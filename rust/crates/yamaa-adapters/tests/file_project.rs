@@ -9,12 +9,14 @@ mod file {
             file_project::{self, Error},
             file_resources::{Error as ResourceError, Resources},
             project_source::{CaptureFailure, Failure as EnvironmentFailure, Origin},
+            specification_run::BoundaryFailure,
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             host_functions::{HostFunctions, Lock},
-            project_activation::LockObservation,
+            project_activation::{Failure, LockObservation},
+            specification_run::PortError,
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -108,6 +110,7 @@ mod file {
         struct Activation {
             trace: Vec<&'static str>,
             reject: bool,
+            reject_binding: bool,
             mismatch: bool,
         }
         impl HostFunctions for Activation {
@@ -135,7 +138,11 @@ mod file {
                 _: &LogicalSignature,
             ) -> Result<(), Self::Error> {
                 self.trace.push("bind");
-                Ok(())
+                if self.reject_binding {
+                    Err("original binding rejection")
+                } else {
+                    Ok(())
+                }
             }
             fn invoke(
                 &mut self,
@@ -320,6 +327,92 @@ mod file {
                     .as_ptr(),
                 definition
             );
+        }
+
+        /// Seam: held environment locks, typed activation boundaries and observations,
+        /// and dataset/capture state after refusal; public replay cases own rows and logs.
+        #[test]
+        fn project_functions_build_without_any_adjacent_packaging_lock() {
+            let study = Study::new();
+            study.write(
+                "project.yaml",
+                &PROJECT.edit("environments: {python: {lock: uv.lock}}\n", ""),
+            );
+            fs::remove_file(study.0.join("uv.lock")).unwrap();
+            study.write("entry/input.csv", "ID\n1\n");
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
+            assert!(project.run().environment().lock().is_none());
+            assert!(project.run().captured_environment().lock().is_none());
+            let mut activation = Activation {
+                reject: true,
+                ..Default::default()
+            };
+            let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
+            assert!(attempt.boundary.is_ok());
+            assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
+
+        }
+        /// Seam: held environment locks, typed activation boundaries and observations,
+        /// and dataset/capture state after refusal; public replay cases own rows and logs.
+        #[test]
+        fn functions_without_a_lock_still_reject_bindings_and_cases_before_study_reads() {
+            let study = Study::new();
+            study.write(
+                "project.yaml",
+                &PROJECT.edit("environments: {python: {lock: uv.lock}}\n", ""),
+            );
+            fs::remove_file(study.0.join("uv.lock")).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
+            let reads = project.capture_reads();
+            assert!(!study.0.join("entry/input.csv").exists());
+            for reject_binding in [true, false] {
+                let mut activation = Activation {
+                    reject: true,
+                    reject_binding,
+                    mismatch: true,
+                    ..Default::default()
+                };
+                let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
+                if reject_binding {
+                    assert!(matches!(
+                        attempt.boundary,
+                        Err(BoundaryFailure::Activation(Failure::Bindings(_)))
+                    ));
+                } else {
+                    assert!(matches!(
+                        attempt.boundary,
+                        Err(BoundaryFailure::Activation(Failure::Tests(_)))
+                    ));
+                }
+                assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
+                assert!(attempt.dataset.sources.is_empty());
+                assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
+                assert_eq!(run_scope.capture_reads(), reads);
+            }
+        }
+        /// Seam: held environment locks, typed activation boundaries and observations,
+        /// and dataset/capture state after refusal; public replay cases own rows and logs.
+        #[test]
+        fn native_project_activation_rejection_precedes_even_a_missing_study_file() {
+            let study = Study::new();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
+            let mut activation = Activation {
+                reject: true,
+                ..Default::default()
+            };
+            let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
+            assert!(matches!(
+                attempt.boundary,
+                Err(BoundaryFailure::Activation(Failure::Lock(
+                    "original lock rejection"
+                )))
+            ));
+            assert!(attempt.dataset.sources.is_empty());
+            assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
+            assert_eq!(run_scope.capture_reads(), 5);
         }
 
         /// Each build gives the host-functions port the exact lock bytes the
