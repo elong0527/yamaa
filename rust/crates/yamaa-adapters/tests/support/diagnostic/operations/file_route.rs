@@ -45,6 +45,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("declaration_vectors.json"),
     fixture!("declarative_case_predicates.json"),
     fixture!("declarative_self.json"),
+    fixture!("empty_child.json"),
     fixture!("file_origins.json"),
     fixture!("inheritance.json"),
     fixture!("integer_literals.json"),
