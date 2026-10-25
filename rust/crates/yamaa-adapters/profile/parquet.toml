@@ -1,0 +1,236 @@
+# The closed Parquet profile: what a Parquet source must hold to be read
+# (rules/reference/parquet.md, PARQUET-5 to PARQUET-10). The engine's Parquet
+# reader includes this file and reads it once per process; each table here is
+# the one place its rule is written, and the reader's dispatch admits only
+# what a table lists. `make check-repository` keeps PARQUET-7's table on the
+# `column` rows (tools/validation/check_parquet_profile.py).
+
+# Column types (PARQUET-7). A field reads as `type` when it is one leaf, not
+# repeated, whose path is its name, and the leaf holds `physical`, an
+# annotation the row admits and one of the `layouts` the file's embedded Arrow
+# schema can name it in, or a dictionary of one, whatever its index type. The
+# annotation is the leaf's logical type, one of `logical`, or, on a leaf
+# without a logical type, its converted type, one of `converted`; with
+# `unannotated`, a leaf with neither reads too. With `width`, every stored
+# value must fit a signed integer of that many bits, or the file is invalid
+# (PARQUET-5). Any other field fails `source_field_type_unsupported`.
+[[column]]
+type = "str"
+physical = "BYTE_ARRAY"
+logical = ["String"]
+converted = ["UTF8"]
+layouts = ["string", "large_string", "string_view"]
+
+[[column]]
+type = "int"
+physical = "INT64"
+unannotated = true
+logical = ["Int(64, signed)"]
+converted = ["INT_64"]
+layouts = ["int64"]
+
+[[column]]
+type = "int"
+physical = "INT32"
+unannotated = true
+logical = ["Int(32, signed)"]
+converted = ["INT_32"]
+layouts = ["int32"]
+
+[[column]]
+type = "int"
+physical = "INT32"
+logical = ["Int(16, signed)"]
+converted = ["INT_16"]
+layouts = ["int16"]
+width = 16
+
+[[column]]
+type = "int"
+physical = "INT32"
+logical = ["Int(8, signed)"]
+converted = ["INT_8"]
+layouts = ["int8"]
+width = 8
+
+[[column]]
+type = "float"
+physical = "DOUBLE"
+unannotated = true
+layouts = ["double"]
+
+[[column]]
+type = "date"
+physical = "INT32"
+logical = ["Date"]
+converted = ["DATE"]
+layouts = ["date32[day]"]
+
+[[column]]
+type = "datetime"
+physical = "INT64"
+logical = ["Timestamp(MICROS, isAdjustedToUTC=false)"]
+layouts = ["timestamp[us]"]
+
+# Physical types, by their code in the format, and the value encodings each
+# decodes (PARQUET-5). Every column is decoded before any field is admitted, a
+# refused one too, so a page whose values are in an encoding its physical type
+# does not list is invalid. `statistics` is the fewest bytes a minimum or
+# maximum statistic of the type holds, and `exact` that it holds no more; a
+# shorter or longer one, or a negative null count, is invalid. Statistics are
+# otherwise never read (PARQUET-10).
+[[physical]]
+name = "BOOLEAN"
+code = 0
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY", "RLE"]
+statistics = 1
+
+[[physical]]
+name = "INT32"
+code = 1
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY", "DELTA_BINARY_PACKED", "BYTE_STREAM_SPLIT"]
+statistics = 4
+
+[[physical]]
+name = "INT64"
+code = 2
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY", "DELTA_BINARY_PACKED", "BYTE_STREAM_SPLIT"]
+statistics = 8
+
+[[physical]]
+name = "INT96"
+code = 3
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY"]
+statistics = 12
+exact = true
+
+[[physical]]
+name = "FLOAT"
+code = 4
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY", "BYTE_STREAM_SPLIT"]
+statistics = 4
+
+[[physical]]
+name = "DOUBLE"
+code = 5
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY", "BYTE_STREAM_SPLIT"]
+statistics = 8
+
+[[physical]]
+name = "BYTE_ARRAY"
+code = 6
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY", "DELTA_LENGTH_BYTE_ARRAY", "DELTA_BYTE_ARRAY"]
+
+[[physical]]
+name = "FIXED_LEN_BYTE_ARRAY"
+code = 7
+encodings = ["PLAIN", "PLAIN_DICTIONARY", "RLE_DICTIONARY", "BYTE_STREAM_SPLIT", "DELTA_BYTE_ARRAY"]
+
+# Encodings, by their code in the format. A column chunk, an encoding
+# statistic or a page that names any other code is invalid (PARQUET-5).
+[[encoding]]
+name = "PLAIN"
+code = 0
+
+[[encoding]]
+name = "PLAIN_DICTIONARY"
+code = 2
+
+[[encoding]]
+name = "RLE"
+code = 3
+
+[[encoding]]
+name = "BIT_PACKED"
+code = 4
+
+[[encoding]]
+name = "DELTA_BINARY_PACKED"
+code = 5
+
+[[encoding]]
+name = "DELTA_LENGTH_BYTE_ARRAY"
+code = 6
+
+[[encoding]]
+name = "DELTA_BYTE_ARRAY"
+code = 7
+
+[[encoding]]
+name = "RLE_DICTIONARY"
+code = 8
+
+[[encoding]]
+name = "BYTE_STREAM_SPLIT"
+code = 9
+
+# Dictionaries (PARQUET-5). A column chunk holds at most one dictionary page,
+# its values in one of `page`. A data page whose values are in one of `data`
+# holds indices into it, and needs it; every index must be below its entry
+# count.
+[dictionary]
+page = ["PLAIN", "PLAIN_DICTIONARY"]
+data = ["PLAIN_DICTIONARY", "RLE_DICTIONARY"]
+
+# Repetition and definition levels (PARQUET-5). A version 1 data page holds
+# each column's levels in one of `v1`, RLE behind a four-byte length. A version
+# 2 data page holds them in RLE, their lengths in its header.
+[levels]
+v1 = ["RLE", "BIT_PACKED"]
+
+# Page types, by their code in the format (PARQUET-5). An INDEX_PAGE is read
+# past and holds no values, and a DATA_PAGE_V2 header says whether its values
+# are compressed. Any other code is invalid.
+[[page]]
+name = "DATA_PAGE"
+code = 0
+
+[[page]]
+name = "INDEX_PAGE"
+code = 1
+
+[[page]]
+name = "DICTIONARY_PAGE"
+code = 2
+
+[[page]]
+name = "DATA_PAGE_V2"
+code = 3
+
+# Codecs, by their code in the format (PARQUET-5). SNAPPY is the raw format,
+# GZIP may hold several members, BROTLI's window is checked before its
+# stream, and the legacy LZ4 is tried as Hadoop's framing, then as the LZ4
+# frame format, then as a raw block. A codec that is not `available` fails as
+# unavailable, with no finding. Any other code is invalid.
+[[codec]]
+name = "UNCOMPRESSED"
+code = 0
+
+[[codec]]
+name = "SNAPPY"
+code = 1
+
+[[codec]]
+name = "GZIP"
+code = 2
+
+[[codec]]
+name = "LZO"
+code = 3
+available = false
+
+[[codec]]
+name = "BROTLI"
+code = 4
+
+[[codec]]
+name = "LZ4"
+code = 5
+
+[[codec]]
+name = "ZSTD"
+code = 6
+
+[[codec]]
+name = "LZ4_RAW"
+code = 7

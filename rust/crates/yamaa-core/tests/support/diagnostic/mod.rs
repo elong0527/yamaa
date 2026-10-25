@@ -6,6 +6,15 @@ pub mod json;
 pub mod operations;
 pub mod replay;
 
+/// Decode a quoted JSON member name with the fixture reader, while the
+/// shared form reader keeps selected values as their original text.
+pub fn json_string(text: &str, label: &str) -> String {
+    match json::read(text, label) {
+        json::Json::String(text) => text,
+        _ => panic!("{label}: expected a JSON string"),
+    }
+}
+
 use std::{cell::RefCell, collections::BTreeSet};
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
