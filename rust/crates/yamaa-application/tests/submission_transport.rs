@@ -14,7 +14,7 @@ mod transport {
         fs,
         path::{Path, PathBuf},
     };
-    use yamaa_adapters::file_define::{Define, PublicationState};
+    use yamaa_application::file_define::{Define, PublicationState};
     use yamaa_core::{json::Value, project_function::Language, project_scope};
 
     struct Temp(crate::support::Scratch);

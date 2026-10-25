@@ -1,7 +1,7 @@
 //! The inspection reader works independently of optional physical readers.
 use crate::support::Edit as _;
-use yamaa_adapters::resolved_artifact::model::specification_value;
-use yamaa_adapters::resolved_artifact::ResolvedArtifact;
+use yamaa_application::resolved_artifact::model::specification_value;
+use yamaa_application::resolved_artifact::ResolvedArtifact;
 use yamaa_core::schema::{Document, DocumentError, DocumentNode as N};
 
 #[test]

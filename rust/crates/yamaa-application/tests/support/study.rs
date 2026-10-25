@@ -1,6 +1,6 @@
 //! A study directory run through the file route, as every host runs it.
 use std::path::PathBuf;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_application::{file_application, specification_report::Identity};
 use yamaa_core::{
     application_observer::Scope, diagnostic::Diagnostic, domain_entry::Request, json::Value,
     project_function::Language,
@@ -17,7 +17,7 @@ pub fn domain(
     identity: Identity<'_>,
 ) -> Result<file_application::Domain, Vec<Diagnostic>> {
     let prepared = file_application::select(Some(host), request, None).map_err(|error| {
-        file_application::collect(yamaa_adapters::project_application::selection_failure(
+        file_application::collect(yamaa_application::project_application::selection_failure(
             &error,
         ))
     })?;

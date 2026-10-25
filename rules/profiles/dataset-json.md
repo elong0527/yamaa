@@ -421,7 +421,7 @@ in entry order, and the document last, applying
 publishes nothing further and leaves every untouched target as it was.
 
 Fails: `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_semantic_failure_writes_nothing`, `rust/crates/yamaa-application/tests/file_resources.rs::a_target_refused_at_save_stops_the_composition_with_zero_writes`, `rust/crates/yamaa-application/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
+Evidence: `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_semantic_failure_writes_nothing`, `rust/crates/yamaa-application/tests/file_resources.rs::a_target_refused_at_save_stops_the_composition_with_zero_writes`, `rust/crates/yamaa-application/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
 
 A visible document therefore never points at a data file that is not there yet,
 which is the order of [OUTPUT-10](../output.md#output-10) applied to

@@ -1,16 +1,45 @@
-//! Infrastructure adapters. The bootstrap resource is embedded at build time.
+//! The engine's infrastructure adapters: what reads and writes bytes, files
+//! and host objects behind the ports of `yamaa-core`. Nothing here
+//! orchestrates a run: `yamaa-application` prepares, binds, executes and
+//! publishes over these modules, and the facade composes both.
+//!
+//! - **Formats.** The physical readers and writers: CSV (`csv_source`,
+//!   `typed_csv`, `csv_artifact`), Parquet (`parquet_source`,
+//!   `parquet_artifact`), SAS (`sas_source`), ODM XML (`odm_xml`),
+//!   Dataset-JSON (`dataset_json_source`), the submission encoders
+//!   (`submission_json`, `submission_xml`, `submission_xpt`), YAML
+//!   (`yaml_decode`), and the lint of a file's written form (`lint`,
+//!   `style_values`).
+//! - **Decoding.** The decoder port (`decoder`), the decoding of a
+//!   specification's held sources and the run error it reports
+//!   (`source_decoding`), and the documents a run reads: specifications
+//!   (`document`, `specification_source`), project files (`project_source`)
+//!   and their packaging locks (`project_lock`).
+//! - **Tables.** The engine's columnar tables (`column_table`, `columns`,
+//!   `epoch`), host scalars (`scalar_bytes`), the public form of a table
+//!   (`public_table`) and its Arrow bridge (`arrow_bridge`).
+//! - **Resources.** The resolver port: the local file resolver
+//!   (`file_resolver`, `canonical_path`, `file_configuration`), a caller's
+//!   resolver (`host_resources`) and the snapshots an operation holds
+//!   (`file_resources`); and the publisher port a save writes through
+//!   (`publisher`), over the file publisher (`file_publication`).
+//! - **Records.** The diagnostics these report (`resource_diagnostics`,
+//!   `source_diagnostics`, `specification_diagnostics`,
+//!   `project_diagnostic_projection`), the typed execution results they
+//!   render (`dataset_result`, `callback`), a report's encoded rows
+//!   (`report_storage`) and the JSON wire form (`json_wire`).
+//! - **Schema.** The shipped schema closures (`shipped_schema`); the
+//!   bootstrap resource is embedded at build time.
 #![deny(unsafe_code)]
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows_file;
 
-pub mod application_measurements;
 #[cfg(feature = "arrow")]
 pub mod arrow_bridge;
 pub mod column_table;
 pub mod columns;
 pub mod epoch;
-pub mod file_define;
 pub mod json_wire;
 pub mod public_table;
 pub mod report_storage;
@@ -41,28 +70,17 @@ pub mod shipped_schema;
 pub mod specification_source;
 
 pub mod source_decoding;
-mod source_profile_inspection;
-pub mod specification_run;
 
 pub mod resource_diagnostics;
 pub mod source_diagnostics;
 mod source_ordinal;
 pub mod specification_diagnostics;
 
-pub(crate) mod run_report;
-pub mod specification_check;
-pub mod specification_report;
-
 pub mod typed_csv;
 
 pub mod canonical_path;
-mod changed_metadata;
-pub mod file_application;
 pub mod file_configuration;
-pub mod file_entry;
 mod file_metadata;
-pub mod file_preparation;
-pub mod file_project;
 #[cfg(unix)]
 pub mod file_publication;
 // File descriptors and retained Windows handles use platform-selected
@@ -72,43 +90,18 @@ pub mod file_publication;
 pub mod file_publication;
 pub mod file_resolver;
 pub mod file_resources;
-pub mod file_workflow;
 pub mod host_resources;
-pub mod issue_location;
-pub mod publication;
 pub mod publisher;
-pub mod resolved_artifact;
-pub mod table_artifact;
 
 pub mod project_source;
 
 pub mod project_lock;
-pub mod project_lock_diagnostics;
 mod python_packaging;
 
-pub mod project_environment_diagnostics;
-
-pub mod project_attempt;
-pub mod project_report;
-
-pub mod project_function_diagnostics;
-
-pub mod project_codelist_diagnostics;
-
-pub mod project_activation_diagnostics;
-
-pub mod project_activation_observations;
-
-pub mod project_application;
-pub mod project_scope;
-
-mod project_diagnostic_projection;
-
-mod file_inventory;
+pub mod project_diagnostic_projection;
 
 pub mod callback;
 pub mod dataset_result;
 mod execution_diagnostics;
-mod report_scalar;
 mod schema_outcomes;
 mod yaml_diagnostics;

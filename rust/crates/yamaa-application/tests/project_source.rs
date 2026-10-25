@@ -76,7 +76,7 @@ mod project {
                     SourceInterpretation::Ordinary,
                     Some(&contract)
                 ),
-                Err(yamaa_adapters::specification_run::Error::Source(
+                Err(yamaa_application::specification_run::Error::Source(
                     yamaa_adapters::csv_source::TextTableError::Csv(
                         yamaa_core::csv_source::Error::Limit {
                             resource: "columns",
@@ -128,7 +128,7 @@ mod project {
                 b"ID\nnot-an-int\n",
                 b"ID,VALUE,EXTRA\nnot-an-int,also-bad,x\n",
             ] {
-                let yamaa_adapters::specification_run::Error::ProducerMetadata(diagnostic) =
+                let yamaa_application::specification_run::Error::ProducerMetadata(diagnostic) =
                     decoder
                         .table(
                             &source,
@@ -188,7 +188,7 @@ mod project {
                         SourceInterpretation::Ordinary,
                         Some(&contract)
                     ),
-                    Err(yamaa_adapters::specification_run::Error::Ordinal(
+                    Err(yamaa_application::specification_run::Error::Ordinal(
                         yamaa_core::source_ordinal::Error::Collision
                     ))
                 ));
@@ -206,7 +206,7 @@ mod project {
                     SourceInterpretation::Ordinary,
                     Some(&contract)
                 ),
-                Err(yamaa_adapters::specification_run::Error::Source(
+                Err(yamaa_application::specification_run::Error::Source(
                     yamaa_adapters::csv_source::TextTableError::Csv(
                         yamaa_core::csv_source::Error::Limit {
                             resource: "columns",
@@ -303,7 +303,7 @@ mod project {
                 .unwrap();
             assert!(matches!(
                 &error,
-                yamaa_adapters::specification_run::Error::Source(
+                yamaa_application::specification_run::Error::Source(
                     yamaa_adapters::csv_source::TextTableError::Csv(
                         yamaa_core::csv_source::Error::Limit {
                             resource: "columns",

@@ -21,10 +21,12 @@
 //! `AnchoredTarget` before it is held. The files come encoded: a run's result
 //! and a composition hold their bytes, and a save never encodes again.
 use crate::file_publication as file;
-use crate::publisher::{keeping, AnchoredTarget, Interruption, Leftover, Publisher, Staging};
 use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
+};
+use yamaa_adapters::publisher::{
+    keeping, AnchoredTarget, Interruption, Leftover, Publisher, Staging,
 };
 
 /// One file a save writes: its target, the path its specification or project

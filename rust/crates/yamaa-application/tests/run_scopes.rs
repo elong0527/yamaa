@@ -11,11 +11,13 @@ use std::sync::Arc;
 
 use crate::support::ports::NoFunctions;
 use yamaa_adapters::{
+    file_resources::RunScope,
+    host_resources::{MemoryResolver, Resolver},
+};
+use yamaa_application::{
     file_application::{self, Domain},
     file_preparation::FileSpecification,
-    file_resources::RunScope,
     file_workflow,
-    host_resources::{MemoryResolver, Resolver},
     specification_report::Identity,
 };
 use yamaa_core::diagnostic::Diagnostic;

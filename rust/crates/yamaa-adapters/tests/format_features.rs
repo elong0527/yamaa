@@ -128,7 +128,7 @@ fn parquet_source_and_artifact_share_one_capability() {
             assert!(matches!(error, parquet_source::Error::ReaderUnavailable));
             assert!(error.finding("SRC", "held.parquet").is_none());
         }
-        let error = yamaa_adapters::specification_run::Error::ParquetSource(
+        let error = yamaa_adapters::source_decoding::Error::ParquetSource(
             parquet_source::Error::ReaderUnavailable,
         );
         assert_fault(
@@ -182,7 +182,7 @@ fn odm_reader_is_an_independent_capability() {
         let error = decoded.unwrap_err();
         assert!(matches!(
             error,
-            yamaa_adapters::specification_run::Error::OdmSource(
+            yamaa_adapters::source_decoding::Error::OdmSource(
                 yamaa_adapters::odm_xml::Error::Unavailable
             )
         ));

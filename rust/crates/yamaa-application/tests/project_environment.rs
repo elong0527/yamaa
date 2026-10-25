@@ -8,9 +8,11 @@ mod project {
         use yamaa_adapters::json;
         use yamaa_adapters::{
             document::{self, Closures},
-            project_environment_diagnostics::{self as diagnostic, Error as ProjectionError},
             project_source::{self, CaptureFailure, Failure, Kind, Origin},
             specification_source::Source,
+        };
+        use yamaa_application::project_environment_diagnostics::{
+            self as diagnostic, Error as ProjectionError,
         };
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
@@ -409,10 +411,11 @@ mod project {
         fn retained_structural_limit_keeps_exact_facts_and_refuses_earlier_missing_rows() {
             // Seam: injected limits, which no case can set.
             use yamaa_adapters::{
+                file_resources::Error as ResourceError, specification_source::Error as SourceError,
+            };
+            use yamaa_application::{
                 file_project,
-                file_resources::Error as ResourceError,
                 project_application::{self, Error as ApplicationError},
-                specification_source::Error as SourceError,
             };
             use yamaa_core::limits::{LimitExceeded, Limits};
 
@@ -545,7 +548,7 @@ mod project {
     }
     mod project_function_diagnostics {
         use std::rc::Rc;
-        use yamaa_adapters::project_function_diagnostics::{invocation, Error, HostDetails};
+        use yamaa_application::project_function_diagnostics::{invocation, Error, HostDetails};
         use yamaa_core::{
             dataset::RowIdentity,
             function_invocation::{FailureKind, InvocationFailure},
@@ -910,10 +913,10 @@ mod project {
         use yamaa_adapters::{
             document::Closures,
             project_lock::{Finding, Reason},
-            project_lock_diagnostics::{issues, Error},
             project_source::{self, CapturedEnvironment, Kind},
             specification_source::Source,
         };
+        use yamaa_application::project_lock_diagnostics::{issues, Error};
         use yamaa_core::project_function::Language;
         use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
 

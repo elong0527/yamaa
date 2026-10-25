@@ -9,9 +9,9 @@
 use crate::support::ports::NoFunctions;
 use crate::support::Edit as _;
 use std::{fs, sync::Arc};
-use yamaa_adapters::{
+use yamaa_adapters::file_resources::HeldArtifacts;
+use yamaa_application::{
     file_application::{self, Domain},
-    file_resources::HeldArtifacts,
     file_workflow,
     project_scope::Project,
     publication::{self, Cause},
@@ -160,7 +160,7 @@ fn saved_build(
     .unwrap_or_else(|error| {
         panic!(
             "{:?}",
-            yamaa_adapters::project_application::selection_failure(&error)
+            yamaa_application::project_application::selection_failure(&error)
         )
     });
     let held = held.map(Arc::new);

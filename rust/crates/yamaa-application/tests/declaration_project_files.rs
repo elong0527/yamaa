@@ -340,14 +340,13 @@ mod declaration {
 
         use std::sync::Arc;
         use yamaa_adapters::{
-            document::Closures,
+            document::Closures, file_resources::Resources, json, project_source::Origin,
+        };
+        use yamaa_application::{
             file_preparation::FileSpecification,
-            file_project,
-            file_resources::Resources,
-            file_workflow, json, project_application,
+            file_project, file_workflow, project_application,
             project_function_diagnostics::HostDetails,
             project_report::Classified,
-            project_source::Origin,
             specification_report::{self, Identity},
             specification_run::BoundaryFailure,
         };

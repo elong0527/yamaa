@@ -725,7 +725,7 @@ flushed and closed, and atomically moved onto the target. A failure leaves the
 previous file and no residue.
 
 Fails: `value_not_permitted`, `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_creation_time_outside_the_schema_facet_is_a_schema_violation`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
+Evidence: `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_creation_time_outside_the_schema_facet_is_a_schema_violation`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
 
 Conformance to this profile is not a substitute for schema validation: an
 implementation that produces a schema-invalid document has a defect regardless

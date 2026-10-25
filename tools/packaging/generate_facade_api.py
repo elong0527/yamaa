@@ -816,7 +816,10 @@ def render():
     if actual != expected:
         raise ValueError(f"facade module files changed: {actual!r} != {expected!r}")
     for entry in entries:
-        if "yamaa_adapters" in entry or "yamaa_core" in entry:
+        if any(
+            crate in entry
+            for crate in ("yamaa_adapters", "yamaa_application", "yamaa_core")
+        ):
             raise ValueError(f"facade surface references internals: {entry}")
     if not entries:
         raise ValueError("facade inventory is empty")

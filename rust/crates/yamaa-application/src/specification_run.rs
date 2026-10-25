@@ -5,7 +5,6 @@
 //! empty environment, and with a project it carries the project's admitted
 //! environment. Every build of it activates the project functions it calls
 //! through one host-functions port, then captures, decodes, binds and executes.
-pub use crate::source_decoding::Error;
 use crate::{
     dataset_result::{self, DatasetError, DatasetResponse},
     decoder::{Decoder, Snapshot},
@@ -16,6 +15,7 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
+pub use yamaa_adapters::source_decoding::Error;
 use yamaa_core::host_functions::HostFunctions;
 use yamaa_core::project_activation::{Failure, Observations};
 use yamaa_core::project_domain::{self, CheckedOwnedProject, RejectedOwnedProject};

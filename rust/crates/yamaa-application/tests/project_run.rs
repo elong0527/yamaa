@@ -7,10 +7,9 @@ mod project {
         use yamaa_adapters::{
             document::Closures,
             project_source::{self, OwnedEnvironment},
-            specification_report::Identity,
-            specification_run::PreparedRun,
             specification_source::Source,
         };
+        use yamaa_application::{specification_report::Identity, specification_run::PreparedRun};
         use yamaa_core::application_observer::Scope;
         use yamaa_core::project_function::Language;
         use yamaa_core::resolver::{Captured, Failure, Located, Name, Resolver};
@@ -156,7 +155,7 @@ mod project {
                 };
                 let attempt =
                     run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
-                let result = yamaa_adapters::specification_report::build_result(
+                let result = yamaa_application::specification_report::build_result(
                     &run,
                     &attempt,
                     id(example),
@@ -216,7 +215,7 @@ mod project {
                 )]),
             };
             let attempt = run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 &run,
                 &attempt,
                 id("codelist"),
@@ -232,7 +231,7 @@ mod project {
                 context
             );
             assert_eq!(
-                yamaa_adapters::specification_report::build_result(
+                yamaa_application::specification_report::build_result(
                     &run,
                     &attempt,
                     id("codelist"),
@@ -331,7 +330,7 @@ mod project {
                     };
                     let attempt =
                         run.execute_with_ports(&mut NoFunctions, &mut resources, Scope::default());
-                    let candidate = yamaa_adapters::specification_report::build_result(
+                    let candidate = yamaa_application::specification_report::build_result(
                         &run,
                         &attempt,
                         id("failed-resource"),
@@ -360,7 +359,7 @@ mod project {
                         // a finding; the attempt keeps the original payload.
                         assert!(matches!(
                             candidate.unwrap_err(),
-                            yamaa_adapters::specification_report::Refusal::Report(_)
+                            yamaa_application::specification_report::Refusal::Report(_)
                         ));
                         let payload = match attempt.dataset.result.as_ref().unwrap_err() {
                             yamaa_core::specification_run::PortError::Capture(error) => error,
@@ -396,7 +395,7 @@ mod project {
                 )]),
             };
             let attempt = run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 &run,
                 &attempt,
                 id("codelist-prefix"),
@@ -425,9 +424,9 @@ mod project {
         use yamaa_adapters::{
             document::Closures,
             project_source::{self, Kind, OwnedEnvironment},
-            specification_run::{BoundaryFailure, PreparedRun},
             specification_source::{PreparedDocument, Source},
         };
+        use yamaa_application::specification_run::{BoundaryFailure, PreparedRun};
         use yamaa_core::application_observer::Scope;
         use yamaa_core::resolver::{Captured, File, Located, Name, Resolver};
         use yamaa_core::{
@@ -826,7 +825,7 @@ tests:
                 assert!(!attempt.activation.tests[2].invoked);
                 assert_eq!(attempt.activation.tests[2].actual, Some(Value::Missing));
                 let trace = activation.trace.borrow().clone();
-                let observed = yamaa_adapters::project_activation_observations::activation(
+                let observed = yamaa_application::project_activation_observations::activation(
                     &run,
                     &attempt.activation,
                 )
@@ -849,7 +848,7 @@ tests:
                 assert_eq!(observed["tests"][0]["function"], "id");
                 assert_eq!(observed["tests"][0]["call"], "project.id");
                 assert_eq!(*activation.trace.borrow(), trace);
-                assert!(yamaa_adapters::project_attempt::execution(&attempt).is_some());
+                assert!(yamaa_application::project_attempt::execution(&attempt).is_some());
                 let captured = &attempt.dataset.sources[0];
                 assert_eq!(captured.read.snapshots_created, reads);
                 assert!(Arc::ptr_eq(
@@ -922,12 +921,12 @@ tests:
                     _ => panic!("exact ordinary or interrupt stage"),
                 };
                 let mut visited = 0;
-                yamaa_adapters::project_attempt::visit_host_failures(&attempt, |_, original| {
+                yamaa_application::project_attempt::visit_host_failures(&attempt, |_, original| {
                     assert!(std::ptr::eq(original, payload));
                     visited += 1;
                 });
                 assert_eq!(visited, 1);
-                assert!(yamaa_adapters::project_attempt::execution(&attempt).is_none());
+                assert!(yamaa_application::project_attempt::execution(&attempt).is_none());
                 assert!(Rc::ptr_eq(&payload.original, &activation.original));
                 assert_eq!(payload.interrupt, matches!(mode, Mode::CaseInterrupt));
                 assert!(attempt.dataset.sources.is_empty());
@@ -961,7 +960,7 @@ tests:
             assert_eq!(attempt.activation.tests[0].outcome, TestOutcome::Passed);
             assert_eq!(attempt.activation.tests[1].outcome, TestOutcome::Attempted);
             assert!(attempt.activation.tests[1].invoked);
-            let observed = yamaa_adapters::project_activation_observations::activation(
+            let observed = yamaa_application::project_activation_observations::activation(
                 &run,
                 &attempt.activation,
             )
@@ -1027,13 +1026,13 @@ tests:
                 &study.bytes
             ));
             let mut visited = 0;
-            yamaa_adapters::project_attempt::visit_host_failures(&attempt, |stage, original| {
+            yamaa_application::project_attempt::visit_host_failures(&attempt, |stage, original| {
                 assert_eq!(stage, "derivation");
                 assert!(std::ptr::eq(original, payload));
                 visited += 1;
             });
             assert_eq!(visited, 1);
-            assert!(yamaa_adapters::project_attempt::execution(&attempt).is_none());
+            assert!(yamaa_application::project_attempt::execution(&attempt).is_none());
             assert_eq!(study.reads(), 1);
             assert_eq!(
                 &*activation.trace.borrow(),
@@ -1045,7 +1044,7 @@ tests:
         fn activation_projection_validates_forged_case_order_without_effects() {
             // Seam: activation observations forged in the attempt, which no input can
             // write.
-            use yamaa_adapters::project_activation_observations::{activation, Error};
+            use yamaa_application::project_activation_observations::{activation, Error};
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut host, mut study) = ports();
@@ -1066,7 +1065,7 @@ tests:
         fn repeated_forged_activation_facts_cannot_gain_report_authority() {
             // Seam: activation observations forged past their limits in the attempt, which
             // no input can write.
-            use yamaa_adapters::project_activation_observations as activation;
+            use yamaa_application::project_activation_observations as activation;
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut host, mut study) = ports();
@@ -1094,14 +1093,14 @@ tests:
                     Err(activation::Error::InvalidObservation)
                 );
                 assert!(matches!(
-                    yamaa_adapters::specification_report::build_result(
+                    yamaa_application::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),
                         &[]
                     ),
-                    Err(yamaa_adapters::specification_report::Refusal::Report(
-                        yamaa_adapters::specification_report::Error::InvalidObservation
+                    Err(yamaa_application::specification_report::Refusal::Report(
+                        yamaa_application::specification_report::Error::InvalidObservation
                     ))
                 ));
             }
@@ -1109,8 +1108,8 @@ tests:
             assert_eq!(study.reads(), reads);
         }
 
-        fn report_identity() -> yamaa_adapters::specification_report::Identity<'static> {
-            yamaa_adapters::specification_report::Identity {
+        fn report_identity() -> yamaa_application::specification_report::Identity<'static> {
+            yamaa_application::specification_report::Identity {
                 runtime: "test",
                 runtime_version: "test-1",
                 engine_version: "0.1.0",
@@ -1136,7 +1135,7 @@ tests:
                 .as_ref()
                 .unwrap()
                 .as_ptr();
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 &run,
                 &attempt,
                 report_identity(),
@@ -1187,7 +1186,7 @@ tests:
             // case states. The issues, saved files and calls of each failure
             // are `project_functions.json`'s binding, case, live call,
             // interrupt and panic cases.
-            use yamaa_adapters::{
+            use yamaa_application::{
                 project_function_diagnostics::HostDetails, project_report::Classified,
                 specification_report::Refusal as Error,
             };
@@ -1204,7 +1203,7 @@ tests:
                 activation.mode = mode;
                 let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
                 let trace = activation.trace.borrow().clone();
-                let unclassified = yamaa_adapters::specification_report::build_result(
+                let unclassified = yamaa_application::specification_report::build_result(
                     &run,
                     &attempt,
                     report_identity(),
@@ -1227,7 +1226,7 @@ tests:
                             message: "é failure",
                         },
                     }];
-                    let result = yamaa_adapters::specification_report::build_result(
+                    let result = yamaa_application::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),
@@ -1258,7 +1257,7 @@ tests:
         fn report_classifications_cannot_target_a_different_failure_or_supply_duplicates() {
             // Seam: classification facts naming another payload, or one twice, which no
             // host's classification can give.
-            use yamaa_adapters::{
+            use yamaa_application::{
                 project_function_diagnostics::HostDetails, project_report::Classified,
                 specification_report::Refusal as Error,
             };
@@ -1297,14 +1296,14 @@ tests:
                 ],
             ] {
                 assert!(matches!(
-                    yamaa_adapters::specification_report::build_result(
+                    yamaa_application::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),
                         &facts
                     ),
                     Err(Error::Report(
-                        yamaa_adapters::specification_report::Error::InvalidObservation
+                        yamaa_application::specification_report::Error::InvalidObservation
                     ))
                 ));
             }
@@ -1316,7 +1315,7 @@ tests:
         fn complete_reports_refuse_missing_or_contradictory_activation_success() {
             // Seam: activation observations removed or contradicted in the attempt, which
             // no input can write.
-            use yamaa_adapters::specification_report::{self, Refusal as Error};
+            use yamaa_application::specification_report::{self, Refusal as Error};
             use yamaa_core::project_activation::BindingOutcome;
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
@@ -1335,7 +1334,7 @@ tests:
                     _ => attempt.activation.bindings[0].outcome = BindingOutcome::Rejected,
                 }
                 assert!(matches!(
-                    yamaa_adapters::specification_report::build_result(
+                    yamaa_application::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),
@@ -1360,10 +1359,9 @@ tests:
             // `a_host_exception_while_verifying_the_lock_refuses_the_build_opaquely`,
             // `a_lock_failure_classified_with_no_finding_refuses_the_report` and
             // `a_case_result_that_differs_fails_conformance_in_the_function_file_that_defines_it`.
-            use yamaa_adapters::{
-                project_lock::{Finding, Reason},
-                project_report::Classified,
-                specification_report::Refusal as Error,
+            use yamaa_adapters::project_lock::{Finding, Reason};
+            use yamaa_application::{
+                project_report::Classified, specification_report::Refusal as Error,
             };
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
@@ -1380,7 +1378,7 @@ tests:
                 expected: vec![],
                 actual: None,
             }];
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 &run,
                 &attempt,
                 report_identity(),
@@ -1392,16 +1390,17 @@ tests:
             .unwrap();
             // A host exception while verifying the lock names no lock
             // finding: the lock failure stays the original opaque payload.
-            let host = yamaa_adapters::specification_report::build_result(
+            let host = yamaa_application::specification_report::build_result(
                 &run,
                 &attempt,
                 report_identity(),
                 &[Classified::Host {
                     failure: original,
-                    details: yamaa_adapters::project_function_diagnostics::HostDetails::Exception {
-                        class: "OSError",
-                        message: "lock unreadable",
-                    },
+                    details:
+                        yamaa_application::project_function_diagnostics::HostDetails::Exception {
+                            class: "OSError",
+                            message: "lock unreadable",
+                        },
                 }],
             );
             let Err(Error::Opaque(held)) = host else {
@@ -1419,7 +1418,7 @@ tests:
             let (mut activation, mut study) = ports();
             activation.mode = Mode::CaseMismatch;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 &run,
                 &attempt,
                 report_identity(),
@@ -1447,7 +1446,7 @@ tests:
         fn zero_sized_host_failures_remain_opaque_and_never_accept_address_classification() {
             // Seam: classification facts naming a zero-sized payload by address, which no
             // host's classification can give.
-            use yamaa_adapters::{
+            use yamaa_application::{
                 project_function_diagnostics::HostDetails, project_report::Classified,
                 specification_report, specification_report::Refusal as Error,
             };
@@ -1491,7 +1490,7 @@ tests:
                 panic!("held original zero-sized lock failure")
             };
             assert!(matches!(
-                yamaa_adapters::specification_report::build_result(
+                yamaa_application::specification_report::build_result(
                     &run,
                     &attempt,
                     report_identity(),
@@ -1518,7 +1517,7 @@ tests:
                 }],
             ] {
                 assert!(matches!(
-                    yamaa_adapters::specification_report::build_result(
+                    yamaa_application::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),

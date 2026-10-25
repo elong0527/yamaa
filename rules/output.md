@@ -213,7 +213,7 @@ one, never a prefix of it. A run that fails at any point leaves the target as
 it was, removes its temporary file and produces no accepted artifact.
 
 Fails: `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_staging_directory_stays_private_under_any_umask`.
+Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_staging_directory_stays_private_under_any_umask`.
 
 A failed atomic replacement fails and reports the target; the run produces no
 artifact and the previous one is unchanged. A target the save cannot reach, in
@@ -286,7 +286,7 @@ not prevent publication. A failed run publishes no primary artifact and
 replaces only its declared report file; it is the only file a failed run
 writes, and writing it accepts nothing.
 
-Evidence: `schema-verification-log`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/src/file_application.rs::actual_late_failures_retain_original_error_entered_prefix_and_retry`, `rust/crates/yamaa-adapters/src/file_application.rs::failed_build_report_keeps_original_failure_and_fresh_retry_prefix`.
+Evidence: `schema-verification-log`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-application/src/file_application.rs::actual_late_failures_retain_original_error_entered_prefix_and_retry`, `rust/crates/yamaa-application/src/file_application.rs::failed_build_report_keeps_original_failure_and_fresh_retry_prefix`.
 
 A successful publication therefore never exposes a new primary artifact
 without its completed report already visible. The run report
