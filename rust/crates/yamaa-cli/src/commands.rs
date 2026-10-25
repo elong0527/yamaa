@@ -49,6 +49,16 @@
 //!   argument the facade cannot take, a value that is not UTF-8 text, exits
 //!   2.
 //!
+//! `--verbose` makes `check`, `run` and `submission` write to standard error
+//! (#3762), never to standard output: one line per progress event,
+//! `<name>: <phase> <kind>`, with a partition's number and records or an
+//! end's outcome, such as `dm.yaml: derivation end: succeeded`; then, for
+//! each run, how it divided its driver input (#3794),
+//! `<name>: partitions <strategy> <count>`, such as
+//! `dm.yaml: partitions key_bounded 1`; then the timings table as the
+//! facade's `Timings::lines` gives it: a line of its column names, then one
+//! line per phase, each cell separated by a tab.
+//!
 //! `check`, `run`, `submission` and `resolve` dispatch on the type their PATH
 //! declares in its `type:` header, which the facade reads before anything
 //! else reads the file (D122). A spec is checked, run or resolved alone, or
@@ -73,14 +83,16 @@
 //! the facade's refusal, `unexpected_file_type`, with exit status 1, as an
 //! unknown section is (D98, D149).
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
+use std::io::Write;
 use std::num::NonZeroUsize;
 
 use yamaa::{
     CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Failure,
-    FileType, Host, Info, LintFinding, OdmOptions, Partitions, ProjectRequest, ProjectRun, Run,
-    Status, SubmissionOptions, Summary,
+    FileType, Host, Info, LintFinding, OdmOptions, Partitions, ProgressEvent, ProgressKind,
+    ProjectRequest, ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -89,9 +101,13 @@ use crate::{FINDINGS, SUCCEEDED};
 /// What became of a command.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Execution {
-    /// The command ran: what it prints on standard output and its exit
-    /// status, 0 or 1.
-    Ran { stdout: String, status: u8 },
+    /// The command ran: what it prints on standard output, what `--verbose`
+    /// adds on standard error once it ran, and its exit status, 0 or 1.
+    Ran {
+        stdout: String,
+        stderr: String,
+        status: u8,
+    },
     /// An argument the facade cannot take, or a PATH whose type the command
     /// does not take: exit status 2.
     Refused(Usage),
@@ -99,10 +115,14 @@ pub(crate) enum Execution {
 
 /// Run `call` and render what it prints in `format`.
 pub(crate) fn execute(call: &Call, format: Format, token: &CancellationToken) -> Execution {
+    let verbose = Verbose {
+        on: call.has("--verbose"),
+        timings: RefCell::new(Vec::new()),
+    };
     let printed = match call.name {
-        "check" => check(call, token),
-        "run" => run(call, token),
-        "submission" => submission(call, token),
+        "check" => check(call, token, &verbose),
+        "run" => run(call, token, &verbose),
+        "submission" => submission(call, token, &verbose),
         "resolve" => resolve(call),
         "read-odm" => read_odm(call),
         "lint" => lint(call),
@@ -112,9 +132,63 @@ pub(crate) fn execute(call: &Call, format: Format, token: &CancellationToken) ->
         other => unreachable!("the arguments admit no command {other}"),
     };
     match printed {
-        Ok(printed) => printed.render(format),
+        Ok(printed) => printed.render(format, verbose.timings.into_inner()),
         Err(execution) => execution,
     }
+}
+
+/// What `--verbose` adds (#3762): each progress event on standard error as
+/// it happens, and, once the command ran, how each run divided its driver
+/// input (#3794) and the timings table of its result.
+struct Verbose {
+    on: bool,
+    timings: RefCell<Vec<String>>,
+}
+
+impl Verbose {
+    /// Keep the lines of `timings`, the result's, for standard error: each
+    /// run's division, then the table.
+    fn timings(&self, timings: &Timings) {
+        if self.on {
+            *self.timings.borrow_mut() = timings
+                .divisions()
+                .iter()
+                .map(|division| {
+                    format!(
+                        "{}: partitions {} {}",
+                        division.name, division.strategy, division.count
+                    )
+                })
+                .chain(timings.lines())
+                .collect();
+        }
+    }
+}
+
+/// One progress event's line on standard error: `<name>: <phase> <kind>`,
+/// then a partition's or batch's number and size, or an end's outcome, such
+/// as `dm.yaml: derivation end: succeeded`.
+fn progress_line(event: &ProgressEvent) -> String {
+    let mut line = format!(
+        "{}: {} {}",
+        event.name,
+        event.phase.as_str(),
+        event.kind.as_str()
+    );
+    if let Some(number) = event.number {
+        line.push_str(&format!(" {number}"));
+    }
+    if let Some(rows) = event.rows {
+        let unit = match event.kind {
+            ProgressKind::Partition => "records",
+            _ => "rows",
+        };
+        line.push_str(&format!(" ({rows} {unit})"));
+    }
+    if let Some(outcome) = event.outcome {
+        line.push_str(&format!(": {}", outcome.as_str()));
+    }
+    line
 }
 
 /// One JSON document's members, in key order.
@@ -132,13 +206,16 @@ struct Printed {
 }
 
 impl Printed {
-    fn render(self, format: Format) -> Execution {
+    /// The command's output in `format`, with the `timings` lines `--verbose`
+    /// writes to standard error after it.
+    fn render(self, format: Format, timings: Vec<String>) -> Execution {
         let stdout = match format {
             Format::Text => self.lines.iter().map(|line| format!("{line}\n")).collect(),
             Format::Json => format!("{}\n", self.json),
         };
         Execution::Ran {
             stdout,
+            stderr: timings.iter().map(|line| format!("{line}\n")).collect(),
             status: self.status,
         }
     }
@@ -342,11 +419,28 @@ const PARTITIONS: [usize; 2] = [2, 624_640];
 /// reads data, and every other build runs as a host runs it (section 2.3,
 /// D110).
 fn engine() -> Engine {
+    Engine::new(options())
+}
+
+/// The options of every engine the command line builds.
+fn options() -> EngineOptions {
     let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
-    Engine::new(
-        EngineOptions::neutral(Host::Cli.as_str().to_owned(), String::new())
-            .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback()),
-    )
+    EngineOptions::neutral(Host::Cli.as_str().to_owned(), String::new())
+        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
+}
+
+/// The command line's [`engine`], which under `--verbose` writes each
+/// progress event to standard error as it happens (#3762). A line that cannot
+/// be written is lost, and the command goes on.
+fn reporting(verbose: &Verbose) -> Engine {
+    let options = options();
+    Engine::new(match verbose.on {
+        true => options.with_progress(|event: &ProgressEvent| {
+            let _ = writeln!(std::io::stderr(), "{}", progress_line(event));
+            Ok(())
+        }),
+        false => options,
+    })
 }
 
 /// The request of the project `path`, polling `token`, whose run and
@@ -369,12 +463,12 @@ fn project_request<'a>(
 /// `s.check(parent)` of a spec, a fragment checked on the spec that flag
 /// names as its parent (#3694). The arguments give `--spec` or `--parent`,
 /// not both.
-fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
+fn check(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let parent = flag(call, "--parent")?;
     let document = document("check", [("path", text(path)), ("spec", optional(name))]);
-    let engine = engine();
+    let engine = reporting(verbose);
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -400,13 +494,16 @@ fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
         (other, ..) => return Err(not_taken(call, path, other, None)),
     };
     Ok(match checked {
-        Ok(check) => result(
-            document,
-            &check.summary(),
-            check.status(),
-            check.diagnostics(),
-            None,
-        ),
+        Ok(check) => {
+            verbose.timings(&check.timings());
+            result(
+                document,
+                &check.summary(),
+                check.status(),
+                check.diagnostics(),
+                None,
+            )
+        }
         Err(failure) => refusal(document, failure),
     })
 }
@@ -414,7 +511,7 @@ fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
 /// `yamaa run PATH`: `s.run()` of a spec, `p.run()` of a project, or, with
 /// `--spec NAME` or `--section SECTION`, `p.spec(name).run()` or
 /// `p.run(section)`; then `save()`.
-fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
+fn run(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let section = flag(call, "--section")?;
@@ -428,19 +525,22 @@ fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = engine();
+    let engine = reporting(verbose);
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
     };
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
-        (FileType::Spec, None, None) => {
-            saved(document, engine.spec(path).cancel_with(token).run(), token)
-        }
+        (FileType::Spec, None, None) => saved(
+            document,
+            engine.spec(path).cancel_with(token).run(),
+            token,
+            verbose,
+        ),
         (FileType::Project, Some(name), _) => {
             match engine.project(path).cancel_with(token).spec(name) {
-                Ok(spec) => saved(document, spec.run(), token),
+                Ok(spec) => saved(document, spec.run(), token, verbose),
                 Err(failure) => refusal(document, failure),
             }
         }
@@ -449,6 +549,7 @@ fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
         (FileType::Project, None, section) => {
             match project_request(&engine, path, section, token).run() {
                 Ok(mut runs) => {
+                    verbose.timings(&runs.timings());
                     let saved = runs.save(token);
                     document.insert("members".into(), members(&runs));
                     result(
@@ -474,9 +575,15 @@ fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
 
 /// One specification's run, then its save, which polls `token`; a refusal of
 /// the run names the specification's path.
-fn saved(document: Document, run: Result<Run, Failure>, token: &CancellationToken) -> Printed {
+fn saved(
+    document: Document,
+    run: Result<Run, Failure>,
+    token: &CancellationToken,
+    verbose: &Verbose,
+) -> Printed {
     match run {
         Ok(mut run) => {
+            verbose.timings(&run.timings());
             let saved = run.save(token);
             result(
                 document,
@@ -519,7 +626,11 @@ fn members(runs: &ProjectRun) -> ContextValue {
 /// `p.submission(section, created)`, then `save()`. Without `--created`,
 /// the submission reads the clock once for every section, and prints the
 /// time it read after its summary line (D129).
-fn submission(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
+fn submission(
+    call: &Call,
+    token: &CancellationToken,
+    verbose: &Verbose,
+) -> Result<Printed, Execution> {
     let path = path(call)?;
     let section = flag(call, "--section")?;
     let created = flag(call, "--created")?;
@@ -532,7 +643,7 @@ fn submission(call: &Call, token: &CancellationToken) -> Result<Printed, Executi
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = engine();
+    let engine = reporting(verbose);
     match engine.file_type(path) {
         Ok(FileType::Project) => {}
         Ok(other) => return Err(not_taken(call, path, other, None)),
@@ -543,6 +654,7 @@ fn submission(call: &Call, token: &CancellationToken) -> Result<Printed, Executi
     let composed = project_request(&engine, path, section, token).submission(&options);
     Ok(match composed {
         Ok(mut submission) => {
+            verbose.timings(&submission.timings());
             let saved = submission.save(token);
             let used = submission.created().to_owned();
             document.insert("created".into(), text(&used));
@@ -788,8 +900,8 @@ mod tests {
     }
 
     fn rendered(printed: Printed, format: Format) -> (String, u8) {
-        match printed.render(format) {
-            Execution::Ran { stdout, status } => (stdout, status),
+        match printed.render(format, Vec::new()) {
+            Execution::Ran { stdout, status, .. } => (stdout, status),
             other => panic!("not run: {other:?}"),
         }
     }

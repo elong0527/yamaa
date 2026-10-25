@@ -687,6 +687,7 @@ fn execute_captured_into<C, D: Decoder>(
         dataset::ExecutionEvent::Refusal { phase, refusal } => {
             scope.refusal(crate::application_observer::Phase::Dataset(phase), refusal)
         }
+        dataset::ExecutionEvent::Partition { number, records } => scope.partition(number, records),
         dataset::ExecutionEvent::Divided(division) => scope.divided(division),
     };
     let cancelled = || scope.cancelled();

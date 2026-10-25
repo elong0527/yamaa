@@ -569,6 +569,10 @@ impl ResolvedPlan {
                 parts.push(Part::passed(range.start, width, outer.handlers.mark()));
                 continue;
             }
+            observer(ExecutionEvent::Partition {
+                number: index + 1,
+                records: range.len(),
+            });
             let Some(table) = (input.decode)(index, range.clone()) else {
                 return Ok(Found::cancelled());
             };

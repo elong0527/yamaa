@@ -42,6 +42,7 @@ const PARENT: Flag = flag("--parent", Takes::Text);
 const SECTION: Flag = flag("--section", Takes::Text);
 const CREATED: Flag = flag("--created", Takes::Text);
 const FIX: Flag = flag("--fix", Takes::Nothing);
+const VERBOSE: Flag = flag("--verbose", Takes::Nothing);
 const ARCHIVE_MEMBER: Flag = flag("--archive-member", Takes::Text);
 const MAX_ARCHIVE_MEMBERS: Flag = flag("--max-archive-members", Takes::Count);
 const MAX_EXPANDED_BYTES: Flag = flag("--max-expanded-bytes", Takes::Count);
@@ -63,31 +64,31 @@ pub(crate) struct Command {
 }
 
 /// Every command, in the order of the design's table (#3030 section 2.8,
-/// with D68's `--spec` and `--section` and #3694's `--parent`), and
-/// `conditions` beside `schema` (#3700).
+/// with D68's `--spec` and `--section`, #3694's `--parent` and #3762's
+/// `--verbose`), and `conditions` beside `schema` (#3700).
 pub(crate) static COMMANDS: [Command; 9] = [
     Command {
         name: "check",
-        synopsis: "check PATH [--spec NAME | --parent PATH]",
+        synopsis: "check PATH [--spec NAME | --parent PATH] [--verbose]",
         arguments: &["PATH"],
         repeats: false,
-        flags: &[SPEC, PARENT],
+        flags: &[SPEC, PARENT, VERBOSE],
         exclusive: &["--spec", "--parent"],
     },
     Command {
         name: "run",
-        synopsis: "run PATH [--spec NAME | --section SECTION]",
+        synopsis: "run PATH [--spec NAME | --section SECTION] [--verbose]",
         arguments: &["PATH"],
         repeats: false,
-        flags: &[SPEC, SECTION],
+        flags: &[SPEC, SECTION, VERBOSE],
         exclusive: &["--spec", "--section"],
     },
     Command {
         name: "submission",
-        synopsis: "submission PATH [--section SECTION] [--created TIME]",
+        synopsis: "submission PATH [--section SECTION] [--created TIME] [--verbose]",
         arguments: &["PATH"],
         repeats: false,
-        flags: &[SECTION, CREATED],
+        flags: &[SECTION, CREATED, VERBOSE],
         exclusive: &[],
     },
     Command {

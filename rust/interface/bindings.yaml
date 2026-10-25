@@ -139,6 +139,27 @@ values:
   host:
     rust: yamaa::HOSTS
     values: [python, r, cli]
+  # The phases a progress event names and a timings table lists (#3762), in
+  # run order: a run passes preparation to output, activation only when it
+  # calls a project function; a check is a preparation, and a submission a
+  # composition of each section.
+  progress_phase:
+    rust: yamaa::PROGRESS_PHASES
+    values:
+      - preparation
+      - activation
+      - input
+      - admission
+      - derivation
+      - output_keys
+      - verification
+      - output
+      - composition
+  # What a progress event marks (#3762): a phase's start or end, a partition
+  # a partitioned run enters, or a batch a streamed run hands out.
+  progress_kind:
+    rust: yamaa::PROGRESS_KINDS
+    values: [start, end, partition, batch]
 
 # Table columns, in order. Each table names the facade constant that holds
 # its column names, and the generator refuses any difference. Column types are
@@ -274,8 +295,22 @@ tables:
       - name: retired_in
         type: optional<str>
         meaning: the release that retired it, such as 1.0.0; missing for a condition the engine may report
+  # #3762: the phases a result ran. Timings live on the result alone; no saved
+  # file holds them (P10).
+  timings:
+    rust: yamaa::TIMING_COLUMNS
+    order: the phases in the order they started, a project run's specifications in run order and a submission's sections in section order
+    columns:
+      - name: name
+        type: str
+        meaning: "a project run member's listed name, a submission's section, or else the specification's path as given"
+      - {name: phase, type: str, values: progress_phase}
+      - {name: started_ms, type: float, meaning: milliseconds from the start of the operation}
+      - {name: elapsed_ms, type: optional<float>, meaning: "milliseconds the phase took; missing for a phase that never ended"}
+      - {name: outcome, type: optional<str>, values: status, meaning: "succeeded or failed; missing for a phase that never ended"}
 
-# Named records a host returns as a dict or named list.
+# Named records a host returns, or passes to a callback, as a dict or named
+# list.
 records:
   # D41 (P-INFO-1): what the engine is and where it runs, in the order of the
   # facade's yamaa::Info; info() returns it, and a selftest holds it.
@@ -290,6 +325,19 @@ records:
       - {name: host, type: str, values: host}
       - {name: host_version, type: optional<str>, meaning: "the Python or R version; missing for cli"}
       - {name: platform, type: str, meaning: "`<os>-<arch>` of the compiled engine, such as linux-x86_64"}
+  # #3762: the one argument a progress callback receives, in the order of the
+  # facade's yamaa::ProgressEvent.
+  progress_event:
+    owner: "#3762; yamaa::ProgressEvent"
+    fields:
+      - name: name
+        type: str
+        meaning: "a project run member's listed name, a submission's section, or else the specification's path as given"
+      - {name: phase, type: str, values: progress_phase}
+      - {name: kind, type: str, values: progress_kind}
+      - {name: outcome, type: optional<str>, values: status, meaning: "an end's outcome, succeeded or failed; missing otherwise"}
+      - {name: number, type: optional<int>, meaning: "a partition's or a batch's number, from 1; missing otherwise"}
+      - {name: rows, type: optional<int>, meaning: "the driver records of a partition or the rows of a batch; missing otherwise"}
 
 # The user-facing surface of each host: names, arguments with their order and
 # defaults, members and result types. The generator writes the Python public
@@ -315,6 +363,11 @@ public:
     optional_path: {python: "str or os.PathLike or None, unannotated", r: "character(1) or NULL"}
     text: {python: str, r: "character(1)"}
     optional_text: {python: "str | None", r: "character(1) or NULL"}
+    # #3762: called with each progress event of the operation, on the calling
+    # thread; a callback that raises fails the result.
+    progress:
+      python: "a callable of one dict, keys in records.progress_event order, or None"
+      r: "a function of one named list, names in records.progress_event order, or NULL"
     count: {python: int, r: "numeric(1), a whole number"}
     flag: {python: bool, r: "logical(1)"}
     names: {python: "list[str]", r: "character()"}
@@ -442,6 +495,12 @@ public:
           calls: check_status
           doc: "`failed` when the check found an issue, and `succeeded` otherwise."
         - {name: issues, kind: property, returns: table, table: issues, calls: check_issues}
+        - name: timings
+          kind: property
+          returns: table
+          table: timings
+          calls: check_timings
+          doc: The time each specification's preparation took.
         - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: check_summary}
     Run:
       python: yamaa.Run
@@ -471,6 +530,12 @@ public:
           table: report
           calls: run_report
           doc: What the run read, counted and checked.
+        - name: timings
+          kind: property
+          returns: table
+          table: timings
+          calls: run_timings
+          doc: The time each phase of the run took, in the order the phases started.
         - name: save
           kind: method
           returns: paths_written
@@ -510,6 +575,12 @@ public:
           table: report
           raises: refusal
           calls: project_run_member_report
+        - name: timings
+          kind: property
+          returns: table
+          table: timings
+          raises: refusal
+          calls: project_run_member_timings
         - name: summary
           kind: printing
           python: __repr__
@@ -546,6 +617,12 @@ public:
         - {name: length, kind: protocol, python: __len__, doc: "The number of names."}
         - {name: issues, kind: property, returns: table, table: issues, calls: project_run_issues}
         - {name: report, kind: property, returns: table, table: report, calls: project_run_report}
+        - name: timings
+          kind: property
+          returns: table
+          table: timings
+          calls: project_run_timings
+          doc: The time each phase of each specification's run took, in run order.
         - name: save
           kind: method
           returns: paths_written
@@ -571,6 +648,12 @@ public:
           calls: submission_created
           doc: The ISO 8601 creation time the documents carry, as given or as read once for every section.
         - {name: issues, kind: property, returns: table, table: issues, calls: submission_issues}
+        - name: timings
+          kind: property
+          returns: table
+          table: timings
+          calls: submission_timings
+          doc: The time each section's composition took.
         - name: save
           kind: method
           returns: paths_written
@@ -588,13 +671,15 @@ public:
       members:
         - name: check
           kind: method
-          args: {parent: optional_path = None}
+          args: {parent: optional_path = None, progress: progress = None}
+          keyword_only: [progress]
           returns: Check
           raises: refusal
           calls: spec_check
           doc: >-
             Report problems without reading study data or running project code;
-            with `parent`, check this fragment as if the specification at that path were its parent.
+            with `parent`, check this fragment as if the specification at that path were its parent;
+            `progress` is called with each progress event.
         - name: resolve
           kind: method
           returns: tree
@@ -604,12 +689,14 @@ public:
         # #3697: with stream, nothing is read until the output is.
         - name: run
           kind: method
-          args: {stream: flag = false}
-          keyword_only: [stream]
+          args: {stream: flag = false, progress: progress = None}
+          keyword_only: [stream, progress]
           returns: Run
           raises: refusal
           calls: spec_run
-          doc: Build the dataset in memory, or with stream as its output is read.
+          doc: >-
+            Build the dataset in memory, or with stream as its output is read;
+            `progress` is called with each progress event.
         - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: spec_summary}
     Project:
       python: yamaa.Project
@@ -631,18 +718,25 @@ public:
           raises: refusal
           calls: project_names
           doc: The listed specifications by `domain` name, in run order, read without study data.
-        - {name: check, kind: method, returns: Check, raises: refusal, calls: project_check}
+        - name: check
+          kind: method
+          args: {progress: progress = None}
+          keyword_only: [progress]
+          returns: Check
+          raises: refusal
+          calls: project_check
         - name: run
           kind: method
-          args: {section: optional_text = None}
+          args: {section: optional_text = None, progress: progress = None}
+          keyword_only: [progress]
           returns: ProjectRun
           raises: refusal
           calls: project_run
           doc: Build every specification of one section, or of all sections.
         - name: submission
           kind: method
-          args: {section: optional_text = None, created: optional_text = None}
-          keyword_only: [created]
+          args: {section: optional_text = None, created: optional_text = None, progress: progress = None}
+          keyword_only: [created, progress]
           returns: Submission
           raises: refusal
           calls: project_submission
@@ -750,8 +844,13 @@ cli:
     stderr: >-
       only the refusals of exit status 2, each as `yamaa: <message>`, then
       `run 'yamaa --help' for usage` unless the write to standard output
-      failed; and the panic message of a selftest case that panicked, which
-      fails that case
+      failed; the panic message of a selftest case that panicked, which
+      fails that case; and under --verbose (#3762), one line per progress
+      event as it happens, `<name>: <phase> <kind>` with a partition's number
+      and records or an end's outcome; then, for each run, how it divided its
+      driver input (#3794), `<name>: partitions <strategy> <count>`; then
+      the timings table, its column names and one line per phase, each cell
+      separated by a tab
   # D68, D98: an unknown section, an unknown schema TYPE and a PATH whose type
   # cannot be read are refusals the facade explains with issues (D125, D149).
   exit_status:
@@ -786,7 +885,7 @@ cli:
     # declares. A type the command does not take, at all or with the flags
     # given, is a usage error (exit status 2).
     - name: check
-      synopsis: yamaa check PATH [--spec NAME | --parent PATH]
+      synopsis: yamaa check PATH [--spec NAME | --parent PATH] [--verbose]
       args:
         - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
       flags:
@@ -796,11 +895,12 @@ cli:
           meaning: the specification the fragment is checked on, as its parent
           valid_when: "PATH declares type: spec, without --spec"
           host: Spec.check(parent)
+        - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Spec.check(progress)}
       operations: [spec_check, project_check, project_spec]
       text: the summary line, then each issue's line
       json_keys: [command, path, spec, status, issues]
     - name: run
-      synopsis: yamaa run PATH [--spec NAME | --section SECTION]
+      synopsis: yamaa run PATH [--spec NAME | --section SECTION] [--verbose]
       args:
         - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
       flags:
@@ -813,6 +913,7 @@ cli:
           values: section
           valid_when: "PATH declares type: project, without --spec"
           host: Project.run(section)
+        - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Spec.run(progress)}
       operations: [spec_run, run_save, project_spec, project_run, project_run_save]
       effect: "runs, then saves; a failed run saves only its report (OUTPUT-10, PROJECT-12)"
       text: "the summary line, a project run's member lines, each issue's line, then each written path"
@@ -820,7 +921,7 @@ cli:
     # D129: without --created, the submission reads the clock once for every
     # section and prints the time it read.
     - name: submission
-      synopsis: yamaa submission PATH [--section SECTION] [--created TIME]
+      synopsis: yamaa submission PATH [--section SECTION] [--created TIME] [--verbose]
       args:
         - {name: PATH, type: path, valid_when: "PATH declares type: project"}
       flags:
@@ -829,6 +930,7 @@ cli:
           value: TIME
           meaning: the ISO 8601 creation time the documents carry
           host: Project.submission(created=TIME)
+        - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Project.submission(progress)}
       operations: [project_submission, submission_save]
       effect: composes, then saves
       text: "the summary line, `created: <time>` when --created is omitted, each issue's line, then each written path"
@@ -972,6 +1074,7 @@ python:
       methods:
         - {name: status, args: {}, returns: text}
         - {name: issues, args: {}, returns: Table}
+        - {name: timings, args: {}, returns: Table}
         - {name: summary, args: {}, returns: text}
     - kind: class
       name: _Run
@@ -982,6 +1085,7 @@ python:
         - {name: output, args: {}, returns: "optional<Table>"}
         - {name: issues, args: {}, returns: Table}
         - {name: report, args: {}, returns: "optional<Table>"}
+        - {name: timings, args: {}, returns: Table}
         - {name: save, args: {}, returns: "list<text>"}
         - {name: summary, args: {}, returns: text}
         - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
@@ -996,9 +1100,11 @@ python:
         - {name: output, args: {name: text}, returns: "optional<Table>"}
         - {name: member_issues, args: {name: text}, returns: Table}
         - {name: member_report, args: {name: text}, returns: "optional<Table>"}
+        - {name: member_timings, args: {name: text}, returns: Table}
         - {name: member_summary, args: {name: text}, returns: text}
         - {name: issues, args: {}, returns: Table}
         - {name: report, args: {}, returns: Table}
+        - {name: timings, args: {}, returns: Table}
         - {name: save, args: {}, returns: "list<text>"}
         - {name: summary, args: {}, returns: text}
     - kind: class
@@ -1009,6 +1115,7 @@ python:
         - {name: status, args: {}, returns: text}
         - {name: created, args: {}, returns: text}
         - {name: issues, args: {}, returns: Table}
+        - {name: timings, args: {}, returns: Table}
         - {name: save, args: {}, returns: "list<text>"}
         - {name: summary, args: {}, returns: text}
     - kind: class
@@ -1033,7 +1140,11 @@ python:
     - kind: function
       name: _spec_check
       rust: api_entry::_spec_check
-      args: {specification: text, project: "optional<text> = None", parent: "optional<text> = None"}
+      args:
+        specification: text
+        project: "optional<text> = None"
+        parent: "optional<text> = None"
+        progress: "optional<host_callback> = None"
       returns: _Check
     - kind: function
       name: _spec_summary
@@ -1048,6 +1159,7 @@ python:
         project: "optional<text> = None"
         plans: "optional<_Plans> = None"
         stream: "bool = false"
+        progress: "optional<host_callback> = None"
       returns: _Run
     - kind: function
       name: _spec_resolve
@@ -1072,17 +1184,25 @@ python:
     - kind: function
       name: _project_check
       rust: api_entry::_project_check
-      args: {project: text}
+      args: {project: text, progress: "optional<host_callback> = None"}
       returns: _Check
     - kind: function
       name: _project_run
       rust: api_entry::_project_run
-      args: {project: text, section: "optional<text> = None", plans: "optional<_Plans> = None"}
+      args:
+        project: text
+        section: "optional<text> = None"
+        plans: "optional<_Plans> = None"
+        progress: "optional<host_callback> = None"
       returns: _ProjectRun
     - kind: function
       name: _project_submission
       rust: api_entry::_project_submission
-      args: {project: text, section: "optional<text> = None", created: "optional<text> = None"}
+      args:
+        project: text
+        section: "optional<text> = None"
+        created: "optional<text> = None"
+        progress: "optional<host_callback> = None"
       returns: _Submission
     - kind: function
       name: _read_odm
@@ -1144,14 +1264,24 @@ r:
     - module: api_entry
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
-        - {name: spec_check, args: {specification: raw, project: robj, parent: robj, version: raw}, returns: r_reply}
+        - name: spec_check
+          args: {specification: raw, project: robj, parent: robj, version: raw, progress: robj}
+          returns: r_reply
         - {name: check_status, args: {handle: robj}, returns: r_reply}
         - {name: check_issues, args: {handle: robj}, returns: r_reply}
+        - {name: check_timings, args: {handle: robj}, returns: r_reply}
         - {name: check_summary, args: {handle: robj}, returns: r_reply}
         - {name: spec_summary, args: {specification: raw}, returns: r_reply}
         - {name: plans, args: {handle: robj}, returns: r_reply}
         - name: spec_run
-          args: {specification: raw, project: robj, version: raw, capabilities: r_list, plans: robj, stream: bool}
+          args:
+            specification: raw
+            project: robj
+            version: raw
+            capabilities: r_list
+            plans: robj
+            stream: bool
+            progress: robj
           returns: r_reply
         - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
         - name: read_odm
@@ -1161,15 +1291,16 @@ r:
         - {name: run_output, args: {handle: robj}, returns: r_reply}
         - {name: run_issues, args: {handle: robj}, returns: r_reply}
         - {name: run_report, args: {handle: robj}, returns: r_reply}
+        - {name: run_timings, args: {handle: robj}, returns: r_reply}
         - {name: run_save, args: {handle: robj}, returns: r_reply}
         - {name: run_summary, args: {handle: robj}, returns: r_reply}
         - {name: run_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
         - {name: project_summary, args: {project: raw}, returns: r_reply}
         - {name: project_names, args: {project: raw, version: raw}, returns: r_reply}
-        - {name: project_check, args: {project: raw, version: raw}, returns: r_reply}
+        - {name: project_check, args: {project: raw, version: raw, progress: robj}, returns: r_reply}
         - name: project_run
-          args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj}
+          args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj, progress: robj}
           returns: r_reply
         - {name: project_run_status, args: {handle: robj}, returns: r_reply}
         - {name: project_run_names, args: {handle: robj}, returns: r_reply}
@@ -1177,17 +1308,20 @@ r:
         - {name: project_run_output, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_member_issues, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_member_report, args: {handle: robj, name: raw}, returns: r_reply}
+        - {name: project_run_member_timings, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_member_summary, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_issues, args: {handle: robj}, returns: r_reply}
         - {name: project_run_report, args: {handle: robj}, returns: r_reply}
+        - {name: project_run_timings, args: {handle: robj}, returns: r_reply}
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
         - {name: project_run_summary, args: {handle: robj}, returns: r_reply}
         - name: project_submission
-          args: {project: raw, section: robj, created: robj, version: raw}
+          args: {project: raw, section: robj, created: robj, version: raw, progress: robj}
           returns: r_reply
         - {name: submission_status, args: {handle: robj}, returns: r_reply}
         - {name: submission_created, args: {handle: robj}, returns: r_reply}
         - {name: submission_issues, args: {handle: robj}, returns: r_reply}
+        - {name: submission_timings, args: {handle: robj}, returns: r_reply}
         - {name: submission_save, args: {handle: robj}, returns: r_reply}
         - {name: submission_summary, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
@@ -1213,6 +1347,7 @@ operations:
   spec_check: {python: [_spec_check], r: [spec_check]}
   check_status: {python: [_Check.status], r: [check_status]}
   check_issues: {python: [_Check.issues], r: [check_issues]}
+  check_timings: {python: [_Check.timings], r: [check_timings]}
   check_summary: {python: [_Check.summary], r: [check_summary]}
   spec_summary: {python: [_spec_summary], r: [spec_summary]}
   spec_run: {python: [_spec_run], r: [spec_run]}
@@ -1222,6 +1357,7 @@ operations:
   run_output: {python: [_Run.output], r: [run_output]}
   run_issues: {python: [_Run.issues], r: [run_issues]}
   run_report: {python: [_Run.report], r: [run_report]}
+  run_timings: {python: [_Run.timings], r: [run_timings]}
   run_save: {python: [_Run.save], r: [run_save]}
   run_summary: {python: [_Run.summary], r: [run_summary]}
   run_observations: {python: [_Run.observations], r: [run_observations]}
@@ -1236,15 +1372,18 @@ operations:
   project_run_output: {python: [_ProjectRun.output], r: [project_run_output]}
   project_run_member_issues: {python: [_ProjectRun.member_issues], r: [project_run_member_issues]}
   project_run_member_report: {python: [_ProjectRun.member_report], r: [project_run_member_report]}
+  project_run_member_timings: {python: [_ProjectRun.member_timings], r: [project_run_member_timings]}
   project_run_member_summary: {python: [_ProjectRun.member_summary], r: [project_run_member_summary]}
   project_run_issues: {python: [_ProjectRun.issues], r: [project_run_issues]}
   project_run_report: {python: [_ProjectRun.report], r: [project_run_report]}
+  project_run_timings: {python: [_ProjectRun.timings], r: [project_run_timings]}
   project_run_save: {python: [_ProjectRun.save], r: [project_run_save]}
   project_run_summary: {python: [_ProjectRun.summary], r: [project_run_summary]}
   project_submission: {python: [_project_submission], r: [project_submission]}
   submission_status: {python: [_Submission.status], r: [submission_status]}
   submission_created: {python: [_Submission.created], r: [submission_created]}
   submission_issues: {python: [_Submission.issues], r: [submission_issues]}
+  submission_timings: {python: [_Submission.timings], r: [submission_timings]}
   submission_save: {python: [_Submission.save], r: [submission_save]}
   submission_summary: {python: [_Submission.summary], r: [submission_summary]}
   lint: {python: [_lint], r: [lint]}

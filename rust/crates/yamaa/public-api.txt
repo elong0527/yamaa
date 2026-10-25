@@ -12,6 +12,7 @@ yamaa: pub mod host
 yamaa: pub mod info
 yamaa: pub mod lint
 yamaa: pub mod odm
+yamaa: pub mod progress
 yamaa: pub mod scalar
 yamaa: pub mod schema
 yamaa: pub mod selftest
@@ -31,6 +32,7 @@ yamaa::DataType: pub use yamaa::table::DataType [cfg(feature = "arrow")]
 yamaa::Date32Array: pub use yamaa::table::Date32Array [cfg(feature = "arrow")]
 yamaa::Diagnostic: pub use yamaa::diagnostic::Diagnostic
 yamaa::DiagnosticContext: pub use yamaa::diagnostic::DiagnosticContext
+yamaa::Division: pub use yamaa::progress::Division
 yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::FEATURES: pub use yamaa::info::FEATURES
@@ -60,10 +62,16 @@ yamaa::MemoryResolver: pub use yamaa::host::resolver::MemoryResolver
 yamaa::ODM_COLUMNS: pub use yamaa::odm::ODM_COLUMNS
 yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
 yamaa::PHASES: pub use yamaa::diagnostic::PHASES
+yamaa::PROGRESS_KINDS: pub use yamaa::progress::PROGRESS_KINDS
+yamaa::PROGRESS_PHASES: pub use yamaa::progress::PROGRESS_PHASES
 yamaa::Partitions: pub use yamaa::engine::Partitions
 yamaa::Phase: pub use yamaa::diagnostic::Phase
 yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Position: pub use yamaa::diagnostic::Position
+yamaa::ProgressCallback: pub use yamaa::progress::ProgressCallback
+yamaa::ProgressEvent: pub use yamaa::progress::ProgressEvent
+yamaa::ProgressKind: pub use yamaa::progress::ProgressKind
+yamaa::ProgressPhase: pub use yamaa::progress::ProgressPhase
 yamaa::ProjectFunctions: pub use yamaa::host::functions::ProjectFunctions
 yamaa::ProjectRequest: pub use yamaa::api::ProjectRequest
 yamaa::ProjectRun: pub use yamaa::api::ProjectRun
@@ -92,10 +100,13 @@ yamaa::StringViewArray: pub use yamaa::table::StringViewArray [cfg(feature = "ar
 yamaa::Submission: pub use yamaa::api::Submission
 yamaa::SubmissionOptions: pub use yamaa::api::SubmissionOptions
 yamaa::Summary: pub use yamaa::text::Summary
+yamaa::TIMING_COLUMNS: pub use yamaa::progress::TIMING_COLUMNS
 yamaa::Table: pub use yamaa::table::Table
 yamaa::TableError: pub use yamaa::error::TableError
 yamaa::TimeUnit: pub use yamaa::table::TimeUnit [cfg(feature = "arrow")]
 yamaa::TimestampSecondArray: pub use yamaa::table::TimestampSecondArray [cfg(feature = "arrow")]
+yamaa::Timing: pub use yamaa::progress::Timing
+yamaa::Timings: pub use yamaa::progress::Timings
 yamaa::VERSION: pub const VERSION: &str
 yamaa::api::Check: impl Check
 yamaa::api::Check: pub struct Check
@@ -103,6 +114,7 @@ yamaa::api::Check::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnost
 yamaa::api::Check::issues: pub fn issues(&self) -> Table
 yamaa::api::Check::status: pub fn status(&self) -> Status
 yamaa::api::Check::summary: pub fn summary(&self) -> Summary
+yamaa::api::Check::timings: pub fn timings(&self) -> Timings
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine::project: pub fn project<'a>(&'a self, path: &'a str) -> ProjectRequest<'a>
 yamaa::api::Engine::spec: pub fn spec<'a>(&'a self, path: &'a str) -> SpecRequest<'a>
@@ -132,6 +144,7 @@ yamaa::api::ProjectRun::report: pub fn report(&self) -> Table
 yamaa::api::ProjectRun::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::ProjectRun::status: pub fn status(&self) -> Status
 yamaa::api::ProjectRun::summary: pub fn summary(&self) -> Summary
+yamaa::api::ProjectRun::timings: pub fn timings(&self) -> Timings
 yamaa::api::Run: impl Run
 yamaa::api::Run: pub struct Run
 yamaa::api::Run::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
@@ -143,6 +156,7 @@ yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
 yamaa::api::Run::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::Run::status: pub fn status(&self) -> Status
 yamaa::api::Run::summary: pub fn summary(&self) -> Summary
+yamaa::api::Run::timings: pub fn timings(&self) -> Timings
 yamaa::api::SECTIONS: pub const SECTIONS: [&str; 3]
 yamaa::api::STATUSES: pub const STATUSES: [&str; 3]
 yamaa::api::SpecRequest: impl std::fmt::Debug for SpecRequest<'_>
@@ -171,6 +185,7 @@ yamaa::api::Submission::issues: pub fn issues(&self) -> Table
 yamaa::api::Submission::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::Submission::status: pub fn status(&self) -> Status
 yamaa::api::Submission::summary: pub fn summary(&self) -> Summary
+yamaa::api::Submission::timings: pub fn timings(&self) -> Timings
 yamaa::api::SubmissionOptions: impl SubmissionOptions
 yamaa::api::SubmissionOptions: pub struct SubmissionOptions [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::api::SubmissionOptions::created: pub created: Option<String>
@@ -288,11 +303,13 @@ yamaa::engine::EngineOptions::host_language: pub host_language: Option<HostLangu
 yamaa::engine::EngineOptions::neutral: pub fn neutral(runtime_name: String, runtime_version: String) -> Self
 yamaa::engine::EngineOptions::new: pub fn new(host_language: HostLanguage, runtime_name: String, runtime_version: String) -> Self
 yamaa::engine::EngineOptions::partitions: pub partitions: Option<Partitions>
+yamaa::engine::EngineOptions::progress: pub progress: Option<ProgressCallback>
 yamaa::engine::EngineOptions::resolver: pub resolver: Option<Arc<dyn ResourceResolver>>
 yamaa::engine::EngineOptions::runtime_name: pub runtime_name: String
 yamaa::engine::EngineOptions::runtime_version: pub runtime_version: String
 yamaa::engine::EngineOptions::with_functions: pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self
 yamaa::engine::EngineOptions::with_partitions: pub fn with_partitions(mut self, partitions: Partitions) -> Self
+yamaa::engine::EngineOptions::with_progress: pub fn with_progress(mut self, progress: impl Fn(&ProgressEvent) -> Result<(), FunctionError> + Send + Sync + 'static) -> Self
 yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
 yamaa::engine::Partitions: impl Partitions
 yamaa::engine::Partitions: pub struct Partitions [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -559,6 +576,52 @@ yamaa::odm::OdmOptions::with_archive_member: pub fn with_archive_member(mut self
 yamaa::odm::OdmOptions::with_max_archive_members: pub fn with_max_archive_members(mut self, limit: usize) -> Self
 yamaa::odm::OdmOptions::with_max_expanded_bytes: pub fn with_max_expanded_bytes(mut self, limit: u64) -> Self
 yamaa::odm::OdmOptions::with_max_xml_depth: pub fn with_max_xml_depth(mut self, limit: usize) -> Self
+yamaa::progress::Division: pub struct Division [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::progress::Division::count: pub count: usize
+yamaa::progress::Division::name: pub name: String
+yamaa::progress::Division::strategy: pub strategy: &'static str
+yamaa::progress::PROGRESS_KINDS: pub const PROGRESS_KINDS: [&str; 4]
+yamaa::progress::PROGRESS_PHASES: pub const PROGRESS_PHASES: [&str; 9]
+yamaa::progress::ProgressCallback: pub type ProgressCallback = Arc<dyn Fn(&ProgressEvent) -> Result<(), FunctionError> + Send + Sync>
+yamaa::progress::ProgressEvent: pub struct ProgressEvent [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::progress::ProgressEvent::kind: pub kind: ProgressKind
+yamaa::progress::ProgressEvent::name: pub name: String
+yamaa::progress::ProgressEvent::number: pub number: Option<usize>
+yamaa::progress::ProgressEvent::outcome: pub outcome: Option<Status>
+yamaa::progress::ProgressEvent::phase: pub phase: ProgressPhase
+yamaa::progress::ProgressEvent::rows: pub rows: Option<usize>
+yamaa::progress::ProgressKind: impl ProgressKind
+yamaa::progress::ProgressKind: pub enum ProgressKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::progress::ProgressKind::Batch: Batch
+yamaa::progress::ProgressKind::End: End
+yamaa::progress::ProgressKind::Partition: Partition
+yamaa::progress::ProgressKind::Start: Start
+yamaa::progress::ProgressKind::as_str: pub fn as_str(self) -> &'static str
+yamaa::progress::ProgressPhase: impl ProgressPhase
+yamaa::progress::ProgressPhase: pub enum ProgressPhase [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::progress::ProgressPhase::Activation: Activation
+yamaa::progress::ProgressPhase::Admission: Admission
+yamaa::progress::ProgressPhase::Composition: Composition
+yamaa::progress::ProgressPhase::Derivation: Derivation
+yamaa::progress::ProgressPhase::Input: Input
+yamaa::progress::ProgressPhase::Output: Output
+yamaa::progress::ProgressPhase::OutputKeys: OutputKeys
+yamaa::progress::ProgressPhase::Preparation: Preparation
+yamaa::progress::ProgressPhase::Verification: Verification
+yamaa::progress::ProgressPhase::as_str: pub fn as_str(self) -> &'static str
+yamaa::progress::TIMING_COLUMNS: pub const TIMING_COLUMNS: [&str; 5]
+yamaa::progress::Timing: pub struct Timing [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::progress::Timing::elapsed: pub elapsed: Option<Duration>
+yamaa::progress::Timing::name: pub name: String
+yamaa::progress::Timing::outcome: pub outcome: Option<Status>
+yamaa::progress::Timing::phase: pub phase: ProgressPhase
+yamaa::progress::Timing::started: pub started: Duration
+yamaa::progress::Timings: impl Timings
+yamaa::progress::Timings: pub struct Timings [derive(Clone, Debug, Default, Eq, PartialEq)]
+yamaa::progress::Timings::divisions: pub fn divisions(&self) -> &[Division]
+yamaa::progress::Timings::entries: pub fn entries(&self) -> &[Timing]
+yamaa::progress::Timings::lines: pub fn lines(&self) -> Vec<String>
+yamaa::progress::Timings::table: pub fn table(&self) -> Table
 yamaa::scalar::Date: impl Date
 yamaa::scalar::Date: pub struct Date [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::scalar::Date::epoch_days: pub fn epoch_days(self) -> i32
