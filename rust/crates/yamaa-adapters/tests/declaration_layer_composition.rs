@@ -3,12 +3,18 @@
 //! P-CLR-1, P-CLR-2, P-NULL-1).
 //!
 //! A layer's `clear` removes values it inherits before its own fields
-//! compose, YAML null is the missing value and never removes anything, a
-//! finding names row templates and intermediates by `id`, and the resolved
-//! specification keeps the provenance of every value. A layer's fragments
-//! compose after its parent chain and before its own fields, each fragment
-//! read from its own directory. The converted `negative-property-clear`
-//! fails where its 0.5 source did.
+//! compose, YAML null is the missing value and never removes anything, and
+//! the resolved specification keeps the provenance of every value. A layer's
+//! fragments compose after its parent chain and before its own fields, each
+//! fragment read from its own directory.
+//!
+//! What the public check or save of a layered study reports is a case of
+//! `fixtures/diagnostics/layer_composition.json`: a refused null, `clear` or
+//! `include`, a keyed member without its identity, findings named by `id`, a
+//! resolved specification without `output`, the converted
+//! `negative-property-clear`, and the output of a window composed by name.
+//! The tests left here compare the resolved specification, the layer that
+//! declares each value, or the resolved artifact, which no case states.
 mod declaration {
     mod layer_composition {
         use crate::support::Edit as _;
@@ -18,16 +24,12 @@ mod declaration {
         use yamaa_adapters::document::{self, Closures, PreparedSpecification, SpecificationError};
         use yamaa_adapters::resolved_artifact::{self, model::specification_value};
 
-        use yamaa_adapters::specification_source::{Error, Source};
-        use yamaa_core::diagnostic::ConditionCode;
-        use yamaa_core::domain_entry::Request;
-        use yamaa_core::inheritance::{self as graph, Source as GraphSource};
+        use yamaa_adapters::specification_source::Source;
+        use yamaa_core::inheritance::Source as GraphSource;
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
-        use yamaa_core::project_function::Language;
         use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
         use yamaa_core::resource::ResourceFailure;
-        use yamaa_core::schema::{NormalizationError, SchemaContext as C, SchemaDiagnostic};
 
         struct Study(crate::support::Scratch);
         impl Study {
@@ -160,44 +162,6 @@ mod declaration {
             yamaa_adapters::json_wire::decode(text).unwrap()
         }
 
-        /// One finding as a test compares it: its cause, path and context.
-        type Finding = (ConditionCode, String, Vec<(&'static str, C)>);
-
-        fn finding(finding: &SchemaDiagnostic) -> Finding {
-            (finding.code, finding.path.clone(), finding.context.clone())
-        }
-
-        fn invalid_clear(index: usize, field: &str) -> Finding {
-            (
-                ConditionCode::SchemaLayerInvalidClear,
-                format!("clear[{index}]"),
-                vec![("field", C::Text(field.into()))],
-            )
-        }
-
-        /// The findings in the layer a refused chain names, and that layer.
-        fn layer_findings(error: SpecificationError<std::io::Error>) -> (String, Vec<Finding>) {
-            match error {
-                SpecificationError::Clear {
-                    source, findings, ..
-                } => (source.identity, findings.iter().map(finding).collect()),
-                SpecificationError::Traversal(graph::Error::Layer {
-                    source,
-                    error: NormalizationError::Invalid(findings),
-                    ..
-                }) => (source, findings.iter().map(finding).collect()),
-                other => panic!("findings in a layer: {other:?}"),
-            }
-        }
-
-        /// The findings in a resolved specification that is not valid.
-        fn resolved_findings(error: SpecificationError<std::io::Error>) -> Vec<Finding> {
-            let SpecificationError::Entry(Error::Findings(captured)) = error else {
-                panic!("findings in the resolved specification: {error:?}");
-            };
-            captured.findings().iter().map(finding).collect()
-        }
-
         const BASE: &str = r#"yamaa: "1.0"
 type: spec
 input:
@@ -245,6 +209,8 @@ output: {path: out.csv, columns: [CODE, REASON]}
             text + rest
         }
 
+        /// Seam: the resolved specification's values and the layer that
+        /// declares each one (`declaring_source`), which no case states.
         #[test]
         fn a_clear_removes_what_the_layer_inherits_before_its_own_fields_compose() {
             let study = Study::new();
@@ -309,6 +275,8 @@ output: {path: out.csv, columns: [CODE, REASON]}
             }
         }
 
+        /// Seam: the resolved specification's `relative_to` and the path it
+        /// respells from the entry, which no case states.
         #[test]
         fn a_cleared_field_takes_its_default_again_and_its_path_its_base() {
             let study = Study::new();
@@ -335,6 +303,8 @@ output: {path: out.csv, columns: [CODE, REASON]}
             assert_eq!(at(&spec, "/input/DS/path"), &json(r#""../shared/ds.csv""#));
         }
 
+        /// Seam: the resolved specification's mapping and derivation values,
+        /// which no case states.
         #[test]
         fn yaml_null_is_the_missing_value_and_never_removes_anything() {
             let study = Study::new();
@@ -358,278 +328,9 @@ output: {path: out.csv, columns: [CODE, REASON]}
             assert_eq!(at(&spec, "/columns/0/derivation/value"), &Value::Null);
         }
 
-        #[test]
-        fn yaml_null_is_refused_outside_value_and_expression_fields() {
-            let study = Study::new();
-            const ALONE: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
-            for (old, new, path) in [
-                ("label: Identifier", "label: null", "columns.ID.label"),
-                ("type: int", "type: null", "columns.ID.type"),
-                ("name: ID,", "name: null,", "columns[0].name"),
-                ("keys: [ID]", "keys: null", "keys"),
-                ("keys: [ID]", "keys: [null]", "keys[0]"),
-                ("domain: TEST", "domain: null", "domain"),
-                ("domain: TEST", "domain: TEST\nparent: null", "parent"),
-                ("domain: TEST", "domain: TEST\nmetadata: null", "metadata"),
-                (
-                    "domain: TEST",
-                    "domain: TEST\nmetadata: {scope: null}",
-                    "metadata.scope",
-                ),
-                ("input: {SRC: input.csv}", "input: {SRC: null}", "input.SRC"),
-                ("input: {SRC: input.csv}", "input: null", "input"),
-                ("path: output.csv", "path: null", "output.path"),
-            ] {
-                assert!(ALONE.contains(old), "{old}");
-                study.write("spec.yaml", &ALONE.replacen(old, new, 1));
-                let (layer, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-                assert_eq!(layer, study.path("spec.yaml"));
-                assert!(
-                    found.iter().any(|(code, at, _)| *code
-                        == ConditionCode::SchemaInvalidFieldType
-                        && at == path),
-                    "{new}: {found:?}"
-                );
-            }
-        }
-
-        #[test]
-        fn a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it() {
-            // Inside a member of `columns`, `rows` or `intermediates`
-            // requiredness waits for the resolved specification, but the
-            // member carries the `name` or `id` that composition matches it
-            // by (LAYER-4). Without it the member fails where it is written,
-            // named by its index (P-CLR-2), as a missing required field
-            // (SCHEMA-13), not as an engine fault (D73).
-            let study = Study::new();
-            const HEAD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\n";
-            let alone = format!(
-                "{HEAD}columns:\n  - {{name: ID, type: str, label: Identifier, derivation: SRC.ID}}\n"
-            );
-            let missing = |path: &str, field: &str, class: &str| -> Finding {
-                (
-                    ConditionCode::SchemaMissingRequiredField,
-                    path.into(),
-                    vec![
-                        ("field", C::Text(field.into())),
-                        ("class", C::Text(class.into())),
-                    ],
-                )
-            };
-            for (text, expected) in [
-                (
-                    format!("{alone}  - {{type: str, label: Nameless, derivation: \"'X'\"}}\n"),
-                    missing("columns[1].name", "name", "column_class"),
-                ),
-                (
-                    format!("{alone}  - {{}}\n"),
-                    missing("columns[1].name", "name", "column_class"),
-                ),
-                (
-                    format!("{alone}intermediates:\n  - {{dataset: SRC, key: [ID]}}\n"),
-                    missing("intermediates[0].id", "id", "intermediate_class"),
-                ),
-                (
-                    format!(
-                        "{HEAD}columns:\n  - {{name: ID, type: str, label: Identifier}}\nrows:\n  - {{dataset: SRC, derivations: {{ID: SRC.ID}}}}\n"
-                    ),
-                    missing("rows[0].id", "id", "row_class"),
-                ),
-            ] {
-                study.write("spec.yaml", &text);
-                assert_eq!(
-                    layer_findings(prepare(&study.path("spec.yaml")).unwrap_err()),
-                    (study.path("spec.yaml"), vec![expected]),
-                    "{text}"
-                );
-            }
-            // A child layer's member is matched with the one it inherits by
-            // that identity too.
-            study.write("base.yaml", BASE);
-            study.write(
-                "spec.yaml",
-                &entry(&[], "columns:\n  - {label: Nameless}\n"),
-            );
-            assert_eq!(
-                layer_findings(prepare(&study.path("spec.yaml")).unwrap_err()),
-                (
-                    study.path("spec.yaml"),
-                    vec![missing("columns[0].name", "name", "column_class")]
-                )
-            );
-        }
-
-        #[test]
-        fn a_clear_that_names_what_it_cannot_clear_fails_at_its_entry() {
-            let study = Study::new();
-            study.write("base.yaml", BASE);
-            // Every entry is checked, and each fault is reported at its own
-            // `clear[i]` with the field the path ends at; the valid entry
-            // among them is not reported.
-            let paths = [
-                "columns.MISSING.label",
-                "columns.CODE.type",
-                "columns.CODE.name",
-                "input.DS",
-                "yamaa",
-                "type",
-                "columns.REASON.derivation.mapping.dict.XX",
-                "columns.REASON.derivation.mapping.source",
-                "metadata.label",
-                "parent",
-                "columns.CODE.label",
-            ];
-            study.write("spec.yaml", &entry(&paths, ""));
-            let (layer, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-            assert_eq!(layer, study.path("spec.yaml"));
-            let fields = [
-                "label", "type", "name", "DS", "yamaa", "type", "XX", "source", "label", "parent",
-            ];
-            assert_eq!(
-                found,
-                fields
-                    .iter()
-                    .enumerate()
-                    .map(|(index, field)| invalid_clear(index, field))
-                    .collect::<Vec<_>>()
-            );
-            // A keyed member itself, and an operation keyword without the
-            // field that holds it, stay.
-            for (path, field) in [
-                ("columns.CODE", "CODE"),
-                ("columns.REASON.derivation.mapping", "mapping"),
-            ] {
-                study.write("spec.yaml", &entry(&[path], ""));
-                let (_, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-                assert_eq!(found, [invalid_clear(0, field)], "{path}");
-            }
-            // A value that came from a schema default is not inherited.
-            study.write(
-                "base.yaml",
-                &format!("{BASE}output: {{path: base.csv, columns: [CODE]}}\n"),
-            );
-            study.write(
-                "spec.yaml",
-                &entry(&["output.relative_to"], "")
-                    .edit("output: {path: out.csv, columns: [CODE, REASON]}\n", ""),
-            );
-            let (_, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-            assert_eq!(found, [invalid_clear(0, "relative_to")]);
-            // A layer without a parent inherits nothing to clear.
-            study.write("base.yaml", &format!("{BASE}clear: [metadata.scope]\n"));
-            study.write("spec.yaml", &entry(&[], ""));
-            let (layer, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-            assert_eq!(layer, study.path("base.yaml"));
-            assert_eq!(found, [invalid_clear(0, "scope")]);
-        }
-
-        #[test]
-        fn a_clear_list_is_spec_paths_none_covering_another() {
-            let study = Study::new();
-            study.write("base.yaml", BASE);
-            // A path outside the notation, and a path beside one of its
-            // prefixes, fail when the layer is admitted, before composition.
-            study.write(
-                "spec.yaml",
-                &entry(
-                    &[
-                        "columns[0].label",
-                        "columns.CODE.metadata",
-                        "$",
-                        "columns.CODE.metadata.owner",
-                        "metadata..scope",
-                        "columns.CODE.metadata",
-                    ],
-                    "",
-                ),
-            );
-            let (layer, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-            assert_eq!(layer, study.path("spec.yaml"));
-            assert_eq!(
-                found,
-                [
-                    invalid_clear(0, "columns[0].label"),
-                    invalid_clear(2, "$"),
-                    invalid_clear(3, "owner"),
-                    invalid_clear(4, "metadata..scope"),
-                    invalid_clear(5, "metadata"),
-                ]
-            );
-        }
-
-        #[test]
-        fn findings_name_row_templates_and_intermediates_by_id() {
-            let study = Study::new();
-            const ROWS: &str = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: input.csv, key: [ID]}}
-output: {path: output.csv, columns: [ID]}
-intermediates:
-  - {id: FIRST, dataset: SRC, key: [ID], other: 1}
-rows:
-  - {id: week2, dataset: SRC, other: 1}
-  - {id: 'week 3', dataset: SRC, other: 1}
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-"#;
-            study.write("spec.yaml", ROWS);
-            let (_, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-            let paths = found
-                .iter()
-                .map(|(code, path, _)| (*code, path.as_str()))
-                .collect::<Vec<_>>();
-            assert_eq!(
-                paths,
-                [
-                    (
-                        ConditionCode::SchemaUnknownField,
-                        "intermediates.FIRST.other"
-                    ),
-                    (ConditionCode::SchemaUnknownField, "rows.week2.other"),
-                    (ConditionCode::SchemaUnknownField, "rows['week 3'].other"),
-                ]
-            );
-            // A member a layer leaves incomplete is completed by no layer:
-            // the resolved specification names it by identity, and a value
-            // written bare by its shorthand (P-CLR-2). Requiredness applies
-            // after pruning (LAYER-12), so an unread intermediate is pruned
-            // with its fault, and a read one reports it.
-            let incomplete = ROWS
-                .edit("dataset: SRC, key: [ID], other: 1", "key: [ID]")
-                .replace(", other: 1}", "}")
-                .edit(
-                    "derivation: SRC.ID}",
-                    "derivation: {mapping: {dict: {A: B}}}}",
-                );
-            let required = |text: &str| {
-                study.write("spec.yaml", text);
-                resolved_findings(prepare(&study.path("spec.yaml")).unwrap_err())
-                    .into_iter()
-                    .filter(|(code, ..)| *code == ConditionCode::SchemaMissingRequiredField)
-                    .map(|(_, path, _)| path)
-                    .collect::<Vec<_>>()
-            };
-            assert_eq!(
-                required(&incomplete),
-                ["columns.ID.derivation.mapping.source"]
-            );
-            let read = incomplete.edit("columns: [ID]}", "columns: [ID, V]}").edit(
-                "columns:\n",
-                "columns:\n  - {name: V, type: str, derivation: FIRST.CODE}\n",
-            );
-            let paths = required(&read);
-            assert!(
-                paths.contains(&"intermediates.FIRST.dataset".to_string()),
-                "{paths:?}"
-            );
-            assert!(
-                paths.contains(&"columns.ID.derivation.mapping.source".to_string()),
-                "{paths:?}"
-            );
-        }
-
+        /// Seam: the resolved artifact of a chain: its entry, the origin of
+        /// each value, its resources and its JSON round trip, which no case
+        /// states.
         #[test]
         fn resolve_writes_out_a_1_0_chain_with_the_origin_of_every_value() {
             use yamaa_adapters::resolved_artifact::model::{
@@ -779,6 +480,9 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
             ) + rest
         }
 
+        /// Seam: the layers a prepared chain composes, in order, the resolved
+        /// specification's values and the layer that declares each one,
+        /// which no case states.
         #[test]
         fn fragments_compose_after_the_parent_chain_and_before_their_layer() {
             let study = Study::new();
@@ -854,6 +558,10 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
             }
         }
 
+        /// Seam: the resolved specification's `metadata` once a fragment's
+        /// `clear` applies, which no case states. The same fragment on a base
+        /// without the scope fails in the fragment, the case
+        /// `layer_composition.json::a_fragment_clear_naming_nothing_inherited_fails_in_the_fragment`.
         #[test]
         fn a_fragment_clear_applies_to_what_the_layers_before_it_compose() {
             let study = Study::new();
@@ -869,52 +577,11 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
             study.write("base.yaml", BASE);
             let spec = resolved(&prepare(&study.path("spec.yaml")).unwrap());
             assert_eq!(at(&spec, "/metadata"), &json(r#"{"owner":"base"}"#));
-            // On a base that does not, the same fragment names nothing it
-            // inherits: the finding is the fragment's (LAYER-9).
-            study.write(
-                "base.yaml",
-                &BASE.edit("metadata: {scope: organization, owner: base}\n", ""),
-            );
-            let error = prepare(&study.path("spec.yaml")).unwrap_err();
-            assert_eq!(
-                layer_findings(error),
-                (
-                    study.path("shared/unscoped.yaml"),
-                    vec![invalid_clear(0, "scope")]
-                )
-            );
         }
 
-        #[test]
-        fn an_include_entry_is_a_list_of_paths_judged_in_its_layer() {
-            let study = Study::new();
-            study.write("base.yaml", BASE);
-            // A URI is refused as written (FILE-5), and a path written alone
-            // is not the list `include` is (SCHEMA-12).
-            for (header, path, code) in [
-                (
-                    "include: [\"https://example.test/fragment.yaml\"]\n",
-                    "include[0]",
-                    ConditionCode::ResourceUriScheme,
-                ),
-                (
-                    "include: shared/fragment.yaml\n",
-                    "include",
-                    ConditionCode::SchemaInvalidFieldType,
-                ),
-            ] {
-                study.write("spec.yaml", &including(header, ""));
-                let (source, findings) =
-                    layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-                assert_eq!(source, study.path("spec.yaml"), "{header}");
-                let found = findings
-                    .iter()
-                    .map(|(code, path, _)| (*code, path.as_str()))
-                    .collect::<Vec<_>>();
-                assert_eq!(found, [(code, path)], "{header}");
-            }
-        }
-
+        /// Seam: the resolved artifact's layers, its parent and include
+        /// resources and the origin of an included value, which no case
+        /// states.
         #[test]
         fn resolve_lists_each_layer_and_each_include_entry_in_contribution_order() {
             use yamaa_adapters::resolved_artifact::model::{Location, RelativeTo, ResourceRole};
@@ -990,6 +657,10 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
             assert_eq!(origin.declaring_source.as_deref(), Some(labels.as_str()));
         }
 
+        /// Seam: the composed window definitions the resolved specification
+        /// holds inline, which no case states. What the composed windows
+        /// save is the case
+        /// `layer_composition.json::a_named_window_merged_by_name_saves_every_reference_by_the_final_definition`.
         /// A later definition of an inherited window merges with it by name,
         /// keeping the settings it does not write and the other inherited
         /// windows, and the inherited reference reads the composed definition
@@ -997,7 +668,6 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
         #[test]
         fn a_named_window_composes_by_name_and_every_reference_uses_the_final_definition() {
             let study = Study::new();
-            study.write("input.csv", "ID,G,SEQ,VAL\na,X,1,10\nb,X,,20\nc,X,2,30\n");
             study.write("base.yaml", WINDOWED);
             study.write(
                 "spec.yaml",
@@ -1016,36 +686,17 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
             ] {
                 assert_eq!(at(&spec, &pointer), &json(expected), "{pointer}");
             }
-            let path = study.path("spec.yaml");
-            let mut domain = crate::support::study::domain(
-                Language::Python,
-                Request {
-                    specification: &path,
-                    environment: None,
-                },
-                crate::support::study::identity("named-window", &path),
-            )
-            .unwrap();
-            assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-            assert!(domain.save().unwrap());
-            // VISITS orders the missing SEQ first, so its rows run b, a, c:
-            // a reads b's VAL and c reads a's, while OTHER still numbers the
-            // rows by VAL.
-            assert_eq!(
-                fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "ID,PREV,RANK\na,20,1\nb,,2\nc,10,3\n"
-            );
         }
 
+        /// Seam: the resolved specification's `output`, which the parent
+        /// contributes, and which no case states.
         /// Requiredness applies to the pruned resolved specification, never to
         /// one layer (LAYER-12): an entry that omits `output` resolves when its
-        /// parent contributes it, and when no layer contributes `output` the
-        /// resolved specification fails as `missing_required_field` at
-        /// `output`, naming the root class, the finding SCHEMA-13 owns. The
-        /// key column survives pruning (LAYER-11), so `output` is the one
-        /// required root field the resolved specification lacks.
+        /// parent contributes it. When no layer contributes `output`, the
+        /// resolved specification fails at `output`, the case
+        /// `layer_composition.json::a_resolved_specification_no_layer_gives_output_misses_it_at_the_root`.
         #[test]
-        fn a_resolved_specification_to_which_no_layer_contributes_output_fails_at_output() {
+        fn an_entry_that_omits_output_resolves_with_the_output_its_parent_contributes() {
             let study = Study::new();
             let output = "output: {path: out.csv, columns: [CODE, REASON]}\n";
             study.write("base.yaml", &format!("{BASE}{output}"));
@@ -1054,40 +705,6 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
             assert_eq!(
                 at(&resolved(&prepared), "/output/path"),
                 &json(r#""out.csv""#)
-            );
-            study.write("base.yaml", BASE);
-            assert_eq!(
-                resolved_findings(prepare(&study.path("spec.yaml")).unwrap_err()),
-                [(
-                    ConditionCode::SchemaMissingRequiredField,
-                    "output".to_string(),
-                    vec![
-                        ("field", C::Text("output".into())),
-                        ("class", C::Text("root_class".into())),
-                    ],
-                )]
-            );
-        }
-
-        /// The converted `negative-property-clear`, as the converter wrote it.
-        const CONVERTED_PARENT: &str = "yamaa: \"1.0\"\ntype: spec\ninput:\n  DM: ../input/dm.csv\nbase: DM\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
-        const CONVERTED_ENTRY: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\nparent: layers/parent.yaml\nclear:\n  # null clears the type inherited from layers/parent.yaml, but a column\n  # must have a type, so it cannot be cleared.\n  - columns.USUBJID.type\ndomain: ADSL\nkeys: [USUBJID]\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID]\n";
-
-        #[test]
-        fn the_converted_negative_property_clear_fails_as_its_source_at_clear_0() {
-            // The converted benchmark fails at the clear entry the 0.5 null
-            // became: a column must have a type (LAYER-9).
-            let study = Study::new();
-            study.write("input/dm.csv", "USUBJID\n01\n");
-            study.write("layers/parent.yaml", CONVERTED_PARENT);
-            study.write("spec.yaml", CONVERTED_ENTRY);
-            let (layer, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-            assert_eq!(layer, study.path("spec.yaml"));
-            assert_eq!(found, [invalid_clear(0, "type")]);
-            let definition = ConditionCode::SchemaLayerInvalidClear.definition();
-            assert_eq!(
-                (definition.phase, definition.condition, definition.rule),
-                ("validation", "invalid_clear", Some("LAYER-9"))
             );
         }
     }
