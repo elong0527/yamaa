@@ -33,7 +33,7 @@ it does not truncate longer text. A missing source yields missing. A width
 below one fails as `invalid_field_type`.
 
 Fails: `invalid_field_type`.
-Evidence: `negative-str-pad-width`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/fixtures/text_pad_reference.json`.
+Evidence: `negative-str-pad-width`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json`.
 
 An unknown source or a failed conversion reports its existing condition.
 
@@ -125,7 +125,7 @@ least `width` characters, a positive integer when declared; it never
 truncates. A missing source returns `missing`, or missing when it is omitted.
 
 Fails: `incompatible_input_type`, `invalid_field_type`.
-Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-adapters/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`.
+Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`.
 
 The rounding and the writing are those of CSV display precision
 ([CSV-9](reference/csv.md#csv-9)): a tie, or a value within
@@ -193,7 +193,7 @@ Every other brace must begin or end a valid placeholder; a template that does
 not parse fails validation with `invalid_string_template`.
 
 Fails: `invalid_string_template`.
-Evidence: `negative-subject-reference`, `yaml/grammar/string-template.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
+Evidence: `negative-subject-reference`, `yaml/grammar/string-template.yaml`, `rust/crates/yamaa-application/tests/fixtures/text_template_reference.json`.
 
 <!-- grammar: string-template -->
 
@@ -229,7 +229,7 @@ result is the exact concatenation of literal text and values, the empty string
 when the template is empty.
 
 Fails: `incompatible_input_type`, `missing_input`.
-Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`, `negative-str-template-missing-placeholder`.
+Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-application/tests/fixtures/text_template_reference.json`, `negative-str-template-missing-placeholder`.
 
 `str_template` accepts a bare template as
 [Schema language](reference/schema-language.md) shorthand. The shorthand
@@ -282,7 +282,7 @@ after a delimiter, and each applies the downward one to the rest. Every other
 scalar is unchanged.
 
 Fails: `unknown_field`, `invalid_field_type`.
-Evidence: `schema-sentence-case`, `schema-text-functions`, `adam-adae-proper-case-terms`, `negative-str-case-delimiters-mode`, `rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_takes_delimiters_only_with_proper`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_delimiters_that_name_no_scalar_repeat_one_or_leave_ascii`.
+Evidence: `schema-sentence-case`, `schema-text-functions`, `adam-adae-proper-case-terms`, `negative-str-case-delimiters-mode`, `rust/crates/yamaa-application/tests/fixtures/text_case_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_takes_delimiters_only_with_proper`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_delimiters_that_name_no_scalar_repeat_one_or_leave_ascii`.
 
 `proper` writes text as SAS `PROPCASE` does. Its delimiters are the scalars
 that `delimiters` lists, a non-empty string of ASCII scalars, each listed once;
@@ -402,7 +402,7 @@ end, never before a trailing `U+000A`. `.` matches every scalar except
 `U+000A`, `U+000D`, `U+2028` and `U+2029`. A pattern keeps no cursor between
 evaluations, and no consumer observes match offsets.
 
-Evidence: `yaml/conformance/regex.yaml`, `rust/crates/yamaa-adapters/tests/declaration_contract_vectors.rs::unchanged_regex_documents_and_authored_capture_controls_run_directly`.
+Evidence: `yaml/conformance/regex.yaml`, `rust/crates/yamaa-application/tests/declaration_contract_vectors.rs::unchanged_regex_documents_and_authored_capture_controls_run_directly`.
 
 ECMA-262 has no inline flag syntax, so `(?i)` is a syntax error. The `u` flag
 makes a pattern operate on the Unicode scalar values of
@@ -426,7 +426,7 @@ without `U+0085`. Every `\u{...}` escape expands to the scalar it names before
 the pattern compiles. A pattern is ASCII language source, so it matches a
 non-ASCII scalar by spelling it with that escape.
 
-Evidence: `yaml/conformance/regex.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/regex_contract.tsv`.
+Evidence: `yaml/conformance/regex.yaml`, `rust/crates/yamaa-application/tests/fixtures/regex_contract.tsv`.
 
 The `\s` set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`,
 `U+2000` through `U+200A`, `U+202F`, `U+205F`, `U+3000`, `U+FEFF`, `U+000A`,
@@ -480,7 +480,7 @@ the match does not enter yields missing. A source the pattern matches nowhere
 returns the declared `no_match` value.
 
 Fails: `regex_group_out_of_range`.
-Evidence: `negative-str-uncaptured-group`, `adam-adsl-site-parse`, `rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json`.
+Evidence: `negative-str-uncaptured-group`, `adam-adsl-site-parse`, `rust/crates/yamaa-application/tests/fixtures/text_extract_reference.json`.
 
 `(?:...)` and a character class contribute no number. The failure reports the
 path, the requested group and the number of capturing groups. A capture inside
@@ -537,7 +537,7 @@ linear in the subject, so no match is refused, and a refusal is never treated
 as an unmatched string or a skipped verification.
 
 Fails: `engine_rejected`.
-Evidence: `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs::oversized_patterns_report_the_compiled_size_limit_at_the_pattern`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/text_replace.json::a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged`, `rust/tests/host-fixtures/cases.json::pattern_beyond_the_compiled_size_limit`.
+Evidence: `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs::oversized_patterns_report_the_compiled_size_limit_at_the_pattern`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/text_replace.json::a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged`, `rust/tests/host-fixtures/cases.json::pattern_beyond_the_compiled_size_limit`.
 
 The policy is the [fixed resource policy](../docs/release.md#resource-limits).
 For a column `matches` check, `spec_paths` names its declaring pattern, such as

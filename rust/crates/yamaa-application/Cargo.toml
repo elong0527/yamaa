@@ -1,0 +1,51 @@
+[package]
+name = "yamaa-application"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+autotests = false
+
+# The format features select the adapters' physical readers; this crate
+# forwards them and adds none of its own.
+[features]
+default = ["yaml", "parquet", "readstat", "odm", "arrow"]
+yaml = ["yamaa-adapters/yaml"]
+parquet = ["yamaa-adapters/parquet"]
+readstat = ["yamaa-adapters/readstat"]
+odm = ["yamaa-adapters/odm"]
+arrow = ["yamaa-adapters/arrow"]
+
+[dependencies]
+yamaa-adapters = { path = "../yamaa-adapters", default-features = false }
+yamaa-core = { path = "../yamaa-core" }
+
+# The integration suite reads JSON and Parquet as the adapters' suite does,
+# at the adapters' releases: the test support writes Parquet inputs at test
+# time (tests/support/parquet_files.rs, the adapters' module copied), with the
+# features the adapters build their Parquet codec with.
+[dev-dependencies]
+arrow-array = { version = "=55.2.0", default-features = false }
+arrow-buffer = { version = "=55.2.0", default-features = false }
+arrow-ipc = { version = "=55.2.0", default-features = false }
+arrow-schema = { version = "=55.2.0", default-features = false }
+base64 = "0.22.1"
+flatbuffers = { version = "=25.12.19", default-features = false }
+parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.145", features = ["raw_value"] }
+
+# A test holds a directory lock as another process would.
+[target.'cfg(unix)'.dev-dependencies]
+rustix = { version = "1.1.5", features = ["fs", "process"] }
+
+[lints]
+workspace = true
+
+# The integration tests are one binary: tests/main.rs declares each family
+# file under tests/ as a module and checks that none is left out (#3556).
+[[test]]
+name = "main"
+path = "tests/main.rs"

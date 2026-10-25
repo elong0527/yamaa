@@ -57,7 +57,7 @@ such as `AVAL` refers to a column of the output dataset. A reference to an
 unknown dataset identifier or variable fails.
 
 Fails: `unknown_field`, `unresolvable_name`.
-Evidence: `schema-source-binding`, `negative-source-undeclared-field`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`.
+Evidence: `schema-source-binding`, `negative-source-undeclared-field`, `rust/crates/yamaa-application/tests/fixtures/binding_diagnostics.tsv`.
 
 ```yaml
 derivation: DM.SEX
@@ -90,7 +90,7 @@ is scalar only when the exact variable appears in the enclosing
 source variable with a scalar `source` fails.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `schema-rows-group-scope`, `schema-column-default-own-record`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/window_drivers.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/column_driver_bindings.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_reads_a_driver_field_its_grouped_templates_leave_out_only_through_an_aggregate`.
+Evidence: `schema-rows-group-scope`, `schema-column-default-own-record`, `rust/crates/yamaa-application/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_scopes.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/window_drivers.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/column_driver_bindings.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_reads_a_driver_field_its_grouped_templates_leave_out_only_through_an_aggregate`.
 
 The driver is an input dataset or an eligible named intermediate under
 [ROW-2](rows.md#row-2). A scalar `source` naming a source
@@ -127,7 +127,7 @@ placeholder binds its complete name as a `variable` field does, and text
 outside placeholders is literal. Whether a plain string in any other field is
 a name or text follows from its field's kind ([EXPR-5](expressions.md#expr-5)).
 
-Evidence: `negative-variable-nested`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
+Evidence: `negative-variable-nested`, `rust/crates/yamaa-application/tests/fixtures/text_template_reference.json`.
 
 ```yaml
 - name: PREFIX
@@ -159,7 +159,7 @@ selection are handlers, which [Column derivation](columns.md) defines.
 reading no record is an absent match, which `absent` answers
 ([LOOKUP-24](lookup.md#lookup-24)).
 
-Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_filters.json`.
+Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/source_filters.json`.
 
 ```yaml
 source:
@@ -184,7 +184,7 @@ period, so the qualifier ends at the first period and the rest is the
 complete `ItemOID`, periods included. A bare string is the
 [Schema language](reference/schema-language.md) shorthand for `{item: ...}`.
 
-Evidence: `schema-odm-item-subject`, `schema-odm-form-items`, `rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json`.
+Evidence: `schema-odm-item-subject`, `schema-odm-form-items`, `rust/crates/yamaa-application/tests/fixtures/odm_reads.json`.
 
 ```yaml
 derivation: {odm: ODM.IT.DM.AGE}
@@ -306,7 +306,7 @@ OIDs that `event`, `form` and `item_group` list, when they list any, and for
 which `filter` is `TRUE` under [Formulas](formulas.md).
 `filter` names only schema fields, qualified with the ODM input.
 
-Evidence: `schema-odm-form-items`, `schema-odm-item-subject`, `rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json`.
+Evidence: `schema-odm-form-items`, `schema-odm-item-subject`, `rust/crates/yamaa-application/tests/fixtures/odm_reads.json`.
 
 <a id="name-13"></a>
 

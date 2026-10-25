@@ -10,7 +10,7 @@ Five types exist only in an embedded Arrow schema, so those files carry one,
 written here as an Arrow IPC message. No expected output is read or written;
 the suites specify their own values and findings. The Rust tests write the
 same inputs, among others, at test time
-(rust/crates/yamaa-adapters/tests/support/parquet_files.rs).
+(rust/crates/yamaa-application/tests/support/parquet_files.rs).
 
 Run explicitly to inspect the inputs:
 python -m tools.staging.build_parquet_source_inputs <new directory>

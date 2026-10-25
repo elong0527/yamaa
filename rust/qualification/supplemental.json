@@ -27,34 +27,34 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/odm_reads.json",
       "family": "odm",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_deferred.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/odm_deferred.json",
       "family": "odm",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_preflight.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/odm_preflight.json",
       "family": "odm",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
@@ -65,7 +65,7 @@
       "level": "component",
       "consumers": [
         "rust/crates/yamaa-adapters/tests/odm_xml.rs",
-        "rust/crates/yamaa-adapters/tests/fixtures/diagnostics/odm_reads_xml.json",
+        "rust/crates/yamaa-application/tests/fixtures/diagnostics/odm_reads_xml.json",
         "python/tests/installed/installed_read_odm.py",
         "R/yamaa/tests/read_odm.R"
       ]
@@ -76,24 +76,24 @@
       "level": "component",
       "consumers": [
         "rust/crates/yamaa-adapters/tests/odm_xml.rs",
-        "rust/crates/yamaa-adapters/tests/fixtures/diagnostics/odm_reads_xml.json",
+        "rust/crates/yamaa-application/tests/fixtures/diagnostics/odm_reads_xml.json",
         "python/tests/installed/installed_read_odm.py",
         "R/yamaa/tests/read_odm.R"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/text_template_reference.json",
       "family": "text",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_text.R",
-        "rust/crates/yamaa-adapters/tests/scalar_declarative_text_template.rs",
+        "rust/crates/yamaa-application/tests/scalar_declarative_text_template.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/text_extract_reference.json",
       "family": "text",
       "level": "component",
       "consumers": [
@@ -103,59 +103,59 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json",
       "family": "datasets",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_keys.R",
-        "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/flag_reference.json",
       "family": "predicate",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_keys.R",
-        "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/case_predicates.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/case_predicates.json",
       "family": "predicate",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_lookups.R",
-        "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/predicate_context_diagnostics.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/predicate_context_diagnostics.tsv",
       "family": "predicate",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
+        "rust/crates/yamaa-application/tests/table_arrow_table.rs"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/row_intermediate_reference.json",
       "family": "datasets",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_keys.R",
-        "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_pad_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json",
       "family": "text",
       "level": "component",
       "consumers": [
@@ -165,19 +165,19 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/text_case_reference.json",
       "family": "text",
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_text.R",
-        "rust/crates/yamaa-adapters/tests/scalar_declarative_text_case.rs",
+        "rust/crates/yamaa-application/tests/scalar_declarative_text_case.rs",
         "rust/crates/yamaa-core/tests/scalar_sqrt.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/temporal_imputation_reference.json",
       "family": "temporal",
       "level": "component",
       "consumers": [
@@ -187,19 +187,19 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/regex_contract.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/regex_contract.tsv",
       "family": "regex",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/declaration_contract_vectors.rs"
+        "rust/crates/yamaa-application/tests/declaration_contract_vectors.rs"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/yaml_transport.json",
       "family": "yaml",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs"
+        "rust/crates/yamaa-application/tests/declaration_schema_capture.rs"
       ]
     },
     {
@@ -323,115 +323,115 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-zero-division.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-zero-division.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-integer-overflow.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-integer-overflow.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/adam-adlb-ordered-sum.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/adam-adlb-ordered-sum.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-lookup.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/schema-lookup.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/lookup-failures.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-window-functions.json",
-      "family": "specification",
-      "level": "compile",
-      "consumers": [
-        "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
-        "python/tests/installed/installed_original_specifications.py"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-inheritance.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/schema-window-functions.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/schema-inheritance.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
+        "python/tests/installed/installed_original_specifications.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-application/tests/fixtures/preflight.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "R/yamaa/tests/original_specifications.R",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/output_declarations.tsv",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/grammar_diagnostics.tsv",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/binding_diagnostics.tsv",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
@@ -442,62 +442,62 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/column_literals.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/column_literals.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_row_conversion_handlers.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/predicate_diagnostics.tsv",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
@@ -508,331 +508,331 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-formula-flag.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-formula-flag.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-row-aggregate.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-row-aggregate.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-row-no-prior.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-row-no-prior.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_capture.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/source_capture.tsv",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
         "R/yamaa/tests/public_file_resources.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_file_resources.py",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_inspection.tsv",
+      "path": "rust/crates/yamaa-application/tests/fixtures/source_inspection.tsv",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
         "R/yamaa/tests/public_file_resources.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_file_resources.py",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filters.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/source_filters.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-source-missing-field.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-source-missing-field.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/first_available.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/first_available.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-source-trivial-filter.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-source-trivial-filter.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_assertions.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_assertions.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-paired-dates.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-paired-dates.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_all_or_none.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_all_or_none.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_not_missing.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-not-missing-age.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-not-missing-age.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_column_values.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_column_values.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-implausible-age.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-implausible-age.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-invalid-sex.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-invalid-sex.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_sources.rs",
+        "rust/crates/yamaa-application/tests/specification_sources.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_column_matches.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-sex-code.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-sex-code.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/project_environment.rs",
-        "rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs",
+        "rust/crates/yamaa-application/tests/project_environment.rs",
+        "rust/crates/yamaa-application/tests/file_diagnostic_origins.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-matches-bad-pattern.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-matches-bad-pattern.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/project_environment.rs",
-        "rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs",
+        "rust/crates/yamaa-application/tests/project_environment.rs",
+        "rust/crates/yamaa-application/tests/file_diagnostic_origins.rs",
         "python/tests/installed/installed_original_specifications.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/static_verification_checks.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/row_column_checks.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/row_reductions.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_filters.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/row_filters.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_filter_admission.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/row_filter_admission.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-verification-log.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/specs/schema-verification-log.json",
       "family": "verification_logs",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/run_report.R",
-        "rust/crates/yamaa-adapters/tests/scalar_language.rs",
+        "rust/crates/yamaa-application/tests/scalar_language.rs",
         "python/tests/installed/installed_run_report.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/original_mapping_cut.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/mapping_cut_admission.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/mapping_cut_admission.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "rust/crates/yamaa-adapters/tests/specification_reports.rs",
+        "rust/crates/yamaa-application/tests/specification_reports.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
@@ -846,55 +846,55 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_selection.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/source_selection.json",
       "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_declarative_self.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_self.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/source_filter_scope.json",
       "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_declarative_self.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_self.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filter_mixed.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/source_filter_mixed.json",
       "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_declarative_self.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_self.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/case_predicate_dispositions.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/case_predicate_dispositions.json",
       "family": "predicate",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
+        "rust/crates/yamaa-application/tests/execution_declarative_case_predicates.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/completed_lookup_assertions.json",
       "family": "completed selected-record assertion scope and eager ordering",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_completed_intermediates.rs",
+        "rust/crates/yamaa-application/tests/execution_completed_intermediates.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications_sources.R"
@@ -905,8 +905,8 @@
       "family": "installed-host-semantics",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_retired_odm_context.rs",
-        "rust/crates/yamaa-adapters/tests/scalar_text_positions.rs",
+        "rust/crates/yamaa-application/tests/execution_retired_odm_context.rs",
+        "rust/crates/yamaa-application/tests/scalar_text_positions.rs",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R",
         "R/yamaa/tests/original_specifications_handlers.R",

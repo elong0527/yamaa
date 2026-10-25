@@ -13,7 +13,7 @@ class CompletedAssertionStage(unittest.TestCase):
     def test_truth_identity_and_complete_r_records_survive_staging(self):
         fixture = (
             ROOT
-            / "rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json"
+            / "rust/crates/yamaa-application/tests/fixtures/completed_lookup_assertions.json"
         )
         truth = json.loads(fixture.read_text())
         with tempfile.TemporaryDirectory() as temporary:

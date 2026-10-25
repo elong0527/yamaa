@@ -1,8 +1,8 @@
 #![cfg(feature = "odm")]
 //! ODM XML clinical-item contracts, from the retained Python reader suite and
 //! refusals that suite did not cover. The reader's reads and refusals of text
-//! files are the cases of `tests/fixtures/diagnostics/odm_reads_xml.json`
-//! (#3798). The tests left here prove seams the replay cannot reach, each
+//! files are cases of the application suite's
+//! `tests/fixtures/diagnostics/odm_reads_xml.json` (#3798). The tests left here prove seams the replay cannot reach, each
 //! named in its first comment: archives and gzip streams built in the test,
 //! bytes that are not UTF-8 text, generated bounds and batches, resolver
 //! doubles, links and Unix file names, the upstream tokenizer's messages, the
