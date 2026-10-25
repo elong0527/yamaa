@@ -47,10 +47,11 @@ from tools.paths import ROOT
 # two lists equal. To accept a new note, explain it there and add it here in
 # the same change. A WARNING or ERROR is never accepted.
 EXPECTED_NOTES = {
-    # A first submission, and a tarball above CRAN's 10 MB guideline because
-    # it bundles the crates that the build compiles (src/rust/vendor.tar.xz),
-    # as CRAN's guidance for Rust asks. "New submission" needs CRAN's package
-    # index, which a check without remote access does not read.
+    # A first submission, and the tarball's size, which R 4.2 reports above
+    # 5 MB: it bundles the crates that the build compiles
+    # (src/rust/vendor.tar.xz), as CRAN's guidance for Rust asks. "New
+    # submission" needs CRAN's package index, which a check without remote
+    # access does not read.
     "CRAN incoming feasibility": (
         r"Maintainer: .+",
         r"New submission",
@@ -69,11 +70,10 @@ EXPECTED_NOTES = {
         r"libs +\d+\.\d+Mb",
     ),
 }
-# CRAN's Repository Policy: tarballs "should if possible not exceed 10MB", and
-# "a modestly increased limit can be requested at submission" for bundled
-# third-party sources. cran-comments.md requests this limit (a test keeps the
-# two equal), and a larger tarball fails the check.
-TARBALL_LIMIT = 15_000_000
+# CRAN's Repository Policy: tarballs "should if possible not exceed 10MB".
+# cran-comments.md requests no larger limit (a test keeps it so), and a larger
+# tarball fails the check.
+TARBALL_LIMIT = 10_000_000
 TARBALL_SIZE = re.compile(r"Size of tarball: (\d+) bytes")
 # On Unix, --as-cran runs the checkbashisms script over configure and cleanup,
 # and warns instead when it is not installed, as on macOS runners and most
@@ -248,8 +248,8 @@ def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True, manual=False):
 
 def tarball_problem(size):
     return (
-        f"the tarball is {size} bytes, above the {TARBALL_LIMIT} that "
-        "cran-comments.md requests"
+        f"the tarball is {size} bytes, above the {TARBALL_LIMIT} of CRAN's "
+        "Repository Policy"
     )
 
 

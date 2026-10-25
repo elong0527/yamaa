@@ -212,7 +212,7 @@ release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each but the valgrind job runs `R CMD check --as-cran`
 through `tools/commands/check_r.py`, which fails on any NOTE, WARNING or
 ERROR that `R/yamaa/cran-comments.md` does not explain and on a tarball above
-the 15 MB that it requests. The build reads the vendored crates behind a
+CRAN's 10 MB limit. The build reads the vendored crates behind a
 proxy that refuses connections and runs two Cargo jobs.
 
 - With R-devel, R-release and R 4.2.0, on Linux, macOS and Windows, Cargo and

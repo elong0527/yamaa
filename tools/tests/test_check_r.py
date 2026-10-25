@@ -22,7 +22,7 @@ Maintainer: 'Yilong Zhang <elong0527@gmail.com>'
 
 New submission
 
-Size of tarball: 14539245 bytes
+Size of tarball: 9413320 bytes
 * checking package namespace information ... OK
 """
 SIZE = """\
@@ -246,11 +246,11 @@ class FindingsTests(unittest.TestCase):
 
 
 class TarballTests(unittest.TestCase):
-    def test_a_tarball_above_the_requested_limit_fails(self):
+    def test_a_tarball_above_cran_s_limit_fails(self):
         limit = check_r.TARBALL_LIMIT
         for size, allowed in ((limit, True), (limit + 1, False)):
             with self.subTest(size=size):
-                text = log(HEAD.replace("14539245", str(size)), status="1 NOTE")
+                text = log(HEAD.replace("9413320", str(size)), status="1 NOTE")
                 self.assertEqual(check_r.unexpected(text) == [], allowed)
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "yamaa_0.5.0.tar.gz"
@@ -259,12 +259,11 @@ class TarballTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "above the"):
                 check_r.check(archive, Path(directory) / "check")
 
-    def test_cran_comments_requests_the_limit(self):
+    def test_cran_comments_requests_no_larger_limit(self):
+        # The check holds the tarball to CRAN's own limit, so the submission
+        # comments must not ask CRAN for a larger one.
         comments = (ROOT / "R/yamaa/cran-comments.md").read_text(encoding="utf-8")
-        self.assertIn(
-            f"we request a limit of {check_r.TARBALL_LIMIT // 1_000_000} MB",
-            " ".join(comments.split()),
-        )
+        self.assertNotIn("request a limit", " ".join(comments.split()))
 
 
 class CranCommentsTests(unittest.TestCase):
@@ -472,7 +471,7 @@ class FailingTestsTests(FakeCheckTests):
             "NOTE: checking CRAN incoming feasibility\n"
             "    Maintainer: 'Yilong Zhang <elong0527@gmail.com>'\n"
             "    New submission\n"
-            "    Size of tarball: 14539245 bytes\n"
+            "    Size of tarball: 9413320 bytes\n"
         )
         for label, check_log, printed, failure in (
             (
