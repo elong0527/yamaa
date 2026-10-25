@@ -1,5 +1,5 @@
 {
-  "about": "What a project's functions and a run report: a project function's invocation failures (FUNC-5, FUNC-8, FUNC-9), a callable its host cannot bind (FUNC-2), a conformance case that fails (FUNC-12), the host's packages measured against the declared lock (FUNC-3), and a run's failed output keys and verifications (OUTPUT-3, CHECK-10 to CHECK-13). The lock reasons and a unique check of warning severity are whole issue lists; the other cases compare the fields their table compared, which for a unique check of error severity is only that it reports one issue. The function `id` is the integer identity of the support's project functions, and the specification `checks` declares a unique check of warning severity, an all_or_none, an assert and a row_count.",
+  "about": "What a project's functions and a run report: a project function's invocation failures (FUNC-5, FUNC-8, FUNC-9), a callable its host cannot bind (FUNC-2), a conformance case that fails (FUNC-12), the host's packages measured against the declared lock (FUNC-3), and a run's failed output keys and verifications (OUTPUT-3, CHECK-10 to CHECK-13). The lock reasons, lock facts kept exactly as spelled, missing or empty, and a unique check of warning severity are whole issue lists; the other cases compare the fields their table compared, which for a unique check of error severity is only that it reports one issue. The function `id` is the integer identity of the support's project functions, and the specification `checks` declares a unique check of warning severity, an all_or_none, an assert and a row_count.",
   "documents": {
     "checks": {
       "yamaa": "1.0",
@@ -125,6 +125,25 @@
       },
       "compares": ["condition", "spec_paths", "context.source", "context.entry", "context.lock"],
       "issues": [{"condition": "runtime_artifact_mismatch", "spec_paths": ["environments.python.lock"], "context": {"source": "study/project.yaml", "entry": "study/project.yaml", "lock": "uv.lock"}}]
+    },
+    {
+      "case": "spelling_missing_and_empty_facts_are_preserved_without_version_comparison",
+      "operation": "lock_mismatch",
+      "input": {
+        "origins": {"source": "é\u0000🙂/environment.yaml", "entry": "é\u0000🙂/project.yaml", "field": "lock", "lock_source": "captured-lock", "written": "../declared/uv.lock"},
+        "findings": [
+          {"package": "program", "reason": "invalid_installed_version", "expected": ["1.0"], "actual": null},
+          {"package": "program", "reason": "invalid_locked_version", "expected": [], "actual": null},
+          {"package": "program", "reason": "version_mismatch", "expected": [" 1.0 "], "actual": " 1.0 "},
+          {"package": "program", "reason": "version_mismatch", "expected": [""], "actual": ""}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "é\u0000🙂/environment.yaml", "entry": "é\u0000🙂/project.yaml", "lock_source": "captured-lock", "lock": "../declared/uv.lock", "package": "program", "reason": "invalid_installed_version", "expected": ["1.0"], "actual": null}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "é\u0000🙂/environment.yaml", "entry": "é\u0000🙂/project.yaml", "lock_source": "captured-lock", "lock": "../declared/uv.lock", "package": "program", "reason": "invalid_locked_version", "expected": [], "actual": null}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "é\u0000🙂/environment.yaml", "entry": "é\u0000🙂/project.yaml", "lock_source": "captured-lock", "lock": "../declared/uv.lock", "package": "program", "reason": "version_mismatch", "expected": [" 1.0 "], "actual": " 1.0 "}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "é\u0000🙂/environment.yaml", "entry": "é\u0000🙂/project.yaml", "lock_source": "captured-lock", "lock": "../declared/uv.lock", "package": "program", "reason": "version_mismatch", "expected": [""], "actual": ""}}
+      ]
     },
     {
       "case": "a_missing_output_key_fails_in_the_output_phase",

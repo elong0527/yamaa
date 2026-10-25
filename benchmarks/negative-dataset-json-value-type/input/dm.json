@@ -1,0 +1,22 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-30T10:15:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "www.example.org/PILOT7/DM",
+  "sourceSystem": {"name": "Example EDC", "version": "5.1"},
+  "studyOID": "PILOT7",
+  "metaDataVersionOID": "MDV.1",
+  "itemGroupOID": "IG.DM",
+  "records": 2,
+  "name": "DM",
+  "label": "Demographics",
+  "columns": [
+    {"itemOID": "IT.DM.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 6, "keySequence": 1},
+    {"itemOID": "IT.DM.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 6, "keySequence": 2},
+    {"itemOID": "IT.DM.SITEID", "name": "SITEID", "label": "Study Site Identifier", "dataType": "string", "length": 3},
+    {"itemOID": "IT.DM.AGE", "name": "AGE", "label": "Age", "dataType": "integer", "length": 3}
+  ],
+  "rows": [
+    ["PILOT7", "P7-741", "101", 24],
+    ["PILOT7", "P7-742", "102", 67.5]
+  ]
+}

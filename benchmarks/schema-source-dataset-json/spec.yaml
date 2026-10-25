@@ -1,0 +1,52 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # A Dataset-JSON 1.1 file in its single-object form. Each column's dataType
+  # types its field, so no types entry is written: AGE is an integer, HEIGHTBL
+  # a decimal read as a float, and TRTSDT and TRTSDTM a date and a datetime,
+  # whatever targetDataType asks a receiving system to convert them to.
+  ADSL_RAW: input/adsl_raw.json
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01A, AGE, HEIGHTBL, TRTSDT, TRTSDTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+
+  # A null value is missing.
+  - name: TRT01A
+    type: str
+    label: Actual Treatment for Period 01
+    derivation: ADSL_RAW.TRT01A
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL_RAW.AGE
+
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height (cm)
+    derivation: ADSL_RAW.HEIGHTBL
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: ADSL_RAW.TRTSDT
+
+  - name: TRTSDTM
+    type: datetime
+    label: Datetime of First Exposure to Treatment
+    derivation: ADSL_RAW.TRTSDTM

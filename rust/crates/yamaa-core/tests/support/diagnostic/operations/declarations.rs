@@ -3,6 +3,7 @@
 //! functions, a project's scope findings, the schema language's validation
 //! of a document or a layer, and the headers a call reads.
 use super::{
+    codelist_source,
     document::{prepared, schemas, tree},
     language, text, value, File,
 };
@@ -171,40 +172,52 @@ fn flag_condition(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The findings preparing `document` in a project refuses with, `{document,
-/// project}`: `project` is `{language, functions}`, the host language
-/// (`"python"`, `"r"` or `null` for an engine that claims none) and each
-/// function file by its name, an integer identity with the tests its
+/// project}`: `project` is `{language, functions, codelists}`, the host
+/// language (`"python"`, `"r"` or `null` for an engine that claims none),
+/// each function file by its name, an integer identity with the tests its
 /// contract needs (`support::project_call_compiler::definition`), mapping
-/// each language to the callable that implements it. With `sources`, as
-/// `bind` reads them, the document must prepare, and the findings are those
-/// binding it to their schemas refuses with.
+/// each language to the callable that implements it, and its codelist files,
+/// each the codelist source [`codelist_source`] reads. A project without
+/// `functions` lists no function file, and one without `codelists` no
+/// codelist file. With `sources`, as `bind` reads them, the document must
+/// prepare, and the findings are those binding it to their schemas refuses
+/// with.
 fn prepare_in(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["document", "project", "sources"]);
-    let project = input.field("project").closed(&["language", "functions"]);
+    let project = input
+        .field("project")
+        .closed(&["language", "functions", "codelists"]);
     let host = match project.field("language") {
         Json::Null => None,
         written => Some(language(written.text())),
     };
-    let functions = project
-        .field("functions")
-        .members()
+    let functions = project.get("functions").map(|files| {
+        files
+            .members()
+            .iter()
+            .map(|(name, implementations)| {
+                let implementations = implementations
+                    .members()
+                    .iter()
+                    .map(|(written, callable)| (language(written), callable.text()))
+                    .collect::<Vec<_>>();
+                definition(name).file(&implementations)
+            })
+            .collect()
+    });
+    let codelists = project
+        .get("codelists")
+        .map_or(&[][..], Json::items)
         .iter()
-        .map(|(name, implementations)| {
-            let implementations = implementations
-                .members()
-                .iter()
-                .map(|(written, callable)| (language(written), callable.text()))
-                .collect::<Vec<_>>();
-            definition(name).file(&implementations)
-        })
+        .map(codelist_source)
         .collect();
     let environment = Environment::admit(
         host,
         Draft {
             language: host,
             lock: None,
-            functions: Some(functions),
-            codelists: Vec::new(),
+            functions,
+            codelists,
         },
     )
     .unwrap_or_else(|findings| panic!("the project is admitted: {findings:?}"))

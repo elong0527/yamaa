@@ -1,11 +1,11 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts: aggregate record operations, baseline window types,
-//! case item order, check output validation and compiled model. The
-//! aggregate record operations that write files, run one specification and
-//! compare what it reports are cases of
-//! `tests/fixtures/diagnostics/aggregate_record_operations.json` (#3798);
-//! the tests left of that family read benchmarks' own files and the API
-//! results the replay does not state.
+//! check output validation and compiled model. The tests that write files,
+//! run one specification and compare what it reports are cases of
+//! `tests/fixtures/diagnostics/aggregate_record_operations.json`,
+//! `case_item_order.json` and `check_output_validation.json` (#3798); the
+//! tests left read benchmarks' own files, host-fixture truth, bound plans and
+//! the API results the replay does not state.
 
 mod execution {
     mod aggregate_record_operations {
@@ -215,191 +215,14 @@ mod execution {
             }
         }
     }
-    mod case_item_order {
-        //! EXPR-7 case item order is one validation finding at every expression site,
-        //! with the same issue from check and domain in both shared host routes. Paths
-        //! follow the schema validator: keyed list members are named by `name` or `id`.
-        use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
-        use yamaa_core::diagnostic::Diagnostic;
-        use yamaa_core::{domain_entry::Request, json::Value};
-
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new(body: &str) -> Self {
-                let root = crate::support::Scratch::new("case-item-order");
-                fs::write(
-                    root.join("spec.yaml"),
-                    format!(
-                        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nbase: DM\nkeys: [USUBJID]\ninput:\n  DM: {{path: dm.csv, types: {{AGE: int}}}}\n  EX: {{path: ex.csv, types: {{DOSE: float}}}}\noutput: {{path: out.csv, columns: [USUBJID, FL]}}\n{body}"
-                    ),
-                )
-                .unwrap();
-                fs::write(root.join("dm.csv"), "USUBJID,AGE\nA,34\nB,70\n").unwrap();
-                fs::write(root.join("ex.csv"), "USUBJID,DOSE\nA,5\nB,10\n").unwrap();
-                Self(root)
-            }
-            fn specification(&self) -> String {
-                self.0.join("spec.yaml").to_str().unwrap().to_owned()
-            }
-        }
-
-        fn identity<'a>(runtime: &'a str, specification: &'a str) -> Identity<'a> {
-            Identity {
-                runtime,
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "case-item-order",
-                specification,
-                base_directory: ".",
-            }
-        }
-
-        fn rows(issues: &[Diagnostic]) -> Value {
-            Value::Array(
-                issues
-                    .iter()
-                    .map(crate::support::study::issue_row)
-                    .collect(),
-            )
-        }
-
-        fn issues(fixture: &Fixture) -> Vec<(String, Value)> {
-            let specification = fixture.specification();
-            let mut result = Vec::new();
-            for runtime in ["python", "r"] {
-                let request = || Request {
-                    specification: &specification,
-                    environment: None,
-                };
-                let checked = file_application::check(
-                    crate::support::host(runtime),
-                    request(),
-                    identity(runtime, &specification),
-                );
-                let built = match crate::support::study::domain(
-                    crate::support::host(runtime),
-                    request(),
-                    identity(runtime, &specification),
-                ) {
-                    Ok(domain) => domain.issues(),
-                    Err(issues) => issues,
-                };
-                result.push((format!("{runtime}/check"), rows(&checked)));
-                result.push((format!("{runtime}/domain"), rows(&built)));
-            }
-            result
-        }
-
-        /// The schema finding of a 1.x specification names the file the run
-        /// loaded, as `source` and `entry` (`support::benchmarks::without_layer`),
-        /// by its identity rather than the path the run was given.
-        fn finding(fixture: &Fixture, path: &str, expected: &str) -> Value {
-            let loaded = fixture.0.identity("spec.yaml");
-            yamaa_adapters::json!({
-                "phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7",
-                "spec_paths": [path],
-                "context": {"expected": expected, "source": loaded, "entry": loaded}
-            })
-        }
-
-        const NO_BRANCH: &str = "at least one when/then item";
-        const NOT_LAST: &str = "otherwise only as the last item";
-        const ONLY: &str = "{case: [{otherwise: \"'N'\"}]}";
-
-        fn column(derivation: &str) -> String {
-            format!("columns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: FL, type: str, derivation: {derivation}}}\n")
-        }
-
-        #[test]
-        fn case_item_order_reports_req_0339_at_each_expression_site() {
-            // `negative-case-otherwise-only` states the first site's first
-            // issue, but its `error.yaml` leaves out the layer the finding
-            // names and that the issue is the only one. No benchmark pins the
-            // other sites.
-            let sites = [
-                (column(ONLY), "columns.FL.derivation.case", NO_BRANCH),
-                (column("{case: []}"), "columns.FL.derivation.case", NO_BRANCH),
-                (
-                    column("{case: [{otherwise: \"'N'\"}, {when: 'DM.AGE >= 65', then: \"'Y'\"}]}"),
-                    "columns.FL.derivation.case[0]",
-                    NOT_LAST,
-                ),
-                (
-                    column("{case: [{when: 'DM.AGE >= 65', then: \"'Y'\"}, {otherwise: \"'N'\"}, {otherwise: \"'U'\"}]}"),
-                    "columns.FL.derivation.case[1]",
-                    NOT_LAST,
-                ),
-                (
-                    column(&format!("{{case: [{{when: 'DM.AGE >= 65', then: {ONLY}}}, {{otherwise: \"'N'\"}}]}}")),
-                    "columns.FL.derivation.case[0].then.case",
-                    NO_BRANCH,
-                ),
-                (
-                    format!("columns:\n  - {{name: USUBJID, type: str}}\n  - {{name: FL, type: str}}\nrows:\n  - {{id: subject, dataset: DM, derivations: {{USUBJID: DM.USUBJID, FL: {ONLY}}}}}\n"),
-                    "rows.subject.derivations.FL.case",
-                    NO_BRANCH,
-                ),
-                (
-                    format!("intermediates:\n  - {{id: DOSED, dataset: EX, key: [USUBJID], derivations: {{GROUP: {ONLY}}}}}\n{}", column("DOSED.GROUP")),
-                    "intermediates.DOSED.derivations.GROUP.case",
-                    NO_BRANCH,
-                ),
-                (
-                    column(&format!("{{aggregate: {{key: [USUBJID], filter: 'EX.DOSE > 0', derivations: {{LEVEL: {{type: str, derivation: {ONLY}}}}}, expr: 'MAX(LEVEL)'}}}}")),
-                    "columns.FL.derivation.aggregate.derivations.LEVEL.derivation.case",
-                    NO_BRANCH,
-                ),
-            ];
-            for (body, path, expected) in sites {
-                let fixture = Fixture::new(&body);
-                for (route, actual) in issues(&fixture) {
-                    assert_eq!(
-                        actual,
-                        yamaa_adapters::json!([finding(&fixture, path, expected)]),
-                        "{route}: {body}"
-                    );
-                }
-                assert!(!fixture.0.join("out.csv").exists());
-            }
-        }
-
-        // `negative-case-otherwise-only` states a case of one `otherwise` item;
-        // no benchmark pins a case of two, each misplaced one reported.
-        #[test]
-        fn case_with_only_otherwise_items_reports_the_case_and_each_misplaced_item() {
-            let fixture = Fixture::new(&column(
-                "{case: [{otherwise: \"'N'\"}, {otherwise: \"'U'\"}]}",
-            ));
-            for (route, actual) in issues(&fixture) {
-                assert_eq!(
-                    actual,
-                    yamaa_adapters::json!([
-                        finding(&fixture, "columns.FL.derivation.case", NO_BRANCH),
-                        finding(&fixture, "columns.FL.derivation.case[0]", NOT_LAST),
-                    ]),
-                    "{route}"
-                );
-            }
-        }
-
-        // No benchmark runs `check` in both hosts: a positive benchmark with an
-        // ordered case, such as `adam-adsl-age-group`, pins its build alone.
-        #[test]
-        fn ordered_case_items_still_build() {
-            let fixture = Fixture::new(&column(
-                "{case: [{when: 'DM.AGE >= 65', then: \"'Y'\"}, {otherwise: \"'N'\"}]}",
-            ));
-            for (route, actual) in issues(&fixture) {
-                assert_eq!(actual, yamaa_adapters::json!([]), "{route}");
-            }
-        }
-    }
     mod check_output_validation {
         //! `check` reports the validation findings that `domain` reaches without
-        //! study data: output declarations (#2295), formula qualification and column
-        //! order. The same first issue, in both host routes. Committed negative
-        //! benchmarks and `expected/error.yaml` remain the oracle.
+        //! study data, with the same first issue in both host routes, over the
+        //! committed negative benchmarks, whose `expected/error.yaml` is the
+        //! oracle. The studies these tests' authors wrote, output declarations
+        //! (#2295), formula qualification and column order, fields written
+        //! empty and the CSV precision, are cases of
+        //! `check_output_validation.json`.
         use crate::support::benchmarks;
         use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
@@ -511,6 +334,11 @@ mod execution {
             selected
         }
 
+        /// A seam the replay cannot reach: a walk of the benchmark corpus, which
+        /// selects the negatives whose first issue comes from `output.*` and
+        /// pins how many there are, then compares each one's first issue in
+        /// `check` and `domain`, in both host routes, with its own
+        /// `expected/error.yaml`.
         #[test]
         fn check_matches_domain_on_output_validation_benchmarks() {
             let selected = output_validation_benchmarks();
@@ -542,48 +370,6 @@ mod execution {
                         checked, oracle,
                         "{name} ({runtime}): first issue vs expected/error.yaml"
                     );
-                }
-            }
-        }
-
-        /// The three rows of #2295's table, with the issue's own minimal study: an
-        /// undeclared output column, `decimals` on a parquet output, and a negative
-        /// `decimals`. None is covered by a committed negative benchmark.
-        #[test]
-        fn check_matches_domain_on_the_issue_rows() {
-            let rows: [(&str, &str, yamaa_core::json::Value); 3] = [
-                (
-                    "undeclared",
-                    "{path: out.csv, columns: [USUBJID, N, ZZZ]}",
-                    yamaa_adapters::json!({"phase":"validation","condition":"undeclared_column","rule":"OUTPUT-1","spec_paths":["output.columns[2]"],"context":{"column":"ZZZ"}}),
-                ),
-                (
-                    "decimals-parquet",
-                    "{path: out.parquet, columns: [USUBJID, N], decimals: 2}",
-                    yamaa_adapters::json!({"phase":"validation","condition":"decimals_not_applicable","rule":"CSV-6","spec_paths":["output.decimals"],"context":{"path":"out.parquet","profile":"parquet"}}),
-                ),
-                (
-                    "decimals-negative",
-                    "{path: out.csv, columns: [USUBJID, N], decimals: -1}",
-                    yamaa_adapters::json!({"phase":"validation","condition":"invalid_field_type","rule":"CSV-6","spec_paths":["output.decimals"],"context":{"expected":"an integer from 0 through 18","actual":-1}}),
-                ),
-            ];
-            for (name, output, oracle) in rows {
-                let fixture = Fixture::new(name);
-                fs::create_dir(fixture.0.join("input")).unwrap();
-                fs::write(fixture.0.join("input/dm.csv"), "USUBJID,AGE\nS-001,34\n").unwrap();
-                let spec = format!(
-            "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input/dm.csv}}\noutput: {output}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: N, type: float, derivation: DM.AGE}}\n"
-        );
-                fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
-                let spec_path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                for runtime in ["python", "r"] {
-                    let (checked, built) = first_issues(&spec_path, name, runtime);
-                    assert_eq!(
-                        checked, built,
-                        "{name} ({runtime}): check/domain first issue"
-                    );
-                    assert_eq!(checked, oracle, "{name} ({runtime}): first issue");
                 }
             }
         }
@@ -760,13 +546,15 @@ mod execution {
             selected
         }
 
-        /// `check` over every committed negative. One that fails after
-        /// validation needs the study's data, so `check` reports nothing for
-        /// it. Every validation negative has the same first issue in `check`
-        /// and `domain`, in both host routes, matching `expected/error.yaml`,
-        /// except the listed ones whose finding binding decides from the
-        /// inputs. Benchmarks run in place, so parents, links and relative
-        /// paths keep their authored meaning.
+        /// A seam the replay cannot reach: a walk of the benchmark corpus, each
+        /// committed negative that conformance runs compared with its own
+        /// `expected/error.yaml`. `check` over every committed negative. One
+        /// that fails after validation needs the study's data, so `check`
+        /// reports nothing for it. Every validation negative has the same
+        /// first issue in `check` and `domain`, in both host routes, matching
+        /// `expected/error.yaml`, except the listed ones whose finding binding
+        /// decides from the inputs. Benchmarks run in place, so parents, links
+        /// and relative paths keep their authored meaning.
         #[test]
         fn check_matches_domain_on_negative_benchmarks() {
             let selected = negative_benchmarks();
@@ -904,349 +692,6 @@ mod execution {
                 "negative-verification-lookup-key",
             ] {
                 assert!(compared.contains(&name), "{name}: not compared");
-            }
-        }
-
-        /// Formula reads bind without a source schema, so when nothing else is wrong
-        /// `check` reports exactly what `domain` reports: each qualified name that is
-        /// not a record lookup, then column order over the formulas' reads. The
-        /// benchmarks state first issues alone (`negative-direct-dose-read`,
-        /// `negative-forward-reference`); no benchmark pins the complete list.
-        #[test]
-        fn check_reports_formula_qualification_and_column_order() {
-            let qualified = |expr: &str, identifier: &str| yamaa_adapters::json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.A.derivation"],"context":{"expr":expr,"identifier":identifier}});
-            let forward = |dependency: &str| yamaa_adapters::json!({"phase":"validation","condition":"forward_reference","rule":"COLUMN-5","spec_paths":["columns.A.derivation"],"context":{"column":"A","dependency":dependency}});
-            let cycle = yamaa_adapters::json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.A.derivation","columns.B.derivation"],"context":{"cycle":["A","B","A"]}});
-            let rows: [(&str, &str, &str, Vec<yamaa_core::json::Value>); 4] = [
-                (
-                    "qualified-then-forward",
-                    "A, B",
-                    "  - {name: A, type: float, derivation: 'B + DM.AGE + DM.WT'}\n  - {name: B, type: float, derivation: DM.AGE}\n",
-                    vec![
-                        qualified("B + DM.AGE + DM.WT", "DM.AGE"),
-                        qualified("B + DM.AGE + DM.WT", "DM.WT"),
-                        forward("B"),
-                    ],
-                ),
-                (
-                    "forward-in-written-order",
-                    "A, B, C",
-                    "  - {name: A, type: float, derivation: 'C - B'}\n  - {name: B, type: float, derivation: DM.AGE}\n  - {name: C, type: float, derivation: DM.WT}\n",
-                    vec![forward("C"), forward("B")],
-                ),
-                (
-                    "cycle",
-                    "A, B",
-                    "  - {name: A, type: float, derivation: 'B + 1'}\n  - {name: B, type: float, derivation: 'A + 1'}\n",
-                    vec![cycle],
-                ),
-                (
-                    "earlier-column",
-                    "B, A",
-                    "  - {name: B, type: float, derivation: DM.AGE}\n  - {name: A, type: float, derivation: 'B * 2'}\n",
-                    vec![],
-                ),
-            ];
-            for (name, outputs, columns, oracle) in rows {
-                let fixture = Fixture::new(name);
-                fs::create_dir(fixture.0.join("input")).unwrap();
-                fs::write(
-                    fixture.0.join("input/dm.csv"),
-                    "USUBJID,AGE,WT\nU1,34,70.5\n",
-                )
-                .unwrap();
-                fs::write(
-                    fixture.0.join("spec.yaml"),
-                    format!(
-                        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: {{path: input/dm.csv, types: {{AGE: float, WT: float}}}}}}\noutput: {{path: out.csv, columns: [USUBJID, {outputs}]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n{columns}"
-                    ),
-                )
-                .unwrap();
-                let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let request = || Request {
-                    specification: &spec,
-                    environment: None,
-                };
-                for runtime in ["python", "r"] {
-                    let checked = file_application::check(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, name, &spec),
-                    );
-                    let built = match crate::support::study::domain(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, name, &spec),
-                    ) {
-                        Ok(result) => result.issues().to_vec(),
-                        Err(failure) => failure,
-                    };
-                    let checked = checked.iter().map(issue).collect::<Vec<_>>();
-                    let built = built.iter().map(issue).collect::<Vec<_>>();
-                    assert_eq!(checked, oracle, "{name} ({runtime}): check");
-                    assert_eq!(built, oracle, "{name} ({runtime}): domain");
-                }
-            }
-        }
-
-        /// What the tree does not keep: a field written empty or `false`, read
-        /// from the document as binding reads it. A driver intermediate refuses
-        /// each prohibited field it writes, whatever its value (ROW-2); an
-        /// `order_by` with no term still needs a `keep` (LOOKUP-10); an ODM
-        /// input refuses a written `types` (NAME-8); and an empty `derivations`
-        /// keeps an intermediate from being rename-only (LOOKUP-4), so it builds.
-        /// `rows: []` builds no row template, as without `rows`, and an ODM read
-        /// under `unconvertible` is named at binding's path. `check` and `domain`
-        /// report the same issues in both host routes (#3225).
-        /// `negative-lookup-empty-order` writes `order_by: []` beside `keep: last`;
-        /// no benchmark pins `order_by: []` without `keep`, `derivations: {}`, an
-        /// ODM input's `types: {}` or `rows: []`.
-        #[test]
-        fn written_empty_declarations_keep_their_outcomes_in_both_routes() {
-            let header = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\n";
-            let driver = |field: &str| {
-                format!(
-                    "{header}keys: [ID]\ninput: {{SRC: input/src.csv}}\noutput: {{path: out.csv, columns: [ID]}}\nintermediates:\n  - {{id: DRV, dataset: SRC, filter: \"SRC.ID <> 'z'\", {field}}}\ncolumns:\n  - {{name: ID, type: str}}\nrows:\n  - {{id: all, dataset: DRV, derivations: {{ID: DRV.ID}}}}\n"
-                )
-            };
-            let lookup = |fields: &str| {
-                format!(
-                    "{header}keys: [X]\ninput: {{SRC: input/src.csv, RIGHT: {{path: input/right.csv, key: [X]}}}}\nbase: SRC\noutput: {{path: out.csv, columns: [X, W]}}\nintermediates:\n  - {{id: LOOK, dataset: RIGHT, {fields}}}\ncolumns:\n  - {{name: X, type: str, derivation: SRC.X}}\n  - {{name: W, type: str, derivation: LOOK.K}}\n"
-                )
-            };
-            let odm = |input: &str, age: &str| {
-                format!(
-                    "{header}keys: [STUDYID, USUBJID]\ninput: {{ODM: {input}}}\noutput: {{path: out.csv, columns: [STUDYID, USUBJID, AGE]}}\ncolumns:\n  - {{name: STUDYID, type: str, derivation: ODM.StudyOID}}\n  - {{name: USUBJID, type: str, derivation: ODM.SubjectKey}}\n  - {{name: AGE, type: int, derivation: {age}}}\n"
-                )
-            };
-            let rows = |columns: &str, intermediates: &str| {
-                format!(
-                    "{header}keys: [ID]\ninput: {{SRC: input/src.csv}}\nbase: SRC\noutput: {{path: out.csv, columns: [ID, A]}}\n{intermediates}columns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: X, type: str, derivation: SRC.X}}\n{columns}rows: []\n"
-                )
-            };
-            let invalid_driver = |field: &str| yamaa_adapters::json!({"phase":"validation","condition":"invalid_intermediate_driver","rule":"ROW-2","spec_paths":["rows.all.dataset"],"context":{"fields":[field],"intermediate":"DRV"}});
-            let cases: [(&str, String, Option<yamaa_core::json::Value>); 8] = [
-                (
-                    "driver-require-match-false",
-                    driver("require_match: false"),
-                    Some(invalid_driver("require_match")),
-                ),
-                (
-                    "driver-order-by-empty",
-                    driver("order_by: []"),
-                    Some(invalid_driver("order_by")),
-                ),
-                ("derivations-empty", lookup("key: [X], derivations: {}"), None),
-                (
-                    "order-by-empty",
-                    lookup("key: [X], order_by: []"),
-                    Some(
-                        yamaa_adapters::json!({"phase":"validation","condition":"unpaired_fields","rule":"LOOKUP-10","spec_paths":["intermediates.LOOK"],"context":{"declared":["order_by"],"intermediate":"LOOK","missing":["keep"]}}),
-                    ),
-                ),
-                (
-                    "odm-types-empty",
-                    odm("{path: input/odm.csv, types: {}}", "{odm: ODM.IT.DM.AGE}"),
-                    Some(
-                        yamaa_adapters::json!({"phase":"validation","condition":"odm_schema_field_type","rule":"NAME-8","spec_paths":["input.ODM.types"],"context":{"dataset":"ODM","declared":"types"}}),
-                    ),
-                ),
-                (
-                    "odm-under-unconvertible",
-                    odm(
-                        "input/odm.csv",
-                        "{value: {odm: NOPE.IT.DM.AGE}, unconvertible: null}",
-                    ),
-                    Some(
-                        yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AGE.derivation.odm.item"],"context":{"identifier":"NOPE.IT.DM.AGE"}}),
-                    ),
-                ),
-                (
-                    "rows-empty-self",
-                    rows(
-                        "  - {name: A, type: str, derivation: PREV.ID}\n",
-                        "intermediates:\n  - {id: PREV, dataset: SELF, key: [ID]}\n",
-                    ),
-                    Some(
-                        yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates.PREV.dataset"],"context":{"identifier":"SELF","intermediate":"PREV"}}),
-                    ),
-                ),
-                (
-                    "rows-empty-rounding",
-                    rows(
-                        "  - {name: A, type: float, derivation: {round_half_away_from_zero: {source: X, digits: 1}}}\n",
-                        "",
-                    ),
-                    Some(
-                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-16","spec_paths":["columns.A.derivation.round_half_away_from_zero.source"],"context":{"actual":"str","expected":"numeric","source":"X"}}),
-                    ),
-                ),
-            ];
-            let odm_source = benchmarks::path("negative-odm-schema-type").join("input/odm.csv");
-            for (name, specification, oracle) in cases {
-                let fixture = Fixture::new(name);
-                fs::create_dir(fixture.0.join("input")).unwrap();
-                fs::write(
-                    fixture.0.join("input/src.csv"),
-                    "ID,X,V\na,one,1.0\nb,two,2.0\n",
-                )
-                .unwrap();
-                fs::write(fixture.0.join("input/right.csv"), "X,K\none,k1\ntwo,k2\n").unwrap();
-                fs::copy(&odm_source, fixture.0.join("input/odm.csv")).unwrap();
-                fs::write(fixture.0.join("spec.yaml"), specification).unwrap();
-                let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                for runtime in ["python", "r"] {
-                    let Some(oracle) = &oracle else {
-                        let request = || Request {
-                            specification: &spec,
-                            environment: None,
-                        };
-                        let checked = file_application::check(
-                            crate::support::host(runtime),
-                            request(),
-                            identity(runtime, name, &spec),
-                        );
-                        assert!(checked.is_empty(), "{name} ({runtime}): check");
-                        let mut built = crate::support::study::domain(
-                            crate::support::host(runtime),
-                            request(),
-                            identity(runtime, name, &spec),
-                        )
-                        .unwrap_or_else(|_| panic!("{name} ({runtime}): domain refused"));
-                        assert!(built.issues().is_empty(), "{name} ({runtime}): domain");
-                        assert!(built.save().unwrap(), "{name} ({runtime}): save");
-                        assert_eq!(
-                            fs::read_to_string(fixture.0.join("out.csv")).unwrap(),
-                            "X,W\none,k1\ntwo,k2\n",
-                            "{name} ({runtime}): saved"
-                        );
-                        fs::remove_file(fixture.0.join("out.csv")).unwrap();
-                        continue;
-                    };
-                    let (checked, built) = first_issues(&spec, name, runtime);
-                    assert_eq!(checked, *oracle, "{name} ({runtime}): check");
-                    assert_eq!(built, *oracle, "{name} ({runtime}): domain");
-                }
-            }
-        }
-
-        fn precision_specification(decimals: Option<&str>, kind: &str) -> String {
-            let precision = decimals.map_or(String::new(), |n| format!(", decimals: {n}"));
-            format!(
-        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input.csv}}\noutput: {{path: out.csv, columns: [USUBJID, N]{precision}}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: N, type: {kind}, derivation: DM.VALUE}}\n"
-    )
-        }
-
-        // The finding is the crate fixture `csv_precision_limit.json`; no
-        // benchmark pins a precision outside the range.
-        #[test]
-        fn csv_precision_range_is_validated_for_empty_and_non_float_outputs_in_both_hosts() {
-            let oracle: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
-                "fixtures/csv_precision_limit.json"
-            ))
-            .unwrap();
-            let huge = format!("1{}", "0".repeat(400));
-            for decimals in [
-                "-1",
-                "19",
-                "400",
-                "5000",
-                "10000000",
-                "9223372036854775807",
-                "9223372036854775808",
-                "18446744073709551616",
-                huge.as_str(),
-            ] {
-                let mut expected = oracle.clone();
-                expected["context"]["actual"] =
-                    yamaa_adapters::json_wire::decode(decimals).unwrap();
-                for (kind, input) in [
-                    ("float", "USUBJID,VALUE\nS-001,0.125\n"),
-                    ("float", "USUBJID,VALUE\n"),
-                    ("int", "USUBJID,VALUE\nS-001,34\n"),
-                ] {
-                    let fixture = Fixture::new("precision-limit");
-                    fs::write(
-                        fixture.0.join("spec.yaml"),
-                        precision_specification(Some(decimals), kind),
-                    )
-                    .unwrap();
-                    fs::write(fixture.0.join("input.csv"), input).unwrap();
-                    let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                    for runtime in ["python", "r"] {
-                        let (checked, built) =
-                            first_issues(&specification, "precision-limit", runtime);
-                        assert_eq!(checked, expected, "check {runtime}: {decimals}/{kind}");
-                        assert_eq!(built, expected, "domain {runtime}: {decimals}/{kind}");
-                    }
-                    assert!(!fixture.0.join("out.csv").exists());
-                    // The static finding does not require study data to exist.
-                    fs::remove_file(fixture.0.join("input.csv")).unwrap();
-                    for runtime in ["python", "r"] {
-                        let issues = file_application::check(
-                            crate::support::host(runtime),
-                            Request {
-                                specification: &specification,
-                                environment: None,
-                            },
-                            identity(runtime, "precision-limit", &specification),
-                        );
-                        assert_eq!(issues.len(), 1);
-                        assert_eq!(issue(&issues[0]), expected);
-                    }
-                }
-            }
-        }
-
-        // No benchmark pins the endpoints of the precision, 0 and 18:
-        // `adam-adlb-reported-precision` pins four decimals, and every float
-        // benchmark without `decimals` pins its omission.
-        #[test]
-        fn csv_precision_endpoints_and_omission_keep_exact_saved_bytes() {
-            for (decimals, expected) in [
-                (Some("0"), "USUBJID,N\nS-001,0\nS-002,0\n"),
-                (
-                    Some("18"),
-                    "USUBJID,N\nS-001,0.125000000000000000\nS-002,-0.125000000000000000\n",
-                ),
-                (None, "USUBJID,N\nS-001,0.125\nS-002,-0.125\n"),
-            ] {
-                let fixture = Fixture::new("precision-endpoints");
-                fs::write(
-                    fixture.0.join("spec.yaml"),
-                    precision_specification(decimals, "float"),
-                )
-                .unwrap();
-                fs::write(
-                    fixture.0.join("input.csv"),
-                    "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n",
-                )
-                .unwrap();
-                let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                for runtime in ["python", "r"] {
-                    let request = || Request {
-                        specification: &specification,
-                        environment: None,
-                    };
-                    assert!(file_application::check(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, "precision-endpoints", &specification)
-                    )
-                    .is_empty());
-                    let mut domain = crate::support::study::domain(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, "precision-endpoints", &specification),
-                    )
-                    .unwrap();
-                    assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-                    assert!(domain.save().unwrap());
-                    assert_eq!(
-                        fs::read_to_string(fixture.0.join("out.csv")).unwrap(),
-                        expected
-                    );
-                }
             }
         }
     }

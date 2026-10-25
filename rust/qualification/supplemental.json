@@ -27,14 +27,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/csv_precision_limit.json",
-      "family": "diagnostics",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json",
       "family": "odm",
       "level": "component",
@@ -902,7 +894,7 @@
       "family": "completed selected-record assertion scope and eager ordering",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs",
+        "rust/crates/yamaa-adapters/tests/execution_completed_intermediates.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications_sources.R"
