@@ -2,11 +2,15 @@
 //! Native specification run assertions.
 mod execution {
     mod specification_run {
+        // A specification run whose findings a case can state through the public
+        // build is a case of `fixtures/diagnostics/specification_runs.json`. These
+        // tests keep the seams no case states and replay authored fixtures.
         use crate::support::ports::NoFunctions;
         use crate::support::specification_run::*;
         use crate::support::Edit as _;
         use yamaa_core::application_observer::Scope;
 
+        /// Seam: the scripted `Sources` port's read count and the captured source table's cells.
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
@@ -46,6 +50,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the core plan's `ExecutionError::Numeric` over an in-memory table and the failing
+        /// record's key values, against each benchmark's own `expected/error.yaml`.
         #[test]
         fn original_yaml_to_checked_numeric_failure_without_python_plan() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -98,6 +104,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the core plan's rows over an in-memory table and its
+        /// `ExecutionError::MultipleValues`.
         #[test]
         fn repeated_keys_collect_raw_readings_before_conversion() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -162,6 +170,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the internal `PrepareError` and `BindError` variants of compiling and binding.
         #[test]
         fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
             use yamaa_core::specification::PrepareError;
@@ -188,6 +197,8 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
+        /// Seam: the internal `BindFinding` and `reference_binding::Diagnostic` variants of
+        /// binding.
         #[test]
         fn binding_uses_shared_reference_and_dependency_findings() {
             use yamaa_core::reference_binding::Diagnostic;
@@ -231,6 +242,8 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
+        /// Seam: the prepared run's source and the condition outcome's failing record (its
+        /// position, key values, partition and matched key) beside its portable issue row.
         #[test]
         fn original_yaml_run_returns_complete_independent_portable_failures() {
             use yamaa_adapters::json;
@@ -299,6 +312,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the internal `Error::Source` and `BindFinding` variants of a run over raw bytes.
         #[test]
         fn source_ingestion_failure_precedes_deferred_formula_diagnostics() {
             use yamaa_adapters::specification_run::{Error, PreparedRun};
@@ -345,6 +359,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Already data: the authored findings of `fixtures/preflight.tsv`.
         #[test]
         fn core_preflight_matches_independent_complete_findings() {
             use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
@@ -367,6 +382,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(count, 5);
         }
 
+        /// Already data: the authored reports of `fixtures/output_declarations.tsv`.
         #[test]
         fn core_output_declarations_match_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -377,6 +393,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/grammar_diagnostics.tsv`.
         #[test]
         fn core_grammar_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -387,6 +404,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/binding_diagnostics.tsv`.
         #[test]
         fn core_binding_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -397,6 +415,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/csv_profile_diagnostics.json`.
         #[test]
         fn core_csv_profile_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -407,6 +426,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored findings of `fixtures/window_diagnostics.tsv`.
         #[test]
         fn core_window_findings_match_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -417,6 +437,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/predicate_diagnostics.tsv`.
         #[test]
         fn core_predicate_matches_independent_complete_failed_report() {
             independent_failed_reports(
@@ -427,6 +448,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/source_typing.json`.
         #[test]
         fn core_source_typing_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -437,6 +459,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: a scripted resolver port's request and read counts, snapshot identity and the
+        /// `PortError` variants of a failed capture.
         #[test]
         fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
             use yamaa_adapters::specification_run::{Error, PortError, PreparedRun};
@@ -554,6 +578,8 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
+        /// Already data: the authored observation records of `fixtures/specs/<benchmark>.json`,
+        /// read through a capturing port that counts its reads.
         #[test]
         fn whole_failure_reports_match_reference_observations_from_actual_capture() {
             use yamaa_adapters::{
@@ -664,6 +690,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the prepared run's declared source types (`run.source().types`), beside the two
+        /// issue rows its runs report.
         #[test]
         fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() {
             use yamaa_adapters::json;
@@ -704,6 +732,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the core plan's typed rows and exact float bits, against the benchmark's
+        /// `expected/adlb.csv`.
         #[test]
         fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits() {
             use yamaa_adapters::typed_csv;
@@ -793,6 +823,8 @@ output: {{path: output.csv, columns: [I, S]}}
             assert!(result.verifications.iter().all(|v| v.failed_count == 0));
         }
 
+        /// Seam: the observation record a build returns (`saved_observations`), against
+        /// `fixtures/specs/adam-adlb-ordered-sum.json`.
         #[test]
         fn original_success_report_describes_its_saved_file_and_output_failures_save_nothing() {
             use yamaa_adapters::json;
@@ -951,6 +983,9 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(actual, expected);
         }
 
+        /// Seam: the observation record's verification records, each failure's context and log
+        /// context, and the scripted port's read count, which `report.check` rows do not state
+        /// whole.
         #[test]
         fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             use crate::support::ports::Sources;
@@ -1101,6 +1136,7 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
+        /// Seam: the observation record a build returns and the scripted port's read count.
         #[test]
         fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
             use crate::support::ports::Sources;
@@ -1190,6 +1226,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the observation record a build returns and the scripted port's read count, beside
+        /// the findings of its edited specifications.
         #[test]
         fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
             use crate::support::ports::Sources;
@@ -1288,6 +1326,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the core plan's binding of several schemas (`SourceCount`, `bind_sources`) and its
+        /// handler counts.
         #[test]
         fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
             use yamaa_core::specification::BindError;
@@ -1376,6 +1416,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the observation record a build returns and a scripted host's capture requests.
         #[test]
         fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers() {
             use std::collections::BTreeMap;
@@ -1492,6 +1533,8 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(host.reads, 3);
         }
 
+        /// Seam: the observation record of each authored variant of
+        /// `fixtures/specs/lookup-failures.json` and a scripted host's capture requests.
         #[test]
         fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
             use yamaa_adapters::json;
@@ -1611,6 +1654,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the internal `Rejection::Fault` of a run given one buffer for three sources.
         #[test]
         fn single_buffer_execution_reports_source_count_without_an_internal_failure() {
             use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
@@ -1634,6 +1678,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the observation record a build returns and a scripted host's read and request
+        /// counts.
         #[test]
         fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
             use yamaa_adapters::json;
