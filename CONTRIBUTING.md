@@ -519,8 +519,12 @@ made to both, and `make check-repository` fails while they differ
   declared in their module under `support::diagnostic::operations`.
 - A positive case also states what its operation built and saved.
   `output` is the output table, whole, written as rows: the header of its
-  column names, then one row per record holding one cell per column.
-  `report` maps each kind of run report row it compares (`run`, `input`,
+  column names, then one row per record holding one cell per column. A
+  header that names some of its columns, in the table's order, states
+  every row, in order, with those columns alone; it is only for a case
+  moved from a test whose assertion named just those columns, as
+  `compares` is for issue rows, and never for a new case, which states the
+  whole table. `report` maps each kind of run report row it compares (`run`, `input`,
   `rows`, `handler`, `column`, `check`; CHECK-23) to that kind's rows in
   report order, written the same way, with a header that names the report
   columns it compares in the report's order (CHECK-24) and leaves out

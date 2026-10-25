@@ -17,7 +17,11 @@
 //! A positive case also states what its operation built and saved:
 //!
 //! - `output`, the output table, whole: a header row of its column names,
-//!   then one row per record, each holding one cell per column;
+//!   then one row per record, each holding one cell per column. A header
+//!   that names some of the table's columns, in the table's order, states
+//!   every row, in order, with those columns alone: it is only for a case
+//!   moved from a test whose assertion named just those columns, as
+//!   `compares` is for issue rows, and never for a new case;
 //! - `report`, the run report's rows of each kind it names (`run`, `input`,
 //!   `rows`, `handler`, `column` or `check`, CHECK-23), in report order, each
 //!   kind's written as a table whose header names the report columns it
@@ -256,7 +260,8 @@ pub struct Outcome {
 /// What a case states beside its issues.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Stated {
-    /// The output table, whole, header first.
+    /// The output table's rows, header first, each with the columns the
+    /// header names.
     pub output: Option<Vec<Value>>,
     /// The report rows of each kind the case names, each kind's header first.
     pub report: Option<BTreeMap<String, Vec<Value>>>,
@@ -285,10 +290,18 @@ impl Stated {
                 .output
                 .as_ref()
                 .unwrap_or_else(|| panic!("{label}: {operation} reports no output table"));
+            let columns = positions(output, &stated[0], "output", label);
+            let output = output
+                .iter()
+                .map(|row| {
+                    let cells = row.as_array().expect("a row");
+                    Value::Array(columns.iter().map(|&at| cells[at].clone()).collect())
+                })
+                .collect::<Vec<_>>();
             assert!(
-                stated == output,
+                *stated == output,
                 "{label}: the output rows are\n{}\nnot\n{}",
-                lines(output),
+                lines(&output),
                 lines(stated)
             );
         }
@@ -480,21 +493,10 @@ fn report(kinds: &Value, label: &str) -> BTreeMap<String, Vec<Value>> {
 /// holding the columns `header` names, which must be report columns in the
 /// report's order.
 fn of_kind(report: &[Value], kind: &str, header: &Value, label: &str) -> Vec<Value> {
+    let columns = positions(report, header, &format!("report.{kind}"), label);
     let names = report[0].as_array().expect("a header");
-    let position = |name: &str| {
-        names
-            .iter()
-            .position(|column| column == name)
-            .unwrap_or_else(|| panic!("{label}: the run report has no column {name:?}"))
-    };
-    let stated = header.as_array().expect("a header").iter();
-    let stated = stated.filter_map(Value::as_str).collect::<Vec<_>>();
-    let columns = stated.iter().map(|name| position(name)).collect::<Vec<_>>();
-    assert!(
-        columns.windows(2).all(|pair| pair[0] < pair[1]),
-        "{label}: report.{kind} names its columns in the report's order: {stated:?}"
-    );
-    let at = position("KIND");
+    let at = names.iter().position(|column| column == "KIND");
+    let at = at.expect("a run report has a KIND column");
     let mut rows = vec![header.clone()];
     for row in &report[1..] {
         let cells = row.as_array().expect("a row");
@@ -504,6 +506,27 @@ fn of_kind(report: &[Value], kind: &str, header: &Value, label: &str) -> Vec<Val
         }
     }
     rows
+}
+
+/// The position in the reported `table` of each column the stated table
+/// `member` names in its `header`, which must be columns of that table, named
+/// in its order.
+fn positions(table: &[Value], header: &Value, member: &str, label: &str) -> Vec<usize> {
+    let names = table[0].as_array().expect("a header");
+    let stated = header.as_array().expect("a header").iter();
+    let stated = stated.filter_map(Value::as_str).collect::<Vec<_>>();
+    let columns = stated
+        .iter()
+        .map(|name| {
+            let at = names.iter().position(|column| column == name);
+            at.unwrap_or_else(|| panic!("{label}: {member}'s table has no column {name:?}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        columns.windows(2).all(|pair| pair[0] < pair[1]),
+        "{label}: {member} names its columns in its table's order: {stated:?}"
+    );
+    columns
 }
 
 /// The files `saved` states: each file created or changed, with its text,
