@@ -115,6 +115,10 @@
     "shared_define.json::without_the_sdtm_section_a_predecessor_names_no_dataset_of_the_study": {
       "save": false,
       "absent": []
+    },
+    "shared_define.json::predecessor_labels_and_the_dataset_inventory_span_every_section": {
+      "save": true,
+      "absent": []
     }
   },
   "written_paths": [

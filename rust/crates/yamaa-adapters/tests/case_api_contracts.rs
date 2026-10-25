@@ -490,7 +490,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
         contracts.keys().cloned().collect(),
         "every define API case remains present"
     );
-    assert_eq!((accepted, refused, artifact_contracts), (3, 23, 3));
+    assert_eq!((accepted, refused, artifact_contracts), (4, 23, 3));
 }
 
 /// Seam: a refused written path has no accepted output and cannot publish,
