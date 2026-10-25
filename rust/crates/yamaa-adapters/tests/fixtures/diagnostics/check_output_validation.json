@@ -1,0 +1,723 @@
+{
+  "about": "check reports the validation findings the build reaches without study data, and the refused build reports them too. Three rows of #2295's table: an output column no column declares (OUTPUT-1), decimals on a parquet output and a negative decimals (CSV-6). Formula reads bind without a source schema, so a formula reports each qualified name that is not a record lookup (FORMULA-9), then column order over its reads (COLUMN-5, COLUMN-6), and a formula that reads an earlier column is clean. What the tree does not keep, a field written empty or false, is read as binding reads it (#3225): a driver intermediate refuses each prohibited field it writes, whatever its value (ROW-2); an order_by with no term still needs a keep (LOOKUP-10); an ODM input refuses a written types (NAME-8); an empty derivations keeps an intermediate from being rename-only (LOOKUP-4), so it builds and saves; rows: [] builds no row template, as without rows; and an ODM read under unconvertible is named at binding's path. negative-lookup-empty-order writes order_by: [] beside keep: last; no benchmark pins the others. A CSV precision outside 0 through 18 fails validation at output.decimals (CSV-6) for a float output with a record or without records and for an int output, with or without study data; the endpoints 0 and 18 and an omitted decimals save their exact bytes, which no benchmark pins (adam-adlb-reported-precision pins four decimals). Moved from the check_output_validation module of execution_aggregate_record_operations.rs at db988eb9c. Each specification is its test's text or template (the issue rows' and the formulas' specifications, driver, lookup, odm, rows and precision_specification), written as a document with the edits that make it, and each input is a file the test wrote; input/odm.csv is the benchmark file the test copied. A test that compared each route's first issue states it as a prefix, at the five fields support::study::issue_row projects; one that compared each route's whole list states it complete. The precision limit's row is csv_precision_limit.json's, which only that test read, with its actual set to the number the test decoded from the decimals it wrote. The tests ran each specification for the Python and the R host. The host is read only for a project's environment, functions or lock, and no case names a project, so each specification is one case, and case_api_contracts.rs makes the R calls. A float precision's check without study data ran twice, once after each input; its specification is one case. No engine output supplied these values.",
+  "documents": {
+    "issue_rows": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: input/dm.csv}\noutput: {path: out.csv, columns: [USUBJID, N, ZZZ]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: N, type: float, derivation: DM.AGE}\n",
+    "formula": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: input/dm.csv, types: {AGE: float, WT: float}}}\noutput: {path: out.csv, columns: [USUBJID, A, B]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: A, type: float, derivation: 'B + DM.AGE + DM.WT'}\n  - {name: B, type: float, derivation: DM.AGE}\n",
+    "driver": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: input/src.csv}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - {id: DRV, dataset: SRC, filter: \"SRC.ID <> 'z'\", require_match: false}\ncolumns:\n  - {name: ID, type: str}\nrows:\n  - {id: all, dataset: DRV, derivations: {ID: DRV.ID}}\n",
+    "lookup": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [X]\ninput: {SRC: input/src.csv, RIGHT: {path: input/right.csv, key: [X]}}\nbase: SRC\noutput: {path: out.csv, columns: [X, W]}\nintermediates:\n  - {id: LOOK, dataset: RIGHT, key: [X], derivations: {}}\ncolumns:\n  - {name: X, type: str, derivation: SRC.X}\n  - {name: W, type: str, derivation: LOOK.K}\n",
+    "odm": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID]\ninput: {ODM: input/odm.csv}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, AGE]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: ODM.StudyOID}\n  - {name: USUBJID, type: str, derivation: ODM.SubjectKey}\n  - {name: AGE, type: int, derivation: {value: {odm: NOPE.IT.DM.AGE}, unconvertible: null}}\n",
+    "rows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: input/src.csv}\nbase: SRC\noutput: {path: out.csv, columns: [ID, A]}\nintermediates:\n  - {id: PREV, dataset: SELF, key: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: X, type: str, derivation: SRC.X}\n  - {name: A, type: str, derivation: PREV.ID}\nrows: []\n",
+    "precision": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: input.csv}\noutput: {path: out.csv, columns: [USUBJID, N]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: N, type: float, derivation: DM.VALUE}\n"
+  },
+  "cases": [
+    {
+      "case": "an_output_column_no_column_declares_is_undeclared",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "issue_rows"}, "input/dm.csv": "USUBJID,AGE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-1", "spec_paths": ["output.columns[2]"], "context": {"column": "ZZZ"}}]
+    },
+    {
+      "case": "decimals_on_a_parquet_output_are_not_applicable",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "issue_rows", "edits": [{"from": "{path: out.csv, columns: [USUBJID, N, ZZZ]}", "to": "{path: out.parquet, columns: [USUBJID, N], decimals: 2}"}]}, "input/dm.csv": "USUBJID,AGE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "decimals_not_applicable", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"path": "out.parquet", "profile": "parquet"}}]
+    },
+    {
+      "case": "a_negative_decimals_on_a_csv_output_is_an_invalid_field_type",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "issue_rows", "edits": [{"from": "{path: out.csv, columns: [USUBJID, N, ZZZ]}", "to": "{path: out.csv, columns: [USUBJID, N], decimals: -1}"}]}, "input/dm.csv": "USUBJID,AGE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": -1}}]
+    },
+    {
+      "case": "a_formula_reports_its_qualified_names_before_its_forward_reference",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "formula"}, "input/dm.csv": "USUBJID,AGE,WT\nU1,34,70.5\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "qualified_identifier", "rule": "FORMULA-9", "spec_paths": ["columns.A.derivation"], "context": {"expr": "B + DM.AGE + DM.WT", "identifier": "DM.AGE"}},
+        {"phase": "validation", "condition": "qualified_identifier", "rule": "FORMULA-9", "spec_paths": ["columns.A.derivation"], "context": {"expr": "B + DM.AGE + DM.WT", "identifier": "DM.WT"}},
+        {"phase": "validation", "condition": "forward_reference", "rule": "COLUMN-5", "spec_paths": ["columns.A.derivation"], "context": {"column": "A", "dependency": "B"}}
+      ]
+    },
+    {
+      "case": "a_formula_reports_its_forward_references_in_written_order",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "formula", "edits": [{"from": "columns: [USUBJID, A, B]}", "to": "columns: [USUBJID, A, B, C]}"}, {"from": "  - {name: A, type: float, derivation: 'B + DM.AGE + DM.WT'}\n  - {name: B, type: float, derivation: DM.AGE}\n", "to": "  - {name: A, type: float, derivation: 'C - B'}\n  - {name: B, type: float, derivation: DM.AGE}\n  - {name: C, type: float, derivation: DM.WT}\n"}]}, "input/dm.csv": "USUBJID,AGE,WT\nU1,34,70.5\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "forward_reference", "rule": "COLUMN-5", "spec_paths": ["columns.A.derivation"], "context": {"column": "A", "dependency": "C"}},
+        {"phase": "validation", "condition": "forward_reference", "rule": "COLUMN-5", "spec_paths": ["columns.A.derivation"], "context": {"column": "A", "dependency": "B"}}
+      ]
+    },
+    {
+      "case": "two_formulas_that_read_each_other_are_one_dependency_cycle",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "formula", "edits": [{"from": "  - {name: A, type: float, derivation: 'B + DM.AGE + DM.WT'}\n  - {name: B, type: float, derivation: DM.AGE}\n", "to": "  - {name: A, type: float, derivation: 'B + 1'}\n  - {name: B, type: float, derivation: 'A + 1'}\n"}]}, "input/dm.csv": "USUBJID,AGE,WT\nU1,34,70.5\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "dependency_cycle", "rule": "COLUMN-6", "spec_paths": ["columns.A.derivation", "columns.B.derivation"], "context": {"cycle": ["A", "B", "A"]}}]
+    },
+    {
+      "case": "a_formula_that_reads_an_earlier_column_checks_and_builds_clean",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "formula", "edits": [{"from": "columns: [USUBJID, A, B]}", "to": "columns: [USUBJID, B, A]}"}, {"from": "  - {name: A, type: float, derivation: 'B + DM.AGE + DM.WT'}\n  - {name: B, type: float, derivation: DM.AGE}\n", "to": "  - {name: B, type: float, derivation: DM.AGE}\n  - {name: A, type: float, derivation: 'B * 2'}\n"}]}, "input/dm.csv": "USUBJID,AGE,WT\nU1,34,70.5\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_driver_intermediate_refuses_require_match_written_false",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "driver"}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "ROW-2", "spec_paths": ["rows.all.dataset"], "context": {"fields": ["require_match"], "intermediate": "DRV"}}]
+    },
+    {
+      "case": "a_driver_intermediate_refuses_order_by_written_empty",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "driver", "edits": [{"from": "require_match: false", "to": "order_by: []"}]}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "ROW-2", "spec_paths": ["rows.all.dataset"], "context": {"fields": ["order_by"], "intermediate": "DRV"}}]
+    },
+    {
+      "case": "an_intermediate_with_derivations_written_empty_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "lookup"}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_intermediate_with_derivations_written_empty_builds_and_saves_its_lookup",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "lookup"}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "X,W\none,k1\ntwo,k2\n"}
+    },
+    {
+      "case": "an_order_by_written_empty_still_needs_a_keep",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "derivations: {}", "to": "order_by: []"}]}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["intermediates.LOOK"], "context": {"declared": ["order_by"], "intermediate": "LOOK", "missing": ["keep"]}}]
+    },
+    {
+      "case": "an_odm_input_refuses_types_written_empty",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "odm", "edits": [{"from": "{ODM: input/odm.csv}", "to": "{ODM: {path: input/odm.csv, types: {}}}"}, {"from": "{value: {odm: NOPE.IT.DM.AGE}, unconvertible: null}", "to": "{odm: ODM.IT.DM.AGE}"}]}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "NAME-8", "spec_paths": ["input.ODM.types"], "context": {"dataset": "ODM", "declared": "types"}}]
+    },
+    {
+      "case": "an_odm_read_under_unconvertible_is_named_at_its_item",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "odm"}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.AGE.derivation.odm.item"], "context": {"identifier": "NOPE.IT.DM.AGE"}}]
+    },
+    {
+      "case": "rows_written_empty_build_no_row_template_so_self_is_unknown",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "rows"}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.PREV.dataset"], "context": {"identifier": "SELF", "intermediate": "PREV"}}]
+    },
+    {
+      "case": "rows_written_empty_still_type_a_rounding_of_text",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "rows", "edits": [{"from": "intermediates:\n  - {id: PREV, dataset: SELF, key: [ID]}\n", "to": ""}, {"from": "  - {name: A, type: str, derivation: PREV.ID}\n", "to": "  - {name: A, type: float, derivation: {round_half_away_from_zero: {source: X, digits: 1}}}\n"}]}, "input/src.csv": "ID,X,V\na,one,1.0\nb,two,2.0\n", "input/right.csv": "X,K\none,k1\ntwo,k2\n", "input/odm.csv": {"file": "benchmarks/negative-odm-schema-type/input/odm.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-16", "spec_paths": ["columns.A.derivation.round_half_away_from_zero.source"], "context": {"actual": "str", "expected": "numeric", "source": "X"}}]
+    },
+    {
+      "case": "a_csv_precision_of_minus_1_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: -1}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": -1}}]
+    },
+    {
+      "case": "a_csv_precision_of_minus_1_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: -1}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": -1}}]
+    },
+    {
+      "case": "a_csv_precision_of_minus_1_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: -1}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": -1}}]
+    },
+    {
+      "case": "a_csv_precision_of_minus_1_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: -1}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": -1}}]
+    },
+    {
+      "case": "a_csv_precision_of_minus_1_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: -1}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": -1}}]
+    },
+    {
+      "case": "a_csv_precision_of_19_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 19}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 19}}]
+    },
+    {
+      "case": "a_csv_precision_of_19_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 19}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 19}}]
+    },
+    {
+      "case": "a_csv_precision_of_19_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 19}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 19}}]
+    },
+    {
+      "case": "a_csv_precision_of_19_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 19}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 19}}]
+    },
+    {
+      "case": "a_csv_precision_of_19_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 19}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 19}}]
+    },
+    {
+      "case": "a_csv_precision_of_400_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 400}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 400}}]
+    },
+    {
+      "case": "a_csv_precision_of_400_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 400}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 400}}]
+    },
+    {
+      "case": "a_csv_precision_of_400_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 400}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 400}}]
+    },
+    {
+      "case": "a_csv_precision_of_400_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 400}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 400}}]
+    },
+    {
+      "case": "a_csv_precision_of_400_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 400}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 400}}]
+    },
+    {
+      "case": "a_csv_precision_of_5000_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 5000}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 5000}}]
+    },
+    {
+      "case": "a_csv_precision_of_5000_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 5000}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 5000}}]
+    },
+    {
+      "case": "a_csv_precision_of_5000_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 5000}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 5000}}]
+    },
+    {
+      "case": "a_csv_precision_of_5000_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 5000}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 5000}}]
+    },
+    {
+      "case": "a_csv_precision_of_5000_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 5000}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 5000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10000000_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10000000_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10000000_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10000000_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10000000_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775807}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775807}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775807}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775807}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775807}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775807}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775807}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775807}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775807}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775807}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_plus_1_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775808}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775808}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_plus_1_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775808}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775808}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_plus_1_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775808}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775808}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_plus_1_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775808}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775808}}]
+    },
+    {
+      "case": "a_csv_precision_of_i64_max_plus_1_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 9223372036854775808}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 9223372036854775808}}]
+    },
+    {
+      "case": "a_csv_precision_of_2_to_the_64_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 18446744073709551616}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 18446744073709551616}}]
+    },
+    {
+      "case": "a_csv_precision_of_2_to_the_64_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 18446744073709551616}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 18446744073709551616}}]
+    },
+    {
+      "case": "a_csv_precision_of_2_to_the_64_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 18446744073709551616}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 18446744073709551616}}]
+    },
+    {
+      "case": "a_csv_precision_of_2_to_the_64_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 18446744073709551616}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 18446744073709551616}}]
+    },
+    {
+      "case": "a_csv_precision_of_2_to_the_64_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 18446744073709551616}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 18446744073709551616}}]
+    },
+    {
+      "case": "a_csv_precision_of_10_to_the_400_is_refused_for_a_float_output_with_a_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10_to_the_400_is_refused_for_a_float_output_without_records",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}"}]}, "input.csv": "USUBJID,VALUE\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10_to_the_400_is_refused_for_an_int_output",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}"}, {"from": "type: float", "to": "type: int"}]}, "input.csv": "USUBJID,VALUE\nS-001,34\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10_to_the_400_is_refused_for_a_float_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_10_to_the_400_is_refused_for_an_int_output_without_study_data",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}"}, {"from": "type: float", "to": "type: int"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]
+    },
+    {
+      "case": "a_csv_precision_of_0_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 0}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_csv_precision_of_0_writes_each_float_without_decimals",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 0}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,0\nS-002,0\n"}
+    },
+    {
+      "case": "a_csv_precision_of_18_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 18}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_csv_precision_of_18_writes_eighteen_decimals",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision", "edits": [{"from": "columns: [USUBJID, N]}", "to": "columns: [USUBJID, N], decimals: 18}"}]}, "input.csv": "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,0.125000000000000000\nS-002,-0.125000000000000000\n"}
+    },
+    {
+      "case": "a_csv_output_without_decimals_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision"}, "input.csv": "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_csv_output_without_decimals_writes_each_float_unrounded",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "precision"}, "input.csv": "USUBJID,VALUE\nS-001,0.125\nS-002,-0.125\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,0.125\nS-002,-0.125\n"}
+    }
+  ]
+}

@@ -240,6 +240,68 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
     assert_eq!((count, first_issues, parity, saves), (95, 4, 38, 30));
 }
 
+/// Seam: the R-host calls of the tests that moved into `case_item_order.json`
+/// and `check_output_validation.json`, which ran each specification for the
+/// Python and the R host. The host is read only for a project's environment,
+/// functions or lock, and no case of the two names one, so the replay states
+/// each specification once, for the default host. This seam makes the R
+/// calls those tests made: the check and the build publish nothing, each
+/// operation a case names reports its rows, and a save returns `Ok(true)` and
+/// writes the bytes its case states.
+#[test]
+fn moved_two_host_families_keep_their_r_host_calls() {
+    const FAMILIES: [&str; 2] = ["case_item_order.json", "check_output_validation.json"];
+    let mut counts = [0; 2];
+    for case in replay::cases() {
+        let family = case.label.split_once("::").unwrap().0;
+        let Some(index) = FAMILIES.iter().position(|name| *name == family) else {
+            continue;
+        };
+        counts[index] += 1;
+        assert!(
+            case.input.get("host").is_none() && case.input.get("project").is_none(),
+            "{}: a case of these families is stated once, for every host",
+            case.label
+        );
+        let label = format!("{} (R)", case.label);
+        let Calls {
+            study,
+            checked,
+            mut built,
+        } = calls(&case.input, Language::R, &label);
+        for operation in &case.operations {
+            match operation.as_str() {
+                "check" => replay::compare_issues(&case, &checked, Some(&study), &label),
+                "build" => {
+                    let issues = match &built {
+                        Ok(domain) => domain.issues(),
+                        Err(issues) => issues.clone(),
+                    };
+                    replay::compare_issues(&case, &issues, Some(&study), &label);
+                }
+                "save" => {
+                    let domain = built
+                        .as_mut()
+                        .unwrap_or_else(|issues| panic!("{label}: a save builds: {issues:?}"));
+                    replay::compare_issues(&case, &domain.issues(), Some(&study), &label);
+                    let saved = domain.save();
+                    assert!(
+                        matches!(saved, Ok(true)),
+                        "{label}: expected Ok(true), got {saved:?}"
+                    );
+                    saved_bytes(&study, case.stated.saved.as_ref().unwrap(), &label);
+                }
+                other => panic!("{label}: no R call for {other}"),
+            }
+        }
+    }
+    assert_eq!(
+        counts,
+        [10, 67],
+        "every moved two-host case makes its R calls"
+    );
+}
+
 /// The original Rust route/save requirements; fixture inputs and expected
 /// diagnostic/output bytes retain their existing owner.
 fn api_routes() -> Value {
@@ -270,7 +332,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        363,
+        402,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -435,8 +497,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (241, 13, 4, 105));
-    assert_eq!((accepted_saves, refused_saves, no_save), (154, 46, 163));
+    assert_eq!((domains, preparation, either, checks), (245, 13, 39, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (158, 46, 198));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter
