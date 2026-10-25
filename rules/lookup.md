@@ -1302,7 +1302,7 @@ are reported and the selection chooses. A lookup whose key is verified unique
 at `error` needs no selection.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
 
 ```yaml
 - id: DS_EOS
@@ -1441,7 +1441,7 @@ local `group_by`: the enclosing `row.group_by` already fixes its current
 relation and keys.
 
 Fails: `invalid_aggregate_context`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/schema_windows.rs`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_group_by_column_must_be_an_output_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_grouped_by_the_output_key_binds`.
 
 A qualified `group_by` column that is not an output key fails, as does an
 unqualified expression with no `group_by` or with a `between`. A grouped-row

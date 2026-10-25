@@ -88,8 +88,8 @@
     {
       "case": "a_declared_csv_type_naming_no_field_is_refused_before_conversion",
       "operation": "csv_types",
-      "input": {"dataset": "SRC", "types": [["X", "int"], ["ABSENT", "int"]], "names": ["X"], "records": [["invalid"]]},
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.ABSENT"], "context": {"dataset": "SRC", "field": "ABSENT", "identifier": "ABSENT"}}]
+      "input": {"dataset": "SRC", "types": [["X", "int"], ["Z", "float"], ["A", "int"]], "names": ["X"], "records": [["not-an-int"]]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.Z"], "context": {"dataset": "SRC", "field": "Z", "identifier": "Z"}}]
     },
     {
       "case": "csv_typing_fails_at_the_first_stored_field_that_does_not_parse",
@@ -106,7 +106,7 @@
     {
       "case": "an_empty_parquet_field_name_is_refused_by_position",
       "operation": "parquet_columns",
-      "input": {"dataset": "SRC", "path": "data.parquet", "fields": [{"name": ""}], "roots": 1},
+      "input": {"dataset": "SRC", "path": "data.parquet", "fields": [{"name": ""}, {"name": "I"}], "roots": 2},
       "issues": [{"phase": "ingest", "condition": "source_field_name_empty", "rule": "PARQUET-6", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "data.parquet", "field": 1}}]
     },
     {
@@ -144,6 +144,18 @@
       "operation": "yaml_source",
       "input": {"identity": "source.yaml", "failure": {"invalid_text": [{"path": "$.x", "code_point": "D800", "offset": 1}]}},
       "issues": [{"phase": "validation", "condition": "invalid_text", "rule": "VALUE-11", "spec_paths": ["$.x"], "context": {"code_point": "U+D800", "offset": 1, "path": "source.yaml"}}]
+    },
+    {
+      "case": "a_csv_profile_refusal_keeps_a_record_and_a_field_index_of_full_width",
+      "operation": "csv_profile",
+      "input": {"dataset": "SRC", "path": "source.csv", "cause": "record_width", "record": 18446744073709551615, "field": 18446744073709551615},
+      "issues": [{"phase": "ingest", "condition": "source_record_width", "rule": "CSV-16", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.csv", "record": 18446744073709551615, "field": 18446744073709551615}}]
+    },
+    {
+      "case": "a_parquet_value_refusal_keeps_a_record_of_full_width_and_the_least_stored_value",
+      "operation": "parquet_value",
+      "input": {"dataset": "SRC", "path": "data.parquet", "type": "datetime", "value": -9223372036854775808, "field": "DT", "record": 18446744073709551615},
+      "issues": [{"phase": "ingest", "condition": "source_field_value_invalid", "rule": "PARQUET-9", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "data.parquet", "field": "DT", "record": 18446744073709551615, "value": -9223372036854775808}}]
     }
   ]
 }

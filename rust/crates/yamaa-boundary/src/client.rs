@@ -1,14 +1,13 @@
-//! The safe client over the engine's C ABI, through which a host binding
-//! reaches the engine (the design on #2870, sections 3.3 to 3.6): the gate
-//! that holds the negotiated function table, handles each owned by one
-//! value, typed calls of the table's entries, and a host's callbacks behind
-//! the engine's callback ABI.
+//! Unused safe client of the retired engine C ABI (the design on #2870,
+//! sections 3.3 to 3.6). It retains a legacy function-table gate, owned
+//! handles, typed calls and callback adapters until the final removal step
+//! of #3877.
 //!
-//! A binding answers its generated layer's request with [`Gate::negotiate`],
-//! which sends it to the engine as the C request a client sends and reads
-//! the outcome back; the first acceptance opens the gate, which hands out
-//! the [`Engine`] every other native call goes through. A binding that
-//! links the engine passes its negotiation entry, `yamaa_engine::negotiate`.
+//! The former engine crate and its negotiation entry no longer exist.
+//! Neither host binding uses this client: both call the `yamaa` facade
+//! directly and use [`crate::Gate`] for their active negotiation and gating.
+//! The [`Gate`] below and the following safety notes document the legacy
+//! function-table contract.
 //!
 //! # Safety
 //!
@@ -31,17 +30,15 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::abi::{self, Handle, Str};
 use crate::{Accepted, Closed, HandleKind, Outcome, Reason, Refusal, Value};
 
-/// An engine's negotiation entry: `yamaa_engine::negotiate` when a binding
-/// links the engine.
+/// The negotiation entry signature of the unused legacy C ABI.
 pub type Negotiate = unsafe extern "C" fn(
     request: *const abi::Request,
     outcome: *mut abi::Outcome,
 ) -> *const abi::Engine;
 
-/// A binding's gate: closed until a negotiation is accepted, then holding
-/// the engine's table for the life of the process; nothing closes it again.
-/// A binding keeps one in a `static`, so a replaced native module starts
-/// closed.
+/// The unused legacy client's gate: closed until a negotiation is accepted,
+/// then holding the engine's table for the life of the process; nothing
+/// closes it again.
 #[derive(Debug, Default)]
 pub struct Gate {
     table: AtomicPtr<abi::Engine>,
@@ -166,58 +163,6 @@ impl Gate {
         // negotiation of an engine's entry returned, of this client's
         // boundary version and at least its size.
         unsafe { table.as_ref() }.map(Engine).ok_or(Closed)
-    }
-
-    /// Answer `request` as [`Gate::negotiate`] does, through the engine
-    /// library beside this module: the test-only loaded mode
-    /// ([`crate::loader`]). Beside a module where no engine library loads,
-    /// or whose library exports no negotiation entry, the request is refused
-    /// as `missing_interface`, as from a native module without a handshake,
-    /// and the reason, with the library's path, goes to standard error.
-    #[cfg(feature = "loader")]
-    pub fn negotiate_loaded(&self, request: &Value) -> Outcome {
-        let entry = crate::loader::entry();
-        if let Err(missing) = &entry {
-            // The refusal names no path; the loaded mode serves tests alone,
-            // whose logs keep this line.
-            eprintln!("yamaa, in the test-only loaded mode: {missing}");
-        }
-        self.negotiate_through(request, entry)
-    }
-
-    /// Answer `request` as [`Gate::negotiate_loaded`] does, through the
-    /// engine library beside `module`, a module file's absolute path: the
-    /// loading tests' route to their fixture engines.
-    ///
-    /// # Safety
-    ///
-    /// As [`crate::loader::load`] asks of the library beside `module`.
-    #[cfg(feature = "loader")]
-    pub unsafe fn negotiate_beside(&self, request: &Value, module: &std::path::Path) -> Outcome {
-        // SAFETY: the caller's contract.
-        self.negotiate_through(request, unsafe { crate::loader::load(module) })
-    }
-
-    #[cfg(feature = "loader")]
-    fn negotiate_through(
-        &self,
-        request: &Value,
-        entry: Result<Negotiate, crate::loader::Missing>,
-    ) -> Outcome {
-        match entry {
-            // SAFETY: the loader returns only an engine library's
-            // negotiation entry.
-            Ok(entry) => unsafe { self.negotiate(request, entry) },
-            Err(_) => {
-                let version = Sent::of(request).version;
-                Outcome::Refused(Refusal {
-                    requested_version: (version != 0).then_some(version),
-                    supported_version: None,
-                    reason: Reason::MissingInterface,
-                    missing_features: Vec::new(),
-                })
-            }
-        }
     }
 }
 

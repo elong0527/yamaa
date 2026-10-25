@@ -1,12 +1,12 @@
 //! The version and feature handshake (`rust/interface/README.md`): each
 //! request of the shared truth's `interface` family negotiates to its
 //! authored outcome, the version is compared before anything else is read,
-//! and R's vectors read as their element and as sequences. A binding's gate,
-//! which needs an engine to negotiate with, is `yamaa-engine`'s client
-//! family's.
+//! R's vectors read as their element and as sequences, and a binding's gate
+//! opens on the first acceptance only.
 use serde_json::{json, Value as Json};
 use yamaa_boundary::{
-    negotiate, Accepted, Closed, EngineFacts, Outcome, Reason, Refusal, Value, BOUNDARY_VERSION,
+    negotiate, Accepted, Closed, EngineFacts, Gate, Outcome, Reason, Refusal, Value,
+    BOUNDARY_VERSION,
 };
 
 use crate::support::{family, texts};
@@ -230,6 +230,40 @@ fn an_r_request_negotiates_by_its_vectors_and_names() {
     for (case, request, outcome) in cases {
         assert_eq!(negotiate(&request, &shipped()), outcome, "{case}");
     }
+}
+
+/// The gate refuses until a negotiation is accepted, and a refused
+/// negotiation, before or after, changes nothing.
+#[test]
+fn the_first_acceptance_opens_the_gate_and_nothing_closes_it() {
+    let gate = Gate::new();
+    let engine = shipped();
+    let interface = family("interface");
+    let generated = request(&resolved(&interface["request"]));
+    let mismatch = Value::Map(vec![(
+        "version".into(),
+        Value::Integer(i64::from(BOUNDARY_VERSION) + 1),
+    )]);
+    let mut steps = vec![("before any negotiation", gate.pass())];
+    for (step, value) in [
+        ("after a refusal", &mismatch),
+        ("after an acceptance", &generated),
+        ("after a later refusal", &mismatch),
+        ("after a later acceptance", &generated),
+    ] {
+        gate.negotiate(value, &engine);
+        steps.push((step, gate.pass()));
+    }
+    assert_eq!(
+        steps,
+        [
+            ("before any negotiation", Err(Closed)),
+            ("after a refusal", Err(Closed)),
+            ("after an acceptance", Ok(())),
+            ("after a later refusal", Ok(())),
+            ("after a later acceptance", Ok(())),
+        ]
+    );
 }
 
 #[test]

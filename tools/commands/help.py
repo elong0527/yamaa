@@ -36,10 +36,7 @@ HELP = """yamaa repository commands (run from the repository root)
   docs              Generate dashboards and build the strict site.
 
 Run setup first, and again after changing rust/ or python/src/ before running
-Python tests: they import the installed package. YAMAA_ENGINE=loaded before
-setup, test-python or test-r builds each host in the test-only loaded mode,
-which loads the engine library from beside the binding's module
-(rust/interface/README.md). Pull request CI selects the
+Python tests: they import the installed package. Pull request CI selects the
 affected checks in four lanes, so
 before a push run the tests nearest the change and, after a Rust change,
 cargo fmt and Clippy on the touched crates (D148 on #3030). Reproduce a red CI
