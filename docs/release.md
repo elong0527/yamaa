@@ -35,9 +35,10 @@ package for that platform. `tools.validation.check_supported_platforms`, which
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
   checks with R-devel, R-release and R 4.2.0 and the minimum Rust. On Linux
   x86_64 it also passes with its C compiled under AddressSanitizer and
-  UndefinedBehaviorSanitizer, with R-devel in R-hub's `clang-asan`
-  container. The separate R-CMD-check workflow also checks the latest R 4.2
-  patch on Linux.
+  UndefinedBehaviorSanitizer, with R-devel in R-hub's `gcc-asan` and
+  `clang-asan` containers, and with its examples and tests under valgrind's
+  memcheck in R-hub's `valgrind` container. The separate R-CMD-check workflow
+  also checks the latest R 4.2 patch on Linux.
 - On Linux aarch64, native qualification uses R-release alone. Its
   `native-r` job installs the R source package that a release publishes,
   runs the conformance corpus and the installed R suites with it, and passes
@@ -208,11 +209,11 @@ state that limit.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
-`native-cran` jobs. Each runs `R CMD check --as-cran` through
-`tools/commands/check_r.py`, which fails on any NOTE, WARNING or ERROR that
-`R/yamaa/cran-comments.md` does not explain and on a tarball above the 15 MB
-that it requests. The build reads the vendored crates behind a proxy that
-refuses connections and runs two Cargo jobs.
+`native-cran` jobs. Each but the valgrind job runs `R CMD check --as-cran`
+through `tools/commands/check_r.py`, which fails on any NOTE, WARNING or
+ERROR that `R/yamaa/cran-comments.md` does not explain and on a tarball above
+the 15 MB that it requests. The build reads the vendored crates behind a
+proxy that refuses connections and runs two Cargo jobs.
 
 - With R-devel, R-release and R 4.2.0, on Linux, macOS and Windows, Cargo and
   rustc are the workspace's `rust-version`, 1.82: the two-year-old toolchain
@@ -234,6 +235,12 @@ refuses connections and runs two Cargo jobs.
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as
   CRAN's Linux check servers use their distribution's.
+- In R-hub v2's `gcc-asan` container, the gcc-ASAN configuration of CRAN's
+  additional checks (R-devel on Fedora 44, whose GCC instruments packages
+  with AddressSanitizer and UndefinedBehaviorSanitizer and whose R preloads
+  both runtimes), the build uses Fedora's Cargo and rustc, as in `gcc16`. As
+  in `clang-asan` below, the bundled C sources are instrumented, which the
+  job confirms, and `check_r.py` fails on any sanitizer report.
 - In R-hub v2's `clang-asan` container, the clang-ASAN configuration of
   CRAN's additional checks (R-devel built with clang 23 and libc++ on Ubuntu
   26.04, whose C compiler instruments packages with AddressSanitizer and
@@ -245,6 +252,17 @@ refuses connections and runs two Cargo jobs.
   code is not instrumented. `check_r.py` also fails on any sanitizer report
   in the installation, example or test output, since
   UndefinedBehaviorSanitizer reports and carries on.
+- In R-hub v2's `valgrind` container, CRAN's valgrind check (R-devel on
+  Fedora 44 built for valgrind), the build uses Fedora's Cargo and rustc.
+  `check_r.py --valgrind` runs, as R-hub's image does, only the
+  installation, the examples and the tests (`--extra-arch`), the examples
+  and each test under valgrind's memcheck (`--use-valgrind`) with the image's
+  `--track-origins=yes --leak-check=full`. It leaves out `--as-cran`, which
+  turns `--extra-arch` off and reports every example slower than five
+  seconds, as each is under valgrind. It fails where memcheck counted an
+  error, a leak that `--leak-check=full` reports included, or did not run.
+  Under memcheck the tests run many times slower, so the job may take up to
+  four hours.
 
 Development PRs do not run the release lanes, so before a release also
 dispatch R-CMD-check, Dependency graphs and Release compatibility on the
@@ -871,7 +889,8 @@ CRAN receives final releases, never a candidate, the first being 0.6.0
 (#3673 D289, which amends #3030 D1's "CRAN receives 1.0.0"). Before
 submitting, the release's `yamaa_X.Y.Z.tar.gz` passes `R CMD check --as-cran`
 on win-builder (R-devel) and the macOS builder, beside the qualifying native
-run's CRAN checks, and `R/yamaa/cran-comments.md` records the results and
+run's CRAN checks, R-hub's `gcc16`, `gcc-asan`, `clang-asan` and `valgrind`
+containers included, and `R/yamaa/cran-comments.md` records the results and
 explains every remaining note. A release reaches its channels in this order:
 
 1. The final release tag `yamaa-vX.Y.Z`, pushed as [Publication](#publication)

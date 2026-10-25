@@ -15,7 +15,16 @@ checks do, and fails unless R reports both of those checks OK.
 With --ignore-vignettes, the dependency-only check can run with no vignette
 builders installed. Other checks continue to validate and rebuild vignettes.
 
+With --valgrind it runs CRAN's valgrind check instead, as R-hub's valgrind
+image does: only the checks that run the package (--extra-arch), its
+installation, examples and tests, with the examples and each test under
+valgrind's memcheck (--use-valgrind) and the options of VALGRIND_OPTS. It
+leaves out --as-cran, which turns --extra-arch off and reports every example
+slower than five seconds, as each is under valgrind. The output of the
+examples and of each test must hold memcheck's summary, with no error.
+
     python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> [--manual] [--ignore-vignettes]
+    python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> --valgrind
     python -m tools.commands.check_r --log <yamaa.Rcheck/00check.log> [--manual]
 
 The second form compares the log of a check that ran elsewhere.
@@ -116,6 +125,12 @@ SANITIZER_REPORT = re.compile(
 # compiled code prints: the installation, which loads the package, the
 # examples and each test file.
 SANITIZER_OUTPUTS = ("00install.out", "*-Ex.Rout", "tests/*.Rout", "tests/*.Rout.fail")
+# What memcheck prints as each process under valgrind ends: the errors that it
+# counted, the leaks that --leak-check=full reports among them. In a valgrind
+# check, the output of the examples and of each test must hold this summary,
+# which is absent where valgrind did not run, and count no error.
+MEMCHECK_SUMMARY = re.compile(r"^==\d+== ERROR SUMMARY: (\d+) errors", re.M)
+MEMCHECK_OUTPUTS = ("*-Ex.Rout", "tests/*.Rout", "tests/*.Rout.fail")
 COUNTED = ("ERROR", "WARNING", "NOTE")
 STATUSES = (*COUNTED, "INFO", "OK", "SKIPPED", "NONE")
 HEADER = re.compile(r"^\* checking (?P<check>.+?) \.\.\.(?P<rest>.*)$")
@@ -228,9 +243,10 @@ def tarball_problem(size):
     )
 
 
-def report(log, checkbashisms=True, manual=False):
+def report(log, checkbashisms=True, manual=False, options="--as-cran"):
     """Print the check's findings; fail on any that EXPECTED_NOTES lacks, and
-    with `manual` unless the manuals were built and validated."""
+    with `manual` unless the manuals were built and validated. `options`
+    names the check in what it prints."""
     found = findings(log)[0]
     for finding in found:
         if finding.status in (*COUNTED, "INFO"):
@@ -240,7 +256,7 @@ def report(log, checkbashisms=True, manual=False):
     problems = unexpected(log, checkbashisms=checkbashisms, manual=manual)
     if problems:
         raise RuntimeError(
-            "R CMD check --as-cran found what R/yamaa/cran-comments.md does not "
+            f"R CMD check {options} found what R/yamaa/cran-comments.md does not "
             "explain:\n" + "\n".join(problems)
         )
     if any(map(lacks_checkbashisms, found)):
@@ -249,7 +265,7 @@ def report(log, checkbashisms=True, manual=False):
         )
     if manual:
         print("R CMD check built the PDF manual and validated the HTML manual")
-    print("R CMD check --as-cran: every finding is one that cran-comments.md explains")
+    print(f"R CMD check {options}: every finding is one that cran-comments.md explains")
 
 
 def r_config(name, environment):
@@ -331,7 +347,30 @@ def sanitizer_reports(work):
     ]
 
 
-def check(archive, work, environment=None, manual=False, ignore_vignettes=False):
+def memcheck_summaries(work):
+    """Map each output of the examples and the tests of a check in `work`, in
+    the order of MEMCHECK_OUTPUTS, to the errors that memcheck counted in each
+    process it ran there: none where valgrind did not run."""
+    return {
+        path: [
+            int(count)
+            for count in MEMCHECK_SUMMARY.findall(
+                path.read_text(encoding="utf-8", errors="replace")
+            )
+        ]
+        for pattern in MEMCHECK_OUTPUTS
+        for path in sorted(work.glob(f"*.Rcheck/{pattern}"))
+    }
+
+
+def check(
+    archive,
+    work,
+    environment=None,
+    manual=False,
+    ignore_vignettes=False,
+    valgrind=False,
+):
     archive, work = archive.resolve(), work.resolve()
     if work.is_relative_to(ROOT):
         raise ValueError("R package checks must run outside the checkout")
@@ -346,23 +385,25 @@ def check(archive, work, environment=None, manual=False, ignore_vignettes=False)
     (work / "source-revision.txt").write_text(revision, encoding="utf-8")
     environment = check_environment(environment)
     # Every test file runs, so one failing file does not hide the others.
-    # Without `manual`, R leaves out the PDF and HTML manuals.
-    command = [
-        "R",
-        "CMD",
-        "check",
-        "--as-cran",
-        *([] if manual else ["--no-manual"]),
-        *(["--ignore-vignettes"] if ignore_vignettes else []),
-        "--no-stop-on-test-error",
-        str(archive),
-    ]
+    # Without `manual`, R leaves out the PDF and HTML manuals. With
+    # `valgrind`, R runs only the installation, the examples and the tests.
+    if valgrind:
+        options = ["--extra-arch", "--use-valgrind"]
+    else:
+        options = [
+            "--as-cran",
+            *([] if manual else ["--no-manual"]),
+            *(["--ignore-vignettes"] if ignore_vignettes else []),
+        ]
+    command = ["R", "CMD", "check", *options, "--no-stop-on-test-error", str(archive)]
     completed = subprocess.run(command, cwd=work, env=environment, check=False)
     printed = print_failed_tests(work)
     # Each output with a report is printed whole, once, for the stack that
     # the report gives.
     reports = sanitizer_reports(work)
-    for path in reports:
+    summaries = memcheck_summaries(work) if valgrind else {}
+    counted = [path for path, counts in summaries.items() if any(counts)]
+    for path in dict.fromkeys([*reports, *counted]):
         if path.name not in printed:
             print_output(path)
     if completed.returncode != 0:
@@ -372,6 +413,19 @@ def check(archive, work, environment=None, manual=False, ignore_vignettes=False)
             "these outputs of the check hold a sanitizer report: "
             + ", ".join(str(path.relative_to(work)) for path in reports)
         )
+    if counted:
+        raise RuntimeError(
+            "memcheck counted errors in these outputs of the check: "
+            + ", ".join(str(path.relative_to(work)) for path in counted)
+        )
+    if valgrind and not summaries:
+        raise RuntimeError("the valgrind check wrote no output of examples or tests")
+    if missing := [path for path, counts in summaries.items() if not counts]:
+        raise RuntimeError(
+            "these outputs of the check hold no memcheck summary, so valgrind did "
+            "not run there: "
+            + ", ".join(str(path.relative_to(work)) for path in missing)
+        )
     logs = list(work.glob("*.Rcheck/00check.log"))
     if len(logs) != 1:
         raise RuntimeError("R package check wrote no single 00check.log")
@@ -379,7 +433,10 @@ def check(archive, work, environment=None, manual=False, ignore_vignettes=False)
         logs[0].read_text(encoding="utf-8"),
         checkbashisms=has_checkbashisms(environment),
         manual=manual,
+        options=" ".join(options) if valgrind else "--as-cran",
     )
+    if valgrind:
+        print("memcheck counted no error in the examples or the tests")
 
 
 def main():
@@ -401,7 +458,19 @@ def main():
         action="store_true",
         help="omit vignette checks when the dependency-only lane has no builders",
     )
+    parser.add_argument(
+        "--valgrind",
+        action="store_true",
+        help="run CRAN's valgrind check: the installation, examples and tests "
+        "alone, without --as-cran, with the examples and tests under valgrind's "
+        "memcheck, which must count no error",
+    )
     args = parser.parse_args()
+    if args.valgrind and (args.manual or args.ignore_vignettes or args.log):
+        parser.error(
+            "--valgrind runs the package's examples and tests alone and takes no "
+            "--manual, --ignore-vignettes or --log"
+        )
     if args.log is not None:
         if args.archive is not None or args.work_dir is not None:
             parser.error("--log compares a log and takes no --archive or --work-dir")
@@ -422,7 +491,13 @@ def main():
         parser.error(
             "R_LIBS must identify the installed package and dependency library"
         )
-    check(archive, work, manual=args.manual, ignore_vignettes=args.ignore_vignettes)
+    check(
+        archive,
+        work,
+        manual=args.manual,
+        ignore_vignettes=args.ignore_vignettes,
+        valgrind=args.valgrind,
+    )
 
 
 if __name__ == "__main__":

@@ -164,11 +164,14 @@ release publishes: with R-devel, R-release and R 4.2.0 on all three platforms
 and Rust 1.82, with R-devel on Linux and none of the suggested packages, as
 CRAN's noSuggests check runs, with R-devel on Linux and the PDF and HTML
 manuals, which CRAN's incoming checks build and validate, in R-hub's Fedora
-`gcc16` container with Fedora's Rust, and in R-hub's `clang-asan` container
-with Rust 1.82. There
+`gcc16` container with Fedora's Rust, in R-hub's `gcc-asan` container with
+Fedora's Rust and its `clang-asan` container with Rust 1.82, and in R-hub's
+`valgrind` container with Fedora's Rust. In the two sanitizer containers
 the package's C, the bundled ReadStat and zstd sources included, is compiled
 with AddressSanitizer and UndefinedBehaviorSanitizer, as in CRAN's
-additional checks, and any sanitizer report fails the check.
+additional checks, and any sanitizer report fails the check. In the valgrind
+container the examples and tests run under valgrind's memcheck, as in CRAN's
+valgrind check, and any error that it counts fails the check.
 
 The build follows CRAN's
 [Rust guidance](https://cran.r-project.org/web/packages/using_rust.html):

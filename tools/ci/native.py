@@ -31,15 +31,17 @@ SOURCE_PLATFORM = "ubuntu-24.04"
 # CRAN's incoming checks of that R source archive: R CMD check --as-cran with
 # these R versions on each of these platforms, with the workspace's minimum
 # Rust, and in these R-hub containers, which carry CRAN's check
-# configurations: gcc16 with its distribution's Rust, and clang-asan, whose R
-# compiles packages with AddressSanitizer and UndefinedBehaviorSanitizer, as
-# CRAN's additional checks do, with the minimum Rust from its standalone
-# installer. Pin the oldest admitted R patch so the declared floor is
-# qualified, not only the last patch of that series. Linux aarch64 stays at
-# R-release alone (#3030 D198), in its native-r lane.
+# configurations: gcc16, and the configurations of CRAN's additional checks,
+# gcc-asan and clang-asan, whose R compiles packages with AddressSanitizer
+# and UndefinedBehaviorSanitizer, and valgrind, where the examples and tests
+# run under valgrind's memcheck. The Fedora images, all but clang-asan, build
+# with their distribution's Rust, and clang-asan with the minimum Rust from
+# its standalone installer. Pin the oldest admitted R patch so the declared
+# floor is qualified, not only the last patch of that series. Linux aarch64
+# stays at R-release alone (#3030 D198), in its native-r lane.
 CRAN_PLATFORMS = PLATFORMS
 CRAN_R_VERSIONS = ("devel", "release", "4.2.0")
-CRAN_CONTAINERS = ("gcc16", "clang-asan")
+CRAN_CONTAINERS = ("gcc16", "gcc-asan", "clang-asan", "valgrind")
 # The same check with none of the package's suggested packages installed,
 # as CRAN's noSuggests check runs it: R-devel on Linux, here with the minimum
 # Rust.

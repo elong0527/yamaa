@@ -949,9 +949,11 @@ installed from its standalone installer with no rustup or network (its
 release publishes and installs each with no Rust, Rtools or network (its
 `native-r-binary` and `native-r-binary-install` jobs), and runs CRAN's
 incoming checks on the R source archive that a release publishes (its
-`native-cran` jobs), also in R-hub's `gcc16` container and in its
-`clang-asan` container, whose C compiler instruments the package's C with
-AddressSanitizer and UndefinedBehaviorSanitizer. It also builds the
+`native-cran` jobs), also in R-hub's `gcc16` container, in its `gcc-asan`
+and `clang-asan` containers, whose C compilers instrument the package's C
+with AddressSanitizer and UndefinedBehaviorSanitizer, and in its `valgrind`
+container, where the examples and tests run under valgrind's memcheck. It
+also builds the
 command-line binaries that a release publishes, statically on Linux and
 Windows, and runs each archive's `yamaa selftest` and then the conformance
 corpus with the network disabled on a fresh runner of its platform (its
@@ -978,10 +980,17 @@ explained notes with the lines each may print, and a test keeps that list
 equal to the notes that the file's "R CMD check results" section names. To
 accept a new note, explain it there and add it to `EXPECTED_NOTES` in the same
 pull request; a warning or an error is never accepted. With an R whose
-compiler adds the sanitizers, as in the `native-cran (clang-asan)` job, it
-also fails on any AddressSanitizer or UndefinedBehaviorSanitizer report in
-the installation, example or test output, which it prints whole: R passes a
-test that UndefinedBehaviorSanitizer reported on. Remote checks (CRAN's
+compiler adds the sanitizers, as in the `native-cran (gcc-asan)` and
+`native-cran (clang-asan)` jobs, it also fails on any AddressSanitizer or
+UndefinedBehaviorSanitizer report in the installation, example or test
+output, which it prints whole: R passes a test that UndefinedBehaviorSanitizer
+reported on. With `--valgrind`, as in the `native-cran (valgrind)` job, it
+runs CRAN's valgrind check instead, as R-hub's image does: only the
+installation, the examples and the tests (`--extra-arch`), the last two under
+valgrind's memcheck (`--use-valgrind`), without `--as-cran`, which would turn
+`--extra-arch` off and report every example as slow. It fails on any output of
+the examples or a test where memcheck counted an error, which it prints whole,
+or did not run. Remote checks (CRAN's
 package index, URLs and the clock) stay off unless the caller sets
 `_R_CHECK_CRAN_INCOMING_REMOTE_` or `_R_CHECK_SYSTEM_CLOCK_`. The PDF and
 HTML manuals, which need LaTeX and HTML Tidy, stay out (`--no-manual`)
