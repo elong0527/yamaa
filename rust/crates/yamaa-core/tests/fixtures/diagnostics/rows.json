@@ -1,0 +1,409 @@
+{
+  "about": "The refusals, and the admissions beside them, of a specification's row templates over its column defaults, prepared without a project or in a project whose function files each define the integer identity they name: a grouped filter over a window its template completes (ROW-1), a default every template replaces that is still checked, call cycles through inherited and overriding derivations (COLUMN-6), a forward reference through a call (COLUMN-5), defaults that are not row-local (SPEC-6) and row reads of what only the column phase completes (COLUMN-4). With `sources`, `prepare_in` prepares the document in the project and reports what binding it to those schemas refuses. Each case writes its specification whole: SRC, read from input.csv with the schema ID, int, gives the key column ID, which each row template derives from SRC.ID. A case whose table compared part of a record compares those fields, and an `among` case finds its record by cause among the others.",
+  "cases": [
+    {
+      "case": "grouped_filters_admit_completed_candidate_windows",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "SEQ", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "SEQ"]},
+          "rows": [
+            {"id": "groups", "derivations": {"ID": {"value": "SRC.ID"}, "SEQ": {"value": {"row_number": {"window": {"order_by": ["ID"]}}}}}, "group_by": ["SRC.ID"], "filter": "SEQ > 1"}
+          ]
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "fully_overridden_function_defaults_remain_statically_checked",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": 7.0}}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]},
+          "rows": [
+            {"id": "first", "derivations": {"ID": {"value": "SRC.ID"}, "A": {"value": 8}}},
+            {"id": "second", "derivations": {"ID": {"value": "SRC.ID"}, "A": {"value": 9}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.A.derivation.function.args.x"]}]
+    },
+    {
+      "case": "row_function_cycles_report_authored_paths_without_column_forward_rules",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "B"}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}},
+            {"name": "D", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B", "D"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "D": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}},
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["condition", "spec_paths", "context.cycle"],
+      "issues": [{"condition": "dependency_cycle", "spec_paths": ["columns.A.derivation.function", "columns.B.derivation.function"], "context": {"cycle": ["A", "B", "A"]}}]
+    },
+    {
+      "case": "transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_rows",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"aggregate": {"expr": "SUM(SRC.ID)"}}}},
+            {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}},
+            {"name": "C", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "B"}}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B", "C"]},
+          "rows": [
+            {"id": "first", "derivations": {"ID": {"value": "SRC.ID"}, "C": {"value": 1}, "B": {"value": 2}}},
+            {"id": "second", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": 3}, "C": {"value": 4}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.rows"],
+      "issues": [
+        {"condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.B.derivation"], "context": {"rows": ["first", "second"]}},
+        {"condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.C.derivation"], "context": {"rows": ["first", "second"]}}
+      ]
+    },
+    {
+      "case": "inherited_cycles_are_reported_once_across_row_templates",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "B"}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}},
+            {"name": "D", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B", "D"]},
+          "rows": [
+            {"id": "first", "derivations": {"ID": {"value": "SRC.ID"}, "D": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}},
+            {"id": "second", "derivations": {"ID": {"value": "SRC.ID"}, "D": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}},
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "dependency_cycle", "spec_paths": ["columns.A.derivation.function", "columns.B.derivation.function"]}]
+    },
+    {
+      "case": "a_distinct_row_override_cycle_keeps_its_own_paths",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "B"}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}},
+            {"name": "D", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B", "D"]},
+          "rows": [
+            {"id": "first", "derivations": {"ID": {"value": "SRC.ID"}, "D": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}},
+            {"id": "second", "derivations": {"ID": {"value": "SRC.ID"}, "D": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}},
+            {"id": "local", "derivations": {"ID": {"value": "SRC.ID"}, "A": {"value": {"function": {"name": "id", "args": {"x": "B"}}}}, "D": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}},
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "dependency_cycle", "spec_paths": ["columns.A.derivation.function", "columns.B.derivation.function"]},
+        {"condition": "dependency_cycle", "spec_paths": ["rows.local.derivations.A.function", "columns.B.derivation.function"]}
+      ]
+    },
+    {
+      "case": "a_column_call_reading_a_later_column_is_a_forward_reference_at_the_call",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "B"}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 7}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}},
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "forward_reference", "spec_paths": ["columns.A.derivation.function"]}]
+    },
+    {
+      "case": "row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"aggregate": {"expr": "SUM(SRC.ID)"}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}},
+            {"name": "C", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B", "C"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}, "C": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.B.function.args.x"]},
+        {"condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.C.function.args.x"]}
+      ]
+    },
+    {
+      "case": "a_row_number_column_default_stays_in_the_column_phase_a_row_template_reads",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"row_number": {"window": {"order_by": ["ID"]}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": "A"}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {}}
+      },
+      "compares": ["condition"],
+      "among": true,
+      "issues": [{"condition": "phase_boundary"}]
+    },
+    {
+      "case": "a_row_template_naming_a_row_number_column_default_duplicates_it_as_a_window",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"row_number": {"window": {"order_by": ["ID"]}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": "A"}, "A": {"value": 7}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {}}
+      },
+      "compares": ["condition", "context.not_row_local"],
+      "among": true,
+      "issues": [{"condition": "duplicate_derivation", "context": {"not_row_local": "window"}}]
+    },
+    {
+      "case": "a_rank_column_default_stays_in_the_column_phase_a_row_template_reads",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"rank": {"window": {"order_by": ["ID"]}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": "A"}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {}}
+      },
+      "compares": ["condition"],
+      "among": true,
+      "issues": [{"condition": "phase_boundary"}]
+    },
+    {
+      "case": "a_row_template_naming_a_rank_column_default_duplicates_it_as_a_window",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"rank": {"window": {"order_by": ["ID"]}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": "A"}, "A": {"value": 7}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {}}
+      },
+      "compares": ["condition", "context.not_row_local"],
+      "among": true,
+      "issues": [{"condition": "duplicate_derivation", "context": {"not_row_local": "window"}}]
+    },
+    {
+      "case": "a_locf_column_default_stays_in_the_column_phase_a_row_template_reads",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"locf": {"window": {"order_by": ["ID"]}, "source": "ID"}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": "A"}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {}}
+      },
+      "compares": ["condition"],
+      "among": true,
+      "issues": [{"condition": "phase_boundary"}]
+    },
+    {
+      "case": "a_row_template_naming_a_locf_column_default_duplicates_it_as_a_window",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"locf": {"window": {"order_by": ["ID"]}, "source": "ID"}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": "A"}, "A": {"value": 7}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {}}
+      },
+      "compares": ["condition", "context.not_row_local"],
+      "among": true,
+      "issues": [{"condition": "duplicate_derivation", "context": {"not_row_local": "window"}}]
+    },
+    {
+      "case": "bare_row_reads_of_nonlocal_outputs_keep_complete_phase_diagnostics_without_function_context",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"aggregate": {"expr": "SUM(SRC.ID)"}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}},
+            {"name": "C", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B", "C"]},
+          "rows": [
+            {"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": "A"}, "C": {"value": "A"}}}
+          ]
+        },
+        "project": {"language": "python", "functions": {}}
+      },
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.B.source"], "context": {"available_phase": "column_derivation", "identifier": "A", "required_phase": "row_construction", "row": "record"}},
+        {"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.C.source"], "context": {"available_phase": "column_derivation", "identifier": "A", "required_phase": "row_construction", "row": "record"}}
+      ]
+    }
+  ]
+}

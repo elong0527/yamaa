@@ -38,6 +38,7 @@ macro_rules! fixture {
 
 mod define;
 mod file_route;
+mod odm;
 mod project_scope;
 
 /// What one operation reported, with the study directory its files were
@@ -53,9 +54,10 @@ pub struct Reported {
 type Reader = fn(&str, &Value) -> Option<Reported>;
 
 /// Each module's readers, by the operations it names, and its files.
-const MODULES: [(Reader, &[File]); 3] = [
+const MODULES: [(Reader, &[File]); 4] = [
     (define::run, define::FILES),
     (file_route::run, file_route::FILES),
+    (odm::run, odm::FILES),
     (project_scope::run, project_scope::FILES),
 ];
 
