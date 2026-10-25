@@ -1,12 +1,12 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts read from shared truth: declarative source selection,
-//! diagnostic sites, empty child condition, intermediate dependencies,
-//! intermediate row drivers, key expressions, namespace admission, the window
-//! defaults of an output key, and predicate suggestions. The family's other
-//! cases are in `tests/fixtures/diagnostics/`: `declarative_self.json`,
+//! diagnostic sites, intermediate dependencies, intermediate row drivers, key
+//! expressions, namespace admission, the window defaults of an output key,
+//! and predicate suggestions. The family's other cases are in
+//! `tests/fixtures/diagnostics/`: `declarative_self.json`,
 //! `inheritance.json`, `integer_literals.json`, `windows.json`,
-//! `verification.json` and `missing_order.json` (#3798); `api_contracts`
-//! holds the build and save seams the replay cannot express.
+//! `verification.json`, `missing_order.json` and `empty_child.json` (#3798);
+//! `api_contracts` holds the build and save seams the replay cannot express.
 
 mod execution {
     mod declarative_source_selection {
@@ -191,6 +191,9 @@ mod execution {
             }
         }
 
+        /// A seam the replay cannot reach: the Rust reader of
+        /// `source_selection.json`, which both installed hosts' suites stage
+        /// too, run twice, with each save repeated after its input changes.
         /// Each case is an authored complete result, its typed table, issues,
         /// handler ledger, capture order and retained save, which no benchmark
         /// states.
@@ -198,17 +201,23 @@ mod execution {
         fn every_source_selection_case_keeps_exact_types_diagnostics_counts_and_saved_bytes() {
             verify_truth(include_str!("fixtures/source_selection.json"));
         }
-        /// Each case is an authored complete result, its typed table, issues,
-        /// handler ledger, capture order and retained save, which no benchmark
-        /// states.
+        /// A seam the replay cannot reach: the Rust reader of
+        /// `source_filter_scope.json`, which both installed hosts' suites
+        /// stage too, run twice, with each save repeated after its input
+        /// changes. Each case is an authored complete result, its typed table,
+        /// issues, handler ledger, capture order and retained save, which no
+        /// benchmark states.
         #[test]
         fn group_key_filters_have_complete_normative_findings_and_record_controls() {
             verify_truth(include_str!("fixtures/source_filter_scope.json"));
         }
 
-        /// Each case is an authored complete result, its typed table, issues,
-        /// handler ledger, capture order and retained save, which no benchmark
-        /// states.
+        /// A seam the replay cannot reach: the Rust reader of
+        /// `source_filter_mixed.json`, which both installed hosts' suites
+        /// stage too, run twice, with each save repeated after its input
+        /// changes. Each case is an authored complete result, its typed table,
+        /// issues, handler ledger, capture order and retained save, which no
+        /// benchmark states.
         #[test]
         fn mixed_grouped_and_record_templates_preserve_only_shared_group_key_scalars() {
             verify_truth(include_str!("fixtures/source_filter_mixed.json"));
@@ -299,126 +308,6 @@ mod execution {
                     assert!(!fixture.0.join(case["output"].as_str().unwrap()).exists());
                 }
             }
-        }
-    }
-    mod empty_child_condition {
-        //! An empty child equals its parent (LAYER-5): for these negative
-        //! benchmarks the child's first issue must match the parent's in phase,
-        //! condition and rule, even though the layered path resolves column
-        //! dependencies before final validation runs (#2292).
-        //!
-        //! These stay beside the replay (#3798): each stages a benchmark's own
-        //! files beside the child, and a replay case's files are authored
-        //! text, with no member yet that names a benchmark's files.
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-        };
-        use yamaa_core::domain_entry::Request;
-
-        fn copy_dir(src: &Path, dst: &Path) {
-            fs::create_dir_all(dst).unwrap();
-            for entry in fs::read_dir(src).unwrap() {
-                let entry = entry.unwrap();
-                let target = dst.join(entry.file_name());
-                if entry.file_type().unwrap().is_dir() {
-                    if entry.file_name() == "expected" {
-                        continue;
-                    }
-                    copy_dir(&entry.path(), &target);
-                } else {
-                    fs::copy(entry.path(), &target).unwrap();
-                }
-            }
-        }
-
-        /// The first issue of a build as `phase | condition | rule`.
-        fn first_issue(spec: &Path) -> String {
-            let path = spec.to_str().unwrap();
-            let identity = crate::support::study::identity("empty-child-condition", path);
-            let failure = match crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: path,
-                    environment: None,
-                },
-                identity,
-            ) {
-                Ok(domain) => domain.issues(),
-                Err(failure) => failure,
-            };
-            let issue = failure.first().expect("benchmark must fail");
-            format!(
-                "{} | {} | {:?}",
-                issue.phase(),
-                issue.condition(),
-                issue.rule()
-            )
-        }
-
-        fn assert_empty_child_matches_parent(benchmark: &str, expected_first: &str) {
-            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
-            let dir = crate::support::Scratch::new("empty-child");
-            let case = dir.join("case");
-            copy_dir(&root.join(benchmark), &case);
-            // The child is written in its parent's language, as every layer
-            // of a chain is (LAYER-4).
-            fs::write(
-                case.join("__child.yaml"),
-                "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n",
-            )
-            .unwrap();
-            let parent = first_issue(&case.join("spec.yaml"));
-            let child = first_issue(&case.join("__child.yaml"));
-            assert_eq!(parent, expected_first, "{benchmark} parent first issue");
-            assert_eq!(child, parent, "{benchmark} empty child first issue");
-        }
-
-        /// Reads `negative-odm-context`; no benchmark builds an empty child:
-        /// the one empty layer, `negative-cyclic-parent`'s
-        /// `layers/parent.yaml`, sits in a refused cycle.
-        #[test]
-        fn empty_child_of_negative_odm_context_reports_invalid_odm_context() {
-            assert_empty_child_matches_parent(
-                "negative-odm-context",
-                "validation | invalid_odm_context | Some(\"NAME-11\")",
-            );
-        }
-
-        /// Reads `negative-review-unknown-date`; no benchmark builds an empty
-        /// child: the one empty layer, `negative-cyclic-parent`'s
-        /// `layers/parent.yaml`, sits in a refused cycle.
-        #[test]
-        fn empty_child_of_negative_review_unknown_date_reports_unknown_field() {
-            assert_empty_child_matches_parent(
-                "negative-review-unknown-date",
-                "validation | unknown_field | Some(\"FORMULA-9\")",
-            );
-        }
-
-        /// Reads `negative-lookup-mismatched`; no benchmark builds an empty
-        /// child: the one empty layer, `negative-cyclic-parent`'s
-        /// `layers/parent.yaml`, sits in a refused cycle.
-        #[test]
-        fn empty_child_of_negative_lookup_mismatched_reports_unknown_field() {
-            assert_empty_child_matches_parent(
-                "negative-lookup-mismatched",
-                "validation | unknown_field | Some(\"LOOKUP-5\")",
-            );
-        }
-
-        /// The child orders its columns before binding (LAYER-13), and an
-        /// unbound reducer name of an aggregate with bindings is no column
-        /// that ordering could miss (#3593). Reads
-        /// `negative-aggregate-unbound-variable`; no benchmark builds an empty
-        /// child: the one empty layer, `negative-cyclic-parent`'s
-        /// `layers/parent.yaml`, sits in a refused cycle.
-        #[test]
-        fn empty_child_of_negative_aggregate_unbound_variable_reports_unknown_derive_variable() {
-            assert_empty_child_matches_parent(
-                "negative-aggregate-unbound-variable",
-                "validation | unknown_derive_variable | Some(\"LOOKUP-22\")",
-            );
         }
     }
     mod intermediate_dependencies {
@@ -791,6 +680,9 @@ mod execution {
             }
         }
 
+        /// A seam the replay cannot reach: one case of the shared
+        /// host-fixture family `key_expressions`, which both installed hosts
+        /// read, run with its inputs missing.
         /// `negative-path-missing` and `negative-path-directory` refuse one
         /// missing input and a directory in an input's place; no benchmark
         /// meets either beside an ill-typed filter or an output declaration
