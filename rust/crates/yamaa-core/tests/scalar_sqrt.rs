@@ -1,9 +1,15 @@
 //! Scalar contracts: sqrt, temporal, temporal arithmetic, text case, text
-//! extract, text pad, text positions, text template and values.
+//! extract, text pad, text positions, text template and values. These are
+//! the seams the diagnostic replay cannot reach, each named in its test's
+//! first comment: the values a kernel returns, generated sizes and internal
+//! refusals. What the operations refuse is `temporal.json`'s and
+//! `text.json`'s.
 mod scalar {
     mod sqrt {
         use yamaa_core::numeric::{sqrt, ArithmeticErrorKind, Number};
 
+        /// Seam: the square root kernel's values and its arithmetic error, which is not
+        /// an issue record.
         /// Missing normalizes before domain checking; negative present values retain diagnostics.
         #[test]
         fn square_root_domain_conditions_and_normalization() {
@@ -24,6 +30,7 @@ mod scalar {
             }
         }
 
+        /// Seam: square roots compared bit for bit with the standard library's.
         /// Compare square roots bit-for-bit, including sign and integer promotion boundaries.
         #[test]
         fn square_root_preserves_zero_sign_and_promotes_integers() {
@@ -44,6 +51,8 @@ mod scalar {
     mod temporal {
         use yamaa_core::temporal::{Date, DateTime, Precision as DP, Precision as TP};
 
+        /// Seam: the date parser's accepted and refused texts, values no reader
+        /// returns.
         #[test]
         /// Check range endpoints and the Gregorian leap-century exception.
         fn calendar_boundaries_and_gregorian_century_rules() {
@@ -74,6 +83,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the date and datetime parsers' refusals, which report no issue.
         #[test]
         /// Reject noncanonical forms and non-ASCII field layouts without panicking.
         fn lexical_forms_reject_partial_dates_zones_offsets_and_unicode_digits() {
@@ -109,6 +119,7 @@ mod scalar {
             }
         }
 
+        /// Seam: parsed datetimes and their canonical text.
         #[test]
         /// Confirm omitted seconds become zero and civil times have no DST gaps.
         fn minute_form_is_complete_to_second_and_dst_has_no_effect() {
@@ -125,6 +136,7 @@ mod scalar {
             }
         }
 
+        /// Seam: collected precision, equality and ordering of temporal values.
         #[test]
         /// Preserve collected precision internally and drop it at the canonical-text boundary.
         fn precision_survives_selection_but_not_equality_or_canonical_text() {
@@ -157,6 +169,7 @@ mod scalar {
             assert!(b < "2025-01-12T14:00:01".parse().unwrap());
         }
 
+        /// Seam: a generated walk of one full 400-year Gregorian cycle.
         #[test]
         /// Check one complete Gregorian cycle for valid, distinct, ordered round-trip dates.
         fn a_full_gregorian_cycle_has_146097_distinct_ordered_days() {
@@ -210,6 +223,7 @@ mod scalar {
             Value::Str(text.into())
         }
 
+        /// Seam: shifted dates and their collected precision (core outcome).
         #[test]
         fn date_shift_crosses_calendar_boundaries_and_preserves_imputation_precision() {
             for (source, days, expected) in [
@@ -233,6 +247,7 @@ mod scalar {
             assert_eq!(shifted.collected_precision(), Precision::Month);
         }
 
+        /// Seam: datetime differences, values no reader returns (core outcome).
         #[test]
         fn datetime_diff_matches_pk_relative_times_and_civil_dst_boundaries() {
             for (sample, expected) in [
@@ -283,6 +298,7 @@ mod scalar {
             }
         }
 
+        /// Seam: shifted datetimes, values no reader returns (core outcome).
         #[test]
         fn datetime_shift_scales_exact_integers_and_rounds_amount_ties_away_from_zero() {
             // 0.025 minute is exactly 1.5 seconds after binary64 scaling, a tie
@@ -386,6 +402,7 @@ mod scalar {
             assert_eq!(shifted.collected_precision(), Precision::Day);
         }
 
+        /// Seam: duration values read from text (core outcome).
         #[test]
         fn duration_value_reads_signed_fractional_and_week_forms_exactly() {
             // A float in every unit: the exact seconds are rounded once to
@@ -423,6 +440,7 @@ mod scalar {
             }
         }
 
+        /// Seam: duration text written for each amount (core outcome).
         #[test]
         fn duration_text_writes_one_canonical_text_for_each_amount() {
             // TIME-21: days, then hours, minutes and seconds, each zero
@@ -475,6 +493,7 @@ mod scalar {
             }
         }
 
+        /// Seam: a round trip of written duration text, compared with its own amount.
         #[test]
         fn duration_text_read_back_returns_every_whole_second_amount() {
             // TIME-21: an amount that is a whole number of seconds, at most
@@ -502,8 +521,11 @@ mod scalar {
             }
         }
 
+        /// Seam: the recovery step a declared `invalid` gives, which is no
+        /// issue; without it, each text fails as a `temporal.json` case
+        /// `duration_value_fails_on_...`.
         #[test]
-        fn invalid_duration_text_recovers_only_when_declared() {
+        fn a_declared_invalid_answers_every_invalid_duration_text() {
             // A duration whose float is not finite is outside the numeric range.
             let infinite = format!("PT1{}S", "0".repeat(309));
             for source in [
@@ -529,18 +551,8 @@ mod scalar {
                 "pt1s",
                 infinite.as_str(),
             ] {
-                let operation = operation(K::DurationValue { unit: U::Second });
-                let error = operation
-                    .apply_values(&[text(source)])
-                    .unwrap()
-                    .unwrap_err();
                 assert_eq!(
-                    error.definition().condition,
-                    "invalid_duration_text",
-                    "{source}"
-                );
-                assert_eq!(
-                    operation
+                    operation(K::DurationValue { unit: U::Second })
                         .with_invalid(Value::Missing)
                         .unwrap()
                         .apply_values(&[text(source)]),
@@ -550,61 +562,11 @@ mod scalar {
             }
         }
 
+        /// Seam: the missing result of all-missing operands and the arity refusal
+        /// (`None`), neither an issue; the overflow and type refusals are
+        /// `temporal.json` cases.
         #[test]
-        fn arithmetic_overflow_is_fatal_and_missingness_does_not_hide_wrong_types() {
-            for (kind, values, rule) in [
-                (
-                    K::DateShift,
-                    vec![date("0001-01-01"), Value::Int(-1)],
-                    "TIME-14",
-                ),
-                (
-                    K::DateShift,
-                    vec![date("9999-12-31"), Value::Int(1)],
-                    "TIME-14",
-                ),
-                (
-                    K::DateShift,
-                    vec![date("2030-01-01"), Value::Int(i64::MAX)],
-                    "TIME-14",
-                ),
-                (
-                    K::DateTimeShift { unit: U::Second },
-                    vec![datetime("9999-12-31T23:59:59"), Value::Int(1)],
-                    "TIME-14",
-                ),
-                (
-                    K::DateTimeShift { unit: U::Day },
-                    vec![datetime("2030-01-01T00:00:00"), Value::float(f64::MAX)],
-                    "TIME-14",
-                ),
-            ] {
-                let error = operation(kind).apply_values(&values).unwrap().unwrap_err();
-                assert_eq!(error.definition().condition, "conversion_failed");
-                assert_eq!(error.definition().rule, Some(rule));
-            }
-            for (kind, values) in [
-                (K::DateShift, vec![Value::Missing, Value::float(1.0)]),
-                (
-                    K::DateTimeDifference { unit: U::Hour },
-                    vec![Value::Missing, date("2030-01-01")],
-                ),
-                (
-                    K::DateTimeShift { unit: U::Second },
-                    vec![Value::Missing, Value::float(1.0)],
-                ),
-                (K::DurationValue { unit: U::Second }, vec![Value::Int(1)]),
-            ] {
-                assert_eq!(
-                    operation(kind)
-                        .apply_values(&values)
-                        .unwrap()
-                        .unwrap_err()
-                        .definition()
-                        .condition,
-                    "incompatible_input_type"
-                );
-            }
+        fn all_missing_operands_give_missing_and_no_operands_give_no_step() {
             for kind in [
                 K::DateShift,
                 K::DateTimeDifference { unit: U::Hour },
@@ -620,6 +582,8 @@ mod scalar {
             }
         }
 
+        /// Seam: a generated 200,000-character handler, an operand index past the
+        /// operands and the handler shape refusal.
         #[test]
         fn duration_handlers_remain_complete_and_operand_indexes_are_validated() {
             use yamaa_core::dataset::InvalidTemporal;
@@ -642,6 +606,8 @@ mod scalar {
     mod text_case {
         use yamaa_core::text_case::{transform, Case, Delimiters};
 
+        /// Seam: already data, the adapters' shared `text_case_reference.json` rows,
+        /// whose results are text values.
         /// The proper-case rows of the adapters' shared truth (TEXT-5), which
         /// both crates read, so each proves the same authored rows.
         #[test]
@@ -668,6 +634,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the delimiter set a declaration admits, a value no reader returns.
         /// Without a list, `proper` takes SAS PROPCASE's six delimiters; a
         /// list names a set only when it holds ASCII scalars, each once, from
         /// `U+0000` to `U+007F` (TEXT-5).
@@ -689,6 +656,7 @@ mod scalar {
             }
         }
 
+        /// Seam: cased text values (core outcome).
         #[test]
         fn normative_ascii_modes_preserve_foreign_scalars_and_first_scalar_boundaries() {
             for (source, mode, expected) in [
@@ -719,6 +687,7 @@ mod scalar {
             }
         }
 
+        /// Seam: cased text values (core outcome).
         #[test]
         fn original_ascii_casing_truth_preserves_range_endpoints_and_unicode_word_boundaries() {
             // Retain the original Python expression tests' inclusive-range mutation
@@ -795,6 +764,8 @@ mod scalar {
             }
         }
 
+        /// Seam: a declaration's steps and its missing handler, values no reader
+        /// returns.
         #[test]
         fn owned_declarations_preserve_missing_literal_presence_and_semantic_truth() {
             use yamaa_core::{
@@ -823,6 +794,8 @@ mod scalar {
                 );
             }
         }
+        /// Seam: the constructor's shape refusals and generated 100,000-character
+        /// metadata.
         #[test]
         fn owned_metadata_retains_complete_values_and_rejects_only_invalid_shapes() {
             use yamaa_core::{text_case::StringCase, value::Value};
@@ -871,6 +844,7 @@ mod scalar {
             )
             .unwrap()
         }
+        /// Seam: the captures a search returns (core outcome).
         #[test]
         fn shared_search_capture_truth_preserves_absence_empty_unicode_and_nul() {
             for (pattern, group, subject, expected) in [
@@ -890,6 +864,7 @@ mod scalar {
                 );
             }
         }
+        /// Seam: the recovery steps and handler values of declared handlers.
         #[test]
         fn omitted_handlers_null_literals_and_nonconversion_are_distinct() {
             for handler in [Value::Missing, Value::Str("12".into()), Value::Int(12)] {
@@ -917,6 +892,7 @@ mod scalar {
             assert_eq!(omitted.substitute("missing"), Value::Missing);
             assert_eq!(omitted.failure_diagnostic(Step::Recovered("missing")), None);
         }
+        /// Seam: a generated 500,000-scalar subject.
         #[test]
         fn long_subjects_are_searched_to_completion_before_no_match() {
             // Half a million scalars, which the retired step budget refused.
@@ -931,6 +907,8 @@ mod scalar {
                 Ok(Step::Recovered("no_match"))
             );
         }
+        /// Seam: the constructor's shape refusals and generated 100,000-character
+        /// patterns, handlers and subjects.
         #[test]
         fn constructor_rejects_shapes_and_keeps_complete_semantic_context() {
             assert_eq!(
@@ -983,6 +961,7 @@ mod scalar {
                 .unwrap()
                 .render()
         }
+        /// Seam: padded text values (core outcome).
         #[test]
         fn unicode_characters_nul_empty_and_no_truncation() {
             for (input, width, expected) in [
@@ -998,6 +977,7 @@ mod scalar {
                 );
             }
         }
+        /// Seam: padded text values (core outcome).
         #[test]
         fn canonical_primitives_preserve_exact_integer_and_zero() {
             for (input, width, expected) in [
@@ -1013,6 +993,7 @@ mod scalar {
                 assert_eq!(pad(&input, width).unwrap(), Value::Str(expected.into()));
             }
         }
+        /// Seam: padded text values (core outcome).
         #[test]
         fn temporal_text_reuses_canonical_conversion_without_precision_suffixes() {
             let date = Date::new(2025, 7, 19, Precision::Month).unwrap();
@@ -1026,6 +1007,8 @@ mod scalar {
                 Value::Str("  2025-07-19T12:34:56".into())
             );
         }
+        /// Seam: a padded missing value and the output size refusal, which is not an
+        /// issue record.
         #[test]
         fn missing_bypasses_positive_mathematical_width_without_output_or_handler() {
             assert_eq!(
@@ -1037,6 +1020,7 @@ mod scalar {
                 Err(OutputError { required: None })
             );
         }
+        /// Seam: a generated 100,000-character value padded unchanged.
         #[test]
         fn complete_authored_text_and_unicode_padding_have_no_copy_quota() {
             assert_eq!(
@@ -1046,6 +1030,7 @@ mod scalar {
             let value = Value::Str("x".repeat(100_000));
             assert_eq!(pad(&value, "1").unwrap(), value);
         }
+        /// Seam: the width shape refusal, which reports no issue.
         #[test]
         fn width_spelling_shape_is_independent_of_metadata_size() {
             assert_eq!(
@@ -1059,6 +1044,7 @@ mod scalar {
                 );
             }
         }
+        /// Seam: the conversion error's cause and target, which is not an issue record.
         #[test]
         fn bool_preserves_core_conversion_failure_instead_of_coercion() {
             let operation = StringPad::new("X", "p", "4").unwrap();
@@ -1068,20 +1054,19 @@ mod scalar {
             assert_eq!(error.target, yamaa_core::value::ColumnType::Str);
         }
 
+        /// Seam: a shape refusal reports no issue, and a width refusal keeps a
+        /// generated 100,000-character path; each width below one is a `text.json` case
+        /// `str_pad_refuses_...`.
         #[test]
-        fn positive_width_failures_are_distinct_from_shape_and_policy_refusals() {
-            for width in ["0", "-1", "-999999999999999999999999999999999"] {
-                assert_eq!(
-                    StringPad::new("X", "p", width),
-                    Err(DeclarationError::Width)
-                );
-            }
+        fn a_shape_refusal_reports_no_issue_and_a_width_refusal_keeps_a_long_path() {
             assert!(DeclarationError::Shape.diagnostic("p").is_none());
             assert!(DeclarationError::Width
                 .diagnostic(&"p".repeat(100_000))
                 .is_some());
         }
 
+        /// Seam: a generated document of 32 columns with 100,000-character source
+        /// names.
         #[test]
         fn static_check_retains_first_bad_width_with_complete_long_source_names() {
             use yamaa_core::{
@@ -1186,6 +1171,7 @@ mod scalar {
             )
         }
 
+        /// Seam: the text pieces `str_substr` takes (core outcome).
         #[test]
         fn a_piece_takes_scalars_from_a_start_counted_from_one() {
             for (label, text, start, length, expected) in [
@@ -1234,6 +1220,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the lengths `str_length` counts (core outcome).
         #[test]
         fn a_length_counts_scalars_not_bytes() {
             let operation = StringLength::new(
@@ -1256,6 +1243,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the recovery step and the substitute a missing source takes.
         #[test]
         fn a_missing_source_is_answered_by_the_declared_missing_or_missing() {
             for handler in [None, Some(Value::Str("NONE".into())), Some(Value::Int(-1))] {
@@ -1283,35 +1271,8 @@ mod scalar {
             }
         }
 
-        #[test]
-        fn a_start_or_length_below_one_is_the_declaration_defect() {
-            for (label, start, length, expected) in [
-                ("a zero start", "0", None, DeclarationError::Start),
-                (
-                    "a negative start",
-                    "-1",
-                    Some("200"),
-                    DeclarationError::Start,
-                ),
-                ("a zero length", "1", Some("0"), DeclarationError::Length),
-                (
-                    "a negative length",
-                    "201",
-                    Some("-200"),
-                    DeclarationError::Length,
-                ),
-                ("both below one", "0", Some("0"), DeclarationError::Start),
-                (
-                    "a start below any integer",
-                    "-100000000000000000000000",
-                    None,
-                    DeclarationError::Start,
-                ),
-            ] {
-                assert_eq!(substr(start, length), Err(expected), "{label}");
-            }
-        }
-
+        /// Seam: the constructors' shape refusals, which report no issue; a start or
+        /// length below one is a `text.json` case `str_substr_refuses_...`.
         #[test]
         fn only_what_lowering_never_writes_is_a_shape_failure() {
             for (label, source, path, start, length) in [
@@ -1347,6 +1308,7 @@ mod scalar {
             text_template::{AdmissionError, MaterializeError, Part, StringTemplate},
             value::Value,
         };
+        /// Seam: the syntax failure span a template keeps, read through its accessor.
         #[test]
         fn deferred_syntax_refusals_retain_original_utf8_spans() {
             for (text, start, end) in [("é{", 2, 3), ("é}", 2, 3), ("é{A + B}", 2, 9)] {
@@ -1363,6 +1325,7 @@ mod scalar {
             assert_eq!(parsed.syntax_failure_span(), None);
             assert!(parsed.declaration_diagnostic().is_none());
         }
+        /// Seam: the identifiers and the text a template writes (core outcome).
         #[test]
         fn literal_escapes_unique_bindings_and_ordered_occurrences_are_exact() {
             let op = StringTemplate::new(
@@ -1400,6 +1363,7 @@ mod scalar {
                 ""
             );
         }
+        /// Seam: the text a template writes and its size.
         #[test]
         fn unicode_scalars_empty_strings_and_nul_have_no_implicit_formatting() {
             let op = StringTemplate::new("\u{03a9}:{A}/{A}".into(), "path".into(), None).unwrap();
@@ -1420,6 +1384,8 @@ mod scalar {
                 .declaration_diagnostic()
                 .is_some());
         }
+        /// Seam: the constructor's shape refusal and generated 100,000-character
+        /// metadata.
         #[test]
         fn public_constructor_preserves_complete_metadata_and_path_occurrences() {
             assert_eq!(
@@ -1450,6 +1416,7 @@ mod scalar {
                 assert_eq!(op.missing(), Some(&value));
             }
         }
+        /// Seam: a generated template of 7,000 names.
         #[test]
         fn many_unique_names_retain_first_occurrence_indexes_without_a_work_quota() {
             let text = (0..7000)
@@ -1481,6 +1448,7 @@ mod scalar {
             compare_present, ComparisonError, FiniteFloat, Selection, Value, ValueType,
         };
 
+        /// Seam: value normalization compared bit for bit.
         #[test]
         /// Check finite bit preservation and missing normalization across non-finite encodings.
         fn boundary_normalization_preserves_finite_bits_and_rejects_every_nonfinite_kind() {
@@ -1510,6 +1478,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the value model's distinctions, which no reader returns.
         #[test]
         /// Protect the closed value distinctions and full-range integer representation.
         fn missing_absence_empty_text_boolean_and_i64_are_distinct() {
@@ -1529,6 +1498,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the comparison kernel's orderings.
         #[test]
         /// Exercise mixed comparisons where rounding integers to binary64 changes ordering.
         fn mixed_numeric_comparison_keeps_full_integer_precision() {
@@ -1558,6 +1528,8 @@ mod scalar {
             );
         }
 
+        /// Seam: the comparison kernel's orderings and its refusals, which are not
+        /// issue records.
         #[test]
         /// Check text and temporal ordering and reject coercion or implicit null placement.
         fn ordered_comparison_does_not_coerce_or_choose_missing_placement() {
