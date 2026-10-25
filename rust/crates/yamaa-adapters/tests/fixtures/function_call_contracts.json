@@ -1,8 +1,8 @@
 {
-  "about": "The calls each case of project_functions.json made through its scripted host-functions port, and where its run started reading its study input (input), in order, as host_functions.rs logs them. Each list is the moved test's own record: the host calls of its trace, the arguments it recorded in call order, and its input read, which FUNC-12 places after the lock verification, the binding and every case of the called function, and before any call for study data (FUNC-8). A lock verification names the called functions only, which carries the tests' called_functions check.",
+  "about": "The calls each case of project_functions.json and project_activation.json made through its scripted host-functions port, and where its run started reading its study input (input), in order, as host_functions.rs logs them. Each list is the moved test's own record: the host calls of its trace, the arguments it recorded in call order, and its input read, which FUNC-12 places after the lock verification, the bindings and every case of the called functions, and before any call for study data (FUNC-8). A lock verification names the called functions only, each with its callable, which carries the tests' called_functions check and their double's checks on the lock and the callables it verified; a log without one is a build that verified no lock, and a log without input one that read no study input.",
   "cases": {
     "project_functions.json::an_aggregate_derivation_calls_its_function_after_activation_with_each_donor_record": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -12,7 +12,7 @@
       "id(x=2)"
     ],
     "project_functions.json::an_aggregate_derivation_calls_its_function_after_activation_with_each_prior_binding": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -22,7 +22,7 @@
       "id(x=2)"
     ],
     "project_functions.json::a_grouped_template_s_aggregate_derivation_calls_its_function_with_each_donor_record": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -32,7 +32,7 @@
       "id(x=2)"
     ],
     "project_functions.json::a_grouped_template_s_aggregate_derivation_calls_its_function_with_each_prior_binding": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -42,7 +42,7 @@
       "id(x=2)"
     ],
     "project_functions.json::an_aggregate_callback_reads_the_kept_current_row_instead_of_each_donor_record": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -52,7 +52,7 @@
       "id(x=40)"
     ],
     "project_functions.json::an_aggregate_callback_reads_the_current_source_s_types_where_its_donor_s_differ": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -64,7 +64,7 @@
       "id(x=40)"
     ],
     "project_functions.json::a_row_callback_joins_the_secondary_record_of_each_primary_record_by_its_key": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -73,7 +73,7 @@
       "id(x=40)"
     ],
     "project_functions.json::a_row_callback_joins_the_primary_record_of_each_secondary_record_by_its_key": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -82,7 +82,7 @@
       "id(x=10)"
     ],
     "project_functions.json::a_window_stage_calls_its_function_for_each_row_in_row_order": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -92,7 +92,7 @@
       "id(x=2)"
     ],
     "project_functions.json::a_window_stage_calls_its_function_for_every_row_before_a_post_window_filter_drops_one": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -102,7 +102,7 @@
       "id(x=2)"
     ],
     "project_functions.json::the_key_grain_calls_its_function_for_each_key_in_the_order_its_first_record_is_stored": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -112,7 +112,7 @@
       "id(x=20)"
     ],
     "project_functions.json::an_intermediate_derivation_calls_its_function_after_activation_with_each_donor_value": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -122,7 +122,7 @@
       "id(x=2)"
     ],
     "project_functions.json::an_intermediate_derivation_calls_its_function_after_activation_with_each_prior_value": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -132,7 +132,7 @@
       "id(x=2)"
     ],
     "project_functions.json::a_grouped_template_s_intermediate_derivation_calls_its_function_with_each_donor_value": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -142,7 +142,7 @@
       "id(x=2)"
     ],
     "project_functions.json::a_grouped_template_s_intermediate_derivation_calls_its_function_with_each_prior_value": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -152,7 +152,7 @@
       "id(x=2)"
     ],
     "project_functions.json::an_intermediate_callback_selects_for_its_donor_record_and_keeps_the_selected_field_s_type": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -162,7 +162,7 @@
       "id(x=40)"
     ],
     "project_functions.json::an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field": [
-      "lock python uv ../uv.lock: pair",
+      "lock python uv ../uv.lock: pair=project.pair",
       "bind pair: project.pair(weight, own)",
       "pair(weight=7, own=3)",
       "pair(weight=0, own=0)",
@@ -172,7 +172,7 @@
       "pair(weight=40, own=40)"
     ],
     "project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -183,7 +183,7 @@
       "input"
     ],
     "project_functions.json::a_saved_project_run_publishes_its_output_without_activating_again": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -191,17 +191,17 @@
       "id(x=1)"
     ],
     "project_functions.json::a_classified_binding_failure_fails_the_function_file": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)"
     ],
     "project_functions.json::a_classified_case_failure_fails_the_function_s_conformance": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)"
     ],
     "project_functions.json::a_classified_live_call_failure_fails_the_call_after_the_input_is_read": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -209,17 +209,49 @@
       "id(x=1)"
     ],
     "project_functions.json::an_unclassified_binding_failure_refuses_the_build_opaquely": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)"
     ],
     "project_functions.json::an_unclassified_case_failure_refuses_the_build_opaquely": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)"
     ],
     "project_functions.json::an_unclassified_live_call_failure_refuses_the_build_opaquely_after_the_input_is_read": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
+      "bind id: project.id(x)",
+      "id(x=7)",
+      "id(x=-9223372036854775808)",
+      "input",
+      "id(x=1)"
+    ],
+    "project_functions.json::a_live_call_that_returns_a_boolean_fails_its_result": [
+      "lock python uv ../uv.lock: id=project.id",
+      "bind id: project.id(x)",
+      "id(x=7)",
+      "id(x=-9223372036854775808)",
+      "input",
+      "id(x=1)"
+    ],
+    "project_functions.json::a_live_call_that_returns_an_undeclared_missing_fails_its_result": [
+      "lock python uv ../uv.lock: id=project.id",
+      "bind id: project.id(x)",
+      "id(x=7)",
+      "id(x=-9223372036854775808)",
+      "input",
+      "id(x=1)"
+    ],
+    "project_functions.json::a_live_call_that_returns_a_float_for_an_integer_fails_its_result": [
+      "lock python uv ../uv.lock: id=project.id",
+      "bind id: project.id(x)",
+      "id(x=7)",
+      "id(x=-9223372036854775808)",
+      "input",
+      "id(x=1)"
+    ],
+    "project_functions.json::a_live_call_whose_result_its_host_rejects_fails_its_result": [
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)",
@@ -227,31 +259,111 @@
       "id(x=1)"
     ],
     "project_functions.json::a_host_interrupt_in_a_case_refuses_the_build_at_the_activation_boundary": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)"
     ],
     "project_functions.json::a_panic_in_a_case_refuses_the_build_at_the_activation_boundary": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)"
     ],
     "project_functions.json::lock_findings_report_against_the_project_file_that_holds_the_lock": [
-      "lock python uv ../uv.lock: id"
+      "lock python uv ../uv.lock: id=project.id"
+    ],
+    "project_functions.json::a_lock_finding_keeps_the_host_s_version_spelling_without_comparing_versions": [
+      "lock python uv ../uv.lock: id=project.id"
     ],
     "project_functions.json::a_host_exception_while_verifying_the_lock_refuses_the_build_opaquely": [
-      "lock python uv ../uv.lock: id"
+      "lock python uv ../uv.lock: id=project.id"
     ],
     "project_functions.json::a_lock_failure_classified_with_no_finding_refuses_the_report": [
-      "lock python uv ../uv.lock: id"
+      "lock python uv ../uv.lock: id=project.id"
     ],
     "project_functions.json::a_case_result_that_differs_fails_conformance_in_the_function_file_that_defines_it": [
-      "lock python uv ../uv.lock: id",
+      "lock python uv ../uv.lock: id=project.id",
       "bind id: project.id(x)",
       "id(x=7)",
       "id(x=-9223372036854775808)"
+    ],
+    "project_activation.json::an_r_lock_finding_reports_at_the_lock_field_of_the_project_that_holds_it": [
+      "lock r renv renv.lock: id=program::id"
+    ],
+    "project_activation.json::a_binding_the_python_host_rejects_reports_at_the_function_file_s_python_callable": [
+      "lock python uv uv.lock: id=program.id",
+      "bind id: program.id(x)"
+    ],
+    "project_activation.json::a_binding_the_r_host_rejects_reports_at_the_function_file_s_r_callable": [
+      "lock r renv renv.lock: id=program::id",
+      "bind id: program::id(x)"
+    ],
+    "project_activation.json::an_r_case_result_that_differs_fails_conformance_at_its_case_in_the_function_file": [
+      "lock r renv renv.lock: id=program::id",
+      "bind id: program::id(x)",
+      "id(x=7)",
+      "id(x=null)"
+    ],
+    "project_activation.json::project_functions_build_without_any_adjacent_packaging_lock": [
+      "bind id: program.id(x)",
+      "id(x=7)",
+      "id(x=null)",
+      "input",
+      "id(x=1)"
+    ],
+    "project_activation.json::without_a_lock_a_binding_failure_refuses_the_build_before_the_study_is_read": [
+      "bind id: program.id(x)"
+    ],
+    "project_activation.json::without_a_lock_a_failed_case_fails_conformance_before_the_study_is_read": [
+      "bind id: program.id(x)",
+      "id(x=7)",
+      "id(x=null)"
+    ],
+    "project_activation.json::a_lock_rejection_refuses_the_build_before_even_a_missing_study_file_is_read": [
+      "lock python uv uv.lock: id=program.id"
+    ],
+    "project_activation.json::a_section_that_lists_only_specs_admits_a_run_without_study_standard_or_define": [
+      "lock python uv uv.lock: id=program.id",
+      "bind id: program.id(x)",
+      "id(x=7)",
+      "id(x=null)",
+      "input",
+      "id(x=1)"
+    ],
+    "project_activation.json::every_case_of_each_called_function_runs_and_each_mismatch_reports_in_listing_order": [
+      "lock python uv uv.lock: first=project.first, second=project.second",
+      "bind first: project.first(x)",
+      "bind second: project.second(x)",
+      "first(x=7)",
+      "first(x=-9223372036854775808)",
+      "second(x=7)",
+      "second(x=-9223372036854775808)"
+    ],
+    "project_activation.json::each_called_function_s_binding_failure_reports_at_its_python_callable": [
+      "lock python uv uv.lock: first=project.first, second=project.second",
+      "bind first: project.first(x)",
+      "bind second: project.second(x)"
+    ],
+    "project_activation.json::each_case_a_host_exception_fails_reports_the_call_failure_it_held": [
+      "lock python uv uv.lock: first=project.first, second=project.second",
+      "bind first: project.first(x)",
+      "bind second: project.second(x)",
+      "first(x=7)",
+      "first(x=-9223372036854775808)",
+      "second(x=7)",
+      "second(x=-9223372036854775808)"
+    ],
+    "project_activation.json::a_conformance_failure_keeps_the_extreme_integers_it_compared": [
+      "lock python uv uv.lock: integer=project.integer",
+      "bind integer: project.integer(x)",
+      "integer(x=7)",
+      "integer(x=-9223372036854775808)"
+    ],
+    "project_activation.json::a_conformance_failure_keeps_the_escaped_text_it_compared": [
+      "lock python uv uv.lock: text=project.text",
+      "bind text: project.text()",
+      "text()"
     ]
   }
 }

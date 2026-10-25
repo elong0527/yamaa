@@ -9,14 +9,12 @@ mod file {
             file_project::{self, Error},
             file_resources::{Error as ResourceError, Resources},
             project_source::{CaptureFailure, Failure as EnvironmentFailure, Origin},
-            specification_run::BoundaryFailure,
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             host_functions::{HostFunctions, Lock},
-            project_activation::{Failure, LockObservation},
-            specification_run::PortError,
+            project_activation::LockObservation,
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -90,31 +88,8 @@ mod file {
         const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
 
         #[test]
-        fn project_preparation_rejects_unknown_suffix_directory_before_activation() {
-            let study = Study::new();
-            fs::create_dir(study.0.join("entry/input.unknown")).unwrap();
-            study.write(
-                "entry/domain.yaml",
-                &DOMAIN.edit("input.csv", "input.unknown"),
-            );
-            let Err(Error::Compile(run)) = study.prepare(study.0.to_str().unwrap(), &[]) else {
-                panic!("directory finding")
-            };
-            let yamaa_core::specification::PrepareError::Invalid(findings) = &run.rejection.error
-            else {
-                panic!("invalid findings")
-            };
-            let issue = findings[0].diagnostic();
-            assert_eq!(
-                issue.definition().condition,
-                "resource_path_not_regular_file"
-            );
-            assert_eq!(issue.spec_paths, ["input.SRC.path"]);
-            assert!(!study.0.join("entry/output.csv").exists());
-        }
-
-        #[test]
         fn public_preparation_accepts_native_absolute_environment_paths_without_study_reads() {
+            // Seam: the public preparation's capture reads, which a check does not return.
             let study = Study::new();
             study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
             let project = yamaa_adapters::project_application::prepare(
@@ -133,7 +108,6 @@ mod file {
         struct Activation {
             trace: Vec<&'static str>,
             reject: bool,
-            reject_binding: bool,
             mismatch: bool,
         }
         impl HostFunctions for Activation {
@@ -161,11 +135,7 @@ mod file {
                 _: &LogicalSignature,
             ) -> Result<(), Self::Error> {
                 self.trace.push("bind");
-                if self.reject_binding {
-                    Err("original binding rejection")
-                } else {
-                    Ok(())
-                }
+                Ok(())
             }
             fn invoke(
                 &mut self,
@@ -186,6 +156,8 @@ mod file {
 
         #[test]
         fn project_report_uses_held_external_function_origins_after_metadata_files_change() {
+            // Seam: metadata files changed after preparation, which a case cannot change between
+            // its preparation and its build.
             let study = Study::new();
             let identity = |name| study.identity(name);
             let project = study.prepare(&study.text(""), &[]).unwrap();
@@ -238,81 +210,9 @@ mod file {
         }
 
         #[test]
-        fn project_functions_build_without_any_adjacent_packaging_lock() {
-            let study = Study::new();
-            study.write(
-                "project.yaml",
-                &PROJECT.edit("environments: {python: {lock: uv.lock}}\n", ""),
-            );
-            fs::remove_file(study.0.join("uv.lock")).unwrap();
-            study.write("entry/input.csv", "ID\n1\n");
-            let project = study.prepare(&study.text(""), &[]).unwrap();
-            let mut run_scope = project.run_scope(None);
-            assert!(project.run().environment().lock().is_none());
-            assert!(project.run().captured_environment().lock().is_none());
-            let mut activation = Activation {
-                reject: true,
-                ..Default::default()
-            };
-            let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
-            assert!(attempt.boundary.is_ok());
-            assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
-            assert_eq!(activation.trace, ["bind", "call", "call", "call"]);
-            assert_eq!(
-                attempt
-                    .dataset
-                    .result
-                    .unwrap()
-                    .result
-                    .unwrap()
-                    .dataset
-                    .rows(),
-                &[vec![Value::Int(1), Value::Int(1)]]
-            );
-        }
-
-        #[test]
-        fn functions_without_a_lock_still_reject_bindings_and_cases_before_study_reads() {
-            let study = Study::new();
-            study.write(
-                "project.yaml",
-                &PROJECT.edit("environments: {python: {lock: uv.lock}}\n", ""),
-            );
-            fs::remove_file(study.0.join("uv.lock")).unwrap();
-            let project = study.prepare(&study.text(""), &[]).unwrap();
-            let mut run_scope = project.run_scope(None);
-            let reads = project.capture_reads();
-            assert!(!study.0.join("entry/input.csv").exists());
-            for reject_binding in [true, false] {
-                let mut activation = Activation {
-                    reject: true,
-                    reject_binding,
-                    mismatch: true,
-                    ..Default::default()
-                };
-                let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
-                if reject_binding {
-                    assert!(matches!(
-                        attempt.boundary,
-                        Err(BoundaryFailure::Activation(Failure::Bindings(_)))
-                    ));
-                    assert_eq!(activation.trace, ["bind"]);
-                } else {
-                    assert!(matches!(
-                        attempt.boundary,
-                        Err(BoundaryFailure::Activation(Failure::Tests(_)))
-                    ));
-                    assert_eq!(activation.trace, ["bind", "call", "call"]);
-                }
-                assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
-                assert!(attempt.dataset.sources.is_empty());
-                assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
-                assert_eq!(run_scope.capture_reads(), reads);
-            }
-        }
-
-        #[test]
         fn native_project_retains_metadata_and_reuses_exact_snapshots_with_fresh_activation() {
+            // Seam: one prepared project built twice after its files change: its held bytes by
+            // address, the shared snapshot and the capture reads.
             let study = Study::new();
             let project = study.prepare(&study.text(""), &[]).unwrap();
             let mut run_scope = project.run_scope(None);
@@ -422,32 +322,11 @@ mod file {
             );
         }
 
-        #[test]
-        fn native_project_activation_rejection_precedes_even_a_missing_study_file() {
-            let study = Study::new();
-            let project = study.prepare(&study.text(""), &[]).unwrap();
-            let mut run_scope = project.run_scope(None);
-            let mut activation = Activation {
-                reject: true,
-                ..Default::default()
-            };
-            let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
-            assert!(matches!(
-                attempt.boundary,
-                Err(BoundaryFailure::Activation(Failure::Lock(
-                    "original lock rejection"
-                )))
-            ));
-            assert!(attempt.dataset.sources.is_empty());
-            assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
-            assert_eq!(run_scope.capture_reads(), 5);
-            assert_eq!(activation.trace, ["lock"]);
-        }
-
         /// Each build gives the host-functions port the exact lock bytes the
         /// prepared project holds, without copying them.
         #[test]
         fn each_build_verifies_the_lock_bytes_the_prepared_project_holds() {
+            // Seam: the lock bytes the port receives, by address, on each of two builds.
             struct Held {
                 expected: *const u8,
                 inner: Activation,
@@ -509,6 +388,7 @@ mod file {
 
         #[test]
         fn native_project_keeps_approved_roots_for_metadata_and_study_without_expanding_them() {
+            // Seam: the native resources' approved roots, which the file route does not take.
             let study = Study::new();
             // The selected entry root does not authorize the project beside it. The
             // same explicit approved fallback used by ordinary builds makes it available.
@@ -554,6 +434,8 @@ mod file {
 
         #[test]
         fn native_project_inheritance_retains_parent_authorship_and_selected_entry_source_paths() {
+            // Seam: the prepared document's parents, its written and resolved source paths and the
+            // capture reads.
             let study = Study::new();
             study.write(
                 "parent/base.yaml",
@@ -581,6 +463,8 @@ mod file {
         #[test]
         fn selected_ordinary_environment_owner_preserves_fresh_activation_and_inherited_data_origins(
         ) {
+            // Seam: one selection built three times, the last two sharing a snapshot, and the bytes
+            // it retains.
             use yamaa_adapters::file_workflow;
             let study = Study::new();
             study.write("parent/base.yaml", &DOMAIN.edit("input.csv", "data.csv"));
@@ -637,7 +521,10 @@ mod file {
         }
 
         #[test]
-        fn a_section_that_lists_only_specs_admits_runs_without_study_standard_or_define() {
+        fn a_section_that_lists_only_specs_reads_none_of_them() {
+            // Seam: the prepared project's capture reads. The run's issues and
+            // output are project_activation.json's
+            // a_section_that_lists_only_specs_admits_a_run_without_study_standard_or_define.
             let study = Study::new();
             study.write(
                 "project.yaml",
@@ -646,23 +533,11 @@ mod file {
             study.write("entry/input.csv", "ID\n1\n");
             let project = study.prepare(&study.text(""), &[]).unwrap();
             let mut run_scope = project.run_scope(None);
-            assert!(project.run().check_diagnostics().is_empty());
             // Define alone composes the section; a run reads none of its specs.
             assert_eq!(project.capture_reads(), 5);
             let attempt =
                 project.build(&mut run_scope, &mut Activation::default(), Scope::default());
             assert!(attempt.boundary.is_ok());
-            assert_eq!(
-                attempt
-                    .dataset
-                    .result
-                    .unwrap()
-                    .result
-                    .unwrap()
-                    .dataset
-                    .rows(),
-                &[vec![Value::Int(1), Value::Int(1)]]
-            );
             assert_eq!(run_scope.capture_reads(), 6);
         }
     }

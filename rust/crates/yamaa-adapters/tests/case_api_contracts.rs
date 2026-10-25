@@ -627,5 +627,5 @@ fn host_function_cases_keep_the_calls_their_port_received() {
         contracts.keys().cloned().collect(),
         "every case with authored calls remains present"
     );
-    assert_eq!(seen.len(), 32);
+    assert_eq!(seen.len(), 51);
 }
