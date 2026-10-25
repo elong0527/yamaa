@@ -17,7 +17,7 @@ that omits `dataset` builds from that dataset. When `input` declares more than
 one, every row template must state `dataset`.
 
 Fails: `driver_unavailable`, `duplicate_identifier`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::row_templates_report_derivation_construction_and_template_refusals_in_that_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_repeated_row_template_id_is_refused_at_the_path_both_share`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv`, `schema-rows-override`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::row_templates_report_derivation_construction_and_template_refusals_in_that_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_repeated_row_template_id_is_refused_at_the_path_both_share`, `rust/crates/yamaa-application/tests/fixtures/preflight.tsv`, `schema-rows-override`.
 
 An omitted driver when no single input is implied, or a driver that names
 neither a declared input nor a named intermediate, fails validation with
@@ -39,7 +39,7 @@ column type ([EXPR-14](expressions.md#expr-14)). A pair relation
 inputs through its sides, and its `key` matches its sides, not the current row.
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type`, `schema-intermediate-driver-columns`, `schema-lookup-inner-join-pairs`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-application/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type`, `schema-intermediate-driver-columns`, `schema-lookup-inner-join-pairs`.
 
 The intermediate's `columns` list, when present, limits the fields the row
 template may read; otherwise all stored and derived fields are visible. Its
@@ -75,7 +75,7 @@ the candidate's derived columns and lookup state. Every driver record whose
 `filter` is `TRUE` produces one candidate row; `FALSE` or `UNKNOWN` discards the
 record before the window pass.
 
-Evidence: `schema-row-templates`, `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`.
+Evidence: `schema-row-templates`, `rust/crates/yamaa-application/tests/fixtures/row_filters.json`.
 
 A row template with `group_by` is group-driven under [ROW-4](#row-4).
 [ROW-6](#row-6) limits what a filter may name, and
@@ -95,7 +95,7 @@ then the `filter`, when present, reads the candidate's completed unqualified
 columns, and the candidate is appended only when the result is `TRUE`.
 
 Fails: `invalid_field_type`, `unknown_field`.
-Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_empty_group`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_a_repeated_variable`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unqualified_variable`.
+Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_empty_group`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_a_repeated_variable`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unqualified_variable`.
 
 [Values](values.md) defines equality for strings. Groups follow the
 position of their first driver record, and driver order is kept within each
@@ -118,7 +118,7 @@ literals, earlier row-derived columns, or a record lookup with already-complete
 matching values, in dependency order.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_scopes.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate`.
+Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-application/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_scopes.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate`.
 
 The aggregate reduces the group under
 [Expressions](expressions.md) and
@@ -139,7 +139,7 @@ the window pass. A grouped row template's `filter` fails when it names a
 qualified variable or a column not derived by that row template.
 
 Fails: `phase_boundary`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`, `rust/crates/yamaa-core/src/specification/types/tests.rs::a_deferred_lookup_match_has_its_authored_filter_phase_witness`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/row_filters.json`, `rust/crates/yamaa-core/src/specification/types/tests.rs::a_deferred_lookup_match_has_its_authored_filter_phase_witness`.
 
 A qualified grouped-filter reference or an unqualified filter reference outside
 the row template's derivations fails with `phase_boundary`, naming the row,
@@ -203,7 +203,7 @@ records; it is required unless `input` declares exactly one dataset, which then
 supplies them.
 
 Fails: `driver_unavailable`.
-Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::without_row_templates_two_inputs_need_a_base`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::preparation_reports_column_name_key_and_base_refusals_in_that_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/row_scopes.json`.
+Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::without_row_templates_two_inputs_need_a_base`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::preparation_reports_column_name_key_and_base_refusals_in_that_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/row_scopes.json`.
 
 The key table is standalone: it has one row per unique key combination and no
 link back to the input records. The input records a key combination was

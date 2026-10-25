@@ -1,5 +1,6 @@
 //! Table contracts: the Dataset-JSON source profiles' seams that the file
-//! route's fixtures (`fixtures/diagnostics/dataset_json_sources.json`) cannot
+//! route's fixtures (the application suite's
+//! `fixtures/diagnostics/dataset_json_sources.json`) cannot
 //! reach: the writer's output read back as the table it wrote, the authored
 //! Dataset-JSON goldens read back as their published rows, and the
 //! narrowing table of DSJSON-2 whole.

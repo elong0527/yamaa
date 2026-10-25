@@ -3,8 +3,8 @@
 # inside this directory would otherwise join the workspace, and workspace-wide
 # test and Clippy runs would cover the upstream sources.
 exclude = ["vendor/saphyr-parser"]
-members = ["crates/yamaa-core", "crates/yamaa-adapters", "crates/yamaa", "crates/yamaa-boundary", "crates/yamaa-python", "crates/yamaa-r", "crates/yamaa-cli"]
-default-members = ["crates/yamaa-core", "crates/yamaa-adapters"]
+members = ["crates/yamaa-core", "crates/yamaa-adapters", "crates/yamaa-application", "crates/yamaa", "crates/yamaa-boundary", "crates/yamaa-python", "crates/yamaa-r", "crates/yamaa-cli"]
+default-members = ["crates/yamaa-core", "crates/yamaa-adapters", "crates/yamaa-application"]
 resolver = "2"
 
 [workspace.package]

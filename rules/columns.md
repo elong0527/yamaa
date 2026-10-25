@@ -94,7 +94,7 @@ derived by that row template. The grouped `filter` is not a derivation: it adds
 no graph edge between columns and runs only after all columns have completed.
 
 Fails: `phase_boundary`.
-Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/rows.json::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::an_ungrouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_grouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`.
+Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/rows.json::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::an_ungrouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_grouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`.
 
 A row dependency on such a value fails as `phase_boundary`.
 
@@ -110,7 +110,7 @@ order. Composition orders the resolved columns
 order.
 
 Fails: `unknown_reference`, `forward_reference`.
-Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/column_driver_bindings.json::column_bindings_run_one_driver_after_another`.
+Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/column_driver_bindings.json::column_bindings_run_one_driver_after_another`.
 
 [Inheritance](inheritance.md) composes and prunes every specification before
 these rules apply: a specification that declares no `parent` and includes no
@@ -157,7 +157,7 @@ an aggregate or an `odm` read, unless a key derived by a window makes each
 base record its own row.
 
 Fails: `key_dependency`.
-Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/row_scopes.json`.
+Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/row_scopes.json`.
 
 A key reads its base record's fields, the keys declared before it, and a
 named intermediate's selection for that record, through any operation that
@@ -215,7 +215,7 @@ enters the completed dataset, and stage 4 column verifications do not include
 it. An error reached while deriving the candidate still fails the run; the
 filter does not retroactively hide a failed derivation.
 
-Evidence: `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`.
+Evidence: `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/row_filters.json`.
 
 For a grouped template, the values the filter may read are those of every row
 derivation. For an ungrouped template, they are those of every derivation that
@@ -305,7 +305,7 @@ with several placeholders, it fires when any input is missing. `invalid`,
 `unmapped` and `str_extract`'s `no_match` fire only when every input is
 present.
 
-Evidence: `rust/crates/yamaa-core/src/specification/source_expressions/mod.rs::absent_does_not_answer_a_variable_that_does_not_exist`, `rust/crates/yamaa/tests/language_header.rs::absent_does_not_answer_a_variable_the_input_does_not_hold`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
+Evidence: `rust/crates/yamaa-core/src/specification/source_expressions/mod.rs::absent_does_not_answer_a_variable_that_does_not_exist`, `rust/crates/yamaa/tests/language_header.rs::absent_does_not_answer_a_variable_the_input_does_not_hold`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-application/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
 
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition
@@ -344,7 +344,7 @@ matches ([LOOKUP-8](lookup.md#lookup-8)), the survivors sort by the
 and right-side record order resolves remaining ties. An empty filtered result
 is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states.
 
-Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_selection.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
+Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/source_selection.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`.
 
 ```yaml
 source:
@@ -379,7 +379,7 @@ replacement converts to that same type. Without `unconvertible`, a failed
 output conversion is fatal.
 
 Fails: `conversion_failed`.
-Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.json`.
+Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/original_row_conversion_handlers.json`.
 
 A derivation that needs stage 3 wraps its expression in `value`:
 
@@ -412,7 +412,7 @@ zero times is reportable and is not an error. The count for a source's
 `order_by` and `keep` reports only records where more than one match survived
 the filter.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-application/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-application/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
 
 A default substitution is counted where the handler it stands for would be: at
 `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,

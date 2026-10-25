@@ -5,7 +5,7 @@ mod file {
         //! What a selection keeps: the files it read and how many times, its
         //! typed owner, and the findings it projects after its study
         //! directory is gone. Each test proves such a unit seam, which no
-        //! operation of the adapters' replay reports; the issue rows, output
+        //! operation of the application's replay reports; the issue rows, output
         //! rows and saved files the same inputs report are cases of
         //! `tests/fixtures/diagnostics/workflow.json` (#3798).
         use crate::support::ports::NoFunctions;

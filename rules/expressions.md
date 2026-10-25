@@ -66,7 +66,7 @@ in `derivation` or `handled_expression_class.value`, is not restricted by
 this rule. That text and fields typed `string_template` and
 `aggregate_expression` are leaves whose identifiers their own rules resolve.
 
-Evidence: `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_is_the_same_for_every_ecg`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_reads_the_current_row`.
+Evidence: `schema-expressions`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_checks_clean`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_is_the_same_for_every_ecg`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_checks_clean`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_reads_the_current_row`.
 
 `case` selects among expressions, a key match value computes the operand it
 matches, and a nearest selection's `to`, read as a key match value is,
@@ -92,7 +92,7 @@ expression's type is one type. Key matching, intermediate fields and drivers,
 aggregate derivations, range bounds, operand checks, extremes and column
 conversion all read that type.
 
-Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/src/specification/types/tests.rs::declared_types_follow_each_inputs_type_authority`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_computed_float_key_of_a_text_donor_column_is_refused_before_matching`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_greatest_key_of_int_sources_on_a_text_donor_column_is_refused_before_matching`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_key_whose_type_is_decided_per_value_binds_and_is_compared_when_matched`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_over_an_int_and_a_float_is_refused_as_integer_days_before_data`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
+Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/src/specification/types/tests.rs::declared_types_follow_each_inputs_type_authority`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_computed_float_key_of_a_text_donor_column_is_refused_before_matching`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_greatest_key_of_int_sources_on_a_text_donor_column_is_refused_before_matching`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_key_whose_type_is_decided_per_value_binds_and_is_compared_when_matched`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/completed_intermediates.json::nullif_over_an_int_and_a_float_is_refused_as_integer_days_before_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/completed_intermediates.json::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
 
 | Expression | Class | Result type |
 | --- | --- | --- |
@@ -223,7 +223,7 @@ coalescing and extreme expressions return the value they select, never a
 converted one, and a selected temporal value keeps its collected precision. The result type each
 expression declares is [EXPR-14](#expr-14)'s.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/first_available.json`, `schema-expressions`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/first_available.json`, `schema-expressions`.
 
 ## Conditional selection
 
@@ -259,7 +259,7 @@ which may repeat `false_value`, name another value, or be YAML null for
 missing.
 
 Fails: `missing_value_required`.
-Evidence: `negative-flag-missing-value`, `negative-flag-condition`, `adam-adae-occurrence-flags`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`.
+Evidence: `negative-flag-missing-value`, `negative-flag-condition`, `adam-adae-occurrence-flags`, `rust/crates/yamaa-application/tests/fixtures/flag_reference.json`.
 
 `flag` is the shorthand for the common one-branch `case` that returns a flag
 value. A bare predicate string is the condition with the default values:
@@ -289,7 +289,7 @@ first source that is not missing. When every source is missing, it returns the
 declared `missing`, or missing when none is declared, counted under `missing`
 either way.
 
-Evidence: `schema-expressions`, `adam-adsl-demographics`, `rust/crates/yamaa-adapters/tests/fixtures/first_available.json`.
+Evidence: `schema-expressions`, `adam-adsl-demographics`, `rust/crates/yamaa-application/tests/fixtures/first_available.json`.
 
 A source that is a binding reading through an implicit join answers its own
 absent record first ([LOOKUP-24](lookup.md#lookup-24)); the answer, missing by

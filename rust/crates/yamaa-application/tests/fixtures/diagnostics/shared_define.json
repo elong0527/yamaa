@@ -1038,8 +1038,8 @@
       "operation": "define",
       "input": {
         "files": {
-          "spec.yaml": {"file": "rust/crates/yamaa-adapters/tests/fixtures/converted/adam-adsl-xpt/spec.yaml"},
-          "project.yaml": {"file": "rust/crates/yamaa-adapters/tests/fixtures/converted/adam-adsl-xpt/project.yaml", "edits": [
+          "spec.yaml": {"file": "rust/crates/yamaa-application/tests/fixtures/converted/adam-adsl-xpt/spec.yaml"},
+          "project.yaml": {"file": "rust/crates/yamaa-application/tests/fixtures/converted/adam-adsl-xpt/project.yaml", "edits": [
             {"from": "transport: xpt", "to": "transport: dataset_json"}
           ]},
           "input/adsl_raw.csv": {"file": "benchmarks/adam-adsl-xpt/input/adsl_raw.csv"},

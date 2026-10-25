@@ -15,7 +15,7 @@ order. Each declared column type maps to exactly one Parquet physical and
 logical type, as the table below fixes. Every field is optional, and every
 column type admits a missing value.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::ordered_row_groups_and_projection_survive_an_empty_source`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::ordered_row_groups_and_projection_survive_an_empty_source`.
 
 | Column type | Physical | Logical |
 |---|---|---|
@@ -37,7 +37,7 @@ must not attach a zone when writing or reading. A `datetime` has whole-second
 resolution: it is written with the microsecond unit, and its microsecond part
 is always zero.
 
-Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
+Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
 
 The same wall clock survives a write and a read. Shifting a value into or out
 of a machine timezone changes the value.
@@ -50,7 +50,7 @@ A `float` enters this profile as the binary64 value its derivation produced.
 `output.decimals` does not apply, and no rounding happens on output, so a
 consumer that reads the artifact receives the value the calculation used.
 
-Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_double_operands_round_trip_without_display_rounding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::output_decimals_do_not_apply_to_a_parquet_output`, `python/tests/installed/installed_original_specifications.py::test_original_build_saves_parquet_with_independent_logical_readback`.
+Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::retired_python_double_operands_round_trip_without_display_rounding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::output_decimals_do_not_apply_to_a_parquet_output`, `python/tests/installed/installed_original_specifications.py::test_original_build_saves_parquet_with_independent_logical_readback`.
 
 Storing native double values is not display. Display rounding happens once, in
 the `csv` profile under [CSV-8](csv.md#csv-8), and an `output.decimals`
@@ -67,7 +67,7 @@ every `DOUBLE` bit-identical. An implementation writes uncompressed pages and
 adds no key-value metadata of its own beyond what the format requires.
 Conforming parquet artifacts are not required to have identical bytes.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 An artifact that must be byte-identical uses the `csv` profile.
 
@@ -168,7 +168,7 @@ collected empty string, and the two remain distinct. A finite `DOUBLE` is
 delivered bit-identically. A non-finite `DOUBLE` is normalized immediately to
 missing under [Values](../values.md).
 
-Evidence: `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::independent_codecs_page_versions_and_encodings_preserve_exact_values`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::parquet_input_policy_and_owned_source_observations_use_the_shared_build_path`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::independent_codecs_page_versions_and_encodings_preserve_exact_values`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `rust/crates/yamaa-application/tests/specification_sources.rs::parquet_input_policy_and_owned_source_observations_use_the_shared_build_path`.
 
 <a id="parquet-9"></a>
 

@@ -45,7 +45,7 @@ completed derivation result, at the conversion stage of the
 [Execution lifecycle](columns.md#column-8).
 
 Fails: `incompatible_input_type`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::baseline_flag_refuses_a_date_that_is_neither_a_date_nor_a_datetime`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::baseline_flag_refuses_a_date_that_is_neither_a_date_nor_a_datetime`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`.
 
 <a id="value-3"></a>
 
@@ -60,7 +60,7 @@ and otherwise it is fatal. A conversion never selects an unspecified
 representation or silently substitutes missing.
 
 Fails: `conversion_failed`.
-Evidence: `negative-number-below-limit`, `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.json`.
+Evidence: `negative-number-below-limit`, `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json`.
 
 The source is the value's runtime type and the destination is the column's
 declared type. Identity preserves the value. A Boolean fails conversion to
@@ -103,7 +103,7 @@ refused, as its literal answers each failure, and a result that is always
 missing converts to every type.
 
 Fails: `conversion_failed`.
-Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_row_number_is_refused_for_a_datetime_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::an_integer_literal_is_refused_for_a_date_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_boolean_literal_is_refused_for_a_text_column`, `rust/crates/yamaa-adapters/tests/fixtures/column_literals.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/scalar_operations.json::row_boolean_is_refused_at_validation_and_refuses_every_save_false`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/scalar_operations.json::row_boolean_is_refused_at_validation_and_refuses_every_save_true`.
+Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_row_number_is_refused_for_a_datetime_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::an_integer_literal_is_refused_for_a_date_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_boolean_literal_is_refused_for_a_text_column`, `rust/crates/yamaa-application/tests/fixtures/column_literals.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/scalar_operations.json::row_boolean_is_refused_at_validation_and_refuses_every_save_false`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/scalar_operations.json::row_boolean_is_refused_at_validation_and_refuses_every_save_true`.
 
 The failure names the column whose lifecycle cannot complete, as a
 conversion failure does, or the typed intermediate derivation or aggregate
@@ -215,7 +215,7 @@ written in an expression or as any other runtime literal. An `int` result of
 `integer_overflow`.
 
 Fails: `integer_overflow`.
-Evidence: `negative-integer-overflow`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/integer_literals.json`, `rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv`.
+Evidence: `negative-integer-overflow`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/integer_literals.json`, `rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv`.
 
 An out-of-range literal never introduces an arbitrary-width integer value.
 Runtime literals include derivation and replacement literals,
@@ -301,7 +301,7 @@ widening each `int` operand first under [VALUE-8](#value-8); there is no
 integer division. `SQRT`, `POWER`, `EXP`, `LN`, `LOG10`, `NORM_CDF`,
 `NORM_INV`, `CEIL`, `FLOOR` and `TRUNC` return `float`.
 
-Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_of_an_int_and_a_float_column_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
+Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/completed_intermediates.json::nullif_of_an_int_and_a_float_column_checks_clean`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/completed_intermediates.json::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
 
 The quotient is the binary64 quotient of the widened operands, including when
 both operands are `int`. Above `2^53` it need not equal the exact integer
@@ -543,7 +543,7 @@ and the text the artifact records for a temporal column; neither form takes a
 project setting. Canonical text is not the collected text, and it carries no
 collected precision.
 
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-application/tests/table_arrow_table.rs`.
 
 A `str` column derived from a temporal value and the artifact's rendering of
 that value therefore never disagree; [VALUE-8](#value-8) fixes the same
@@ -599,7 +599,7 @@ Comparing values that are not mutually comparable fails rather than converting
 an operand.
 
 Fails: `incompatible_input_type`, `incomparable_sources`.
-Evidence: `negative-greatest-mixed`, `negative-least-mixed`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`.
+Evidence: `negative-greatest-mixed`, `negative-least-mixed`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`.
 
 So `9007199254740993` and `9007199254740992.0` are unequal everywhere.
 Collected temporal precision changes neither a value's
@@ -675,7 +675,7 @@ order. A term is a bare variable or a mapping declaring `variable`,
 `desc`. A declared `nulls: first` or `nulls: last` places missing values there
 under either direction.
 
-Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_last_without_nulls`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_last_by_nulls`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_first_by_nulls`.
+Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_last_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_last_by_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_first_by_nulls`.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
 union, whichever operation declares the list, and a mapping holding only
@@ -719,4 +719,4 @@ ordering uses the same tie-break. Ties are valid and must not change between
 runs over the same input. A specification may declare an additional term to
 break a tie.
 
-Evidence: `schema-ordering`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_floats_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_dates_descending_and_places_missing_last_without_nulls`.
+Evidence: `schema-ordering`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_floats_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_dates_descending_and_places_missing_last_without_nulls`.
