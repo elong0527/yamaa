@@ -7,6 +7,7 @@ use std::{
     rc::Rc,
     time::{Duration, Instant},
 };
+use yamaa::CancellationToken;
 
 // R's SEXP is an opaque pointer. Use that pointer's ABI directly, without
 // exposing extendr-ffi's non-exhaustive SEXPREC definition in an extern block.
@@ -54,14 +55,31 @@ thread_local! {
     static STREAM_CHECKED: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
 }
 
+/// The token of the active call. On the R thread that made the call its
+/// probe asks [`poll`]; on any other thread it never touches R.
+pub(super) fn token() -> CancellationToken {
+    let owner = std::thread::current().id();
+    CancellationToken::with_probe(move || std::thread::current().id() == owner && poll(false))
+}
+
+/// The token of a streamed run (#3697), which outlives its initial call. On
+/// the R thread that started the run, its probe asks [`stream_cancelled`];
+/// on any other thread it never touches R.
+pub(super) fn stream_token() -> CancellationToken {
+    let owner = std::thread::current().id();
+    CancellationToken::with_probe(move || {
+        std::thread::current().id() == owner && stream_cancelled()
+    })
+}
+
 /// The probe of a streamed run (#3697), which outlives its initial call.
 /// The caller must be on the R thread that started the run. On that thread,
 /// it polls as the active native call does, keeping the interrupt for that
 /// call to signal again; with no native
 /// call running, as when another package pulls the run's Arrow stream, it
 /// checks for an interrupt itself, at most every 20 ms, and the interrupt
-/// ends the stream as cancelled. `Host::cancelled` enforces this precondition.
-pub(super) fn stream_cancelled() -> bool {
+/// ends the stream as cancelled. [`stream_token`] enforces this precondition.
+fn stream_cancelled() -> bool {
     if let Some(state) = ACTIVE.with(|active| active.borrow().clone()) {
         return poll_state(&state, false);
     }
@@ -74,7 +92,7 @@ pub(super) fn stream_cancelled() -> bool {
     }
     STREAM_CHECKED.with(|checked| checked.set(Some(Instant::now())));
     let classes = Strings::from_values(["interrupt", "error"]);
-    // SAFETY: `Host::cancelled` checks that this runs on the R thread that
+    // SAFETY: `stream_token` checks that this runs on the R thread that
     // started the run before calling this function. `classes` stays protected
     // for the call. The body owns no
     // Rust values, and R_tryCatch catches its interrupt or error jump
@@ -109,7 +127,7 @@ pub(super) fn remember(condition: Robj) {
 /// pending, checked at most every 20 ms unless `force` (D186). The engine
 /// asks this probe at its cancellation points and once more as a call
 /// returns.
-pub(super) fn poll(force: bool) -> bool {
+fn poll(force: bool) -> bool {
     let state = ACTIVE.with(|active| active.borrow().clone());
     state.is_some_and(|state| poll_state(&state, force))
 }
