@@ -60,7 +60,6 @@ mod project_environment;
 mod project_run;
 mod project_scope;
 mod project_source;
-mod prune_all_specifications;
 mod resolved_artifact;
 mod resolved_artifact_wire;
 mod resolved_plan;
