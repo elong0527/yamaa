@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from host_fixtures import first_difference
 from host_fixtures import load as load_truth
 
 import yamaa
@@ -151,8 +152,12 @@ class ColumnCeilings(unittest.TestCase):
         self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
         built = yamaa.spec(spec).run()
         self.assertEqual(built.issues.num_rows, 0)
-        self.assertEqual(
-            built.output.to_polars().row(0), ("S-001", *["x"] * (width - 1))
+        # A row up to 1,024 cells wide is compared as a summary of its first
+        # difference (#3882).
+        self.assertIsNone(
+            first_difference(
+                built.output.to_polars().row(0), ("S-001", *["x"] * (width - 1))
+            )
         )
         self.assertEqual(built.output.to_polars().shape, (1, width))
 
@@ -418,8 +423,14 @@ class ColumnCeilings(unittest.TestCase):
                     self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
                     built = yamaa.spec(spec).run()
                     self.assertEqual(built.issues.num_rows, 0)
-                    self.assertEqual(built.output.column_names, names)
-                    self.assertEqual(built.output.to_polars().rows(), expected)
+                    # Up to 1,024 names and rows of up to 1,024 cells are
+                    # compared as summaries of their first difference (#3882).
+                    self.assertIsNone(
+                        first_difference(built.output.column_names, names)
+                    )
+                    self.assertIsNone(
+                        first_difference(built.output.to_polars().rows(), expected)
+                    )
                     built.save()
                     self.assertEqual((root / "out.csv").read_bytes(), expected_bytes)
 

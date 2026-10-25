@@ -93,9 +93,16 @@ pub fn rendered(finding: &impl Record) -> ConditionCode {
     record.code
 }
 
-/// Every cause this thread rendered from a reached finding.
+/// Every cause this thread rendered from a reached finding, with those the
+/// replay's threads rendered for it.
 pub fn rendered_causes() -> BTreeSet<ConditionCode> {
     RENDERED.with(|causes| causes.borrow().clone())
+}
+
+/// Count `causes`, which the replay's threads rendered for a replay this
+/// thread runs, as rendered on this thread.
+pub fn rendered_for_this_thread(causes: &BTreeSet<ConditionCode>) {
+    RENDERED.with(|rendered| rendered.borrow_mut().extend(causes.iter().copied()));
 }
 impl Record for yamaa_core::project_diagnostics::Diagnostic<'_> {
     /// A borrowed project record owns its facts the way the adapters'

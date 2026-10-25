@@ -24,6 +24,7 @@ from unittest.mock import patch
 import pandas as pd
 import polars as pl
 import pyarrow as pa
+from host_fixtures import first_difference
 
 import yamaa
 from yamaa import _native
@@ -338,7 +339,9 @@ class Table(unittest.TestCase):
         self.assertEqual((table.num_rows, len(table)), (65_537, 65_537))
         self.assertEqual(len(pa.table(table).to_batches()), 2)
         rows = table.to_pylist()
-        self.assertEqual(rows, pa.table(table).to_pylist())
+        # The 65,537 rows are compared as a summary of their first
+        # difference (#3882).
+        self.assertIsNone(first_difference(rows, pa.table(table).to_pylist()))
         self.assertEqual(
             [(row["ItemOID"], row["SourceOrdinal"]) for row in rows[65_535:]],
             [("I65536", 65_536), ("I65537", 65_537)],
