@@ -1,0 +1,101 @@
+{
+  "about": "Declared source types over a CSV input, read through the file route's build (INPUT-6, INPUT-7, INPUT-9, CSV-16, VALUE-3, VALUE-15). A types entry that names no stored field fails before any cell converts, the first such entry in written declaration order; cells convert in stored record order, then stored field order, so the first failing cell is the first failing row's first failing field, whatever order the types are declared in; a CSV profile failure precedes an unknown declared field; the nonfinite spellings .nan, +.inf, -.inf and .Inf read as missing; a date or datetime with fields left out is not imputed but fails to parse; an empty field and a quoted empty field read as missing, while NA, NULL, . and unknown stay text; a datetime keeps its civil fields; and a header alone reads no rows. Moved from the typed_csv module of table_sas_source.rs at 55276b420, whose tests called typed_csv::parse on the same bytes and declarations and compared its error variant with the field, target and value it named, or the cells of the table it returned. Each case stages those bytes as input.csv, declares those types on the input SRC, and builds a specification that reads each field by name into an output column of the field's type; a case without a unique non-missing field keys its rows by a generated ordinal ROW (INPUT-3). An error is the first issue of the build: its phase, condition and rule are the registry's for the error's cause, its spec path the types entry of its field (or the input's path for a profile failure), and its context the dataset SRC with the field, and for a conversion the target type and the value, as the source projection writes them. A cell is the value the test compared, a datetime written with its seconds. No engine output supplied these values.",
+  "cases": [
+    {
+      "case": "the_first_declared_field_the_source_lacks_fails_in_written_order_before_conversion",
+      "operation": "build",
+      "input": {"files": {"input.csv": "X\nnot-an-int", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [X]\ninput: {SRC: {path: input.csv, types: {X: int, Z: float, A: int}}}\noutput: {path: output.csv, columns: [X]}\ncolumns:\n  - {name: X, type: int, derivation: SRC.X}\n"}, "specification": "spec.yaml"},
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.Z"], "context": {"dataset": "SRC", "field": "Z", "identifier": "Z"}}]
+    },
+    {
+      "case": "a_conversion_failure_is_reported_in_the_first_failing_row",
+      "operation": "build",
+      "input": {"files": {"input.csv": "A,B\n1,bad\nworse,2", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [A]\ninput: {SRC: {path: input.csv, types: {B: int, A: int}}}\noutput: {path: output.csv, columns: [A, B]}\ncolumns:\n  - {name: A, type: int, derivation: SRC.A}\n  - {name: B, type: int, derivation: SRC.B}\n"}, "specification": "spec.yaml"},
+      "prefix": true,
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.B"], "context": {"dataset": "SRC", "field": "B", "type": "int", "value": "bad"}}]
+    },
+    {
+      "case": "a_conversion_failure_follows_stored_field_order_not_declaration_order",
+      "operation": "build",
+      "input": {"files": {"input.csv": "A,B\nfirst,second", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [A]\ninput: {SRC: {path: input.csv, types: {B: int, A: int}}}\noutput: {path: output.csv, columns: [A, B]}\ncolumns:\n  - {name: A, type: int, derivation: SRC.A}\n  - {name: B, type: int, derivation: SRC.B}\n"}, "specification": "spec.yaml"},
+      "prefix": true,
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.A"], "context": {"dataset": "SRC", "field": "A", "type": "int", "value": "first"}}]
+    },
+    {
+      "case": "a_csv_profile_failure_precedes_an_unknown_declared_field",
+      "operation": "build",
+      "input": {"files": {"input.csv": "X\n\"bad", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [X]\ninput: {SRC: {path: input.csv, types: {Z: int}}}\noutput: {path: output.csv, columns: [X]}\ncolumns:\n  - {name: X, type: str, derivation: SRC.X}\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "prefix": true,
+      "issues": [{"phase": "ingest", "condition": "source_quote_unterminated", "rule": "CSV-16", "spec_paths": ["input.SRC.path"]}]
+    },
+    {
+      "case": "nonfinite_float_spellings_read_as_missing",
+      "operation": "build",
+      "input": {"files": {"input.csv": "F\n.nan\n+.inf\n-.inf", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ROW]\ninput: {SRC: {path: input.csv, types: {F: float}, ordinal: ROW}}\noutput: {path: output.csv, columns: [ROW, F]}\ncolumns:\n  - {name: ROW, type: int, derivation: SRC.ROW}\n  - {name: F, type: float, derivation: SRC.F}\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [
+        ["ROW", "F"],
+        [1, null],
+        [2, null],
+        [3, null]
+      ]
+    },
+    {
+      "case": "incomplete_date_text_is_not_imputed_when_a_source_is_typed",
+      "operation": "build",
+      "input": {"files": {"input.csv": "X\n2024-03", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [X]\ninput: {SRC: {path: input.csv, types: {X: date}}}\noutput: {path: output.csv, columns: [X]}\ncolumns:\n  - {name: X, type: date, derivation: SRC.X}\n"}, "specification": "spec.yaml"},
+      "prefix": true,
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.X"], "context": {"dataset": "SRC", "field": "X", "type": "date", "value": "2024-03"}}]
+    },
+    {
+      "case": "incomplete_datetime_text_is_not_imputed_when_a_source_is_typed",
+      "operation": "build",
+      "input": {"files": {"input.csv": "X\n2024-03-02", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [X]\ninput: {SRC: {path: input.csv, types: {X: datetime}}}\noutput: {path: output.csv, columns: [X]}\ncolumns:\n  - {name: X, type: datetime, derivation: SRC.X}\n"}, "specification": "spec.yaml"},
+      "prefix": true,
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.X"], "context": {"dataset": "SRC", "field": "X", "type": "datetime", "value": "2024-03-02"}}]
+    },
+    {
+      "case": "a_typed_csv_keeps_the_retired_python_missingness_and_civil_time",
+      "operation": "build",
+      "input": {"files": {"input.csv": "ID,AGE,SCORE,DATE,MOMENT,EMPTY,TEXT\n007,42,1.5,2025-01-02,2025-01-02T03:04,,\"\"\n008,,.Inf,2025-02-03,2025-02-03T04:05:06,NA,unknown\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {AGE: int, SCORE: float, DATE: date, MOMENT: datetime}}}\noutput: {path: output.csv, columns: [ID, AGE, SCORE, DATE, MOMENT, EMPTY, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - {name: SCORE, type: float, derivation: SRC.SCORE}\n  - {name: DATE, type: date, derivation: SRC.DATE}\n  - {name: MOMENT, type: datetime, derivation: SRC.MOMENT}\n  - {name: EMPTY, type: str, derivation: SRC.EMPTY}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [
+        ["ID", "AGE", "SCORE", "DATE", "MOMENT", "EMPTY", "TEXT"],
+        ["007", 42, 1.5, "2025-01-02", "2025-01-02T03:04:00", null, null],
+        ["008", null, null, "2025-02-03", "2025-02-03T04:05:06", "NA", "unknown"]
+      ]
+    },
+    {
+      "case": "a_typed_csv_with_a_header_alone_reads_no_rows",
+      "operation": "build",
+      "input": {"files": {"input.csv": "ID,AGE\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {AGE: int}}}\noutput: {path: output.csv, columns: [ID, AGE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [["ID", "AGE"]]
+    },
+    {
+      "case": "a_quoted_empty_typed_field_reads_as_missing",
+      "operation": "build",
+      "input": {"files": {"input.csv": "AGE\n\"\"\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ROW]\ninput: {SRC: {path: input.csv, types: {AGE: int}, ordinal: ROW}}\noutput: {path: output.csv, columns: [ROW, AGE]}\ncolumns:\n  - {name: ROW, type: int, derivation: SRC.ROW}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [
+        ["ROW", "AGE"],
+        [1, null]
+      ]
+    },
+    {
+      "case": "missing_looking_text_is_never_inferred_as_missing",
+      "operation": "build",
+      "input": {"files": {"input.csv": "VALUE\nNA\nNULL\n.\nunknown\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [VALUE]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [VALUE]}\ncolumns:\n  - {name: VALUE, type: str, derivation: SRC.VALUE}\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [
+        ["VALUE"],
+        ["NA"],
+        ["NULL"],
+        ["."],
+        ["unknown"]
+      ]
+    }
+  ]
+}

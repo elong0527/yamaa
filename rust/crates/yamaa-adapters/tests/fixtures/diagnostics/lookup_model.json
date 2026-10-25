@@ -1,5 +1,5 @@
 {
-  "about": "One lookup model (LOOKUP-25): an implicit join, a named intermediate and a qualified aggregate match their keys and range (LOOKUP-9), narrow the matched records by their filter (LOOKUP-8) and select or reduce the candidates in stored record order (LOOKUP-10), a named intermediate by distance too (LOOKUP-26), and a row template's lookup reads only its own driver's record and the values available before column derivation (LOOKUP-2). Moved from execution_lookup_model.rs. A test that saved the artifact is a save case with its bytes, and the handler counts it read are the report's handler rows at SPEC_PATH and COUNT: every path COLUMN-14 registers for the specification, a source binding's or a named intermediate read's multiple_matches before its absent. Each count is its test's, except the absent of a_range_with_a_filter_and_a_selection_keeps_the_four_steps, derived: no window holds S-1's event before every window, and the windows hold no S-2 record, so three events find none. A test that read the first issue of a failed or refused run is a build case comparing the fields it compared: a complete list where the input carries one defect and so one issue, and among where it carries more: three events without a period, the same per-value key in an intermediate no row reads, a filter that names the unavailable field twice, and a nearest source the relation lacks, whose selection then binds nothing, so the read of its lookup is unknown too. A test that asserted check and the run report the same issues, and compared their phase, condition, spec paths and context, is a case of both operations at those fields; where the run then saved, it is a checks_clean case beside the save case. A home row has no clinic record. Day 12 falls in LATE only, and day 99 in no window. S-1's first ECG lies an hour from a sample before it and one after it, and the earlier is read; S-2's sample without a time is never read, and of its two samples at one time the one stored first is. From a reference on 1 March 2025, samples 12 and 8 days after it and 9 days before it are each one whole week away. From the 8 January target, the visits 7, 1 and 12 days away give the second.",
+  "about": "One lookup model (LOOKUP-25): an implicit join, a named intermediate and a qualified aggregate match their keys and range (LOOKUP-9), narrow the matched records by their filter (LOOKUP-8) and select or reduce the candidates in stored record order (LOOKUP-10), a named intermediate by distance too (LOOKUP-26), and a row template's lookup reads only its own driver's record and the values available before column derivation (LOOKUP-2). Moved from execution_lookup_model.rs. A test that saved the artifact is a save case with its bytes, and the handler counts it read are the report's handler rows at SPEC_PATH and COUNT: every path COLUMN-14 registers for the specification, a source binding's or a named intermediate read's multiple_matches before its absent. Each count is its test's, except the absent of a_range_with_a_filter_and_a_selection_keeps_the_four_steps, derived: no window holds S-1's event before every window, and the windows hold no S-2 record, so three events find none. A test that read the first issue of a failed or refused run is a build case comparing the fields it compared: a complete list where the input carries one defect and so one issue, and among where it carries more: three events without a period, the same per-value key in an intermediate no row reads, a filter that names the unavailable field twice, and a nearest source the relation lacks, whose selection then binds nothing, so the read of its lookup is unknown too. A test that asserted check and the run report the same issues, and compared their phase, condition, spec paths and context, is a case of both operations at those fields; where the run then saved, it is a checks_clean case beside the save case. A home row has no clinic record. Day 12 falls in LATE only, and day 99 in no window. S-1's first ECG lies an hour from a sample before it and one after it, and the earlier is read; S-2's sample without a time is never read, and of its two samples at one time the one stored first is. From a reference on 1 March 2025, samples 12 and 8 days after it and 9 days before it are each one whole week away. From the 8 January target, the visits 7, 1 and 12 days away give the second. Moved from execution_lookup_read_contexts.rs: a named intermediate reads the current row only through values that every context reading it holds (LOOKUP-2, LOOKUP-5, LOOKUP-7, LOOKUP-9, LOOKUP-15, ROW-5), over the documents context_source, context_donor and context_windows, whose two windows share ID 1. Each run that file's tests made is a save case. A run its test took as refused, whether preparation refused it or its built result held issues, states its complete rows at phase, condition, rule, spec paths and context, and that nothing was saved; a run that built states the bytes it saved. Moved from execution_implicit_join_absence.rs: a read through an implicit join, or of a named intermediate, that finds no record answers or fails as LOOKUP-24 says, and is counted under COLUMN-14 (LOOKUP-14). absence_adsl holds S-1 alone, so S-2's event finds no subject-level record. A test that read the run's handler counts is a save case stating the report's handler rows. Where its test compared every count, the rows are those. Where it found some counts among the others (every_value_read_counts_its_missing_record_and_a_predicate_read_does_not, a_declared_absent_answers_before_the_input_requirement and a_row_template_counts_an_operand_read_of_an_implicit_join), the rows are the complete ledger derived from COLUMN-14, with each count the test's own: every path the specification registers, in registration order, an operation's missing before the absent of the read it makes, and no path for a read made while a flag's condition is evaluated. A test that read the run's first issue is a build case stating it as the prefix, at the fields it compared.",
   "documents": {
     "ae": "STUDYID,USUBJID,AESEQ,ASTDT\nS,S-1,1,2025-01-05\nS,S-1,2,2025-02-01\nS,S-1,3,2025-02-20\nS,S-1,4,2024-12-01\nS,S-2,1,\nS,S-2,2,2025-03-10\n",
     "periods": "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\nS,S-1,1,2025-01-01,2025-01-31\nS,S-1,2,2025-02-01,2025-02-28\nS,S-2,1,2025-03-01,\n",
@@ -24,7 +24,19 @@
     "dosed_periods": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, ASEQ]\ninput:\n  EX: {path: ex.csv, types: {EXSEQ: int, EXDOSE: int, EXSTDT: date}}\n  PERIODS: {path: periods.csv, key: [STUDYID, USUBJID], types: {APERIOD: int, APERSDT: date, APEREDT: date}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, ASEQ, APERIOD]}\nintermediates:\n  - id: DOSED\n    dataset: EX\n    filter: \"EX.EXDOSE > 0\"\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: ASEQ, type: int}\n  - name: APERIOD\n    type: int\nrows:\n  - id: dosed\n    dataset: DOSED\n    derivations:\n      STUDYID: DOSED.STUDYID\n      USUBJID: DOSED.USUBJID\n      ASEQ: DOSED.EXSEQ\n      APERIOD: {source: {variable: PERIODS.APERIOD, between: {value: DOSED.EXSTDT, lower: APERSDT, upper: APEREDT}}}\n",
     "nearest_ecgs": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, EGSEQ]\ninput:\n  EG: {path: eg.csv, types: {EGSEQ: int, EGDTC: datetime}}\n  PC: {path: pc.csv, types: {PCSEQ: int, PCDTM: datetime}}\nbase: EG\noutput: {path: out.csv, columns: [STUDYID, USUBJID, EGSEQ, PCSEQ]}\nintermediates:\n  - id: NEAR\n    dataset: PC\n    key: [STUDYID, USUBJID]\n    nearest: {source: PCDTM, to: EG.EGDTC, unit: hour}\ncolumns:\n  - {name: STUDYID, type: str, derivation: EG.STUDYID}\n  - {name: USUBJID, type: str, derivation: EG.USUBJID}\n  - {name: EGSEQ, type: int, derivation: EG.EGSEQ}\n  - {name: ADTM, type: datetime, derivation: EG.EGDTC}\n  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n",
     "nearest_subjects": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: dm.csv\n  EG: {path: eg.csv, types: {EGSEQ: int, EGDTC: datetime}}\n  PC: {path: pc.csv, types: {PCSEQ: int, PCDTM: datetime}}\nbase: DM\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PCSEQ]}\nintermediates:\n  - id: NEAR\n    dataset: PC\n    key: [STUDYID, USUBJID]\n    nearest: {source: PCDTM, to: EG.EGDTC, unit: minute}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n",
-    "self_visits": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, VSDT: date}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, NEARSEQ]}\nintermediates:\n  - id: COVER\n    dataset: SELF\n    key: [STUDYID, USUBJID]\n    nearest: {source: ADT, to: TARGET, unit: day}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - {name: ADT, type: date}\n  - {name: TARGET, type: date}\n  - {name: NEARSEQ, type: int}\nrows:\n  - id: collected\n    dataset: VS\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      SEQ: VS.VSSEQ\n      ADT: VS.VSDT\n      TARGET: \"NULL\"\n      NEARSEQ: \"NULL\"\n  - id: expected\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      SEQ: 99\n      ADT: \"NULL\"\n      TARGET: \"DATE '2025-01-08'\"\n      NEARSEQ: COVER.SEQ\n"
+    "self_visits": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, VSDT: date}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, NEARSEQ]}\nintermediates:\n  - id: COVER\n    dataset: SELF\n    key: [STUDYID, USUBJID]\n    nearest: {source: ADT, to: TARGET, unit: day}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - {name: ADT, type: date}\n  - {name: TARGET, type: date}\n  - {name: NEARSEQ, type: int}\nrows:\n  - id: collected\n    dataset: VS\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      SEQ: VS.VSSEQ\n      ADT: VS.VSDT\n      TARGET: \"NULL\"\n      NEARSEQ: \"NULL\"\n  - id: expected\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      SEQ: 99\n      ADT: \"NULL\"\n      TARGET: \"DATE '2025-01-08'\"\n      NEARSEQ: COVER.SEQ\n",
+    "context_source": "ID,GRP,VAL\n1,A,3\n2,A,4\n3,B,5\n",
+    "context_donor": "KEY,X\n1,10\n2,20\n3,30\n",
+    "context_windows": "ID,LO,HI,NAME\n1,1,4,LOW\n1,5,9,HIGH\n",
+    "grouped_lookups": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [GRP]\ninput:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  DONOR: {path: donor.csv, types: {KEY: int, X: int}}\n  WIN: {path: win.csv, types: {ID: int, LO: int, HI: int}}\noutput: {path: out.csv, columns: [GRP, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {KEY: SRC.ID}\ncolumns:\n  - {name: GRP, type: str}\n  - {name: VALUE, type: str}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.GRP]\n    derivations:\n      GRP: SRC.GRP\n      VALUE: P.X\n",
+    "template_lookups": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, ORIGIN]\ninput:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  DONOR: {path: donor.csv, types: {KEY: int, X: int}}\n  WIN: {path: win.csv, types: {ID: int, LO: int, HI: int}}\noutput: {path: out.csv, columns: [ID, ORIGIN, VALUE]}\nintermediates:\n  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\ncolumns:\n  - {name: ID, type: int}\n  - {name: ORIGIN, type: str}\n  - {name: VALUE, type: str}\nrows:\n  - id: source\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      ORIGIN: \"'SOURCE'\"\n      VALUE: W.NAME\n\n  - id: donor\n    dataset: DONOR\n    derivations:\n      ID: DONOR.KEY\n      ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n",
+    "verified_lookup": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  DONOR: {path: donor.csv, types: {KEY: int, X: int}}\n  WIN: {path: win.csv, types: {ID: int, LO: int, HI: int}}\nbase: SRC\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {KEY: ID}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\nverifications:\n  - assert:\n      id: positive\n      require: 'P.X > 0'\n",
+    "lookup_read_twice": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, ORIGIN]\ninput:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  DONOR: {path: donor.csv, types: {KEY: int, X: int}}\n  WIN: {path: win.csv, types: {ID: int, LO: int, HI: int}}\noutput: {path: out.csv, columns: [ID, ORIGIN, VALUE]}\nintermediates:\n  - id: P\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.HI < SRC.VAL'\n    order_by: [WIN.LO]\n    keep: first\ncolumns:\n  - {name: ID, type: int}\n  - {name: ORIGIN, type: str}\n  - {name: VALUE, type: str, derivation: P.NAME}\nrows:\n  - id: first\n    dataset: SRC\n    derivations: {ID: SRC.ID, ORIGIN: \"'A'\"}\n\n  - id: second\n    dataset: SRC\n    derivations: {ID: SRC.ID, ORIGIN: \"'B'\"}\n",
+    "absence_ae": "STUDYID,USUBJID,AESEQ,AETERM\nS,S-1,1,HEADACHE\nS,S-2,1,NAUSEA\n",
+    "absence_adsl": "STUDYID,USUBJID,TRTSDT,ARM,AGE,SAFFL\nS,S-1,2025-01-10,drug a,40,Y\n",
+    "absence_reads": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: ae.csv\n  ADSL: {path: adsl.csv, require_match: true}\nbase: AE\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ]\ncolumns:\n  - {name: STUDYID, type: str, derivation: AE.STUDYID}\n  - {name: USUBJID, type: str, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n",
+    "named_absence": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: ae.csv\n  ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], types: {AGE: int}}\nbase: AE\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, TRTSDT, ARM, ARMD, AGE1]\nintermediates:\n  - {id: SAFETY, dataset: ADSL, key: [STUDYID, USUBJID], filter: \"ADSL.SAFFL = 'Y'\"}\n  - {id: NAMED, dataset: ADSL, key: [STUDYID, USUBJID], filter: \"ADSL.SAFFL = 'Y'\", absent: NONE}\ncolumns:\n  - {name: STUDYID, type: str, derivation: AE.STUDYID}\n  - {name: USUBJID, type: str, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: TRTSDT, type: str, derivation: ADSL.TRTSDT}\n  - {name: ARM, type: str, derivation: SAFETY.ARM}\n  - {name: ARMD, type: str, derivation: NAMED.ARM}\n  - {name: AGE1, type: int, derivation: \"SAFETY.AGE + 1\"}\n",
+    "template_absence": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: ae.csv\n  ADSL: {path: adsl.csv, key: [STUDYID, USUBJID]}\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, ARMU]\nrows:\n  - id: event\n    dataset: AE\n    derivations:\n      STUDYID: AE.STUDYID\n      USUBJID: AE.USUBJID\n      AESEQ: AE.AESEQ\n      ARMU: {str_case: {source: ADSL.ARM, to: upper}}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - {name: ARMU, type: str}\n"
   },
   "cases": [
     {
@@ -1105,6 +1117,456 @@
       "input": {"files": {"spec.yaml": {"base": "self_visits"}, "vs.csv": {"base": "visits"}}, "specification": "spec.yaml"},
       "issues": [],
       "saved": {"out.csv": "STUDYID,USUBJID,SEQ,NEARSEQ\nS,S-1,1,\nS,S-1,2,\nS,S-1,3,\nS,S-1,99,2\n"}
+    },
+    {
+      "case": "a_grouped_template_s_match_value_outside_its_groups_is_ungrouped",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "grouped_lookups"}, "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["intermediates.P.key"], "context": {"identifier": "SRC.ID", "intermediate": "P", "row": "grouped", "dataset": "SRC"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_grouped_template_s_range_value_outside_its_groups_is_ungrouped",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "grouped_lookups", "edits": [
+            {"from": "  - id: P\n    dataset: DONOR\n    key: {KEY: SRC.ID}\n", "to": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    between: {value: SRC.VAL, lower: LO, upper: HI}\n"},
+            {"from": "VALUE: P.X", "to": "VALUE: W.NAME"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["intermediates.W.between.value"], "context": {"identifier": "SRC.VAL", "intermediate": "W", "row": "grouped", "dataset": "SRC"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_grouped_template_s_lookup_derivation_outside_its_groups_is_ungrouped",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "grouped_lookups", "edits": [
+            {"from": "  - id: P\n    dataset: DONOR\n    key: {KEY: SRC.ID}\n", "to": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\n"},
+            {"from": "VALUE: P.X", "to": "VALUE: W.NAME"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["intermediates.W.derivations.DAY.source"], "context": {"identifier": "SRC.VAL", "intermediate": "W", "row": "grouped", "dataset": "SRC"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_grouped_template_s_correlated_filter_field_outside_its_groups_is_unknown",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "grouped_lookups", "edits": [
+            {"from": "  - id: P\n    dataset: DONOR\n    key: {KEY: SRC.ID}\n", "to": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.HI < SRC.VAL'\n    order_by: [WIN.LO]\n    keep: first\n"},
+            {"from": "VALUE: P.X", "to": "VALUE: W.NAME"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.W.filter"], "context": {"identifier": "SRC.VAL", "intermediate": "W"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_grouped_template_matches_a_lookup_on_its_group_key",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "grouped_lookups", "edits": [
+            {"from": "keys: [GRP]", "to": "keys: [ID]"},
+            {"from": "columns: [GRP, VALUE]", "to": "columns: [ID, VALUE]"},
+            {"from": "{name: GRP, type: str}", "to": "{name: ID, type: int}"},
+            {"from": "group_by: [SRC.GRP]", "to": "group_by: [SRC.ID]"},
+            {"from": "GRP: SRC.GRP", "to": "ID: SRC.ID"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n1,10\n2,20\n3,30\n"}
+    },
+    {
+      "case": "a_grouped_template_ranges_a_lookup_on_a_value_its_row_derives",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "grouped_lookups", "edits": [
+            {"from": "  - id: P\n    dataset: DONOR\n    key: {KEY: SRC.ID}\n", "to": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    between: {value: TOP, lower: LO, upper: HI}\n"},
+            {"from": "  - {name: VALUE, type: str}\n", "to": "  - {name: TOP, type: int}\n  - {name: VALUE, type: str}\n"},
+            {"from": "      VALUE: P.X\n", "to": "      TOP: {aggregate: 'MAX(SRC.VAL)'}\n      VALUE: W.NAME\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "GRP,VALUE\nA,LOW\nB,HIGH\n"}
+    },
+    {
+      "case": "a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "template_lookups"}, "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.W.derivations.DAY.source"], "context": {"identifier": "SRC.VAL", "intermediate": "W"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_lookup_derivation_read_by_the_source_template_alone_reads_its_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_lookups", "edits": [
+            {"from": "ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'DONOR'\"\n      VALUE: \"'NONE'\"\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,VALUE\n1,SOURCE,LOW\n2,SOURCE,LOW\n3,SOURCE,HIGH\n1,DONOR,NONE\n2,DONOR,NONE\n3,DONOR,NONE\n"}
+    },
+    {
+      "case": "a_row_filter_s_lookup_filter_naming_another_template_s_driver_is_unknown",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_lookups", "edits": [
+            {"from": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\n", "to": "  - id: R\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.HI >= DONOR.X'\n    order_by: [WIN.LO]\n    keep: first\n"},
+            {"from": "    dataset: SRC\n    derivations:", "to": "    dataset: SRC\n    filter: 'R.NAME IS NOT NULL'\n    derivations:"},
+            {"from": "ORIGIN: \"'SOURCE'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'SOURCE'\"\n      VALUE: \"'NONE'\"\n"},
+            {"from": "ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'DONOR'\"\n      VALUE: \"'NONE'\"\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.R.filter"], "context": {"identifier": "DONOR.X", "intermediate": "R"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_row_filter_s_lookup_filter_compares_with_its_own_template_s_driver",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_lookups", "edits": [
+            {"from": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\n", "to": "  - id: R\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.HI < SRC.VAL'\n    order_by: [WIN.LO]\n    keep: first\n"},
+            {"from": "    dataset: SRC\n    derivations:", "to": "    dataset: SRC\n    filter: 'R.NAME IS NOT NULL'\n    derivations:"},
+            {"from": "ORIGIN: \"'SOURCE'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'SOURCE'\"\n      VALUE: R.NAME\n"},
+            {"from": "ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'DONOR'\"\n      VALUE: \"'NONE'\"\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,VALUE\n3,SOURCE,LOW\n1,DONOR,NONE\n2,DONOR,NONE\n3,DONOR,NONE\n"}
+    },
+    {
+      "case": "a_row_filter_s_lookup_range_value_naming_another_template_s_driver_is_unknown",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_lookups", "edits": [
+            {"from": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\n", "to": "  - id: R\n    dataset: WIN\n    key: {ID: 1}\n    between: {value: DONOR.X, lower: LO, upper: HI}\n"},
+            {"from": "    dataset: SRC\n    derivations:", "to": "    dataset: SRC\n    filter: 'R.NAME IS NOT NULL'\n    derivations:"},
+            {"from": "ORIGIN: \"'SOURCE'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'SOURCE'\"\n      VALUE: \"'NONE'\"\n"},
+            {"from": "ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'DONOR'\"\n      VALUE: \"'NONE'\"\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.R.between.value"], "context": {"identifier": "DONOR.X", "intermediate": "R"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_match_value_reading_the_source_record_is_unknown_to_the_donor_template",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_lookups", "edits": [
+            {"from": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\n", "to": "  - id: K\n    dataset: WIN\n    key: {ID: SRC.ID}\n    order_by: [WIN.LO]\n    keep: first\n"},
+            {"from": "ORIGIN: \"'SOURCE'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'SOURCE'\"\n      VALUE: K.NAME\n"},
+            {"from": "ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'DONOR'\"\n      VALUE: K.NAME\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.K.key"], "context": {"identifier": "SRC.ID", "intermediate": "K"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_match_value_read_by_the_source_template_alone_reads_its_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_lookups", "edits": [
+            {"from": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\n", "to": "  - id: K\n    dataset: WIN\n    key: {ID: SRC.ID}\n    order_by: [WIN.LO]\n    keep: first\n"},
+            {"from": "ORIGIN: \"'SOURCE'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'SOURCE'\"\n      VALUE: K.NAME\n"},
+            {"from": "ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'DONOR'\"\n      VALUE: \"'NONE'\"\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,VALUE\n1,SOURCE,LOW\n2,SOURCE,\n3,SOURCE,\n1,DONOR,NONE\n2,DONOR,NONE\n3,DONOR,NONE\n"}
+    },
+    {
+      "case": "a_match_value_outside_a_grouped_donor_template_s_groups_is_ungrouped",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_lookups", "edits": [
+            {"from": "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    derivations: {DAY: SRC.VAL}\n", "to": "  - id: K\n    dataset: WIN\n    key: {ID: DONOR.X}\n    order_by: [WIN.LO]\n    keep: first\n"},
+            {"from": "ORIGIN: \"'SOURCE'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'SOURCE'\"\n      VALUE: \"'NONE'\"\n"},
+            {"from": "ORIGIN: \"'DONOR'\"\n      VALUE: W.NAME\n", "to": "ORIGIN: \"'DONOR'\"\n      VALUE: K.NAME\n"},
+            {"from": "    dataset: DONOR\n", "to": "    dataset: DONOR\n    group_by: [DONOR.KEY]\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["intermediates.K.key"], "context": {"identifier": "DONOR.X", "intermediate": "K", "row": "donor", "dataset": "DONOR"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_verification_s_lookup_match_value_of_no_completed_row_s_input_is_unknown",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "verified_lookup", "edits": [
+            {"from": "    key: {KEY: ID}\n", "to": "    key: {KEY: WIN.ID}\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.P.key"], "context": {"identifier": "WIN.ID", "intermediate": "P"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_verification_s_lookup_range_value_of_no_completed_row_s_input_is_unknown",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "verified_lookup", "edits": [
+            {"from": "    key: {KEY: ID}\n", "to": "    key: {KEY: ID}\n    between: {value: WIN.LO, lower: X, upper: X}\n"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "WIN.LO", "intermediate": "P"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_verification_reads_a_lookup_matched_on_its_completed_row",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "verified_lookup"}, "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID\n1\n2\n3\n"}
+    },
+    {
+      "case": "a_lookup_read_by_several_row_templates_is_reported_once",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "lookup_read_twice", "edits": [
+            {"from": "    dataset: SRC\n    derivations: {ID: SRC.ID, ORIGIN: \"'A'\"}", "to": "    dataset: DONOR\n    derivations: {ID: DONOR.KEY, ORIGIN: \"'A'\"}"},
+            {"from": "    dataset: SRC\n    derivations: {ID: SRC.ID, ORIGIN: \"'B'\"}", "to": "    dataset: DONOR\n    derivations: {ID: DONOR.KEY, ORIGIN: \"'B'\"}"}
+          ]},
+          "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.P.filter"], "context": {"identifier": "SRC.VAL", "intermediate": "P"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_lookup_read_by_several_row_templates_of_its_driver_reads_for_each",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "lookup_read_twice"}, "source.csv": {"base": "context_source"}, "donor.csv": {"base": "context_donor"}, "win.csv": {"base": "context_windows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,VALUE\n1,A,\n2,A,\n3,A,LOW\n1,B,\n2,B,\n3,B,LOW\n"}
+    },
+    {
+      "case": "every_value_read_counts_its_missing_record_and_a_predicate_read_does_not",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "absence_reads", "edits": [
+            {"from": "ADSL: {path: adsl.csv, require_match: true}", "to": "ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], types: {AGE: int}}"},
+            {"from": "columns: [STUDYID, USUBJID, AESEQ]", "to": "columns: [STUDYID, USUBJID, AESEQ, TRTSDT, ARMU, SAFE]"},
+            {"from": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n", "to": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: TRTSDT, type: str, derivation: ADSL.TRTSDT}\n  - name: ARMU\n    type: str\n    derivation: {str_case: {source: ADSL.ARM, to: upper}}\n  - name: SAFE\n    type: str\n    derivation: {flag: \"ADSL.SAFFL = 'Y'\"}\n"}
+          ]},
+          "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.TRTSDT.derivation.source.absent", 1], ["columns.ARMU.derivation.str_case.missing", 1], ["columns.ARMU.derivation.str_case.source.absent", 1], ["columns.SAFE.derivation.flag.missing", 1]]},
+      "saved": {"adae.csv": "STUDYID,USUBJID,AESEQ,TRTSDT,ARMU,SAFE\nS,S-1,1,2025-01-10,DRUG A,Y\nS,S-2,1,,,\n"}
+    },
+    {
+      "case": "an_input_requiring_a_match_fails_an_operand_read_at_its_path",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "absence_reads", "edits": [
+            {"from": "ADSL: {path: adsl.csv, require_match: true}", "to": "ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], types: {AGE: int}, require_match: true}"},
+            {"from": "columns: [STUDYID, USUBJID, AESEQ]", "to": "columns: [STUDYID, USUBJID, AESEQ, ARMU]"},
+            {"from": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n", "to": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: ARMU, type: str, derivation: {str_case: {source: ADSL.ARM, to: upper}}}\n"}
+          ]},
+          "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "prefix": true,
+      "issues": [
+        {"condition": "unmatched_key", "rule": "LOOKUP-24", "spec_paths": ["columns.ARMU.derivation.str_case.source"]}
+      ]
+    },
+    {
+      "case": "an_input_requiring_a_match_fails_a_predicate_read_at_its_path",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "absence_reads", "edits": [
+            {"from": "ADSL: {path: adsl.csv, require_match: true}", "to": "ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], types: {AGE: int}, require_match: true}"},
+            {"from": "columns: [STUDYID, USUBJID, AESEQ]", "to": "columns: [STUDYID, USUBJID, AESEQ, SAFE]"},
+            {"from": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n", "to": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: SAFE, type: str, derivation: {flag: \"ADSL.SAFFL = 'Y'\"}}\n"}
+          ]},
+          "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "prefix": true,
+      "issues": [
+        {"condition": "unmatched_key", "rule": "LOOKUP-24", "spec_paths": ["columns.SAFE.derivation.flag.condition"]}
+      ]
+    },
+    {
+      "case": "a_declared_absent_answers_before_the_input_requirement",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "absence_reads", "edits": [
+            {"from": "ADSL: {path: adsl.csv, require_match: true}", "to": "ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], require_match: true}"},
+            {"from": "columns: [STUDYID, USUBJID, AESEQ]", "to": "columns: [STUDYID, USUBJID, AESEQ, TRTSDT]"},
+            {"from": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n", "to": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - name: TRTSDT\n    type: str\n    derivation:\n      source: {variable: ADSL.TRTSDT, absent: NONE}\n"}
+          ]},
+          "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.TRTSDT.derivation.source.absent", 1]]},
+      "saved": {"adae.csv": "STUDYID,USUBJID,AESEQ,TRTSDT\nS,S-1,1,2025-01-10\nS,S-2,1,NONE\n"}
+    },
+    {
+      "case": "an_input_requirement_registers_no_count_and_allows_an_unread_input",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "absence_reads"}, "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"]]},
+      "saved": {"adae.csv": "STUDYID,USUBJID,AESEQ\nS,S-1,1\nS,S-2,1\n"}
+    },
+    {
+      "case": "an_input_requirement_leaves_a_named_intermediate_its_own_policy",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "absence_reads", "edits": [
+            {"from": "  columns: [STUDYID, USUBJID, AESEQ]\n", "to": "  columns: [STUDYID, USUBJID, AESEQ, ARM]\nintermediates:\n  - id: SUBJECT\n    dataset: ADSL\n    key: [STUDYID, USUBJID]\n    filter: \"ADSL.SAFFL = 'Y'\"\n"},
+            {"from": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n", "to": "  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: ARM, type: str, derivation: SUBJECT.ARM}\n"}
+          ]},
+          "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.ARM.derivation.source.absent", 1]]},
+      "saved": {"adae.csv": "STUDYID,USUBJID,AESEQ,ARM\nS,S-1,1,drug a\nS,S-2,1,\n"}
+    },
+    {
+      "case": "a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "named_absence"}, "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "NAME", "COUNT"], ["columns.TRTSDT.derivation.source.absent", "absent", 1], ["columns.ARM.derivation.source.absent", "absent", 1], ["columns.ARMD.derivation.source.absent", "absent", 1], ["columns.AGE1.derivation.absent", "absent", 1]]},
+      "saved": {"adae.csv": "STUDYID,USUBJID,AESEQ,TRTSDT,ARM,ARMD,AGE1\nS,S-1,1,2025-01-10,drug a,drug a,41\nS,S-2,1,,,NONE,\n"}
+    },
+    {
+      "case": "a_row_template_counts_an_operand_read_of_an_implicit_join",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "template_absence"}, "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["rows.event.derivations.ARMU.str_case.missing", 1], ["rows.event.derivations.ARMU.str_case.source.absent", 1]]},
+      "saved": {"adae.csv": "STUDYID,USUBJID,AESEQ,ARMU\nS,S-1,1,DRUG A\nS,S-2,1,\n"}
+    },
+    {
+      "case": "a_row_template_fails_a_required_operand_read_at_its_path",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_absence", "edits": [
+            {"from": "ADSL: {path: adsl.csv, key: [STUDYID, USUBJID]}", "to": "ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], require_match: true}"}
+          ]},
+          "ae.csv": {"base": "absence_ae"}, "adsl.csv": {"base": "absence_adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "prefix": true,
+      "issues": [
+        {"condition": "unmatched_key", "rule": "LOOKUP-24", "spec_paths": ["rows.event.derivations.ARMU.str_case.source"]}
+      ]
     }
   ]
 }

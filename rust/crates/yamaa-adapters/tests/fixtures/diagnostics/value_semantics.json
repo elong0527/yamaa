@@ -1,0 +1,536 @@
+{
+  "about": "How a run treats values, moved from execution_value_semantics.rs at 144fc5559, whose tests saved out.csv and compared its bytes, or compared the issues of a run that kept anything from being saved at their phase, condition, rule, spec paths and context. An output.order_by term sorts each type's present values in its direction and places missing values by nulls, first under asc and last under desc when nulls is omitted (VALUE-22); rows equal on the term keep their construction order (VALUE-23), whatever collected precision or zero sign tells them apart. Each order case's out.csv is the test's own saved record of each ID, in the order VALUE-22 and VALUE-23 give: IDs 3 and 4 tie low and 1 is high in every column, and 2 and 5 are missing, so asc gives 3, 4, 1 and desc 1, 3, 4, with 2 and 5 before them or after them. A unique check counts a missing value as a value (CHECK-10), and the run report's one check row counts the one combination it evaluated (CHECK-23, CHECK-24); a conversion failure reports the keys its row has completed (VALUE-3, COLUMN-8); a text literal in a float column is no finding of check, and fails conversion only in a row that holds it (VALUE-24); a key reads one value by exact equality and keeps its first representation (COLUMN-2, VALUE-19); equal extremes keep the first present operand (EXPR-10); and SUM adds a donor's matched records in stored order, which MEAN divides by their count (FORMULA-19). The four TOTAL conversion refusals compare their context whole: Only the ungrouped row-template conversion precedes ID and has no keys. Both column conversions and the grouped row-template conversion have keys [{ID: a}], derived from the authored input: SPEC-6 grouped-driver default promotion selects ID before VALUE in declaration order (specification/phases.rs::grouped_driver_reads and row_phases), while ordinary column derivation also completes ID before VALUE (COLUMN-8, VALUE-3). No engine output supplied these values.",
+  "documents": {
+    "ordered": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, I: int, F: float}}}\noutput: {path: out.csv, columns: [ID, S, I, F, D, T], order_by: [S]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: S, type: str, derivation: SRC.S}\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: F, type: float, derivation: SRC.F}\n  - name: D\n    type: date\n    derivation:\n      impute: {type: date, source: SRC.D, month: 1, day: first}\n  - name: T\n    type: datetime\n    derivation:\n      impute: {type: datetime, source: SRC.T, month: 1, day: first, time: first}\n",
+    "ordered_input": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n3,A\u0000z,9007199254740992,-0,2020,2020-01-01\n4,A\u0000z,9007199254740992,0,2020-01,2020-01-01T00:00:00\n5,,,,,\n",
+    "literal_column": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: \"'TOTAL'\"}\nrows:\n  - {id: values}\n",
+    "literal_grouped_column": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: \"'TOTAL'\"}\nrows:\n  - {id: values, group_by: [SRC.ID]}\n",
+    "literal_row_template": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float}\nrows:\n  - {id: values, derivations: {VALUE: \"'TOTAL'\"}}\n",
+    "literal_grouped_row_template": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float}\nrows:\n  - {id: values, group_by: [SRC.ID], derivations: {VALUE: \"'TOTAL'\"}}\n",
+    "collected": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, I: int, F: float}}}\noutput: {path: out.csv, columns: [ID, F, S]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: F, type: float, derivation: SRC.F}\n  - {name: S, type: str, derivation: SRC.S}\n",
+    "collected_input": "ID,I,F,S\n1,9007199254740992,-0,\n1,9007199254740993,0,\n2,1,0,\n2,1,-0,\n",
+    "sum": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int}}\n  S: {path: donor.csv, key: [ID], types: {ID: int, V: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, SUM, MEAN]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SUM, type: float, derivation: {aggregate: 'SUM(S.V)'}}\n  - {name: MEAN, type: float, derivation: {aggregate: 'MEAN(S.V)'}}\n"
+  },
+  "cases": [
+    {
+      "case": "output_order_sorts_text_ascending_and_places_missing_first_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered"}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_text_ascending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: S, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_text_ascending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: S, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_text_descending_and_places_missing_last_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: S, direction: desc}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_text_descending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: S, direction: desc, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_text_descending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: S, direction: desc, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_integers_ascending_and_places_missing_first_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [I]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_integers_ascending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: I, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_integers_ascending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: I, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_integers_descending_and_places_missing_last_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: I, direction: desc}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_integers_descending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: I, direction: desc, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_integers_descending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: I, direction: desc, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_floats_ascending_and_places_missing_first_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [F]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_floats_ascending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: F, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_floats_ascending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: F, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_floats_descending_and_places_missing_last_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: F, direction: desc}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_floats_descending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: F, direction: desc, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_floats_descending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: F, direction: desc, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_dates_ascending_and_places_missing_first_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [D]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_dates_ascending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: D, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_dates_ascending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: D, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_dates_descending_and_places_missing_last_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: D, direction: desc}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_dates_descending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: D, direction: desc, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_dates_descending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: D, direction: desc, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_datetimes_ascending_and_places_missing_first_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [T]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_datetimes_ascending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: T, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_datetimes_ascending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: T, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_datetimes_descending_and_places_missing_last_without_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: T, direction: desc}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "output_order_sorts_datetimes_descending_and_places_missing_first_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: T, direction: desc, nulls: first}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+    },
+    {
+      "case": "output_order_sorts_datetimes_descending_and_places_missing_last_by_nulls",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "order_by: [S]", "to": "order_by: [{variable: T, direction: desc, nulls: last}]"}]}, "input.csv": {"base": "ordered_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+    },
+    {
+      "case": "unique_counts_missing_values_as_one_repeated_combination",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, report: report.csv, columns: [ID, X]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: X, type: int, derivation: SRC.X}\nverifications:\n  - unique: [X]\n", "input.csv": "ID,X\n1,\n2,\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "unique_failed", "rule": "CHECK-10", "spec_paths": ["verifications[0].unique"], "context": {"columns": ["X"], "failure_count": 1, "keys": [{"ID": 1}, {"ID": 2}]}}],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL"],
+          ["out.csv", "verifications[0].unique", "unique", null, null, "CHECK-10", "error", "violated", "unique_failed", 1, 1]
+        ]
+      }
+    },
+    {
+      "case": "a_conversion_failure_in_a_column_reports_the_missing_key_its_row_completed",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_column", "edits": [{"from": "'TOTAL'", "to": "'x'"}]}, "input.csv": "ID,N\n,1\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.VALUE"], "context": {"from": "str", "to": "float", "value": "x", "keys": [{"ID": null}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_conversion_failure_in_a_grouped_column_reports_the_missing_key_its_row_completed",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_grouped_column", "edits": [{"from": "'TOTAL'", "to": "'x'"}]}, "input.csv": "ID,N\n,1\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.VALUE"], "context": {"from": "str", "to": "float", "value": "x", "keys": [{"ID": null}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_conversion_failure_in_a_row_template_reports_no_key_before_its_row_derives_one",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_row_template", "edits": [{"from": "'TOTAL'", "to": "'x'"}]}, "input.csv": "ID,N\n,1\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.VALUE"], "context": {"from": "str", "to": "float", "value": "x"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_text_literal_in_a_float_row_template_is_no_check_finding",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_row_template"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_text_literal_in_a_float_row_template_saves_the_header_alone_over_no_records",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_row_template"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n"}
+    },
+    {
+      "case": "a_text_literal_in_a_float_row_template_fails_conversion_in_the_row_that_holds_it",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_row_template"}, "input.csv": "ID\na\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.VALUE"], "context": {"from": "str", "to": "float", "value": "TOTAL"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_text_literal_in_a_float_column_is_no_check_finding",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_column"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_text_literal_in_a_float_column_saves_the_header_alone_over_no_records",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_column"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n"}
+    },
+    {
+      "case": "a_text_literal_in_a_float_column_fails_conversion_in_the_row_that_holds_it",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_column"}, "input.csv": "ID\na\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.VALUE"], "context": {"from": "str", "to": "float", "value": "TOTAL", "keys": [{"ID": "a"}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_text_literal_in_a_float_grouped_row_template_is_no_check_finding",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_grouped_row_template"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_text_literal_in_a_float_grouped_row_template_saves_the_header_alone_over_no_records",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_grouped_row_template"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n"}
+    },
+    {
+      "case": "a_text_literal_in_a_float_grouped_row_template_fails_conversion_in_the_row_that_holds_it",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_grouped_row_template"}, "input.csv": "ID\na\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.VALUE"], "context": {"from": "str", "to": "float", "value": "TOTAL", "keys": [{"ID": "a"}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_text_literal_in_a_float_grouped_column_is_no_check_finding",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_grouped_column"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_text_literal_in_a_float_grouped_column_saves_the_header_alone_over_no_records",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_grouped_column"}, "input.csv": "ID\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n"}
+    },
+    {
+      "case": "a_text_literal_in_a_float_grouped_column_fails_conversion_in_the_row_that_holds_it",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "literal_grouped_column"}, "input.csv": "ID\na\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.VALUE"], "context": {"from": "str", "to": "float", "value": "TOTAL", "keys": [{"ID": "a"}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_key_reads_one_zero_by_exact_equality_and_keeps_its_first_representation",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "collected"}, "input.csv": {"base": "collected_input"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,F,S\n1,-0,\n2,0,\n"}
+    },
+    {
+      "case": "a_key_reads_integers_that_only_exact_equality_tells_apart_as_two_values",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "collected", "edits": [{"from": "columns: [ID, F, S]", "to": "columns: [ID, I]"}]}, "input.csv": {"base": "collected_input"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2", "spec_paths": ["columns.I.derivation.source"], "context": {"identifier": "SRC.I", "value_count": 2, "keys": [{"ID": 1}]}}],
+      "saved": {}
+    },
+    {
+      "case": "equal_extremes_take_a_zeros_sign_from_the_first_present_operand",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float, M: float}}}\noutput: {path: out.csv, columns: [ID, G1, G2, L1, L2]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: G1, type: float, derivation: {greatest: {sources: [SRC.M, SRC.I, SRC.F]}}}\n  - {name: G2, type: float, derivation: {greatest: {sources: [SRC.M, SRC.F, SRC.I]}}}\n  - {name: L1, type: float, derivation: {least: {sources: [SRC.M, SRC.I, SRC.F]}}}\n  - {name: L2, type: float, derivation: {least: {sources: [SRC.M, SRC.F, SRC.I]}}}\n", "input.csv": "ID,I,F,M\na,0,-0,\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,G1,G2,L1,L2\na,0,-0,0,-0\n"}
+    },
+    {
+      "case": "sum_in_stored_order_loses_a_one_added_before_the_sum_cancels",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "sum"}, "input.csv": "ID\n1\n", "donor.csv": "ID,V\n1,10000000000000000\n2,99\n1,1\n1,\n1,-10000000000000000\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SUM,MEAN\n1,0,0\n"}
+    },
+    {
+      "case": "sum_in_stored_order_keeps_a_one_added_after_the_sum_cancels_and_mean_divides_that_sum",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "sum"}, "input.csv": "ID\n1\n", "donor.csv": "ID,V\n1,10000000000000000\n2,99\n1,-10000000000000000\n1,\n1,1\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SUM,MEAN\n1,1,0.3333333333333333\n"}
+    }
+  ]
+}

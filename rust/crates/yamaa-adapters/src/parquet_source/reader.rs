@@ -1,16 +1,16 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
+use super::columns::{self, Column};
+use super::footer::Footer;
 use super::{
-    compact, compression, framing, metadata, payload, physical, profile, row_groups, schema,
+    compact, compression, conversion, footer, framing, metadata, payload, profile, schema,
 };
-use crate::storage_api::contain_decode;
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
     TimestampMicrosecondArray,
 };
 use arrow_schema::DataType;
-use parquet::file::metadata::ParquetMetaData;
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 use yamaa_core::{table::TableSchema, value::ColumnType};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +73,42 @@ pub(super) struct Decoded {
     pub batches: Vec<RecordBatch>,
 }
 
+/// What the reader decodes a file's footer, Arrow schema and stored columns
+/// with: the native decoders ([`NATIVE`]), and in the differential harness
+/// parquet 55's, which the reader read with until #3878.
+#[derive(Clone, Copy)]
+pub(super) struct Decoders {
+    /// The footer that framing admitted.
+    pub footer: fn(&framing::Framing<'_>) -> Result<Footer, Error>,
+    /// The footer's Arrow schema, with the file's embedded schema as hints.
+    pub arrow: fn(
+        &framing::Framing<'_>,
+        &Footer,
+        Option<&metadata::Hint>,
+    ) -> Result<arrow_schema::Schema, Error>,
+    /// The stored columns of a run of row groups (`columns::read`).
+    pub columns: ReadColumns,
+}
+
+/// Read the kept leaves of row groups `groups` of the held file, from its
+/// admitted pages, to their stored columns.
+pub(super) type ReadColumns = fn(
+    &[u8],
+    &[framing::Page],
+    &Footer,
+    &[bool],
+    &arrow_schema::Schema,
+    std::ops::Range<usize>,
+) -> Result<Vec<Column>, Error>;
+
+/// The native decoders: the footer (`footer`), its Arrow schema
+/// (`conversion`) and the column reader (`columns`).
+pub(super) const NATIVE: Decoders = Decoders {
+    footer: |frame| Ok(footer::decode(frame.metadata)?),
+    arrow: native_schema,
+    columns: columns::read,
+};
+
 /// Where a finding of one partition's checks falls in the whole read's
 /// order (#3830): its stage, the column the stage was checking, and the step
 /// of that column's check. The whole read runs each stage over every
@@ -93,9 +129,11 @@ const BATCH: u8 = 16;
 /// and what decodes one partition's row groups at a time, each partition
 /// once for its checks and again whenever a run reads it (#3830).
 pub(super) struct Runs {
-    /// The pages, as the native decoder is shown them.
-    source: bytes::Bytes,
-    metadata: Arc<ParquetMetaData>,
+    decoders: Decoders,
+    /// The held file, and its pages as framing admitted them.
+    file: Vec<u8>,
+    pages: Vec<framing::Page>,
+    footer: Footer,
     keep: Vec<bool>,
     arrow_schema: arrow_schema::Schema,
     /// The ODM fields' stored columns, or the profile's table: what each
@@ -113,84 +151,78 @@ enum Shape {
 }
 
 pub(super) fn read(bytes: &[u8]) -> Result<Decoded, Error> {
-    whole(bytes, false)
+    whole(bytes, false, NATIVE)
 }
 
 pub(super) fn read_odm(bytes: &[u8]) -> Result<Decoded, Error> {
-    whole(bytes, true)
+    whole(bytes, true, NATIVE)
 }
 
-/// The whole read: the file as one partition.
-fn whole(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
-    let runs = Runs::open(bytes, odm, None)?;
+/// The whole read with `decoders`: the file as one partition.
+pub(super) fn whole(bytes: &[u8], odm: bool, decoders: Decoders) -> Result<Decoded, Error> {
+    let runs = Runs::open(bytes, odm, None, decoders)?;
     let raw = runs.raw(0)?;
     runs.deferred()?;
     runs.decoded(raw, 0, 0).map_err(|(_, error)| error)
 }
 
-/// The table schema the held file decodes to, from its footer alone
-/// (#3792): the fields [`read`], or with `odm` [`read_odm`], gives the table
-/// when it finds nothing. No page is decoded, and each row group, not the
-/// whole file, is admitted within the row and cell limits.
-pub(super) fn table_schema(bytes: &[u8], odm: bool) -> Result<TableSchema, Error> {
+/// The table schema the held file decodes to with `decoders`, from its
+/// footer alone (#3792): the fields [`read`], or with `odm` [`read_odm`],
+/// gives the table when it finds nothing. No page is decoded, and each row
+/// group, not the whole file, is admitted within the row and cell limits.
+pub(super) fn table_schema(
+    bytes: &[u8],
+    odm: bool,
+    decoders: Decoders,
+) -> Result<TableSchema, Error> {
     let frame = framing::admit_partitioned(bytes, Some(std::num::NonZeroUsize::MIN))?;
-    let metadata = row_groups::decode(frame.metadata, &frame.footer)?;
-    let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
+    let footer = (decoders.footer)(&frame)?;
+    let hint = metadata::admit(&footer.key_values)?;
     if odm {
-        odm_fields(&metadata, hint.as_ref(), &frame.annotated)?;
+        odm_fields(&frame, &footer, hint.as_ref(), decoders)?;
         return odm_schema();
     }
-    let arrow = native_schema(&metadata, hint.as_ref())?;
+    let arrow = (decoders.arrow)(&frame, &footer, hint.as_ref())?;
     let arrow_schema = schema::normalize(&arrow, hint.as_ref().map(|hint| &hint.schema));
     let later = hint.as_ref().map_or(&[][..], |hint| &hint.later);
-    profile::columns(
-        &arrow_schema,
-        metadata.file_metadata().schema_descr(),
-        &frame.annotated,
-        later,
-    )
-    .map_err(Error::Profile)
+    profile::columns(&arrow_schema, &footer.schema, &frame.annotated, later).map_err(Error::Profile)
 }
 
 /// Each stored column's schema facts, from the admitted footer alone: no page
 /// is decoded and no profile is applied.
 pub(super) fn signature(bytes: &[u8]) -> Result<Vec<super::ColumnSignature>, Error> {
     let frame = framing::admit(bytes)?;
-    let metadata = row_groups::decode(frame.metadata, &frame.footer)?;
-    Ok(metadata
-        .file_metadata()
-        .schema_descr()
-        .columns()
+    let footer = footer::decode(frame.metadata)?;
+    Ok(footer
+        .schema
+        .leaves
         .iter()
-        .map(|column| super::ColumnSignature {
-            path: column.path().string(),
-            physical_type: format!("{:?}", column.physical_type()),
-            logical_type: column.logical_type().map(|logical| format!("{logical:?}")),
-            converted_type: format!("{:?}", column.converted_type()),
-            precision: column.type_precision(),
-            scale: column.type_scale(),
-            max_definition_level: column.max_def_level(),
-            max_repetition_level: column.max_rep_level(),
+        .map(|leaf| super::ColumnSignature {
+            path: leaf.path.join("."),
+            physical_type: leaf.physical.name().into(),
+            logical_type: leaf.logical.map(|logical| logical.debug()),
+            converted_type: leaf.converted.name().into(),
+            precision: leaf.precision,
+            scale: leaf.scale,
+            max_definition_level: leaf.max_definition,
+            max_repetition_level: leaf.max_repetition,
         })
         .collect())
 }
 
 /// Reconcile page counts with their held chunk and row-group metadata before
 /// any codec interprets a claimed value count as an allocation size. Repeated
-/// columns may contain more values than rows. The ordinary physical decoder
-/// may still retain storage for every admitted repeated value.
-fn admit_page_counts(
-    frame: &framing::Framing<'_>,
-    metadata: &ParquetMetaData,
-) -> Result<(), Error> {
-    let descriptors = metadata.file_metadata().schema_descr().columns();
+/// columns may contain more values than rows. The column reader may still
+/// retain storage for every admitted repeated value.
+fn admit_page_counts(frame: &framing::Framing<'_>, footer: &Footer) -> Result<(), Error> {
+    let leaves = &footer.schema.leaves;
     let mut pages = frame.pages.iter().peekable();
-    for (row_group, group) in metadata.row_groups().iter().enumerate() {
-        let rows = usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?;
-        for (column, chunk) in group.columns().iter().enumerate() {
-            let expected = usize::try_from(chunk.num_values()).map_err(|_| Error::Malformed)?;
-            let descriptor = descriptors.get(column).ok_or(Error::Malformed)?;
-            if descriptor.max_rep_level() == 0 && expected != rows {
+    for (row_group, group) in footer.row_groups.iter().enumerate() {
+        let rows = usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?;
+        for (column, chunk) in group.columns.iter().enumerate() {
+            let expected = usize::try_from(chunk.num_values).map_err(|_| Error::Malformed)?;
+            let leaf = leaves.get(column).ok_or(Error::Malformed)?;
+            if leaf.max_repetition == 0 && expected != rows {
                 return Err(Error::Malformed);
             }
             let mut values = 0usize;
@@ -220,84 +252,81 @@ fn admit_page_counts(
     Ok(())
 }
 
-/// Copy the held file for the native page reader, presenting each page header
-/// as the footer is presented to the metadata decoder. The presentation keeps
-/// each header's length, so it is written in place and no offset moves. Page
-/// bodies keep their held bytes.
-fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Bytes, Error> {
-    let mut file: Option<Vec<u8>> = None;
-    for (header, _) in &frame.headers {
-        if let Cow::Owned(native) = compact::native_metadata(&bytes[header.clone()])? {
-            file.get_or_insert_with(|| bytes.to_vec())[header.clone()].copy_from_slice(&native);
-        }
+/// Refuse a file whose pages share a byte, once one of its page headers would
+/// be presented otherwise: a header holding a value parquet 55's page reader
+/// could not skip (`compact::native_metadata`), or a skipped binary that is
+/// not UTF-8 (`framing::Framing::opaque`). parquet 55 read such a header
+/// rewritten in place in a copy of the held file, and the reader refused the
+/// file if two pages then shared a byte, since parquet 55 could read header
+/// or body bytes that admission never saw. The native reader reads the held
+/// bytes, and keeps the refusal at the same point of the read, so the set of
+/// admitted files does not change (D283, #3878). Written files never overlap
+/// pages, and a file with nothing to present reads as held.
+fn refuse_shared_presented_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<(), Error> {
+    let mut presented = !frame.opaque.is_empty();
+    for page in &frame.pages {
+        let shown = compact::native_metadata(&bytes[page.header.clone()])?;
+        presented |= matches!(shown, std::borrow::Cow::Owned(_));
     }
-    // A skipped binary that is not UTF-8 (`wire::Presentation`).
-    for opaque in &frame.opaque {
-        file.get_or_insert_with(|| bytes.to_vec())[opaque.clone()].fill(0);
+    if !presented {
+        return Ok(());
     }
-    let Some(file) = file else {
-        return Ok(bytes::Bytes::copy_from_slice(bytes));
-    };
-    // Once a header is presented, no two pages may share a byte, or the native
-    // reader could read header or body bytes that admission never saw. Written
-    // files never overlap pages, and a file with nothing to present is read
-    // exactly as held.
     let mut extents: Vec<_> = frame
-        .headers
+        .pages
         .iter()
-        .map(|(header, end)| (header.start, *end))
+        .map(|page| (page.header.start, page.body.end))
         .collect();
     extents.sort_unstable();
     if extents.windows(2).any(|pair| pair[1].0 < pair[0].1) {
         return Err(Error::Malformed);
     }
-    Ok(bytes::Bytes::from(file))
+    Ok(())
 }
 
-/// The Arrow schema of the admitted file `metadata`, as the native conversion
-/// gives it with the file's embedded schema `hint`.
+/// The Arrow schema of the admitted footer `footer`, with the file's embedded
+/// schema `hint` (`conversion`). A hint that nests deeper than the
+/// FlatBuffers verifier's default depth gives none (`metadata::Hint`).
 fn native_schema(
-    metadata: &ParquetMetaData,
+    _: &framing::Framing<'_>,
+    footer: &Footer,
     hint: Option<&metadata::Hint>,
 ) -> Result<arrow_schema::Schema, Error> {
-    let held = hint.and_then(metadata::Hint::held);
-    contain_decode(|| crate::storage_api::arrow_schema(metadata, held))
-        .ok_or(Error::Malformed)?
-        .map_err(|_| Error::Malformed)
+    if hint.is_some_and(|hint| !hint.shallow) {
+        return Err(Error::Malformed);
+    }
+    conversion::schema(&footer.schema, hint.map(|hint| &hint.schema))
 }
 
-/// The leaf columns that store the eleven ODM fields of the admitted file
-/// `metadata`, in their canonical order (ODM-1, NAME-8). Metadata alone
-/// decides them.
+/// The leaf columns that store the eleven ODM fields of the admitted file,
+/// in their canonical order (ODM-1, NAME-8). Metadata alone decides them.
 fn odm_fields(
-    metadata: &ParquetMetaData,
+    frame: &framing::Framing<'_>,
+    footer: &Footer,
     hint: Option<&metadata::Hint>,
-    annotated: &[usize],
+    decoders: Decoders,
 ) -> Result<[usize; 11], Error> {
-    let columns = metadata.file_metadata().schema_descr().columns();
-    let arrow = native_schema(metadata, hint)?;
+    let leaves = &footer.schema.leaves;
+    let arrow = (decoders.arrow)(frame, footer, hint)?;
     let arrow_schema = schema::normalize(&arrow, hint.map(|hint| &hint.schema));
     let fields = arrow_schema
         .fields()
         .iter()
         .map(|field| yamaa_core::odm_source::StoredField {
             name: field.name(),
-            kind: columns
+            kind: leaves
                 .iter()
                 .enumerate()
-                .find(|(_, column)| {
-                    column.max_rep_level() == 0 && column.path().string() == *field.name()
-                })
-                .and_then(|(index, column)| {
-                    profile::column_type(column, field.data_type(), annotated.contains(&index))
+                .find(|(_, leaf)| leaf.max_repetition == 0 && leaf.path.join(".") == *field.name())
+                .and_then(|(index, leaf)| {
+                    profile::column_type(leaf, field.data_type(), frame.annotated.contains(&index))
                 }),
         })
         .collect::<Vec<_>>();
     let binding = yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
     Ok(binding.stored().map(|root| {
-        columns
+        leaves
             .iter()
-            .position(|column| column.path().string() == *arrow_schema.field(root).name())
+            .position(|leaf| leaf.path.join(".") == *arrow_schema.field(root).name())
             .expect("admitted flat ODM field")
     }))
 }
@@ -318,79 +347,78 @@ fn odm_schema() -> Result<TableSchema, Error> {
 }
 
 impl Runs {
-    /// Admit the held file for a read by partition (#3792): its row groups
-    /// divided into partitions of at most `rows` records each, or, without
-    /// `rows`, one partition holding the whole file. Every page is decoded
-    /// and checked here, as the whole read checks it before any column is
-    /// built, and dropped; each partition, not the whole file, is admitted
-    /// within the row and cell limits. The checks the whole read makes after
-    /// every partition's columns are decoded wait for [`Self::deferred`].
+    /// Admit the held file for a read by partition (#3792), with `decoders`:
+    /// its row groups divided into partitions of at most `rows` records
+    /// each, or, without `rows`, one partition holding the whole file. Every
+    /// page is decoded and checked here, as the whole read checks it before
+    /// any column is built, and dropped; each partition, not the whole file,
+    /// is admitted within the row and cell limits. The checks the whole read
+    /// makes after every partition's columns are decoded wait for
+    /// [`Self::deferred`].
     pub(super) fn open(
         bytes: &[u8],
         odm: bool,
         rows: Option<std::num::NonZeroUsize>,
+        decoders: Decoders,
     ) -> Result<Self, Error> {
         let frame = framing::admit_partitioned(bytes, rows)?;
-        let metadata = Arc::new(row_groups::decode(frame.metadata, &frame.footer)?);
-        let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
+        let footer = (decoders.footer)(&frame)?;
+        let hint = metadata::admit(&footer.key_values)?;
         let held_hint = hint.as_ref().map(|hint| &hint.schema);
-        let columns = metadata.file_metadata().schema_descr().columns();
+        let leaves = &footer.schema.leaves;
         let annotated = |column: usize| frame.annotated.contains(&column);
         // ODM field admission uses metadata alone. Ordinary profile findings
         // keep their existing precedence after all physical chunks have been
         // decoded.
         let odm_stored = if odm {
-            Some(odm_fields(&metadata, hint.as_ref(), &frame.annotated)?)
+            Some(odm_fields(&frame, &footer, hint.as_ref(), decoders)?)
         } else {
             None
         };
-        admit_page_counts(&frame, &metadata)?;
+        admit_page_counts(&frame, &footer)?;
         let mut payloads = payload::Validation::new();
         let mut pages = frame.pages.iter().peekable();
-        for (row_group, group) in metadata.row_groups().iter().enumerate() {
-            let expected = usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?;
-            for column in 0..group.num_columns() {
-                let descriptor = columns.get(column).ok_or(Error::Malformed)?;
+        for (row_group, group) in footer.row_groups.iter().enumerate() {
+            let expected = usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?;
+            for column in 0..group.columns.len() {
+                let leaf = leaves.get(column).ok_or(Error::Malformed)?;
                 let mut rows = payload::Rows::new(expected);
                 while pages
                     .peek()
                     .is_some_and(|page| page.row_group == row_group && page.column == column)
                 {
                     let page = pages.next().unwrap();
-                    let decoded = compression::decode(page)?;
-                    rows.admit(page, &decoded, descriptor)?;
-                    payloads.admit(page, &decoded, descriptor)?;
+                    let decoded = compression::decode(page, bytes)?;
+                    rows.admit(page, &decoded, leaf)?;
+                    payloads.admit(page, &decoded, leaf)?;
                 }
                 rows.finish()?;
             }
         }
-        let row_count =
-            usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
-        let arrow = native_schema(&metadata, hint.as_ref())?;
+        let row_count = usize::try_from(footer.num_rows).map_err(|_| Error::Malformed)?;
+        let arrow = (decoders.arrow)(&frame, &footer, hint.as_ref())?;
         // A whole read admits the rows the file declares; a read by
         // partition admits each partition's rows, which its row groups hold.
         let partitions = frame
             .partitions
             .iter()
             .map(|groups| {
-                let groups_metadata = metadata
-                    .row_groups()
+                let row_groups = footer
+                    .row_groups
                     .get(groups.clone())
                     .ok_or(Error::Malformed)?;
-                let records = groups_metadata.iter().try_fold(0usize, |sum, group| {
-                    sum.checked_add(
-                        usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?,
-                    )
-                    .ok_or(Error::Malformed)
+                let records = row_groups.iter().try_fold(0usize, |sum, group| {
+                    sum.checked_add(usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?)
+                        .ok_or(Error::Malformed)
                 })?;
                 Ok((groups.clone(), records))
             })
             .collect::<Result<Vec<_>, Error>>()?;
         match rows {
-            None => yamaa_core::limits::Limits::table(row_count, columns.len())?,
+            None => yamaa_core::limits::Limits::table(row_count, leaves.len())?,
             Some(_) => {
                 for &(_, records) in &partitions {
-                    yamaa_core::limits::Limits::table(records, columns.len())?;
+                    yamaa_core::limits::Limits::table(records, leaves.len())?;
                 }
             }
         }
@@ -398,48 +426,42 @@ impl Runs {
         // Determine retention only. Profile errors remain deferred until
         // every physical chunk has been decoded, including fields outside the
         // profile.
-        let keep: Vec<_> = columns
+        let keep: Vec<_> = leaves
             .iter()
             .enumerate()
-            .map(|(index, column)| {
+            .map(|(index, leaf)| {
                 if let Some(stored) = &odm_stored {
                     return stored.contains(&index);
                 }
-                arrow_schema.fields().len() == columns.len()
+                arrow_schema.fields().len() == leaves.len()
                     && arrow_schema.fields().get(index).is_some_and(|field| {
-                        column.max_rep_level() == 0
-                            && column.path().string() == *field.name()
-                            && profile::column_type(column, field.data_type(), annotated(index))
+                        leaf.max_repetition == 0
+                            && leaf.path.join(".") == *field.name()
+                            && profile::column_type(leaf, field.data_type(), annotated(index))
                                 .is_some()
                     })
             })
             .collect();
-        let source = native_pages(bytes, &frame)?;
-        let group_rows = metadata
-            .row_groups()
-            .iter()
-            .try_fold(0usize, |sum, group| {
-                sum.checked_add(usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?)
-                    .ok_or(Error::Malformed)
-            })?;
+        refuse_shared_presented_pages(bytes, &frame)?;
+        let group_rows = footer.row_groups.iter().try_fold(0usize, |sum, group| {
+            sum.checked_add(usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?)
+                .ok_or(Error::Malformed)
+        })?;
         let shape = match odm_stored {
             Some(stored) => Ok(Shape::Odm(stored)),
             None => {
                 let later = hint.as_ref().map_or(&[][..], |hint| &hint.later);
-                profile::columns(
-                    &arrow_schema,
-                    metadata.file_metadata().schema_descr(),
-                    &frame.annotated,
-                    later,
-                )
-                .map(Shape::Ordinary)
-                .map_err(Error::Profile)
+                profile::columns(&arrow_schema, &footer.schema, &frame.annotated, later)
+                    .map(Shape::Ordinary)
+                    .map_err(Error::Profile)
             }
         };
         Ok(Self {
-            source,
+            decoders,
+            file: bytes.to_vec(),
+            pages: frame.pages,
             groups_hold_rows: group_rows == row_count,
-            metadata,
+            footer,
             keep,
             arrow_schema,
             shape,
@@ -460,15 +482,16 @@ impl Runs {
     /// Partition `partition`'s stored columns, decoded from its row groups.
     /// The whole read decodes every partition's before any later check, so
     /// the first partition that does not decode is its finding.
-    pub(super) fn raw(&self, partition: usize) -> Result<Vec<physical::Column>, Error> {
+    pub(super) fn raw(&self, partition: usize) -> Result<Vec<Column>, Error> {
         self.groups(self.partitions[partition].0.clone())
     }
 
     /// The stored columns of row groups `groups`.
-    fn groups(&self, groups: std::ops::Range<usize>) -> Result<Vec<physical::Column>, Error> {
-        physical::read(
-            self.source.clone(),
-            &self.metadata,
+    fn groups(&self, groups: std::ops::Range<usize>) -> Result<Vec<Column>, Error> {
+        (self.decoders.columns)(
+            &self.file,
+            &self.pages,
+            &self.footer,
             &self.keep,
             &self.arrow_schema,
             groups,
@@ -494,7 +517,7 @@ impl Runs {
     /// whole file. Call it only once [`Self::deferred`] admits the file.
     pub(super) fn decoded(
         &self,
-        raw: Vec<physical::Column>,
+        raw: Vec<Column>,
         partition: usize,
         before: usize,
     ) -> Result<Decoded, (Position, Error)> {
@@ -511,8 +534,8 @@ impl Runs {
     /// has admitted the file (#3830).
     pub(super) fn range(&self, range: std::ops::Range<usize>) -> Result<(Decoded, usize), Error> {
         let (mut start, mut groups, mut offset, mut records) = (0usize, None, 0, 0);
-        for (index, group) in self.metadata.row_groups().iter().enumerate() {
-            let rows = usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?;
+        for (index, group) in self.footer.row_groups.iter().enumerate() {
+            let rows = usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?;
             let end = start.checked_add(rows).ok_or(Error::Malformed)?;
             if start < range.end && end > range.start {
                 match &mut groups {
@@ -541,16 +564,16 @@ impl Runs {
     /// one partition.
     fn ordinary(
         &self,
-        raw: Vec<physical::Column>,
+        raw: Vec<Column>,
         schema: &TableSchema,
         records: usize,
         before: usize,
     ) -> Result<Decoded, (Position, Error)> {
-        let columns = self.metadata.file_metadata().schema_descr().columns();
+        let leaves = &self.footer.schema.leaves;
         for (index, field) in schema.columns().iter().enumerate() {
             let at = |error| ((TEMPORAL, index, 0), Error::Profile(error));
             match (field.kind, raw.get(index)) {
-                (ColumnType::Date, Some(physical::Column::Int32(values))) => {
+                (ColumnType::Date, Some(Column::Int32(values))) => {
                     for (row, value) in values.iter().enumerate() {
                         if let Some(value) = value {
                             let row = before + row + 1;
@@ -559,7 +582,7 @@ impl Runs {
                         }
                     }
                 }
-                (ColumnType::DateTime, Some(physical::Column::Int64(values))) => {
+                (ColumnType::DateTime, Some(Column::Int64(values))) => {
                     for (row, value) in values.iter().enumerate() {
                         if let Some(value) = value {
                             let row = before + row + 1;
@@ -587,7 +610,9 @@ impl Runs {
                 )
             };
             let arrow = self.arrow_schema.field(index).data_type();
-            let declared = columns.get(index).and_then(|c| profile::width(c, arrow));
+            let declared = leaves
+                .get(index)
+                .and_then(|leaf| profile::width(leaf, arrow));
             let array = column_array(field.kind, stored, large, declared)
                 .map_err(|(step, error)| ((ARRAYS, index, step), error))?;
             if array.len() != records {
@@ -619,28 +644,34 @@ impl Runs {
     }
 }
 
+/// Each value of byte array values `values` as text, or none for a missing
+/// value; `invalid` when one is not UTF-8.
+fn texts<E>(values: &columns::Binary, invalid: impl Fn() -> E) -> Result<Vec<Option<&str>>, E> {
+    values
+        .iter()
+        .map(|value| {
+            value
+                .map(|bytes| std::str::from_utf8(bytes).map_err(|_| invalid()))
+                .transpose()
+        })
+        .collect()
+}
+
 /// One column's array from one partition's stored values, or the step of
 /// its check that failed, with the finding: text is validated (step 0)
 /// before its offsets are checked (step 1), and the whole read validates
 /// every partition's text before any partition's offsets.
 fn column_array(
     kind: ColumnType,
-    stored: physical::Column,
+    stored: Column,
     large: impl Fn() -> bool,
     declared: Option<u8>,
 ) -> Result<ArrayRef, (u8, Error)> {
     if kind == ColumnType::Str {
-        let physical::Column::Bytes(values) = &stored else {
+        let Column::Bytes(values) = &stored else {
             return Err((0, Error::Malformed));
         };
-        let strings = values
-            .iter()
-            .map(|v| {
-                v.as_ref()
-                    .map(|b| std::str::from_utf8(b.data()).map_err(|_| (0, Error::Malformed)))
-                    .transpose()
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let strings = texts(values, || (0, Error::Malformed))?;
         if !crate::column_table::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len()))
         {
             return Err((1, Error::Representation));
@@ -652,14 +683,14 @@ fn column_array(
         });
     }
     Ok(match (kind, stored) {
-        (ColumnType::Int, physical::Column::Int64(values)) => Arc::new(Int64Array::from(values)),
+        (ColumnType::Int, Column::Int64(values)) => Arc::new(Int64Array::from(values)),
         // A narrower signed annotation declares the width of every stored
         // value, as its column row's `width` says (`closed_profile`). The
         // format forbids writing a value outside it and leaves reading one
         // to each reader, so such a value fails rather than reads as one of
         // their answers. Every stored value fits 32 bits, with or without an
         // annotation that says so.
-        (ColumnType::Int, physical::Column::Int32(values)) => {
+        (ColumnType::Int, Column::Int32(values)) => {
             if let Some(bits) = declared {
                 let bound = 1i64 << (bits - 1);
                 if values
@@ -674,14 +705,14 @@ fn column_array(
                 values.into_iter().map(|value| value.map(i64::from)),
             ))
         }
-        (ColumnType::Float, physical::Column::Double(values)) => {
+        (ColumnType::Float, Column::Double(values)) => {
             Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
                 v.and_then(yamaa_core::value::FiniteFloat::new)
                     .map(yamaa_core::value::FiniteFloat::get)
             })))
         }
-        (ColumnType::Date, physical::Column::Int32(values)) => Arc::new(Date32Array::from(values)),
-        (ColumnType::DateTime, physical::Column::Int64(values)) => {
+        (ColumnType::Date, Column::Int32(values)) => Arc::new(Date32Array::from(values)),
+        (ColumnType::DateTime, Column::Int64(values)) => {
             Arc::new(TimestampMicrosecondArray::from(values))
         }
         _ => return Err((0, Error::Malformed)),
@@ -693,7 +724,7 @@ fn column_array(
 /// then its offsets (step 2), as the whole read checks each field over
 /// every partition before the next step.
 fn odm_decoded(
-    raw: Vec<physical::Column>,
+    raw: Vec<Column>,
     stored: [usize; 11],
     records: usize,
 ) -> Result<Decoded, (Position, Error)> {
@@ -702,18 +733,10 @@ fn odm_decoded(
     let mut arrays: Vec<ArrayRef> = Vec::with_capacity(FIELDS.len());
     for (position, index) in stored.into_iter().enumerate() {
         let malformed = |step| ((ODM_TEXT, position, step), Error::Malformed);
-        let Some(physical::Column::Bytes(values)) = raw.get(index) else {
+        let Some(Column::Bytes(values)) = raw.get(index) else {
             return Err(malformed(0));
         };
-        let strings = values
-            .iter()
-            .map(|value| {
-                value
-                    .as_ref()
-                    .map(|bytes| std::str::from_utf8(bytes.data()).map_err(|_| malformed(0)))
-                    .transpose()
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let strings = texts(values, || malformed(0))?;
         if strings.len() != records {
             return Err(malformed(1));
         }
@@ -736,11 +759,9 @@ fn odm_decoded(
         batches: vec![batch],
     })
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parquet::file::metadata::ParquetMetaDataReader;
 
     fn unsigned(mut value: u64, output: &mut Vec<u8>) {
         while value >= 128 {
@@ -987,44 +1008,16 @@ mod tests {
         assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
     }
 
-    #[test]
-    fn presented_page_headers_refuse_pages_that_share_bytes() {
-        // A page header holding only an unknown empty set, which the native
-        // copy presents as a list, then a one-byte body.
-        let presented = [0x1a, 0x01, 0, 0xee];
-        let frame = |headers| framing::Framing {
-            metadata: &[],
-            footer: Default::default(),
-            annotated: Vec::new(),
-            pages: Vec::new(),
-            headers,
-            opaque: Vec::new(),
-            partitions: Vec::new(),
-        };
-        let mut file = presented.to_vec();
-        file.extend(presented);
-        let native = native_pages(&file, &frame(vec![(0..3, 4), (4..7, 8)])).unwrap();
-        assert_eq!(native.as_ref(), [0x19, 0x01, 0, 0xee, 0x19, 0x01, 0, 0xee]);
-        // Two chunks that name the same page share its bytes.
-        let shared = frame(vec![(0..3, 4), (0..3, 4)]);
-        assert_eq!(
-            native_pages(&presented, &shared).unwrap_err(),
-            Error::Malformed
-        );
-        // With nothing to present, the held bytes are read as they are.
-        let held = [0x19, 0x01, 0, 0xee];
-        assert_eq!(native_pages(&held, &shared).unwrap().as_ref(), held);
-    }
-
-    /// The shared-bytes guard of `native_pages`, end to end: two row groups
-    /// whose chunks name the same page.
+    /// Two row groups whose chunks name the same page: refused once its header
+    /// would be presented, as parquet 55's path refused it, and read as held
+    /// otherwise (`refuse_shared_presented_pages`).
     #[test]
     fn a_file_whose_chunks_name_one_presented_page_is_malformed() {
         let mut body = progression(0, 1, 2);
         body.extend(progression(1, 0, 2));
         body.extend(b"ab"); // a, ab
         let plain = data_page(2, &body);
-        // The same page, with unknown fields that its header must present.
+        // The same page, with unknown fields of every kind in its header.
         let mut unskippable = plain.clone();
         let stop = plain.len() - body.len() - 1;
         unskippable.splice(stop..stop, unskippable_fields(0xaa));
@@ -1042,10 +1035,8 @@ mod tests {
             if presented {
                 assert_eq!(decoded.unwrap_err(), Error::Malformed);
             } else {
-                // With nothing to present, the shared page is read as held.
-                let decoded = decoded.unwrap();
                 assert_eq!(
-                    strings(&decoded),
+                    strings(&decoded.unwrap()),
                     [Some("a"), Some("ab"), Some("a"), Some("ab")]
                 );
             }
@@ -1124,23 +1115,22 @@ mod tests {
         }
     }
 
-    /// The installed hosts' `parquet-containment` truth: a file whose INT96
-    /// column chunk has a 13-byte `min_value` statistic, which the metadata
-    /// decoder asserts holds 12 bytes, and a readable file holding the INT64
-    /// values 1 and 2.
-    fn host_containment() -> (Vec<u8>, Vec<u8>) {
+    /// A file of the installed hosts' `parquet-containment` truth: one whose
+    /// INT96 column chunk has a 13-byte `min_value` statistic, where the
+    /// type's statistics hold exactly 12; one whose two row groups name one
+    /// page, whose header holds fields parquet 55 could not skip; and a
+    /// readable file holding the INT64 values 1 and 2.
+    fn host_containment(name: &str) -> Vec<u8> {
         let truth =
             crate::json_wire::decode(include_str!("../../../../tests/host-fixtures/cases.json"))
                 .unwrap();
-        let family = &truth["families"]["parquet-containment"];
-        let bytes = |name: &str| -> Vec<u8> {
-            let hex = family[name]["hex"].as_str().unwrap();
-            (0..hex.len())
-                .step_by(2)
-                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
-                .collect()
-        };
-        (bytes("contained_panic_parquet"), bytes("readable_parquet"))
+        let hex = truth["families"]["parquet-containment"][name]["hex"]
+            .as_str()
+            .unwrap();
+        (0..hex.len())
+            .step_by(2)
+            .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
+            .collect()
     }
 
     fn values(decoded: &Decoded) -> &[i64] {
@@ -1152,120 +1142,40 @@ mod tests {
             .values()
     }
 
+    /// Admission passes the hosts' INT96 statistic to the footer, whose
+    /// statistics rule refuses it, so the file is invalid however often it
+    /// is read, and the readable file reads.
     #[test]
-    fn the_host_containment_input_reaches_a_contained_decoder_panic() {
-        let (contained, readable) = host_containment();
-        // Admission passes it to the native decoder, which panics, so the
-        // host suites that read it exercise a contained panic.
-        let frame = framing::admit(&contained).unwrap();
-        let native = compact::native_metadata(frame.metadata).unwrap();
-        assert!(contain_decode(|| ParquetMetaDataReader::decode_metadata(&native)).is_none());
+    fn the_host_fixture_int96_statistic_of_thirteen_bytes_is_invalid() {
+        let long = host_containment("long_int96_statistic_parquet");
+        let readable = host_containment("readable_parquet");
+        let frame = framing::admit(&long).unwrap();
+        assert_eq!(
+            footer::decode(frame.metadata).unwrap_err(),
+            compact::Error::Malformed
+        );
         for _ in 0..2 {
-            assert_eq!(read(&contained).unwrap_err(), Error::Malformed);
+            assert_eq!(read(&long).unwrap_err(), Error::Malformed);
             assert_eq!(values(&read(&readable).unwrap()), [1, 2]);
         }
     }
 
-    /// Selects what `contained_panics_print_nothing_and_others_print_as_before`
-    /// does when it runs as a child process.
-    const PANIC_CHILD: &str = "YAMAA_CONTAINED_PANIC_CHILD";
-
-    /// A panic outside `contain_decode`, caught so the test goes on.
-    fn uncontained_panic() {
-        assert!(std::panic::catch_unwind(|| panic!("a panic outside contain_decode")).is_err());
-    }
-
-    /// Panics when it is dropped.
-    struct PanicOnDrop;
-
-    impl Drop for PanicOnDrop {
-        fn drop(&mut self) {
-            panic!("a destructor panicked while a contained panic unwound");
-        }
-    }
-
-    /// Hook output without the thread id that follows the thread's name,
-    /// which differs between processes.
-    fn without_thread_id(text: &str) -> String {
-        let Some(start) = text.find("' (") else {
-            return text.to_owned();
-        };
-        let rest = &text[start + 3..];
-        match rest.find(')') {
-            Some(end) if rest[..end].bytes().all(|byte| byte.is_ascii_digit()) => {
-                format!("{}'{}", &text[..start], &rest[end + 1..])
-            }
-            _ => text.to_owned(),
-        }
-    }
-
+    /// The hosts' shared page: its footer decodes and its table schema reads,
+    /// so a check binds it, and the read refuses it where the pages are
+    /// compared (`refuse_shared_presented_pages`), however often it is read.
     #[test]
-    fn contained_panics_print_nothing_and_others_print_as_before() {
-        match std::env::var(PANIC_CHILD).as_deref() {
-            Ok("contained") => {
-                let (contained, readable) = host_containment();
-                assert_eq!(read(&contained).unwrap_err(), Error::Malformed);
-                assert_eq!(values(&read(&readable).unwrap()), [1, 2]);
-                return;
-            }
-            Ok("uncontained") => {
-                uncontained_panic();
-                return;
-            }
-            Ok("after-contained") => {
-                assert!(contain_decode::<()>(|| panic!("a contained panic")).is_none());
-                uncontained_panic();
-                return;
-            }
-            // The runtime aborts the process when a destructor panics while
-            // another panic unwinds.
-            Ok("abort") => {
-                contain_decode::<()>(|| {
-                    let _armed = PanicOnDrop;
-                    panic!("a contained panic");
-                });
-                unreachable!("the process aborted");
-            }
-            _ => {}
+    fn the_host_fixture_shared_presented_page_is_invalid_once_read() {
+        let shared = host_containment("shared_presented_page_parquet");
+        let frame = framing::admit(&shared).unwrap();
+        assert!(footer::decode(frame.metadata).is_ok());
+        assert!(table_schema(&shared, false, NATIVE).is_ok());
+        assert_eq!(
+            refuse_shared_presented_pages(&shared, &frame).unwrap_err(),
+            Error::Malformed
+        );
+        for _ in 0..2 {
+            assert_eq!(read(&shared).unwrap_err(), Error::Malformed);
         }
-        // Each child runs this test alone. Its output is not captured, so the
-        // panic hook writes to the child's stderr, as it does in a host.
-        let test = concat!(
-            module_path!(),
-            "::contained_panics_print_nothing_and_others_print_as_before"
-        );
-        let child = |role: &str| {
-            std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", test.split_once("::").unwrap().1])
-                .args(["--no-capture", "--test-threads=1"])
-                .env(PANIC_CHILD, role)
-                .env_remove("RUST_BACKTRACE")
-                .output()
-                .unwrap()
-        };
-        let stderr = |role: &str| {
-            let output = child(role);
-            assert!(output.status.success(), "{role}: {output:?}");
-            String::from_utf8(output.stderr).unwrap()
-        };
-        assert_eq!(stderr("contained"), "");
-        let before = without_thread_id(&stderr("uncontained"));
-        assert!(
-            before.contains("a panic outside contain_decode"),
-            "{before}"
-        );
-        assert_eq!(without_thread_id(&stderr("after-contained")), before);
-        // A panic while the contained one unwinds reaches the hook the
-        // wrapper wraps, so the abort keeps its message. The contained panic
-        // stays silent.
-        let aborted = child("abort");
-        let message = String::from_utf8_lossy(&aborted.stderr);
-        assert!(!aborted.status.success(), "{aborted:?}");
-        assert!(
-            message.contains("a destructor panicked while a contained panic unwound"),
-            "{message}"
-        );
-        assert!(!message.contains("a contained panic\n"), "{message}");
     }
 
     #[test]

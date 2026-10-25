@@ -1,5 +1,5 @@
 {
-  "about": "The schema language's own findings in a pass over a complete document or a layer (SCHEMA-5, SCHEMA-7, SCHEMA-9, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. `schema_document` reads a complete document as an author wrote it, a list member named by the text of its `name` or `id` and otherwise by a rendering of what it holds; `schema_layer` reads a layer, inside each member of a keyed collection (`input`, `windows`, `columns`, `rows`, `intermediates`) as a fragment whose requiredness waits for the resolved specification. A case that names both operations states that a fragment reports what the complete document reports. A case compares a complete list where its source stated every finding, and otherwise finds each finding by its cause among those the pass reports; its rows compare phase, condition, rule and path, with the context or the `expected` of the context where its source stated them. A value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). The rows from the Rust tests of schema_validation.rs and schema_references.rs keep those tests' paths, conditions and context; each phase is the registry's (yaml/conditions.yaml) and each rule the one the cause cites in the condition table.",
+  "about": "The schema language's own findings in a pass over a complete document or a layer (SCHEMA-5, SCHEMA-7, SCHEMA-9, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. `schema_document` reads a complete document as an author wrote it, a list member named by the text of its `name` or `id` and otherwise by a rendering of what it holds; `schema_layer` reads a layer, inside each member of a keyed collection (`input`, `windows`, `columns`, `rows`, `intermediates`) as a fragment whose requiredness waits for the resolved specification. A case that names both operations states that a fragment reports what the complete document reports. A case compares a complete list where its source stated every finding, and otherwise finds each finding by its cause among those the pass reports; its rows compare phase, condition, rule and path, with the context or the `expected` of the context where its source stated them. A value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). The rows from the Rust tests of schema_validation.rs and schema_references.rs keep those tests' paths, conditions and context; each phase is the registry's (yaml/conditions.yaml) and each rule the one the cause cites in the condition table. A class validated by itself (schema_types), which no version gates, reports its missing required field, a field of the wrong type and an unknown field in that order, each with its context, names a list member by its index, and admits an int field's integer beyond 64 bits as written; these rows are declaration_schema_capture.rs's, whose tests read the class from a captured schema and the document from YAML.",
   "cases": [
     {
       "case": "classes_keep_schema_then_input_order_in_a_complete_document",
@@ -735,6 +735,30 @@
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "among": true,
       "issues": [{"phase": "validation", "condition": "unknown_window", "rule": "WINDOW-1", "spec_paths": ["w"]}]
+    },
+    {
+      "case": "a_versionless_class_keeps_required_type_then_unknown_findings_in_order",
+      "operation": "schema_types",
+      "input": {"schema": {"schema.yaml": {"version": "1.0", "root_class": [{"needed": {"type": "str", "required": true}}, {"count": {"type": "int"}}, {"items": {"type": "list[int]"}}]}}, "version": "1.0", "types": ["root_class"], "document": {"count": true, "extra": null}},
+      "issues": [
+        {"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["needed"], "context": {"field": "needed", "class": "root_class"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["count"], "context": {"expected": "int", "actual": "bool"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["extra"], "context": {"field": "extra", "class": "root_class", "identifier": "extra"}}
+      ]
+    },
+    {
+      "case": "a_class_list_member_is_named_by_its_index",
+      "operation": "schema_types",
+      "input": {"schema": {"schema.yaml": {"version": "1.0", "root_class": [{"needed": {"type": "str", "required": true}}, {"count": {"type": "int"}}, {"items": {"type": "list[int]"}}]}}, "version": "1.0", "types": ["root_class"], "document": {"needed": "kept", "items": [1, false, 9223372036854775808]}},
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["items[1]"], "context": {"expected": "int", "actual": "bool"}}
+      ]
+    },
+    {
+      "case": "a_class_int_field_admits_an_integer_beyond_64_bits",
+      "operation": "schema_types",
+      "input": {"schema": {"schema.yaml": {"version": "1.0", "root_class": [{"needed": {"type": "str", "required": true}}, {"count": {"type": "int"}}, {"items": {"type": "list[int]"}}]}}, "version": "1.0", "types": ["root_class"], "document": {"needed": "kept", "count": 9223372036854775808, "items": [1, 2]}},
+      "issues": []
     }
   ]
 }

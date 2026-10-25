@@ -1,11 +1,16 @@
 {
-  "about": "check reports a row template's phase boundaries as build does (#2754): a row derivation that reads a column its template leaves to the column phase (COLUMN-4), directly or through a lookup that matches on it (LOOKUP-2), and a template that names a column whose default is not row local (SPEC-6). An aggregate makes its default not row local wherever it is written, the whole derivation or a case result, as a window does (#3030 D132), so a template that names the default duplicates it and one that reads it is refused at the read, instead of completing the default in its own scope; a default that reads a SELF intermediate names it as the reason. Each case runs check and build for the default host, since a request without a project reads no environment entry. The document boundaries has two templates over VS, each deriving the line an edit writes in place of X: 0.0; AVISITN is a window, which only the column phase completes, and PLAN declares its key, the output key it stores, for the reads that join it (D23). The document dosing has one template, dosed, over EX: TOTAL's default holds an aggregate only in a case result, FIRSTSEQ's reads the SELF intermediate FIRST, and EX declares the key its keyless aggregate matches on (D63). Moved from check_row_phase_boundaries.rs, whose first test compared check's issues with build's and the first one's condition, which the case finds among the issues, and whose second compared each operation's one issue at its phase, condition, rule, spec paths and context.",
+  "about": "check reports a row template's phase boundaries as build does (#2754): a row derivation that reads a column its template leaves to the column phase (COLUMN-4), directly or through a lookup that matches on it (LOOKUP-2), and a template that names a column whose default is not row local (SPEC-6). An aggregate makes its default not row local wherever it is written, the whole derivation or a case result, as a window does (#3030 D132), so a template that names the default duplicates it and one that reads it is refused at the read, instead of completing the default in its own scope; a default that reads a SELF intermediate names it as the reason. Each case moved from check_row_phase_boundaries.rs runs check and build for the default host, since a request without a project reads no environment entry. The document boundaries has two templates over VS, each deriving the line an edit writes in place of X: 0.0; AVISITN is a window, which only the column phase completes, and PLAN declares its key, the output key it stores, for the reads that join it (D23). The document dosing has one template, dosed, over EX: TOTAL's default holds an aggregate only in a case result, FIRSTSEQ's reads the SELF intermediate FIRST, and EX declares the key its keyless aggregate matches on (D63). Moved from check_row_phase_boundaries.rs, whose first test compared check's issues with build's and the first one's condition, which the case finds among the issues, and whose second compared each operation's one issue at its phase, condition, rule, spec paths and context. Moved from execution_row_phase_reads.rs, whose tests built and saved each specification for the default host. In window_operands the one template, record, derives VALUE from the row operand an edit writes, and SEQ is a window, so each operand form that reads it reports one COLUMN-4 phase boundary at its own operand. window_lookups reads, from that template, K keyed on SEQ, W ranged on SEQ and W2 ranged on W's LO: each read is a LOOKUP-2 phase boundary that names every range value it followed, reported once for a site that reads its lookup twice, and read by a column instead each lookup matches once SEQ is numbered. row_local_lookups ranges W on POS, a row-local column, which the template that reads W, directly or through W2, derives as a default (SPEC-6). Each refusal states its complete rows and that nothing was saved, and each build the bytes it saved. These cases sit beside the condition-only cases moved from check_row_phase_boundaries.rs, which prove check's parity with build on two templates over other documents; neither replaces the other.",
   "documents": {
     "boundaries": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD, AVISITN]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [STUDYID], types: {DOSENUM: int, PLANDOSE: float, FIRST: int, LAST: int, REF: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, X, C]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: VS.STUDYID}\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: ADT, type: date, derivation: VS.VSDTC}\n  - name: AVISITN\n    type: int\n    derivation: {rank: {method: dense, window: {group_by: [STUDYID, USUBJID], order_by: [ADT]}}}\n  - {name: AVAL, type: float}\n  - {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: \"'none'\"}\nrows:\n  - id: systolic\n    dataset: VS\n    derivations:\n      PARAMCD: \"'SYSBP'\"\n      AVAL: VS.SYSBP\n      X: 0.0\n  - id: diastolic\n    dataset: VS\n    derivations:\n      PARAMCD: \"'DIABP'\"\n      AVAL: VS.DIABP\n      X: 0.0\n",
     "dosing": "yamaa: \"1.0\"\ntype: spec\ndomain: ADEX\nkeys: [STUDYID, USUBJID, ASEQ]\ninput:\n  EX: {path: ex.csv, types: {EXSEQ: int, EXDOSE: float}, key: [STUDYID, USUBJID]}\nintermediates:\n  - {id: FIRST, dataset: SELF, key: [STUDYID, USUBJID], order_by: [SELF.ASEQ], keep: first}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, ASEQ, TOTAL, FIRSTSEQ, SHARE]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: EX.STUDYID}\n  - {name: USUBJID, type: str, derivation: EX.USUBJID}\n  - {name: ASEQ, type: int, derivation: EX.EXSEQ}\n  - name: TOTAL\n    type: float\n    derivation: {case: [{when: \"ASEQ > 0\", then: {aggregate: \"SUM(EX.EXDOSE)\"}}, {otherwise: 0.0}]}\n  - {name: FIRSTSEQ, type: int, derivation: FIRST.ASEQ}\n  - {name: SHARE, type: float}\nrows:\n  - id: dosed\n    dataset: EX\n    derivations: {SHARE: 1.0}\n",
     "vs": "STUDYID,USUBJID,VSDTC,SYSBP,DIABP\nS,S-1,2025-01-01,120,80\n",
     "plan": "STUDYID,DOSENUM,PLANDOSE,FIRST,LAST,REF\nS,1,10,1,2,1\n",
-    "ex": "STUDYID,USUBJID,EXSEQ,EXDOSE\nS,S-1,1,10\nS,S-1,2,20\nS,S-2,1,5\n"
+    "ex": "STUDYID,USUBJID,EXSEQ,EXDOSE\nS,S-1,1,10\nS,S-1,2,20\nS,S-2,1,5\n",
+    "phase_source": "ID,VAL\n1,3\n1,1\n2,5\n",
+    "phase_windows": "ONE,LO,HI,NAME\n1,1,1,FIRST\n1,2,9,LATER\n",
+    "window_operands": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: int}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - {name: VALUE, type: int}\nrows:\n  - id: record\n    derivations:\n      ID: SRC.ID\n      VALUE: 'SEQ * 10'\n",
+    "window_lookups": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, VAL]\ninput:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  WIN: {path: win.csv, types: {ONE: int, LO: int, HI: int}}\noutput: {path: out.csv, columns: [ID, VAL, SEQ, VALUE]}\nintermediates:\n  - id: K\n    dataset: WIN\n    key: {LO: SEQ}\n  - id: W\n    dataset: WIN\n    between: {value: SEQ, lower: LO, upper: HI}\n    key: {ONE: 1}\n  - id: W2\n    dataset: WIN\n    key: {ONE: 1}\n    between: {value: W.LO, lower: LO, upper: HI}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VAL, type: int}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [VAL]}\n  - {name: VALUE, type: str}\nrows:\n  - id: record\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      VAL: SRC.VAL\n      VALUE: K.NAME\n",
+    "row_local_lookups": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, VAL]\ninput:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  WIN: {path: win.csv, types: {ONE: int, LO: int, HI: int}}\noutput: {path: out.csv, columns: [ID, VAL, VALUE]}\nintermediates:\n  - id: W\n    dataset: WIN\n    between: {value: POS, lower: LO, upper: HI}\n    key: {ONE: 1}\n  - id: W2\n    dataset: WIN\n    key: {ONE: 1}\n    between: {value: W.LO, lower: LO, upper: HI}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VAL, type: int}\n  - {name: POS, type: int, derivation: SRC.VAL}\n  - {name: VALUE, type: str}\nrows:\n  - id: record\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      VAL: SRC.VAL\n      VALUE: W.NAME\n"
   },
   "cases": [
     {"case": "a_row_flag_reading_a_window_column_is_a_phase_boundary", "operation": ["check", "build"], "input": {"files": {"spec.yaml": {"base": "boundaries", "edits": [{"from": "AVAL: VS.SYSBP\n      X: 0.0", "to": "AVAL: VS.SYSBP\n      C: {flag: \"AVISITN = 1\"}"}, {"from": "AVAL: VS.DIABP\n      X: 0.0", "to": "AVAL: VS.DIABP\n      C: {flag: \"AVISITN = 1\"}"}]}, "vs.csv": {"base": "vs"}, "plan.csv": {"base": "plan"}}, "specification": "spec.yaml"},
@@ -43,6 +48,244 @@
     {"case": "a_grouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary", "operation": ["check", "build"], "input": {"files": {"spec.yaml": {"base": "dosing", "edits": [{"from": "    dataset: EX\n", "to": "    dataset: EX\n    group_by: [EX.STUDYID, EX.USUBJID, EX.EXSEQ]\n"}, {"from": "derivations: {SHARE: 1.0}", "to": "derivations: {SHARE: \"TOTAL / 2\"}"}]}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
      "compares": ["phase", "condition", "rule", "spec_paths", "context"], "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.dosed.derivations.SHARE"], "context": {"identifier": "TOTAL", "row": "dosed", "available_phase": "column_derivation", "required_phase": "row_construction"}}]},
     {"case": "a_template_naming_a_default_that_reads_a_self_intermediate_duplicates_it", "operation": ["check", "build"], "input": {"files": {"spec.yaml": {"base": "dosing", "edits": [{"from": "derivations: {SHARE: 1.0}", "to": "derivations: {SHARE: 1.0, FIRSTSEQ: 0}"}]}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
-     "compares": ["phase", "condition", "rule", "spec_paths", "context"], "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.FIRSTSEQ.derivation"], "context": {"column": "FIRSTSEQ", "identifier": "FIRSTSEQ", "rows": ["dosed"], "not_row_local": "self_intermediate"}}]}
+     "compares": ["phase", "condition", "rule", "spec_paths", "context"], "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.FIRSTSEQ.derivation"], "context": {"column": "FIRSTSEQ", "identifier": "FIRSTSEQ", "rows": ["dosed"], "not_row_local": "self_intermediate"}}]},
+    {
+      "case": "a_formula_reading_a_window_column_reports_its_phase_boundary_at_the_derivation",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "window_operands"}, "source.csv": {"base": "phase_source"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.VALUE"], "context": {"identifier": "SEQ", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_flag_condition_reading_a_window_column_reports_its_phase_boundary_at_the_condition",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_operands", "edits": [
+            {"from": "      VALUE: 'SEQ * 10'\n", "to": "      VALUE: {flag: {condition: 'SEQ = 1', true_value: 1, false_value: 0, missing: 0}}\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.VALUE.flag.condition"], "context": {"identifier": "SEQ", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_rounding_source_reading_a_window_column_reports_its_phase_boundary_at_the_source",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_operands", "edits": [
+            {"from": "      VALUE: 'SEQ * 10'\n", "to": "      VALUE: {round_half_away_from_zero: {source: SEQ, digits: 0}}\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.VALUE.round_half_away_from_zero.source"], "context": {"identifier": "SEQ", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_row_number_ordered_by_a_window_column_reports_its_phase_boundary_at_the_order",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_operands", "edits": [
+            {"from": "      VALUE: 'SEQ * 10'\n", "to": "      VALUE: {row_number: {window: {group_by: [ID], order_by: [SEQ]}}}\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.VALUE.row_number.window.order_by[0]"], "context": {"identifier": "SEQ", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_case_predicate_reading_a_window_column_reports_its_phase_boundary_at_the_predicate",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_operands", "edits": [
+            {"from": "      VALUE: 'SEQ * 10'\n", "to": "      VALUE: {case: [{when: 'SEQ = 1', then: 1}, {otherwise: 0}]}\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.VALUE.case[0].when"], "context": {"identifier": "SEQ", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_lookup_keyed_on_a_window_column_reports_its_phase_boundary_at_the_read",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "window_lookups"}, "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.record.derivations.VALUE.source"], "context": {"identifier": "SEQ", "intermediate": "K", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_lookup_ranged_on_a_window_column_reports_its_phase_boundary_at_the_read",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_lookups", "edits": [
+            {"from": "      VALUE: K.NAME\n", "to": "      VALUE: W.NAME\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.record.derivations.VALUE.source"], "context": {"identifier": "SEQ", "intermediate": "W", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_lookup_ranged_through_another_s_range_value_names_each_value_followed",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_lookups", "edits": [
+            {"from": "      VALUE: K.NAME\n", "to": "      VALUE: W2.NAME\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.record.derivations.VALUE.source", "intermediates.W2.between.value", "intermediates.W.between.value"], "context": {"identifier": "SEQ", "intermediate": "W2", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_row_filter_reading_a_keyed_lookup_twice_reports_its_phase_boundary_once",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_lookups", "edits": [
+            {"from": "      VALUE: K.NAME\n", "to": "      VALUE: \"'x'\"\n"},
+            {"from": "    dataset: SRC\n    derivations:", "to": "    dataset: SRC\n    filter: 'K.NAME IS NOT NULL AND K.LO > 0'\n    derivations:"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.record.filter"], "context": {"identifier": "SEQ", "intermediate": "K", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_row_filter_reading_a_ranged_lookup_twice_reports_its_phase_boundary_once",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_lookups", "edits": [
+            {"from": "      VALUE: K.NAME\n", "to": "      VALUE: \"'x'\"\n"},
+            {"from": "    dataset: SRC\n    derivations:", "to": "    dataset: SRC\n    filter: 'W.NAME IS NOT NULL AND W.HI > 0'\n    derivations:"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.record.filter"], "context": {"identifier": "SEQ", "intermediate": "W", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_formula_reading_a_chained_lookup_names_each_value_followed",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_lookups", "edits": [
+            {"from": "      VALUE: K.NAME\n", "to": "      VALUE: 'W2.LO + W2.HI'\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.record.derivations.VALUE", "intermediates.W2.between.value", "intermediates.W.between.value"], "context": {"identifier": "SEQ", "intermediate": "W2", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_column_reads_a_chained_lookup_after_the_window_numbers_its_rows",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_lookups", "edits": [
+            {"from": "      VALUE: K.NAME\n", "to": ""},
+            {"from": "  - {name: VALUE, type: str}\n", "to": "  - {name: VALUE, type: str, derivation: W2.NAME}\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VAL,SEQ,VALUE\n1,3,2,LATER\n1,1,1,FIRST\n2,5,1,FIRST\n"}
+    },
+    {
+      "case": "a_column_reads_a_keyed_lookup_after_the_window_numbers_its_rows",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_lookups", "edits": [
+            {"from": "      VALUE: K.NAME\n", "to": ""},
+            {"from": "  - {name: VALUE, type: str}\n", "to": "  - {name: VALUE, type: str, derivation: K.NAME}\n"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VAL,SEQ,VALUE\n1,3,2,LATER\n1,1,1,FIRST\n2,5,1,FIRST\n"}
+    },
+    {
+      "case": "a_lookup_ranged_on_a_row_local_column_promotes_its_default",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_local_lookups"}, "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,VAL,VALUE\n1,3,LATER\n1,1,FIRST\n2,5,LATER\n"}
+    },
+    {
+      "case": "a_chained_lookup_promotes_the_default_its_range_values_read",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_local_lookups", "edits": [
+            {"from": "VALUE: W.NAME", "to": "VALUE: W2.NAME"}
+          ]},
+          "source.csv": {"base": "phase_source"}, "win.csv": {"base": "phase_windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VAL,VALUE\n1,3,LATER\n1,1,FIRST\n2,5,LATER\n"}
+    }
   ]
 }

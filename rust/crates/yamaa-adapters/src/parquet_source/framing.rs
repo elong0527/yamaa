@@ -29,10 +29,12 @@ impl From<yamaa_core::limits::LimitExceeded> for Error {
     }
 }
 
+/// One page of the held file, by where its header and body lie in it.
 #[derive(Debug)]
-pub(super) struct Page<'a> {
+pub(super) struct Page {
     pub codec: i64,
-    pub body: &'a [u8],
+    pub header: std::ops::Range<usize>,
+    pub body: std::ops::Range<usize>,
     pub decoded_bytes: usize,
     pub uncompressed_prefix: usize,
     pub compressed: bool,
@@ -67,18 +69,19 @@ pub(super) enum Payload {
 #[derive(Debug)]
 pub(super) struct Framing<'a> {
     pub metadata: &'a [u8],
-    /// How the native decoder is shown the footer (`wire::Presentation`).
+    /// How parquet 55's decoder is shown the footer (`wire::Presentation`),
+    /// which the differential harness reads by.
+    #[cfg(test)]
     pub footer: wire::Presentation,
     /// The leaf columns, in schema order, whose variant, geometry or
     /// geography annotation the footer's presentation removes: they still
     /// fall outside the closed mapping (PARQUET-7).
     pub annotated: Vec<usize>,
-    pub pages: Vec<Page<'a>>,
-    /// Each page header's byte range in the held file and the end of the
-    /// page's body, in page order.
-    pub headers: Vec<(std::ops::Range<usize>, usize)>,
+    pub pages: Vec<Page>,
     /// Where page headers hold a skipped binary whose bytes are not UTF-8,
-    /// in the held file: shown to the native decoder as zero bytes.
+    /// in the held file: shown to parquet 55's decoder as zero bytes. A file
+    /// that holds one is presented, so no two of its pages may share a byte
+    /// (`reader::refuse_shared_presented_pages`).
     pub opaque: Vec<std::ops::Range<usize>>,
     /// The row groups of each partition, in order (#3792): every row group
     /// for a whole read, and one empty partition for a file without any.
@@ -231,10 +234,10 @@ pub(super) fn admit_partitioned(
     }
     let mut result = Framing {
         metadata,
+        #[cfg(test)]
         footer: footer.presentation,
         annotated,
         pages: Vec::new(),
-        headers: Vec::new(),
         opaque: Vec::new(),
         partitions: Vec::new(),
     };
@@ -281,10 +284,12 @@ pub(super) fn admit_partitioned(
                 // A page header holds no list that `wire::Lists` reports, and
                 // nothing that the presentation splices.
                 let shown = wire::check(header, Shape::PageHeader)?.presentation;
-                let opaque = shown.opaque.into_iter();
-                result
-                    .opaque
-                    .extend(opaque.map(|range| offset + range.start..offset + range.end));
+                result.opaque.extend(
+                    shown
+                        .opaque
+                        .into_iter()
+                        .map(|range| offset + range.start..offset + range.end),
+                );
                 let uncompressed = count(header.field(2)?)?;
                 let compressed = count(header.field(3)?)?;
                 let kind = closed_profile::page(integer(header.field(1)?)?);
@@ -345,10 +350,10 @@ pub(super) fn admit_partitioned(
                     .checked_add(compressed)
                     .filter(|end_body| *end_body <= end)
                     .ok_or(Error::Malformed)?;
-                result.headers.push((header..body_start, offset));
                 result.pages.push(Page {
                     codec,
-                    body: &bytes[body_start..offset],
+                    header: header..body_start,
+                    body: body_start..offset,
                     decoded_bytes: uncompressed,
                     uncompressed_prefix: prefix,
                     compressed: should_decompress,
@@ -696,13 +701,14 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_page_ranges_preserve_exact_body_and_metadata() {
+    fn page_ranges_locate_the_exact_header_body_and_metadata() {
         let bytes = container(&page());
         let admitted = admit(&bytes).unwrap();
         assert_eq!(admitted.pages.len(), 1);
         let page = &admitted.pages[0];
-        assert_eq!(page.body.as_ptr(), bytes[21..].as_ptr());
-        assert_eq!(page.body, &[0, 0, 0, 0]);
+        // The page header is the 17 bytes after the magic number.
+        assert_eq!((page.header.clone(), page.body.clone()), (4..21, 21..25));
+        assert_eq!(bytes[page.body.clone()], [0, 0, 0, 0]);
         assert_eq!(page.codec, 0);
         assert_eq!(page.decoded_bytes, 4);
         assert_eq!(page.uncompressed_prefix, 0);

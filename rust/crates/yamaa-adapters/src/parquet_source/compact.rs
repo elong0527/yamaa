@@ -47,7 +47,6 @@ impl<'a> Value<'a> {
     /// pass, by id, the last occurrence supplying each; with how many fields
     /// the struct holds and the id of the first, which name a union's
     /// variant. Any other value has none.
-    #[cfg(test)]
     pub(super) fn fields<const N: usize>(&self) -> Result<Fields<'a, N>, Error> {
         let mut fields = Fields {
             values: [None; N],
@@ -75,7 +74,6 @@ impl<'a> Value<'a> {
 }
 
 /// A struct's fields, read in one pass (`Value::fields`).
-#[cfg(test)]
 pub(super) struct Fields<'a, const N: usize> {
     /// Each field by its id.
     pub values: [Option<Value<'a>>; N],
@@ -474,7 +472,7 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
 /// collections and no known set, map or UUID fields. Present validated
 /// one-byte boolean elements as bytes, a set as the identically encoded list,
 /// and a map or UUID as one opaque binary of the same length whose bytes are
-/// UTF-8, only to the native decoder; every field header and id stays. The
+/// UTF-8, only to parquet 55's decoder; every field header and id stays. The
 /// result has the input's length, so a page header is presented in place in
 /// the held file. A skipped binary whose bytes are not UTF-8, which only the
 /// struct's shape tells from a known one, is presented afterwards by
@@ -482,8 +480,9 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
 /// Keep the original metadata for admission and the original data pages for
 /// reads. This independently
 /// authored correction copies the struct only when needed, changes no values
-/// the native decoder reads from a well-typed struct, and never turns invalid
-/// booleans into bytes.
+/// that decoder reads from a well-typed struct, and never turns invalid
+/// booleans into bytes. The native reader asks only whether a page header
+/// would be presented otherwise (`reader::refuse_shared_presented_pages`).
 pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
     let mut reader = Reader::new(bytes);
     reader.native_metadata = Some(Cow::Borrowed(bytes));
