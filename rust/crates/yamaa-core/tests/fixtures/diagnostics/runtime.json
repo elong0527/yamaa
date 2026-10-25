@@ -32,15 +32,15 @@
       "case": "a_required_argument_not_supplied_to_a_project_function_is_invalid",
       "operation": "function_invocation",
       "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": {"missing_required": {"parameter": "x"}}},
-      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
-      "issues": [{"phase": "derivation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function", "context.argument"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.X.derivation"], "context": {"function": "id", "argument": "x"}}]
     },
     {
       "case": "an_argument_of_another_type_than_its_parameter_is_invalid",
       "operation": "function_invocation",
       "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": {"argument_type": {"parameter": "x", "expected": "int", "actual": "str"}}},
-      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
-      "issues": [{"phase": "derivation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function", "context.argument", "context.expected_type", "context.actual_type"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.X.derivation"], "context": {"function": "id", "argument": "x", "expected_type": "int", "actual_type": "str"}}]
     },
     {
       "case": "a_project_function_call_the_host_raises_in_fails",
