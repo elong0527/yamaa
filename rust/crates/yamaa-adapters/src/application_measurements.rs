@@ -1,7 +1,10 @@
 //! Measurements captured during the original application. Reading them
 //! later never runs a source, function, serializer or publisher again.
 use serde::Serialize;
-use std::{sync::Mutex, time::Instant};
+use std::{
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 use yamaa_core::{
     application_observer::{CallStage, Event, Observer, Outcome, Phase},
     dataset::{Division, ExecutionPhase},
@@ -19,6 +22,7 @@ fn phase_name(phase: Phase) -> &'static str {
         Phase::Dataset(ExecutionPhase::Verification) => "verification",
         Phase::Dataset(ExecutionPhase::Finished) => "execution_finished",
         Phase::Output => "output_preparation",
+        Phase::Composition => "composition",
         Phase::Finished => "finished",
     }
 }
@@ -41,6 +45,8 @@ struct Calls {
 }
 #[derive(Serialize)]
 struct Record {
+    #[serde(skip)]
+    kind: Phase,
     phase: &'static str,
     entered_ns: u64,
     completed_ns: Option<u64>,
@@ -118,10 +124,27 @@ impl Default for Measurements {
         Self::new()
     }
 }
+/// One stage the original application entered, as [`Measurements::stages`]
+/// reads it: its phase, when it was entered and completed, as offsets from
+/// the measurements' origin, and its outcome. A stage a panic left has no
+/// completion and no outcome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stage {
+    pub phase: Phase,
+    pub entered: Duration,
+    pub completed: Option<Duration>,
+    pub outcome: Option<Outcome>,
+}
+
 impl Measurements {
     pub fn new() -> Self {
+        Self::starting_at(Instant::now())
+    }
+    /// Measurements whose offsets count from `origin`, such as the start of
+    /// an operation that builds several members (#3762).
+    pub fn starting_at(origin: Instant) -> Self {
         Self {
-            origin: Instant::now(),
+            origin,
             state: Mutex::new(State {
                 records: Vec::new(),
                 calls: [Calls::default(); 6],
@@ -142,6 +165,32 @@ impl Measurements {
     /// no public result shows it.
     pub fn plan(&self, status: &'static str) {
         self.state().plan = Some(status);
+    }
+    /// Every stage entered, in the order entered (#3762). Reading them runs
+    /// nothing again.
+    pub fn stages(&self) -> Vec<Stage> {
+        let offset = |nanos: u64| Duration::from_nanos(nanos);
+        self.state()
+            .records
+            .iter()
+            .map(|record| Stage {
+                phase: record.kind,
+                entered: offset(record.entered_ns),
+                completed: record.completed_ns.map(offset),
+                outcome: record.outcome.map(|outcome| match outcome {
+                    "succeeded" => Outcome::Succeeded,
+                    _ => Outcome::Failed,
+                }),
+            })
+            .collect()
+    }
+    /// How the run divided its driver input, as its evidence names it (#3794):
+    /// the strategy and the number of partitions; none before it divided.
+    pub fn division(&self) -> Option<(&'static str, usize)> {
+        self.state()
+            .partitions
+            .as_ref()
+            .map(|partitions| (partitions.strategy, partitions.count))
     }
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
         self.state
@@ -269,6 +318,7 @@ impl Observer for Measurements {
                     return;
                 }
                 state.records.push(Record {
+                    kind: phase,
                     phase: phase_name(phase),
                     entered_ns: now,
                     completed_ns: None,
@@ -327,6 +377,8 @@ impl Observer for Measurements {
                     required: refusal.required,
                 });
             }
+            // A partition boundary is progress, not a stage of its own.
+            Event::Partition { .. } => {}
             Event::Divided { division, rows } => {
                 state.partitions = Some(Partitions::new(division, rows));
             }

@@ -4815,33 +4815,38 @@
         ],
         "check": [
           "issues",
-          "status"
+          "status",
+          "timings"
         ],
         "run": [
           "issues",
           "output",
           "report",
           "save",
-          "status"
+          "status",
+          "timings"
         ],
         "project_run": [
           "issues",
           "names",
           "report",
           "save",
-          "status"
+          "status",
+          "timings"
         ],
         "member_run": [
           "issues",
           "output",
           "report",
-          "status"
+          "status",
+          "timings"
         ],
         "submission": [
           "created",
           "issues",
           "save",
-          "status"
+          "status",
+          "timings"
         ]
       },
       "arguments": {
@@ -4863,22 +4868,28 @@
           "fix"
         ],
         "spec.check": [
-          "parent"
+          "parent",
+          "progress"
         ],
         "spec.resolve": [],
         "spec.run": [
-          "stream"
+          "stream",
+          "progress"
         ],
         "project.spec": [
           "name"
         ],
-        "project.check": [],
+        "project.check": [
+          "progress"
+        ],
         "project.run": [
-          "section"
+          "section",
+          "progress"
         ],
         "project.submission": [
           "section",
-          "created"
+          "created",
+          "progress"
         ],
         "run.save": [],
         "project_run.save": [],
@@ -4894,24 +4905,28 @@
           "status",
           "output",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "member_run": [
           "status",
           "output",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "project_run": [
           "status",
           "names",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "submission": [
           "status",
           "created",
-          "issues"
+          "issues",
+          "timings"
         ]
       },
       "messages": {
@@ -5074,25 +5089,29 @@
       "r_names": {
         "check": [
           "status",
-          "issues"
+          "issues",
+          "timings"
         ],
         "run": [
           "status",
           "output",
           "issues",
           "report",
+          "timings",
           "save"
         ],
         "member_run": [
           "status",
           "output",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "submission": [
           "status",
           "created",
           "issues",
+          "timings",
           "save"
         ]
       },
@@ -8373,6 +8392,46 @@
       "cancelled": "cannot read TEST: operation cancelled",
       "stream_taken": "cannot read TEST: the run's output stream has already been read [stream_taken]",
       "host_thread": "cannot read TEST: a run that can call project functions is built only on the thread that started it [host_thread]"
+    },
+    "progress": {
+      "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: report.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
+      "input_csv": "ID\n1\n2\n",
+      "events": [
+        {"name": "{path}", "phase": "preparation", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "preparation", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "input", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "input", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "admission", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "admission", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "derivation", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "derivation", "kind": "partition", "outcome": null, "number": 1, "rows": 2},
+        {"name": "{path}", "phase": "derivation", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "output_keys", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "output_keys", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "verification", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "verification", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "output", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "output", "kind": "end", "outcome": "succeeded", "number": null, "rows": null}
+      ],
+      "timing_columns": ["name", "phase", "started_ms", "elapsed_ms", "outcome"],
+      "run_phases": ["preparation", "input", "admission", "derivation", "output_keys", "verification", "output"],
+      "check_phases": ["preparation"],
+      "failed_run_issues": [
+        {
+          "severity": "error",
+          "phase": "engine",
+          "condition": "engine_rejected",
+          "rule": null,
+          "spec_paths": [],
+          "file": null,
+          "line": null,
+          "column": null,
+          "message": "the engine refused the operation in its build step: host_progress_failure",
+          "context": "{\"code\":\"host_progress_failure\",\"step\":\"build\"}",
+          "source_span": null,
+          "operand_route": null
+        }
+      ]
     }
   }
 }

@@ -148,6 +148,7 @@ mod diagnostics {
                     "environment_boundary",
                     "execution_boundary",
                     "execution_limit",
+                    "host_progress_failure",
                     "host_publication_failure",
                     "host_resource_failure",
                     "inheritance_required",

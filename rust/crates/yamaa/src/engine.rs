@@ -14,7 +14,6 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use yamaa_adapters::application_measurements::Measurements;
 use yamaa_adapters::file_application::Domain;
 use yamaa_core::diagnostic::Diagnostic;
 
@@ -25,6 +24,7 @@ use crate::host::functions::{FunctionError, HostLanguage, ProjectFunctions};
 use crate::host::resolver::ResourceResolver;
 use crate::internal::EngineShared;
 use crate::plan::Plan;
+use crate::progress::{Measured, Observed, ProgressCallback, ProgressEvent, Timings};
 use crate::table::Table;
 
 /// Engine configuration. The struct is `#[non_exhaustive]`, so the `new`,
@@ -45,6 +45,9 @@ pub struct EngineOptions {
     /// How each run divides its driver input, or none to run it whole, the
     /// default (see [`EngineOptions::with_partitions`]).
     pub partitions: Option<Partitions>,
+    /// The callback every operation reports its progress to, or none (see
+    /// [`EngineOptions::with_progress`]).
+    pub progress: Option<ProgressCallback>,
 }
 
 /// Partitioned execution: each run divides its driver input into partitions
@@ -212,6 +215,7 @@ impl EngineOptions {
             runtime_version,
             functions: None,
             partitions: None,
+            progress: None,
         }
     }
 
@@ -267,6 +271,53 @@ impl EngineOptions {
         self.partitions = Some(partitions);
         self
     }
+
+    /// Report every operation's progress to `progress` (#3762): each phase
+    /// of a check, a run or a submission as it starts and ends, each
+    /// partition a partitioned run enters and each batch a streamed run's
+    /// reader hands out. See [`crate::progress`] for when it is called and
+    /// what a callback that fails does to the result.
+    ///
+    /// # Example
+    ///
+    /// A run of a specification served from memory reports its phases, in
+    /// order, and its result gives the time each took.
+    ///
+    /// ```
+    /// use std::sync::{Arc, Mutex};
+    ///
+    /// use yamaa::{Engine, EngineOptions, HostLanguage, MemoryResolver, ProgressEvent};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n"[..],
+    /// ));
+    /// resolver.insert("/spec.yaml", "input.csv", "input:1", Arc::from(&b"ID\n1\n"[..]));
+    /// let heard = Arc::new(Mutex::new(Vec::new()));
+    /// let kept = Arc::clone(&heard);
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver)
+    ///         .with_progress(move |event: &ProgressEvent| {
+    ///             kept.lock().unwrap().push(format!("{} {}", event.kind.as_str(), event.phase.as_str()));
+    ///             Ok(())
+    ///         }),
+    /// );
+    /// let run = engine.spec("spec.yaml").run().unwrap();
+    /// let heard = heard.lock().unwrap();
+    /// assert_eq!(heard.first().map(String::as_str), Some("start preparation"));
+    /// // Without the `yaml` feature the specification cannot be read.
+    /// let last = if cfg!(feature = "yaml") { "end output" } else { "end preparation" };
+    /// assert_eq!(heard.last().map(String::as_str), Some(last));
+    /// assert_eq!(run.timings().entries().len() * 2, heard.len());
+    /// ```
+    pub fn with_progress(
+        mut self,
+        progress: impl Fn(&ProgressEvent) -> Result<(), FunctionError> + Send + Sync + 'static,
+    ) -> Self {
+        self.progress = Some(Arc::new(progress));
+        self
+    }
 }
 
 /// One build or check request: the entry path or resolver reference plus an
@@ -313,12 +364,12 @@ impl Engine {
     /// through the engine's resolver and compile the selected route, reading
     /// no study data and activating nothing. A refused compilation still
     /// returns a plan that owns its report.
-    fn compile(&self, request: &Request<'_>, measurements: &Arc<Measurements>) -> Plan {
+    fn compile(&self, request: &Request<'_>, observed: &Observed<'_>) -> Plan {
         let compiled = crate::internal::compile(
             &self.shared,
             request.specification,
             request.environment,
-            yamaa_core::application_observer::Scope::new(&**measurements),
+            yamaa_core::application_observer::Scope::new(observed),
         );
         Plan::new(
             Arc::clone(&self.shared),
@@ -340,26 +391,27 @@ impl Engine {
     /// The run polls `token`, and so does this call once the member is
     /// built: a cancelled build, or one whose project function raised the
     /// host's interrupt (as [`ProjectFunctions::is_interrupt`] classifies
-    /// it), stops the call as [`Cancelled`] and is dropped.
+    /// it), stops the call as [`Cancelled`] and is dropped. `observed` takes
+    /// the build's events and its measurements.
     pub(crate) fn build_reusing(
         &self,
         plans: &crate::api::Plans,
         request: &Request<'_>,
         identity: Option<crate::api::PlanKey>,
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+        observed: &Observed<'_>,
         token: &CancellationToken,
     ) -> Result<Build, Cancelled> {
-        let measurements = Arc::new(Measurements::new());
-        let (plan, compiled) = self.plan_reusing(plans, request, identity.as_ref(), &measurements);
+        let (plan, compiled) = self.plan_reusing(plans, request, identity.as_ref(), observed);
         // A compilation has just captured the files it holds.
-        let build = plan.run_through(&self.shared, held, &measurements, token);
+        let build = plan.run_through(&self.shared, held, observed, token);
         if compiled {
             self.keep(plans, request, identity, &plan);
         }
         if build.interrupted() || token.is_cancelled() {
             return Err(Cancelled);
         }
-        measurements.complete(build.accepted());
+        observed.measurements().complete(build.accepted());
         let subject = plan.name().unwrap_or(request.specification);
         Ok(build.with_subject(subject))
     }
@@ -367,14 +419,16 @@ impl Engine {
     /// The plan `request` runs: the one `plans` keeps for `identity`, what
     /// the request resolves to now, when the run-start check finds its files
     /// unchanged, or else a new compilation, with `true`. The choice is
-    /// counted in `measurements`.
+    /// counted in the measurements `observed` takes, which observes a
+    /// compilation.
     pub(crate) fn plan_reusing(
         &self,
         plans: &crate::api::Plans,
         request: &Request<'_>,
         identity: Option<&crate::api::PlanKey>,
-        measurements: &Arc<Measurements>,
+        observed: &Observed<'_>,
     ) -> (Plan, bool) {
+        let measurements = observed.measurements();
         // The run-start check runs outside the holder's lock.
         let kept = identity
             .and_then(|identity| plans.get(identity))
@@ -383,7 +437,7 @@ impl Engine {
             measurements.plan("reused");
             return (plan, false);
         }
-        let plan = self.compile(request, measurements);
+        let plan = self.compile(request, observed);
         measurements.plan(if plan.report().is_empty() {
             "compiled"
         } else {
@@ -418,10 +472,9 @@ impl Engine {
         subject: &str,
         locator: Arc<Locator>,
     ) -> Build {
-        let measurements = Arc::new(Measurements::new());
-        measurements.complete(false);
-        Build::new(Err(issues), Vec::new(), measurements, &self.shared, locator)
-            .with_subject(subject)
+        let measured = Measured::unobserved(subject);
+        measured.measurements().complete(false);
+        Build::new(Err(issues), Vec::new(), measured, &self.shared, locator).with_subject(subject)
     }
 
     pub(crate) fn shared(&self) -> &EngineShared {
@@ -461,7 +514,9 @@ pub(crate) struct Build {
     /// refusal before it ran, or the refusal of a result its run could not
     /// build.
     result: Result<Box<Domain>, Vec<Diagnostic>>,
-    measurements: Arc<Measurements>,
+    /// What the build's timings are read from: its measurements, which also
+    /// count its saves.
+    measured: Measured,
     /// The issues of the build as it was made: a later save's refusal joins
     /// the report, never these.
     built: Vec<Diagnostic>,
@@ -495,7 +550,7 @@ impl Build {
     pub(crate) fn new(
         result: Result<Box<Domain>, Vec<Diagnostic>>,
         failures: Vec<FunctionError>,
-        measurements: Arc<Measurements>,
+        measured: Measured,
         shared: &EngineShared,
         locator: Arc<Locator>,
     ) -> Self {
@@ -506,7 +561,7 @@ impl Build {
         });
         let mut build = Self {
             result,
-            measurements,
+            measured,
             built: Vec::new(),
             report: Report::default(),
             output: None,
@@ -670,6 +725,23 @@ impl Build {
         self.refresh();
     }
 
+    /// The phases the build ran, in the order they started (#3762).
+    pub(crate) fn timings(&self) -> Timings {
+        self.measured.timings()
+    }
+
+    /// Fail the build with its issues and then `failure`, as when its
+    /// operation's progress callback failed (#3762): it keeps no output or
+    /// run report, so its save writes nothing, and its timings stay.
+    pub(crate) fn fail(&mut self, failure: Vec<Diagnostic>) {
+        let mut issues = self.issues();
+        issues.extend(failure);
+        self.result = Err(issues);
+        self.streamed = None;
+        self.built = self.issues();
+        self.refresh();
+    }
+
     /// Record a save refused for `issues` before any file was staged.
     pub(crate) fn refuse(&mut self, issues: Vec<Diagnostic>) {
         if let Ok(domain) = &mut self.result {
@@ -680,8 +752,8 @@ impl Build {
 
     /// Count one save of this build in its measurements, ending as `outcome`.
     pub(crate) fn measure_save(&self, outcome: &'static str) {
-        self.measurements.save_entered();
-        self.measurements.save_completed(outcome);
+        self.measured.measurements().save_entered();
+        self.measured.measurements().save_completed(outcome);
     }
 
     /// Save this build as a run of one specification saves it, through the
@@ -708,7 +780,7 @@ impl Build {
 
     /// The build's observations enveloped with its operation's measurements.
     pub(crate) fn measured_observations(&self) -> String {
-        self.measurements.envelope(self.observations())
+        self.measured.measurements().envelope(self.observations())
     }
 
     /// Whether a project function raised the host's interrupt, which cancels

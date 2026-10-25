@@ -26,6 +26,7 @@ project functions.
 | Run report | `run$report` | `run.report` |
 | A table in Polars or pandas | `run$output` is a data frame | `run.output.to_polars()`, `run.output.to_pandas()` |
 | Read an output as a stream | `spec$run(stream = TRUE)$output` | `spec.run(stream=True).output` |
+| Follow a run, and see where it spent its time | `spec$run(progress = print)$timings` | `spec.run(progress=print).timings` |
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | See the resolved specification | `spec$resolve()` | `spec.resolve()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
@@ -284,6 +285,65 @@ thread, its stream fails with `host_thread`.
     ```
 
 The command line saves whole runs; it has no streaming flag.
+
+## Progress and timings
+
+`check()`, `run()` and `submission()` take a `progress` function, called
+with one event as each phase starts and as it ends. An event is a named list
+in R and a dict in Python, with `name`, `phase`, `kind`, `outcome`, `number`
+and `rows`:
+
+| Field | Value |
+|---|---|
+| `name` | The specification's path as given; a project run member's name; a submission's section |
+| `phase` | `preparation`, `activation`, `input`, `admission`, `derivation`, `output_keys`, `verification`, `output` or `composition` |
+| `kind` | `start` or `end` of the phase; `partition` as a partitioned run enters a partition of its input, in `derivation`; `batch` as a streamed run hands out a batch of its output, after `output` |
+| `outcome` | For an `end`, `succeeded` or `failed`; otherwise missing |
+| `number`, `rows` | For a `partition`, its number from 1 and its records; for a `batch`, its number and its rows; otherwise missing |
+
+A run passes the phases from `preparation` to `output` in that order, with
+`activation` only when its specification calls a project function; a run of
+a plan an earlier `run()` of the object kept starts at `input`. A check is
+one `preparation` of each specification it checks, and a submission one
+`composition` of each section. The function runs on the thread that called
+the method, so it can show progress, and it may call yamaa itself, on the
+same object too.
+
+A `progress` function that signals an error in R or raises in Python is
+called no more: the method finishes its work, and its result then fails with
+one issue, `engine_rejected` with the code `host_progress_failure`. A failed
+run keeps no output and saves nothing; a project run builds no later
+specification, and a submission composes no later section, and either
+refuses its save. An interrupt in the function cancels the call, as Ctrl+C
+does ([Interrupts](#interrupts)).
+
+Every check, run, project run, member of a project run and submission has
+`timings`: a table of each phase it ran, in the order the phases started,
+with the columns `name`, `phase`, `started_ms` (from the start of the call),
+`elapsed_ms` and `outcome`. Timings are facts of one call, so no saved file
+holds them: the saved output, run report, Dataset-JSON and define.xml are the
+same with or without them. The command line prints both under `--verbose`
+([Output](#output)).
+
+=== "R"
+
+    ```r
+    run <- yamaa_spec("adam/adlb.yaml")$run(progress = function(event) {
+      if (identical(event$kind, "start")) message(event$phase, " ...")
+    })
+    run$timings
+    ```
+
+=== "Python"
+
+    ```python
+    def report(event):
+        if event["kind"] == "start":
+            print(event["phase"], "...")
+
+    run = yamaa.spec("adam/adlb.yaml").run(progress=report)
+    run.timings.to_polars()
+    ```
 
 ## Check a specification without data
 
@@ -982,9 +1042,9 @@ usage whatever else is given. Both exit 0.
 ### Commands
 
 ```text
-yamaa check PATH [--spec NAME | --parent PATH]
-yamaa run PATH [--spec NAME | --section SECTION]
-yamaa submission PATH [--section SECTION] [--created TIME]
+yamaa check PATH [--spec NAME | --parent PATH] [--verbose]
+yamaa run PATH [--spec NAME | --section SECTION] [--verbose]
+yamaa submission PATH [--section SECTION] [--created TIME] [--verbose]
 yamaa resolve PATH [--spec NAME]
 yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
 yamaa lint [--fix] PATH...
@@ -1078,9 +1138,19 @@ one line, with its members in key order ([JSON documents](#json-documents)).
 
 Standard error carries only the refusals of exit status 2, each as
 `yamaa: <message>` and then `run 'yamaa --help' for usage`, which a failed
-write to standard output leaves out. The one exception is a `selftest` case
-that panics: the case fails, and the panic message, which shows where the
-engine panicked, goes to standard error.
+write to standard output leaves out. There are two exceptions. A `selftest`
+case that panics fails, and the panic message, which shows where the engine
+panicked, goes to standard error. And `check`, `run` and `submission` with
+`--verbose` write each progress event there as it happens, as
+`<name>: <phase> <kind>` with a partition's number and records or an end's
+outcome, such as `sdtm/dm.yaml: derivation end: succeeded`. Then, for each
+run, they write how it divided its driver input, as
+`<name>: partitions <strategy> <count>`, where the strategy is
+`whole_table`, `key_bounded` or `consecutive`, such as
+`sdtm/dm.yaml: partitions key_bounded 1`. Last comes the timings table of
+the result, its column names and one line per phase, each cell separated by
+a tab ([Progress and timings](#progress-and-timings)).
+Standard output is the same with or without `--verbose`.
 
 ### Exit status
 

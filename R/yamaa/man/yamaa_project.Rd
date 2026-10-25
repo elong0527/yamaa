@@ -90,6 +90,17 @@ An object with a read-only field and four methods:
     \code{$issues} and \code{$save()}, which writes each section's transport
     files and then its define.xml.}
 }
+\code{$check()}, \code{$run()} and \code{$submission()} also take
+\code{progress}, a function called with one named list per event, as
+\code{\link{yamaa_spec}} describes: each specification of a check or run is
+named by its \code{domain}, and each section of a submission is one
+\code{"composition"} phase. A \code{progress} function that signals an error
+is called no more: the call checks, builds or composes nothing further, and
+its result fails with one \code{engine_rejected} issue whose code is
+\code{host_progress_failure} and refuses its save. A check, a project run,
+one specification's run and a submission hold \code{$timings}, a data frame
+of each phase the call ran; no saved file holds them.
+
 Each \code{$save()} returns the absolute paths it wrote invisibly, in
 publication order. A failure raises a condition of class \code{yamaa_error}
 whose \code{issues} data frame says why; for a refused \code{$save()}, its

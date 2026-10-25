@@ -13,6 +13,7 @@
 //! the R host, R's version and, for a call that may run project functions,
 //! the installed functions' port.
 use crate::handle::address;
+use crate::progress::Progress;
 use crate::project_activation::Functions;
 use extendr_api::prelude::*;
 use std::{
@@ -180,15 +181,29 @@ const PARTITIONS: [usize; 2] = [2, 624_640];
 
 /// The facade engine of one call: the R host on R's `version`, over
 /// [`PARTITIONS`], with the installed project functions when `functions` are
-/// given. Every call builds its engine here.
-fn engine(version: &str, functions: Option<Functions>) -> yamaa::Engine {
+/// given, reporting to `progress` when one is given (#3762). Every call
+/// builds its engine here.
+fn engine(
+    version: &str,
+    functions: Option<Functions>,
+    progress: Option<Progress>,
+) -> yamaa::Engine {
     let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
     let options = EngineOptions::new(HostLanguage::R, "r".into(), version.into())
         .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback());
-    yamaa::Engine::new(match functions {
+    let options = match functions {
         Some(functions) => options.with_functions(Arc::new(functions)),
         None => options,
+    };
+    yamaa::Engine::new(match progress {
+        Some(progress) => options.with_progress(move |event| progress.call(event)),
+        None => options,
     })
+}
+
+/// The progress callback the R layer wrapped, or none for `NULL`.
+fn progress(value: &Robj) -> std::result::Result<Option<Progress>, Refusal> {
+    Progress::of(value).map_err(Refusal::from)
 }
 
 /// Run a cancellable call of the engine as the R host on R's `version`, with
@@ -198,13 +213,14 @@ fn engine(version: &str, functions: Option<Functions>) -> yamaa::Engine {
 /// cancels it (D186).
 fn called<T>(
     version: &Raw,
-    capabilities: Option<List>,
+    (capabilities, progress): (Option<List>, &Robj),
     run: impl FnOnce(&yamaa::Engine, &CancellationToken) -> std::result::Result<T, Failure>,
 ) -> std::result::Result<T, Refusal> {
     let version = text(version)?;
     let functions = capabilities.map(parse_capabilities).transpose()?;
+    let progress = self::progress(progress)?;
     let token = crate::interrupt::token();
-    let answer = run(&engine(&version, functions), &token);
+    let answer = run(&engine(&version, functions, progress), &token);
     if token.is_cancelled() {
         return Err("the call was cancelled".into());
     }
@@ -419,12 +435,18 @@ fn project_request<'a>(
 /// The check of a specification, or, with `parent`, of a fragment composed on
 /// the specification `parent` names as its parent (#3694).
 #[extendr]
-fn spec_check(specification: Raw, project: Robj, parent: Robj, version: Raw) -> List {
+fn spec_check(
+    specification: Raw,
+    project: Robj,
+    parent: Robj,
+    version: Raw,
+    progress: Robj,
+) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let parent = optional_text(&parent)?;
         let specification = text(&specification)?;
-        let check = called(&version, None, |engine, token| {
+        let check = called(&version, (None, &progress), |engine, token| {
             let request =
                 spec_request(engine, &specification, project.as_deref()).cancel_with(token);
             match parent.as_deref() {
@@ -444,6 +466,11 @@ fn check_status(handle: Robj) -> List {
 #[extendr]
 fn check_issues(handle: Robj) -> List {
     reply(|| table(Some(&read_check(&handle, yamaa::Check::issues)?)))
+}
+
+#[extendr]
+fn check_timings(handle: Robj) -> List {
+    reply(|| table(Some(&read_check(&handle, |check| check.timings().table())?)))
 }
 
 #[extendr]
@@ -507,6 +534,7 @@ fn spec_run(
     capabilities: List,
     plans: Robj,
     stream: bool,
+    progress: Robj,
 ) -> List {
     reply(|| {
         let project = optional_text(&project)?;
@@ -515,7 +543,11 @@ fn spec_run(
         let plans = plans_of(&holder);
         if stream {
             let version = text(&version)?;
-            let engine = engine(&version, Some(parse_capabilities(capabilities)?));
+            let engine = engine(
+                &version,
+                Some(parse_capabilities(capabilities)?),
+                self::progress(&progress)?,
+            );
             let token = crate::interrupt::stream_token();
             let request =
                 spec_request(&engine, &specification, project.as_deref()).cancel_with(&token);
@@ -529,15 +561,19 @@ fn spec_run(
             }
             return store(Value::Streamed(run?));
         }
-        let run = called(&version, Some(capabilities), |engine, token| {
-            let request =
-                spec_request(engine, &specification, project.as_deref()).cancel_with(token);
-            match plans {
-                Some(plans) => request.reusing(plans),
-                None => request,
-            }
-            .run()
-        })?;
+        let run = called(
+            &version,
+            (Some(capabilities), &progress),
+            |engine, token| {
+                let request =
+                    spec_request(engine, &specification, project.as_deref()).cancel_with(token);
+                match plans {
+                    Some(plans) => request.reusing(plans),
+                    None => request,
+                }
+                .run()
+            },
+        )?;
         store(Value::Run(Mutex::new(run)))
     })
 }
@@ -547,7 +583,7 @@ fn spec_resolve(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
-        let engine = engine(&text(&version)?, None);
+        let engine = engine(&text(&version)?, None, None);
         let value = spec_request(&engine, &specification, project.as_deref()).resolve()?;
         Ok(crate::context_values::context_value(&value)?)
     })
@@ -571,7 +607,7 @@ fn read_odm(
         }
         let source = text(&source)?;
         // The read needs no host capability, so the engine names no R version.
-        let items = engine("", None).read_odm(&source, &options)?;
+        let items = engine("", None, None).read_odm(&source, &options)?;
         table(Some(&items))
     })
 }
@@ -669,6 +705,12 @@ fn run_report(handle: Robj) -> List {
     reply(|| read_run(&handle, |run| table(run.report())))
 }
 
+/// The time each phase of the run took (#3762).
+#[extendr]
+fn run_timings(handle: Robj) -> List {
+    reply(|| read_run(&handle, |run| table(Some(&run.timings().table()))))
+}
+
 #[extendr]
 fn run_save(handle: Robj) -> List {
     reply(|| {
@@ -704,7 +746,7 @@ fn run_observations(handle: Robj, include_measurements: bool) -> List {
 fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
     reply(|| {
         let (project, name) = (text(&project)?, text(&name)?);
-        let engine = engine(&text(&version)?, None);
+        let engine = engine(&text(&version)?, None, None);
         let path = engine.project(&project).spec(&name)?.path().to_owned();
         Ok(r!(path.as_str()))
     })
@@ -715,16 +757,18 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 fn project_names(project: Raw, version: Raw) -> List {
     reply(|| {
         let project = text(&project)?;
-        let names = engine(&text(&version)?, None).project(&project).names()?;
+        let names = engine(&text(&version)?, None, None)
+            .project(&project)
+            .names()?;
         Ok(Strings::from_values(names).into_robj())
     })
 }
 
 #[extendr]
-fn project_check(project: Raw, version: Raw) -> List {
+fn project_check(project: Raw, version: Raw, progress: Robj) -> List {
     reply(|| {
         let project = text(&project)?;
-        let check = called(&version, None, |engine, token| {
+        let check = called(&version, (None, &progress), |engine, token| {
             engine.project(&project).cancel_with(token).check()
         })?;
         store(Value::Check(Mutex::new(check)))
@@ -732,21 +776,33 @@ fn project_check(project: Raw, version: Raw) -> List {
 }
 
 #[extendr]
-fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, plans: Robj) -> List {
+fn project_run(
+    project: Raw,
+    section: Robj,
+    version: Raw,
+    capabilities: List,
+    plans: Robj,
+    progress: Robj,
+) -> List {
     reply(|| {
         let section = optional_text(&section)?;
         let project = text(&project)?;
         let holder = held_plans(&plans)?;
         let plans = plans_of(&holder);
-        let runs = called(&version, Some(capabilities), |engine, token| {
-            let request = project_request(engine, &project, section.as_deref()).cancel_with(token);
-            // Only an unknown section refuses the call with issues.
-            match plans {
-                Some(plans) => request.reusing(plans),
-                None => request,
-            }
-            .run()
-        })?;
+        let runs = called(
+            &version,
+            (Some(capabilities), &progress),
+            |engine, token| {
+                let request =
+                    project_request(engine, &project, section.as_deref()).cancel_with(token);
+                // Only an unknown section refuses the call with issues.
+                match plans {
+                    Some(plans) => request.reusing(plans),
+                    None => request,
+                }
+                .run()
+            },
+        )?;
         store(Value::ProjectRun(Mutex::new(runs)))
     })
 }
@@ -785,6 +841,11 @@ fn project_run_member_report(handle: Robj, name: Raw) -> List {
     reply(|| read_member(&handle, &name, |run| table(run.report())))
 }
 
+#[extendr]
+fn project_run_member_timings(handle: Robj, name: Raw) -> List {
+    reply(|| read_member(&handle, &name, |run| table(Some(&run.timings().table()))))
+}
+
 /// One member's printed lines, its run's under its name (D37).
 #[extendr]
 fn project_run_member_summary(handle: Robj, name: Raw) -> List {
@@ -799,6 +860,11 @@ fn project_run_issues(handle: Robj) -> List {
 #[extendr]
 fn project_run_report(handle: Robj) -> List {
     reply(|| read_project_run(&handle, |runs| table(Some(&runs.report()))))
+}
+
+#[extendr]
+fn project_run_timings(handle: Robj) -> List {
+    reply(|| read_project_run(&handle, |runs| table(Some(&runs.timings().table()))))
 }
 
 #[extendr]
@@ -819,14 +885,20 @@ fn project_run_summary(handle: Robj) -> List {
 }
 
 #[extendr]
-fn project_submission(project: Raw, section: Robj, created: Robj, version: Raw) -> List {
+fn project_submission(
+    project: Raw,
+    section: Robj,
+    created: Robj,
+    version: Raw,
+    progress: Robj,
+) -> List {
     reply(|| {
         let section = optional_text(&section)?;
         let created = optional_text(&created)?;
         let project = text(&project)?;
         let mut options = SubmissionOptions::new(yamaa::VERSION);
         options.created = created;
-        let submission = called(&version, None, |engine, token| {
+        let submission = called(&version, (None, &progress), |engine, token| {
             project_request(engine, &project, section.as_deref())
                 .cancel_with(token)
                 .submission(&options)
@@ -856,6 +928,15 @@ fn submission_created(handle: Robj) -> List {
 #[extendr]
 fn submission_issues(handle: Robj) -> List {
     reply(|| table(Some(&read_submission(&handle, yamaa::Submission::issues)?)))
+}
+
+#[extendr]
+fn submission_timings(handle: Robj) -> List {
+    reply(|| {
+        table(Some(&read_submission(&handle, |submission| {
+            submission.timings().table()
+        })?))
+    })
 }
 
 #[extendr]

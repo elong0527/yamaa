@@ -71,7 +71,6 @@ use std::thread::ThreadId;
 use arrow_array::ffi_stream::FFI_ArrowArrayStream;
 use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::{ArrowError, Schema, SchemaRef};
-use yamaa_adapters::application_measurements::Measurements;
 
 use crate::api::{Run, Status};
 use crate::cancel::CancellationToken;
@@ -79,6 +78,7 @@ use crate::engine::Engine;
 use crate::error::{Failure, FailureKind, TableError};
 use crate::internal::{EngineShared, PublicBatches};
 use crate::plan::Plan;
+use crate::progress::{Measured, Reporter};
 use crate::table::Table;
 use crate::text::Action;
 
@@ -124,7 +124,9 @@ fn progress_code(state: &State) -> u8 {
 struct Pending {
     shared: Arc<EngineShared>,
     plan: Plan,
-    measurements: Arc<Measurements>,
+    /// The measurements its compilation started, which its build continues.
+    measured: Measured,
+    reporter: Arc<Reporter>,
 }
 
 impl Pending {
@@ -140,20 +142,32 @@ impl Pending {
         if token.is_cancelled() {
             return None;
         }
-        let (build, batches) = match rows {
+        let observed = self.reporter.resume(self.measured.clone());
+        let (mut build, batches) = match rows {
             Some(rows) => self
                 .plan
-                .stream_through(&self.shared, &self.measurements, token, rows),
+                .stream_through(&self.shared, &observed, token, rows),
             None => (
-                self.plan
-                    .run_through(&self.shared, None, &self.measurements, token),
+                self.plan.run_through(&self.shared, None, &observed, token),
                 None,
             ),
         };
         if build.interrupted() || token.is_cancelled() {
             return None;
         }
-        self.measurements.complete(build.accepted());
+        self.measured.measurements().complete(build.accepted());
+        // A failed progress callback fails the run, which keeps no output.
+        if self.reporter.failed() {
+            build.fail(vec![Reporter::failure(
+                yamaa_core::application_issue::Step::Build,
+            )]);
+            return Some((
+                Run {
+                    build: build.with_subject(subject),
+                },
+                None,
+            ));
+        }
         let build = build.with_subject(subject);
         Some((Run { build }, batches))
     }
@@ -185,9 +199,13 @@ enum State {
 impl State {
     /// A reader that started the stream was released before its end-of-
     /// stream pull. A stream that handed out its last batch has ended, and
-    /// its run keeps its result; any other is cancelled.
-    fn abandon(&mut self) {
+    /// its run keeps its result, unless the progress callback failed, whose
+    /// `failure` then ends it (#3762); any other is cancelled.
+    fn abandon(&mut self, failure: Option<Failure>) {
         match std::mem::replace(self, Self::Cancelled) {
+            Self::Producing { .. } if failure.is_some() => {
+                *self = Self::Failed(failure.expect("a failure"));
+            }
             Self::Producing { run, batches } if batches.ended() => {
                 *self = Self::Ended {
                     run,
@@ -211,6 +229,10 @@ struct Shared {
     /// Whether building the run can call the host.
     host: bool,
     rows: NonZeroUsize,
+    /// What the run's progress events name: the path as given.
+    name: String,
+    /// The run's progress, which each batch handed out reports (#3762).
+    reporter: Arc<Reporter>,
     /// A reader released while another call held the state.
     abandoned: AtomicBool,
     /// Where the run stands, as the state was when last released, read
@@ -265,6 +287,19 @@ impl Shared {
         Failure::rejected(Action::Read(&self.subject), run.build.report())
     }
 
+    /// The refusal that ends the stream once the progress callback failed
+    /// (#3762), or none.
+    fn progress_failure(&self) -> Option<Failure> {
+        self.reporter.failed().then(|| {
+            Failure::from_issues(
+                Action::Read(&self.subject),
+                &[Reporter::failure(
+                    yamaa_core::application_issue::Step::Build,
+                )],
+            )
+        })
+    }
+
     /// The state, unless another call holds it.
     fn lock(&self) -> Result<Held<'_>, Failure> {
         let mut state = match self.try_hold() {
@@ -272,7 +307,7 @@ impl Shared {
             None => return Err(self.refusal(FailureKind::Stream { code: "busy" })),
         };
         if self.abandoned.swap(false, Ordering::SeqCst) {
-            state.abandon();
+            state.abandon(self.progress_failure());
         }
         Ok(state)
     }
@@ -313,14 +348,15 @@ pub struct Streamed {
 }
 
 impl Streamed {
-    /// A streamed run of `plan` through `engine`, polling `token`. A refused
-    /// compilation's run has already ended: it holds its refusal and reads
-    /// nothing.
+    /// A streamed run of `plan` through `engine`, polling `token`, whose
+    /// compilation `measured` measured and which reports to `reporter`. A
+    /// refused compilation's run has already ended: it holds its refusal and
+    /// reads nothing.
     pub(crate) fn new(
         engine: &Engine,
         plan: Plan,
         specification: &str,
-        measurements: Arc<Measurements>,
+        (measured, reporter): (Measured, Arc<Reporter>),
         token: &CancellationToken,
     ) -> Self {
         let shared = engine.shared_owned();
@@ -334,11 +370,18 @@ impl Streamed {
             State::Unread(Box::new(Pending {
                 shared,
                 plan,
-                measurements,
+                measured,
+                reporter: Arc::clone(&reporter),
             }))
         } else {
-            let build = plan.run_through(&shared, None, &measurements, token);
-            measurements.complete(false);
+            let mut build =
+                plan.run_through(&shared, None, &reporter.resume(measured.clone()), token);
+            measured.measurements().complete(false);
+            if reporter.failed() {
+                build.fail(vec![Reporter::failure(
+                    yamaa_core::application_issue::Step::Build,
+                )]);
+            }
             let build = build.with_subject(&subject);
             State::Ended {
                 run: Run { build },
@@ -353,6 +396,8 @@ impl Streamed {
                 owner: std::thread::current().id(),
                 host,
                 rows,
+                name: specification.to_owned(),
+                reporter,
                 abandoned: AtomicBool::new(false),
                 progress: AtomicU8::new(progress_code(&state)),
                 state: Mutex::new(state),
@@ -394,6 +439,7 @@ impl Streamed {
         Batches {
             shared: Arc::clone(&self.shared),
             mode: Mode::Unstarted,
+            handed: 0,
         }
     }
 
@@ -504,6 +550,8 @@ enum Mode {
 pub struct Batches {
     shared: Arc<Shared>,
     mode: Mode,
+    /// The batches this reader's stream has handed out.
+    handed: usize,
 }
 
 impl Batches {
@@ -620,6 +668,14 @@ impl Batches {
             self.mode = Mode::Done;
             return Some(Err(shared.refusal(FailureKind::Cancelled)));
         };
+        // A progress callback that failed at an earlier batch ends the stream,
+        // and the run, whose output was never all handed out, has no result.
+        if let Some(failure) = shared.progress_failure() {
+            self.mode = Mode::Done;
+            drop(run);
+            *state = State::Failed(failure.clone());
+            return Some(Err(failure));
+        }
         // Before each batch, the token; the state stays cancelled.
         if !batches.ended() && shared.token.is_cancelled() {
             self.mode = Mode::Done;
@@ -665,7 +721,18 @@ impl Iterator for Batches {
                 }
                 next.map(Ok)
             }
-            Mode::Unstarted | Mode::Producing => self.pull(),
+            Mode::Unstarted | Mode::Producing => {
+                let next = self.pull();
+                // The batch is reported once the run's state is released.
+                if let (Some(Ok(batch)), Mode::Producing) = (&next, &self.mode) {
+                    self.handed += 1;
+                    let shared = &self.shared;
+                    shared
+                        .reporter
+                        .batch(&shared.name, self.handed, batch.num_rows());
+                }
+                next
+            }
         }
     }
 }
@@ -679,7 +746,7 @@ impl Drop for Batches {
             return;
         }
         match self.shared.try_hold() {
-            Some(mut state) => state.abandon(),
+            Some(mut state) => state.abandon(self.shared.progress_failure()),
             // Another call holds the state: the next one abandons the stream.
             None => self.shared.abandoned.store(true, Ordering::SeqCst),
         }

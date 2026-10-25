@@ -7,6 +7,7 @@ mod function_callback;
 mod handle;
 mod interface;
 mod interrupt;
+mod progress;
 mod project_activation;
 mod public_table;
 mod thread_bound;
