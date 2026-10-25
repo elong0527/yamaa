@@ -366,8 +366,8 @@ enum Kind {
     /// A `str_pad` whose width is not a positive whole number has no
     /// operation, only its declaration defect (TEXT-2).
     StrPad(Result<StringPad, Diagnostic>),
-    /// A `str_substr` whose `start` or `length` is below one has no
-    /// operation, only its declaration defect (TEXT-13).
+    /// A `str_substr` whose fields TEXT-13 or TEXT-16 refuses has no
+    /// operation, only its declaration defect.
     StrSubstr(Result<StringSubstr, Diagnostic>),
     StrLength(StringLength),
     StrDecimal(StringDecimal),
@@ -616,8 +616,8 @@ impl Operation {
 
     /// The declaration defect that leaves the verb without an operation,
     /// which binding reports at its derivation's checkpoint, before any
-    /// reference binds: a `str_pad` width (TEXT-2), a `str_substr` start or
-    /// length (TEXT-13).
+    /// reference binds: a `str_pad` width (TEXT-2), a `str_substr`'s fields
+    /// (TEXT-13, TEXT-16).
     pub(crate) fn defect(&self) -> Option<&Diagnostic> {
         match &self.kind {
             Kind::StrPad(Err(defect)) | Kind::StrSubstr(Err(defect)) => Some(defect),

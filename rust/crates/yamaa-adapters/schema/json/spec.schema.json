@@ -2082,13 +2082,19 @@
             },
             "start": {
               "type": "integer",
-              "description": "Position of the first scalar taken, counted from 1 (TEXT-13).",
+              "description": "Position of the first scalar taken, counted from 1; required unless piece is declared, and refused beside it (TEXT-13, TEXT-16).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "int"
             },
             "length": {
               "type": "integer",
-              "description": "Most scalars taken; without it, they run to the end of the source (TEXT-13).",
+              "description": "Most scalars taken; without it, they run to the end of the source; required beside piece (TEXT-13, TEXT-16).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "piece": {
+              "type": "integer",
+              "description": "Which piece, counted from 1, of the text broken between words into pieces of at most length scalars; declared instead of start (TEXT-16).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "int"
             },
@@ -4250,13 +4256,19 @@
             },
             "start": {
               "type": "integer",
-              "description": "Position of the first scalar taken, counted from 1 (TEXT-13).",
+              "description": "Position of the first scalar taken, counted from 1; required unless piece is declared, and refused beside it (TEXT-13, TEXT-16).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "int"
             },
             "length": {
               "type": "integer",
-              "description": "Most scalars taken; without it, they run to the end of the source (TEXT-13).",
+              "description": "Most scalars taken; without it, they run to the end of the source; required beside piece (TEXT-13, TEXT-16).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "piece": {
+              "type": "integer",
+              "description": "Which piece, counted from 1, of the text broken between words into pieces of at most length scalars; declared instead of start (TEXT-16).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "int"
             },
@@ -4268,8 +4280,7 @@
             }
           },
           "required": [
-            "source",
-            "start"
+            "source"
           ],
           "additionalProperties": false
         },

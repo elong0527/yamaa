@@ -1,4 +1,4 @@
-//! The text verbs' entry points (TEXT-1 to TEXT-10, TEXT-13 to TEXT-15).
+//! The text verbs' entry points (TEXT-1 to TEXT-10, TEXT-13 to TEXT-16).
 use super::{text, value, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
@@ -8,7 +8,7 @@ use yamaa_core::{
     text_decimal::{Admission, Error as DecimalError, StringDecimal},
     text_extract::{Error as ExtractError, Step, StringExtract},
     text_pad::StringPad,
-    text_position::{DeclarationError, Error as PositionError, StringLength, StringSubstr},
+    text_position::{DeclarationError, Error as PositionError, Fields, StringLength, StringSubstr},
     text_template::StringTemplate,
 };
 
@@ -33,11 +33,12 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     })
 }
 
-/// The members every `str_substr` operation reads; `length` is optional.
-const SUBSTR: [&str; 4] = ["source", "path", "start", "length"];
+/// The members every `str_substr` operation reads; `start`, `length` and
+/// `piece` are each optional.
+const SUBSTR: [&str; 5] = ["source", "path", "start", "length", "piece"];
 
-/// `str_substr`'s declaration, `{source, path, start, length}`: its refusal
-/// at `path`.
+/// `str_substr`'s declaration, `{source, path, start?, length?, piece?}`:
+/// its refusal at `path`.
 fn str_substr(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&SUBSTR);
     match substr(input) {
@@ -66,8 +67,11 @@ fn substr(input: &Json) -> Result<StringSubstr, DeclarationError> {
     StringSubstr::new(
         text(input, "source").into(),
         text(input, "path").into(),
-        text(input, "start"),
-        input.get("length").map(Json::text),
+        Fields {
+            start: input.get("start").map(Json::text),
+            length: input.get("length").map(Json::text),
+            piece: input.get("piece").map(Json::text),
+        },
         None,
     )
 }

@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_decimal, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, TEXT-15, COLUMN-10, NAME-3), each reached by the verb's own declaration or step, and, through binding, the order in which str_pad's width checkpoint reports beside a case predicate's grammar and the references a derivation reads (TEXT-2, FORMULA-1, FORMULA-9, NAME-3). The specification `spec`, which preparation reads for the declarations it refuses, reads SRC and writes one key column ID; each binding case writes its specification whole, binding SRC to the schema ID, int.",
+  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_decimal, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, TEXT-15, TEXT-16, COLUMN-10, NAME-3), each reached by the verb's own declaration or step, and, through binding, the order in which str_pad's width checkpoint reports beside a case predicate's grammar and the references a derivation reads (TEXT-2, FORMULA-1, FORMULA-9, NAME-3). The specification `spec`, which preparation reads for the declarations it refuses, reads SRC and writes one key column ID; each binding case writes its specification whole, binding SRC to the schema ID, int.",
   "documents": {
     "spec": {
       "yamaa": "1.0",
@@ -71,6 +71,36 @@
       "operation": "str_substr",
       "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "start": "-100000000000000000000000"},
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.T.derivation.str_substr.start"], "context": {"expected": "a positive integer start"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_start_beside_a_piece",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "start": "1", "length": "200", "piece": "2"},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "TEXT-16", "spec_paths": ["columns.T.derivation.str_substr.start"], "context": {"class": "str_substr", "field": "start", "identifier": "start"}}]
+    },
+    {
+      "case": "str_substr_requires_a_start_without_a_piece",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "length": "200"},
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "TEXT-16", "spec_paths": ["columns.T.derivation.str_substr.start"], "context": {"class": "str_substr", "field": "start"}}]
+    },
+    {
+      "case": "str_substr_requires_a_length_beside_a_piece",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "piece": "1"},
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "TEXT-16", "spec_paths": ["columns.T.derivation.str_substr.length"], "context": {"class": "str_substr", "field": "length"}}]
+    },
+    {
+      "case": "str_substr_reports_only_the_piece_when_piece_and_length_are_both_below_one",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "length": "0", "piece": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-16", "spec_paths": ["columns.T.derivation.str_substr.piece"], "context": {"expected": "a positive integer piece"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_length_below_one_beside_a_piece",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "length": "-200", "piece": "2"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.T.derivation.str_substr.length"], "context": {"expected": "a positive integer length"}}]
     },
     {
       "case": "str_substr_refuses_a_source_that_is_not_text",
