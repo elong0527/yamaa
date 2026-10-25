@@ -94,7 +94,7 @@
         "strict": true
       },
       "compares": ["condition", "spec_paths"],
-      "among": true,
+      "prefix": true,
       "issues": [{"condition": "invalid_field_type", "spec_paths": ["windows.UNUSED"]}]
     },
     {
