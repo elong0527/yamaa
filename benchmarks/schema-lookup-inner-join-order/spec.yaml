@@ -1,0 +1,61 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ, CMSEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  CM: {path: input/cm.csv, types: {CMSEQ: int}}
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, CMSEQ, AETERM, CMTRT]
+
+intermediates:
+  # Each adverse event paired with each medication of the same subject given
+  # for its term. Neither file is stored in key order, so the pairs follow
+  # the events as stored and, within an event, its medications as stored.
+  - id: GIVEN
+    dataset: AE
+    inner_join: CM
+    key:
+      USUBJID: AE.USUBJID
+      CMINDC: AE.AETERM
+    derivations:
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      AETERM: AE.AETERM
+      CMSEQ: CM.CMSEQ
+      CMTRT: CM.CMTRT
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number of the Adverse Event
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Medication
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+
+# No output order is declared, so the rows keep the order of the pairs that
+# build them.
+rows:
+  - id: pairs
+    dataset: GIVEN
+    derivations:
+      USUBJID: GIVEN.USUBJID
+      AESEQ: GIVEN.AESEQ
+      CMSEQ: GIVEN.CMSEQ
+      AETERM: GIVEN.AETERM
+      CMTRT: GIVEN.CMTRT

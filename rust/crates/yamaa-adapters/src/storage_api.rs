@@ -52,6 +52,8 @@
 //! (`parquet::format`), which bound a column chunk's encoding statistics
 //! (`ENCODING_STATS`).
 #[cfg(feature = "parquet")]
+use crate::parquet_source::format::{Logical, TimeUnit as Unit};
+#[cfg(feature = "parquet")]
 use parquet::{
     basic::{LogicalType, TimeUnit},
     errors::ParquetError,
@@ -64,8 +66,6 @@ use parquet::{
 };
 #[cfg(feature = "parquet")]
 use std::sync::Arc;
-#[cfg(feature = "parquet")]
-use yamaa_core::parquet_source::{Logical, Unit};
 
 /// An Arrow type that an embedded schema names and Arrow 55 has no
 /// counterpart for, held as its nearest Arrow 55 type.
@@ -502,35 +502,54 @@ pub(crate) fn writer_properties_max_rows(
 }
 
 #[cfg(feature = "parquet")]
-pub(crate) fn column_logical(descriptor: &ColumnDescriptor) -> Logical {
-    logical_type(descriptor.logical_type().as_ref())
+pub(crate) fn column_logical(descriptor: &ColumnDescriptor) -> Option<Logical> {
+    descriptor.logical_type().as_ref().map(logical_type)
 }
 
+/// A logical type as the reader names it (`parquet_source::format`).
 #[cfg(feature = "parquet")]
-pub(crate) fn logical_type(logical: Option<&LogicalType>) -> Logical {
+pub(crate) fn logical_type(logical: &LogicalType) -> Logical {
+    let unit = |unit: &TimeUnit| match unit {
+        TimeUnit::MILLIS(_) => Unit::Millis,
+        TimeUnit::MICROS(_) => Unit::Micros,
+        TimeUnit::NANOS(_) => Unit::Nanos,
+    };
     match logical {
-        None => Logical::None,
-        Some(LogicalType::String) => Logical::String,
-        Some(LogicalType::Date) => Logical::Date,
-        Some(LogicalType::Timestamp {
-            unit,
-            is_adjusted_to_u_t_c,
-        }) => Logical::Timestamp {
-            unit: match unit {
-                TimeUnit::MICROS(_) => Unit::Microsecond,
-                TimeUnit::MILLIS(_) => Unit::Millisecond,
-                TimeUnit::NANOS(_) => Unit::Nanosecond,
-            },
-            utc: *is_adjusted_to_u_t_c,
+        LogicalType::String => Logical::String,
+        LogicalType::Map => Logical::Map,
+        LogicalType::List => Logical::List,
+        LogicalType::Enum => Logical::Enum,
+        LogicalType::Decimal { scale, precision } => Logical::Decimal {
+            scale: *scale,
+            precision: *precision,
         },
-        Some(LogicalType::Integer {
+        LogicalType::Date => Logical::Date,
+        LogicalType::Time {
+            is_adjusted_to_u_t_c,
+            unit: time,
+        } => Logical::Time {
+            utc: *is_adjusted_to_u_t_c,
+            unit: unit(time),
+        },
+        LogicalType::Timestamp {
+            is_adjusted_to_u_t_c,
+            unit: time,
+        } => Logical::Timestamp {
+            utc: *is_adjusted_to_u_t_c,
+            unit: unit(time),
+        },
+        LogicalType::Integer {
             bit_width,
             is_signed,
-        }) => u8::try_from(*bit_width).map_or(Logical::Other, |bits| Logical::Integer {
-            bits,
+        } => Logical::Integer {
+            bits: *bit_width,
             signed: *is_signed,
-        }),
-        _ => Logical::Other,
+        },
+        LogicalType::Unknown => Logical::Unknown,
+        LogicalType::Json => Logical::Json,
+        LogicalType::Bson => Logical::Bson,
+        LogicalType::Uuid => Logical::Uuid,
+        LogicalType::Float16 => Logical::Float16,
     }
 }
 
