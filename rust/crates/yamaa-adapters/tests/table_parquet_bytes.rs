@@ -5,11 +5,12 @@
 //! The stability contract in `docs/release.md` keeps the bytes that each
 //! profile saves through every 1.x release. PARQUET-4 asks only that a
 //! Parquet file read back the same, and the corpus compares Parquet that way,
-//! so a change to the encoder's settings or to the Parquet crate would pass
-//! it unnoticed. These tests save two fixed tables through the artifact
-//! encoder (`src/parquet_artifact/encode.rs`): one with a column of each type
-//! that PARQUET-1 maps, a missing value in each, and 1,030 rows in two row
-//! groups, and one with no rows.
+//! so a change to the encoder would pass it unnoticed. These tests save three
+//! fixed tables through the artifact encoder (`src/parquet_artifact/encode.rs`):
+//! one with a column of each type that PARQUET-1 maps, a missing value in
+//! each, and 1,030 rows in two row groups; one with the same columns and row
+//! groups, each missing in a pattern that the definition levels encode
+//! differently; and one with no rows.
 //!
 //! A run divided into partitions writes its output one partition at a time
 //! (D264); the writer holds rows until a row group is full, so every
@@ -168,14 +169,69 @@ fn rows() -> Vec<[Value; 5]> {
     rows
 }
 
+/// Whether row `row` falls in a run of missing rows, where the runs grow
+/// from one row to seventeen and back to one, with runs of one to twelve
+/// present rows between them.
+fn in_missing_run(row: usize) -> bool {
+    let (mut at, mut length) = (0, 1);
+    loop {
+        if row < at + length {
+            return true;
+        }
+        at += length;
+        let present = length % 12 + 1;
+        if row < at + present {
+            return false;
+        }
+        at += present;
+        length = length % 17 + 1;
+    }
+}
+
+/// 1,030 rows whose columns are missing in the patterns that decide how the
+/// definition levels are encoded: a value repeated eight times or more is a
+/// run of its own, other values are packed eight to a byte in runs of at most
+/// 504, and the last group of a row group is padded. `str` is missing in runs
+/// of one to seventeen rows, `int` in every row, `float` in the first 600,
+/// `date` in alternate runs of eight and `datetime` in every other row from
+/// row 504. Present values come from integer arithmetic, and each float is
+/// an exact half.
+fn nulls() -> Vec<[Value; 5]> {
+    (0..1_030_usize)
+        .map(|i| {
+            let n = i as i64;
+            let unless = |missing: bool, value: Value| {
+                if missing {
+                    Value::Missing
+                } else {
+                    value
+                }
+            };
+            [
+                unless(in_missing_run(i), Value::Str("s".repeat(i % 3))),
+                Value::Missing,
+                unless(i < 600, Value::float(n as f64 * 0.5)),
+                unless(i % 16 < 8, date(n - 515)),
+                unless(i >= 504 && i % 2 == 1, datetime(n * 86_399)),
+            ]
+        })
+        .collect()
+}
+
 /// Each case: its fixture's name and text, the table it was saved from, and
 /// the rows of each row group that its footer lists.
-fn cases() -> [(&'static str, &'static str, Table, Vec<i64>); 2] {
+fn cases() -> [(&'static str, &'static str, Table, Vec<i64>); 3] {
     [
         (
             "table.parquet.b64",
             include_str!("fixtures/parquet_bytes/table.parquet.b64"),
             table(rows()),
+            vec![1_024, 6],
+        ),
+        (
+            "nulls.parquet.b64",
+            include_str!("fixtures/parquet_bytes/nulls.parquet.b64"),
+            table(nulls()),
             vec![1_024, 6],
         ),
         (

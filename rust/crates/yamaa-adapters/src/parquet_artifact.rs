@@ -7,6 +7,8 @@ use yamaa_core::{
 };
 #[cfg(feature = "parquet")]
 mod encode;
+#[cfg(all(test, feature = "parquet"))]
+mod upstream;
 
 #[derive(Debug)]
 pub enum Error<E> {
@@ -20,8 +22,9 @@ pub enum Error<E> {
     },
     Cell(CellError<E>),
     ValueType,
-    #[cfg(feature = "parquet")]
-    Codec(parquet::errors::ParquetError),
+    /// More row groups than an i16 ordinal numbers, which the 1.0 writer
+    /// refused (D160).
+    RowGroups,
 }
 
 /// Artifact encoding retains a capability boundary without the codec dependency.
