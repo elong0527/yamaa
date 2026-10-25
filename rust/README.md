@@ -780,8 +780,13 @@ strategies:
   by those keys runs as one partition, and a specification that declares no
   key runs over consecutive partitions.
 
-Under either strategy, `Partitions::with_whole_table_fallback` runs a step
-that would refuse over the whole input instead.
+Under either strategy, the records one step reads together must sit in one
+partition (#3830): a grouped row template, the key grain or an ODM read whose
+records the partitions cannot keep whole, rows driven by an intermediate over
+the driver input and such an intermediate's `unique` check refuse the run too,
+and consecutive partitions end only between runs of the fields those reads
+share. `Partitions::with_whole_table_fallback` runs a step that would refuse
+over the whole input instead.
 
 ### Terminology: key groups vs. data partitions
 
