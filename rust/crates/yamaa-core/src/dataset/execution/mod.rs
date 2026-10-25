@@ -40,6 +40,9 @@ pub enum ExecutionEvent {
         phase: ExecutionPhase,
         refusal: crate::application_observer::Refusal,
     },
+    /// A partitioned run enters its partition `number`, from 1, which holds
+    /// `records` driver records (#3762).
+    Partition { number: usize, records: usize },
 }
 
 /// How a run divides its driver input. Without `leading_keys` (#3697), into

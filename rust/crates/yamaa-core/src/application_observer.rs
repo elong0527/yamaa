@@ -25,6 +25,8 @@ pub enum Phase {
     Input,
     Dataset(ExecutionPhase),
     Output,
+    /// One submission section composed (#3762), which the facade observes.
+    Composition,
     Finished,
 }
 
@@ -64,6 +66,9 @@ pub enum Event {
     Exit { phase: Phase, outcome: Outcome },
     FunctionReturn { stage: CallStage, outcome: Outcome },
     Refusal { phase: Phase, refusal: Refusal },
+    /// A partitioned run enters its partition `number`, from 1, of `records`
+    /// driver records (#3762).
+    Partition { number: usize, records: usize },
 }
 
 /// Observers have no failure result and must not mutate source/callback state,
@@ -137,6 +142,9 @@ impl<'a> Scope<'a> {
     }
     pub fn refusal(self, phase: Phase, refusal: Refusal) {
         self.observer.observe(Event::Refusal { phase, refusal });
+    }
+    pub fn partition(self, number: usize, records: usize) {
+        self.observer.observe(Event::Partition { number, records });
     }
     pub(crate) fn activation<P: HostFunctions>(self, port: &mut P) -> Activation<'_, 'a, P> {
         Activation { port, scope: self }
