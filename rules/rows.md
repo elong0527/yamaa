@@ -118,7 +118,7 @@ literals, earlier row-derived columns, or a record lookup with already-complete
 matching values, in dependency order.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate`.
+Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_scopes.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate`.
 
 The aggregate reduces the group under
 [Expressions](expressions.md) and
