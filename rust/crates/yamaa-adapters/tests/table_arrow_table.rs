@@ -730,6 +730,7 @@ mod table {
             drop(run);
             // The saved bytes belong to the result, not to the run.
             let expected = b"ID,VALUE,DOUBLE\n1,0.13,0.25\n2,1.23,2.47\n3,2.35,4.69\n";
+            assert_eq!(result.files(), [("output.csv", expected.as_slice())]);
             let report = result.saved_observations().unwrap();
             assert_eq!(
                 report["artifacts"][0]["content"]
