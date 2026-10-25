@@ -14,16 +14,7 @@ autotests = false
 yamaa = { path = "../yamaa" }
 yamaa-boundary = { path = "../yamaa-boundary" }
 
-[features]
-# The loadable engine of the test-only loaded mode: this crate built as a
-# library (cargo rustc --crate-type cdylib) exports yamaa_engine_negotiate,
-# which a binding built with its own dynamic-engine feature loads from beside
-# its module (rust/interface/README.md). No shipped build enables it.
-dynamic-engine = []
-
 [dev-dependencies]
-# The loading tests drive the loader the bindings' loaded mode uses.
-yamaa-boundary = { path = "../yamaa-boundary", features = ["loader"] }
 # The lifetime tests read exported streams as a host does, with the Arrow
 # release the facade locks.
 arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
@@ -39,28 +30,3 @@ workspace = true
 [[test]]
 name = "main"
 path = "tests/main.rs"
-
-# The loading tests' fixture engines (tests/abi_loading.rs), each a library
-# that cargo test builds beside the test binary: an engine of the next
-# boundary version, a library without the negotiation entry, and engines
-# without plan_reuse and without format_parquet. Each names its path, so the
-# source bundles, which stage no examples, still read this manifest.
-[[example]]
-name = "fixture_next_version"
-path = "examples/fixture_next_version.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "fixture_no_entry"
-path = "examples/fixture_no_entry.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "fixture_no_plan_reuse"
-path = "examples/fixture_no_plan_reuse.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "fixture_no_format_parquet"
-path = "examples/fixture_no_format_parquet.rs"
-crate-type = ["cdylib"]

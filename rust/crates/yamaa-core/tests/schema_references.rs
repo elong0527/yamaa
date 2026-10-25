@@ -1,5 +1,8 @@
 //! Schema contracts: resolution pruning, schema layer admission and schema
-//! type expression.
+//! type expression. The cases that validate a layer against a schema and
+//! compare its findings are `fixtures/diagnostics/schema.json`; each test
+//! here proves a seam the replay cannot reach, which its first comment names
+//! (#3798).
 mod schema {
     mod resolution_pruning {
         //! LAYER-11 pruning and the LAYER-13 order on the AST (#3134), over
@@ -138,6 +141,8 @@ mod schema {
             }
         }
 
+        /// Seam: the inputs and columns LAYER-11 pruning keeps in the pruned document,
+        /// which no reader returns.
         #[test]
         fn only_semantic_roles_read_names() {
             // A label, a metadata value and a row id name columns without
@@ -184,6 +189,7 @@ mod schema {
             }
         }
 
+        /// Seam: the columns LAYER-11 pruning keeps in the pruned document.
         #[test]
         fn literal_values_are_not_reads() {
             let case = op(
@@ -220,6 +226,7 @@ mod schema {
             assert_eq!(columns(&result), ["OUT", "MARK", "FLAG", "OTHER"]);
         }
 
+        /// Seam: the columns LAYER-11 pruning keeps in the pruned document.
         #[test]
         fn dictionary_entries_are_values_not_reads() {
             let mapping = op(
@@ -246,6 +253,7 @@ mod schema {
             assert_eq!(columns(&result), ["OUT", "CODE", "SPARE"]);
         }
 
+        /// Seam: the columns and inputs pruning keeps, in the order it gives them.
         #[test]
         fn closed_languages_retain_field_and_record_count_dependencies() {
             // Every grammar is parsed for its names: a numeric expression, a
@@ -304,6 +312,7 @@ mod schema {
             }
         }
 
+        /// Seam: the columns pruning keeps when a text reads no name.
         #[test]
         fn malformed_texts_read_nothing() {
             let template =
@@ -334,6 +343,8 @@ mod schema {
             }
         }
 
+        /// Seam: pruning's refusal of a live text over the parser's depth, and the
+        /// pruned document of a dead one.
         #[test]
         fn parser_refusal_is_not_an_empty_reference_set() {
             // A live text over the parser's depth refuses the spec, so that a
@@ -374,6 +385,8 @@ mod schema {
             }
         }
 
+        /// Seam: repeated pruning gives one pruned document and leaves its input
+        /// unchanged.
         #[test]
         fn repeated_pruning_keeps_written_identifiers() {
             let input = spec(
@@ -396,6 +409,7 @@ mod schema {
             assert_eq!(input, original);
         }
 
+        /// Seam: the pruned document, its order and the origin of each of its nodes.
         #[test]
         fn prunes_dead_sources_follows_count_and_stably_orders_without_changing_output() {
             let fields = |columns: Vec<V>, inputs: Vec<(&'static str, V)>| {
@@ -450,6 +464,8 @@ mod schema {
             }
         }
 
+        /// Seam: the inputs, columns, intermediates and rows pruning keeps, in
+        /// dependency and in declared order.
         #[test]
         fn rows_and_assertions_are_roots_and_lookup_matching_inputs_precede_users() {
             let mut asserted = bare("ASSERT");
@@ -536,6 +552,8 @@ mod schema {
             assert_eq!(columns(&declared), ["LIVE", "KEY", "CHECK", "ASSERT"]);
         }
 
+        /// Seam: the dependency issues (`resolution::Issue`) pruning refuses with,
+        /// which the replay's reader takes as its input rather than returns.
         #[test]
         fn unknown_dependencies_are_lexical_and_precede_cycle_reporting() {
             // B also reads itself; the unknown names are reported first, in
@@ -579,6 +597,7 @@ mod schema {
             }
         }
 
+        /// Seam: the cycle issue pruning refuses with, its closed loop and its paths.
         #[test]
         fn a_layered_cycle_names_its_closed_loop() {
             // One detector names the closed loop, as a single-file spec's
@@ -643,6 +662,7 @@ mod schema {
             );
         }
 
+        /// Seam: repeated pruning in dependency order gives one pruned document.
         #[test]
         fn repeated_dependency_requests_keep_the_complete_document() {
             let input = spec(
@@ -655,6 +675,8 @@ mod schema {
             assert_eq!(columns(&first), ["A"]);
         }
 
+        /// Seam: the unknown-dependency issue pruning refuses with, and the columns it
+        /// keeps.
         #[test]
         fn unknown_dependency_retains_its_authored_column_and_name() {
             let input = spec(
@@ -674,6 +696,8 @@ mod schema {
             assert_eq!(columns(&prune(&input, Order::Dependencies).unwrap()), ["X"]);
         }
 
+        /// Seam: the order pruning gives, compared with the order
+        /// `dependency_analysis::analyze` gives.
         #[test]
         fn dependency_order_matches_the_shared_analysis() {
             use yamaa_core::dependency_analysis::analyze;
@@ -717,6 +741,8 @@ mod schema {
             }
         }
 
+        /// Seam: the order `dependency_analysis::analyze` gives and the first cycle it
+        /// names.
         #[test]
         fn the_order_names_only_the_first_cycle() {
             use yamaa_core::dependency_analysis::analyze;
@@ -749,6 +775,7 @@ mod schema {
             assert_eq!(analyzed.cycle, Some(vec![1, 2, 1]));
         }
 
+        /// Seam: the declared order pruning keeps, with its input unchanged.
         #[test]
         fn declared_order_and_unordered_input_are_kept() {
             let input = spec(
@@ -775,6 +802,7 @@ mod schema {
             assert_eq!(input, original);
         }
 
+        /// Seam: the columns and inputs pruning keeps for an aggregate's bindings.
         #[test]
         fn aggregate_bindings_are_local_to_their_aggregate() {
             // The filter reads outside the bindings; the reducer and the
@@ -825,6 +853,7 @@ mod schema {
             assert_eq!(columns(&result), ["TOTAL"]);
         }
 
+        /// Seam: what pruning keeps or refuses for a bare reducer name (LOOKUP-22).
         #[test]
         fn a_bare_reducer_name_reads_a_column_only_in_an_aggregate_without_bindings() {
             // LOOKUP-22: the reducer of an aggregate that declares bindings
@@ -892,6 +921,7 @@ mod schema {
             }
         }
 
+        /// Seam: the inputs and columns pruning keeps for ODM items and range bounds.
         #[test]
         fn odm_items_name_their_input_and_range_bounds_name_donor_fields() {
             let read = op("odm", V::map(vec![("item", text("RAW.IT.WEIGHT"))]));
@@ -943,8 +973,8 @@ mod schema {
         //! before it composes (LAYER-4).
         use yamaa_core::language::LanguageVersion;
         use yamaa_core::schema::{
-            Document, DocumentKind as K, DocumentNode as N, NormalizedDocument, SchemaContext as C,
-            SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure,
+            Document, DocumentNode as N, NormalizedDocument, SchemaDiagnostic, SchemaModule,
+            SchemaSource, SchemaStructure,
         };
 
         use crate::support::document::Tree as V;
@@ -1071,9 +1101,6 @@ mod schema {
             assert_eq!(view.validate_layer(input).unwrap(), []);
             view.normalize_versioned_layer(input).unwrap()
         }
-        fn text(value: &str) -> C {
-            C::Text(value.into())
-        }
         fn paths(findings: &[SchemaDiagnostic]) -> Vec<(&str, &str)> {
             findings
                 .iter()
@@ -1113,76 +1140,7 @@ mod schema {
             same(actual, actual.root(), expected, expected.root());
         }
 
-        #[test]
-        fn collects_all_field_errors_in_schema_order_before_normalization() {
-            let findings = diagnostics(layer(vec![(
-                "columns",
-                V::List(vec![V::map(vec![
-                    ("label", V::integer("2")),
-                    ("name", V::text("X")),
-                    ("type", V::integer("1")),
-                ])]),
-            )]));
-            assert_eq!(findings.len(), 2);
-            assert_eq!(
-                paths(&findings),
-                [
-                    ("columns.X.type", "invalid_field_type"),
-                    ("columns.X.label", "invalid_field_type")
-                ]
-            );
-            assert_eq!(
-                findings[0].context,
-                vec![
-                    ("expected", text("column_type")),
-                    ("actual", C::ValueKind(K::Integer))
-                ]
-            );
-            assert_eq!(
-                findings[1].context,
-                vec![
-                    ("expected", text("str")),
-                    ("actual", C::ValueKind(K::Integer))
-                ]
-            );
-        }
-
-        #[test]
-        fn keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not() {
-            let findings = diagnostics(layer(vec![
-                (
-                    "input",
-                    V::map(vec![("SRC", V::map(vec![("options", V::map(vec![]))]))]),
-                ),
-                (
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", V::text("X")),
-                        ("options", V::map(vec![])),
-                    ])]),
-                ),
-                (
-                    "rows",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("R")),
-                        ("options", V::map(vec![])),
-                    ])]),
-                ),
-                (
-                    "intermediates",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("I")),
-                        ("options", V::map(vec![])),
-                    ])]),
-                ),
-                ("settings", V::map(vec![])),
-            ]));
-            assert_eq!(
-                paths(&findings),
-                [("settings.needed", "missing_required_field")]
-            );
-        }
-
+        /// Seam: the normalized layer and its origins, which no reader returns.
         #[test]
         fn normalization_defers_member_defaults_and_owns_shorthand() {
             let input = layer(vec![
@@ -1242,6 +1200,7 @@ mod schema {
                 .any(|o| matches!(o.source, SchemaSource::Default { .. })));
         }
 
+        /// Seam: the origins of the nodes a layer's shorthand generates.
         #[test]
         fn generated_input_path_and_container_point_to_original_shorthand() {
             let input = layer(vec![("input", V::map(vec![("SRC", V::text("data.csv"))]))]);
@@ -1260,6 +1219,8 @@ mod schema {
             }
         }
 
+        /// Seam: repeated passes over one layer give one result; a case makes one
+        /// call.
         #[test]
         fn repeated_invalid_layers_retain_the_same_complete_findings() {
             let schema = at_version(&schema());
@@ -1269,6 +1230,7 @@ mod schema {
             assert_eq!(schema.validate_layer(&input).unwrap(), first);
         }
 
+        /// Seam: repeated normalization of one layer gives equal results.
         #[test]
         fn independent_normalized_layers_keep_the_complete_authored_column() {
             let schema = schema();
@@ -1281,6 +1243,8 @@ mod schema {
             assert_eq!(first, second);
         }
 
+        /// Seam: mapping keys that are not text, which a case's JSON document cannot
+        /// write.
         #[test]
         fn member_paths_distinguish_numeric_boolean_and_textual_keys() {
             let input = document(V::Pairs(vec![
@@ -1320,39 +1284,11 @@ mod schema {
                 ]
             );
         }
-
-        #[test]
-        fn a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand() {
-            let input = layer(vec![(
-                "input",
-                V::map(vec![
-                    ("DM", V::map(vec![("path", V::text("dm.csv"))])),
-                    // Another field beside the path adds to it.
-                    (
-                        "AE",
-                        V::map(vec![
-                            ("path", V::text("ae.csv")),
-                            ("options", V::map(vec![("needed", V::text("yes"))])),
-                        ]),
-                    ),
-                    ("LB", V::text("lb.csv")),
-                ]),
-            )]);
-            let path = get(&input, get(&input, input.root(), "input"), "DM");
-            let findings = diagnostics(input.clone());
-            assert_eq!(paths(&findings), [("input.DM", "redundant_long_form")]);
-            assert_eq!(
-                findings[0].context,
-                [
-                    ("field", C::Text("path".into())),
-                    ("shorthand", C::InputValue(get(&input, path, "path"))),
-                ]
-            );
-        }
     }
     mod schema_type_expression {
         use yamaa_core::schema::{TypeError, TypeExpression, TypeNode, TypeResource};
 
+        /// Seam: the arena the `TypeExpression` parser builds and the spans it keeps.
         #[test]
         fn authored_nested_type_arena_retains_occurrences_and_original_spans() {
             let text = " dict[ str, list[dict[str, int]] ] ";
@@ -1373,6 +1309,8 @@ mod schema {
             assert_eq!(parsed.root(), 5);
         }
 
+        /// Seam: the names the `TypeExpression` parser accepts before any bundle
+        /// resolves them.
         #[test]
         fn builtins_and_unresolved_names_are_syntax_not_bundle_resolution() {
             for name in [
@@ -1394,6 +1332,7 @@ mod schema {
             assert_eq!(parsed.names().collect::<Vec<_>>(), ["str"]);
         }
 
+        /// Seam: the `TypeExpression` parser's refusals.
         #[test]
         fn malformed_types_and_string_encoded_unions_are_rejected() {
             for text in [
@@ -1426,6 +1365,7 @@ mod schema {
             );
         }
 
+        /// Seam: the `TypeExpression` parser's depth limit.
         #[test]
         fn fixed_type_depth_refuses_the_next_layer_and_fresh_parse_succeeds() {
             let admitted = format!("{}str{}", "list[".repeat(127), "]".repeat(127));

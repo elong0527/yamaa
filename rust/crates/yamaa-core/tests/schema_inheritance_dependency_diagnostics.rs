@@ -3,56 +3,15 @@
 //! diagnostic projection and schema document.
 mod schema {
     mod inheritance_dependency_diagnostics {
+        //! The projection of composed columns' dependency issues. The cases that
+        //! project authored facts and compare the issues are
+        //! `fixtures/diagnostics/inheritance.json`; each test here proves a seam
+        //! the replay cannot reach, which its first comment names (#3798).
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{diagnostic::inheritance_dependency_diagnostics, resolution::Issue};
 
-        #[test]
-        fn complete_ordered_facts_name_each_cycle_by_its_closed_loop() {
-            // One detector names the closed loop for layered and single-file
-            // specs alike (#2844, decision 1).
-            let issues = [
-                Issue::Unknown {
-                    column: "VALUE\0é".into(),
-                    dependency: "MISSING🙂".into(),
-                },
-                Issue::Cycle {
-                    cycle: vec!["A".into(), "B".into(), "A".into()],
-                    paths: vec![
-                        "columns.A.derivation.compute".into(),
-                        "columns.B.derivation.compute".into(),
-                    ],
-                },
-            ];
-            let findings = inheritance_dependency_diagnostics(&issues);
-            assert_eq!(findings.len(), 2);
-            assert_eq!(findings[0].spec_paths, ["columns.VALUE\0é.derivation"]);
-            assert_eq!(
-                findings[0].context["dependency"],
-                JsonValue::String("MISSING🙂".into())
-            );
-            assert_eq!(
-                findings[1].spec_paths,
-                [
-                    "columns.A.derivation.compute",
-                    "columns.B.derivation.compute"
-                ]
-            );
-            assert_eq!(
-                findings[1].context["cycle"],
-                JsonValue::Array(
-                    ["A", "B", "A"]
-                        .into_iter()
-                        .map(|name| JsonValue::String(name.into()))
-                        .collect()
-                )
-            );
-            assert_eq!(findings[1].definition().condition, "dependency_cycle");
-            assert_eq!(findings[1].definition().rule, Some("COLUMN-6"));
-            assert!(findings
-                .iter()
-                .all(|finding| finding.source_span.is_none() && finding.operand_route.is_none()));
-        }
-
+        /// Seam: dependency facts thousands of characters long, generated in the test,
+        /// and the issues left unchanged after projection.
         #[test]
         fn later_long_dependency_facts_remain_complete_in_order() {
             let later = "\"\\\0🙂".repeat(1000);
@@ -95,6 +54,7 @@ mod schema {
             );
         }
 
+        /// Seam: a cycle of 1,000 generated empty members.
         #[test]
         fn all_empty_cycle_members_remain_in_the_retained_order() {
             let issues = [Issue::Cycle {

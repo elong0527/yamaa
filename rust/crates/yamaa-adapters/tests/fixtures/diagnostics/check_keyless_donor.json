@@ -1,5 +1,5 @@
 {
-  "about": "What check reports for a specification, build reports too, in binding's order. Keyless reads (#3307, D111, D164, #3533): a 1.0 input that declares no key has nothing to match a join on, so an implicit join's read of it, a qualified aggregate without key or a copy from it fails as no_applicable_keys (LOOKUP-5); a declared key's columns are columns of the specification, stored by the input, of types that compare (LOOKUP-5, LOOKUP-9, ROW-5, NAME-3); a column that holds an aggregate binds once over the whole dataset, so it reads the primary input through its join where the rows share no record; and a read binding refuses admits no range. Donor reads (#3474, #2844 decision 3): a lookup's own derivations and an aggregate's derive bindings read the records of one relation, with no implicit join, so join options are refused once a read binds (LOOKUP-24, LOOKUP-9); a read of a derivation not yet derived or of a name nothing declares fails (LOOKUP-15, FORMULA-9), as do a window's read of another record, a read of a lookup it cannot match there (LOOKUP-3, LOOKUP-16) and an aggregate (LOOKUP-18); placeholders and mapping sources are typed (TEXT-1, EXPR-11, EXPR-13); and a lookup's derivations come before its key types, which come before its filter. In `implicit` VS is the base and X, C and N derive constants; `record` is one row template over VS, `two` one over VS and one over HOME, `dosed` one over DOSES, a lookup of PLAN, and `whole` two whose columns hold an aggregate; `copied` and `copied_rows` copy AGE and SEX from ADSL, which `adsl_spec` produces; `grouped` groups a template over VS by subject, `linked` reads DM in a template over that ADSL, and `subject` has a grouped template's read and a column's. In `lookup` the lookup P of PLAN derives D, which X reads, and `driven` adds row templates over VS and over DOSES. Moved from check_keyless_reads.rs and check_donor_reads.rs, whose tests ran check and build and compared, for both, the spec paths of every issue in order and the first issue's condition and rule, with its context where the test wrote it and its phase in the donor half. Where the first issue is not the only one, one case states the spec paths of every issue and a second states that first issue among them. Each case writes the files its specification reads and runs for the default host, since a request without a project reads no environment entry.",
+  "about": "What check reports for a specification, build reports too, in binding's order. Keyless reads (#3307, D111, D164, #3533): a 1.0 input that declares no key has nothing to match a join on, so an implicit join's read of it, a qualified aggregate without key or a copy from it fails as no_applicable_keys (LOOKUP-5); a declared key's columns are columns of the specification, stored by the input, of types that compare (LOOKUP-5, LOOKUP-9, ROW-5, NAME-3); a column that holds an aggregate binds once over the whole dataset, so it reads the primary input through its join where the rows share no record; and a read binding refuses admits no range. Donor reads (#3474, #2844 decision 3): a lookup's own derivations and an aggregate's derive bindings read the records of one relation, with no implicit join, so join options are refused once a read binds (LOOKUP-24, LOOKUP-9); a read of a derivation not yet derived or of a name nothing declares fails (LOOKUP-15, FORMULA-9), as do a window's read of another record, a read of a lookup it cannot match there (LOOKUP-3, LOOKUP-16) and an aggregate (LOOKUP-18); placeholders and mapping sources are typed (TEXT-1, EXPR-11, EXPR-13); and a lookup's derivations come before its key types, which come before its filter. In `implicit` VS is the base and X, C and N derive constants; `record` is one row template over VS, `two` one over VS and one over HOME, `dosed` one over DOSES, a lookup of PLAN, and `whole` two whose columns hold an aggregate; `copied` and `copied_rows` copy AGE and SEX from ADSL, which `adsl_spec` produces; `grouped` groups a template over VS by subject, `linked` reads DM in a template over that ADSL, and `subject` has a grouped template's read and a column's. In `lookup` the lookup P of PLAN derives D, which X reads, and `driven` adds row templates over VS and over DOSES. Moved from check_keyless_reads.rs and check_donor_reads.rs, whose tests ran check and build and compared, for both, the spec paths of every issue in order and the first issue's condition and rule, with its context where the test wrote it and its phase in the donor half. Where the first issue is not the only one, one case states the spec paths of every issue and a second states that first issue: as the first issue reported (`prefix`) where a later issue has its spec paths too, and otherwise among the issues, which the first case's spec paths, held by no later issue, already place first. Each case writes the files its specification reads and runs for the default host, since a request without a project reads no environment entry.",
   "documents": {
     "implicit": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, VSDY]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\nbase: VS\noutput: {path: out.csv, columns: [STUDYID, USUBJID, VSDY, X, C, N]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: VS.STUDYID}\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSDY, type: int, derivation: VS.VSDY}\n  - {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}\n",
     "record": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD, VSDY]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL, X, C, N]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: VSDY, type: int}\n  - {name: AVAL, type: float}\n  - {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}\nrows:\n  - id: record\n    dataset: VS\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'SYSBP'\"\n      VSDY: VS.VSDY\n      AVAL: VS.SYSBP\n",
@@ -109,7 +109,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1 AND VS.VSDY > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
       "compares": ["condition", "rule", "spec_paths", "context"],
-      "among": true,
+      "prefix": true,
       "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.flag.condition"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
     },
     {
@@ -124,7 +124,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: 1.0}, {when: \"VSDY > 1\", then: {source: {variable: VS.SYSBP, require_match: true}}}, {when: \"HOME.VSDY > 1\", then: DM.AGE}, {otherwise: 2.0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
       "compares": ["condition", "rule", "spec_paths", "context"],
-      "among": true,
+      "prefix": true,
       "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].when"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
     },
     {
@@ -242,7 +242,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1 AND HOME.VSDY > 1 AND DM.AGE < 9\""}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
       "compares": ["condition", "rule", "spec_paths", "context"],
-      "among": true,
+      "prefix": true,
       "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.record.filter"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
     },
     {
@@ -607,7 +607,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
       "compares": ["condition", "rule", "spec_paths", "context"],
-      "among": true,
+      "prefix": true,
       "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.flag.condition"], "context": {"identifier": "RFSTDTC"}}]
     },
     {
@@ -622,7 +622,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: 1.0}, {otherwise: 2.0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
       "compares": ["condition", "rule", "spec_paths", "context"],
-      "among": true,
+      "prefix": true,
       "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].when"], "context": {"identifier": "RFSTDTC"}}]
     },
     {
@@ -644,7 +644,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [RFSTDTC, VSTESTCD, USUBJID], types: {RFSTDTC: date, AGE: int, VSTESTCD: int}}"}, {"from": "- {name: VSDY, type: int, derivation: VS.VSDY}", "to": "- {name: VSDY, type: int, derivation: VS.VSDY}\n  - {name: VSTESTCD, type: str, derivation: VS.VSTESTCD}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
       "compares": ["condition", "rule", "spec_paths", "context"],
-      "among": true,
+      "prefix": true,
       "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"identifier": "RFSTDTC"}}]
     },
     {
@@ -692,12 +692,6 @@
       "case": "a_key_column_of_an_int_ordinal_joins",
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [SEQ], ordinal: SEQ, types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: SEQ, type: int, derivation: VS.VSDY}\n  - {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
-      "issues": []
-    },
-    {
-      "case": "a_key_its_producer_stores_joins",
-      "operation": ["check", "build"],
-      "input": {"files": {"spec.yaml": {"base": "copied", "edits": [{"from": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml}", "to": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [STUDYID, USUBJID]}"}]}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
       "issues": []
     },
     {
@@ -918,7 +912,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: \"B + XYZ.A\", B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
+      "prefix": true,
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D"]}]
     },
     {
@@ -940,7 +934,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{B}-{XYZ.A}\"}, B: PLAN.METHOD}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
+      "prefix": true,
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
     },
     {
@@ -970,7 +964,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"XYZ.A > 1 OR PLAN.B > 1\", then: 1.0}, {otherwise: 2.0}]}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
+      "prefix": true,
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["intermediates.P.derivations.D.case[0].when"]}]
     },
     {
@@ -992,7 +986,7 @@
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {flag: \"Q.FIRST > 1 OR XYZ.A > 1\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
+      "prefix": true,
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["intermediates.P.derivations.D.flag.condition"]}]
     },
     {

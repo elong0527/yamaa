@@ -10,6 +10,7 @@ cell as None.
 import inspect
 import unittest
 
+from host_fixtures import first_difference
 from host_fixtures import load as load_truth
 
 import yamaa
@@ -41,7 +42,9 @@ class Conditions(unittest.TestCase):
                 )
 
     def test_a_second_call_gives_the_same_catalogue(self):
-        self.assertEqual(yamaa.conditions().to_pylist(), self.rows)
+        # The catalogue is compared as a summary of its first difference
+        # (#3882).
+        self.assertIsNone(first_difference(yamaa.conditions().to_pylist(), self.rows))
 
 
 if __name__ == "__main__":
