@@ -282,7 +282,8 @@ mod tests {
             (
                 rows % ROW_GROUP_ROWS,
                 Limits::table(rows, Limits::COLUMNS),
-                Limits::table(rows + ROW_GROUP_ROWS, Limits::COLUMNS).map_err(|error| error.resource),
+                Limits::table(rows + ROW_GROUP_ROWS, Limits::COLUMNS)
+                    .map_err(|error| error.resource),
             ),
             (0, Ok(()), Err("table_cells")),
             "the default partition of {rows} rows"

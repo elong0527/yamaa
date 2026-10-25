@@ -943,6 +943,6 @@ mod partitioned_execution;
 mod execution;
 pub use execution::{
     CheckRecord, CodelistObservation, Dataset, Division, Execution, ExecutionAttempt,
-    ExecutionError, ExecutionEvent, ExecutionPhase, Partitioning, Resource, RowCountObservation, RowIdentity,
-    TemplateRows,
+    ExecutionError, ExecutionEvent, ExecutionPhase, Partitioning, Resource, RowCountObservation,
+    RowIdentity, TemplateRows,
 };

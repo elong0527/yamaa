@@ -59,11 +59,24 @@ pub struct Refusal {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Event {
-    Phase { phase: Phase },
-    FunctionCall { stage: CallStage },
-    Exit { phase: Phase, outcome: Outcome },
-    FunctionReturn { stage: CallStage, outcome: Outcome },
-    Refusal { phase: Phase, refusal: Refusal },
+    Phase {
+        phase: Phase,
+    },
+    FunctionCall {
+        stage: CallStage,
+    },
+    Exit {
+        phase: Phase,
+        outcome: Outcome,
+    },
+    FunctionReturn {
+        stage: CallStage,
+        outcome: Outcome,
+    },
+    Refusal {
+        phase: Phase,
+        refusal: Refusal,
+    },
     /// How a run divided its driver input, with the most records its
     /// partitions hold when it ran divided (#3794).
     Divided {

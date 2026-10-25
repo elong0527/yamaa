@@ -541,4 +541,10 @@ partitions, and its confinement gate, are stated case by case in
 the gate's refusals, their fallbacks and the plans it admits. The streamed run's
 are the facade's `streaming.rs`, the adapters' `table_public_batches.rs`, whose
 counting source proves that a consumer that stops pulling stops production,
-and the installed `streaming` suites of both hosts.
+and the installed `streaming` suites of both hosts. The clients' default
+partitions are the facade's `client_partitions.rs`, which reads each client's
+values against core's, `partitioned_confinement.rs`, which reads how each run
+divided its input from its measured observations, the hosts'
+`longitudinal_capacity` suites, which read it for their default, and their
+`partitioned_default` suites, which run 10,000,001 records under it in native
+qualification.

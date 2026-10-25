@@ -280,7 +280,10 @@ impl Frame {
         order: &[usize],
     ) -> Result<Vec<Values>, std::collections::TryReserveError> {
         let in_place = order.len() == self.rows()
-            && order.iter().enumerate().all(|(position, &row)| position == row);
+            && order
+                .iter()
+                .enumerate()
+                .all(|(position, &row)| position == row);
         let Self {
             columns,
             completed,

@@ -270,15 +270,19 @@ impl PartialEq for StoredReport {
         self.metadata == other.metadata
             && self.diagnostics == other.diagnostics
             && self.contents.len() == other.contents.len()
-            && self.contents.iter().zip(&other.contents).all(|(left, right)| {
-                left.name == right.name
-                    && match ((left.encode)(), (right.encode)()) {
-                        (Ok(left), Ok(right)) => {
-                            left.0.get() == right.0.get() && left.1.get() == right.1.get()
+            && self
+                .contents
+                .iter()
+                .zip(&other.contents)
+                .all(|(left, right)| {
+                    left.name == right.name
+                        && match ((left.encode)(), (right.encode)()) {
+                            (Ok(left), Ok(right)) => {
+                                left.0.get() == right.0.get() && left.1.get() == right.1.get()
+                            }
+                            _ => false,
                         }
-                        _ => false,
-                    }
-            })
+                })
             && self.rows.len() == other.rows.len()
             && self.rows.iter().zip(&other.rows).all(|(left, right)| {
                 match (left.encoded(), right.encoded()) {
@@ -451,9 +455,9 @@ impl Serialize for ArtifactsView<'_> {
                 .get("records")
                 .is_some_and(Value::is_null)
                 .then(|| {
-                    self.contents
-                        .iter()
-                        .find(|content| artifact.get("name").and_then(Value::as_str) == Some(&content.name))
+                    self.contents.iter().find(|content| {
+                        artifact.get("name").and_then(Value::as_str) == Some(&content.name)
+                    })
                 })
                 .flatten();
             let Some(content) = deferred else {

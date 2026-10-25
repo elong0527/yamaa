@@ -1170,11 +1170,7 @@ pub(crate) fn artifact_report(
         .map(|rows| rows.len())
         .collect::<Vec<_>>();
     report.push_table(deferred_observation(
-        table,
-        id,
-        "derived",
-        "output",
-        partitions,
+        table, id, "derived", "output", partitions,
     )?)?;
     report["outcome"] = json!("success");
     report["nodes"][0]["outcome"] = json!("success");

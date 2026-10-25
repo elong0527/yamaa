@@ -139,11 +139,7 @@ impl<K: Ord, V> Map<K, V> {
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         match self.position(&key) {
             Ok(at) => Entry::Occupied(OccupiedEntry { map: self, at }),
-            Err(at) => Entry::Vacant(VacantEntry {
-                map: self,
-                at,
-                key,
-            }),
+            Err(at) => Entry::Vacant(VacantEntry { map: self, at, key }),
         }
     }
     pub fn append(&mut self, other: &mut Self) {
@@ -363,8 +359,13 @@ mod tests {
                 "insert {key}"
             );
         }
-        let entries = |map: &Map<String, usize>| map.iter().map(|(k, v)| (k.clone(), *v)).collect::<Vec<_>>();
-        let reference = |tree: &BTreeMap<String, usize>| tree.iter().map(|(k, v)| (k.clone(), *v)).collect::<Vec<_>>();
+        let entries =
+            |map: &Map<String, usize>| map.iter().map(|(k, v)| (k.clone(), *v)).collect::<Vec<_>>();
+        let reference = |tree: &BTreeMap<String, usize>| {
+            tree.iter()
+                .map(|(k, v)| (k.clone(), *v))
+                .collect::<Vec<_>>()
+        };
         assert_eq!(entries(&map), reference(&tree), "the entries in key order");
         *map.entry("c".into()).or_insert(0) += 7;
         *tree.entry("c".into()).or_insert(0) += 7;
@@ -374,7 +375,11 @@ mod tests {
         assert_eq!(map.remove("y"), tree.remove("y"), "remove an absent key");
         map.retain(|key, _| key != "q");
         tree.retain(|key, _| key != "q");
-        assert_eq!(entries(&map), reference(&tree), "after entry, remove and retain");
+        assert_eq!(
+            entries(&map),
+            reference(&tree),
+            "after entry, remove and retain"
+        );
         assert_eq!(
             (map.get("b"), map.contains_key("a"), map.len()),
             (tree.get("b"), tree.contains_key("a"), tree.len()),

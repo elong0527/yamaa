@@ -84,7 +84,11 @@ impl Partitions {
                 count: 1,
             },
             Division::Partitions { keys, count } => Self {
-                strategy: if keys == 0 { "consecutive" } else { "key_bounded" },
+                strategy: if keys == 0 {
+                    "consecutive"
+                } else {
+                    "key_bounded"
+                },
                 keys,
                 rows,
                 count,

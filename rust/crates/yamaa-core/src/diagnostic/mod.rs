@@ -10,7 +10,6 @@
 //! original-document preflight and output declarations. Other families retain their existing error types
 //! until their semantics and provenance migrate here.
 
-
 use crate::expression::SourceSpan;
 
 mod dataset;

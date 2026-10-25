@@ -18,8 +18,8 @@ use extendr_api::prelude::*;
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
-    panic::{catch_unwind, AssertUnwindSafe},
     num::NonZeroUsize,
+    panic::{catch_unwind, AssertUnwindSafe},
     rc::{Rc, Weak},
     sync::{Arc, Mutex, MutexGuard},
 };

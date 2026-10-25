@@ -171,9 +171,13 @@ impl PartialEq for Dataset {
         left.schema == right.schema
             && left.rows == right.rows
             && left.columns.len() == right.columns.len()
-            && left.columns.iter().zip(&right.columns).all(|(left, right)| {
-                (0..self.inner.rows).all(|row| left.get(row) == right.get(row))
-            })
+            && left
+                .columns
+                .iter()
+                .zip(&right.columns)
+                .all(|(left, right)| {
+                    (0..self.inner.rows).all(|row| left.get(row) == right.get(row))
+                })
     }
 }
 

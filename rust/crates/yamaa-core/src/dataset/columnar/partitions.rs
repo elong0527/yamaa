@@ -553,10 +553,12 @@ impl ResolvedPlan {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
         });
-        observer(ExecutionEvent::Divided(crate::dataset::Division::Partitions {
-            keys: input.keys,
-            count: ranges.len(),
-        }));
+        observer(ExecutionEvent::Divided(
+            crate::dataset::Division::Partitions {
+                keys: input.keys,
+                count: ranges.len(),
+            },
+        ));
         observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
         let width = self.region(RegionId::DATASET).output.columns().len();
         let mut parts = Vec::with_capacity(ranges.len());
