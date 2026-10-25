@@ -1,9 +1,9 @@
 """Run a host's tests and optional equivalence on the same fresh installation.
 
 Python's package/tools tests and installed suites use a new wheel environment.
-R's package check and public benchmark conformance use one external source
-installation. Test failures are collected so that a failed ordinary suite
-does not hide the benchmark result, or the reverse.
+R's full installed suites, package check and public benchmark conformance
+use one external source installation. Test failures are collected so that
+a failed ordinary suite does not hide the benchmark result, or the reverse.
 """
 
 import argparse
@@ -67,6 +67,11 @@ def run(host, work, uv, qualify):
     else:
         record(failed, "R configure tests", r_tests.test_configure)
         archive, environment = r_tests.install(work / "install")
+        record(
+            failed,
+            "R installed suites",
+            lambda: r_tests.run_installed_suites(work / "suites", environment),
+        )
         record(
             failed,
             "R package check",

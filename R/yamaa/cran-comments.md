@@ -3,6 +3,13 @@
 This is a new submission. yamaa builds clinical data specifications through
 a shared Rust engine, which the package compiles at installation.
 
+The source package carries a small base-R smoke suite. It runs the embedded
+format selftest and checks the public specification/project API, R function
+activation, progress callbacks and saved output against an authored study.
+It needs no suggested packages. The full unit, regression and conformance
+suites remain CI release gates against the installed package; their scripts
+and large fixture trees are not shipped for CRAN to run.
+
 ## Test environments
 
 `R CMD check --as-cran` on the package's source tarball, with the settings of

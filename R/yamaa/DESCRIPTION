@@ -20,9 +20,7 @@ License: MIT + file LICENSE
 Copyright: The yamaa contributors; for the bundled and linked third-party
     code and data, the holders that inst/AUTHORS lists and that
     inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
-    inst/LICENSE-UNICODE.txt and inst/LICENSE-YAML.txt name; and for the SAS
-    test files in tests/host-fixtures/sas, those that the license files beside
-    them name.
+    inst/LICENSE-UNICODE.txt and inst/LICENSE-YAML.txt name.
 Encoding: UTF-8
 Depends: R (>= 4.2.0)
 Imports: utils

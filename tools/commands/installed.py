@@ -50,8 +50,8 @@ def stage(runtime, destination):
             )
         ]
     else:
-        # The inputs that the R package's tests directory carries beside the
-        # suites, which read them from their working directory.
+        # Full R supplemental inputs stay outside the small CRAN archive.
+        # The suites read these trees from their working directory.
         directories += [destination / name for name in stage_r_package.TEST_INPUTS]
     for target in [*(target for _, target in copies), *directories]:
         if target.exists():

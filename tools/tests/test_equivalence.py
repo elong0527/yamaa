@@ -53,6 +53,9 @@ class GateRun:
                 "install",
                 return_value=(self.archive, self.environment),
             ) as self.install_r,
+            mock.patch.object(
+                equivalence.r_tests, "run_installed_suites"
+            ) as self.r_suites,
             mock.patch.object(equivalence, "check") as self.check,
         ):
             equivalence.main(list(argv))
@@ -65,6 +68,7 @@ class GateRun:
             "python installs": list(self.install_python.call_args_list),
             "python suites": list(self.suites.call_args_list),
             "r installs": list(self.install_r.call_args_list),
+            "r suites": list(self.r_suites.call_args_list),
             "r checks": list(self.check.call_args_list),
         }
 
@@ -114,6 +118,9 @@ class EquivalenceGateTests(unittest.TestCase):
         self.assertEqual(gate.suites.call_args.args[0], Path("venv/bin/python"))
         self.assertEqual(gate.check.call_args.args[0], gate.archive)
         self.assertIs(gate.check.call_args.args[2], gate.environment)
+        gate.r_suites.assert_called_once_with(
+            Path("gate-work/r-suites"), gate.environment
+        )
 
     def test_a_python_mismatch_fails_before_the_r_build(self):
         """A failing Python comparison stops the gate with a nonzero status."""
