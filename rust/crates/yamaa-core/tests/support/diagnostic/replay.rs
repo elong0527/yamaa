@@ -16,14 +16,17 @@
 //! is filled in. A case whose table compared some keys of the context, not
 //! the whole of it, names each as `context.<key>` in place of `context`:
 //! each row's context holds exactly those keys, and each reported context is
-//! compared at them alone. A case whose table found its record by cause
+//! compared at them alone. A case whose table read the first of several
+//! issues by position says `"prefix": true`: its rows are the first issues
+//! reported, in order, after the `compares` projection, and the issues after
+//! them are not compared. A case whose table found its record by cause
 //! among several issues says `"among": true`: its rows are some of the
 //! issues reported, each equal to a distinct one after the `compares`
 //! projection, in any order, since the issues the table left unstated give
-//! its rows no authored position; the replay renders and counts only the
-//! issues they match. An input may take its `document` from one of the
-//! file's `documents`, by name (`base`), with `edits` that set or remove a
-//! member at a path of keys and list indexes.
+//! its rows no authored position. For either, the replay renders and counts
+//! only the issues the rows match ([`form::Order`]). An input may take its
+//! `document` from one of the file's `documents`, by name (`base`), with
+//! `edits` that set or remove a member at a path of keys and list indexes.
 //!
 //! A positive case also states the output table's rows, the run report's
 //! rows or the files a save created, changed or removed, as [`super::form`]
@@ -31,13 +34,16 @@
 //! issues alone, so a core case that states one of them fails, naming the
 //! operation that reports no such thing.
 //!
+//! The cases run in parallel ([`form::in_parallel`]), and the causes they
+//! render count as rendered on the thread that runs the replay.
+//!
 //! Every row was authored: in the Rust table it moved from, or from the rule
 //! card, registry entry or sibling record its pull request names. No run
 //! wrote one.
 use super::{
     form::{self, Outcome, Stated},
     json::{self, Json},
-    operations, rendered,
+    operations, rendered, rendered_for_this_thread,
 };
 use std::{collections::BTreeSet, path::Path};
 use yamaa_core::{
@@ -65,11 +71,18 @@ pub struct Case {
     /// The fields the case compares, when its table compared fewer than all,
     /// each a field or a `context.<key>`.
     pub compares: Option<Vec<String>>,
-    /// Whether the rows are some of the issues reported, in any order.
-    pub among: bool,
+    /// How the rows stand to the issues reported.
+    pub order: form::Order,
     pub issues: Vec<Value>,
     /// The tables and files the case states beside its issues.
     pub stated: Stated,
+}
+
+impl Case {
+    /// The case's label, which names it in a failure.
+    pub fn label(&self) -> &str {
+        &self.label
+    }
 }
 
 /// Every case of every fixture file, by file name and then as written. A
@@ -134,14 +147,8 @@ pub fn cases() -> Vec<Case> {
                 fields
             });
             let issues = case.field("issues").items();
-            let among = case.get("among").is_some_and(|among| {
-                assert!(among.boolean(), "{label}: among is written only as true");
-                assert!(
-                    !issues.is_empty(),
-                    "{label}: an among case names at least one row"
-                );
-                true
-            });
+            let value = case.value();
+            let order = form::Order::read(&value, issues.len(), &label);
             if let Some(fields) = &compares {
                 let keys = context_keys(fields);
                 for issue in issues {
@@ -171,11 +178,11 @@ pub fn cases() -> Vec<Case> {
             }
             cases.push(Case {
                 input: resolved(fixture, case.field("input"), &label),
-                stated: Stated::read(&case.value(), &label),
+                stated: Stated::read(&value, &label),
                 label,
                 operations,
                 compares,
-                among,
+                order,
                 issues: issues.iter().map(Json::value).collect(),
             });
         }
@@ -232,13 +239,14 @@ pub fn row(diagnostic: &Diagnostic) -> Value {
 }
 
 /// Replay every case: the issues each of its operations reports must equal
-/// its rows, or hold them when the case is `among`, the operations of a case
-/// that names several must report the same complete rows, each issue a row
-/// compares renders its registered message from its own record (P-MSG-1),
-/// and the causes the cases reach are returned.
+/// its rows, begin with them for a `prefix`, or hold them when the case is
+/// `among`, the operations of a case that names several must report the
+/// same complete rows, each issue a row compares renders its registered
+/// message from its own record (P-MSG-1), and the causes the cases reach are
+/// returned.
 pub fn replay() -> BTreeSet<ConditionCode> {
-    let mut reached = BTreeSet::new();
-    for case in cases() {
+    let reached = form::in_parallel(&cases(), Case::label, |case| {
+        let mut reached = BTreeSet::new();
         let mut reported = Vec::new();
         for operation in &case.operations {
             let label = match case.operations.len() {
@@ -252,7 +260,7 @@ pub fn replay() -> BTreeSet<ConditionCode> {
                 .iter()
                 .map(|row| compared(row.clone(), case.compares.as_deref()))
                 .collect::<Vec<_>>();
-            let checked = if case.among {
+            let checked = if case.order == form::Order::Among {
                 match among(&case.issues, &rows) {
                     Ok(matched) => matched.into_iter().map(|index| &issues[index]).collect(),
                     Err(unmatched) => panic!(
@@ -260,12 +268,13 @@ pub fn replay() -> BTreeSet<ConditionCode> {
                     ),
                 }
             } else {
+                let compared = case.order.compared(&rows, case.issues.len());
                 assert_eq!(
-                    Value::Array(rows),
+                    Value::Array(compared.to_vec()),
                     Value::Array(case.issues.clone()),
                     "{label}"
                 );
-                issues.iter().collect::<Vec<_>>()
+                issues[..compared.len()].iter().collect::<Vec<_>>()
             };
             reached.extend(checked.into_iter().map(rendered));
             // A core operation builds no table and saves no file.
@@ -273,7 +282,10 @@ pub fn replay() -> BTreeSet<ConditionCode> {
             reported.push((operation.as_str(), complete));
         }
         form::same_issues(&reported, &case.label);
-    }
+        reached
+    });
+    let reached = reached.into_iter().flatten().collect();
+    rendered_for_this_thread(&reached);
     reached
 }
 

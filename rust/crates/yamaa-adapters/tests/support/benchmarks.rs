@@ -142,81 +142,114 @@ pub fn stage(name: &str, into: &Path) -> Vec<String> {
 /// recursively. A validation error's spec paths are each owned by a
 /// validation issue of its condition, whose spec paths lie at or below them,
 /// and no entry of a negative benchmark exposes or saves an output.
-// Over the 250-line ceiling until the follow-up of #3806 splits it.
-#[allow(clippy::too_many_lines)]
 #[track_caller]
 pub fn reproduce(name: &str) {
-    /// Every file below `root`.
-    fn files(name: &str, root: &Path) -> std::collections::BTreeSet<PathBuf> {
-        let mut found = std::collections::BTreeSet::new();
-        let entries = std::fs::read_dir(root)
-            .unwrap_or_else(|error| panic!("{name}: {}: {error}", root.display()));
-        for entry in entries {
-            let path = entry
-                .unwrap_or_else(|error| panic!("{name}: {}: {error}", root.display()))
-                .path();
-            if path.is_dir() {
-                found.extend(files(name, &path));
-            } else {
-                found.insert(path);
-            }
-        }
-        found
-    }
-    /// The layers of the composition whose entry is `path`, in contribution
-    /// order: its parent chain, then the fragments it includes, then the
-    /// layer itself (LAYER-3).
-    fn layers(path: &Path) -> Vec<Value> {
-        let layer = yaml(path);
-        let directory = path.parent().unwrap_or(Path::new(""));
-        let mut layers = match layer["parent"].as_str() {
-            Some(parent) => layers(&directory.join(parent)),
-            None => Vec::new(),
-        };
-        let fragments = layer["include"].as_array().into_iter().flatten();
-        for fragment in fragments.filter_map(Value::as_str) {
-            layers.push(yaml(&directory.join(fragment)));
-        }
-        layers.push(layer);
-        layers
-    }
-    /// Whether the project file at `project` lists function files, read as
-    /// conformance reads it: a file that cannot be read lists none.
-    fn supplies_functions(project: &Path) -> bool {
-        let Some(document) = std::fs::read(project)
-            .ok()
-            .and_then(|bytes| yamaa_adapters::yaml_decode::decode_yaml(&bytes).ok())
-            .map(|decoded| decoded.document)
-        else {
-            return false;
-        };
-        document
-            .field(document.root(), "functions")
-            .is_some_and(|functions| match &document.nodes()[functions] {
-                N::Null | N::Boolean(false) => false,
-                N::Sequence(items) => !items.is_empty(),
-                N::Mapping(pairs) => !pairs.is_empty(),
-                _ => true,
-            })
-    }
-    /// The path below `at` of the first field `stated` writes that `reported`
-    /// lacks or holds another value at: a mapping states the fields it writes,
-    /// recursively, and any other value is compared whole.
-    fn differing(stated: &Value, reported: &Value, at: &str) -> Option<String> {
-        let Some(fields) = stated.as_object() else {
-            return (stated != reported).then(|| at.to_owned());
-        };
-        if !reported.is_object() {
-            return Some(at.to_owned());
-        }
-        fields
-            .iter()
-            .find_map(|(field, value)| match reported.get(field) {
-                Some(reported) => differing(value, reported, &format!("{at}.{field}")),
-                None => Some(format!("{at}.{field}")),
-            })
-    }
     let case = path(name);
+    let entries = python_entries(name, &case);
+    let study = super::Scratch::new(name);
+    stage(name, &study);
+    let staged = files(name, &study);
+    let negative = case.join("expected/error.yaml").is_file();
+    let issues = run_entries(name, &study, &entries, negative);
+    // Conformance judges every issue of every entry before the first one.
+    for issue in &issues {
+        assert!(
+            issue["phase"] != "engine",
+            "{name}: an engine issue, which conformance judges an error: {issue:?}"
+        );
+        assert!(
+            issue["condition"] != "unsupported_operation",
+            "{name}: an unsupported operation, which conformance judges unsupported: {issue:?}"
+        );
+    }
+    if negative {
+        first_issue_is_stated(name, &issues);
+        return;
+    }
+    assert!(issues.is_empty(), "{name}: {issues:?}");
+    saved_outputs_are_expected(name, &case, &study, &entries, &staged);
+}
+
+/// Every file below `root`.
+fn files(name: &str, root: &Path) -> std::collections::BTreeSet<PathBuf> {
+    let mut found = std::collections::BTreeSet::new();
+    let entries = std::fs::read_dir(root)
+        .unwrap_or_else(|error| panic!("{name}: {}: {error}", root.display()));
+    for entry in entries {
+        let path = entry
+            .unwrap_or_else(|error| panic!("{name}: {}: {error}", root.display()))
+            .path();
+        if path.is_dir() {
+            found.extend(files(name, &path));
+        } else {
+            found.insert(path);
+        }
+    }
+    found
+}
+
+/// The layers of the composition whose entry is `path`, in contribution
+/// order: its parent chain, then the fragments it includes, then the
+/// layer itself (LAYER-3).
+fn layers(path: &Path) -> Vec<Value> {
+    let layer = yaml(path);
+    let directory = path.parent().unwrap_or(Path::new(""));
+    let mut layers = match layer["parent"].as_str() {
+        Some(parent) => layers(&directory.join(parent)),
+        None => Vec::new(),
+    };
+    let fragments = layer["include"].as_array().into_iter().flatten();
+    for fragment in fragments.filter_map(Value::as_str) {
+        layers.push(yaml(&directory.join(fragment)));
+    }
+    layers.push(layer);
+    layers
+}
+
+/// Whether the project file at `project` lists function files, read as
+/// conformance reads it: a file that cannot be read lists none.
+fn supplies_functions(project: &Path) -> bool {
+    let Some(document) = std::fs::read(project)
+        .ok()
+        .and_then(|bytes| yamaa_adapters::yaml_decode::decode_yaml(&bytes).ok())
+        .map(|decoded| decoded.document)
+    else {
+        return false;
+    };
+    document
+        .field(document.root(), "functions")
+        .is_some_and(|functions| match &document.nodes()[functions] {
+            N::Null | N::Boolean(false) => false,
+            N::Sequence(items) => !items.is_empty(),
+            N::Mapping(pairs) => !pairs.is_empty(),
+            _ => true,
+        })
+}
+
+/// The path below `at` of the first field `stated` writes that `reported`
+/// lacks or holds another value at: a mapping states the fields it writes,
+/// recursively, and any other value is compared whole.
+fn differing(stated: &Value, reported: &Value, at: &str) -> Option<String> {
+    let Some(fields) = stated.as_object() else {
+        return (stated != reported).then(|| at.to_owned());
+    };
+    if !reported.is_object() {
+        return Some(at.to_owned());
+    }
+    fields
+        .iter()
+        .find_map(|(field, value)| match reported.get(field) {
+            Some(reported) => differing(value, reported, &format!("{at}.{field}")),
+            None => Some(format!("{at}.{field}")),
+        })
+}
+
+/// The entries the benchmark at `case` lists for Python, each its
+/// specification and its environment, once the case is one this route runs:
+/// not a Define benchmark, not excluded from conformance, and with no
+/// project that supplies project functions.
+#[track_caller]
+fn python_entries(name: &str, case: &Path) -> Vec<(String, Option<String>)> {
     let metadata = yaml(&case.join("benchmark.yaml"));
     assert!(
         metadata["define"].is_null(),
@@ -252,7 +285,7 @@ pub fn reproduce(name: &str) {
             })
             .collect(),
         None => {
-            let mut specifications: Vec<String> = std::fs::read_dir(&case)
+            let mut specifications: Vec<String> = std::fs::read_dir(case)
                 .unwrap_or_else(|error| panic!("{name}: {error}"))
                 .map(|entry| {
                     let entry = entry.unwrap_or_else(|error| panic!("{name}: {error}"));
@@ -277,13 +310,23 @@ pub fn reproduce(name: &str) {
              a benchmark too)"
         );
     }
-    let study = super::Scratch::new(name);
-    stage(name, &study);
-    let staged = files(name, &study);
-    let negative = case.join("expected/error.yaml").is_file();
+    entries
+}
+
+/// Run each of `entries` in the staged copy `study`, in order, and return
+/// the issue rows they report: a positive benchmark's entry checks clean
+/// and saves when it builds without an issue, and a negative benchmark's
+/// entry neither exposes nor saves an output.
+#[track_caller]
+fn run_entries(
+    name: &str,
+    study: &super::Scratch,
+    entries: &[(String, Option<String>)],
+    negative: bool,
+) -> Vec<Value> {
     let host = yamaa_core::project_function::Language::Python;
     let mut issues = Vec::new();
-    for (specification, environment) in &entries {
+    for (specification, environment) in entries {
         let path = study.join(specification).to_string_lossy().into_owned();
         let environment = environment
             .as_ref()
@@ -324,93 +367,94 @@ pub fn reproduce(name: &str) {
         };
         issues.extend(reported.iter().map(super::study::issue_row));
     }
-    // Conformance judges every issue of every entry before the first one.
-    for issue in &issues {
-        assert!(
-            issue["phase"] != "engine",
-            "{name}: an engine issue, which conformance judges an error: {issue:?}"
-        );
-        assert!(
-            issue["condition"] != "unsupported_operation",
-            "{name}: an unsupported operation, which conformance judges unsupported: {issue:?}"
+    issues
+}
+
+/// Compare the first of a negative benchmark's `issues` with its
+/// `expected/error.yaml`: its phase, condition and spec paths, its rule and
+/// context as the file writes them, and, for a validation error, that a
+/// validation issue of its condition owns each spec path it states.
+#[track_caller]
+fn first_issue_is_stated(name: &str, issues: &[Value]) {
+    let stated = error(name);
+    let Some(first) = issues.first() else {
+        panic!("{name}: no entry reported an issue");
+    };
+    for field in ["phase", "condition", "spec_paths"] {
+        assert_eq!(
+            first[field], stated[field],
+            "{name}: the first issue's {field}"
         );
     }
-    if negative {
-        let stated = error(name);
-        let Some(first) = issues.first() else {
-            panic!("{name}: no entry reported an issue");
-        };
-        for field in ["phase", "condition", "spec_paths"] {
-            assert_eq!(
-                first[field], stated[field],
-                "{name}: the first issue's {field}"
+    if let Some(rule) = stated.get("rule") {
+        assert_eq!(&first["rule"], rule, "{name}: the first issue's rule");
+    }
+    if !stated["context"].is_null() {
+        if let Some(at) = differing(&stated["context"], &first["context"], "context") {
+            panic!(
+                "{name}: the first issue's {at} is not what expected/error.yaml states\n  \
+                 stated: {:?}\nreported: {:?}",
+                stated["context"], first["context"]
             );
         }
-        if let Some(rule) = stated.get("rule") {
-            assert_eq!(&first["rule"], rule, "{name}: the first issue's rule");
-        }
-        if !stated["context"].is_null() {
-            if let Some(at) = differing(&stated["context"], &first["context"], "context") {
-                panic!(
-                    "{name}: the first issue's {at} is not what expected/error.yaml states\n  \
-                     stated: {:?}\nreported: {:?}",
-                    stated["context"], first["context"]
-                );
-            }
-        }
-        if stated["phase"] == "validation" {
-            let declared: Vec<&str> = stated["spec_paths"]
+    }
+    if stated["phase"] == "validation" {
+        let declared: Vec<&str> = stated["spec_paths"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+        let below = |actual: &str, path: &str| {
+            actual
+                .strip_prefix(path)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with(['.', '[']))
+        };
+        let mut owned = std::collections::BTreeSet::<&str>::new();
+        for issue in issues {
+            let paths: Vec<&str> = issue["spec_paths"]
                 .as_array()
                 .into_iter()
                 .flatten()
                 .filter_map(Value::as_str)
                 .collect();
-            let below = |actual: &str, path: &str| {
-                actual
-                    .strip_prefix(path)
-                    .is_some_and(|rest| rest.is_empty() || rest.starts_with(['.', '[']))
-            };
-            let mut owned = std::collections::BTreeSet::<&str>::new();
-            for issue in &issues {
-                let paths: Vec<&str> = issue["spec_paths"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(Value::as_str)
-                    .collect();
-                if issue["phase"] == "validation"
-                    && issue["condition"] == stated["condition"]
-                    && !paths.is_empty()
-                    && paths
+            if issue["phase"] == "validation"
+                && issue["condition"] == stated["condition"]
+                && !paths.is_empty()
+                && paths
+                    .iter()
+                    .all(|actual| declared.iter().any(|path| below(actual, path)))
+            {
+                owned.extend(
+                    declared
                         .iter()
-                        .all(|actual| declared.iter().any(|path| below(actual, path)))
-                {
-                    owned.extend(
-                        declared
-                            .iter()
-                            .copied()
-                            .filter(|path| paths.iter().any(|actual| below(actual, path))),
-                    );
-                }
+                        .copied()
+                        .filter(|path| paths.iter().any(|actual| below(actual, path))),
+                );
             }
-            let unowned: Vec<&str> = declared
-                .iter()
-                .copied()
-                .filter(|path| !owned.contains(path))
-                .collect();
-            assert!(
-                unowned.is_empty(),
-                "{name}: no validation issue of the stated condition owns {unowned:?}: {issues:?}"
-            );
         }
-        return;
+        let unowned: Vec<&str> = declared
+            .iter()
+            .copied()
+            .filter(|path| !owned.contains(path))
+            .collect();
+        assert!(
+            unowned.is_empty(),
+            "{name}: no validation issue of the stated condition owns {unowned:?}: {issues:?}"
+        );
     }
-    assert!(issues.is_empty(), "{name}: {issues:?}");
-    // Each entry's declared report, then its declared output, beside the
-    // entry, as its composed layers declare them; a later layer's `clear`
-    // removes an earlier layer's output field (LAYER-9).
+}
+
+/// Each entry's declared report, then its declared output, beside the
+/// entry in the staged copy `study`, as its composed layers declare them; a
+/// later layer's `clear` removes an earlier layer's output field (LAYER-9).
+fn declared_outputs(
+    case: &Path,
+    study: &super::Scratch,
+    entries: &[(String, Option<String>)],
+) -> Vec<PathBuf> {
     let mut declared = Vec::new();
-    for (specification, _) in &entries {
+    for (specification, _) in entries {
         let mut output = yamaa_core::json::Map::new();
         for layer in layers(&case.join(specification)) {
             let cleared = layer["clear"].as_array().into_iter().flatten();
@@ -429,6 +473,22 @@ pub fn reproduce(name: &str) {
             }
         }
     }
+    declared
+}
+
+/// Compare what a positive benchmark's `entries` saved in `study` with its
+/// `expected/` files: every expected file is a declared CSV output, each
+/// declared output equals its expected file byte for byte, and the entries
+/// wrote no file beside the `staged` copy that no entry declares.
+#[track_caller]
+fn saved_outputs_are_expected(
+    name: &str,
+    case: &Path,
+    study: &super::Scratch,
+    entries: &[(String, Option<String>)],
+    staged: &std::collections::BTreeSet<PathBuf>,
+) {
+    let declared = declared_outputs(case, study, entries);
     let truths = case.join("expected");
     let mut expected: Vec<PathBuf> = std::fs::read_dir(&truths)
         .unwrap_or_else(|error| panic!("{name}: {}: {error}", truths.display()))
@@ -471,7 +531,7 @@ pub fn reproduce(name: &str) {
             output.display()
         );
     }
-    let mut written = files(name, &study);
+    let mut written = files(name, study);
     written.retain(|path| !staged.contains(path));
     for path in &written {
         assert!(

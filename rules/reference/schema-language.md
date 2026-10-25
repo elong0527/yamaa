@@ -141,7 +141,7 @@ exactly the `registry` keyword, naming a schema registry, and cannot also
 declare `type` or descriptor constraints. Named-type references may cross
 module boundaries, and recursive types are allowed.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_bundle_resolves_forward_names_and_preserves_reused_default_origin`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::registry_contributions_merge_after_complete_include_loading`, `rust/crates/yamaa-core/tests/schema_validation.rs::union_selects_success_then_matching_outer_type_and_recursion_is_value_local`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_bundle_resolves_forward_names_and_preserves_reused_default_origin`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::registry_contributions_merge_after_complete_include_loading`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_union_value_that_a_member_admits_and_a_nested_recursive_value_are_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_recursive_union_reports_the_nested_value_it_refuses_where_it_is_written`.
 
 A specification value is finite and must eventually match a non-recursive
 type.
@@ -195,7 +195,7 @@ one-entry mapping whose key exists in the referenced registry and whose value
 matches that entry's payload shape.
 
 Fails: `invalid_operation_count`, `unknown_operation`.
-Evidence: `negative-literal-structure`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
+Evidence: `negative-literal-structure`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_no_keyword_declares_no_operation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_a_keyword_the_registry_lacks_is_an_unknown_operation`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
 
 ```yaml
 expressions:
@@ -243,7 +243,7 @@ are not integers. An `int` is accepted where `float` is expected, but a
 `float` is not accepted where `int` is expected. An invalid type expression or
 unresolved reference fails.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::builtins_and_unresolved_names_are_syntax_not_bundle_resolution`, `rust/crates/yamaa-core/tests/schema_references.rs::malformed_types_and_string_encoded_unions_are_rejected`, `rust/crates/yamaa-core/tests/schema_validation.rs::constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_success`.
+Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::builtins_and_unresolved_names_are_syntax_not_bundle_resolution`, `rust/crates/yamaa-core/tests/schema_references.rs::malformed_types_and_string_encoded_unions_are_rejected`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_float_field_admits_an_integer_beyond_the_exact_range_of_a_float`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_float_field_refuses_a_boolean`.
 
 ```text
 type_expression := type_name
@@ -311,7 +311,7 @@ default, keeps its meaning. The refusal applies to what an author wrote, never
 to the canonical form a validation produces.
 
 Fails: `redundant_long_form`.
-Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs::a_structured_source_holding_only_its_variable_restates_the_bare_read`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_check_that_declares_no_field_is_written_as_its_bare_keyword`, `rust/crates/yamaa-core/tests/schema_references.rs::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
+Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs::a_structured_source_holding_only_its_variable_restates_the_bare_read`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_check_that_declares_no_field_is_written_as_its_bare_keyword`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
 
 The shorthand unions of the specification bundle, and the long form each one
 refuses, are:
@@ -394,7 +394,7 @@ A value of a class carries every field its class declares required and no
 field the class does not declare. An undeclared or missing class field fails.
 
 Fails: `unknown_field`, `missing_required_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-core/tests/schema_validation.rs::classes_keep_schema_then_input_order_in_a_complete_document`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::classes_keep_schema_then_input_order_in_a_complete_document`.
 
 Schema findings report an undeclared field as `unknown_field` and a missing
 required field as `missing_required_field`.

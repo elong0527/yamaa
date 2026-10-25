@@ -1269,7 +1269,7 @@ mod execution {
                 Intermediate, ResolvedPlan, WindowKind,
             },
             schema::DocumentNode as N,
-            specification::PrepareError,
+            specification::{PrepareError, PreparedSpecification},
             table::TableSchema,
             value::ColumnType as T,
         };
@@ -1410,21 +1410,19 @@ mod execution {
             }
         }
 
-        // A unit seam: the bound plans of six benchmarks' specifications, which
-        // no benchmark's expected files pin.
-        // Over the 250-line ceiling until the follow-up of #3806 splits it.
-        #[allow(clippy::too_many_lines)]
-        #[test]
-        fn all_six_original_yaml_documents_compile_against_independent_model_expectations() {
-            type Case<'a> = (
-                &'a str,
-                Vec<TableSchema>,
-                &'a [&'a str],
-                &'a [usize],
-                usize,
-                usize,
-            );
-            let cases: [Case<'_>; 6] = [
+        type Case = (
+            &'static str,
+            Vec<TableSchema>,
+            &'static [&'static str],
+            &'static [usize],
+            usize,
+            usize,
+        );
+        /// Each benchmark, with the source schemas binding receives and the
+        /// output columns, key indices, template count and dataset check
+        /// count authored from its specification.
+        fn cases() -> [Case; 6] {
+            [
                 (
                     "negative-zero-division",
                     vec![schema(&[
@@ -1521,8 +1519,238 @@ mod execution {
                     1,
                     0,
                 ),
-            ];
-            for (name, schemas, output, keys, templates, checks) in cases {
+            ]
+        }
+        /// The output column types authored from the specification of `name`.
+        fn output_types(name: &str) -> Vec<T> {
+            match name {
+                "negative-zero-division" => {
+                    vec![T::Str, T::Str, T::Str, T::Float, T::Float, T::Float]
+                }
+                "negative-integer-overflow" => vec![T::Str, T::Str, T::Int, T::Int, T::Int],
+                "adam-adlb-ordered-sum" => {
+                    vec![T::Str, T::Str, T::Str, T::Str, T::Str, T::Float, T::Str]
+                }
+                "schema-window-functions" => vec![
+                    T::Str,
+                    T::Str,
+                    T::Int,
+                    T::Str,
+                    T::Date,
+                    T::Date,
+                    T::Float,
+                    T::Str,
+                    T::Int,
+                    T::Int,
+                    T::Int,
+                    T::Float,
+                    T::Float,
+                    T::Float,
+                    T::Float,
+                    T::Float,
+                    T::Str,
+                ],
+                "schema-lookup" => vec![T::Str, T::Int, T::Str, T::Str],
+                "schema-inheritance" => vec![T::Str, T::Str, T::Float, T::Str],
+                _ => unreachable!(),
+            }
+        }
+        /// `negative-zero-division` and `negative-integer-overflow`: the last
+        /// column computes its authored expression over the columns it names.
+        fn numeric_derivation(name: &str, plan: &ResolvedPlan) {
+            let last = columns(plan).last().unwrap().expr;
+            let Op::Compute(numeric) = &plan.expr(last).op else {
+                panic!("numeric derivation")
+            };
+            assert_eq!(
+                numeric.expression().expression(),
+                if name == "negative-zero-division" {
+                    "100 * (AVAL - BASE) / BASE"
+                } else {
+                    "CELLCNT * VOLUML"
+                }
+            );
+            let bindings = if name == "negative-zero-division" {
+                vec![
+                    Binding {
+                        name: "AVAL".into(),
+                        read: Read::Column(3),
+                    },
+                    Binding {
+                        name: "BASE".into(),
+                        read: Read::Column(4),
+                    },
+                ]
+            } else {
+                vec![
+                    Binding {
+                        name: "CELLCNT".into(),
+                        read: Read::Column(2),
+                    },
+                    Binding {
+                        name: "VOLUML".into(),
+                        read: Read::Column(3),
+                    },
+                ]
+            };
+            assert_eq!(numeric.bindings(), bindings);
+        }
+        /// `adam-adlb-ordered-sum`: the grouped template's total is the
+        /// authored SUM over the dataset's own input.
+        fn ordered_sum(plan: &ResolvedPlan, template_ids: &[slots::TemplateId]) {
+            // Both templates are driven by the dataset's own input.
+            for &template in template_ids {
+                let driver = &plan.template(template).driver;
+                assert_eq!((driver.source.index(), driver.named), (0, None));
+            }
+            let grain = |index: usize| &plan.template(template_ids[index]).driver.grain;
+            assert_eq!(grain(0), &Grain::Records);
+            assert_eq!(grain(1), &Grain::Groups(vec![0, 1, 5]));
+            let total = plan
+                .row_bindings(template_ids[1])
+                .map(|binding| plan.binding(binding))
+                .find(|binding| binding.column.index() == 5)
+                .unwrap();
+            let Op::Aggregate(aggregate) = &plan.expr(total.expr).op else {
+                panic!("the authored grouped SUM is a bound aggregate");
+            };
+            assert_eq!(
+                aggregate.relation(),
+                &yamaa_core::dataset::AggregateRelation::CurrentGroup
+            );
+            assert_eq!(aggregate.expression().expression(), "SUM(LB.LBSTRESN)");
+            assert_eq!(
+                aggregate.bindings(),
+                [yamaa_core::dataset::AggregateBinding {
+                    name: "LB.LBSTRESN".into(),
+                    column: 6,
+                }]
+            );
+            assert_eq!(aggregate.expression().reductions().len(), 1);
+            let reduction = &aggregate.expression().reductions()[0];
+            assert_eq!(reduction.reducer, yamaa_core::expression::Reducer::Sum);
+            assert_eq!(
+                reduction.operand,
+                yamaa_core::expression::ReductionOperand::Value("LB.LBSTRESN".into())
+            );
+        }
+        /// `schema-window-functions`: the window columns' kinds, in column
+        /// order.
+        fn window_kinds(plan: &ResolvedPlan) {
+            let kinds = columns(plan)
+                .into_iter()
+                .filter_map(|binding| match &plan.expr(binding.expr).op {
+                    Op::Window { window, .. } => Some(window.kind),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                kinds,
+                vec![
+                    WindowKind::RowNumber,
+                    WindowKind::Competition,
+                    WindowKind::Dense,
+                    WindowKind::RowValue {
+                        column: 6,
+                        offset: -1
+                    },
+                    WindowKind::RowValue {
+                        column: 6,
+                        offset: 1
+                    },
+                    WindowKind::RowValue {
+                        column: 6,
+                        offset: -1
+                    },
+                    WindowKind::Locf {
+                        column: 6,
+                        include_current: false
+                    },
+                    WindowKind::Locf {
+                        column: 6,
+                        include_current: true
+                    },
+                    WindowKind::BaselineFlag {
+                        date: 4,
+                        reference_date: 5,
+                        value: 6,
+                        inclusive: true
+                    }
+                ]
+            );
+        }
+        /// `schema-lookup`: the two intermediates, their keys, and the
+        /// secondary sources they read.
+        fn lookup_intermediates(plan: &ResolvedPlan) {
+            let intermediates = intermediates(plan);
+            assert_eq!(
+                intermediates
+                    .iter()
+                    .map(|item| item.identifier.as_str())
+                    .collect::<Vec<_>>(),
+                ["DEATHEV", "MEDDRA_PT"]
+            );
+            assert_eq!(
+                intermediates[0].keys,
+                [yamaa_core::dataset::IntermediateKey {
+                    source_column: 0,
+                    path: "intermediates.DEATHEV.key".into(),
+                    value: yamaa_core::dataset::MatchValue::Variable(
+                        yamaa_core::dataset::MatchRead::Output {
+                            column: 0,
+                            identifier: "USUBJID".into()
+                        }
+                    ),
+                }]
+            );
+            assert_eq!(
+                intermediates[1].keys,
+                [yamaa_core::dataset::IntermediateKey {
+                    source_column: 0,
+                    path: "intermediates.MEDDRA_PT.key".into(),
+                    value: yamaa_core::dataset::MatchValue::Variable(
+                        yamaa_core::dataset::MatchRead::Output {
+                            column: 2,
+                            identifier: "DTHCAUS".into()
+                        }
+                    ),
+                }]
+            );
+            assert_eq!(
+                plan.region(RegionId::DATASET)
+                    .secondary
+                    .iter()
+                    .map(|source| source.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["AE", "MEDDRA"]
+            );
+        }
+        /// `schema-inheritance`: the one source, and the layer that declares
+        /// a column's label and an input's types.
+        fn inherited_layers(compiled: &PreparedSpecification, document: &PreparedDocument) {
+            assert_eq!(
+                compiled
+                    .sources()
+                    .iter()
+                    .map(|source| source.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["LB"]
+            );
+            assert_eq!(
+                document.declaring_source("columns.AVAL.label"),
+                Some("spec_study.yaml")
+            );
+            assert_eq!(
+                document.declaring_source("input.LB.types"),
+                Some("spec_compound.yaml")
+            );
+        }
+
+        // A unit seam: the bound plans of six benchmarks' specifications, which
+        // no benchmark's expected files pin.
+        #[test]
+        fn all_six_original_yaml_documents_compile_against_independent_model_expectations() {
+            for (name, schemas, output, keys, templates, checks) in cases() {
                 let (document, parents) = prepare(name, false);
                 // Only YAML parent captures are possible. No study bytes are supplied;
                 // binding receives independently enumerated immutable metadata. The
@@ -1541,44 +1769,13 @@ mod execution {
                     .bind_sources(&schemas.iter().collect::<Vec<_>>())
                     .unwrap();
                 assert_eq!(names(&plan), output, "{name}");
-                let output_types = match name {
-                    "negative-zero-division" => {
-                        vec![T::Str, T::Str, T::Str, T::Float, T::Float, T::Float]
-                    }
-                    "negative-integer-overflow" => vec![T::Str, T::Str, T::Int, T::Int, T::Int],
-                    "adam-adlb-ordered-sum" => {
-                        vec![T::Str, T::Str, T::Str, T::Str, T::Str, T::Float, T::Str]
-                    }
-                    "schema-window-functions" => vec![
-                        T::Str,
-                        T::Str,
-                        T::Int,
-                        T::Str,
-                        T::Date,
-                        T::Date,
-                        T::Float,
-                        T::Str,
-                        T::Int,
-                        T::Int,
-                        T::Int,
-                        T::Float,
-                        T::Float,
-                        T::Float,
-                        T::Float,
-                        T::Float,
-                        T::Str,
-                    ],
-                    "schema-lookup" => vec![T::Str, T::Int, T::Str, T::Str],
-                    "schema-inheritance" => vec![T::Str, T::Str, T::Float, T::Str],
-                    _ => unreachable!(),
-                };
                 assert_eq!(
                     output_schema(&plan)
                         .columns()
                         .iter()
                         .map(|column| column.kind)
                         .collect::<Vec<_>>(),
-                    output_types,
+                    output_types(name),
                     "{name}"
                 );
                 let projection = match name {
@@ -1610,185 +1807,12 @@ mod execution {
                 provenance(&document, &plan, name == "schema-inheritance");
                 match name {
                     "negative-zero-division" | "negative-integer-overflow" => {
-                        let last = columns(&plan).last().unwrap().expr;
-                        let Op::Compute(numeric) = &plan.expr(last).op else {
-                            panic!("numeric derivation")
-                        };
-                        assert_eq!(
-                            numeric.expression().expression(),
-                            if name == "negative-zero-division" {
-                                "100 * (AVAL - BASE) / BASE"
-                            } else {
-                                "CELLCNT * VOLUML"
-                            }
-                        );
-                        let bindings = if name == "negative-zero-division" {
-                            vec![
-                                Binding {
-                                    name: "AVAL".into(),
-                                    read: Read::Column(3),
-                                },
-                                Binding {
-                                    name: "BASE".into(),
-                                    read: Read::Column(4),
-                                },
-                            ]
-                        } else {
-                            vec![
-                                Binding {
-                                    name: "CELLCNT".into(),
-                                    read: Read::Column(2),
-                                },
-                                Binding {
-                                    name: "VOLUML".into(),
-                                    read: Read::Column(3),
-                                },
-                            ]
-                        };
-                        assert_eq!(numeric.bindings(), bindings);
+                        numeric_derivation(name, &plan);
                     }
-                    "adam-adlb-ordered-sum" => {
-                        // Both templates are driven by the dataset's own input.
-                        for &template in &template_ids {
-                            let driver = &plan.template(template).driver;
-                            assert_eq!((driver.source.index(), driver.named), (0, None));
-                        }
-                        let grain = |index: usize| &plan.template(template_ids[index]).driver.grain;
-                        assert_eq!(grain(0), &Grain::Records);
-                        assert_eq!(grain(1), &Grain::Groups(vec![0, 1, 5]));
-                        let total = plan
-                            .row_bindings(template_ids[1])
-                            .map(|binding| plan.binding(binding))
-                            .find(|binding| binding.column.index() == 5)
-                            .unwrap();
-                        let Op::Aggregate(aggregate) = &plan.expr(total.expr).op else {
-                            panic!("the authored grouped SUM is a bound aggregate");
-                        };
-                        assert_eq!(
-                            aggregate.relation(),
-                            &yamaa_core::dataset::AggregateRelation::CurrentGroup
-                        );
-                        assert_eq!(aggregate.expression().expression(), "SUM(LB.LBSTRESN)");
-                        assert_eq!(
-                            aggregate.bindings(),
-                            [yamaa_core::dataset::AggregateBinding {
-                                name: "LB.LBSTRESN".into(),
-                                column: 6,
-                            }]
-                        );
-                        assert_eq!(aggregate.expression().reductions().len(), 1);
-                        let reduction = &aggregate.expression().reductions()[0];
-                        assert_eq!(reduction.reducer, yamaa_core::expression::Reducer::Sum);
-                        assert_eq!(
-                            reduction.operand,
-                            yamaa_core::expression::ReductionOperand::Value("LB.LBSTRESN".into())
-                        );
-                    }
-                    "schema-window-functions" => {
-                        let kinds = columns(&plan)
-                            .into_iter()
-                            .filter_map(|binding| match &plan.expr(binding.expr).op {
-                                Op::Window { window, .. } => Some(window.kind),
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>();
-                        assert_eq!(
-                            kinds,
-                            vec![
-                                WindowKind::RowNumber,
-                                WindowKind::Competition,
-                                WindowKind::Dense,
-                                WindowKind::RowValue {
-                                    column: 6,
-                                    offset: -1
-                                },
-                                WindowKind::RowValue {
-                                    column: 6,
-                                    offset: 1
-                                },
-                                WindowKind::RowValue {
-                                    column: 6,
-                                    offset: -1
-                                },
-                                WindowKind::Locf {
-                                    column: 6,
-                                    include_current: false
-                                },
-                                WindowKind::Locf {
-                                    column: 6,
-                                    include_current: true
-                                },
-                                WindowKind::BaselineFlag {
-                                    date: 4,
-                                    reference_date: 5,
-                                    value: 6,
-                                    inclusive: true
-                                }
-                            ]
-                        );
-                    }
-                    "schema-lookup" => {
-                        let intermediates = intermediates(&plan);
-                        assert_eq!(
-                            intermediates
-                                .iter()
-                                .map(|item| item.identifier.as_str())
-                                .collect::<Vec<_>>(),
-                            ["DEATHEV", "MEDDRA_PT"]
-                        );
-                        assert_eq!(
-                            intermediates[0].keys,
-                            [yamaa_core::dataset::IntermediateKey {
-                                source_column: 0,
-                                path: "intermediates.DEATHEV.key".into(),
-                                value: yamaa_core::dataset::MatchValue::Variable(
-                                    yamaa_core::dataset::MatchRead::Output {
-                                        column: 0,
-                                        identifier: "USUBJID".into()
-                                    }
-                                ),
-                            }]
-                        );
-                        assert_eq!(
-                            intermediates[1].keys,
-                            [yamaa_core::dataset::IntermediateKey {
-                                source_column: 0,
-                                path: "intermediates.MEDDRA_PT.key".into(),
-                                value: yamaa_core::dataset::MatchValue::Variable(
-                                    yamaa_core::dataset::MatchRead::Output {
-                                        column: 2,
-                                        identifier: "DTHCAUS".into()
-                                    }
-                                ),
-                            }]
-                        );
-                        assert_eq!(
-                            plan.region(RegionId::DATASET)
-                                .secondary
-                                .iter()
-                                .map(|source| source.name.as_str())
-                                .collect::<Vec<_>>(),
-                            ["AE", "MEDDRA"]
-                        );
-                    }
-                    "schema-inheritance" => {
-                        assert_eq!(
-                            compiled
-                                .sources()
-                                .iter()
-                                .map(|source| source.name.as_str())
-                                .collect::<Vec<_>>(),
-                            ["LB"]
-                        );
-                        assert_eq!(
-                            document.declaring_source("columns.AVAL.label"),
-                            Some("spec_study.yaml")
-                        );
-                        assert_eq!(
-                            document.declaring_source("input.LB.types"),
-                            Some("spec_compound.yaml")
-                        );
-                    }
+                    "adam-adlb-ordered-sum" => ordered_sum(&plan, &template_ids),
+                    "schema-window-functions" => window_kinds(&plan),
+                    "schema-lookup" => lookup_intermediates(&plan),
+                    "schema-inheritance" => inherited_layers(&compiled, &document),
                     _ => unreachable!(),
                 }
             }

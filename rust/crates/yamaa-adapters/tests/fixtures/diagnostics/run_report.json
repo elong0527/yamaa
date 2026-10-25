@@ -96,7 +96,7 @@
         "specification": "spec.yaml"
       },
       "compares": ["condition"],
-      "among": true,
+      "prefix": true,
       "issues": [
         {"condition": "resource_path_missing"}
       ],

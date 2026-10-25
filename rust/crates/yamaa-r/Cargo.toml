@@ -18,23 +18,13 @@ doctest = false
 # library a second time, under cfg(test).
 bench = false
 
-[features]
-default = ["linked-engine"]
-# The engine is linked into the library by default: its negotiation entry is
-# called as a Rust function. With dynamic-engine instead, the test-only
-# loaded mode, it links no engine and loads the engine library from beside
-# its own file at the handshake (rust/interface/README.md); a repository
-# check refuses that feature in every shipped build.
-linked-engine = ["dep:yamaa-engine"]
-dynamic-engine = ["yamaa-boundary/loader"]
-
 [dependencies]
 # The client through which the binding reaches the engine: the handshake,
 # the gate and every call (rust/interface/README.md).
 yamaa-boundary = { path = "../yamaa-boundary" }
-# The engine, linked into the library unless the loaded mode loads it: its
-# negotiation entry hands the client the function table.
-yamaa-engine = { path = "../yamaa-engine", optional = true }
+# The engine, linked into the library: its negotiation entry hands the client
+# the function table.
+yamaa-engine = { path = "../yamaa-engine" }
 # Reads the engine's Arrow C streams into plain R vectors; the engine already
 # links this release, through Parquet too.
 arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }

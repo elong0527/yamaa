@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from host_fixtures import first_difference
 from host_fixtures import load as load_truth
 
 import yamaa
@@ -139,10 +140,15 @@ class LongitudinalCapacity(unittest.TestCase):
                         saved = pq.read_table(output)
                         self.assertEqual(saved.column_names, NAMES)
                         self.assertEqual(saved.num_rows, ROWS)
+                        # Each column of 50,000 values is compared as a
+                        # summary of its first difference (#3882).
                         for column, name in enumerate(NAMES):
-                            self.assertEqual(
-                                saved[name].to_pylist(),
-                                [value(row, column) for row in range(ROWS)],
+                            self.assertIsNone(
+                                first_difference(
+                                    saved[name].to_pylist(),
+                                    [value(row, column) for row in range(ROWS)],
+                                ),
+                                name,
                             )
                 del built
 
