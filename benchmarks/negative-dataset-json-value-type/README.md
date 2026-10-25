@@ -10,8 +10,10 @@ written as 67.5.
 
 **Variables:**
 
-- `SITEID` would be the site the subject enrolled at, and `AGE` the age in
-  whole years, each taken directly from the received demographics.
+- `SITEID` would identify the site where the subject enrolled. The rejected
+  file produces no output value.
+- `AGE` would give the subject's age in whole years. The rejected file
+  produces no output value.
 
 The column's type is part of the dataset: a value that is not a whole number
 in a column of integers is a defect in the data, not a reason to round it or
