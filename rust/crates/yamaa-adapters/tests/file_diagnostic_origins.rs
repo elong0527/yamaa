@@ -1,6 +1,9 @@
 #![cfg(feature = "yaml")]
 //! File contracts: diagnostic origins, file application, file entry and file
-//! preparation.
+//! preparation. The cases a study directory states, with one call and its
+//! issues or saved files, are `tests/fixtures/diagnostics/file_origins.json`'s
+//! (#3778, #3798); the tests left here prove the seams their first comments
+//! name.
 mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
@@ -29,6 +32,8 @@ mod file {
             }
         }
 
+        /// Seam: the prepared owner's declaring source and capture counter,
+        /// which a case's rows do not show.
         #[test]
         fn ready_static_owner_returns_contributor_without_changing_public_issue_context() {
             let study = Study::new();
@@ -133,6 +138,8 @@ mod file {
         fn identity(specification: &str) -> Identity<'_> {
             crate::support::study::identity("test", specification)
         }
+        /// Seam: an input changed between preparation and the build, with the
+        /// held snapshot and the run scope's capture counter.
         #[test]
         fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
             use yamaa_adapters::{
@@ -187,117 +194,9 @@ mod file {
                 b"prior saved output"
             );
         }
-        #[test]
-        fn environment_and_invalid_source_profile_precede_entry_and_study_reads() {
-            let study = Study::new();
-            let path = study.text("absent.yaml");
-            let project = study.text("absent-project.yaml");
-            let issues = file_application::check(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &path,
-                    environment: Some(&project),
-                },
-                identity(&path),
-            );
-            // The project file is read first: the caller's own path, named
-            // as given (FILE-7, #3321).
-            assert_issues(
-                &issues,
-                &[
-                    yamaa_adapters::json!({"phase":"validation","condition":"resource_path_missing","rule":"FILE-7","spec_paths":[],"context":{"path":project}}),
-                ],
-                "the missing project file",
-            );
-            fs::write(
-                study.0.join("spec.yaml"),
-                VALID.edit("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
-            )
-            .unwrap();
-            let path = study.text("spec.yaml");
-            let issues = crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &path,
-                    environment: None,
-                },
-                identity(&path),
-            )
-            .err()
-            .unwrap();
-            assert_issues(
-                &issues,
-                &[
-                    yamaa_adapters::json!({"phase":"validation","condition":"source_profile_unknown","rule":"INPUT-1","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"input.unknown"}}),
-                ],
-                "an input whose extension selects no profile",
-            );
-            assert!(!study.0.join("input.csv").exists());
-            assert!(!study.0.join("input.unknown").exists());
-        }
-        #[test]
-        fn static_check_does_not_need_study_data_and_failed_build_cannot_save() {
-            let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), VALID).unwrap();
-            let path = study.text("spec.yaml");
-            assert!(file_application::check(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &path,
-                    environment: None
-                },
-                identity(&path)
-            )
-            .is_empty());
-            let mut result = study.build();
-            assert!(result.output().is_none());
-            assert!(!result.issues().is_empty());
-            assert!(result.save().is_err());
-            assert_eq!(fs::read_dir(&study.0).unwrap().count(), 1);
-        }
 
-        #[test]
-        fn unknown_suffix_directory_precedes_profile_rejection_through_the_file_entry() {
-            let study = Study::new();
-            fs::create_dir(study.0.join("input.unknown")).unwrap();
-            fs::write(
-                study.0.join("spec.yaml"),
-                VALID.edit("input.csv", "input.unknown"),
-            )
-            .unwrap();
-            let path = study.text("spec.yaml");
-            let issues = crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &path,
-                    environment: None,
-                },
-                identity(&path),
-            )
-            .err()
-            .unwrap();
-            assert_issues(
-                &issues,
-                &[
-                    yamaa_adapters::json!({"phase":"validation","condition":"resource_path_not_regular_file","rule":"FILE-7","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"input.unknown"}}),
-                ],
-                "an input path that is a directory",
-            );
-            fs::remove_dir(study.0.join("input.unknown")).unwrap();
-            fs::write(study.0.join("input.unknown"), b"ID\n1\n").unwrap();
-            let issues = crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &path,
-                    environment: None,
-                },
-                identity(&path),
-            )
-            .err()
-            .unwrap();
-            assert_eq!(issues[0].condition(), "source_profile_unknown");
-            assert!(!study.0.join("output.csv").exists());
-        }
+        /// Seam: files changed after the build, a save retried as its directory
+        /// is made and removed, and the observation record.
         #[test]
         fn saved_bytes_use_retained_values_and_save_failure_can_be_retried() {
             let study = Study::new();
@@ -354,6 +253,8 @@ mod file {
             assert!(!result.save().unwrap());
             assert_eq!(result.observations(), observations);
         }
+        /// Seam: capture counters across builds, with files changed between
+        /// them.
         #[test]
         fn project_configuration_is_ignored_and_missing_input_has_no_fallback() {
             let study = Study::new();
@@ -406,6 +307,8 @@ mod file {
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 2);
         }
+        /// Seam: absolute paths of the study directory, and an input changed
+        /// and the entry removed between the build and its save.
         #[test]
         fn parent_and_absolute_local_paths_build_and_save_held_bytes() {
             for absolute in [false, true] {
@@ -445,6 +348,8 @@ mod file {
                 assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
             }
         }
+        /// Seam: symbolic links, which a case does not stage, and a linked
+        /// entry's typed preparation error.
         #[cfg(unix)]
         #[test]
         fn entry_and_outside_resource_links_remain_refused() {
@@ -487,6 +392,7 @@ mod file {
                 ))
             ));
         }
+        /// Seam: the resources' and the preparation's capture counters.
         #[test]
         fn malformed_project_configuration_is_not_discovered_or_captured() {
             let study = Study::new();
@@ -505,6 +411,8 @@ mod file {
             }
         }
 
+        /// Seam: a link to a directory outside the study, replaced by a
+        /// directory between two saves.
         #[cfg(unix)]
         #[test]
         fn publication_refuses_linked_parents_for_existing_and_absent_targets() {
@@ -548,6 +456,8 @@ mod file {
             }
         }
 
+        /// Seam: a parent directory replaced by a link between the build and
+        /// its save.
         #[cfg(unix)]
         #[test]
         fn publication_refuses_parent_link_substitution_after_build() {
@@ -568,6 +478,8 @@ mod file {
             assert_eq!(fs::read_dir(study.0.join("held")).unwrap().count(), 0);
         }
 
+        /// Seam: the selected root renamed and replaced by a link between the
+        /// build and its save.
         #[cfg(unix)]
         #[test]
         fn publication_retains_the_selected_physical_root_after_name_substitution() {
@@ -598,6 +510,7 @@ mod file {
             assert_eq!(fs::read_dir(&outside.0).unwrap().count(), 0);
         }
 
+        /// Seam: specifications generated at and over each compiler capacity.
         #[test]
         fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() {
             use yamaa_adapters::json;
@@ -762,6 +675,8 @@ mod file {
             }
         }
 
+        /// Seam: specifications generated at the key and column limits, and the
+        /// project service's build through a host-port double.
         #[test]
         fn row_shape_boundaries_are_per_template_and_preserve_authored_preflight_precedence() {
             use yamaa_adapters::json;
@@ -894,6 +809,7 @@ mod file {
             assert_eq!(result.files(), [("output.csv", b"ID\n1\n2\n".as_slice())]);
         }
 
+        /// Seam: a chain of 65 generated layers.
         #[test]
         fn iterative_inheritance_admits_sixty_five_layers_during_check_and_build() {
             let study = Study::new();
@@ -940,59 +856,6 @@ mod file {
             .unwrap();
             assert!(result.issues().is_empty());
             assert!(result.output().is_some());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
-        }
-
-        #[test]
-        fn catastrophic_pattern_is_an_ordinary_verification_failure() {
-            let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: [{matches: {pattern: '(a+)+b'}}]\n").unwrap();
-            fs::write(
-                study.0.join("input.csv"),
-                format!("ID,TERM\n1,{}\n", "a".repeat(32)),
-            )
-            .unwrap();
-            // (a+)+b cannot match a run of a's. Matching is linear, so the value
-            // simply fails the check rather than exhausting a step budget.
-            let result = study.build();
-            assert!(result.output().is_none());
-            let findings = result.issues();
-            assert_issues(
-                &findings,
-                &[
-                    yamaa_adapters::json!({"phase":"verification","condition":"matches_failed","rule":"CHECK-9","spec_paths":["columns.TERM.verifications[0].matches"],"context":{"column":"TERM","failure_count":1,"keys":[{"ID":1}]}}),
-                ],
-                "a catastrophic pattern that fails to match",
-            );
-            assert!(!study.0.join("output.csv").exists());
-        }
-        #[test]
-        fn data_driven_like_preserves_false_and_unicode_truth_at_publication() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("spec.yaml"),
-                format!(
-                    "{}rows:\n  - id: selected\n    dataset: SRC\n    filter: SRC.A LIKE SRC.B\n    derivations: {{ID: SRC.ID}}\n",
-                    VALID.edit(", derivation: SRC.ID", "")
-                ),
-            )
-            .unwrap();
-            fs::write(
-                study.0.join("input.csv"),
-                format!("ID,A,B\n1,{},{}\n", "a".repeat(100), "%a".repeat(100) + "b"),
-            )
-            .unwrap();
-            let mut result = study.build();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.output().is_some());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n");
-
-            // A fresh build retains ordinary Unicode full-match truth.
-            fs::write(study.0.join("input.csv"), "ID,A,B\n1,😀,_\n2,a,b\n").unwrap();
-            let mut result = study.build();
-            assert!(result.issues().is_empty());
             assert!(result.save().unwrap());
             assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
         }
@@ -1098,6 +961,8 @@ mod file {
                 .collect()
         }
 
+        /// Seam: the capture counter, the compiled sources and the resolved
+        /// artifact's producer-schema locations.
         #[test]
         fn aliased_links_share_one_document_and_producer_links_are_not_followed() {
             let study = Study::new();
@@ -1162,6 +1027,8 @@ mod file {
             }
         }
 
+        /// Seam: the resolved artifact's resources: each one's declaring
+        /// source, written path and location.
         #[test]
         fn inherited_schema_and_input_origins_resolve_independently() {
             let study = Study::new();
@@ -1215,6 +1082,8 @@ mod file {
             assert!(!study.0.join("data").exists());
         }
 
+        /// Seam: the typed entry failure: its resource error, origin, retained
+        /// document, entry and capture counter.
         #[test]
         fn missing_producer_keeps_captured_consumer_and_original_declaration() {
             let study = Study::new();
@@ -1245,6 +1114,8 @@ mod file {
             assert_eq!(failure.capture_reads(), 1);
         }
 
+        /// Seam: the failure's captured source bytes, kept after the file is
+        /// removed.
         #[test]
         fn malformed_entry_and_failed_parent_raw_bytes_survive_without_a_prepared_document() {
             for parent in [false, true] {
@@ -1277,6 +1148,8 @@ mod file {
             }
         }
 
+        /// Seam: resources with a metadata fallback root, which no operation of
+        /// the replay selects, and the compiled source path.
         #[test]
         fn metadata_fallback_does_not_redirect_declared_artifact_locations() {
             let study = Study::new();
@@ -1308,6 +1181,8 @@ mod file {
             assert!(!study.0.join("fallback/p.csv").exists());
         }
 
+        /// Seam: metadata captured, then changed before selection, and the
+        /// typed failure and snapshot it keeps.
         #[test]
         fn already_captured_changed_metadata_keeps_original_snapshot_and_native_failure() {
             let study = Study::new();
@@ -1343,6 +1218,8 @@ mod file {
             );
         }
 
+        /// Seam: a selection without a project, its capture counter and its
+        /// typed compilation rejection.
         #[test]
         fn producer_derivations_are_never_compiled_but_consumer_failures_remain() {
             for producer in [false, true] {
@@ -1382,6 +1259,8 @@ mod file {
             }
         }
 
+        /// Seam: the capture counter after a producer link is read, beside the
+        /// rejection's first finding.
         #[test]
         fn original_redundant_types_keep_req_0523_after_link_capture() {
             let study = Study::new();
@@ -1404,6 +1283,8 @@ mod file {
             assert_eq!(failure.capture_reads(), 2);
         }
 
+        /// Seam: the capture counter of a refused self link, beside the
+        /// rejection's first finding.
         #[test]
         fn a_link_naming_the_consuming_specification_is_refused() {
             let study = Study::new();
@@ -1429,6 +1310,8 @@ mod file {
             assert_eq!(failure.capture_reads(), 1);
         }
 
+        /// Seam: symbolic links, which a case does not stage, and the typed
+        /// resource errors.
         #[cfg(unix)]
         #[test]
         fn symlink_and_escape_schema_failures_are_terminal_and_artifact_symlinks_are_not_opened() {
@@ -1476,6 +1359,7 @@ mod file {
                 .is_symlink());
         }
 
+        /// Seam: a Unix directory name holding a backslash.
         #[cfg(unix)]
         #[test]
         fn canonical_unix_root_with_literal_backslash_remains_an_identity() {
@@ -1523,6 +1407,9 @@ mod file {
             }
         }
 
+        /// Seam: a caller's resolver double that refuses a snapshot's
+        /// verification.
+        ///
         /// A file that changed or disappeared after it was read, found when
         /// the entry's snapshots are verified before selection, fails with
         /// its own condition at the field that declared it, the path as
@@ -1600,7 +1487,6 @@ mod file {
     }
     mod file_preparation {
         use crate::support::table_snapshot;
-        use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
         use yamaa_adapters::json;
         use yamaa_adapters::{
@@ -1645,6 +1531,8 @@ mod file {
                 Err(error) => crate::support::preparation_findings(error),
             }
         }
+        /// Seam: the capture counters, the retained entry bytes, and files
+        /// changed between preparation and the builds.
         #[test]
         fn standalone_retains_entry_and_checks_without_study_capture() {
             let study = Study::new();
@@ -1679,6 +1567,7 @@ mod file {
             assert_eq!(run_scope.capture_reads(), 2);
         }
 
+        /// Seam: a Unix directory name holding a backslash.
         #[cfg(unix)]
         #[test]
         fn canonical_entry_identity_retains_a_selected_root_with_a_backslash_name() {
@@ -1710,60 +1599,8 @@ mod file {
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 2);
         }
-        #[test]
-        fn entry_version_finding_precedes_parent_and_study_authority() {
-            let study = Study::new();
-            // An entry that declares `schema_version` is written in language
-            // 0.5 and is refused at its own `schema_version` before its parent
-            // is resolved or any study file is read (SCHEMA-2).
-            let actual: Value = failure(
-                &study,
-                &format!(
-                    "{}parent: ../outside/missing.yaml\n",
-                    VALID.edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '99.0'\n")
-                ),
-            );
-            assert_eq!(
-                actual,
-                json!([{"phase":"validation","condition":"unsupported_language_version","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"version":"0.5","language_versions":["1.0"]}}])
-            );
-        }
-        #[test]
-        fn missing_parent_retains_complete_authored_reference_finding() {
-            let study = Study::new();
-            let actual: Value = failure(&study, &format!("{VALID}parent: absent.yaml\n"));
-            assert_eq!(
-                actual,
-                json!([{"phase":"validation","condition":"parent_not_found","rule":"LAYER-2","spec_paths":["parent"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}])
-            );
-        }
-        /// LAYER-2 and SCHEMA-12: an empty `parent` fails schema admission in
-        /// its layer, being shorter than a `path`'s minimum length of one,
-        /// before any parent is resolved.
-        #[test]
-        fn an_empty_parent_fails_schema_admission_before_it_is_resolved() {
-            let study = Study::new();
-            let actual: Value = failure(&study, &format!("{VALID}parent: ''\n"));
-            let entry = study.resource_key("entry/spec.yaml");
-            assert_eq!(
-                actual,
-                json!([{"phase":"validation","condition":"minimum_length","rule":"SCHEMA-12","spec_paths":["parent"],"context":{"minimum":1,"source":entry,"entry":entry}}])
-            );
-        }
-        #[test]
-        fn invalid_parent_preserves_complete_layer_context() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("parent/base.yaml"),
-                "yamaa: \"1.0\"\ntype: spec\ndomain: bad-name\n",
-            )
-            .unwrap();
-            let actual: Value = failure(&study, &format!("{VALID}parent: ../parent/base.yaml\n"));
-            assert_eq!(
-                actual,
-                json!([{"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.resource_key("parent/base.yaml"),"entry":study.resource_key("entry/spec.yaml")}}])
-            );
-        }
+        /// Seam: the prepared document's parents and rebased source path, and
+        /// the capture counters.
         #[test]
         fn inherited_paths_rebase_lexically_and_parent_bytes_are_retained_once() {
             let study = Study::new();
@@ -1803,6 +1640,8 @@ mod file {
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 3);
         }
+        /// Seam: a symbolic link, and resources rooted at the entry directory,
+        /// which no operation of the replay selects.
         #[cfg(unix)]
         #[test]
         fn selected_read_roots_and_no_link_authority_remain_enforced() {
@@ -1837,6 +1676,7 @@ mod file {
             );
         }
 
+        /// Seam: a file whose permissions refuse reading.
         #[cfg(unix)]
         #[test]
         fn unreadable_parent_is_unavailable_without_fallback_or_study_capture() {
@@ -1864,6 +1704,8 @@ mod file {
                 json!([{"phase":"validation","condition":"parent_not_found","rule":"LAYER-2","spec_paths":["parent"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}])
             );
         }
+        /// Seam: benchmarks' own files against their authored observation
+        /// records, with the run scope's capture counter.
         #[test]
         fn all_original_file_builds_preserve_full_reports_and_cached_counters() {
             use yamaa_adapters::specification_report::{self, Identity};
@@ -1959,6 +1801,8 @@ mod file {
         }
 
         const DICTIONARY_SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, X, Y]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: X, type: str, derivation: {mapping: {source: SRC.CODE, dict: dict.yaml}}}\n  - {name: Y, type: str, derivation: {mapping: {source: SRC.CODE, dict: ./dict.yaml}}}\n";
+        /// Seam: the held dictionary bytes and the authored document model,
+        /// with the dictionary changed before an in-memory run.
         #[test]
         fn dictionary_resources_are_held_once_and_original_authored_model_is_retained() {
             let study = Study::new();
@@ -2001,6 +1845,8 @@ mod file {
             assert_eq!(prepared.capture_reads(), 2);
             assert!(!study.0.join("entry/output.csv").exists());
         }
+        /// Seam: the held dictionary's identity and an in-memory run of the
+        /// prepared specification, with the capture counter.
         #[test]
         fn inherited_dictionary_resources_start_at_original_declaring_layer() {
             let study = Study::new();
@@ -2027,38 +1873,8 @@ mod file {
             assert!(!study.0.join("parent/input.csv").exists());
             assert!(!study.0.join("entry/output.csv").exists());
         }
-        #[test]
-        fn dictionary_missing_and_directory_failures_name_authored_field_without_host_identity() {
-            let study = Study::new();
-            for (path, condition) in [
-                ("absent.yaml", "resource_path_missing"),
-                (".", "resource_path_not_regular_file"),
-            ] {
-                let actual: Value = failure(&study, &DICTIONARY_SPEC.replace("dict.yaml", path));
-                assert_eq!(
-                    actual,
-                    json!([{"phase":"validation","condition":condition,"rule":"FILE-7","spec_paths":["columns.X.derivation.mapping.dict"],"context":{"path":path}}])
-                );
-            }
-        }
-        #[test]
-        fn dictionary_invalid_content_retains_original_typed_schema_context_before_study() {
-            let study = Study::new();
-            fs::write(study.0.join("entry/dict.yaml"), "7: answer\n").unwrap();
-            let actual = failure(&study, DICTIONARY_SPEC);
-            let diagnostics = actual.as_array().unwrap();
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(diagnostics[0]["condition"], "invalid_field_type");
-            assert_eq!(
-                diagnostics[0]["spec_paths"],
-                json!(["columns.X.derivation.mapping.dict.key(7)"])
-            );
-            assert_eq!(
-                diagnostics[0]["context"],
-                json!({"expected":"str","actual":"int"})
-            );
-            assert!(!study.0.join("entry/input.csv").exists());
-        }
+        /// Seam: a symbolic link, which a case does not stage.
+        ///
         /// FILE-8: a linked dictionary fails at its authored field, as a
         /// missing one or a directory does under FILE-7.
         #[cfg(unix)]
