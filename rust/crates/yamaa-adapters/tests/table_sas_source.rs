@@ -990,7 +990,7 @@ mod table {
             data[4668] = 1;
             let error = sas_source::parse(&data, &source).unwrap_err();
             assert!(matches!(error, Error::Invalid("deleted_records")));
-            let error = yamaa_adapters::specification_run::Error::SasSource(error);
+            let error = yamaa_adapters::source_decoding::Error::SasSource(error);
             assert_eq!(
                 crate::support::rows(
                     &yamaa_adapters::specification_diagnostics::findings(&error, Some(&source))
@@ -1744,9 +1744,9 @@ mod table {
         use yamaa_adapters::json;
         use yamaa_adapters::{
             csv_source::{self, TextTableError},
-            parquet_source as parquet, source_diagnostics, specification_diagnostics as projection,
-            specification_run::Error,
-            typed_csv,
+            parquet_source as parquet,
+            source_decoding::Error,
+            source_diagnostics, specification_diagnostics as projection, typed_csv,
         };
         use yamaa_core::json::Value;
         use yamaa_core::{

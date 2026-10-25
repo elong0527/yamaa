@@ -11,7 +11,7 @@
 
 use std::{convert::Infallible, num::NonZeroUsize};
 
-use yamaa_adapters::{column_table::ColumnTable, decoder::Decoder, specification_run::Error};
+use yamaa_adapters::{column_table::ColumnTable, decoder::Decoder, source_decoding::Error};
 use yamaa_core::{
     decoder::Decoder as _,
     specification::{SourceDeclaration, SourceInterpretation, SourceProfile},

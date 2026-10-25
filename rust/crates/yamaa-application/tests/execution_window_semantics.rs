@@ -5,7 +5,7 @@
 //! baseline_flag's eligibility and tie-break terms (WINDOW-9) are cases of
 //! `tests/fixtures/diagnostics/windows.json`.
 use std::fs;
-use yamaa_adapters::file_application;
+use yamaa_application::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 

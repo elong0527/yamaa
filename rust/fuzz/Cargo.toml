@@ -27,6 +27,7 @@ libfuzzer-sys = "=0.4.13"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145", features = ["raw_value"] }
 yamaa-adapters = { path = "../crates/yamaa-adapters" }
+yamaa-application = { path = "../crates/yamaa-application" }
 yamaa-core = { path = "../crates/yamaa-core" }
 
 # Line tables give symbolized stacks in crash and sanitizer reports.

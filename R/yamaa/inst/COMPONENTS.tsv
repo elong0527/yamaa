@@ -96,9 +96,9 @@ rustversion	1.0.23	MIT	crates.io	procedural macro: compiler version conditions i
 ryu	1.0.23	Apache-2.0	crates.io	shortest round-trip formatting of floating-point numbers (yamaa-core); arrow-cast uses it too
 semver	1.0.28	MIT	crates.io	build script: version parsing for rustc_version
 seq-macro	0.3.6	MIT	crates.io	procedural macro: parquet's unrolled bit-packing loops
-serde	1.0.229	MIT	crates.io	Serialize and Deserialize for the records that yamaa-adapters writes and reads as JSON
+serde	1.0.229	MIT	crates.io	Serialize and Deserialize for the records that yamaa-adapters and yamaa-application write and read as JSON
 serde_core	1.0.229	MIT	crates.io	transitive dependency of serde, serde_json and toml: the serde traits
-serde_derive	1.0.229	MIT	crates.io	procedural macro: derive(Serialize, Deserialize) for the records of yamaa-adapters
+serde_derive	1.0.229	MIT	crates.io	procedural macro: derive(Serialize, Deserialize) for the records of yamaa-adapters and yamaa-application
 serde_json	1.0.154	MIT	crates.io	JSON reading and writing in yamaa-adapters: the core's JSON values, R renv.lock files, reports and artifact facts
 serde_spanned	1.0.4	MIT	crates.io	transitive dependency of toml: values with their source spans
 shlex	2.0.1	MIT	crates.io	build script: splits the compiler flags that cc reads from the environment
@@ -133,8 +133,9 @@ windows-strings	0.5.1	MIT	crates.io	not compiled: transitive dependency of windo
 windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters), and console Ctrl+C handling in the command line
 winnow	1.0.4	MIT	crates.io	transitive dependency of toml and toml_parser: parser combinators
 wit-bindgen	0.46.0	MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
-yamaa	1.0.0-rc.1	MIT	rust/crates/yamaa	the Rust facade over yamaa-core and yamaa-adapters, which the host bindings and the command line depend on
+yamaa	1.0.0-rc.1	MIT	rust/crates/yamaa	the Rust facade over yamaa-core, yamaa-adapters and yamaa-application, which the host bindings and the command line depend on
 yamaa-adapters	1.0.0-rc.1	MIT	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
+yamaa-application	1.0.0-rc.1	MIT	rust/crates/yamaa-application	the engine's application layer: the use cases that prepare, bind, execute, report and save over yamaa-core and yamaa-adapters
 yamaa-boundary	1.0.0-rc.1	MIT	rust/crates/yamaa-boundary	the engine boundary of the host bindings: the interface version and feature handshake, the gate every native call passes and the census of live native handles
 yamaa-core	1.0.0-rc.1	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
 yamaa-r	1.0.0-rc.1	MIT	rust/crates/yamaa-r	the R binding: the static library that the R package links

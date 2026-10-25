@@ -18,8 +18,8 @@ mod execution {
         //! tests here stay beside the replay, each for the seam its first
         //! comment names.
         use std::fs;
-        use yamaa_adapters::file_application;
         use yamaa_adapters::json;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
@@ -71,7 +71,7 @@ mod execution {
         /// run of the benchmark shows.
         #[test]
         fn original_binding_fixture_keeps_output_names_literal_fields_and_complete_source_count() {
-            use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_application::specification_run::PreparedRun;
             use yamaa_core::{
                 reference_binding::{Binding, Catalog, Dataset, Field},
                 specification::BindError,
@@ -183,7 +183,7 @@ mod execution {
         //! family both installed hosts read, and it compares the observations'
         //! verification records, which no replay operation reports.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -294,7 +294,7 @@ mod execution {
         //! before and after its inputs exist and runs each case twice, where a
         //! replay case writes its files once and runs once.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -389,7 +389,7 @@ mod execution {
         //! a check of the observations' verification record, which no replay
         //! operation reports.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
         impl Study {
@@ -519,7 +519,7 @@ verifications:
         //! family both installed hosts read, and it checks each specification
         //! before its inputs exist, then runs it with them.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -622,7 +622,7 @@ verifications:
         //! the first checks each specification before its inputs exist.
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {

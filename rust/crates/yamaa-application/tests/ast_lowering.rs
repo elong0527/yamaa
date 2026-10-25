@@ -18,9 +18,10 @@
 
 use std::{collections::BTreeSet, fs, path::Path};
 use yamaa_adapters::{
-    file_preparation::FileSpecification, file_resources::Resources, shipped_schema,
-    specification_source::Source, yaml_decode::decode_yaml,
+    file_resources::Resources, shipped_schema, specification_source::Source,
+    yaml_decode::decode_yaml,
 };
+use yamaa_application::file_preparation::FileSpecification;
 use yamaa_core::{
     ast::{ColumnCheckKind, DatasetCheckKind, ExprKind, Literal, Spec, Step},
     schema::{Document, DocumentNode as N},

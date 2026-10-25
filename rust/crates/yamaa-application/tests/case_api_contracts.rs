@@ -13,7 +13,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
 };
-use yamaa_adapters::file_application;
+use yamaa_application::file_application;
 use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
 };
@@ -682,7 +682,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
         let staged = operations::state(&study);
         let project = study.identity(replay::text(replay::field(&case.input, "project")));
         let section = operations::section(replay::field(&case.input, "section"));
-        let mut define = yamaa_adapters::file_define::Define::prepare(
+        let mut define = yamaa_application::file_define::Define::prepare(
             &project,
             section,
             Some(replay::text(replay::field(&case.input, "created"))),

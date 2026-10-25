@@ -134,7 +134,7 @@ impl Error {
         match self {
             Self::Unavailable => vec![rejected(Step::Prepare, Fault::YamlReaderUnavailable)],
             Self::Read { file, error } => {
-                vec![crate::file_application::caller_read_failure(file, error)]
+                vec![crate::file_resources::caller_read_failure(file, error)]
             }
             Self::Source { file, failure } => source_diagnostics(file, failure),
             Self::Language { .. } => vec![yamaa_core::language::legacy_refusal(

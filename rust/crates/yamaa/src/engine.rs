@@ -14,7 +14,7 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use yamaa_adapters::file_application::Domain;
+use yamaa_application::file_application::Domain;
 use yamaa_core::diagnostic::Diagnostic;
 
 use crate::cancel::{CancellationToken, Cancelled};
@@ -495,7 +495,7 @@ impl Engine {
         &self,
         request: &Request<'_>,
     ) -> Result<ResolvedSpecification, Report> {
-        match yamaa_adapters::resolved_artifact::resolve_located(
+        match yamaa_application::resolved_artifact::resolve_located(
             request.specification,
             request.environment,
             self.shared.language,
@@ -700,8 +700,8 @@ impl Build {
         report_only: bool,
     ) -> Result<
         Option<(
-            Vec<yamaa_adapters::publication::File<'_>>,
-            yamaa_adapters::file_application::Admitted,
+            Vec<yamaa_application::publication::File<'_>>,
+            yamaa_application::file_application::Admitted,
         )>,
         Vec<Diagnostic>,
     > {
@@ -715,9 +715,9 @@ impl Build {
     /// build's issues, never its status.
     pub(crate) fn record(
         &mut self,
-        admitted: yamaa_adapters::file_application::Admitted,
+        admitted: yamaa_application::file_application::Admitted,
         committed: usize,
-        stopped: Option<(usize, yamaa_adapters::publication::Cause)>,
+        stopped: Option<(usize, yamaa_application::publication::Cause)>,
     ) {
         if let Ok(domain) = &mut self.result {
             domain.record(admitted, committed, stopped);
@@ -794,7 +794,7 @@ impl Build {
 /// access, path resolution, callbacks or recompilation.
 #[derive(Clone, Debug)]
 pub(crate) struct ResolvedSpecification {
-    inner: yamaa_adapters::resolved_artifact::ResolvedArtifact,
+    inner: yamaa_application::resolved_artifact::ResolvedArtifact,
 }
 
 impl ResolvedSpecification {

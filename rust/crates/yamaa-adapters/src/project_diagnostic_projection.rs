@@ -4,7 +4,7 @@ use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value as Json;
 use yamaa_core::project_diagnostics::{self, Fact};
 
-pub(crate) fn fact(value: Fact<'_>) -> Json {
+pub fn fact(value: Fact<'_>) -> Json {
     match value {
         Fact::Text(text) => json!(text),
         Fact::OwnedText(text) => json!(text),
@@ -26,7 +26,7 @@ pub(crate) fn fact(value: Fact<'_>) -> Json {
     }
 }
 /// The owned record of one borrowed core diagnostic; it records no geometry.
-pub(crate) fn owned(diagnostic: project_diagnostics::Diagnostic<'_>) -> Diagnostic {
+pub fn owned(diagnostic: project_diagnostics::Diagnostic<'_>) -> Diagnostic {
     Diagnostic {
         code: diagnostic.code,
         spec_paths: vec![diagnostic.spec_path],

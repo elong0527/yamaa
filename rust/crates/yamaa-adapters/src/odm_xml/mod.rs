@@ -108,7 +108,7 @@ impl Error {
         match self {
             Self::Unavailable | Self::Table(_) => None,
             Self::Resource(error) => {
-                Some(crate::file_application::caller_read_failure(source, error))
+                Some(crate::file_resources::caller_read_failure(source, error))
             }
             Self::Read(refusal) => Some(
                 yamaa_core::diagnostic::OdmReadFinding {

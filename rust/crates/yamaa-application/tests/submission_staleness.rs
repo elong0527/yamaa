@@ -10,7 +10,9 @@
 mod staleness {
     use crate::support::Edit as _;
     use std::fs;
-    use yamaa_adapters::{file_application, file_define::Define, specification_report::Identity};
+    use yamaa_application::{
+        file_application, file_define::Define, specification_report::Identity,
+    };
     use yamaa_core::{
         diagnostic::{ConditionCode, Diagnostic},
         domain_entry::Request,
