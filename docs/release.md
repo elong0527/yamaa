@@ -822,11 +822,12 @@ and its dependencies from PyPI, and its source job is skipped.
 A final release is then installed with `pip install yamaa`. A candidate's
 version is a PyPI pre-release, which a bare `pip install yamaa` does not
 install reliably, so its release body gives
-`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 was distributed as GitHub
-release assets only. 0.5.0 was published as GitHub release assets (#2848), and
-on 2026-10-20 its wheels and Python source archive were uploaded to PyPI from
-those assets unchanged (#3030 D177). The GitHub release assets remain the
-standalone download route for every package.
+`pip install --pre yamaa==X.Y.ZrcN`. PyPI holds 0.5.0, whose wheels and Python
+source archive were uploaded from its GitHub release assets unchanged
+(#3030 D177). No 1.0.0 candidate was published (#3673 D236), so 1.0.0 follows
+0.5.0 there, uploaded from the assets of the GitHub release that its tag
+creates. The GitHub release assets remain the standalone download route for
+every package.
 
 ### Command-line binaries
 
