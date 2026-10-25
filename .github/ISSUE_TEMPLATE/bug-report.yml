@@ -74,7 +74,7 @@ body:
       description: 'Paste what `yamaa --version` prints, or what `yamaa.info()` (Python) or `yamaa_info()` (R) returns. 0.5.0 has neither: give `yamaa.__version__` or `packageVersion("yamaa")`, your host and your OS. Name the commit if you built from a checkout. Skip for a rules or docs issue.'
       render: text
       placeholder: |
-        yamaa 1.0.0
+        yamaa 0.6.0
         language versions: 1.0
         features: odm, parquet, readstat, yaml
         host: cli

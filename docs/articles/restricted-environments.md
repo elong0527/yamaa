@@ -3,7 +3,7 @@
 A machine without internet access, such as a validated server, installs yamaa
 from an internal mirror, an internal PyPI index or a CRAN mirror such as Posit
 Package Manager, or from files carried in, and needs no further network. This
-page covers yamaa 1.0.0 and its release candidates.
+page covers yamaa 0.6.0 and later releases.
 
 Once installed, yamaa never reaches the network. It reads and writes local
 files only, since a path in a specification has no URI scheme
@@ -27,7 +27,7 @@ runner: `ubuntu-24.04` is Linux x86_64, `ubuntu-24.04-arm` Linux aarch64,
 | R source package, from the release assets, built with no network | R 4.2.0 or later, Cargo and rustc 1.82 or later, a C compiler and GNU make; on Windows, the Rtools version for your R series (Rtools42 for R 4.2) and Rust's `x86_64-pc-windows-gnu` target | `native-offline-source (<os>, r)` on every platform with R 4.6.1, and `native-cran (<os>, R 4.2.0)`, which builds it with Rust 1.82 behind a proxy that refuses every connection |
 | R binary package, from the release assets | R-release or R-oldrel, today R 4.6 or R 4.5, on Windows x64 or on macOS arm64 from macOS 11; no Rust or Rtools | `native-r-binary-install (<os>, R <version>)` on Windows x64 and macOS arm64 with R 4.6.1 and R 4.5.3 |
 | [Offline Rust toolchain route](#the-offline-rust-toolchain-route), for either source archive on Linux | Linux x86_64 or aarch64, Rust's standalone installer carried in, and what the source archive needs besides Rust | `native-offline-toolchain (<os>, python)` and `native-offline-toolchain (<os>, r)` on both Linux architectures, with Rust 1.82.0 |
-| R from CRAN or a CRAN mirror, from 1.0.0 | R 4.2.0 or later; on Windows and macOS, CRAN's binary package for R-release or R-oldrel; elsewhere, what the R source package needs | CRAN's binary builders, from the release's R source package, on which `native-cran` runs CRAN's incoming checks |
+| R from CRAN or a CRAN mirror, from 0.6.0 | R 4.2.0 or later; on Windows and macOS, CRAN's binary package for R-release or R-oldrel; elsewhere, what the R source package needs | CRAN's binary builders, from the release's R source package, on which `native-cran` runs CRAN's incoming checks |
 | Command-line binary, from the release assets | Linux x86_64 or aarch64, whatever its C library, since the binary is static; Windows x64; or macOS arm64 from macOS 11; no Python, R or Rust | `native-cli-install (<os>, <target>)` on every platform, which unpacks the archive that `native-cli (<os>, <target>)` built and runs `yamaa selftest` and the conformance corpus from it, with no network |
 
 The floors are CPython 3.12 (#3030 D56, confirming D13) and R 4.2.0. A source
@@ -51,8 +51,7 @@ python -m pip install --index-url <index URL> yamaa
 ```
 
 A release candidate is a pre-release, which pip installs only when asked: name
-it with `--pre`, as in `python -m pip install --pre yamaa==1.0.0rc1`. Until
-1.0.0 is out, a bare `pip install yamaa` installs 0.5.0 (#3030 D177).
+it with `--pre`, as in `python -m pip install --pre yamaa==<candidate>`.
 
 An index that does not proxy PyPI can host the files instead: upload the
 wheels and the source archive from the release assets, which are the files
@@ -61,11 +60,11 @@ you convert its tables to theirs.
 
 ### A CRAN mirror
 
-CRAN receives 1.0.0, never a candidate (#3030 D1). Once CRAN has published it,
-a CRAN mirror serves yamaa as it serves any CRAN package: Posit Package
-Manager's CRAN repository follows CRAN, so `install.packages("yamaa")` with
-the mirror as the repository installs it, and a curated repository serves it
-once an administrator adds it. On Windows and macOS, CRAN provides binary
+CRAN receives final releases from 0.6.0 on, never a candidate (#3673 D289).
+Once CRAN has published one, a CRAN mirror serves yamaa as it serves any CRAN
+package: Posit Package Manager's CRAN repository follows CRAN, so
+`install.packages("yamaa")` with the mirror as the repository installs it,
+and a curated repository serves it once an administrator adds it. On Windows and macOS, CRAN provides binary
 packages for R-release and R-oldrel; elsewhere the source package builds with
 no network, as [the next section](#from-files-carried-in) describes.
 
@@ -145,8 +144,8 @@ name.
     that native qualification verifies the installer against,
     [`tools/ci/keys/rust-key.gpg.ascii`](../../tools/ci/keys/rust-key.gpg.ascii)
     (#3030 D135), as `yamaa-rust-key.gpg.ascii`, from the tag of the release
-    that you install: `yamaa-v<version>`, such as `yamaa-v1.0.0`, or
-    `yamaa-v1.0.0-rc.1` for a candidate. The target is
+    that you install: `yamaa-v<version>`, such as `yamaa-v0.6.0`, or
+    `yamaa-v<version>-rc.<N>` for a candidate. The target is
     `x86_64-unknown-linux-gnu` or `aarch64-unknown-linux-gnu`: `uname -m` on
     the restricted machine prints its first part.
 

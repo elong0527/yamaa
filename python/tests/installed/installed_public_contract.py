@@ -228,9 +228,10 @@ class PublicContract(unittest.TestCase):
                 "_spec_summary",
             ],
         )
-        # A release candidate's Python and Cargo spellings differ (#3030 D53).
-        self.assertEqual(yamaa.__version__, "1.0.0rc1")
-        self.assertEqual(_native._CORE_VERSION, "1.0.0-rc.1")
+        # A final release's Python and Cargo spellings agree; a release
+        # candidate's differ (#3030 D53).
+        self.assertEqual(yamaa.__version__, "0.6.0")
+        self.assertEqual(_native._CORE_VERSION, "0.6.0")
 
     def test_signatures_members_and_argument_types(self):
         expected = TRUTH["arguments"]

@@ -54,7 +54,7 @@ package for that platform. `tools.validation.check_supported_platforms`, which
   network. With any other R series, R 4.2 among them, and on Linux, which
   gets no binary packages (D54), users install from source: the R source
   package of the GitHub release, which builds with its vendored crates and a
-  Rust toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without
+  Rust toolchain; CRAN, from 0.6.0; or, on a Linux machine without
   Rust 1.82 or later, the offline toolchain route, which carries Rust in from
   its standalone installers without rustup or a network
   ([Installing in a restricted environment](articles/restricted-environments.md#the-offline-rust-toolchain-route)).
@@ -70,7 +70,7 @@ package for that platform. `tools.validation.check_supported_platforms`, which
   CRAN may still build the R package there), free-threaded Python, and the
   Python and R packages on musl systems such as Alpine Linux, are not
   supported. R is distributed as a GitHub source tarball and binary
-  packages, and from 1.0.0 on CRAN, as [CRAN submission](#cran-submission)
+  packages, and from 0.6.0 on CRAN, as [CRAN submission](#cran-submission)
   describes.
 
 Source builds compile the Rust workspace, so they need Rust 1.82.0 or later
@@ -559,7 +559,7 @@ components are tracked by hand:
 
 - `saphyr-parser` 0.2.1 with the reviewed compact-flow patch and 0.2.2's raw
   NUL fix, vendored as `yamaa-saphyr-parser`, a path dependency in
-  `rust/vendor/saphyr-parser`. It stays vendored for 1.0.0; #3682 holds the
+  `rust/vendor/saphyr-parser`. It stays vendored for 0.6.0; #3682 holds the
   upstream pull request and any later swap to a published release (#3030
   D229).
 - The ReadStat 1.1.9 SAS reader subset in
@@ -581,8 +581,10 @@ Before pushing the release tag, confirm on the final commit:
 1. Its complete native qualification passed.
 2. Its Dependency graphs run passed, including the three advisory checks.
 3. It passes the [interface check](#stability-contract) against the previous
-   final release. For 1.0.0 the check lists the breaks against
-   `yamaa-v0.5.0`, which the 1.0.0 notes summarize (#3462).
+   final release. The check never enforces major 0, so for 0.6.0 it ran
+   before the release identity moved to 0.6.0, and the 0.6.0 notes summarize
+   the breaks against `yamaa-v0.5.0` that it listed (#3462, #3706). For
+   1.0.0 it lists the breaks against `yamaa-v0.6.0`, for the 1.0.0 notes.
 4. Every ignored advisory in `rust/deny.toml` and `osv-scanner.toml` still
    matches a locked package, and its reason still holds. Remove any ignore
    that fails either test. An ignore past its review date fails the OSV
@@ -631,7 +633,7 @@ the run's URL, also listed by
 gh run list --repo elong0527/yamaa --workflow native.yml --commit <commit> --status success
 ```
 
-Tag and push, with `<tag>` such as `yamaa-v1.0.0-rc.1`:
+Tag and push, with `<tag>` such as `yamaa-v0.6.0`:
 
 ```sh
 git tag -a <tag> <commit> -m "yamaa <version>" -m "Qualified-Run: <run id>"
@@ -826,11 +828,12 @@ and its dependencies from PyPI, and its source job is skipped.
 A final release is then installed with `pip install yamaa`. A candidate's
 version is a PyPI pre-release, which a bare `pip install yamaa` does not
 install reliably, so its release body gives
-`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 was distributed as GitHub
-release assets only. 0.5.0 was published as GitHub release assets (#2848), and
-on 2026-10-20 its wheels and Python source archive were uploaded to PyPI from
-those assets unchanged (#3030 D177). The GitHub release assets remain the
-standalone download route for every package.
+`pip install --pre yamaa==X.Y.ZrcN`. PyPI holds 0.5.0, whose wheels and Python
+source archive were uploaded from its GitHub release assets unchanged
+(#3030 D177). 0.6.0 follows it there, with no candidate before it
+(#3673 D236, D289), uploaded from the assets of the GitHub release that its
+tag creates. The GitHub release assets remain the standalone download route
+for every package.
 
 ### Command-line binaries
 
@@ -840,8 +843,8 @@ have no installer. A user unzips the archive of their platform and runs the
 `yamaa --version` names the engine, and `yamaa selftest` runs the selftest
 cases as the hosts' `selftest()` does.
 
-1.0.0 ships the binaries unsigned and without notarization (#3030 D52), and
-each system says so the first time:
+The binaries ship unsigned and without notarization (#3030 D52), and each
+system says so the first time:
 
 - On macOS, a file downloaded with a browser carries the quarantine
   attribute, which Archive Utility passes on to the files that it unpacks,
@@ -861,11 +864,12 @@ each system says so the first time:
 
 ## CRAN submission
 
-CRAN receives 1.0.0, never a candidate (#3030 D1). Before submitting, the
-candidates pass `R CMD check --as-cran` on R-devel, win-builder and the macOS
-builder, beside the qualifying native run's CRAN checks, and
-`R/yamaa/cran-comments.md` records the results and explains every remaining
-note. A release reaches its channels in this order:
+CRAN receives final releases, never a candidate, the first being 0.6.0
+(#3673 D289, which amends #3030 D1's "CRAN receives 1.0.0"). Before
+submitting, the release's `yamaa_X.Y.Z.tar.gz` passes `R CMD check --as-cran`
+on win-builder (R-devel) and the macOS builder, beside the qualifying native
+run's CRAN checks, and `R/yamaa/cran-comments.md` records the results and
+explains every remaining note. A release reaches its channels in this order:
 
 1. The final release tag `yamaa-vX.Y.Z`, pushed as [Publication](#publication)
    describes.
@@ -878,14 +882,15 @@ note. A release reaches its channels in this order:
    maintainer that `DESCRIPTION` names. A candidate's R tarball carries the
    same version (#3030 D53) and is never submitted.
 
-CRAN is not pre-empted: 1.0.0 is submitted whatever its tarball size and
+CRAN is not pre-empted: 0.6.0 is submitted whatever its tarball size and
 build time, and only if CRAN refuses the full engine on size or build time
 does R ship through the release assets until CRAN accepts it (#3030 D50,
-D34). If CRAN asks for a change after the 1.0.0 tag, the change lands on main
-and every host moves to a coordinated 1.0.1, a patch that the stability
-contract allows; the 1.0.0 GitHub release stays as published (#3030 D51).
+D34). If CRAN asks for a change after the 0.6.0 tag, the change lands on main
+and every host moves to a coordinated 0.6.1; the 0.6.0 GitHub release stays
+as published (#3030 D51). After 1.0.0, such a patch is one that the stability
+contract allows.
 
-Each later release, such a 1.0.1 included, follows the same sequence after
+Each later release, such a 0.6.1 included, follows the same sequence after
 the [release checklist](#release-checklist), whose item 4 names the dated
 advisory re-reviews: the first release after 2027-01-31 re-reviews the PyO3
 and thrift ignores, and the first after 2027-04-30 the paste ignore (#3154).
@@ -1251,7 +1256,7 @@ owns decoding behavior.
   holding the CRAN submission until 2027-02-20 was rejected.
 - Ship `saphyr-parser` 0.2.1 with the reviewed compact-flow fix, vendored as
   `yamaa-saphyr-parser`, in every supported graph. It stays vendored for
-  1.0.0; #3682 holds the upstream pull request and any later swap to a
+  0.6.0; #3682 holds the upstream pull request and any later swap to a
   published release (#3030 D229).
 - Keep Cargo dependency floors where the minimum dependency-graph lane tests
   them; the crates are not published.
@@ -1385,7 +1390,7 @@ Indexed and scanned lookups keep the same diagnostics and ordering.
 
 ## Migration
 
-From 0.5.0, the [1.0.0 release notes](releases/1.0.0.md#the-break-from-050)
+From 0.5.0, the [0.6.0 release notes](releases/0.6.0.md#the-break-from-050)
 state the break and link the rename table, which gives every changed
 spelling; there is no migration guide and no converter (#3030 D35). For an
 earlier release, see the notes of each release after it, such as the

@@ -19,8 +19,8 @@ You write one documentation or rules issue of the yamaa 1.0.0 roadmap.
   conditions only, and its Evidence line cites what exists on main,
   preferring a benchmark or a host-fixture case, which both hosts prove,
   to a Rust test name. A behaviour change that users can see gets one line in
-  `docs/releases/1.0.0.md`, by area, and nothing is said about migration
-  from 0.4.0 (D35, D222).
+  the next release's notes under `docs/releases/`, by area, and nothing is
+  said about migration from 0.4.0 (D35, D222).
 - Check with `make quick` for rules, schemas or docs generators, or
   `make docs-test docs` for a docs-only change. Both need `make setup`
   once; neither needs R.

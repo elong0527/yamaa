@@ -1,17 +1,17 @@
-# yamaa for Python <img src="https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0-rc.1/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
+# yamaa for Python <img src="https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.6.0/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
 [![Regular build](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&event=schedule&label=regular%20build)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/yamaa-v1.0.0-rc.1/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/yamaa-v0.6.0/LICENSE)
 
 Python package for yamaa, a domain-specific language for clinical trial data
 standardization.
 
 Runs yamaa specifications that transform ODM XML data into SDTM and ADaM
 datasets, and generates define.xml, with the same Rust engine as the
-[R package](https://github.com/elong0527/yamaa/tree/yamaa-v1.0.0-rc.1/R/yamaa):
+[R package](https://github.com/elong0527/yamaa/tree/yamaa-v0.6.0/R/yamaa):
 
 ```python
 import yamaa
@@ -47,8 +47,8 @@ python -m pip install yamaa
 ```
 
 A release candidate is a pre-release there, which pip installs only when
-asked, so name it, for example `python -m pip install --pre yamaa==1.0.0rc1`.
-Until 1.0.0 is out, a bare `pip install yamaa` installs 0.5.0.
+asked, so name it with `--pre`, as in
+`python -m pip install --pre yamaa==<candidate>`.
 
 The wheels cover CPython 3.12 and later on Linux x86_64 and aarch64, macOS
 arm64 and Windows x64. The Linux wheels are `manylinux_2_28` and need glibc
@@ -74,7 +74,7 @@ and Rust 1.82 or later from 0.5.0 on, with Cargo, a C compiler and GNU make:
 python -m pip install ./yamaa-<version>.tar.gz
 ```
 
-From the 1.0.0 release candidates on, the source archive carries the locked
+From 0.6.0 on, the source archive carries the locked
 Rust crates, so the build reads nothing from crates.io; pip's build isolation
 still fetches `maturin`.
 To build offline, install `maturin` 1.9.6 and pass `--no-build-isolation`. The

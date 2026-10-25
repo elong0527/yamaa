@@ -103,7 +103,7 @@ pub struct Condition {
     pub message: Option<&'static str>,
     /// The name the condition had before a release renamed it, if one did.
     pub renamed_from: Option<&'static str>,
-    /// The release that retired the condition, such as `1.0.0`; `None` for a
+    /// The release that retired the condition, such as `0.6.0`; `None` for a
     /// condition the engine may report.
     pub retired_in: Option<&'static str>,
 }
@@ -230,7 +230,7 @@ impl Conditions {
 ///     .iter()
 ///     .find(|entry| entry.condition.as_str() == "month_required")
 ///     .unwrap();
-/// assert_eq!((retired.retired_in, retired.message), (Some("1.0.0"), None));
+/// assert_eq!((retired.retired_in, retired.message), (Some("0.6.0"), None));
 /// assert_eq!(catalogue.table().rows(), entries.len());
 /// ```
 pub fn conditions() -> Conditions {

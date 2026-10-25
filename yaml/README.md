@@ -181,7 +181,7 @@ rule, grammar, or fixture:
   the former name as `renamed_from` of the registration that takes its place;
   one that retires a condition moves it from `conditions` to `retired`, with
   the release as `retired_in`. Then regenerate the tables as above.
-  `tools/tests/test_condition_history.py` keeps 1.0.0's history equal to the
+  `tools/tests/test_condition_history.py` keeps 0.6.0's history equal to the
   `conditions` section of `tools/migrate/renames.yaml`.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
