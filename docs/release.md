@@ -264,9 +264,12 @@ proxy that refuses connections and runs two Cargo jobs.
   `tools/commands/memcheck.supp` hides the "possibly lost" blocks of three
   roots that live as long as the process, which memcheck reaches only through
   a pointer into a block's middle: extendr's ownership map, the R thread's
-  handle and the lazy caches of the shipped schemas' regexes. Before the
-  check, `tools/commands/memcheck_control.c` must show that a definite leak
-  at a listed root, and a possibly lost block at any other, still count.
+  handle as the cancellation token first asks for it, and the lazy caches of
+  the shipped schemas' regexes as a descriptor's constraint check first
+  searches with them. Before the check, `tools/commands/memcheck_control.c`
+  must show that a definite leak at a listed root, a listed function reached
+  from another caller, and a possibly lost block at any other root still
+  count.
   Under memcheck the tests run many times slower, so the job may take up to
   four hours.
 

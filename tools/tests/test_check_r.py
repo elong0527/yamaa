@@ -612,11 +612,12 @@ MEMCHECK_ERROR = """\
 ==4242==  Address 0x10e3c5a0 is 0 bytes after a block of size 16 alloc'd
 ==4242== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
 """
-# What memcheck prints for memcheck_control.c with the suppressions: its
-# definite loss and its other root's possibly lost block counted, and the
-# listed root's possibly lost block suppressed.
+# What memcheck prints for memcheck_control.c with the suppressions: the
+# listed roots' possibly lost blocks through their listed callers suppressed,
+# and its definite loss, the other callers' blocks and the unrelated root's
+# block counted.
 MEMCHECK_CONTROL_COUNTED = (
-    "==4243== ERROR SUMMARY: 2 errors from 2 contexts (suppressed: 1 from 1)\n"
+    "==4243== ERROR SUMMARY: 4 errors from 4 contexts (suppressed: 3 from 3)\n"
 )
 RUNTIME_LOG = """\
 * using log directory '/tmp/check/yamaa.Rcheck'
@@ -693,7 +694,7 @@ class ValgrindTests(FakeCheckTests):
 
     def test_the_check_runs_only_after_memcheck_counts_the_control_as_stated(self):
         uncounted = (
-            "==4243== ERROR SUMMARY: 3 errors from 3 contexts (suppressed: 0 from 0)\n"
+            "==4243== ERROR SUMMARY: 7 errors from 7 contexts (suppressed: 0 from 0)\n"
         )
         for label, control, commands, printed, failure in (
             ("counted as stated", MEMCHECK_CONTROL_COUNTED, 1, "", None),
@@ -774,11 +775,24 @@ class ValgrindTests(FakeCheckTests):
 )
 class MemcheckControlTests(unittest.TestCase):
     """memcheck_control.c, under a real valgrind, passes only with the
-    suppressions and the leak kinds that memcheck counts by default."""
+    suppressions, their callers included, and the leak kinds that memcheck
+    counts by default."""
 
     def test_the_control_fails_unless_only_the_listed_root_is_suppressed(self):
         image = "--track-origins=yes --leak-check=full"
         suppressions = f"--suppressions={check_r.MEMCHECK_SUPPRESSIONS}"
+        # The same entries without the callers they name.
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        unanchored = Path(directory.name) / "unanchored.supp"
+        unanchored.write_text(
+            re.sub(
+                r"\n   \.\.\.\n   fun:\*yamaa_[^\n]*",
+                "",
+                check_r.MEMCHECK_SUPPRESSIONS.read_text(encoding="utf-8"),
+            ),
+            encoding="utf-8",
+        )
         for label, options, passes in (
             (
                 "the image's options and the suppressions",
@@ -786,6 +800,11 @@ class MemcheckControlTests(unittest.TestCase):
                 True,
             ),
             ("no suppressions", image, False),
+            (
+                "the listed functions from any caller",
+                f"{image} --suppressions={unanchored}",
+                False,
+            ),
             (
                 "possibly lost blocks not counted",
                 f"{image} {suppressions} --errors-for-leak-kinds=definite",

@@ -3,10 +3,13 @@
 # Each entry hides the "possibly lost" blocks of one allocation root whose
 # state lives as long as the process, and that memcheck reaches only through
 # a pointer into the block's middle: a hash table through its control bytes,
-# an Arc through its data. A definite or indirect leak at the same root, and
-# a possibly lost block at any other root, still count as errors;
-# memcheck_control.c proves both before every valgrind check. Patterns
-# match a Rust function's demangled and mangled names alike.
+# an Arc through its data. An entry names the allocating function and, where
+# that function serves other callers too, the caller that the native check
+# showed. A definite or indirect leak at the same root, the same function
+# reached from another caller, and a possibly lost block at any other root
+# still count as errors; memcheck_control.c proves each before every
+# valgrind check. Patterns match a Rust function's demangled and mangled
+# names alike.
 
 # extendr-api's `static OWNERSHIP: Lazy<Mutex<Ownership>>`, the protection
 # map that the R binding's first call to R fills (ownership.rs).
@@ -19,21 +22,27 @@
 }
 
 # The handle of the R thread that std::thread::current() caches for the
-# thread's life, first asked for by the R binding's cancellation token.
+# thread's life, when the R binding's cancellation token
+# (yamaa_r::interrupt) first asks for it.
 {
    yamaa-std-current-thread-handle
    Memcheck:Leak
    match-leak-kinds: possible
    ...
    fun:*std*thread*current*init_current*
+   ...
+   fun:*yamaa_r*interrupt*token*
 }
 
 # The lazy DFA caches of the regexes that the shipped schemas compile once,
-# held by yamaa-adapters' `static OnceLock` schemas (shipped_schema).
+# held by yamaa-adapters' `static OnceLock` schemas (shipped_schema), when a
+# schema descriptor's constraint check first searches with them.
 {
    yamaa-regex-lazy-dfa-cache
    Memcheck:Leak
    match-leak-kinds: possible
    ...
    fun:*regex_automata*hybrid*dfa*Lazy*
+   ...
+   fun:*yamaa_core*schema*descriptor*Descriptor*check_constraints*
 }

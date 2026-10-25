@@ -139,12 +139,14 @@ MEMCHECK_OUTPUTS = ("*-Ex.Rout", "tests/*.Rout", "tests/*.Rout.fail")
 # middle, so it reports them at every exit though nothing is lost. Each entry
 # names one root and the possibly lost kind alone.
 MEMCHECK_SUPPRESSIONS = Path(__file__).with_name("memcheck.supp")
-# A program that loses a possibly lost block at a listed root, a definite one
-# there and a possibly lost one elsewhere: memcheck must suppress the first
-# and count the other two, as MEMCHECK_CONTROL_SUMMARY states.
+# A program that loses a possibly lost block at each listed root through its
+# listed caller, a definite one at a listed root, possibly lost ones in the
+# listed functions through other callers, and one elsewhere: memcheck must
+# suppress the first three and count the other four, as
+# MEMCHECK_CONTROL_SUMMARY states.
 MEMCHECK_CONTROL = Path(__file__).with_name("memcheck_control.c")
 MEMCHECK_CONTROL_SUMMARY = re.compile(
-    r"^==\d+== ERROR SUMMARY: 2 errors from 2 contexts \(suppressed: 1 from 1\)$",
+    r"^==\d+== ERROR SUMMARY: 4 errors from 4 contexts \(suppressed: 3 from 3\)$",
     re.M,
 )
 COUNTED = ("ERROR", "WARNING", "NOTE")
@@ -382,8 +384,8 @@ def memcheck_summaries(work):
 def memcheck_control(work, environment):
     """Compile MEMCHECK_CONTROL in `work` and run it under valgrind with
     `environment`'s VALGRIND_OPTS; fail, printing memcheck's report, unless
-    memcheck suppressed the listed root's possibly lost block and counted the
-    definite one there and the possibly lost one elsewhere."""
+    memcheck suppressed only the listed roots' possibly lost blocks reached
+    through their listed callers, and counted every other loss."""
     program = work / "memcheck-control"
     subprocess.run(
         ["cc", "-O0", "-g", "-o", str(program), str(MEMCHECK_CONTROL)],
