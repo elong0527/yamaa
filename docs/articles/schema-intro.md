@@ -287,7 +287,7 @@ in its short form is listed under the field it fills.
 | `mapping` | | `source` | | `dict`, `case_sensitive`, `missing`, `unmapped` | |
 | `cut` | | `source` | | `breaks`, `labels`, `closed`, `missing` | |
 | `str_pad` | | `source` | | `width` | |
-| `str_substr` | | `source` | | `start`, `length`, `missing` | |
+| `str_substr` | | `source` | | `start`, `length`, `piece`, `missing` | |
 | `str_length` | | `source` | | `missing` | |
 | `str_extract` | | `source` | | `pattern`, `group`, `missing`, `no_match` | |
 | `str_replace` | | `source` | | `pattern`, `replacement`, `missing` | |

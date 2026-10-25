@@ -733,6 +733,40 @@
           "csv": "ID,PIECE,VALUE\nrow1,1,ABC\nrow2,1,\"AB\n\"\nrow2,2,CDE\nrow3,1,\n",
           "issues": null,
           "missing_count": 2
+        },
+        {
+          "name": "pieces_break_between_words_and_cut_a_word_longer_than_length",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput:\n  path: result.csv\n  columns: [ID, P1, P2, P3]\ncolumns:\n- {name: ID, type: str, derivation: SRC.ID}\n- name: P1\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, length: 10, piece: 1}\n- name: P2\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, length: 10, piece: 2, missing: NONE}\n- name: P3\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, length: 10, piece: 3}\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\nrow1,the quick brown fox\nrow2,abcdefghijklmn op\nrow3,abcd efghi jkl\nrow4,\u00e9\ud83e\udd80\u00e9\u00e9\u00a0wxyz12 tail\nrow5,anti-inflammatory x\nrow6,short\nrow7,\n"
+          },
+          "csv": "ID,P1,P2,P3\nrow1,the quick,brown fox,\nrow2,abcdefghij,klmn op,\nrow3,abcd efghi,jkl,\nrow4,\u00e9\ud83e\udd80\u00e9\u00e9,wxyz12,tail\nrow5,anti-infla,mmatory x,\nrow6,short,,\nrow7,,NONE,\n",
+          "issues": null,
+          "missing_count": 3
+        },
+        {
+          "name": "a_start_beside_a_piece_is_refused_before_input",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput:\n  path: result.csv\n  columns: [ID, RESULT]\ncolumns:\n- {name: ID, type: str, derivation: SRC.ID}\n- name: RESULT\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, start: 11, length: 10, piece: 2}\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\nrow1,the quick brown fox\n"
+          },
+          "csv": null,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "TEXT-16",
+              "spec_paths": [
+                "columns.RESULT.derivation.str_substr.start"
+              ],
+              "context": {
+                "class": "str_substr",
+                "field": "start",
+                "identifier": "start"
+              }
+            }
+          ],
+          "missing_count": 0
         }
       ],
       "inheritance_nulls": [

@@ -11,18 +11,29 @@
 //! repetition and bracketed class (with a nested class or a union of members)
 //! adds a level. The crate compiles recursively, so this nesting, not group
 //! depth alone, is what the semantic depth bounds.
-use super::{CompileError, Resource};
+use super::{CompileError, Resource, SPACE};
 use crate::limits::Limits;
-use std::{collections::BTreeSet, fmt::Write};
+use std::{borrow::Cow, collections::BTreeSet, fmt::Write};
 
-/// ECMA-262 WhiteSpace and LineTerminator, without U+0085 (TEXT-8).
-const SPACE: &str = r"\x{9}-\x{D}\x{20}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}";
 const DIGIT: &str = "0-9";
 const WORD: &str = "0-9A-Za-z_";
 /// Every scalar except the line terminators U+000A, U+000D, U+2028 and U+2029.
 const DOT: &str = r"[^\x{A}\x{D}\x{2028}\x{2029}]";
 const NOTHING: &str = r"[^\x{0}-\x{10FFFF}]";
 const ANYTHING: &str = r"[\x{0}-\x{10FFFF}]";
+/// The members of `\s`, each range of [`SPACE`] spelled as the crate reads it.
+fn space() -> String {
+    let mut members = String::new();
+    for (low, high) in SPACE {
+        let written = if low == high {
+            write!(members, r"\x{{{low:X}}}")
+        } else {
+            write!(members, r"\x{{{low:X}}}-\x{{{high:X}}}")
+        };
+        written.expect("writing to a String");
+    }
+    members
+}
 /// A bracketed class and the union of its members, as the crate nests them.
 const CLASS_NESTING: usize = 2;
 
@@ -496,12 +507,12 @@ impl Parser<'_> {
                     }
                     continue;
                 }
-                Item::Digit(positive) => (positive, DIGIT),
-                Item::Word(positive) => (positive, WORD),
-                Item::Space(positive) => (positive, SPACE),
+                Item::Digit(positive) => (positive, Cow::Borrowed(DIGIT)),
+                Item::Word(positive) => (positive, Cow::Borrowed(WORD)),
+                Item::Space(positive) => (positive, Cow::Owned(space())),
             };
             if positive {
-                body.push_str(members);
+                body.push_str(&members);
             } else if items.len() == 1 && !negative {
                 // A lone complemented shorthand is the complemented class itself.
                 write!(self.output, "[^{members}]").expect("writing to a String");

@@ -1152,10 +1152,11 @@ mod scalar {
         }
     }
     mod text_position {
-        //! TEXT-13 and TEXT-14: pieces and lengths by Unicode scalar position.
+        //! TEXT-13, TEXT-14 and TEXT-16: pieces by Unicode scalar position or
+        //! between words, and lengths.
         use yamaa_core::{
             table::ValueRef,
-            text_position::{DeclarationError, Step, StringLength, StringSubstr},
+            text_position::{DeclarationError, Fields, Step, StringLength, StringSubstr},
             value::Value,
         };
 
@@ -1165,10 +1166,27 @@ mod scalar {
             StringSubstr::new(
                 "SRC.T".into(),
                 "columns.T.derivation.str_substr".into(),
-                start,
-                length,
+                Fields {
+                    start: Some(start),
+                    length,
+                    piece: None,
+                },
                 None,
             )
+        }
+
+        fn piece(piece: &str, length: &str) -> StringSubstr {
+            StringSubstr::new(
+                "SRC.T".into(),
+                "columns.T.derivation.str_substr".into(),
+                Fields {
+                    start: None,
+                    length: Some(length),
+                    piece: Some(piece),
+                },
+                None,
+            )
+            .unwrap()
         }
 
         /// Seam: the text pieces `str_substr` takes (core outcome).
@@ -1220,6 +1238,115 @@ mod scalar {
             }
         }
 
+        /// Seam: the pieces `str_substr` takes between words (core outcome);
+        /// each expectation follows TEXT-16 with a `length` of 10.
+        #[test]
+        fn a_piece_breaks_between_words_and_cuts_a_word_longer_than_length() {
+            for (label, text, number, expected) in [
+                (
+                    "the last word end within ten",
+                    "the quick brown fox",
+                    "1",
+                    Some("the quick"),
+                ),
+                (
+                    "the rest after the dropped space",
+                    "the quick brown fox",
+                    "2",
+                    Some("brown fox"),
+                ),
+                ("past the last piece", "the quick brown fox", "3", None),
+                (
+                    "a word ending at the tenth scalar fills the piece",
+                    "abcd efghi jkl",
+                    "1",
+                    Some("abcd efghi"),
+                ),
+                ("what follows it", "abcd efghi jkl", "2", Some("jkl")),
+                (
+                    "a word longer than ten is cut",
+                    "abcdefghijklmn op",
+                    "1",
+                    Some("abcdefghij"),
+                ),
+                ("and continues", "abcdefghijklmn op", "2", Some("klmn op")),
+                (
+                    "a hyphen is no break",
+                    "anti-inflammatory x",
+                    "1",
+                    Some("anti-infla"),
+                ),
+                (
+                    "scalars, not bytes, and U+00A0 breaks",
+                    "\u{e9}\u{1f980}\u{e9}\u{e9}\u{a0}wxyz12 tail",
+                    "1",
+                    Some("\u{e9}\u{1f980}\u{e9}\u{e9}"),
+                ),
+                (
+                    "a second break",
+                    "\u{e9}\u{1f980}\u{e9}\u{e9}\u{a0}wxyz12 tail",
+                    "2",
+                    Some("wxyz12"),
+                ),
+                (
+                    "a third piece",
+                    "\u{e9}\u{1f980}\u{e9}\u{e9}\u{a0}wxyz12 tail",
+                    "3",
+                    Some("tail"),
+                ),
+                (
+                    "a tab and a line break",
+                    "abcd\tefgh\nijkl",
+                    "1",
+                    Some("abcd\tefgh"),
+                ),
+                (
+                    "after the dropped line break",
+                    "abcd\tefgh\nijkl",
+                    "2",
+                    Some("ijkl"),
+                ),
+                (
+                    "trailing whitespace is no piece",
+                    "abcdefghi    ",
+                    "2",
+                    None,
+                ),
+                (
+                    "a text that fits is kept as written",
+                    "  ab cd ",
+                    "1",
+                    Some("  ab cd "),
+                ),
+                ("any piece of the empty string", "", "1", None),
+                (
+                    "a piece beyond any integer",
+                    "the quick brown fox",
+                    BEYOND,
+                    None,
+                ),
+            ] {
+                let expected =
+                    expected.map_or(Value::Missing, |piece: &str| Value::Str(piece.into()));
+                assert_eq!(
+                    piece(number, "10").apply(ValueRef::Str(text)),
+                    Ok(Step::Value(expected)),
+                    "{label}"
+                );
+            }
+            assert_eq!(
+                (
+                    piece("1", BEYOND).apply(ValueRef::Str("the quick brown fox")),
+                    piece("2", BEYOND).apply(ValueRef::Str("the quick brown fox")),
+                ),
+                (
+                    Ok(Step::Value(Value::Str("the quick brown fox".into()))),
+                    Ok(Step::Value(Value::Missing)),
+                ),
+                "a length beyond any integer takes the whole text as one piece"
+            );
+        }
+
         /// Seam: the lengths `str_length` counts (core outcome).
         #[test]
         fn a_length_counts_scalars_not_bytes() {
@@ -1248,9 +1375,16 @@ mod scalar {
         fn a_missing_source_is_answered_by_the_declared_missing_or_missing() {
             for handler in [None, Some(Value::Str("NONE".into())), Some(Value::Int(-1))] {
                 let substitute = handler.clone().unwrap_or(Value::Missing);
-                let piece =
-                    StringSubstr::new("SRC.T".into(), "p".into(), "1", None, handler.clone())
-                        .unwrap();
+                let piece = StringSubstr::new(
+                    "SRC.T".into(),
+                    "p".into(),
+                    Fields {
+                        start: Some("1"),
+                        ..Fields::default()
+                    },
+                    handler.clone(),
+                )
+                .unwrap();
                 let length =
                     StringLength::new("SRC.T".into(), "p".into(), handler.clone()).unwrap();
                 assert_eq!(
@@ -1275,20 +1409,41 @@ mod scalar {
         /// length below one is a `text.json` case `str_substr_refuses_...`.
         #[test]
         fn only_what_lowering_never_writes_is_a_shape_failure() {
-            for (label, source, path, start, length) in [
-                ("no source", "", "p", "1", None),
-                ("no path", "SRC.T", "", "1", None),
-                ("a start that is not an integer", "SRC.T", "p", "1.5", None),
+            for (label, source, path, start, length, piece) in [
+                ("no source", "", "p", Some("1"), None, None),
+                ("no path", "SRC.T", "", Some("1"), None, None),
+                (
+                    "a start that is not an integer",
+                    "SRC.T",
+                    "p",
+                    Some("1.5"),
+                    None,
+                    None,
+                ),
                 (
                     "a length that is not an integer",
                     "SRC.T",
                     "p",
-                    "1",
+                    Some("1"),
+                    Some("x"),
+                    None,
+                ),
+                (
+                    "a piece that is not an integer",
+                    "SRC.T",
+                    "p",
+                    None,
+                    Some("10"),
                     Some("x"),
                 ),
             ] {
+                let fields = Fields {
+                    start,
+                    length,
+                    piece,
+                };
                 assert_eq!(
-                    StringSubstr::new(source.into(), path.into(), start, length, None),
+                    StringSubstr::new(source.into(), path.into(), fields, None),
                     Err(DeclarationError::Shape),
                     "{label}"
                 );
