@@ -29,8 +29,24 @@ that cannot be read or parsed, or a directory that cannot be listed, raises a
 condition of class \code{yamaa_error}, and nothing is written.
 }
 \examples{
-\dontrun{
-findings <- yamaa_lint(c("sdtm/dm.yaml", "adam/"))
-remaining <- yamaa_lint("sdtm/dm.yaml", fix = TRUE)
-}
+study <- tempfile("yamaa-")
+dir.create(study)
+spec <- file.path(study, "dm.yaml")
+writeLines('yamaa: "1.0"
+type: spec
+domain: DM
+input: {RAW: {path: input.csv, types: {USUBJID: str, AGE: int}}}
+keys: [USUBJID]
+columns:
+  - {name: USUBJID, type: str, derivation: RAW.USUBJID}
+  - {name: AGE, type: int, derivation: RAW.AGE}
+output: {path: dm.csv, columns: [USUBJID, AGE]}
+', spec)
+
+findings <- yamaa_lint(study)
+findings[, c("line", "finding", "message")]
+remaining <- yamaa_lint(spec, fix = TRUE)
+remaining[, c("line", "finding", "message")]
+
+unlink(study, recursive = TRUE)
 }

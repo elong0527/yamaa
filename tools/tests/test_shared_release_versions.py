@@ -152,6 +152,15 @@ class CoherentRelease(ReleaseTree):
                 f"R/yamaa/DESCRIPTION: {authors}",
             ),
             (
+                "R author without the copyright holder role",
+                (
+                    "R/yamaa/DESCRIPTION",
+                    'role = c("aut", "cre", "cph")',
+                    'role = c("aut", "cre")',
+                ),
+                f"R/yamaa/DESCRIPTION: {authors}",
+            ),
+            (
                 "R author appended with named arguments",
                 (
                     "R/yamaa/DESCRIPTION",

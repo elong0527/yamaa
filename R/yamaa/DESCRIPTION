@@ -2,7 +2,8 @@ Package: yamaa
 Title: Clinical Data Standardization Using 'YAML' Specifications
 Version: 0.6.0
 Authors@R: c(
-    person("Yilong", "Zhang", email = "elong0527@gmail.com", role = c("aut", "cre")),
+    person("Yilong", "Zhang", email = "elong0527@gmail.com",
+           role = c("aut", "cre", "cph")),
     person("Ming-Chun", "Chen", role = "ctb"),
     person("Peng", "Zhang", role = "ctb"),
     person("Bingjun", "Wang", role = "ctb"),
