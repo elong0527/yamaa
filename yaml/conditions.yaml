@@ -456,6 +456,10 @@ conditions:
   source_carriage_return:
     phases: [ingest]
     message: "record {record} of {path} holds a carriage return"
+  # DSJSON-5
+  source_dataset_json_invalid:
+    phases: [ingest]
+    message: "{path} is not a Dataset-JSON file the engine can read ({cause})"
   source_encoding_required:
     phases: [validation]
     message: "input {dataset} must declare its encoding"

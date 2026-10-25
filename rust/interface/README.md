@@ -15,33 +15,23 @@ native qualification lane compare the generated files with this definition
 the version and feature handshake below before any other native call, and the
 boundary compatibility and lifetime tests of
 [#2692](https://github.com/elong0527/yamaa/issues/2692) run in both installed
-suites. Both bindings reach the engine only through its C ABI and
-`yamaa-boundary`'s client, never through the facade, and link it into each
-package (below).
+suites. Both bindings call the `yamaa` facade directly and use
+`yamaa-boundary` for the handshake, gate and handle census. Each package
+links its engine (below).
 
 ## The boundary
 
 Each binding's generated Rust glue registers its host's functions with PyO3
-or extendr and reaches the engine through one C ABI: the function table,
-handle table, records and callbacks that `yamaa-boundary`'s `abi` module
-declares and `rust/crates/yamaa-engine` implements over the facade. The
-binding calls it only through `yamaa-boundary`'s client, whose gate holds the
-table that the first accepted negotiation returns. Rust values never cross
-the ABI, which has no stable Rust layout to promise: handles are a slot and
-its generation, texts and lists are borrowed or released by the side that
-made them, and every entry and callback contains a panic. The existing Arrow
-C Data/Stream interface remains the standard C ABI for tables. Its ownership
-contract below applies to both hosts. The ABI is internal: any release may
-change it with a new boundary version, and the negotiation entry's signature,
-the request's header, the outcome's fixed part, the table's header and the
-check order stay the same in every boundary version, so that any two yamaa
-builds refuse each other cleanly.
+or extendr. Its handwritten implementations call the facade's public Rust
+items and keep their results in owned native handles. The binding's
+`yamaa-boundary::Gate` negotiates from the facade's engine information and
+opens on the first acceptance. The Arrow C Data/Stream interface carries
+tables between native code and host libraries, with the ownership contract
+below applying to both hosts.
 
-Each host package builds the engine, the adapters and its binding crate
-together with the selected toolchain and lock, and the binding calls
-`yamaa_engine::negotiate` as a Rust function. Neither the wheel's module nor
-the R package's library exports a new symbol, so the Python and R packages in
-one process, through reticulate or rpy2, cannot clash.
+Each host package builds the facade, adapters, core, boundary and its binding
+crate together with the selected toolchain and lock. No stable Rust ABI is
+required.
 
 The IDL owns export names, ordered arguments, defaults, host projections, Rust
 implementation paths, feature names and semantic pairings. The adjacent document
@@ -296,7 +286,7 @@ handle. The generated `yamaa/__init__.py` imports `_native` and calls
 the package, and the generated `.onLoad` of the R package calls the
 `interface_handshake` routine. Both send the request that the `handshake`
 section declares, with the version `yamaa_boundary::BOUNDARY_VERSION`, and the
-binding forwards it to the engine through `yamaa-boundary`'s client.
+binding negotiates through `yamaa-boundary::Gate` using the facade's engine facts.
 Negotiation reads nothing, calls nothing and publishes nothing.
 
 | | Contents |
@@ -374,9 +364,9 @@ extendr's own routines that describe each module and write its R wrappers,
 are exempt. The generator checks that every registered native function
 reaches the gate, so a new export cannot skip it.
 
-The engine counts its live handles by kind (`check`, `run`,
+Each binding counts its live handles by kind (`check`, `run`,
 `project_run`, `submission`, `selftest`, `plans` and `table`, which only
-Python hands out; R copies each table and gives its handle back) in a census
+Python hands out; R copies each table into host values) in a census
 that the private accessors `_native._live_handles()` and
 `.native_live_handles()` read for the handle lifetime suites.
 
@@ -572,8 +562,7 @@ its result, and that a refused conversion or a cancelled run or save leaves no
 handle. They reuse the existing Arrow pointer, release, early-release,
 failed-conversion and repeated-import/export controls of
 [#2646](https://github.com/elong0527/yamaa/pull/2646), which gain the census,
-and the interrupt-identity controls of both hosts. The engine's C ABI has
-its Rust lifetime tests in `rust/crates/yamaa-engine/tests/`. Diagnostic
+and the interrupt-identity controls of both hosts. Diagnostic
 full-registry and cross-host payload parity remain owned by
 [#2677](https://github.com/elong0527/yamaa/issues/2677). No test may derive
 benchmark expected values from the implementation.

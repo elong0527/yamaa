@@ -17,9 +17,8 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
-| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles, the types of the engine's C ABI and the safe client through which both bindings call it. |
-| `rust/crates/yamaa-engine/` | The engine's C ABI over the facade: its function table, handle table, callback adapters and Arrow stream export, which both bindings link. |
-| `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the client of `yamaa-boundary`. |
+| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
+| `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
 | `benchmarks/` | Authored specifications, inputs, metadata and expected results. |
@@ -33,17 +32,14 @@ results. Explicit Save publishes held bytes in contract order. Diagnostic codes
 belong to the shared registry. Resource policies and supported platforms have
 one owner in [release guidance](docs/release.md).
 
-The workspace has eight crates. `yamaa-core` owns preparation, project ports,
+The workspace has seven crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
 `yamaa-adapters` implements physical boundaries, and the `yamaa` facade
 composes the two. The two binding crates and the `yamaa-cli` command line
-implement their host boundaries; the command line depends on the facade
-alone. `yamaa-boundary` holds the types of the engine's C ABI, the interface
-handshake and the safe client, and depends on nothing else in the workspace;
-`yamaa-engine` puts the facade behind that C ABI and depends on the facade and
-the boundary alone. Each binding links `yamaa-engine` and reaches it only
-through the client, never through the facade (D225 on #3030 amends section
-2.10). Core may use
+implement their host boundaries and depend on the facade; the bindings also
+depend on `yamaa-boundary`, which holds their interface handshake and depends
+on nothing else in the workspace (D281 on #3673 restores these edges of
+#3030 section 2.10, which D225 had amended). Core may use
 `std` but holds no file or format code: it keeps the formats' metadata models,
 and the adapters read and write their bytes. Portable math still uses the
 pinned libm policy. `make check-repository` holds both rules of #3030 section
@@ -76,8 +72,8 @@ package uses an edition that Rust does not read
 
 One tool, `tools/staging/engine_bundle.py`, stages the engine source bundle
 that each host's source package builds from: the engine crates, the boundary
-and engine C ABI crates and that host's binding crate, a lock trimmed from the
-canonical one and verified crate
+crate and that host's binding crate, a lock trimmed from the canonical one and
+verified crate
 by crate against it, and the crates.io crates that the lock selects, vendored,
 with no tests and no toolchain file anywhere (#3030 D55). It builds the Python
 source archive, maturin's output over the bundle, with maturin 1.9.6 on the

@@ -19,6 +19,18 @@
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.V.derivation.str_pad.width"], "context": {"expected": "a positive integer width"}}]
     },
     {
+      "case": "str_pad_refuses_a_negative_width",
+      "operation": "str_pad",
+      "input": {"source": "X", "path": "p", "width": "-1"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["p.width"], "context": {"expected": "a positive integer width"}}]
+    },
+    {
+      "case": "str_pad_refuses_a_width_below_any_integer",
+      "operation": "str_pad",
+      "input": {"source": "X", "path": "p", "width": "-999999999999999999999999999999999"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["p.width"], "context": {"expected": "a positive integer width"}}]
+    },
+    {
       "case": "str_substr_refuses_a_start_below_one",
       "operation": "str_substr",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "0"},
@@ -29,6 +41,36 @@
       "operation": "str_substr",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "1", "length": "-3"},
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.V.derivation.str_substr.length"], "context": {"expected": "a positive integer length"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_negative_start",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "start": "-1", "length": "200"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.T.derivation.str_substr.start"], "context": {"expected": "a positive integer start"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_zero_length",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "start": "1", "length": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.T.derivation.str_substr.length"], "context": {"expected": "a positive integer length"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_negative_length_after_a_late_start",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "start": "201", "length": "-200"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.T.derivation.str_substr.length"], "context": {"expected": "a positive integer length"}}]
+    },
+    {
+      "case": "str_substr_reports_only_the_start_when_start_and_length_are_both_below_one",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "start": "0", "length": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.T.derivation.str_substr.start"], "context": {"expected": "a positive integer start"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_start_below_any_integer",
+      "operation": "str_substr",
+      "input": {"source": "SRC.T", "path": "columns.T.derivation.str_substr", "start": "-100000000000000000000000"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.T.derivation.str_substr.start"], "context": {"expected": "a positive integer start"}}]
     },
     {
       "case": "str_substr_refuses_a_source_that_is_not_text",

@@ -48,6 +48,7 @@ fn semantic(error: &Error) -> bool {
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => error.finding("").is_some(),
         Error::ParquetSource(error) => error.finding("", "").is_some(),
         Error::SasSource(error) => error.finding("", "").is_some(),
+        Error::DatasetJsonSource(error) => error.finding("", "").is_some(),
         Error::Ordinal(error) => error.finding("", "").is_some(),
         Error::OdmFields(_) | Error::OdmValues(_) | Error::ProducerMetadata(_) => true,
         Error::OdmSource(error) => error.refuses_document(),
@@ -60,6 +61,7 @@ fn finding<'a>(error: &'a Error, source: &'a SourceDeclaration) -> Option<Source
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => error.finding(&source.name),
         Error::ParquetSource(error) => error.finding(&source.name, &source.path),
         Error::SasSource(error) => error.finding(&source.name, &source.path),
+        Error::DatasetJsonSource(error) => error.finding(&source.name, &source.path),
         Error::Ordinal(error) => error.finding(&source.name, source.ordinal.as_deref()?),
         _ => None,
     }

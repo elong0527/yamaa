@@ -29,6 +29,7 @@ mod yaml_source;
 
 pub mod csv_artifact;
 pub mod csv_source;
+pub mod dataset_json_source;
 pub mod decoder;
 pub mod odm_xml;
 pub mod parquet_artifact;
