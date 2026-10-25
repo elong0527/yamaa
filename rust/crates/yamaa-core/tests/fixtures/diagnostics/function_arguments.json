@@ -1,0 +1,51 @@
+{
+  "about": "What `invalid_function_argument` names when a call's argument is written as a value the engine cannot run with (FUNC-5): the `argument`, and in `value` the text it is written as, null when it is no scalar text, while a fault of the call's own shape names no argument. `called` derives VALUE with a call of the project function id, the integer identity of a project whose function file implements it in Python. An integer past the 64-bit range is the third row of `projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`. A `DATE` or `DATETIME` literal whose text names no day or second fails the grammar before the call reads it, so no specification reaches those two causes, and their cases read the finding a call's decoding makes.",
+  "documents": {
+    "called": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": 7}}}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "VALUE"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "a_call_argument_that_is_no_scalar_names_its_argument_and_no_written_value",
+      "operation": "prepare_in",
+      "input": {
+        "base": "called",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "function", "args", "x"], "to": {"literal": 7}}],
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.VALUE.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "cause": "invalid_shape", "value": null}}]
+    },
+    {
+      "case": "a_call_of_another_shape_than_its_name_and_arguments_names_no_argument",
+      "operation": "prepare_in",
+      "input": {
+        "base": "called",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "function", "contract_version"], "to": "1"}],
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.VALUE.derivation.function"], "context": {"function": "id", "cause": "invalid_shape"}}]
+    },
+    {
+      "case": "a_call_argument_that_names_no_day_names_its_argument_and_its_written_date",
+      "operation": "function_finding",
+      "input": {"path": "columns.VALUE.derivation.function.args.on", "function": "id", "argument": "on", "cause": "invalid_date", "value": "2024-02-30"},
+      "issues": [{"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.VALUE.derivation.function.args.on"], "context": {"function": "id", "argument": "on", "cause": "invalid_date", "value": "2024-02-30"}}]
+    },
+    {
+      "case": "a_call_argument_that_names_no_second_names_its_argument_and_its_written_datetime",
+      "operation": "function_finding",
+      "input": {"path": "columns.VALUE.derivation.function.args.at", "function": "id", "argument": "at", "cause": "invalid_datetime", "value": "2024-01-01T25:00:00"},
+      "issues": [{"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.VALUE.derivation.function.args.at"], "context": {"function": "id", "argument": "at", "cause": "invalid_datetime", "value": "2024-01-01T25:00:00"}}]
+    }
+  ]
+}

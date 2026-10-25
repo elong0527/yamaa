@@ -29,6 +29,7 @@ use yamaa_core::{
     },
     producer_contract::{prepare_document, Link, Links},
     project_environment::{Draft, Environment},
+    project_function_document::Kind,
     project_scope,
     run_report::{Recorded, Run},
     schema::{
@@ -36,13 +37,17 @@ use yamaa_core::{
         NormalizationError, SchemaContext, SchemaDiagnostic, SchemaDiagnosticValue, SchemaModule,
         SchemaStructure,
     },
-    specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
+    specification::{
+        BindError, FunctionCause, FunctionFinding, PreflightFinding, PrepareError,
+        PreparedSpecification,
+    },
     submission_staleness::Guard,
     table::TableSchema,
     value::{Selection, Value},
 };
 
 pub(super) const FILES: &[File] = &[
+    fixture!("function_arguments.json"),
     fixture!("intermediates.json"),
     fixture!("language.json"),
     fixture!("producers.json"),
@@ -59,6 +64,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "copy_datasets" => copy_datasets(input),
         "file_type_argument" => file_type_argument(input),
         "flag_condition" => flag_condition(input),
+        "function_finding" => function_finding(input),
         "language_header" => language_header(input),
         "layer_header" => layer_header(input),
         "prepare_in" => prepare_in(input),
@@ -356,6 +362,38 @@ fn prepare_linked(input: &Json) -> Vec<Diagnostic> {
     prepare_linked_with(&tree(input.field("document")).document(), None, links)
         .err()
         .map_or_else(Vec::new, refusal)
+}
+
+/// The finding of a call of the project function `function` at `path`
+/// whose decoding failed, `{path, function, argument, cause, value}`: a
+/// fault of the call's `argument`, or of the call itself when it is `null`,
+/// of the `cause` `integer_range`, `invalid_date`, `invalid_datetime` or
+/// `invalid_shape`, with the text its value is written as, or `null`. A case
+/// reads it for a cause no specification reaches, since the grammar reads
+/// a `DATE` or `DATETIME` literal's text before the call does.
+fn function_finding(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["path", "function", "argument", "cause", "value"]);
+    let written = |key: &str| match input.field(key) {
+        Json::Null => None,
+        written => Some(written.text().to_owned()),
+    };
+    let kind = match text(input, "cause") {
+        "integer_range" => Kind::IntegerRange,
+        "invalid_date" => Kind::InvalidDate,
+        "invalid_datetime" => Kind::InvalidDateTime,
+        "invalid_shape" => Kind::NormalizedShape,
+        other => panic!("no decoding cause {other:?}"),
+    };
+    let finding = FunctionFinding {
+        path: text(input, "path").into(),
+        function: text(input, "function").into(),
+        argument: written("argument"),
+        cause: FunctionCause::Scalar {
+            kind,
+            value: written("value"),
+        },
+    };
+    vec![finding.diagnostic()]
 }
 
 /// The finding of stored metadata that the contract of the `producer`
