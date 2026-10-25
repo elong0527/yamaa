@@ -339,7 +339,7 @@ mod declaration {
                 panic!("an inline rank outside the int range")
             };
             let issues =
-                yamaa_adapters::project_environment_diagnostics::scalar_root(&root, &findings)
+                yamaa_application::project_environment_diagnostics::scalar_root(&root, &findings)
                     .unwrap();
             let [issue] = issues.as_slice() else {
                 panic!("one issue: {issues:?}")
@@ -389,7 +389,8 @@ mod declaration {
                 panic!("a listed codelist file's rank outside the int range")
             };
             let issues =
-                yamaa_adapters::project_environment_diagnostics::scalar_sources(&rejected).unwrap();
+                yamaa_application::project_environment_diagnostics::scalar_sources(&rejected)
+                    .unwrap();
             let [issue] = issues.as_slice() else {
                 panic!("one issue: {issues:?}")
             };
@@ -476,7 +477,7 @@ mod declaration {
                 panic!("a lock of another kind and a repeated name")
             };
             let issues =
-                yamaa_adapters::project_environment_diagnostics::admission(&rejected).unwrap();
+                yamaa_application::project_environment_diagnostics::admission(&rejected).unwrap();
             let text = |text: &str| Value::String(text.into());
             let project = study.path("project.yaml").to_str().unwrap().to_owned();
             let copy = study
@@ -537,7 +538,7 @@ mod declaration {
                 panic!("an invalid R callable fails in either host")
             };
             let issues =
-                yamaa_adapters::project_environment_diagnostics::admission(&rejected).unwrap();
+                yamaa_application::project_environment_diagnostics::admission(&rejected).unwrap();
             let [issue] = issues.as_slice() else {
                 panic!("one issue: {issues:?}")
             };
@@ -574,7 +575,8 @@ mod declaration {
                 panic!("an unreadable date")
             };
             let issues =
-                yamaa_adapters::project_environment_diagnostics::scalar_sources(&rejected).unwrap();
+                yamaa_application::project_environment_diagnostics::scalar_sources(&rejected)
+                    .unwrap();
             let [issue] = issues.as_slice() else {
                 panic!("one issue: {issues:?}")
             };
@@ -605,14 +607,16 @@ mod declaration {
         use std::sync::Arc;
         use yamaa_adapters::{
             document::Closures,
-            file_preparation::FileSpecification,
-            file_project,
             file_resources::Resources,
-            file_workflow, json, project_application,
-            project_function_diagnostics::HostDetails,
+            json,
             project_lock::{Finding, Reason},
-            project_report::Classified,
             project_source::Origin,
+        };
+        use yamaa_application::{
+            file_preparation::FileSpecification,
+            file_project, file_workflow, project_application,
+            project_function_diagnostics::HostDetails,
+            project_report::Classified,
             specification_report::{self, Identity},
             specification_run::BoundaryFailure,
         };

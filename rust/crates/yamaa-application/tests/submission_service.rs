@@ -5,9 +5,11 @@
 mod service {
     use std::sync::{Arc, Mutex};
     use yamaa_adapters::{
-        file_define::{self, Define, PublicationState},
         file_publication, file_resources,
         host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
+    };
+    use yamaa_application::{
+        file_define::{self, Define, PublicationState},
         publication::Cause,
     };
     use yamaa_core::{

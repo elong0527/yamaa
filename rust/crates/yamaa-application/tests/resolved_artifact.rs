@@ -2,10 +2,10 @@
 #![cfg(feature = "yaml")]
 use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::resolved_artifact::model::{
+use yamaa_application::resolved_artifact::model::{
     specification_value, Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
 };
-use yamaa_adapters::{file_workflow, resolved_artifact};
+use yamaa_application::{file_workflow, resolved_artifact};
 use yamaa_core::{build::Request, json::Value, project_function::Language};
 
 struct Study(crate::support::Scratch);

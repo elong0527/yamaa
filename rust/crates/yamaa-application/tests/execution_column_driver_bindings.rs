@@ -8,7 +8,7 @@
 //! first template each completes. A column holding a qualified aggregate
 //! keeps the whole-dataset scope (LOOKUP-18).
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_application::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 

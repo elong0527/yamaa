@@ -9,7 +9,7 @@
 //! read paths.
 use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::file_application;
+use yamaa_application::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 

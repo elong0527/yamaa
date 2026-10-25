@@ -23,7 +23,7 @@
       "family": "diagnostics",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/src/specification_check.rs"
+        "rust/crates/yamaa-application/src/specification_check.rs"
       ]
     },
     {

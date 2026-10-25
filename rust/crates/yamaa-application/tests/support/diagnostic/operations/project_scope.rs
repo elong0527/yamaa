@@ -24,7 +24,7 @@ use crate::support::diagnostic::{
     form::Outcome,
     replay::{closed, field, text},
 };
-use yamaa_adapters::project_scope::{self, Project};
+use yamaa_application::project_scope::{self, Project};
 use yamaa_core::json::Value;
 
 pub(super) const FILES: &[File] = &[fixture!("project_scope.json")];

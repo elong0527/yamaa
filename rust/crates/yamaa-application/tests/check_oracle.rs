@@ -37,7 +37,7 @@ fn check(
         environment: environment.as_deref(),
     };
     let (_, comparisons) = check_oracle::record(|| {
-        yamaa_adapters::file_application::check(host, request, study::identity(label, &path))
+        yamaa_application::file_application::check(host, request, study::identity(label, &path))
     });
     recorded.extend(
         comparisons

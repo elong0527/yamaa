@@ -8,7 +8,8 @@ mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
         use std::fs;
-        use yamaa_adapters::{file_resources::Resources, file_workflow};
+        use yamaa_adapters::file_resources::Resources;
+        use yamaa_application::file_workflow;
         use yamaa_core::project_function::Language;
 
         struct Study(crate::support::Scratch);
@@ -68,14 +69,14 @@ mod file {
                     .declaring_source(&findings[0].spec_paths[0]),
                 Some(parent.as_str())
             );
-            let issues = yamaa_adapters::specification_check::issues(prepared.run());
+            let issues = yamaa_application::specification_check::issues(prepared.run());
             assert_eq!(issues.len(), 1);
             assert_eq!(
                 yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"pattern\":\"(\"}"
             );
             assert_eq!(
-                yamaa_adapters::project_application::check(
+                yamaa_application::project_application::check(
                     &study.identity("spec.yaml"),
                     &study.identity("project.yaml"),
                     Language::Python,
@@ -91,11 +92,11 @@ mod file {
         use crate::support::issues::assert_issues;
         use crate::support::Edit as _;
         use std::fs;
+        use yamaa_adapters::file_configuration;
         #[cfg(unix)]
         use yamaa_adapters::file_resources::Error;
-        use yamaa_adapters::{
-            file_application, file_configuration, file_preparation::FileSpecification,
-            specification_report::Identity,
+        use yamaa_application::{
+            file_application, file_preparation::FileSpecification, specification_report::Identity,
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
@@ -142,7 +143,7 @@ mod file {
         /// held snapshot and the run scope's capture counter.
         #[test]
         fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
-            use yamaa_adapters::{
+            use yamaa_application::{
                 file_application::Domain, file_preparation, specification_report,
                 specification_run::PortError,
             };
@@ -387,7 +388,7 @@ mod file {
                 file_configuration::resources(&study.text("entry/link.yaml")).unwrap();
             assert!(matches!(
                 FileSpecification::prepare(resources, &entry),
-                Err(yamaa_adapters::file_preparation::Error::Entry(
+                Err(yamaa_application::file_preparation::Error::Entry(
                     Error::Symlink
                 ))
             ));
@@ -781,7 +782,7 @@ mod file {
             // Native::project deliberately has no installed host. Exercise the
             // environment build through the public project service and a host
             // port that proves this functionless specification never activates.
-            let project = yamaa_adapters::project_application::prepare(
+            let project = yamaa_application::project_application::prepare(
                 &spec,
                 &project_file,
                 yamaa_core::project_function::Language::Python,
@@ -793,7 +794,7 @@ mod file {
                 Scope::default(),
             );
             assert!(attempt.boundary.is_ok());
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 project.run(),
                 &attempt,
                 identity(&spec),
@@ -866,11 +867,13 @@ mod file {
         use crate::support::Edit as _;
         use std::{collections::BTreeMap, fs, sync::Arc};
         use yamaa_adapters::{
+            file_resources::{Error as ResourceError, Resources},
+            host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
+        };
+        use yamaa_application::{
             file_entry::{Error, RejectedEntry},
             file_preparation::{Error as DocumentError, FileSpecification, Rejected},
-            file_resources::{Error as ResourceError, Resources},
             file_workflow::{self, SelectionError},
-            host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
             project_application,
             resolved_artifact::model::{Location, ResourceRole},
         };
@@ -898,13 +901,13 @@ mod file {
             fn resources(&self) -> Resources {
                 Resources::new(&self.path(""), &self.path(""), &[]).unwrap()
             }
-            fn select(&self) -> Result<yamaa_adapters::file_workflow::Selected, SelectionError> {
+            fn select(&self) -> Result<yamaa_application::file_workflow::Selected, SelectionError> {
                 select(self.resources())
             }
         }
         fn select(
             resources: Resources,
-        ) -> Result<yamaa_adapters::file_workflow::Selected, SelectionError> {
+        ) -> Result<yamaa_application::file_workflow::Selected, SelectionError> {
             file_workflow::select_with_optional_resources(
                 resources,
                 "root.yaml",
@@ -914,7 +917,7 @@ mod file {
             )
         }
         fn plain(
-            result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
+            result: Result<yamaa_application::file_workflow::Selected, SelectionError>,
         ) -> FileSpecification {
             match result {
                 Ok(prepared) => prepared,
@@ -922,7 +925,7 @@ mod file {
             }
         }
         fn rejected_entry(
-            result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
+            result: Result<yamaa_application::file_workflow::Selected, SelectionError>,
         ) -> Box<RejectedEntry> {
             match result {
                 Err(SelectionError::Preparation(file_workflow::Error::Entry(error))) => error,
@@ -931,7 +934,7 @@ mod file {
             }
         }
         fn rejected_plain(
-            result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
+            result: Result<yamaa_application::file_workflow::Selected, SelectionError>,
         ) -> Box<Rejected> {
             match result {
                 Err(SelectionError::Compile(error)) => error,
@@ -1488,11 +1491,9 @@ mod file {
     mod file_preparation {
         use crate::support::table_snapshot;
         use std::{fs, path::PathBuf};
+        use yamaa_adapters::file_resources::Resources;
         use yamaa_adapters::json;
-        use yamaa_adapters::{
-            file_preparation::{Error, FileSpecification},
-            file_resources::Resources,
-        };
+        use yamaa_application::file_preparation::{Error, FileSpecification};
         use yamaa_core::application_observer::Scope;
         use yamaa_core::json::Value;
         struct Study(crate::support::Scratch);
@@ -1539,7 +1540,7 @@ mod file {
             let prepared = study.prepare(VALID).unwrap();
             assert_eq!(prepared.capture_reads(), 1);
             assert_eq!(prepared.run().document().source().bytes, VALID.as_bytes());
-            assert!(yamaa_adapters::specification_check::issues(prepared.run()).is_empty());
+            assert!(yamaa_application::specification_check::issues(prepared.run()).is_empty());
             assert_eq!(prepared.capture_reads(), 1);
             // Compilation uses the retained original model rather than reopening entry YAML.
             fs::write(study.0.join("entry/spec.yaml"), b"[changed").unwrap();
@@ -1616,7 +1617,7 @@ mod file {
             );
             assert_eq!(prepared.run().source().path, "../parent/input.csv");
             // No data file was needed for model preparation or declaration-only checking.
-            assert!(yamaa_adapters::specification_check::issues(prepared.run()).is_empty());
+            assert!(yamaa_application::specification_check::issues(prepared.run()).is_empty());
             fs::write(study.0.join("parent/input.csv"), b"ID\n1\n").unwrap();
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
@@ -1708,7 +1709,7 @@ mod file {
         /// records, with the run scope's capture counter.
         #[test]
         fn all_original_file_builds_preserve_full_reports_and_cached_counters() {
-            use yamaa_adapters::specification_report::{self, Identity};
+            use yamaa_application::specification_report::{self, Identity};
             let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
             let names = [
                 "negative-zero-division",

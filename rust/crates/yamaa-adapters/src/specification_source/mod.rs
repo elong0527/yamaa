@@ -392,10 +392,7 @@ impl PreparedDocument {
     }
     /// Keep the spellings that located each file this document holds, once
     /// every one of them was captured again.
-    pub fn retain_resource_aliases(
-        &mut self,
-        aliases: yamaa_core::file_preparation::Aliases,
-    ) {
+    pub fn retain_resource_aliases(&mut self, aliases: yamaa_core::file_preparation::Aliases) {
         self.resource_aliases = aliases;
     }
     pub fn resource_diagnostic_for_identity(

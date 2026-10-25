@@ -15,13 +15,13 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
+pub use yamaa_adapters::source_decoding::Error;
 use yamaa_core::host_functions::HostFunctions;
 use yamaa_core::project_activation::{Failure, Observations};
 use yamaa_core::project_domain::{self, CheckedOwnedProject, RejectedOwnedProject};
 use yamaa_core::project_environment::ExecutionEnvironment;
 use yamaa_core::specification::{PrepareError, PreparedSpecification, SourceDeclaration};
 use yamaa_core::specification_run as application;
-pub use yamaa_adapters::source_decoding::Error;
 pub use yamaa_core::specification_run::{InspectionFailure, PortError, SourceRead};
 /// One captured source of an attempt: the exact owned snapshot used for
 /// execution; reporting never reopens or reparses data.

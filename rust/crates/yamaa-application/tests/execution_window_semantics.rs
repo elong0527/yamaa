@@ -7,7 +7,7 @@
 //! orders by a source field counts that field against the fixed column
 //! limit.
 use std::fs;
-use yamaa_adapters::file_application;
+use yamaa_application::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 

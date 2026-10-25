@@ -14,7 +14,7 @@ mod table {
         use std::num::NonZeroUsize;
         use yamaa_adapters::csv_source::{self, Error as CsvError, Field, ProfileCause};
         use yamaa_adapters::decoder::{Decoder, Snapshot};
-        use yamaa_adapters::specification_run::Error;
+        use yamaa_adapters::source_decoding::Error;
         use yamaa_core::decoder::Decoder as _;
         use yamaa_core::specification::{SourceDeclaration, SourceInterpretation, SourceProfile};
         use yamaa_core::table::{Column, TableAccess, TableSchema, ValueRef};

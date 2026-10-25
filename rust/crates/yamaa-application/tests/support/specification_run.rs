@@ -41,7 +41,7 @@ pub(crate) fn fixture_bytes(value: &yamaa_core::json::Value) -> Vec<u8> {
 
 /// The findings of a refused specification as the run report renders them.
 pub(crate) fn spec_findings(
-    error: &yamaa_adapters::specification_run::Error,
+    error: &yamaa_application::specification_run::Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<yamaa_core::json::Value>> {
     yamaa_adapters::specification_diagnostics::findings(error, source)
@@ -146,7 +146,7 @@ pub(crate) fn independent_failed_reports(
     expected_counts: (usize, usize),
     content: &[u8],
 ) {
-    pub(crate) use yamaa_adapters::{
+    pub(crate) use yamaa_application::{
         specification_report::{self, Identity},
         specification_run::PreparedRun,
     };
@@ -254,7 +254,7 @@ pub(crate) fn independent_failed_reports(
 }
 
 pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize) {
-    pub(crate) use yamaa_adapters::{
+    pub(crate) use yamaa_application::{
         specification_report::{self, Identity},
         specification_run::PreparedRun,
     };
@@ -349,7 +349,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
     assert_eq!(cases, expected_cases);
 }
 pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
-    pub(crate) use yamaa_adapters::{
+    pub(crate) use yamaa_application::{
         specification_report::{self, Identity},
         specification_run::PreparedRun,
     };

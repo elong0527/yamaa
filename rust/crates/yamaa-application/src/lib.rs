@@ -21,6 +21,8 @@
 #![deny(unsafe_code)]
 
 // The adapters' modules, at the paths the modules below name them by.
+#[cfg(test)]
+pub(crate) use yamaa_adapters::canonical_path;
 pub(crate) use yamaa_adapters::{
     callback, column_table, csv_artifact, csv_source, dataset_result, decoder, document,
     file_configuration, file_publication, file_resolver, file_resources, host_resources, json,
@@ -29,8 +31,6 @@ pub(crate) use yamaa_adapters::{
     source_decoding, source_diagnostics, specification_diagnostics, specification_source,
     submission_json, submission_xml, submission_xpt, yaml_decode,
 };
-#[cfg(test)]
-pub(crate) use yamaa_adapters::canonical_path;
 
 pub mod application_measurements;
 mod source_profile_inspection;

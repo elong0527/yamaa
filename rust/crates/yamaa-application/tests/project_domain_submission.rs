@@ -5,7 +5,7 @@ mod project {
         use crate::support::ports::NoFunctions;
         use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_application::{file_application, specification_report::Identity};
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
@@ -194,7 +194,7 @@ mod project {
         /// Build one specification on the project route; its run calls no
         /// project function, so the host-functions port is never entered.
         fn project_domain(path: &str, project_path: &str) -> file_application::Domain {
-            let project = yamaa_adapters::file_workflow::select(
+            let project = yamaa_application::file_workflow::select(
                 path,
                 project_path,
                 yamaa_core::project_function::Language::Python,
@@ -202,12 +202,12 @@ mod project {
             .unwrap_or_else(|error| {
                 panic!(
                     "{:?}",
-                    yamaa_adapters::project_application::selection_failure(&error)
+                    yamaa_application::project_application::selection_failure(&error)
                 )
             });
             let mut run_scope = project.run_scope(None);
             let attempt = project.build(&mut run_scope, &mut NoFunctions, Scope::default());
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 project.run(),
                 &attempt,
                 identity(path),
@@ -239,7 +239,7 @@ mod project {
                 &[],
             )
             .unwrap();
-            let prepared = yamaa_adapters::file_preparation::FileSpecification::prepare(
+            let prepared = yamaa_application::file_preparation::FileSpecification::prepare(
                 resources,
                 "spec.yaml",
             )
@@ -324,7 +324,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let project_path = study.0.join("project.yaml");
-                let project = yamaa_adapters::file_workflow::select(
+                let project = yamaa_application::file_workflow::select(
                     path,
                     project_path.to_str().unwrap(),
                     language,
@@ -332,7 +332,7 @@ mod project {
                 .unwrap_or_else(|error| {
                     panic!(
                         "{:?}",
-                        yamaa_adapters::project_application::selection_failure(&error)
+                        yamaa_application::project_application::selection_failure(&error)
                     )
                 });
                 assert_eq!(project.run().environment().inventory().names(), ["DM"]);

@@ -6,7 +6,7 @@
 //! (VALUE-3); a `unique` check counts missing values (CHECK-10); and SUM adds
 //! in record order (FORMULA-19).
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_application::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 

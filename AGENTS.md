@@ -38,7 +38,7 @@ The whole of this guide is the contract; this list is the order of work.
 - `python/` -- the Python host package: a thin facade over the shared Rust engine.
 - `R/` -- the R host package under `R/yamaa/`, likewise a facade over the shared engine.
 - `rules/` -- the normative language contracts, indexed by `rules/README.md`.
-- `rust/` -- the shared Rust engine workspace, fixtures and installed-host qualification.
+- `rust/` -- the shared Rust engine workspace, fixtures and installed-host qualification: `yamaa-core` (language semantics), `yamaa-adapters` (readers, writers, resolvers), `yamaa-application` (the use cases that prepare, bind, execute and publish), the `yamaa` facade, the host bindings and the command line.
 - `tools/` -- importable repository checks, documentation, staging and conformance tools.
 - `yaml/` -- the specification schemas, closed grammars, and conformance fixtures; see `yaml/README.md`.
 

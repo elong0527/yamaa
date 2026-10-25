@@ -693,7 +693,7 @@ Proposed (title unchanged, statement 90 words):
 - **Detail:** the field list stays, and the profile's other fields are vendor
   fields, as in a stored item table. Today's statement names the CSV header
   and the Parquet schema; the same binding also runs on SAS and Transport item
-  tables (`project_odm` in `rust/crates/yamaa-adapters/src/specification_run.rs`).
+  tables (`project_odm` in `rust/crates/yamaa-adapters/src/source_decoding.rs`).
   Naming them is outside D26 and is not proposed here.
 - **Evidence:** the three negatives stay, and P1-15's `.xml` positive binds the
   profile's fields.

@@ -15,9 +15,8 @@ use std::{
     os::windows::process::CommandExt,
     path::{Path, PathBuf},
 };
-use yamaa_adapters::{
-    file_application, file_configuration, file_resources::Error, specification_report::Identity,
-};
+use yamaa_adapters::{file_configuration, file_resources::Error};
+use yamaa_application::{file_application, specification_report::Identity};
 use yamaa_core::{domain_entry::Request, project_function::Language};
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: ../data/src.csv, types: {ID: int}}}\noutput: {path: out/result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -123,8 +122,9 @@ fn a_project_file_on_a_network_share_is_a_caller_path() {
         identity(&specification),
     );
     assert!(checked.is_empty(), "{checked:?}");
-    let read = yamaa_adapters::project_scope::Project::read(&project, Some(Language::Python), None)
-        .unwrap();
+    let read =
+        yamaa_application::project_scope::Project::read(&project, Some(Language::Python), None)
+            .unwrap();
     assert_eq!(read.listed().len(), 1);
     assert!(read.listed()[0].failure().is_empty());
 }

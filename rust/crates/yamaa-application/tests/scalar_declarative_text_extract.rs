@@ -23,9 +23,9 @@ fn all_invalid_patterns_keep_complete_findings_before_zero_row_execution() {
     let document = crate::support::specification_run::prepare(
         yamaa_adapters::json_wire::encode(&spec).as_bytes(),
     );
-    let Err(yamaa_adapters::specification_run::Error::Prepare(
+    let Err(yamaa_application::specification_run::Error::Prepare(
         yamaa_core::specification::PrepareError::Invalid(findings),
-    )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
+    )) = yamaa_application::specification_run::PreparedRun::prepare(document)
     else {
         panic!("all malformed patterns must retain their language findings")
     };

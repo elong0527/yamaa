@@ -6,7 +6,7 @@
 //! result before the stage split completes it, and an unqualified aggregate
 //! key, are not supported yet.
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_application::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 

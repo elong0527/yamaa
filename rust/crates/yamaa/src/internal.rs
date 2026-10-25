@@ -542,7 +542,10 @@ fn run_with(
 /// for a run whose output is read as a stream, its accepted dataset with the
 /// most rows one partition of it holds (D264).
 type Ran = (
-    Result<Box<yamaa_application::file_application::Domain>, Vec<yamaa_core::diagnostic::Diagnostic>>,
+    Result<
+        Box<yamaa_application::file_application::Domain>,
+        Vec<yamaa_core::diagnostic::Diagnostic>,
+    >,
     Vec<FunctionError>,
     Option<(yamaa_core::dataset::Dataset, Option<std::num::NonZeroUsize>)>,
 );

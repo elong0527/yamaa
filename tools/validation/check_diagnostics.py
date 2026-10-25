@@ -53,7 +53,7 @@ CATALOGUE_TABLE = Path("rust/crates/yamaa/src/conditions/registry.rs")
 # The registry and the generated sources that hold its literals.
 REGISTRY_SOURCES = (REGISTRY, MESSAGE_TABLE, CATALOGUE_TABLE)
 PRIVATE_TEST_MODULE = Path(
-    "rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs"
+    "rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs"
 )
 # The lint names its findings with a closed list in its own module. One finding
 # shares a registered condition's spelling (`redundant_long_form`, which the
@@ -105,8 +105,8 @@ JSON_CODECS = {
     Path("rust/crates/yamaa-adapters/src/json_wire.rs"),
     Path("rust/crates/yamaa-adapters/src/project_lock.rs"),
     Path("rust/crates/yamaa-adapters/src/report_storage.rs"),
-    Path("rust/crates/yamaa-adapters/src/resolved_artifact/model.rs"),
-    Path("rust/crates/yamaa-adapters/src/run_report.rs"),
+    Path("rust/crates/yamaa-application/src/resolved_artifact/model.rs"),
+    Path("rust/crates/yamaa-application/src/run_report.rs"),
     Path("rust/crates/yamaa-adapters/src/shipped_schema/json.rs"),
 }
 JSON_WIRE = "json_wire"

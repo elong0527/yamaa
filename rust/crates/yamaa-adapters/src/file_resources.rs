@@ -536,10 +536,7 @@ impl Resources {
     /// (see [`FileResolver::publication_target_named`]); through a caller's
     /// resolver, the object that resolver's target reply names for `name`
     /// from the entry, as it names a specification's output.
-    pub fn caller_target(
-        &self,
-        name: &str,
-    ) -> Result<crate::publisher::AnchoredTarget, Error> {
+    pub fn caller_target(&self, name: &str) -> Result<crate::publisher::AnchoredTarget, Error> {
         match &self.file {
             Some(file) => file
                 .publication_target_named(&self.store.base, name)

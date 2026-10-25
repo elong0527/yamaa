@@ -156,9 +156,9 @@ rustversion = "procedural macro: compiler version conditions in indoc's build sc
 ryu = "shortest round-trip formatting of floating-point numbers (yamaa-core); arrow-cast uses it too"
 semver = "build script: version parsing for rustc_version"
 seq-macro = "procedural macro: parquet's unrolled bit-packing loops"
-serde = "Serialize and Deserialize for the records that yamaa-adapters writes and reads as JSON"
+serde = "Serialize and Deserialize for the records that yamaa-adapters and yamaa-application write and read as JSON"
 serde_core = "transitive dependency of serde, serde_json and toml: the serde traits"
-serde_derive = "procedural macro: derive(Serialize, Deserialize) for the records of yamaa-adapters"
+serde_derive = "procedural macro: derive(Serialize, Deserialize) for the records of yamaa-adapters and yamaa-application"
 serde_json = "JSON reading and writing in yamaa-adapters: the core's JSON values, R renv.lock files, reports and artifact facts"
 serde_spanned = "transitive dependency of toml: values with their source spans"
 shlex = "build script: splits the compiler flags that cc reads from the environment"
@@ -194,8 +194,9 @@ windows-strings = "not compiled: transitive dependency of windows-core"
 windows-sys = "handle-relative file IO and atomic publication on Windows (yamaa-adapters), and console Ctrl+C handling in the command line"
 winnow = "transitive dependency of toml and toml_parser: parser combinators"
 wit-bindgen = "not compiled: transitive dependency of wasip2 (WASI preview 2 only)"
-yamaa = "the Rust facade over yamaa-core and yamaa-adapters, which the host bindings and the command line depend on"
+yamaa = "the Rust facade over yamaa-core, yamaa-adapters and yamaa-application, which the host bindings and the command line depend on"
 yamaa-adapters = "the engine's codecs, storage formats, physical IO and filesystem environment capture"
+yamaa-application = "the engine's application layer: the use cases that prepare, bind, execute, report and save over yamaa-core and yamaa-adapters"
 yamaa-boundary = "the engine boundary of the host bindings: the interface version and feature handshake, the gate every native call passes and the census of live native handles"
 yamaa-cli = "the command line: the yamaa executable of the command-line archives"
 yamaa-core = "the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering"
@@ -232,9 +233,14 @@ zstd-sys = "transitive dependency of zstd-safe: builds and links the zstd C libr
 serde_json = """\
   JSON on the always-on path: the wire form of the core's JSON values \
   (json_wire.rs), through which R renv.lock files are read (project_lock.rs), \
-  report rows and views (report_storage.rs), application measurements \
-  (application_measurements.rs), resolved artifact facts \
-  (resolved_artifact/model.rs) and Dataset-JSON output (submission_json.rs)"""
+  report rows and views (report_storage.rs) and Dataset-JSON output \
+  (submission_json.rs)"""
 toml = """\
   projects need no feature, and capturing a project's lock file classifies it \
   (file_metadata.rs), reading a uv.lock as TOML (project_lock.rs)"""
+
+[unconditional.yamaa-application]
+serde_json = """\
+  JSON on the always-on path: the measurements of one application \
+  (application_measurements.rs) and a preparation's resolved artifact facts \
+  (resolved_artifact/model.rs)"""

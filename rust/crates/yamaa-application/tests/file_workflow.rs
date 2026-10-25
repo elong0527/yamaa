@@ -11,8 +11,8 @@ mod file {
         use crate::support::ports::NoFunctions;
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{
-            file_resources::Resources,
+        use yamaa_adapters::file_resources::Resources;
+        use yamaa_application::{
             file_workflow::{self, Error},
             project_application::{preparation_issues, IssueError},
             specification_check,
@@ -65,7 +65,7 @@ mod file {
             // captured project stays held.
             assert!(matches!(
                 owner.error(),
-                yamaa_adapters::file_entry::Error::Caller {
+                yamaa_application::file_entry::Error::Caller {
                     path,
                     error: yamaa_adapters::file_resources::Error::Missing,
                 } if *path == entry
@@ -97,7 +97,7 @@ mod file {
                 fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::write(path, text).unwrap();
             }
-            fn prepare(&self) -> yamaa_adapters::file_preparation::FileSpecification {
+            fn prepare(&self) -> yamaa_application::file_preparation::FileSpecification {
                 match self.select() {
                     Ok(project) => project,
                     Err(error) => panic!("project preparation: {error:?}"),
@@ -110,7 +110,7 @@ mod file {
                     Err(error) => panic!("expected preparation rejection: {error:?}"),
                 }
             }
-            fn compile_rejection(&self) -> Box<yamaa_adapters::file_preparation::Rejected> {
+            fn compile_rejection(&self) -> Box<yamaa_application::file_preparation::Rejected> {
                 match self.select() {
                     Err(file_workflow::SelectionError::Compile(error)) => error,
                     Ok(_) => panic!("expected compilation rejection"),
@@ -204,7 +204,7 @@ mod file {
                 );
             }
 
-            let public = yamaa_adapters::project_application::check(
+            let public = yamaa_application::project_application::check(
                 &study.path("root.yaml"),
                 &study.path("project.yaml"),
                 Language::Python,
@@ -228,7 +228,7 @@ mod file {
             let rows = preparation_issues(&owner).unwrap();
             assert_eq!(
                 rows,
-                yamaa_adapters::project_application::check(
+                yamaa_application::project_application::check(
                     &study.path("root.yaml"),
                     &study.path("project.yaml"),
                     Language::Python
@@ -265,7 +265,7 @@ mod file {
             // `workflow.json`).
             assert_eq!(
                 preparation_issues(&error).unwrap(),
-                yamaa_adapters::project_application::check(&entry, &project, Language::Python),
+                yamaa_application::project_application::check(&entry, &project, Language::Python),
             );
             let Error::Environment(owner) = &error else {
                 unreachable!()
@@ -330,8 +330,9 @@ mod file {
                 let Error::Environment(owner) = error else {
                     panic!("original environment owner")
                 };
-                let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
-                    owner.error()
+                let yamaa_application::file_project::Error::Environment(Failure::Rejected(
+                    rejected,
+                )) = owner.error()
                 else {
                     panic!("original source failures remain owned: {:?}", owner.error())
                 };
@@ -369,22 +370,22 @@ mod file {
                     yamaa_core::application_issue::Fault::ResourceLimit,
                 );
                 assert_eq!(
-                    yamaa_adapters::project_application::check(
+                    yamaa_application::project_application::check(
                         &study.path("root.yaml"),
                         &study.path("project.yaml"),
                         Language::Python,
                     ),
                     expected_rows,
                 );
-                let application_error = yamaa_adapters::project_application::prepare(
+                let application_error = yamaa_application::project_application::prepare(
                     &study.path("root.yaml"),
                     &study.path("project.yaml"),
                     Language::Python,
                 )
                 .err()
                 .unwrap();
-                let yamaa_adapters::project_application::Error::Project(
-                    yamaa_adapters::file_project::Error::Environment(Failure::Rejected(
+                let yamaa_application::project_application::Error::Project(
+                    yamaa_application::file_project::Error::Environment(Failure::Rejected(
                         application_owner,
                     )),
                 ) = &application_error
@@ -400,7 +401,8 @@ mod file {
                         preparation_issues(error),
                         Err(IssueError::ResourceLimit(again)) if again == refusal
                     ));
-                    let rows = yamaa_adapters::project_application::selection_failure(&selection);
+                    let rows =
+                        yamaa_application::project_application::selection_failure(&selection);
                     assert_eq!(rows.len(), 1);
                     assert_eq!(rows[0].phase(), "engine");
                     assert_eq!(rows[0].condition(), "engine_rejected");
@@ -416,7 +418,7 @@ mod file {
                         }),
                     );
                     assert_eq!(
-                        yamaa_adapters::project_application::failure(&application_error),
+                        yamaa_application::project_application::failure(&application_error),
                         rows,
                     );
                     assert_eq!(owner.capture_reads(), reads);
@@ -438,9 +440,10 @@ mod file {
         #[test]
         fn root_decoder_failures_keep_native_facts_across_public_views_without_rereads() {
             use yamaa_adapters::{
-                file_project, project_application, project_source::Failure,
-                specification_source::Error as SourceError, yaml_decode::DecodeFailure,
+                project_source::Failure, specification_source::Error as SourceError,
+                yaml_decode::DecodeFailure,
             };
+            use yamaa_application::{file_project, project_application};
             use yamaa_core::limits::Limits;
 
             for limited in [false, true] {
@@ -565,16 +568,16 @@ mod file {
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "never-written.csv", true),
             );
-            let ordinary = yamaa_adapters::project_application::prepare(
+            let ordinary = yamaa_application::project_application::prepare(
                 &study.path("root.yaml"),
                 &study.path("project.yaml"),
                 Language::Python,
             )
             .unwrap();
-            let expected = yamaa_adapters::specification_check::issues(ordinary.run());
+            let expected = yamaa_application::specification_check::issues(ordinary.run());
             assert_eq!(expected.len(), 1);
             assert_eq!(
-                yamaa_adapters::project_application::check(
+                yamaa_application::project_application::check(
                     &study.path("root.yaml"),
                     &study.path("project.yaml"),
                     Language::Python
@@ -855,8 +858,8 @@ mod file {
             };
             assert!(matches!(
                 entry.error(),
-                yamaa_adapters::file_entry::Error::Document(
-                    yamaa_adapters::file_preparation::Error::ResourceFinding {
+                yamaa_application::file_entry::Error::Document(
+                    yamaa_application::file_preparation::Error::ResourceFinding {
                         error: yamaa_adapters::file_resources::Error::Missing,
                         ..
                     }
@@ -970,7 +973,7 @@ mod file {
                 .unwrap();
             assert_eq!(
                 schema.location,
-                yamaa_adapters::resolved_artifact::model::Location::Local {
+                yamaa_application::resolved_artifact::model::Location::Local {
                     path: study.path("leaf.yaml")
                 }
             );
@@ -1091,8 +1094,8 @@ mod file {
                 }
             }
         }
-        fn ordinary_report_id() -> yamaa_adapters::specification_report::Identity<'static> {
-            yamaa_adapters::specification_report::Identity {
+        fn ordinary_report_id() -> yamaa_application::specification_report::Identity<'static> {
+            yamaa_application::specification_report::Identity {
                 runtime: "test",
                 runtime_version: "1",
                 engine_version: "0.1.0",
@@ -1118,7 +1121,7 @@ mod file {
             assert!(!study.0.join("root.csv").exists());
             // An independent study source is first created and read after preparation.
             study.write("never-read.csv", "ID,VALUE\n1,alpha\n2,beta\n");
-            let ordinary = yamaa_adapters::file_project::prepare(
+            let ordinary = yamaa_application::file_project::prepare(
                 Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
                 "root.yaml",
                 "project.yaml",
@@ -1135,14 +1138,14 @@ mod file {
                 Scope::default(),
             );
             assert_eq!(selected_scope.capture_reads(), 3);
-            let selected_result = yamaa_adapters::specification_report::build_result(
+            let selected_result = yamaa_application::specification_report::build_result(
                 selected.run(),
                 &selected_attempt,
                 ordinary_report_id(),
                 &[],
             )
             .unwrap();
-            let ordinary_result = yamaa_adapters::specification_report::build_result(
+            let ordinary_result = yamaa_application::specification_report::build_result(
                 ordinary.run(),
                 &ordinary_attempt,
                 ordinary_report_id(),
@@ -1250,7 +1253,7 @@ mod file {
             assert_eq!(rejected.entry(), "root.yaml");
             // The default project lists no function file, so the call names an
             // unknown function (FUNC-4, #3030 D8, `workflow.json`).
-            let rows = yamaa_adapters::specification_check::rejected(rejected.run()).unwrap();
+            let rows = yamaa_application::specification_check::rejected(rejected.run()).unwrap();
             fs::remove_dir_all(&study.0).unwrap();
             let held = rejected.retained_sources();
             assert_eq!(held.len(), 2);
@@ -1259,7 +1262,7 @@ mod file {
                 .any(|(identity, bytes)| identity.ends_with("root.yaml")
                     && bytes.as_ref() == raw.as_bytes()));
             assert_eq!(
-                yamaa_adapters::specification_check::rejected(rejected.run()).unwrap(),
+                yamaa_application::specification_check::rejected(rejected.run()).unwrap(),
                 rows
             );
             assert_eq!(
@@ -1478,7 +1481,7 @@ mod file {
             .unwrap_or_else(|error| {
                 panic!(
                     "original link admission: {:?}",
-                    yamaa_adapters::project_application::selection_failure(&error)
+                    yamaa_application::project_application::selection_failure(&error)
                 )
             });
             let prepared = selected;
@@ -1488,7 +1491,7 @@ mod file {
             assert!(!study.0.join("leaf.csv").exists());
             assert!(!study.0.join("root.csv").exists());
             fs::remove_dir_all(&study.0).unwrap();
-            assert!(yamaa_adapters::specification_check::issues(prepared.run()).is_empty());
+            assert!(yamaa_application::specification_check::issues(prepared.run()).is_empty());
         }
 
         // A unit seam: what the plain route's refused compilation read and

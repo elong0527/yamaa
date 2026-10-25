@@ -12,7 +12,7 @@ mod execution {
         //! Per-record aggregates: benchmarks that pin their saved bytes, and
         //! the build route and save result of each case of
         //! `aggregate_record_operations.json`.
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -134,7 +134,7 @@ mod execution {
     mod baseline_window_types {
         //! Baseline temporal operands retain their typed condition and authored input site.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -225,7 +225,7 @@ mod execution {
         //! `check_output_validation.json`.
         use crate::support::benchmarks;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_application::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);

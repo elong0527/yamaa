@@ -6,7 +6,7 @@
 //! validation; the three forms build with equal outputs.
 
 use std::fs;
-use yamaa_adapters::specification_report::Identity;
+use yamaa_application::specification_report::Identity;
 use yamaa_core::domain_entry::Request;
 
 struct Study(crate::support::Scratch);

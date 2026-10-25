@@ -1,5 +1,6 @@
 //! Shared language semantics, preparation and execution services, and the
-//! submission metadata model. The adapters encode and publish files.
+//! submission metadata model. The adapters read and write files, and the
+//! application layer runs the use cases over both.
 #![forbid(unsafe_code)]
 
 pub mod application_issue;

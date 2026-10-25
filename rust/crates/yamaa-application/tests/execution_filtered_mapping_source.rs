@@ -3,7 +3,7 @@
 //! a plain source binding, so a filtered raw column no longer needs a
 //! helper column that exists only to feed the dictionary lookup.
 use std::fs;
-use yamaa_adapters::file_application;
+use yamaa_application::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 use yamaa_core::json::Value;

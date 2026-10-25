@@ -6,7 +6,7 @@ mod scalar {
         // `fixtures/diagnostics/scalar_operations.json`. The test left here
         // reads benchmark truth.
         use std::{fs, path::Path};
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -124,7 +124,7 @@ mod scalar {
         //! `fixtures/diagnostics/secondary_operands.json`.
         use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -374,7 +374,7 @@ rows:
         // a save repeated on one held result.
         use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
         impl Study {

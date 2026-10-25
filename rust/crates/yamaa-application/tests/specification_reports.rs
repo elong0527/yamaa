@@ -11,7 +11,7 @@ mod execution {
         #[test]
         fn classified_capture_failures_retain_complete_reports_without_publication() {
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::{PortError, PreparedRun},
             };
@@ -221,10 +221,10 @@ mod execution {
         /// findings keep.
         #[test]
         fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
-            use yamaa_adapters::{
+            use yamaa_adapters::specification_source::Source;
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
-                specification_source::Source,
             };
             use yamaa_core::inheritance::Source as FileIdentity;
             use yamaa_core::resource::ResourceFailure;
@@ -387,7 +387,7 @@ mod execution {
         /// `fixtures/source_inspection.tsv`.
         #[test]
         fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::{PortError, PreparedRun},
             };
@@ -582,7 +582,7 @@ mod execution {
         fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
             use crate::support::ports::Sources;
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -683,8 +683,9 @@ mod execution {
             let mut count = 0;
             for row in fixture_rows(include_str!("fixtures/odm_preflight.json")) {
                 let raw = fixture_bytes(&row["source"]);
-                let error = yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&raw))
-                    .unwrap_err();
+                let error =
+                    yamaa_application::specification_run::PreparedRun::prepare(prepare(&raw))
+                        .unwrap_err();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
                 assert_eq!(expected["outcome"]["status"], "invalid");
                 assert_eq!(
@@ -734,7 +735,7 @@ mod execution {
         /// whose issues no test authored; only its `missing_report` refusal names a row.
         #[test]
         fn deferred_column_findings_keep_vocabulary_and_report_admission() {
-            use yamaa_adapters::specification_run::{Error, PreparedRun};
+            use yamaa_application::specification_run::{Error, PreparedRun};
             use yamaa_core::specification::PrepareError;
             let raw = |first: &str, severity: &str| {
                 format!(
@@ -763,11 +764,11 @@ mod execution {
             for row in &rows {
                 let document = prepare(&fixture_bytes(&row["source"]));
                 let run =
-                    yamaa_adapters::specification_run::PreparedRun::prepare(document).unwrap();
+                    yamaa_application::specification_run::PreparedRun::prepare(document).unwrap();
                 for _ in 0..2 {
                     assert_eq!(
                         yamaa_core::json::Value::Array(crate::support::rows(
-                            &yamaa_adapters::specification_check::issues(&run)
+                            &yamaa_application::specification_check::issues(&run)
                         )),
                         row["expected"],
                         "{}",
@@ -782,7 +783,7 @@ mod execution {
         fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
             use crate::support::ports::Sources;
             use std::collections::BTreeMap;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -856,7 +857,7 @@ mod execution {
         fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
             use crate::support::ports::Sources;
             use std::collections::BTreeMap;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -936,7 +937,7 @@ mod execution {
             for row in fixture_rows(include_str!("fixtures/mapping_cut_admission.json")) {
                 let bytes = fixture_bytes(&row["source"]);
                 let error =
-                    yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&bytes))
+                    yamaa_application::specification_run::PreparedRun::prepare(prepare(&bytes))
                         .unwrap_err();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
                 assert_eq!(

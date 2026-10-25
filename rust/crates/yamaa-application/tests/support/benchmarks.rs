@@ -337,7 +337,7 @@ fn run_entries(
         };
         let identity = || super::study::identity(name, &path);
         if !negative {
-            let checked = yamaa_adapters::file_application::check(host, request(), identity());
+            let checked = yamaa_application::file_application::check(host, request(), identity());
             let checked: Vec<_> = checked.iter().map(super::study::issue_row).collect();
             assert!(
                 checked.is_empty(),

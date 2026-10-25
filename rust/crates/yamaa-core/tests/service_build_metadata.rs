@@ -361,7 +361,7 @@ mod service {
     mod define_service {
         //! The Define service's findings and creation time, which core keeps.
         //! The service itself, which composes, renders and admits a section's
-        //! files, is the adapters' `file_define`.
+        //! files, is the application layer's `file_define`.
         use std::cell::Cell;
         use yamaa_core::define;
         use yamaa_core::diagnostic::ConditionCode;

@@ -1004,8 +1004,8 @@ mod declaration {
         //! the invalid payloads stay here, private Python model instances replaced
         //! by the native check boundary.
         use std::fs;
-        use yamaa_adapters::file_application;
         use yamaa_adapters::json;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;

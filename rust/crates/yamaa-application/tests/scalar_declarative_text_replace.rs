@@ -2,8 +2,8 @@
 //! `str_replace` through file application: the authored benchmarks, then
 //! bespoke specifications for each binding, handler and failure route.
 use std::{fs, path::Path};
-use yamaa_adapters::file_application;
 use yamaa_adapters::json;
+use yamaa_application::file_application;
 use yamaa_core::domain_entry::Request;
 use yamaa_core::json::Value as Json;
 struct Fixture(crate::support::Scratch);

@@ -15,7 +15,7 @@ mod execution {
         #[cfg(feature = "parquet")]
         fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
             use crate::support::ports::Sources;
-            use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_application::specification_run::PreparedRun;
             use yamaa_core::table::ValueRef;
             for (policy, first) in [
                 ("missing", ValueRef::Missing),
@@ -247,7 +247,7 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn original_yaml_run_returns_complete_independent_portable_failures() {
             use yamaa_adapters::json;
-            use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_application::specification_run::PreparedRun;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             for (name, condition, rule, expr, keys) in [
                 (
@@ -315,7 +315,7 @@ output: {{path: output.csv, columns: [I, S]}}
         /// Seam: the internal `Error::Source` and `BindFinding` variants of a run over raw bytes.
         #[test]
         fn source_ingestion_failure_precedes_deferred_formula_diagnostics() {
-            use yamaa_adapters::specification_run::{Error, PreparedRun};
+            use yamaa_application::specification_run::{Error, PreparedRun};
             use yamaa_core::specification::{BindError, BindFinding};
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/negative-zero-division");
@@ -362,7 +362,8 @@ output: {{path: output.csv, columns: [I, S]}}
         /// Already data: the authored findings of `fixtures/preflight.tsv`.
         #[test]
         fn core_preflight_matches_independent_complete_findings() {
-            use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+            use yamaa_adapters::specification_diagnostics;
+            use yamaa_application::specification_run::PreparedRun;
             use yamaa_core::json::Value;
             let mut count = 0;
             for row in include_str!("fixtures/preflight.tsv").lines().skip(1) {
@@ -467,7 +468,7 @@ output: {{path: output.csv, columns: [I, S]}}
         /// `PortError` variants of a failed capture.
         #[test]
         fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
-            use yamaa_adapters::specification_run::{Error, PortError, PreparedRun};
+            use yamaa_application::specification_run::{Error, PortError, PreparedRun};
             use yamaa_core::specification_run::RunError;
             struct Port {
                 content: Arc<[u8]>,
@@ -586,7 +587,7 @@ output: {{path: output.csv, columns: [I, S]}}
         /// read through a capturing port that counts its reads.
         #[test]
         fn whole_failure_reports_match_reference_observations_from_actual_capture() {
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -699,7 +700,7 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() {
             use yamaa_adapters::json;
-            use yamaa_adapters::specification_run::PreparedRun;
+            use yamaa_application::specification_run::PreparedRun;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/negative-zero-division");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
@@ -832,7 +833,7 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn original_success_report_describes_its_saved_file_and_output_failures_save_nothing() {
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -994,7 +995,7 @@ output: {{path: output.csv, columns: [I, S]}}
         fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             use crate::support::ports::Sources;
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -1134,7 +1135,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let missing_report = format!("{written}  - row_count: {{min: 1, severity: warning}}\n");
             assert!(matches!(
                 PreparedRun::prepare(prepare(missing_report.as_bytes())),
-                Err(yamaa_adapters::specification_run::Error::Prepare(
+                Err(yamaa_application::specification_run::Error::Prepare(
                     yamaa_core::specification::PrepareError::Invalid(findings)
                 )) if findings.iter().any(|finding| finding.diagnostic().definition().condition == "missing_report")
             ));
@@ -1145,7 +1146,7 @@ output: {{path: output.csv, columns: [I, S]}}
         fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
             use crate::support::ports::Sources;
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -1236,7 +1237,7 @@ output: {{path: output.csv, columns: [I, S]}}
         fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
             use crate::support::ports::Sources;
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -1425,7 +1426,7 @@ output: {{path: output.csv, columns: [I, S]}}
         fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers() {
             use std::collections::BTreeMap;
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -1542,7 +1543,7 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
@@ -1661,7 +1662,8 @@ output: {{path: output.csv, columns: [I, S]}}
         /// Seam: the internal `Rejection::Fault` of a run given one buffer for three sources.
         #[test]
         fn single_buffer_execution_reports_source_count_without_an_internal_failure() {
-            use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+            use yamaa_adapters::specification_diagnostics;
+            use yamaa_application::specification_run::PreparedRun;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-lookup");
             let run =
@@ -1687,7 +1689,7 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
             use yamaa_adapters::json;
-            use yamaa_adapters::{
+            use yamaa_application::{
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };

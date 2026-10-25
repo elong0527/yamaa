@@ -18,9 +18,8 @@ mod execution {
         //! what a replay case cannot state, a save repeated after the input
         //! changes and every run made twice.
         use std::fs;
-        use yamaa_adapters::{
-            file_application, public_table::PublicTable, specification_report::Identity,
-        };
+        use yamaa_adapters::public_table::PublicTable;
+        use yamaa_application::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -231,7 +230,7 @@ mod execution {
         //! before and after its inputs exist, where a replay case writes one
         //! set of files.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -318,7 +317,7 @@ mod execution {
         //! before and after its inputs exist, where a replay case writes one
         //! set of files.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -435,7 +434,7 @@ mod execution {
         //! This stays beside the replay (#3798): its truth is a host-fixture
         //! family both installed hosts read.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -526,7 +525,7 @@ mod execution {
         //! second running one of its specifications with inputs missing.
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -767,7 +766,7 @@ mod execution {
         //! This stays beside the replay (#3798): its truth is a host-fixture
         //! family both installed hosts read.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -860,7 +859,7 @@ mod execution {
         //! This stays beside the replay (#3798): its truth is a host-fixture
         //! family both installed hosts read.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -937,7 +936,7 @@ mod execution {
         //! original tests, independently of the replay's issue/byte checks.
         use crate::support::diagnostic::{operations, replay};
         use std::{collections::BTreeSet, fs};
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
 
         #[test]

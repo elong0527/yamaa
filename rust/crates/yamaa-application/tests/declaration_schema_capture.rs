@@ -491,7 +491,7 @@ mod declaration {
         }
     }
     mod static_declarations {
-        use yamaa_adapters::{specification_check, specification_run::PreparedRun};
+        use yamaa_application::{specification_check, specification_run::PreparedRun};
 
         #[test]
         fn arithmetic_predicates_are_admitted_at_every_predicate_site() {
@@ -602,10 +602,9 @@ mod declaration {
         use yamaa_adapters::{
             document::Closures,
             project_source::{self, Kind},
-            specification_check,
-            specification_run::PreparedRun,
             specification_source::Source,
         };
+        use yamaa_application::{specification_check, specification_run::PreparedRun};
         use yamaa_core::project_function::Language;
         use yamaa_core::resolver::{Captured, Failure, File, Located, Name, Resolver};
 

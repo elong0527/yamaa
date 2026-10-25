@@ -6,7 +6,7 @@
 //! `absent` must not fail `unmatched_key` for it (LOOKUP-12), while A
 //! still completes its keys.
 use std::fs;
-use yamaa_adapters::file_application;
+use yamaa_application::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 

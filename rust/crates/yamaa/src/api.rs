@@ -727,7 +727,8 @@ impl<'a> SpecRequest<'a> {
         let identity = crate::internal::request_identity(self.engine.shared(), &request);
         // As a run reusing the holder keeps only this specification's plan.
         plans.retain(|kept| identity.as_ref() == Some(kept));
-        let measurements = Arc::new(yamaa_application::application_measurements::Measurements::new());
+        let measurements =
+            Arc::new(yamaa_application::application_measurements::Measurements::new());
         let (plan, compiled) =
             self.engine
                 .plan_reusing(plans, &request, identity.as_ref(), &measurements);

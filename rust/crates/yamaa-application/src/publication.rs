@@ -25,7 +25,9 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use yamaa_adapters::publisher::{keeping, AnchoredTarget, Interruption, Leftover, Publisher, Staging};
+use yamaa_adapters::publisher::{
+    keeping, AnchoredTarget, Interruption, Leftover, Publisher, Staging,
+};
 
 /// One file a save writes: its target, the path its specification or project
 /// file wrote, its complete bytes, and where each partition of them ends,

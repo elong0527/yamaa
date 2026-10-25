@@ -1,13 +1,13 @@
 #![cfg(feature = "yaml")]
-//! Project-scope contracts in the adapters: listed names, run-scope plans,
+//! Project-scope contracts of the application layer: listed names, run-scope plans,
 //! held producer artifacts, report-only saves and the preflight of one save
 //! across results.
 use crate::support::ports::NoFunctions;
 use crate::support::Edit as _;
 use std::{fs, sync::Arc};
-use yamaa_adapters::{
+use yamaa_adapters::file_resources::HeldArtifacts;
+use yamaa_application::{
     file_application::{self, Domain},
-    file_resources::HeldArtifacts,
     file_workflow,
     project_scope::Project,
     publication::{self, Cause},
@@ -122,7 +122,7 @@ fn an_unreadable_project_fails_as_a_check_reports_it() {
     let issues = Project::read(&project, Some(Language::Python), None)
         .err()
         .unwrap();
-    let checked = yamaa_adapters::project_application::check(
+    let checked = yamaa_application::project_application::check(
         &study.path("spec.yaml"),
         &project,
         Language::Python,
@@ -240,7 +240,7 @@ fn saved_build(
     .unwrap_or_else(|error| {
         panic!(
             "{:?}",
-            yamaa_adapters::project_application::selection_failure(&error)
+            yamaa_application::project_application::selection_failure(&error)
         )
     });
     let held = held.map(Arc::new);

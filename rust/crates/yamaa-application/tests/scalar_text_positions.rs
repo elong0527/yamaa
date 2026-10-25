@@ -3,7 +3,7 @@
 //! TEXT-14), replayed from the shared host truth that the Python and R suites
 //! read too.
 use crate::support::study::{identity, issue_row, Study};
-use yamaa_adapters::file_application;
+use yamaa_application::file_application;
 use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
 };

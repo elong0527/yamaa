@@ -2,7 +2,7 @@
 //! run retained, with no IO. Core owns the fact admission, the row kinds and
 //! their order, the column schema, scalar semantics and the verification of the
 //! assembled table. The canonical JSON text of KEYS and DETAILS cells is
-//! projected by yamaa-adapters' `run_report`, which encodes the prepared cells
+//! projected by yamaa-application's `run_report`, which encodes the prepared cells
 //! and hands plain rows back to `assemble` here, then calls `verify` before any
 //! byte of the report is written.
 use crate::expression_table::Verb;

@@ -68,9 +68,10 @@ pub fn findings(
 
 /// The report rows of a native preparation refusal's language findings.
 pub fn preparation_findings(
-    error: yamaa_adapters::file_preparation::Error,
+    error: yamaa_application::file_preparation::Error,
 ) -> yamaa_core::json::Value {
-    use yamaa_adapters::{file_preparation::Error, specification_diagnostics};
+    use yamaa_adapters::specification_diagnostics;
+    use yamaa_application::file_preparation::Error;
     findings(match error {
         Error::Preparation(error) => {
             specification_diagnostics::inheritance_failure_ref(&error).expect("semantic report")
@@ -85,8 +86,9 @@ pub fn preparation_findings(
 }
 
 /// The message of the resource error a native preparation refusal retains.
-pub fn retained_resource_message(error: yamaa_adapters::file_preparation::Error) -> String {
-    use yamaa_adapters::{file_preparation::Error, specification_diagnostics};
+pub fn retained_resource_message(error: yamaa_application::file_preparation::Error) -> String {
+    use yamaa_adapters::specification_diagnostics;
+    use yamaa_application::file_preparation::Error;
     match error {
         Error::Resource(error) => error.message().into(),
         Error::Preparation(error) => {
