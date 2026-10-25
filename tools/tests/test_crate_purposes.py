@@ -205,9 +205,16 @@ class DeclaredTest(unittest.TestCase):
                     ],
                 },
                 {
-                    "name": "yamaa",
+                    "name": "yamaa-application",
                     "dependencies": [
                         dependency("yamaa-adapters"),
+                        dependency("serde_json"),
+                    ],
+                },
+                {
+                    "name": "yamaa",
+                    "dependencies": [
+                        dependency("yamaa-application"),
                         dependency("arrow"),
                         dependency("arrow-schema"),
                     ],
@@ -224,6 +231,7 @@ class DeclaredTest(unittest.TestCase):
             {
                 "yamaa-core": set(),
                 "yamaa-adapters": {"arrow-array", "serde_json", "arrow-ipc"},
+                "yamaa-application": {"serde_json"},
                 "yamaa": {"arrow", "arrow-schema"},
             },
         )
@@ -233,6 +241,7 @@ class DeclaredTest(unittest.TestCase):
             "packages": [
                 {"name": "yamaa-core", "dependencies": []},
                 {"name": "yamaa-adapters", "dependencies": []},
+                {"name": "yamaa-application", "dependencies": []},
             ]
         }
         with self.assertRaisesRegex(ValueError, "yamaa is not a workspace member"):
@@ -245,10 +254,12 @@ class DeclaredTest(unittest.TestCase):
         # Arrow, serde_json and toml left the core, and Arrow left the
         # always-on adapters and facade: it comes with their arrow and parquet
         # features, while the adapters keep serde_json and toml (#3030 section
-        # 2.9, #3696).
+        # 2.9, #3696), and the application layer serde_json for its records
+        # (#3761).
         self.assertEqual(dependencies["yamaa-core"], set())
         self.assertEqual(dependencies["yamaa"], set())
         self.assertEqual(dependencies["yamaa-adapters"], {"serde_json", "toml"})
+        self.assertEqual(dependencies["yamaa-application"], {"serde_json"})
         for names in dependencies.values():
             self.assertTrue(all(map(purposes.scoped, names)), names)
 

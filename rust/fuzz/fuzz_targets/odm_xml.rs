@@ -10,7 +10,7 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use libfuzzer_sys::fuzz_target;
-use yamaa_adapters::{odm_xml, public_table::TableError, specification_run};
+use yamaa_adapters::{odm_xml, public_table::TableError, source_decoding};
 use yamaa_core::{
     odm_items::{Error, Options},
     specification::{SourceInterpretation, SourceProfile},
@@ -43,7 +43,7 @@ fuzz_target!(|data: &[u8]| {
     for interpretation in [SourceInterpretation::Ordinary, SourceInterpretation::Odm] {
         match decode(&input, data, interpretation) {
             Ok(_) => {}
-            Err(specification_run::Error::OdmSource(error)) if error.refuses_document() => {}
+            Err(source_decoding::Error::OdmSource(error)) if error.refuses_document() => {}
             Err(error) => panic!("an `.xml` input was refused for no reason it holds: {error:?}"),
         }
     }

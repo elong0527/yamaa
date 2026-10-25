@@ -1767,7 +1767,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             '#[path = "file_define"]\nmod live {\n    mod publication_failure_tests;\n}\n',
         ):
             with self.subTest(alias=alias):
-                self.write("rust/crates/yamaa-adapters/src/lib.rs", alias)
+                self.write("rust/crates/yamaa-application/src/lib.rs", alias)
                 self.assertEqual(
                     self.errors(),
                     [
