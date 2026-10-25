@@ -2,7 +2,6 @@
 //! Project contracts: domain submission.
 mod project {
     mod domain_submission {
-        use crate::support::issues::assert_issues;
         use crate::support::ports::NoFunctions;
         use crate::support::Edit as _;
         use std::{fs, path::Path};
@@ -32,121 +31,10 @@ mod project {
         fn identity(path: &str) -> Identity<'_> {
             crate::support::study::identity("submission", path)
         }
-        fn copy(source: &Path, target: &Path) {
-            fs::create_dir_all(target).unwrap();
-            for entry in fs::read_dir(source).unwrap() {
-                let entry = entry.unwrap();
-                let path = target.join(entry.file_name());
-                if entry.file_type().unwrap().is_dir() {
-                    copy(&entry.path(), &path)
-                } else {
-                    fs::copy(entry.path(), path).unwrap();
-                }
-            }
-        }
         /// An SDTM column's submission metadata: a 1.0 specification that
         /// declares it names its model (SUB-3), which requires the origin's
         /// source (SUB-15).
         const VALID: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: SRC.VALUE\n    submission: {length: 3, origins: [{type: Assigned, source: Sponsor}]}\n";
-        /// Each benchmark runs as it declares, with the project file that
-        /// binds its codelists (CT-13): sdtm-lb-metadata's entry is its
-        /// SDTM-complete layer under its own project.
-        #[test]
-        fn submission_fields_do_not_change_any_original_domain_artifact() {
-            let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            for (example, entry, project, artifact) in [
-                ("sdtm-ae-coding", "spec.yaml", "project.yaml", "ae.csv"),
-                ("sdtm-dm-metadata", "spec.yaml", "project.yaml", "dm.csv"),
-                (
-                    "sdtm-lb-metadata",
-                    "submission-spec.yaml",
-                    "submission-project.yaml",
-                    "lb.csv",
-                ),
-                (
-                    "sdtm-vs-epoch-from-subject-elements",
-                    "spec.yaml",
-                    "project.yaml",
-                    "vs.csv",
-                ),
-            ] {
-                let case = repository.join("benchmarks").join(example);
-                let study = Study::new();
-                copy(&case, &study.0);
-                let path = study.0.join(entry);
-                let project = study.0.join(project);
-                let mut run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
-                assert!(run.issues().is_empty(), "{example}: {:?}", run.issues());
-                run.save().unwrap();
-                assert_eq!(
-                    fs::read(study.0.join(artifact)).unwrap(),
-                    fs::read(case.join("expected").join(artifact)).unwrap(),
-                    "{example}"
-                );
-            }
-        }
-        /// Drop one YAML mapping entry: its header line and every following
-        /// line indented deeper than the header, or written at its depth as
-        /// an entry of the header's block sequence.
-        fn without_entry(text: &str, header: &str) -> String {
-            let depth = |line: &str| line.len() - line.trim_start().len();
-            let mut kept = String::new();
-            let mut found = false;
-            let mut inside = false;
-            for line in text.split_inclusive('\n') {
-                if line.trim_end() == header {
-                    (found, inside) = (true, true);
-                    continue;
-                }
-                if inside
-                    && (line.trim().is_empty()
-                        || depth(line) > depth(header)
-                        || (depth(line) == depth(header) && line.trim_start().starts_with("- ")))
-                {
-                    continue;
-                }
-                inside = false;
-                kept.push_str(line);
-            }
-            assert!(found, "{header:?}");
-            kept
-        }
-        /// Benchmarks pass a study-level case's root project, so its codelists
-        /// apply. A run needs none of the project's study or the section's
-        /// standards and define, so a specs-only section changes nothing.
-        #[test]
-        fn study_projects_with_or_without_submission_metadata_reproduce_each_domain_artifact() {
-            let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            for (example, artifact) in [
-                ("sdtm-ae-coding", "ae.csv"),
-                ("sdtm-dm-metadata", "dm.csv"),
-                ("sdtm-vs-epoch-from-subject-elements", "vs.csv"),
-            ] {
-                for specs_only in [false, true] {
-                    let case = repository.join("benchmarks").join(example);
-                    let study = Study::new();
-                    copy(&case, &study.0);
-                    let project = study.0.join("project.yaml");
-                    if specs_only {
-                        let mut text = fs::read_to_string(&project).unwrap();
-                        for header in ["study:", "  standards:", "  define: define.xml"] {
-                            text = without_entry(&text, header);
-                        }
-                        fs::write(&project, text).unwrap();
-                    }
-                    let path = study.0.join("spec.yaml");
-                    let path = path.to_str().unwrap();
-                    let mut run = project_domain(path, project.to_str().unwrap());
-                    assert!(run.issues().is_empty(), "{example}: {:?}", run.issues());
-                    assert!(run.save().unwrap());
-                    assert_eq!(
-                        fs::read(study.0.join(artifact)).unwrap(),
-                        fs::read(case.join("expected").join(artifact)).unwrap(),
-                        "{example}, specs only: {specs_only}"
-                    );
-                }
-            }
-        }
         /// One closed CDISC vocabulary, in the order of the data file that
         /// holds them all (P-VOC-1).
         fn vocabulary(name: &str) -> Vec<String> {
@@ -231,27 +119,11 @@ mod project {
             }
             assert!(!study.0.join("output.csv").exists());
         }
-        #[test]
-        fn declared_length_is_checked_once_over_unicode_scalar_values() {
-            let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), VALID).unwrap();
-            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,é字😀\n2,abcd\n").unwrap();
-            let path = study.0.join("spec.yaml");
-            let path = path.to_str().unwrap();
-            let mut run = crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: path,
-                    environment: None,
-                },
-                identity(path),
-            )
-            .unwrap();
-            // The one length failure is `submission.json`'s; it refuses the save.
-            assert!(run.save().is_err());
-            assert!(!study.0.join("output.csv").exists());
-        }
-
+        /// Seam: single check rows of the report file a save writes, a
+        /// refused one included (CHECK-22), found as substrings. A case
+        /// states a report kind's rows whole and a saved file's bytes whole,
+        /// and CHECK-23 leaves the order of one column's check rows open,
+        /// so these rows cannot be authored as a case.
         /// SUB-26: a `str` column's date or time data type is a form each
         /// present completed value must have; an entry's data type decides
         /// the rows its where clause selects, and the column's every other row.
@@ -317,133 +189,8 @@ mod project {
             // of an `int` one is `submission.json`'s.
         }
 
-        /// A value-level check reads its completed where column. When that
-        /// column is not a key and a row template leaves it to its column
-        /// derivation, it completes after the checked column, so the check
-        /// waits for it in the executor, the resolved plan and its reference
-        /// order alike: `check()` passes and the run succeeds.
-        #[test]
-        fn value_level_checks_wait_for_a_where_column_the_column_phase_completes() {
-            const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, SEQ]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, SEQ, LBORRES, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origins: [{type: Collected, source: Investigator}], value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, ENTRY}]}}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE}\nrows:\n  - id: onset\n    filter: \"SRC.CODE = 'ONSET'\"\n    derivations: {LBTESTCD: \"'ONSET'\"}\n  - id: other\n    filter: \"SRC.CODE <> 'ONSET'\"\n";
-            // The check selects the onset row by its completed test code, and
-            // fails on it as `submission.json` records for each entry.
-            for entry in ["mandatory: true", "data_type: date"] {
-                let study = Study::new();
-                let spec = SPEC.edit("ENTRY", entry);
-                let issues = study.check(&spec);
-                assert!(issues.is_empty(), "{entry}: {issues:?}");
-                // The onset row holds a date; the glucose row, which the
-                // entry does not select, may hold anything or nothing.
-                let mut run = domain(
-                    &study,
-                    &spec,
-                    "ID,SEQ,CODE,RES\n1,1,ONSET,2025-03-04\n1,2,GLUC,\n",
-                );
-                assert!(run.issues().is_empty(), "{entry}: {:?}", run.issues());
-                assert!(run.save().unwrap());
-                assert_eq!(
-                    fs::read_to_string(study.0.join("output.csv")).unwrap(),
-                    "ID,SEQ,LBORRES,LBTESTCD\n1,1,2025-03-04,ONSET\n1,2,,GLUC\n"
-                );
-            }
-        }
-
         const ROW_CT: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origins: [{type: Assigned, source: Sponsor}], codelist: DEFAULT, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, codelist: GLUCOSE}]}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\"}\n";
         const CT_PROJECT: &str = "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - codelists:\n      - {id: DEFAULT, name: Default values, items: [{value: D}]}\n      - {id: GLUCOSE, name: Glucose values, items: [{value: G}]}\n      - {id: EXT, name: Extended values, extensible: true, items: [{value: X}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.1'}}\n";
-        #[test]
-        fn per_value_codelists_inherit_origins_and_check_completed_where_columns() {
-            let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), ROW_CT).unwrap();
-            fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
-            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,G\n2,D\n3,\n").unwrap();
-            let path = study.0.join("spec.yaml");
-            let path = path.to_str().unwrap();
-            let project = study.0.join("project.yaml");
-            // Each list fails on its own rows (`submission.json`), which
-            // refuses the save.
-            let mut run = project_domain(path, project.to_str().unwrap());
-            assert!(run.save().is_err());
-            assert!(!study.0.join("output.csv").exists());
-        }
-        #[test]
-        fn per_value_extensible_lists_are_enforced_on_their_rows_and_dictionaries_replace_the_default(
-        ) {
-            // An extensible list of items states its rows' value set like any other
-            // list: the glucose rows are checked against EXT alone.
-            let study = Study::new();
-            fs::write(
-                study.0.join("spec.yaml"),
-                ROW_CT.edit("codelist: GLUCOSE", "codelist: EXT"),
-            )
-            .unwrap();
-            fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
-            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,X\n").unwrap();
-            let path = study.0.join("spec.yaml");
-            let path = path.to_str().unwrap();
-            let environment = study.0.join("project.yaml");
-            let mut run = project_domain(path, environment.to_str().unwrap());
-            assert!(run.save().is_err());
-            // An external dictionary is not enforced, and it still replaces the
-            // column's list on its own rows.
-            let study = Study::new();
-            fs::write(
-                study.0.join("spec.yaml"),
-                ROW_CT.edit("codelist: GLUCOSE", "codelist: DICT"),
-            )
-            .unwrap();
-            fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
-            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,\n").unwrap();
-            let path = study.0.join("spec.yaml");
-            let path = path.to_str().unwrap();
-            let project = study.0.join("project.yaml");
-            let mut run = project_domain(path, project.to_str().unwrap());
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-            assert!(run.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("output.csv")).unwrap(),
-                "ID,RESULT,LBTESTCD\n1,D,GLUC\n2,,GLUC\n1,D,CREAT\n2,,CREAT\n"
-            );
-        }
-        /// A float codelist's items compare with the column's values exactly
-        /// (VALUE-19): 9007199254740992.0 equals no item, although it is the
-        /// float nearest the item 9007199254740993, while 0 equals the item
-        /// -0.0 and 1.0 the item 1. Missing values pass (CT-7).
-        #[test]
-        fn float_codelist_items_compare_exactly_and_missing_values_pass() {
-            const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, CODE: float}}}\noutput: {path: output.csv, columns: [ID, CODE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: float, derivation: SRC.CODE, submission: {origins: [{type: Collected, source: Investigator}], codelist: CODES}}\n";
-            const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - codelists:\n      - {id: CODES, name: Codes, data_type: float, items: [{value: 9007199254740993}, {value: -0.0}, {value: 1}]}\n";
-            let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), SPEC).unwrap();
-            fs::write(study.0.join("project.yaml"), PROJECT).unwrap();
-            let path = study.0.join("spec.yaml");
-            let path = path.to_str().unwrap();
-            let project = study.0.join("project.yaml");
-            let project = project.to_str().unwrap();
-            fs::write(
-                study.0.join("input.csv"),
-                "ID,CODE\n1,9007199254740992\n2,0\n3,1\n4,\n",
-            )
-            .unwrap();
-            let mut run = project_domain(path, project);
-            let issues = run.issues();
-            assert_issues(
-                &issues,
-                &[
-                    yamaa_adapters::json!({"phase":"verification","condition":"allowed_values_failed","rule":"CT-7","spec_paths":["columns.CODE.submission.codelist"],"context":{"column":"CODE","codelist":"CODES","failure_count":1,"keys":[{"ID":1}],"values":[9007199254740992.0]}}),
-                ],
-                "a code outside its codelist",
-            );
-            assert!(run.save().is_err());
-            fs::write(study.0.join("input.csv"), "ID,CODE\n2,0\n3,1\n4,\n").unwrap();
-            let mut run = project_domain(path, project);
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-            assert!(run.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("output.csv")).unwrap(),
-                "ID,CODE\n2,0\n3,1\n4,\n"
-            );
-        }
-
         /// Build one specification on the project route; its run calls no
         /// project function, so the host-functions port is never entered.
         fn project_domain(path: &str, project_path: &str) -> file_application::Domain {
@@ -470,6 +217,9 @@ mod project {
             file_application::Domain::new(result, &project, &run_scope)
         }
 
+        /// Seam: the compiled specification's retained length bound and a
+        /// hand-built check record projected through it, since no string a
+        /// run can hold exceeds a bound this wide.
         #[test]
         fn wide_length_projection_borrows_the_exact_bound_from_compiled_metadata() {
             use yamaa_core::dataset::{CheckRecord, RowIdentity};
@@ -540,23 +290,11 @@ mod project {
         /// section's standard and define are required only by Define.
         const SPECS_ONLY_PROJECT: &str =
             "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [catalog/renamed.yaml]\n";
-        /// A project that lists no dataset holds an empty inventory, which
-        /// admits only a missing value (CT-11). A 1.x specification binds its
-        /// inventory vocabulary only with a project file (CT-13).
-        const NO_DATASETS_PROJECT: &str = "yamaa: \"1.0\"\ntype: project\n";
-        /// A present value fails the empty inventory (`submission.json`); a
-        /// missing one is admitted.
-        #[test]
-        fn absent_study_inventory_checks_nonmissing_values_and_keeps_missing_values_admitted() {
-            let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), inventory_spec()).unwrap();
-            fs::write(study.0.join("project.yaml"), NO_DATASETS_PROJECT).unwrap();
-            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,\n").unwrap();
-            let path = study.0.join("spec.yaml");
-            let project = study.0.join("project.yaml");
-            let run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-        }
+        /// Seam: the selected project's inventory as values its API returns,
+        /// the dataset names it holds and the documents it retained, which
+        /// no issue row, table or saved file states. The build of each
+        /// project and the value its inventory refuses are the
+        /// `the_inventory_...` cases of `submission.json`.
         #[test]
         fn inventory_uses_inherited_declared_dataset_names_and_retained_original_metadata_in_both_hosts(
         ) {
@@ -606,22 +344,14 @@ mod project {
                     .ends_with("catalog/renamed.yaml"));
                 assert!(!study.0.join("catalog/never-read.csv").exists());
                 assert!(!study.0.join("input.csv").exists());
-                // The build reads the inventory's renamed dataset as
-                // `submission.json` records, and writes no define.
-                fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,renamed\n3,\n").unwrap();
-                let mut run_scope = project.run_scope(None);
-                let attempt = project.build(&mut run_scope, &mut NoFunctions, Scope::default());
-                yamaa_adapters::specification_report::build_result(
-                    project.run(),
-                    &attempt,
-                    identity(path),
-                    &[],
-                )
-                .unwrap();
-                assert!(!study.0.join("define.xml").exists());
             }
         }
 
+        /// Seam: the report's row count and single check rows of the report
+        /// file a save writes, a refused one included (CHECK-22), counted as
+        /// substrings. A case states a report kind's rows whole and a saved
+        /// file's bytes whole, and CHECK-23 leaves the order of one column's
+        /// check rows open, so these rows cannot be authored as a case.
         #[test]
         fn value_codelist_checks_report_one_row_per_declaring_path_in_success_and_failure() {
             for fail in [false, true] {
@@ -670,31 +400,11 @@ mod project {
                 .edit("codelist: DEFAULT", "length: 3")
                 .edit("codelist: GLUCOSE", &format!("length: {length}"))
         }
-        /// Each bound's one length failure is `submission.json`'s; it refuses
-        /// the save.
-        #[test]
-        fn per_value_lengths_replace_inherited_bounds_only_for_their_completed_test_code() {
-            for (bound, input) in [
-                ("5", "ID,VALUE\n1,abcde\n2,é字😀\n"),
-                ("2", "ID,VALUE\n1,abc\n2,é字\n3,\n"),
-            ] {
-                let study = Study::new();
-                fs::write(study.0.join("spec.yaml"), value_length_spec(bound)).unwrap();
-                fs::write(study.0.join("input.csv"), input).unwrap();
-                let path = study.0.join("spec.yaml");
-                let path = path.to_str().unwrap();
-                let mut run = crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: path,
-                        environment: None,
-                    },
-                    identity(path),
-                )
-                .unwrap();
-                assert!(run.save().is_err(), "{bound}");
-            }
-        }
+        /// Seam: the report's row count, which tells one shared length check
+        /// from one per bound. A case states a report kind's rows whole, and
+        /// CHECK-23 leaves the path and place of a shared check among one
+        /// column's check rows open; the save also writes the declared
+        /// report, whose bytes a case would have to state whole.
         #[test]
         fn equal_per_value_lengths_run_one_shared_check_and_wide_bounds_keep_exact_metadata() {
             for length in ["3", "340282366920938463463374607431768211456"] {
@@ -774,92 +484,25 @@ mod project {
             }
             violated
         }
-        const FINDINGS: &str = "submission: {label: Results, class: FINDINGS, structure: One record per test, repeating: true}\n";
-        #[test]
-        fn mandatory_columns_are_checked_without_a_study_document() {
-            let missing = "ID,VALUE\n1,abc\n2,\n";
-            // A mandatory column, and a required column of a findings
-            // dataset, refuse the missing value as `submission.json` records,
-            // and the save.
-            for raw in [
-                VALID.edit(
-                    "submission: {length: 3",
-                    "submission: {mandatory: true, length: 3",
-                ),
-                format!(
-                    "{}{FINDINGS}",
-                    VALID.edit(
-                        "submission: {length: 3",
-                        "submission: {core: Req, length: 3"
-                    )
-                ),
-            ] {
-                let study = Study::new();
-                let mut run = domain(&study, &raw, missing);
-                assert!(run.save().is_err(), "{raw}");
-                assert!(!study.0.join("output.csv").exists());
-            }
-            // `core` derives nothing without a declared class, nor for an
-            // analysis class, whose ADaM columns declare `mandatory` (SUB-10),
-            // so the same missing value is admitted.
-            let adam = VALID
-                .edit("model: SDTM", "model: ADaM")
-                .edit("{type: Assigned, source: Sponsor}", "{type: Assigned}");
-            for raw in [
-                VALID.edit(
-                    "submission: {length: 3",
-                    "submission: {core: Req, length: 3",
-                ),
-                format!(
-                    "{}{}",
-                    adam.edit(
-                        "submission: {length: 3",
-                        "submission: {core: Req, mandatory: false, length: 3"
-                    ),
-                    FINDINGS.edit("FINDINGS", "BASIC DATA STRUCTURE")
-                ),
-            ] {
-                let study = Study::new();
-                let mut run = domain(&study, &raw, missing);
-                assert!(run.issues().is_empty(), "{raw}: {:?}", run.issues());
-                assert!(run.save().unwrap());
-            }
-        }
-        /// The missing value fails on the rows of the declaring entry, or of
-        /// the column outside a relaxing entry, as `submission.json` records;
-        /// present values pass.
-        #[test]
-        fn value_level_mandatory_applies_only_to_the_rows_of_its_test_code() {
-            let missing = "ID,VALUE\n1,abc\n2,\n";
-            for (base, value) in [
-                ("length: 3", "mandatory: true"),
-                ("mandatory: true, length: 3", "mandatory: false"),
-            ] {
-                let raw = ROW_CT
-                    .edit("codelist: DEFAULT", base)
-                    .edit("codelist: GLUCOSE", value);
-                let study = Study::new();
-                let mut run = domain(&study, &raw, missing);
-                assert!(run.save().is_err(), "{value}");
-                let study = Study::new();
-                let mut run = domain(&study, &raw, "ID,VALUE\n1,abc\n2,xyz\n");
-                assert!(run.issues().is_empty(), "{value}: {:?}", run.issues());
-                assert!(run.save().unwrap());
-            }
-        }
         /// Entries over two where columns: one by test code, one by specimen;
         /// nothing static rules out a glucose urine row.
         const SELECTED: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBSPEC, RESULT], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBSPEC, type: str, derivation: SRC.SPEC}\n  - name: RESULT\n    type: str\n    derivation: SRC.VALUE\n    submission:\n      origins: [{type: Assigned, source: Sponsor}]\n      value_level:\n        - {id: GLUC, where: {LBTESTCD: [GLUC]}, mandatory: true}\n        - {id: URINE, where: {LBSPEC: [URINE]}, length: 2}\n        - {id: ALB, where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\"}\n";
+        /// Seam: the refused save of a specification that declares a report
+        /// still writes the report (CHECK-22), whose bytes a case would have
+        /// to state whole, and no output. The check that passes and the
+        /// failure naming both entries are `submission.json`'s.
         #[test]
         fn a_row_two_entries_select_fails_with_its_keys_and_both_entries() {
             let study = Study::new();
-            assert!(study.check(SELECTED).is_empty());
-            // The failure naming both entries is `submission.json`'s; it
-            // refuses the save.
             let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,5\n2,URINE,7\n");
             assert!(run.save().is_err());
             assert!(!study.0.join("output.csv").exists());
         }
+        /// Seam: the violated check rows of a run's report, and single check
+        /// rows of the report file its save writes, counted as substrings. A
+        /// case states a report kind's rows whole, and CHECK-23 leaves the
+        /// order of one column's check rows open, so these rows cannot be
+        /// authored as a case.
         #[test]
         fn an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows() {
             let study = Study::new();
@@ -908,45 +551,6 @@ mod project {
             let study = Study::new();
             let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,\n");
             assert!(run.save().is_err());
-        }
-        #[test]
-        fn inventory_names_the_datasets_of_every_submission_section() {
-            // An ADaM SRCDOM names the SDTM domain another section lists.
-            let study = Study::new();
-            fs::create_dir(study.0.join("sdtm")).unwrap();
-            fs::write(
-                study.0.join("spec.yaml"),
-                // ADaM derives an Assigned origin's source (SUB-15).
-                inventory_spec()
-                    .edit("domain: TEST", "domain: ADAE")
-                    .edit("model: SDTM", "model: ADaM")
-                    .edit("{type: Assigned, source: Sponsor}", "{type: Assigned}"),
-            )
-            .unwrap();
-            fs::write(
-                study.0.join("sdtm/ae.yaml"),
-                VALID
-                    .edit("domain: TEST", "domain: AE")
-                    .edit("input.csv", "never-read.csv"),
-            )
-            .unwrap();
-            fs::write(
-                study.0.join("environment.yaml"),
-                "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/ae.yaml]\n  define: sdtm/define.xml\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [spec.yaml]\n  define: define.xml\n",
-            )
-            .unwrap();
-            fs::write(
-                study.0.join("input.csv"),
-                "ID,VALUE\n1,AE\n2,ADAE\n3,XX\n4,\n",
-            )
-            .unwrap();
-            let path = study.0.join("spec.yaml");
-            let environment = study.0.join("environment.yaml");
-            // The one value outside the inventory is `submission.json`'s; the
-            // build reads no other section's input and writes no define.
-            project_domain(path.to_str().unwrap(), environment.to_str().unwrap());
-            assert!(!study.0.join("sdtm/never-read.csv").exists());
-            assert!(!study.0.join("define.xml").exists());
         }
     }
 }

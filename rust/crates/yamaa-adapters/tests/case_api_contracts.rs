@@ -50,17 +50,20 @@ fn check_call(
     (study, checked)
 }
 
+/// The check and the build of a case's input, each with the project it
+/// names if any; the build publishes nothing.
 fn calls(input: &Value, host: Language, label: &str) -> Calls {
-    // The build below names no project, so neither call does.
-    assert!(input.get("project").is_none());
     let (study, checked) = check_call(input, host, label);
     let staged = operations::state(&study);
     let specification = study.identity(replay::text(replay::field(input, "specification")));
+    let project = input
+        .get("project")
+        .map(|name| study.identity(replay::text(name)));
     let built = crate::support::study::domain(
         host,
         Request {
             specification: &specification,
-            environment: None,
+            environment: project.as_deref(),
         },
         crate::support::study::identity("diagnostics", &specification),
     );
@@ -264,7 +267,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        288,
+        319,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -348,7 +351,9 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         saved_bytes(&study, expected, &case.label);
                         // Save owns completed bytes, even after source inputs
                         // change. Expectations still come from the fixture.
-                        for name in replay::object(replay::field(&case.input, "files")).keys() {
+                        // A benchmark's staged files are not the input's own.
+                        let files = case.input.get("files").map(replay::object);
+                        for name in files.into_iter().flat_map(|files| files.keys()) {
                             if name.ends_with(".csv") && !expected.contains_key(name) {
                                 fs::write(study.join(name), "changed after build").unwrap();
                             }
@@ -393,8 +398,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (178, 1, 4, 105));
-    assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 145));
+    assert_eq!((domains, preparation, either, checks), (209, 1, 4, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (128, 40, 151));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter
