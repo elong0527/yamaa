@@ -221,7 +221,10 @@ refuses connections and runs two Cargo jobs.
   installed, as CRAN's noSuggests check runs: `_R_CHECK_DEPENDS_ONLY_=true`
   gives the tests only the Depends and Imports, and with
   `_R_CHECK_FORCE_SUGGESTS_=false` R reports the missing packages instead of
-  stopping. The tests skip, with a message, what needs `arrow` or `jsonlite`.
+  stopping. This lane passes `check_r.py --ignore-vignettes`, because its
+  missing Suggests include the vignette builders. Every other CRAN lane
+  validates and rebuilds the vignette with its builders and Pandoc installed.
+  The tests skip, with a message, what needs `arrow` or `jsonlite`.
 - With R-devel on Linux and the PDF and HTML manuals, which CRAN's incoming
   checks build and validate and the other jobs leave out with `--no-manual`:
   the job installs pdflatex with the LaTeX packages and fonts of R's manual,

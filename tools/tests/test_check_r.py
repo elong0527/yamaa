@@ -351,7 +351,9 @@ class FakeCheckTests(unittest.TestCase):
         self.archive = self.root / "yamaa_0.5.0.tar.gz"
         self.archive.write_bytes(b"archive")
 
-    def run_check(self, returncode, outputs, manual=False, check_log=None):
+    def run_check(
+        self, returncode, outputs, manual=False, check_log=None, ignore_vignettes=False
+    ):
         """Run check() against a fake R CMD check that writes `outputs`, by
         path below yamaa.Rcheck, and `check_log` or a log with the explained
         note as its 00check.log, and exits with `returncode`."""
@@ -381,7 +383,9 @@ class FakeCheckTests(unittest.TestCase):
             contextlib.redirect_stdout(printed),
         ):
             try:
-                check_r.check(self.archive, work, manual=manual)
+                check_r.check(
+                    self.archive, work, manual=manual, ignore_vignettes=ignore_vignettes
+                )
                 failure = None
             except (check_r.subprocess.CalledProcessError, RuntimeError) as error:
                 failure = error
@@ -411,6 +415,31 @@ class FailingTestsTests(FakeCheckTests):
             ],
         )
         self.assertIsNone(failure)
+
+    def test_builder_free_checks_ignore_vignettes_without_allowing_their_notes(self):
+        # The command seam selects R's explicit ignore mode, while the same
+        # strict log guard continues refusing unexpected vignette findings.
+        vignette_note = (
+            "* checking package vignettes ... NOTE\n"
+            "Package has 'vignettes' subdirectory but apparently no vignettes.\n"
+        )
+        for label, check_log, rejected in (
+            ("clean dependency-only check", log(HEAD, status="1 NOTE"), False),
+            (
+                "an unexpected finding still fails",
+                log(HEAD, vignette_note, status="2 NOTEs"),
+                True,
+            ),
+        ):
+            with self.subTest(case=label):
+                commands, _, failure = self.run_check(
+                    0, {}, ignore_vignettes=True, check_log=check_log
+                )
+                self.assertIn("--ignore-vignettes", commands[0][0])
+                self.assertIn("--no-stop-on-test-error", commands[0][0])
+                self.assertEqual(failure is not None, rejected)
+                if rejected:
+                    self.assertIn("checking package vignettes", str(failure))
 
     def test_a_check_with_the_manuals_builds_them_and_requires_both_ok(self):
         # --manual leaves --no-manual out, and the log must then report both
