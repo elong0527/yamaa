@@ -580,7 +580,7 @@ fn fields(columns: &RawValue, source: &SourceDeclaration) -> Result<Vec<Stored>,
 }
 
 /// The members of one JSON object the profile reads, each unparsed, and the
-/// first of them written twice.
+/// first in the profile's member order that is written twice.
 struct Object<'a> {
     values: Vec<Option<&'a RawValue>>,
     repeated: Option<usize>,
@@ -607,13 +607,13 @@ impl<'de> Visitor<'de> for ObjectSeed {
     }
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Object<'de>, A::Error> {
         let mut values = vec![None; self.0.len()];
-        let mut repeated = None;
+        let mut repeated: Option<usize> = None;
         while let Some(index) = map.next_key_seed(KeySeed(self.0))? {
             match index {
                 Some(index) => {
                     let value = map.next_value::<&'de RawValue>()?;
-                    if values[index].replace(value).is_some() && repeated.is_none() {
-                        repeated = Some(index);
+                    if values[index].replace(value).is_some() {
+                        repeated = Some(repeated.map_or(index, |earlier| earlier.min(index)));
                     }
                 }
                 None => {

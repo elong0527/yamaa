@@ -1,17 +1,21 @@
 //! Build per-template stored-source metadata through the existing source-port ordering.
 use super::*;
+/// The catalog of a row whose driver is `name`, laid out as `source`: the
+/// output columns, and the driver's fields, those of the intermediate `item`
+/// when one drives the rows, each typed as `donors` types it.
 pub(super) fn catalog_visible(
     output: &TableSchema,
     source: &TableSchema,
     name: &str,
     item: Option<&crate::dataset::Intermediate>,
+    donors: binder::Donors<'_>,
 ) -> Result<Catalog, BindError> {
     let outputs = output
         .columns()
         .iter()
         .map(|c| reference_binding::Field {
             name: &c.name,
-            column_type: c.kind,
+            column_type: Some(c.kind),
         })
         .collect::<Vec<_>>();
     let names = source
@@ -29,10 +33,14 @@ pub(super) fn catalog_visible(
     let fields = source
         .columns()
         .iter()
+        .enumerate()
         .zip(&names)
-        .map(|(column, name)| reference_binding::Field {
-            name,
-            column_type: column.kind,
+        .map(|((index, column), field)| reference_binding::Field {
+            name: field,
+            column_type: match item {
+                Some(item) => donors.kind(item, index),
+                None => donors.inputs.kind_of(name, &column.name, column.kind),
+            },
         })
         .collect::<Vec<_>>();
     Catalog::compile(
@@ -62,31 +70,27 @@ pub(super) fn joined_catalog(
     output: &TableSchema,
     primary: &TableSchema,
     name: &str,
-    secondary: &[crate::dataset::SecondarySource],
+    donors: binder::Donors<'_>,
 ) -> Result<Catalog, BindError> {
-    let catalog = catalog_visible(output, primary, name, None)?;
-    extend_catalog(spec, catalog, primary, name, secondary, name)
+    let catalog = catalog_visible(output, primary, name, None, donors)?;
+    extend_catalog(spec, catalog, primary, name, donors, name)
 }
 pub(super) fn extend_catalog(
     spec: &ast::Spec,
     catalog: Catalog,
     primary: &TableSchema,
     name: &str,
-    secondary: &[crate::dataset::SecondarySource],
+    donors: binder::Donors<'_>,
     driver: &str,
 ) -> Result<Catalog, BindError> {
-    let fields = std::iter::once(primary)
-        .chain(secondary.iter().map(|source| &source.schema))
-        .map(|schema| {
-            schema
-                .columns()
+    let secondary = donors.secondary;
+    let fields = std::iter::once((name, primary))
+        .chain(
+            secondary
                 .iter()
-                .map(|column| reference_binding::Field {
-                    name: &column.name,
-                    column_type: column.kind,
-                })
-                .collect::<Vec<_>>()
-        })
+                .map(|source| (source.name.as_str(), &source.schema)),
+        )
+        .map(|(relation, schema)| donors.inputs.fields_of(relation, schema))
         .collect::<Vec<_>>();
     let relations = std::iter::once(name)
         .chain(secondary.iter().map(|source| source.name.as_str()))

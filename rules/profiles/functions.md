@@ -133,7 +133,7 @@ is one scalar for one logical row. A call naming no function the project lists
 fails.
 
 Fails: `unknown_project_function`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_function_file_names_its_function_and_types_its_values_by_declaration`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_function_file_names_its_function_and_types_its_values_by_declaration`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 A call contains no implementation language, callable name or contract version.
 A `function` call's exact argument and result types are those its definition
@@ -161,7 +161,7 @@ and a required parameter declares no `default`. Parameter types are the
 matches its declared exact type, with no implicit conversion.
 
 Fails: `invalid_function_argument`.
-Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`.
+Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`.
 
 The function-only `bool` introduces neither Boolean columns nor Boolean
 derivation results. There is no `int`-to-`float` widening, and
@@ -189,7 +189,7 @@ may contain an operator, a function call or another expression, and a name
 resolves under [FORMULA-9](../formulas.md#formula-9).
 
 Fails: `invalid_function_argument`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 An argument is an expression field ([EXPR-5](../expressions.md#expr-5)):
 `weight: WEIGHTKG` passes a variable, `unit: "'kg'"` text,

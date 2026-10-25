@@ -511,10 +511,16 @@ made to both, and `make check-repository` fails while they differ
   declared in their module under `support::diagnostic::operations`.
 - A positive case also states what its operation built and saved.
   `output` is the output table, whole, written as rows: the header of its
-  column names, then one row per record holding one cell per column.
-  `report` maps each kind of run report row it compares (`run`, `input`,
-  `rows`, `handler`, `column`, `check`; CHECK-23) to that kind's rows in
-  report order, written the same way, with a header that names the report
+  column names, then one row per record holding one cell per column. A
+  case moved from a test whose assertion named just some columns may write
+  `"output_subset": true`: its header names those columns in the table's
+  order, and it still states every row in order. Without that marker,
+  the whole table must match, including its complete header. As with
+  `compares` for issue rows, the subset is only for migrated assertions;
+  a new case always states the whole table. `report` maps each kind of
+  run report row it compares (`run`, `input`, `rows`, `handler`, `column`,
+  `check`; CHECK-23) to that kind's rows in report order, written the same
+  way, with a header that names the report
   columns it compares in the report's order (CHECK-24) and leaves out
   `KIND`; a kind it does not name is not compared, and a header alone
   states that the report has no row of that kind, so a check of the

@@ -165,8 +165,8 @@ fn language(written: &str) -> Language {
 /// `yaml/schema_terminology.yaml`), `{standard, codelists}`: an optional
 /// `standard`, `{name, publishing_set, version}`, and its lists, each `{id,
 /// name, data_type, extensible, alias, format_name, items, external}`, with
-/// `items` each `{value, decode, rank, alias, extended}` and `external`
-/// `{dictionary, version, href}`. As the schema says, `data_type` defaults to
+/// `items` each `{value, decode, rank, alias, extended}` and `external` as
+/// [`external`] reads it. As the schema says, `data_type` defaults to
 /// text, `extensible` and an item's `extended` to false, and an optional
 /// member left out is absent.
 #[track_caller]
@@ -227,19 +227,24 @@ fn codelist_source(json: &Json) -> Codelists {
                             })
                             .collect()
                     }),
-                    external: list.get("external").map(|external| {
-                        let external = external.closed(&["dictionary", "version", "href"]);
-                        External {
-                            dictionary: text(external, "dictionary").into(),
-                            version: text(external, "version").into(),
-                            href: optional(external, "href"),
-                        }
-                    }),
+                    external: list.get("external").map(external),
                 }
             })
             .collect(),
     }
     .root()
+}
+
+/// The external dictionary a codelist names in place of its items, as a
+/// codelist file writes it, `{dictionary, version, href}`, `href` optional.
+#[track_caller]
+fn external(json: &Json) -> External {
+    let json = json.closed(&["dictionary", "version", "href"]);
+    External {
+        dictionary: text(json, "dictionary").into(),
+        version: text(json, "version").into(),
+        href: json.get("href").map(|href| href.text().to_owned()),
+    }
 }
 
 /// A column type as the language spells it.

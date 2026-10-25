@@ -22,7 +22,7 @@ unknown extension falls back to a default: it fails during validation, before
 any byte is read.
 
 Fails: `source_profile_unknown`.
-Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_file_reads_each_data_type_as_the_type_its_table_gives`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_written_over_several_lines_is_no_newline_delimited_file`.
+Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_file_reads_each_data_type_as_the_type_its_table_gives`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_written_over_several_lines_is_no_newline_delimited_file`, `schema-source-dataset-json`, `schema-source-dataset-ndjson`.
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`

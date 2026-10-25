@@ -1,5 +1,5 @@
 {
-  "about": "The findings of a qualified or row aggregate: its keys and key types (LOOKUP-5, LOOKUP-9), its context and relations (LOOKUP-18, LOOKUP-19), a reduction that reads several records (FORMULA-20), an identifier outside a reduction (FORMULA-22), operands of no common or numeric type (FORMULA-23) and a `quantile` outside 0 through 1 (FORMULA-18), then the derive bindings that preparation refuses (LOOKUP-22), and the fields of the aggregate that preparation finds unpaired from the reductions that read them (FORMULA-18, LOOKUP-10). All but the static type findings compare the fields their table compared, and each derive binding's case finds its issue among those preparation reports (among). The specification `aggregate` derives RESULT from an aggregate whose derive bindings each case writes.",
+  "about": "The findings of a qualified or row aggregate: its keys and key types (LOOKUP-5, LOOKUP-9), its context and relations (LOOKUP-18, LOOKUP-19), a reduction that reads several records (FORMULA-20), an identifier outside a reduction (FORMULA-22), operands of no common or numeric type (FORMULA-23), before any record is read and when the arithmetic over reductions and grouping columns is evaluated, and a `quantile` outside 0 through 1 (FORMULA-18), then the derive bindings that preparation refuses (LOOKUP-22), and the fields of the aggregate that preparation finds unpaired from the reductions that read them (FORMULA-18, LOOKUP-10). All but the static type and evaluation findings compare the fields their table compared, and each derive binding's case finds its issue, at the path of the derive step or binding it names, among those preparation reports (among). The specification `aggregate` derives RESULT from an aggregate whose derive bindings each case writes.",
   "documents": {
     "aggregate": {
       "yamaa": "1.0",
@@ -132,6 +132,18 @@
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["aggregate.expr"], "context": {"expr": "STDDEV(D.S)", "reducer": "STDDEV", "source": "D.S", "expected": "numeric", "actual": "str"}}]
     },
     {
+      "case": "arithmetic_over_a_text_reduction_fails_under_formula_23_when_evaluated",
+      "operation": "aggregate_evaluation",
+      "input": {"expression": "MIN(EX.TEXT) + 1", "path": "columns.X.aggregate", "reductions": ["a"], "group": {"KEY": "a"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["columns.X.aggregate"], "context": {"expr": "MIN(EX.TEXT) + 1", "source": "MIN(EX.TEXT)", "expected": "numeric", "actual": "str"}, "source_span": {"start": 0, "end": 12}, "operand_route": ["left"]}]
+    },
+    {
+      "case": "arithmetic_over_a_text_grouping_column_fails_under_formula_23_when_evaluated",
+      "operation": "aggregate_evaluation",
+      "input": {"expression": "SUM(EX.DOSE) + KEY", "path": "columns.X.aggregate", "reductions": [1], "group": {"KEY": "a"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["columns.X.aggregate"], "context": {"expr": "SUM(EX.DOSE) + KEY", "source": "KEY", "expected": "numeric", "actual": "str"}, "source_span": {"start": 15, "end": 18}, "operand_route": ["right"]}]
+    },
+    {
       "case": "a_quantile_above_one_fails_at_the_field_before_any_record",
       "operation": "prepare",
       "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "derivation"], "to": {"aggregate": {"expr": "QUANTILE(SRC.V)", "quantile": 1.5}}}]},
@@ -141,25 +153,25 @@
       "case": "an_aggregate_whose_derivations_bind_nothing_is_an_invalid_derive_step",
       "operation": "prepare",
       "input": {"base": "aggregate"},
-      "compares": ["phase", "condition", "rule"],
+      "compares": ["phase", "condition", "rule", "spec_paths"],
       "among": true,
-      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.RESULT.derivation.aggregate.derivations"]}]
     },
     {
       "case": "a_derive_binding_that_reads_no_relation_is_an_invalid_derive_step",
       "operation": "prepare",
       "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "float", "derivation": {"value": 1}}}}]},
-      "compares": ["phase", "condition", "rule"],
+      "compares": ["phase", "condition", "rule", "spec_paths"],
       "among": true,
-      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.RESULT.derivation.aggregate.derivations"]}]
     },
     {
       "case": "a_derive_binding_that_reads_an_unbound_name_is_an_unknown_derive_variable",
       "operation": "prepare",
       "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "float", "derivation": {"value": "W"}}}}]},
-      "compares": ["phase", "condition", "rule"],
+      "compares": ["phase", "condition", "rule", "spec_paths"],
       "among": true,
-      "issues": [{"phase": "validation", "condition": "unknown_derive_variable", "rule": "LOOKUP-22"}]
+      "issues": [{"phase": "validation", "condition": "unknown_derive_variable", "rule": "LOOKUP-22", "spec_paths": ["columns.RESULT.derivation.aggregate.derivations.V"]}]
     },
     {
       "case": "a_derive_binding_that_reads_an_intermediate_without_keep_is_an_invalid_derive_step",

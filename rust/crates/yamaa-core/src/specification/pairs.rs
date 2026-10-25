@@ -131,11 +131,11 @@ pub(super) fn prepare(
 }
 
 /// A field of one side's records: its name, its position in the side's
-/// layout and its type.
+/// layout and its type, `None` where the input's schema does not decide it.
 struct Field {
     name: String,
     column: usize,
-    kind: ColumnType,
+    kind: Option<ColumnType>,
 }
 
 /// One side's records and their visible fields.
@@ -171,14 +171,16 @@ fn side(
         .iter()
         .position(|source| source.name == declared.name)
     {
-        let fields = cx.relations.schemas[index]
+        let schema = &cx.relations.schemas[index];
+        let fields = schema
+            .layout()
             .columns()
             .iter()
             .enumerate()
             .map(|(column, field)| Field {
                 name: field.name.clone(),
                 column,
-                kind: field.kind,
+                kind: schema.kind(column),
             })
             .collect();
         let port = match index.cmp(&cx.relations.driver) {
@@ -236,11 +238,13 @@ fn side(
         if !item.admits_column(column) {
             continue;
         }
+        // A derived field of no one type is untyped; a stored field has the
+        // kind its input's schema gives it, decided or not.
         match item.source_kind(cx.secondary, column) {
-            Some(kind) => fields.push(Field {
+            Some(_) => fields.push(Field {
                 name: field.name.clone(),
                 column,
-                kind,
+                kind: cx.relations.source_kind(item, cx.secondary, column),
             }),
             None => untyped.push(field.name.as_str()),
         }
@@ -268,7 +272,7 @@ struct Joined<'a> {
 }
 
 impl Joined<'_> {
-    fn field(&self, name: &str) -> Option<(usize, ColumnType)> {
+    fn field(&self, name: &str) -> Option<(usize, Option<ColumnType>)> {
         let (owner, field) = name.split_once('.')?;
         let (fields, offset) = if owner == self.left {
             (self.left_fields, 0)
@@ -306,13 +310,13 @@ pub(super) fn bind(
     for (offset, field) in left.fields.iter().enumerate() {
         columns.push(Column {
             name: format!("\0left{offset}"),
-            kind: field.kind,
+            kind: field.kind.unwrap_or(ColumnType::Str),
         });
     }
     for (offset, field) in right.fields.iter().enumerate() {
         columns.push(Column {
             name: format!("\0right{offset}"),
-            kind: field.kind,
+            kind: field.kind.unwrap_or(ColumnType::Str),
         });
     }
     let joined_schema = TableSchema::new(columns).map_err(|_| BindError::Internal)?;
@@ -530,7 +534,7 @@ fn bind_keys(
                 position.map(|position| {
                     (
                         PairValue::Field(position),
-                        ResultType::column(left.fields[position].kind),
+                        ResultType::declared(left.fields[position].kind),
                     )
                 })
             }
@@ -552,7 +556,7 @@ fn bind_keys(
         let (Some((left_value, expected)), Some(right_field)) = (left_value, right_field) else {
             continue;
         };
-        let actual = ResultType::column(right.fields[right_field].kind);
+        let actual = ResultType::declared(right.fields[right_field].kind);
         if !expected.comparable(actual) {
             push(
                 findings,
@@ -578,7 +582,7 @@ fn bind_keys(
 
 /// Each side's fields as a joined record's catalog reads them: `(field,
 /// position, type)`, the positions counted from `offset`.
-fn catalog_fields(fields: &[Field], offset: usize) -> Vec<(&str, usize, ColumnType)> {
+fn catalog_fields(fields: &[Field], offset: usize) -> Vec<(&str, usize, Option<ColumnType>)> {
     fields
         .iter()
         .enumerate()
@@ -599,7 +603,7 @@ fn joined_catalog(
         .iter()
         .map(|column| reference_binding::Field {
             name: &column.name,
-            column_type: column.kind,
+            column_type: Some(column.kind),
         })
         .collect::<Vec<_>>();
     Ok(Catalog::compile_joined(&outputs, sides)
@@ -645,6 +649,7 @@ impl Entries<'_> {
                 named: &empty,
                 secondary: &[],
                 items: &[],
+                inputs: cx.relations,
             },
             catalog: self.catalog,
             output: self.output,
@@ -724,7 +729,9 @@ fn bind_values(
         read.split_once('.')
             .filter(|(owner, _)| *owner == left)
             .and_then(|(_, field)| fields.iter().find(|candidate| candidate.name == field))
-            .map_or(ResultType::UNKNOWN, |field| ResultType::column(field.kind))
+            .map_or(ResultType::UNKNOWN, |field| {
+                ResultType::declared(field.kind)
+            })
     };
     let types = expressions
         .iter()
@@ -735,7 +742,7 @@ fn bind_values(
         .enumerate()
         .map(|(position, field)| Column {
             name: format!("\0left{position}"),
-            kind: field.kind,
+            kind: field.kind.unwrap_or(ColumnType::Str),
         })
         .collect::<Vec<_>>();
     columns.extend(types.iter().enumerate().map(|(position, kind)| Column {
@@ -745,7 +752,7 @@ fn bind_values(
     let output = TableSchema::new(columns).map_err(|_| BindError::Internal)?;
     let kinds: Vec<Option<ColumnType>> = fields
         .iter()
-        .map(|field| Some(field.kind))
+        .map(|field| field.kind)
         .chain(types.iter().map(|kind| kind.column_type()))
         .collect();
     let side = catalog_fields(fields, 0);
@@ -802,7 +809,11 @@ fn bind_filter(
             ))),
         }
     }
-    let kind = |name: &str| joined.field(name).map(|(_, kind)| kind.into());
+    let kind = |name: &str| {
+        joined
+            .field(name)
+            .and_then(|(_, kind)| kind.map(Into::into))
+    };
     findings.extend(
         types::predicate_kinds(plan, kind)
             .into_iter()
@@ -847,7 +858,7 @@ fn bind_derivations(
             if read.contains('.') {
                 return joined
                     .field(read)
-                    .map_or(ResultType::UNKNOWN, |(_, kind)| ResultType::column(kind));
+                    .map_or(ResultType::UNKNOWN, |(_, kind)| ResultType::declared(kind));
             }
             fields[width..]
                 .iter()
@@ -864,10 +875,11 @@ fn bind_derivations(
         operation_types.push(operation);
     }
     let output = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
-    let kinds: Vec<Option<ColumnType>> = stored
-        .columns()
+    let kinds: Vec<Option<ColumnType>> = joined
+        .left_fields
         .iter()
-        .map(|column| Some(column.kind))
+        .chain(joined.right_fields)
+        .map(|field| field.kind)
         .chain(field_types.iter().map(|kind| kind.column_type()))
         .collect();
     let left = catalog_fields(joined.left_fields, 0);
@@ -939,6 +951,15 @@ fn bind_derivations(
 /// path.
 fn reference_findings(findings: &mut [BindFinding], intermediate: &str) {
     for finding in findings {
+        // The pair relation's own cause does not keep a withheld wording.
+        if matches!(finding, BindFinding::Withheld(inner) if matches!(
+            **inner,
+            BindFinding::UnknownReference { .. }
+                | BindFinding::OutputReference { .. }
+                | BindFinding::QualifiedReference { .. }
+        )) {
+            finding.release();
+        }
         let reference = match finding {
             BindFinding::UnknownReference { path, name }
             | BindFinding::OutputReference { path, name, .. }
