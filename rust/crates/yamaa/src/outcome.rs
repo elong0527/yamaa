@@ -23,6 +23,7 @@ use crate::diagnostic::{Locator, Report, Severity};
 use crate::engine::Build;
 use crate::error::Failure;
 use crate::internal::EngineShared;
+use crate::progress::{Measured, Timings};
 use crate::text::Action;
 
 /// Whether any of `issues` fails a result: an error-severity issue does.
@@ -50,6 +51,9 @@ pub(crate) struct Member {
     /// absent for an operation on one specification.
     pub(crate) identity: Option<String>,
     pub(crate) work: Work,
+    /// What a check's or a composition's timings are read from; a build
+    /// keeps its own, and work that never ran has none (#3762).
+    pub(crate) measured: Option<Measured>,
 }
 
 pub(crate) enum Work {
@@ -100,6 +104,15 @@ impl Member {
         match &self.work {
             Work::Built(run) => Some(run),
             _ => None,
+        }
+    }
+
+    /// The phases the member ran, in the order they started.
+    pub(crate) fn timings(&self) -> Timings {
+        match (&self.work, &self.measured) {
+            (Work::Built(run), _) => run.build.timings(),
+            (_, Some(measured)) => measured.timings(),
+            (_, None) => Timings::default(),
         }
     }
 }
@@ -205,6 +218,11 @@ impl Outcome {
 
     pub(crate) fn status(&self) -> Status {
         Status::of_all(&self.issues, self.members.iter().map(Member::status))
+    }
+
+    /// Every member's timings, in member order.
+    pub(crate) fn timings(&self) -> Timings {
+        Timings::joined(self.members.iter().map(Member::timings))
     }
 
     /// Save every member as one save, whose refusals name `subject`, polling

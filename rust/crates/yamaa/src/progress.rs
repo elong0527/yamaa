@@ -363,6 +363,15 @@ impl Reporter {
         }
     }
 
+    /// The observer of work `measured` already holds, such as a streamed
+    /// run's build after its compilation.
+    pub(crate) fn resume(&self, measured: Measured) -> Observed<'_> {
+        Observed {
+            reporter: self,
+            measured,
+        }
+    }
+
     /// Whether the callback panicked or returned an error.
     pub(crate) fn failed(&self) -> bool {
         self.failed.load(Ordering::SeqCst)
