@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_decimal, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, TEXT-15, COLUMN-10, NAME-3), each reached by the verb's own declaration or step. The specification `spec`, which preparation reads for the declarations it refuses, reads SRC and writes one key column ID.",
+  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_decimal, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, TEXT-15, COLUMN-10, NAME-3), each reached by the verb's own declaration or step, and, through binding, the order in which str_pad's width checkpoint reports beside a case predicate's grammar and the references a derivation reads (TEXT-2, FORMULA-1, FORMULA-9, NAME-3). The specification `spec`, which preparation reads for the declarations it refuses, reads SRC and writes one key column ID; each binding case writes its specification whole, binding SRC to the schema ID, int.",
   "documents": {
     "spec": {
       "yamaa": "1.0",
@@ -239,6 +239,193 @@
       "operation": "str_extract",
       "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "(a)", "group": "100000000000000000000000000000000000000000000000000000000000000000000000000000000"},
       "issues": [{"phase": "validation", "condition": "regex_group_out_of_range", "rule": "TEXT-10", "spec_paths": ["columns.TEXT.derivation.str_extract.group"], "context": {"group": 100000000000000000000000000000000000000000000000000000000000000000000000000000000, "group_count": 1, "pattern": "(a)"}}]
+    },
+    {
+      "case": "all_nested_case_widths_precede_that_derivations_reference_findings",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "str", "derivation": {"value": {"case": [{"when": "ID = 1", "then": {"case": [{"when": "ID = 1", "then": {"str_pad": {"source": "SRC.ABSENT1", "width": 0}}}, {"otherwise": {"str_pad": {"source": "SRC.ABSENT2", "width": -1}}}]}}, {"otherwise": {"str_pad": {"source": "SRC.ABSENT3", "width": 0}}}]}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]}
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.A.derivation.case[0].then.case[0].then.str_pad.width"]},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.A.derivation.case[0].then.case[1].otherwise.str_pad.width"]},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.A.derivation.case[1].otherwise.str_pad.width"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.case[0].then.case[0].then.str_pad.source"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.case[0].then.case[1].otherwise.str_pad.source"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.case[1].otherwise.str_pad.source"]}
+      ]
+    },
+    {
+      "case": "width_checkpoint_precedes_case_predicate_reference_binding_without_duplication",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "str", "derivation": {"value": {"case": [{"when": "ABSENT = 1", "then": {"str_pad": {"source": "SRC.ABSENT1", "width": 0}}}, {"otherwise": {"str_pad": {"source": "SRC.ID", "width": 2}}}]}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]}
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.A.derivation.case[0].then.str_pad.width"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.A.derivation.case[0].when"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.case[0].then.str_pad.source"]}
+      ]
+    },
+    {
+      "case": "separate_column_derivations_keep_width_then_reference_interleaving",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "str", "derivation": {"value": {"str_pad": {"source": "SRC.ABSENT1", "width": 0}}}},
+            {"name": "B", "type": "str", "derivation": {"value": {"str_pad": {"source": "SRC.ABSENT2", "width": -1}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]}
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["spec_paths"],
+      "issues": [
+        {"spec_paths": ["columns.A.derivation.str_pad.width"]},
+        {"spec_paths": ["columns.A.derivation.str_pad.source"]},
+        {"spec_paths": ["columns.B.derivation.str_pad.width"]},
+        {"spec_paths": ["columns.B.derivation.str_pad.source"]}
+      ]
+    },
+    {
+      "case": "row_substitutions_report_all_widths_before_reference_binding",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "str", "derivation": {"value": "'unused'"}},
+            {"name": "B", "type": "str", "derivation": {"value": "'unused'"}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [
+            {"id": "records", "derivations": {"A": {"value": {"str_pad": {"source": "ABSENT1", "width": 0}}}, "B": {"value": {"str_pad": {"source": "ABSENT2", "width": -1}}}}}
+          ]
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["spec_paths"],
+      "issues": [
+        {"spec_paths": ["rows.records.derivations.A.str_pad.width"]},
+        {"spec_paths": ["rows.records.derivations.B.str_pad.width"]},
+        {"spec_paths": ["rows.records.derivations.A.str_pad.source"]},
+        {"spec_paths": ["rows.records.derivations.B.str_pad.source"]}
+      ]
+    },
+    {
+      "case": "predicate_grammar_stays_before_its_branch_width_validation",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "str", "derivation": {"value": {"case": [{"when": "ID >", "then": {"str_pad": {"source": "SRC.ABSENT", "width": 0}}}, {"otherwise": {"str_pad": {"source": "SRC.ID", "width": 2}}}]}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]}
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.A.derivation.case[0].when"]},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.A.derivation.case[0].then.str_pad.width"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.case[0].then.str_pad.source"]}
+      ]
+    },
+    {
+      "case": "numeric_grammar_in_the_then_branch_and_widths_keep_authored_order_before_reference_binding",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "str", "derivation": {"value": {"case": [{"when": "ABSENT = 1", "then": "ID +"}, {"otherwise": {"str_pad": {"source": "SRC.ABSENT", "width": 0}}}]}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]}
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.A.derivation.case[0].then"]},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.A.derivation.case[1].otherwise.str_pad.width"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.A.derivation.case[0].when"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.case[1].otherwise.str_pad.source"]}
+      ]
+    },
+    {
+      "case": "numeric_grammar_in_the_otherwise_branch_and_widths_keep_authored_order_before_reference_binding",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "str", "derivation": {"value": {"case": [{"when": "ABSENT = 1", "then": {"str_pad": {"source": "SRC.ABSENT", "width": 0}}}, {"otherwise": "ID +"}]}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]}
+        },
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.A.derivation.case[0].then.str_pad.width"]},
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.A.derivation.case[1].otherwise"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.A.derivation.case[0].when"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.case[0].then.str_pad.source"]}
+      ]
     }
   ]
 }

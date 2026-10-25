@@ -375,7 +375,6 @@ class CandidateRelease(ReleaseTree):
             "yamaa-adapters",
             "yamaa-boundary",
             "yamaa-cli",
-            "yamaa-engine",
             "yamaa-core",
             "yamaa-python",
             "yamaa-r",

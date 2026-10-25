@@ -314,10 +314,9 @@ starts at 1.0.0 (#3030 D1).
   flags, exit statuses and `--format json` keys.
 - The Rust facade: the public items of the `yamaa` crate, as
   `rust/crates/yamaa/public-api.txt` lists them. The internal crates
-  `yamaa-core`, `yamaa-adapters`, `yamaa-boundary` and `yamaa-engine` are
-  not covered, nor are the native modules (`yamaa._native` and the R
-  package's registered routines) and the engine's C ABI, which are internal
-  (#3679, #3702).
+  `yamaa-core`, `yamaa-adapters` and `yamaa-boundary` are not covered, nor
+  are the native modules (`yamaa._native` and the R package's registered
+  routines), which are internal (#3679).
 - Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
   version 5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an
   admitted project and its inputs, on every supported platform. The Parquet
@@ -899,8 +898,8 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 
 `tools/staging/engine_bundle.py` stages each host's engine source bundle,
 from which both source packages build (#3030 D55). The bundle holds the
-engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`,
-`yamaa-engine` and that host's binding crate; the canonical workspace manifest with `crates/*` as its
+engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`
+and that host's binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates, and with the profiles
 that the host builds with, so that the R bundle's leaves out
 `[profile.dist]`, which only the wheels and the command-line binaries
@@ -1252,8 +1251,7 @@ owns decoding behavior.
   `rust/interface/bindings.yaml` and compare them in the repository check
   and the native qualification lane. Both hosts run the version and feature
   handshake of `yamaa-boundary` before any other native call (#3679), and
-  reach the engine they link only through its client, over the engine's
-  internal C ABI (D225 on #3030, #3702).
+  then call the `yamaa` facade they link (D281 on #3673).
 - The `yamaa` facade crate is the only supported Rust surface; every other
   crate is internal and may change in any release, as the
   [stability contract](#stability-contract) says.
