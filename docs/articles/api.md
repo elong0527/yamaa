@@ -917,9 +917,12 @@ them for `yamaa --version`. The engine version is the same in every host;
 ## Inputs, outputs and paths
 
 Inputs can be CSV, Parquet, SAS datasets (`.sas7bdat`), SAS transport v5/v8
-files (`.xpt`) or ODM XML files (`.xml`). A SAS input declares its
+files (`.xpt`), Dataset-JSON 1.1 files (`.json`, or `.ndjson` for the
+newline-delimited form) or ODM XML files (`.xml`). A SAS input declares its
 `encoding`, for example
-`{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int}}`. Outputs are
+`{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int}}`. A
+Dataset-JSON input takes each field's type from its column's `dataType`, so
+`types` only narrows one, as in `{path: input/vs.ndjson, types: {VISITNUM: int}}`. Outputs are
 CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
 `submission()`.
 
