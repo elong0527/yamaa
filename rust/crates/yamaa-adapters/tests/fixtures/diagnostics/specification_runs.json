@@ -1,0 +1,369 @@
+{
+  "about": "Specification runs through the public build, moved from specification_sources.rs and specification_reports.rs at 5ed2d8a46, whose tests prepared a run (PreparedRun::prepare) and ran it over the input's bytes (execute_csv), or prepared the document alone, and compared the findings the run report renders. A finding of preparation is a refused build of the specification alone, staged with no input; a finding after the input is read is a failed build of the staged input. The negative-zero-division and adam-adlb-ordered-sum specifications and inputs are the benchmarks' own, with the tests' exact-once edits. Compiler findings of a derivation keep their reference paths, context and phase, and an input's unterminated quote is reported before a derivation's grammar; every preflight finding is reported in reference order before any source access; binding collects its ordered findings before dependency findings; an aggregate's grammar findings follow typed ingestion and keep the original path, an unparsed float being reported first; row group declarations and the shared scope keep their authored findings; and a source's condition stays unknown under the normative grammar. No engine output supplied these values.",
+  "cases": [
+    {
+      "case": "compiler_diagnostics_match_independent_reference_paths_context_and_phase_for_an_invalid_expression",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "100 * (AVAL - BASE) / BASE", "to": "AVAL +"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.PCHG.derivation"], "context": {"expr": "AVAL +"}}
+      ]
+    },
+    {
+      "case": "compiler_diagnostics_match_independent_reference_paths_context_and_phase_for_a_qualified_identifier",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "100 * (AVAL - BASE) / BASE", "to": "LB.LBSTRESN + 1"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "qualified_identifier", "rule": "FORMULA-9", "spec_paths": ["columns.PCHG.derivation"], "context": {"expr": "LB.LBSTRESN + 1", "identifier": "LB.LBSTRESN"}}
+      ]
+    },
+    {
+      "case": "compiler_diagnostics_match_independent_reference_paths_context_and_phase_for_an_unknown_field",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "100 * (AVAL - BASE) / BASE", "to": "BOGUS + 1"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.PCHG.derivation"], "context": {"identifier": "BOGUS"}}
+      ]
+    },
+    {
+      "case": "compiler_diagnostics_match_independent_reference_paths_context_and_phase_for_an_unresolvable_name",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "100 * (AVAL - BASE) / BASE", "to": "LBSTRESN + 1"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unresolvable_name", "rule": "NAME-3", "spec_paths": ["columns.PCHG.derivation"], "context": {"identifier": "LBSTRESN", "suggestion": "LB.LBSTRESN"}}
+      ]
+    },
+    {
+      "case": "compiler_diagnostics_match_independent_reference_paths_context_and_phase_for_an_unknown_source_field",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "derivation: LB.LBSTRESN", "to": "derivation: LB.BOGUS"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.AVAL.derivation.source"], "context": {"identifier": "LB.BOGUS"}}
+      ]
+    },
+    {
+      "case": "compiler_diagnostics_match_independent_reference_paths_context_and_phase_for_an_unterminated_quote_before_the_formula",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "100 * (AVAL - BASE) / BASE", "to": "AVAL +"}]}, "input/lb.csv": "A\n\"bad"},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "source_quote_unterminated", "rule": "CSV-16", "spec_paths": ["input.LB.path"], "context": {"dataset": "LB", "path": "input/lb.csv", "record": 2, "field": 1}}
+      ]
+    },
+    {
+      "case": "compiler_diagnostics_match_independent_reference_paths_context_and_phase_for_a_division_by_zero_an_undeclared_projection_keeps_live",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG]", "to": "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG, BOGUS]"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "prefix": true,
+      "issues": [
+        {"condition": "division_by_zero"}
+      ]
+    },
+    {
+      "case": "preflight_reports_all_findings_in_reference_order_before_source_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "domain: ADLB", "to": "domain: LB\nbase: BAD"}, {"from": "keys: [STUDYID, USUBJID, PARAMCD]", "to": "keys: [STUDYID, USUBJID, PARAMCD, BOGUS]"}, {"from": "    derivation: \"100 * (AVAL - BASE) / BASE\"", "to": ""}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "missing_derivation", "rule": "SPEC-4", "spec_paths": ["columns.PCHG.derivation"], "context": {"column": "PCHG"}},
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "NAME-2", "spec_paths": ["input.LB", "domain"], "context": {"identifier": "LB"}},
+        {"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-2", "spec_paths": ["keys[3]"], "context": {"column": "BOGUS"}},
+        {"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-8", "spec_paths": ["base"], "context": {"dataset": "BAD", "row": null}}
+      ]
+    },
+    {
+      "case": "binding_collects_ordered_findings_before_dependency_diagnostics_after_an_unknown_source_field",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "derivation: LB.LBSTRESN", "to": "derivation: LB.BOGUS"}, {"from": "100 * (AVAL - BASE) / BASE", "to": "BOGUS + PCHG"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.AVAL.derivation.source"], "context": {"identifier": "LB.BOGUS"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.PCHG.derivation"], "context": {"identifier": "BOGUS"}},
+        {"phase": "validation", "condition": "dependency_cycle", "rule": "COLUMN-6", "spec_paths": ["columns.PCHG.derivation"], "context": {"cycle": ["PCHG", "PCHG"]}}
+      ]
+    },
+    {
+      "case": "binding_collects_ordered_findings_before_dependency_diagnostics_after_qualified_identifiers",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-zero-division/spec.yaml", "edits": [{"from": "100 * (AVAL - BASE) / BASE", "to": "LB.LBSTRESN + BOGUS + LB.LBBLRESN + PCHG"}]}, "input/lb.csv": {"file": "benchmarks/negative-zero-division/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "qualified_identifier", "rule": "FORMULA-9", "spec_paths": ["columns.PCHG.derivation"], "context": {"expr": "LB.LBSTRESN + BOGUS + LB.LBBLRESN + PCHG", "identifier": "LB.LBSTRESN"}},
+        {"phase": "validation", "condition": "qualified_identifier", "rule": "FORMULA-9", "spec_paths": ["columns.PCHG.derivation"], "context": {"expr": "LB.LBSTRESN + BOGUS + LB.LBBLRESN + PCHG", "identifier": "LB.LBBLRESN"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.PCHG.derivation"], "context": {"identifier": "BOGUS"}},
+        {"phase": "validation", "condition": "dependency_cycle", "rule": "COLUMN-6", "spec_paths": ["columns.PCHG.derivation"], "context": {"cycle": ["PCHG", "PCHG"]}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_bare_driver_field",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(AVAL)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM(AVAL)", "reason": "a grouped row aggregate reads its row driver"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_bare_driver_field_after_an_unparsed_float",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(AVAL)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv", "edits": [{"from": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,0.1\n", "to": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,invalid\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_bare_absent_field",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(ABSENT)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM(ABSENT)", "reason": "a grouped row aggregate reads its row driver"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_bare_absent_field_after_an_unparsed_float",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(ABSENT)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv", "edits": [{"from": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,0.1\n", "to": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,invalid\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_another_dataset_s_field",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(OTHER.X)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM(OTHER.X)", "reason": "a grouped row aggregate reads 'LB', not 'OTHER'"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_another_dataset_s_field_after_an_unparsed_float",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(OTHER.X)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv", "edits": [{"from": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,0.1\n", "to": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,invalid\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_an_unknown_driver_field",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(LB.ABSENT)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"identifier": "LB.ABSENT"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_an_unknown_driver_field_after_an_unparsed_float",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(LB.ABSENT)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv", "edits": [{"from": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,0.1\n", "to": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,invalid\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_an_unclosed_call",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM("}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM("}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_an_unclosed_call_after_an_unparsed_float",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM("}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv", "edits": [{"from": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,0.1\n", "to": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,invalid\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_nested_reduction",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(SUM(LB.LBSTRESN))"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "nested_reduction", "rule": "FORMULA-21", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM(SUM(LB.LBSTRESN))", "outer": "SUM", "inner": "SUM"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_nested_reduction_after_an_unparsed_float",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(SUM(LB.LBSTRESN))"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv", "edits": [{"from": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,0.1\n", "to": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,invalid\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_two_arguments",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(LB.LBSTRESN, LB.LBSTRESN)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM(LB.LBSTRESN, LB.LBSTRESN)"}}
+      ]
+    },
+    {
+      "case": "aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_two_arguments_after_an_unparsed_float",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "SUM(LB.LBSTRESN)", "to": "SUM(LB.LBSTRESN, LB.LBSTRESN)"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv", "edits": [{"from": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,0.1\n", "to": "YAMAA-01,YAMAA-01-101,1,COMP1,Component 1,WEEK 1,invalid\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+      ]
+    },
+    {
+      "case": "row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_empty_group",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]", "to": "group_by: []"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "ROW-4", "spec_paths": ["rows.total.group_by"], "context": {"row": "total", "group_by": [], "expected": "at least one driver variable, each once"}}
+      ]
+    },
+    {
+      "case": "row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_a_repeated_variable",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]", "to": "group_by: [LB.STUDYID, LB.STUDYID]"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "ROW-4", "spec_paths": ["rows.total.group_by"], "context": {"row": "total", "group_by": ["LB.STUDYID", "LB.STUDYID"], "expected": "at least one driver variable, each once"}}
+      ]
+    },
+    {
+      "case": "row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unqualified_variable",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]", "to": "group_by: [STUDYID]"}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "ROW-4", "spec_paths": ["rows.total.group_by"], "context": {"row": "total", "identifier": "STUDYID", "dataset": "LB"}}
+      ]
+    },
+    {
+      "case": "row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unavailable_driver",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "id: total", "to": "id: total\n    dataset: ABSENT"}, {"from": "    group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]\n", "to": ""}]}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-1", "spec_paths": ["rows.total.dataset"], "context": {"row": "total", "dataset": "ABSENT"}}
+      ]
+    },
+    {
+      "case": "row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unknown_group_variable",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]", "to": "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.total.group_by[3]"], "context": {"identifier": "LB.ABSENT"}}
+      ]
+    },
+    {
+      "case": "row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_ungrouped_driver_field_in_a_row_derivation",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "PARAM: \"'Total of Components'\"", "to": "PARAM: LB.LBTEST"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["rows.total.derivations.PARAM.source"], "context": {"identifier": "LB.LBTEST", "row": "total", "dataset": "LB"}}
+      ]
+    },
+    {
+      "case": "row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_ungrouped_driver_field_in_a_column_default",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/adam-adlb-ordered-sum/spec.yaml", "edits": [{"from": "derivation: LB.VISIT", "to": "derivation: LB.LBTEST"}]}, "input/lb.csv": {"file": "benchmarks/adam-adlb-ordered-sum/input/lb.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["columns.AVISIT.derivation.source"], "context": {"identifier": "LB.LBTEST", "row": "total", "dataset": "LB"}}
+      ]
+    },
+    {
+      "case": "source_condition_stays_unknown_under_the_normative_grammar",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "among": true,
+      "issues": [
+        {"condition": "unknown_field", "spec_paths": ["columns.ID.derivation.source.condition"]}
+      ]
+    }
+  ]
+}

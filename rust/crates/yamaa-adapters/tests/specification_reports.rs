@@ -900,30 +900,6 @@ mod execution {
         }
 
         #[test]
-        fn source_condition_stays_unknown_under_the_normative_grammar() {
-            let raw=b"yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n";
-            let error = yamaa_adapters::shipped_schema::prepare(
-                Source {
-                    identity: "spec.yaml".into(),
-                    bytes: raw.to_vec(),
-                },
-                "spec.yaml".into(),
-                &mut crate::support::specification_run::EntryOnly,
-            )
-            .unwrap_err();
-            let findings = crate::support::findings(
-                yamaa_adapters::specification_diagnostics::inheritance_failure_ref(&error).unwrap(),
-            );
-            assert!(findings
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|issue| issue["condition"] == "unknown_field"
-                    && issue["spec_paths"]
-                        == yamaa_adapters::json!(["columns.ID.derivation.source.condition"])));
-        }
-
-        #[test]
         fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
             for row in fixture_rows(include_str!("fixtures/mapping_cut_admission.json")) {
                 let bytes = fixture_bytes(&row["source"]);
