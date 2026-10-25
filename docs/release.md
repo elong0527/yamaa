@@ -212,7 +212,7 @@ release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each but the valgrind job runs `R CMD check --as-cran`
 through `tools/commands/check_r.py`, which fails on any NOTE, WARNING or
 ERROR that `R/yamaa/cran-comments.md` does not explain and on a tarball above
-the 15 MB that it requests. The build reads the vendored crates behind a
+CRAN's 10 MB limit. The build reads the vendored crates behind a
 proxy that refuses connections and runs two Cargo jobs.
 
 - With R-devel, R-release and R 4.2.0, on Linux, macOS and Windows, Cargo and
@@ -261,6 +261,15 @@ proxy that refuses connections and runs two Cargo jobs.
   turns `--extra-arch` off and reports every example slower than five
   seconds, as each is under valgrind. It fails where memcheck counted an
   error, a leak that `--leak-check=full` reports included, or did not run.
+  `tools/commands/memcheck.supp` hides the "possibly lost" blocks of three
+  roots that live as long as the process, which memcheck reaches only through
+  a pointer into a block's middle: extendr's ownership map, the R thread's
+  handle as the cancellation token first asks for it, and the lazy caches of
+  the shipped schemas' regexes as a descriptor's constraint check first
+  searches with them. Before the check, `tools/commands/memcheck_control.c`
+  must show that a definite leak at a listed root, a listed function reached
+  from another caller, and a possibly lost block at any other root still
+  count.
   Under memcheck the tests run many times slower, so the job may take up to
   four hours.
 
