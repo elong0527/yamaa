@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of an expression's text, which an expression field, an aggregate and a predicate share: a syntax error (FORMULA-1), a refused construct (FORMULA-27), a refused or misused function (FORMULA-13), a nested reduction (FORMULA-21), a predicate's escape and pattern refusals (FORMULA-7, FORMULA-8) and an integer literal outside the 64-bit range (VALUE-5), checked once the whole text parses and wherever it is written, its sign included. A literal at either end of the range, and any float literal, is admitted, which a case states with no issue. A refused predicate also names its text as the predicate and its position in characters; seven of its cases compare the fields their table compared.",
+  "about": "The refusals of an expression's text, which an expression field, an aggregate and a predicate share: a syntax error (FORMULA-1), a refused construct (FORMULA-27), a refused or misused function (FORMULA-13), a nested reduction (FORMULA-21), a predicate's escape and pattern refusals (FORMULA-7, FORMULA-8) and an integer literal outside the 64-bit range (VALUE-5), checked once the whole text parses and wherever it is written, its sign included. A literal at either end of the range, and any float literal, is admitted, which a case states with no issue. A refused predicate also names its text as the predicate and its position in characters; six of its cases compare the fields their table compared.",
   "cases": [
     {
       "case": "an_incomplete_derivation_is_an_invalid_expression",
@@ -47,8 +47,13 @@
       "case": "an_incomplete_predicate_is_an_invalid_expression",
       "operation": "expression_refusal",
       "input": {"field": "predicate", "expression": "A >", "path": "columns.VALUE.window.filter"},
-      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
-      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.window.filter"], "context": {"predicate": "A >"}}]
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.window.filter"], "context": {"expr": "A >", "predicate": "A >", "position": 3}}]
+    },
+    {
+      "case": "a_doubled_greater_than_sign_is_an_invalid_predicate_at_the_second_sign",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "AGE >> 65", "path": "filter"},
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["filter"], "context": {"expr": "AGE >> 65", "predicate": "AGE >> 65", "position": 5}}]
     },
     {
       "case": "an_escape_of_two_characters_is_an_invalid_predicate",

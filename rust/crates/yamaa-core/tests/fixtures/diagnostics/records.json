@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of a specification's record operations and flags: an intermediate a row template reads as its dataset (ROW-2), an aggregate's derive step (LOOKUP-22) and a row template's read of another input (FORMULA-9), each found by its condition among the issues the declarations report, and a flag's declaration and condition (EXPR-8, FORMULA-5, FORMULA-9). `driven` has the row template `first` read the intermediate CAP of SRC, `aggregate` derives VALUE with an aggregate whose derive step a case writes (`aggregate_lookup` beside the lookup CAP), `template` has the row template `first` derive VALUE, and `flagged` derives the text column F with a flag.",
+  "about": "The refusals of a specification's record operations and flags: an intermediate a row template reads as its dataset (ROW-2), an aggregate's derive step (LOOKUP-22) and a row template's read of another input (FORMULA-9), each found by its condition among the issues the declarations report, and a flag's declaration and condition (EXPR-8, FORMULA-1, FORMULA-5, FORMULA-9), in the order binding reports them and the same on each admission. `driven` has the row template `first` read the intermediate CAP of SRC, `aggregate` derives VALUE with an aggregate whose derive step a case writes (`aggregate_lookup` beside the lookup CAP), `template` has the row template `first` derive VALUE, `flagged` derives the text column F with a flag, and `flags` derives the text columns A and B with one each.",
   "documents": {
     "driven": {
       "yamaa": "1.0",
@@ -64,6 +64,19 @@
         {"name": "F", "type": "str", "derivation": {"value": {"flag": {"condition": "ABSENT = 1", "false_value": "N"}}}}
       ],
       "output": {"path": "output.csv", "columns": ["ID", "F"]}
+    },
+    "flags": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "A", "type": "str", "derivation": {"value": {"flag": {"condition": "ABSENT = 1", "false_value": "N"}}}},
+        {"name": "B", "type": "str", "derivation": {"value": {"flag": {"condition": "ID >> 1", "false_value": "N"}}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "A", "B"]}
     }
   },
   "cases": [
@@ -208,6 +221,65 @@
       },
       "compares": ["phase", "condition", "rule"],
       "issues": [{"phase": "validation", "condition": "unresolvable_name", "rule": "FORMULA-9"}]
+    },
+    {
+      "case": "semantic_flag_declarations_are_deferred_and_interleaved_before_name_binding",
+      "operation": "bind",
+      "input": {
+        "base": "flags",
+        "sources": {"SRC": [["ID", "int"], ["EXTRA", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.A.derivation.flag.missing"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.A.derivation.flag.condition"]},
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.B.derivation.flag.condition"]},
+        {"phase": "validation", "condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.B.derivation.flag.missing"]}
+      ]
+    },
+    {
+      "case": "a_flag_with_a_null_false_value_still_requires_its_missing_value",
+      "operation": "bind",
+      "input": {
+        "base": "flagged",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "flag", "false_value"], "to": null}],
+        "sources": {"SRC": [["ID", "int"], ["EXTRA", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "missing_value_required", "rule": "EXPR-8"}]
+    },
+    {
+      "case": "nested_flag_declarations_precede_enclosing_case_reference_checkpoint",
+      "operation": "bind",
+      "input": {
+        "base": "flagged",
+        "edits": [{"set": ["columns", "1", "derivation", "value"], "to": {"case": [{"when": "UNKNOWN = 1", "then": {"flag": {"condition": "ID >> 1", "false_value": "N"}}}, {"otherwise": "'x'"}]}}],
+        "sources": {"SRC": [["ID", "int"], ["EXTRA", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1"},
+        {"phase": "validation", "condition": "missing_value_required", "rule": "EXPR-8"},
+        {"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9"}
+      ]
+    },
+    {
+      "case": "independent_flag_admissions_keep_complete_deferred_grammar_and_name_findings",
+      "operation": ["bind", "bind"],
+      "input": {
+        "base": "flags",
+        "edits": [
+          {"set": ["columns", "1", "derivation", "value", "flag"], "to": {"condition": "ID >> 1"}},
+          {"set": ["columns", "2", "derivation", "value", "flag"], "to": {"condition": "ABSENT = 1"}}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["EXTRA", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.A.derivation.flag.condition"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.B.derivation.flag.condition"]}
+      ]
     },
     {
       "case": "a_flag_condition_reading_a_number_as_text_is_the_flag_s_input_type_refusal",
