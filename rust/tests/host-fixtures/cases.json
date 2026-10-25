@@ -4706,33 +4706,38 @@
         ],
         "check": [
           "issues",
-          "status"
+          "status",
+          "timings"
         ],
         "run": [
           "issues",
           "output",
           "report",
           "save",
-          "status"
+          "status",
+          "timings"
         ],
         "project_run": [
           "issues",
           "names",
           "report",
           "save",
-          "status"
+          "status",
+          "timings"
         ],
         "member_run": [
           "issues",
           "output",
           "report",
-          "status"
+          "status",
+          "timings"
         ],
         "submission": [
           "created",
           "issues",
           "save",
-          "status"
+          "status",
+          "timings"
         ]
       },
       "arguments": {
@@ -4754,22 +4759,28 @@
           "fix"
         ],
         "spec.check": [
-          "parent"
+          "parent",
+          "progress"
         ],
         "spec.resolve": [],
         "spec.run": [
-          "stream"
+          "stream",
+          "progress"
         ],
         "project.spec": [
           "name"
         ],
-        "project.check": [],
+        "project.check": [
+          "progress"
+        ],
         "project.run": [
-          "section"
+          "section",
+          "progress"
         ],
         "project.submission": [
           "section",
-          "created"
+          "created",
+          "progress"
         ],
         "run.save": [],
         "project_run.save": [],
@@ -4785,24 +4796,28 @@
           "status",
           "output",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "member_run": [
           "status",
           "output",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "project_run": [
           "status",
           "names",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "submission": [
           "status",
           "created",
-          "issues"
+          "issues",
+          "timings"
         ]
       },
       "messages": {
@@ -4965,25 +4980,29 @@
       "r_names": {
         "check": [
           "status",
-          "issues"
+          "issues",
+          "timings"
         ],
         "run": [
           "status",
           "output",
           "issues",
           "report",
+          "timings",
           "save"
         ],
         "member_run": [
           "status",
           "output",
           "issues",
-          "report"
+          "report",
+          "timings"
         ],
         "submission": [
           "status",
           "created",
           "issues",
+          "timings",
           "save"
         ]
       },
