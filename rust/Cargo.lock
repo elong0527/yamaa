@@ -1382,8 +1382,6 @@ dependencies = [
 name = "yamaa-engine"
 version = "1.0.0-rc.1"
 dependencies = [
- "arrow-array",
- "serde_json",
  "yamaa",
  "yamaa-boundary",
 ]
