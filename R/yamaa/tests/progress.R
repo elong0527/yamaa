@@ -47,9 +47,11 @@ expect_identical(run$status, "succeeded", "a run with progress")
 expect_identical(heard, expected_events(path), "the events a run reports")
 cat("a run reports each event in order as a named list\n")
 
+# A new object, so the run compiles its plan rather than reuse the one kept.
+fresh <- yamaa_spec(path)
 for (case in list(
-  list(label = "a run", result = spec$run(), phases = truth$run_phases),
-  list(label = "a check", result = spec$check(), phases = truth$check_phases))) {
+  list(label = "a run", result = fresh$run(), phases = truth$run_phases),
+  list(label = "a check", result = fresh$check(), phases = truth$check_phases))) {
   timings <- case$result$timings
   phases <- as.character(unlist(case$phases))
   expect_identical(names(timings), as.character(unlist(truth$timing_columns)),
