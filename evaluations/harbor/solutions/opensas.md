@@ -73,9 +73,13 @@ benchmark with no Harbor prompt, and run reports are not graded.
   so the two-space comment and `CMNTFL=Y` survive the original, held-out and
   changed-input checks. The track still excludes the case. Whether SAS 9.4
   keeps the trailing blanks of `_infile_` the same way is unverified.
+- **Blank search strings.** INDEX returns zero for a blank one-character
+  excerpt, so the proper-case reference compares the previous character
+  with each word separator in an IN list instead of searching a separator
+  string.
 - **SQL join expressions.** Numeric and padded character keys are calculated
-  in DATA steps before joining SUPPLB. Function calls in join predicates were
-  rejected by the release. Questionnaire membership is filtered into tables
+  in DATA steps before joining SUPPLB and the RELREC members. Function calls
+  in join predicates were rejected by the release. Questionnaire membership is filtered into tables
   before joining, avoiding unsupported complex join predicates.
 - **Self-join column names.** Nadir values use separate historical date/value
   columns, and unscheduled visits use a sorted carry-forward step. Comparisons

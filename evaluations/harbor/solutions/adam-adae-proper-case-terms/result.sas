@@ -12,7 +12,8 @@ run;
    directly follows a delimiter, in upper case, and every other letter in
    lower case. Each term is rebuilt one character at a time, a blank
    included. AETERMPC takes the default delimiters, the tab among them, and
-   AETERMPB the ones that replace them. */
+   AETERMPB the ones that replace them. The previous character is compared
+   with each delimiter: INDEX finds no blank excerpt in this release. */
 data result;
   length AETERMPC AETERMPB $1024 CH PREV PC PB $1;
   set ae;
@@ -29,9 +30,9 @@ data result;
       end;
       else do;
         PREV = substr(AETERM, I - 1, 1);
-        if index(" /-(." || '09'x, PREV) > 0 then PC = upcase(CH);
+        if PREV in (" ", "/", "-", "(", ".", '09'x) then PC = upcase(CH);
         else PC = lowcase(CH);
-        if index(" /-(.,[", PREV) > 0 then PB = upcase(CH);
+        if PREV in (" ", "/", "-", "(", ".", ",", "[") then PB = upcase(CH);
         else PB = lowcase(CH);
         AETERMPC = substr(AETERMPC, 1, I - 1) || PC;
         AETERMPB = substr(AETERMPB, 1, I - 1) || PB;
