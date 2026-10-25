@@ -397,9 +397,9 @@ them, a 1.x release reproduces 1.0's results and saved bytes. CI compares a
 Parquet file by what it reads back as, so a control keeps its bytes:
 `rust/crates/yamaa-adapters/tests/table_parquet_bytes.rs` saves fixed tables
 and compares every byte with the files that the 1.0 writer saved, and
-requires `created_by` to be `parquet-rs version 55.2.0` (#3475). A move to
-another Parquet release must pass it without changing those files
-(#3030 D160).
+requires `created_by` to be `parquet-rs version 55.2.0` (#3475). The native
+writer that replaced parquet 55.2.0 passes it with those files unchanged, and
+any change to the writer must too (#3030 D160, #3878).
 
 ## Saved artifact readers
 
@@ -485,15 +485,17 @@ the lock and the minimum dependency graph select 0.27.2.
 The engine links one version of each crate. yamaa's own requirements on
 lz4_flex, zstd, base64 and num-bigint stay in the series that Parquet 55.2.0
 and the num crate of the Arrow crates require (0.11, 0.13, 0.22 and 0.4), so
-each resolves to the release that Parquet uses (#3696). num-bigint's floor,
+each resolves to the release that Parquet uses (#3696): no package builds
+Parquet any more, but the adapters' tests compile it as their differential
+oracle (#3878). num-bigint's floor,
 0.4.8, carries the division fix that 0.4.7 lacks. The duplicate versions that
 `cargo tree -d` still lists add no second linked copy: syn serves procedural
 macros, and the extra getrandom version serves a procedural macro too.
 
-Parquet 55 turns on flate2's zlib-rs backend whenever it reads GZIP pages, and
-flate2 then prefers it to the rust_backend (miniz_oxide) that yamaa names, so
-the engine's own GZIP decoding, for Parquet page admission and ODM archives,
-uses zlib-rs as well. zlib-rs is pure Rust under the Zlib license, which the
+yamaa names flate2's zlib-rs backend beside its rust_backend (miniz_oxide),
+as Parquet 55 did while the engine built it, and flate2 prefers zlib-rs, so
+the engine's GZIP decoding, for Parquet page admission and ODM archives, uses
+zlib-rs (#3878). zlib-rs is pure Rust under the Zlib license, which the
 license notices now accept.
 
 Python supports CPython 3.12 through 3.15. The package has no runtime
@@ -501,7 +503,8 @@ dependency, and on CPython 3.12 to 3.14 the declared floors of the `test`
 extra in `python/pyproject.toml` are
 lxml 6.1.3, pandas 2.3.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1,
 Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
-The Parquet 55.2.0 writer records only type-defined column orders, which
+The Parquet writer, which saves the bytes that parquet 55.2.0 saved (#3878),
+records only type-defined column orders, which
 Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
 for floating-point columns needs Polars 1.43.2. R supports R 4.2.0 and later
 and uses the shared Rust graph; its host qualification readers are the
