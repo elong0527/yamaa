@@ -1,5 +1,5 @@
 {
-  "about": "A project run's specification compiled under its project (LOOKUP-22): an aggregate derivation step that reads an intermediate's scalar needs the intermediate to keep one record. The project lists three function files and holds the Python lock beside the study. Moved from project_run.rs, whose test found the issue among the compilation's by its condition and rule; it compiled the specification under a project its scripted resolver served from these files, which a check reads from the study.",
+  "about": "A project run's specification compiled under its project (LOOKUP-22): an aggregate derivation step that reads an intermediate's scalar needs the intermediate to keep one record. The project lists three function files and holds the Python lock beside the study. Moved from project_run.rs, whose test found the issue among the compilation's by its condition and rule; it compiled the specification under a project its scripted resolver served from these files, which a check reads from the study. The later cases are project_run.rs's runs that call no project function, moved at 8e662c648: a project that holds only the other host's lock, which the run never reads (PROJECT-2) and whose project calls name no function (FUNC-4), and a project with an inline codelist whose check fails or completes before a later verification declaration fails. Each builds or checks through the file route, whose host-functions port refuses any lock verification, binding or call.",
   "cases": [
     {
       "case": "an_aggregate_derivation_reads_an_intermediate_scalar_only_once_it_keeps_one_record",
@@ -19,6 +19,63 @@
       "compares": ["condition", "rule"],
       "among": true,
       "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+    },
+    {
+      "case": "a_project_holding_only_the_other_host_s_lock_runs_a_specification_that_calls_no_function",
+      "operation": "build",
+      "input": {
+        "files": {
+          "study/project.yaml": "yamaa: '1.0'\ntype: project\nenvironments: {r: {lock: r/renv.lock}}\n",
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.ID}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml"
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1]]
+    },
+    {
+      "case": "each_call_to_a_function_no_file_defines_fails_as_unknown_without_reading_the_other_host_s_lock",
+      "operation": "check",
+      "input": {
+        "files": {
+          "study/project.yaml": "yamaa: '1.0'\ntype: project\nenvironments: {r: {lock: r/renv.lock}}\n",
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\n  - {name: OTHER, type: int, derivation: {function: {name: absent, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE, OTHER]}\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": ["columns.VALUE.derivation.function.name"], "context": {"function": "id"}}, {"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": ["columns.OTHER.derivation.function.name"], "context": {"function": "absent"}}]
+    },
+    {
+      "case": "a_codelist_failure_keeps_every_value_and_key_and_fails_the_output",
+      "operation": "build",
+      "input": {
+        "files": {
+          "study/project.yaml": "yamaa: '1.0'\ntype: project\ncodelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n",
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origins: [{type: Assigned}]}}\noutput: {path: output.csv, columns: [ID, CODE]}\n",
+          "study/input.csv": "ID,CODE\n9223372036854775807,X\n-9223372036854775808,Z\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml"
+      },
+      "compares": ["context"],
+      "issues": [{"context": {"column": "CODE", "codelist": "SEX", "failure_count": 2, "keys": [{"ID": 9223372036854775807}, {"ID": -9223372036854775808}], "values": ["X", "Z"]}}]
+    },
+    {
+      "case": "a_completed_codelist_check_leaves_a_later_verification_declaration_s_failure_alone",
+      "operation": "build",
+      "input": {
+        "files": {
+          "study/project.yaml": "yamaa: '1.0'\ntype: project\ncodelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n",
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origins: [{type: Assigned}]}}\n  - {name: LATE, type: str, derivation: SRC.CODE, verifications: [{matches: {pattern: '('}}]}\noutput: {path: output.csv, columns: [ID, CODE]}\n",
+          "study/input.csv": "ID,CODE\n9223372036854775807,F\n-9223372036854775808,M\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.LATE.verifications[0].matches.pattern"], "context": {"pattern": "("}}]
     }
   ]
 }

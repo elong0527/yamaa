@@ -46,6 +46,8 @@ mod project {
         }
         #[test]
         fn linked_documents_supply_only_their_output_contract_without_study_authority() {
+            // Seam: a consumer checked against prepared producer documents in memory, and the
+            // compiled sources it holds.
             let consumer = standalone("/consumer.yaml", CONSUMER);
             let producer = standalone("/producer.yaml", PRODUCER);
             let links = [linked(Arc::clone(&producer))];
@@ -153,6 +155,8 @@ mod project {
         }
         #[test]
         fn inherited_link_and_artifact_paths_keep_independent_authored_layers() {
+            // Seam: inherited producer and consumer documents in memory, the resolver calls each
+            // makes and the paths each layer keeps.
             let entry="yamaa: '1.0'\ntype: spec\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: './child.csv'}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
             let parent =
         "yamaa: '1.0'\ntype: spec\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
@@ -287,7 +291,11 @@ mod project {
             ]
         }
         #[test]
-        fn real_activation_mismatches_keep_every_case_in_selected_order_without_retry() {
+        fn held_case_failures_project_alike_twice_without_another_call() {
+            // Seam: one set of held case failures projected twice, which no
+            // build does. The issues and calls of the build are
+            // project_activation.json's
+            // every_case_of_each_called_function_runs_and_each_mismatch_reports_in_listing_order.
             let functions = [support::function("first"), support::function("second")];
             let mut port = port();
             let Failure::Tests(failures) =
@@ -296,28 +304,7 @@ mod project {
             else {
                 panic!("actual case mismatch")
             };
-            assert_eq!((port.bindings, port.calls), (2, 4));
-            assert_eq!(failures.len(), 2);
             let issues = test_issues(&sources(&functions), &failures, &[None, None]).unwrap();
-            assert_eq!(issues.len(), 2);
-            for (index, issue) in issues.iter().enumerate() {
-                assert_eq!(
-                    (issue.phase(), issue.condition(), issue.rule()),
-                    ("validation", "function_conformance_failed", Some("FUNC-12"))
-                );
-                assert_eq!(
-                    issue.spec_paths,
-                    [format!("{}.tests[0]", sources(&functions)[index].path)]
-                );
-                let context = yamaa_core::json::Value::Object(issue.context.clone());
-                assert_eq!(context["function"], functions[index].name());
-                assert_eq!(context["case"], "normal");
-                assert_eq!(context["args"]["x"], 7);
-                assert_eq!(context["expected"], 7);
-                assert_eq!(context["actual"], 8);
-                assert!(context.get("contract_version").is_none());
-                assert!(context.get("implementation_version").is_none());
-            }
             assert_eq!(
                 test_issues(&sources(&functions), &failures, &[None, None]).unwrap(),
                 issues
@@ -326,6 +313,11 @@ mod project {
         }
         #[test]
         fn actual_binding_and_invocation_errors_remain_original_non_send_payloads() {
+            // Seam: the original payload each unclassified failure holds,
+            // which no replay compares. The issues of the classified failures
+            // are project_activation.json's
+            // each_called_function_s_binding_failure_reports_at_its_python_callable
+            // and each_case_a_host_exception_fails_reports_the_call_failure_it_held.
             let functions = [support::function("first"), support::function("second")];
             let mut port = port();
             port.bindings_fail = true;
@@ -335,26 +327,12 @@ mod project {
             else {
                 panic!("binding failures")
             };
-            assert_eq!((port.bindings, port.calls), (2, 0));
             let Err(Error::Opaque(held)) =
                 binding_issues(&sources(&functions), &failures, &[None, None])
             else {
                 panic!("opaque binding flattened")
             };
             assert!(Rc::ptr_eq(held, &port.payload));
-            let host = Some(HostDetails::Exception {
-                class: "ValueError",
-                message: "é\0🙂",
-            });
-            let issues = binding_issues(&sources(&functions), &failures, &[host, host]).unwrap();
-            assert_eq!(issues.len(), 2);
-            // A function file names the host's callable under
-            // `implementations` (FUNC-8).
-            assert_eq!(
-                issues[0].spec_paths,
-                ["functions[0].implementations.python"]
-            );
-            assert_eq!(issues[0].rule(), Some("FUNC-2"));
             port.bindings_fail = false;
             port.calls_fail = true;
             let Failure::Tests(failures) =
@@ -363,23 +341,16 @@ mod project {
             else {
                 panic!("call failures")
             };
-            assert_eq!(failures.len(), 4);
             let details = [None, None, None, None];
             let Err(Error::Opaque(held)) = test_issues(&sources(&functions), &failures, &details)
             else {
                 panic!("opaque test flattened")
             };
             assert!(Rc::ptr_eq(held, &port.payload));
-            let issues =
-                test_issues(&sources(&functions), &failures, &[host, host, host, host]).unwrap();
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(context["failure"]["condition"], "function_call_failed");
-            assert_eq!(context["failure"]["rule"], "FUNC-8");
-            assert_eq!(context["failure"]["context"]["host_message"], "é\0🙂");
-            assert_eq!(port.calls, 4);
         }
         #[test]
         fn contradictory_indices_identity_result_and_duplicate_observations_return_no_issues() {
+            // Seam: forged case and binding failures, which no activation produces.
             let functions = [support::function("first"), support::function("second")];
             let selected = sources(&functions);
             for (function, case, actual, expected) in
@@ -432,6 +403,8 @@ mod project {
         }
         #[test]
         fn complete_projection_keeps_long_escaped_paths_and_host_details() {
+            // Seam: a 1.4 MB definition path, an 8,193-fold host message and a duplicate case
+            // failure, forged.
             let functions = [support::function("first"), support::function("second")];
             let selected = sources(&functions);
             let failures: Vec<TestFailure<()>> = vec![TestFailure::Result {
@@ -487,7 +460,13 @@ mod project {
         }
 
         #[test]
-        fn authored_float_bits_and_complete_scalar_values_remain_exact() {
+        fn authored_float_bits_remain_exact() {
+            // Seam: a forged case result whose expected value is the authored
+            // zero's other sign, and the bits of the zero the issue holds,
+            // which a case's JSON numbers do not tell apart. The integer and
+            // text values a mismatch keeps are project_activation.json's
+            // a_conformance_failure_keeps_the_extreme_integers_it_compared and
+            // a_conformance_failure_keeps_the_escaped_text_it_compared.
             let float = |value| Value::Float(FiniteFloat::new(value).unwrap());
             let function = Function::admit(
                 Language::Python,
@@ -540,58 +519,6 @@ mod project {
                 0.0_f64.to_bits()
             );
             assert_eq!(function.definition().tests[0].result, float(0.0));
-
-            let integer = support::function("integer");
-            let selected = [DefinitionSource {
-                function: &integer,
-                path: "functions[0]",
-            }];
-            let failures: Vec<TestFailure<()>> = vec![TestFailure::Result {
-                function: 0,
-                case: 1,
-                actual: Value::Int(i64::MAX),
-                expected: Value::Int(i64::MIN),
-            }];
-            let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(context["expected"].as_i64(), Some(i64::MIN));
-            assert_eq!(context["args"]["x"].as_i64(), Some(i64::MIN));
-            assert_eq!(context["actual"].as_i64(), Some(i64::MAX));
-
-            let text = Function::admit(
-                Language::Python,
-                Definition {
-                    name: "text".into(),
-                    function: "project.text".into(),
-                    description: "Text".into(),
-                    params: vec![],
-                    returns: ColumnType::Str,
-                    may_return_missing: false,
-                    comparison_decimals: 4,
-                    tests: vec![Case {
-                        id: "text".into(),
-                        covers: vec!["normal".into(), "boundary".into()],
-                        args: vec![],
-                        result: Value::Str("authored é\0🙂".into()),
-                    }],
-                }
-                .root(Language::Python),
-            )
-            .unwrap();
-            let selected = [DefinitionSource {
-                function: &text,
-                path: "functions[0]",
-            }];
-            let failures: Vec<TestFailure<()>> = vec![TestFailure::Result {
-                function: 0,
-                case: 0,
-                actual: Value::Str("actual é\0🙂".into()),
-                expected: Value::Str("authored é\0🙂".into()),
-            }];
-            let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(context["expected"], "authored é\0🙂");
-            assert_eq!(context["actual"], "actual é\0🙂");
         }
     }
 
@@ -666,6 +593,8 @@ mod project {
         }
         #[test]
         fn complete_retained_values_and_full_width_keys_are_projected_without_output_or_sources() {
+            // Seam: codelist observations over an in-memory table, and the cells the projection
+            // reads.
             let compiled = compiled();
             let source = Source {
                 schema: schema(),
@@ -709,6 +638,7 @@ mod project {
         }
         #[test]
         fn contradictory_observation_geometry_never_returns_partial_or_invented_issues() {
+            // Seam: forged codelist observations, which no run produces.
             let compiled = compiled();
             let original = record(Value::Str("bad".into()));
             for case in 0..6 {
@@ -737,6 +667,7 @@ mod project {
         }
         #[test]
         fn complete_escaped_values_and_large_retained_observations_are_projected() {
+            // Seam: codelist observations of 65,537 rows over an in-memory table.
             let compiled = compiled();
             let text = "\0".repeat(1_500_000);
             let records = vec![record(Value::Str(text.clone()))];
@@ -895,6 +826,8 @@ mod project {
         #[test]
         fn static_admission_restores_external_and_inline_origins_after_an_earlier_capture_failure()
         {
+            // Seam: a resolver double's opaque failure, kept by address beside the findings of the
+            // files after it.
             let (rejected, payload) = rejected(false);
             assert_eq!(rejected.origins.codelists, [1, 2]);
             let issues = admission(&rejected).unwrap();
@@ -933,6 +866,8 @@ mod project {
         }
         #[test]
         fn captured_external_document_ownership_does_not_depend_on_identity_text_equality() {
+            // Seam: a function file served under the project file's own identity, which a study's
+            // files cannot have.
             // The function file reports the identity of the project file that
             // lists it; it is still an external capture.
             let (rejected, _) = rejected(true);
@@ -948,6 +883,7 @@ mod project {
         }
         #[test]
         fn invalid_origins_refuse_while_retaining_original_rejection() {
+            // Seam: forged origins of a held rejection, which no preparation produces.
             let (mut rejected, payload) = rejected(false);
             assert_eq!(admission(&rejected).unwrap().len(), 5);
             rejected.origins.functions.clear();
@@ -960,6 +896,9 @@ mod project {
 
         #[test]
         fn root_scalar_issues_keep_arbitrary_integers_without_dependency_reads() {
+            // Seam: a held root's scalar findings projected twice, with no
+            // file the root names read. The issue rows are project_files.json's
+            // inline_codelist_integers_outside_the_int_range_fail_in_the_project_before_any_file_is_read.
             use yamaa_adapters::project_environment_diagnostics::scalar_root;
             let body = format!("{LISTING}codelists: [{{codelists: [{{id: WIDE, name: Wide, data_type: integer, items: [{{value: 123456789012345678901234567890}}]}}]}}]\n");
             let mut port = port();
@@ -968,30 +907,20 @@ mod project {
                 panic!("complete root scalars")
             };
             let issues = scalar_root(&root, &findings).unwrap();
-            // An inline codelist source's integer outside the `int` range fails
-            // as any runtime literal does (VALUE-5).
-            assert_eq!(
-                crate::support::rows(&issues),
-                [
-                    yamaa_adapters::json!({"phase": "validation", "condition": "integer_overflow",
-                    "rule": "VALUE-5", "spec_paths": ["codelists[0].codelists[0].items[0].value"],
-                    "context": {"actual": number("123456789012345678901234567890"),
-                        "value": "123456789012345678901234567890",
-                        "minimum": number("-9223372036854775808"),
-                        "maximum": number("9223372036854775807"),
-                        "source": PROJECT, "entry": PROJECT, "environment_path": "$"}})
-                ]
-            );
+            assert_eq!(issues.len(), 1);
             assert_eq!(scalar_root(&root, &findings).unwrap(), issues);
             // A failed project root names nothing that is read.
             assert_eq!(port.reads, 0);
         }
+
         fn number(text: &str) -> Value {
             Value::Number(text.parse().expect("canonical integer"))
         }
 
         #[test]
         fn failed_external_scalar_issues_keep_each_document_origin_and_original_other_failures() {
+            // Seam: one listed file's opaque failure, kept by address beside the others' scalar
+            // findings, and the reads of a repeated projection.
             use yamaa_adapters::project_environment_diagnostics::scalar_sources;
             let mut port = port();
             port.wide = true;
@@ -1034,6 +963,8 @@ mod project {
 
         #[test]
         fn root_schema_issues_keep_actual_closed_fields_and_source_without_dependency_reads() {
+            // Seam: a held root's schema findings projected twice, with no file the root names
+            // read.
             use yamaa_adapters::{
                 project_environment_diagnostics::schema_root,
                 specification_source::Error as SourceError,
@@ -1064,6 +995,8 @@ mod project {
 
         #[test]
         fn failed_external_schema_issues_use_held_arenas_and_keep_original_other_failures() {
+            // Seam: one listed file's opaque failure, kept by address beside the others' schema
+            // findings.
             use yamaa_adapters::project_environment_diagnostics::schema_sources;
             let mut port = port();
             port.shape = true;
@@ -1118,6 +1051,8 @@ mod project {
 
         #[test]
         fn large_capture_counts_preserve_complete_reports_and_original_origins() {
+            // Seam: 129 generated listings of one file, with its opaque failure or its findings
+            // each time.
             use yamaa_adapters::project_environment_diagnostics::{scalar_sources, schema_sources};
             for written in ["bad.yaml", "ct.yaml"] {
                 let mut port = port();

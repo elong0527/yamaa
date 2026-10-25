@@ -1,0 +1,326 @@
+{
+  "about": "A project's activation through a scripted host-functions port, by host (#3778 group 2): the lock verification, the bindings and the cases of each called function, which the case's functions member scripts as project_functions.json's do. Moved at 8e662c648 from the doubles of declaration_project_files.rs, file_project.rs and project_diagnostics.rs. The project of the first two lists one function file with a callable for each host, a lock for each host and a codelist file, beside the specification's entry directory; file_project.rs's study differed only in the function file's directory and the R lock, which its cases do not read, and its unlocked cases remove the environments and both locks. project_diagnostics.rs's project lists two integer identities with the Python lock, and its single-function cases list an integer identity or a text function instead. Each case reports through the file route, which names each file by its path in the study, reports a function file's finding in that file with the project as its entry and its listing as its environment path, and refuses an unclassified host failure as engine_rejected opaque_host at step build. The calls each port received are in function_call_contracts.json.",
+  "documents": {
+    "project": "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/id.yaml]\nenvironments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\ncodelists: [ct.yaml]\n",
+    "id": "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id, r: program::id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n",
+    "uv.lock": "version = 1\npackage = []\n",
+    "renv.lock": "{\"R\": {\"Version\": \"4.6.1\"}, \"Packages\": {}}\n",
+    "codelists": "yamaa: \"1.0\"\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n",
+    "domain": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+    "identities": "yamaa: '1.0'\ntype: project\nfunctions: [functions/first.yaml, functions/second.yaml]\nenvironments: {python: {lock: uv.lock}}\n",
+    "first": "yamaa: '1.0'\ntype: function\nname: first\ndescription: Integer identity.\nparams: [{name: x, type: int}]\nreturns: int\nimplementations: {python: project.first}\ntests:\n  - {id: normal, covers: [normal], args: {x: 7}, result: 7}\n  - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    "both": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: FIRST, type: int, derivation: {function: {name: first, args: {x: SRC.ID}}}}\n  - {name: SECOND, type: int, derivation: {function: {name: second, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, FIRST, SECOND]}\n",
+    "text": "yamaa: '1.0'\ntype: function\nname: text\ndescription: Text\nparams: []\nreturns: str\nimplementations: {python: project.text}\ntests: [{id: text, covers: [normal, boundary], args: {}, result: \"authored \\u00e9\\0\\U0001F642\"}]\n"
+  },
+  "cases": [
+    {
+      "case": "an_r_lock_finding_reports_at_the_lock_field_of_the_project_that_holds_it",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "host": "r",
+        "functions": {"lock": {"lock": [{"package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "2.0"}]}}
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.r.lock"], "context": {"source": "{study}/project.yaml", "entry": "{study}/project.yaml", "lock_source": "{study}/renv.lock", "lock": "renv.lock", "package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "2.0"}}]
+    },
+    {
+      "case": "a_binding_the_python_host_rejects_reports_at_the_function_file_s_python_callable",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {"bind": {"id": {"reason": "the callable is not installed", "returned": null}}}
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.python"], "context": {"function": "id", "call": "program.id", "reason": "the callable is not installed", "source": "{study}/functions/id.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[0]"}}]
+    },
+    {
+      "case": "a_binding_the_r_host_rejects_reports_at_the_function_file_s_r_callable",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "host": "r",
+        "functions": {"bind": {"id": {"reason": "the callable is not installed", "returned": null}}}
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.r"], "context": {"function": "id", "call": "program::id", "reason": "the callable is not installed", "source": "{study}/functions/id.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[0]"}}]
+    },
+    {
+      "case": "an_r_case_result_that_differs_fails_conformance_at_its_case_in_the_function_file",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "host": "r",
+        "functions": {"calls": [{"function": "id", "args": {"x": 7}, "returns": 8}, {"function": "id", "args": {"x": null}, "returns": null}]}
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.source", "context.entry", "context.environment_path", "context.case", "context.expected", "context.actual"],
+      "issues": [{"condition": "function_conformance_failed", "rule": "FUNC-12", "spec_paths": ["tests[0]"], "context": {"source": "{study}/functions/id.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[0]", "case": "normal", "expected": 7, "actual": 8}}]
+    },
+    {
+      "case": "project_functions_build_without_any_adjacent_packaging_lock",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "environments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\n", "to": ""}]},
+          "functions/id.yaml": {"base": "id"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"},
+          "entry/input.csv": "ID\n1\n"
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {
+          "lock": "opaque",
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": null}, "returns": null},
+            {"function": "id", "args": {"x": 1}, "returns": 1}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1]]
+    },
+    {
+      "case": "without_a_lock_a_binding_failure_refuses_the_build_before_the_study_is_read",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "environments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\n", "to": ""}]},
+          "functions/id.yaml": {"base": "id"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {"lock": "opaque", "bind": {"id": "opaque"}}
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "opaque_host"}}]
+    },
+    {
+      "case": "without_a_lock_a_failed_case_fails_conformance_before_the_study_is_read",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "environments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\n", "to": ""}]},
+          "functions/id.yaml": {"base": "id"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {"lock": "opaque", "calls": [{"function": "id", "args": {"x": 7}, "returns": 8}, {"function": "id", "args": {"x": null}, "returns": null}]}
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "function_conformance_failed"}]
+    },
+    {
+      "case": "a_lock_rejection_refuses_the_build_before_even_a_missing_study_file_is_read",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {"lock": "opaque"}
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "opaque_host"}}]
+    },
+    {
+      "case": "a_section_that_lists_only_specs_admits_a_run_without_study_standard_or_define",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "codelists: [ct.yaml]\n", "to": "codelists: [ct.yaml]\nsdtm: {specs: [entry/domain.yaml]}\n"}]},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"},
+          "entry/input.csv": "ID\n1\n"
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": null}, "returns": null},
+            {"function": "id", "args": {"x": 1}, "returns": 1}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1]]
+    },
+    {
+      "case": "every_case_of_each_called_function_runs_and_each_mismatch_reports_in_listing_order",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "identities"},
+          "functions/first.yaml": {"base": "first"},
+          "functions/second.yaml": {
+            "base": "first",
+            "edits": [{"from": "name: first", "to": "name: second"}, {"from": "project.first", "to": "project.second"}]
+          },
+          "uv.lock": {"base": "uv.lock"},
+          "entry/domain.yaml": {"base": "both"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "first", "args": {"x": 7}, "returns": 8},
+            {"function": "first", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "second", "args": {"x": 7}, "returns": 8},
+            {"function": "second", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808}
+          ]
+        }
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "function_conformance_failed", "rule": "FUNC-12", "spec_paths": ["tests[0]"], "context": {"function": "first", "call": "project.first", "case": "normal", "args": {"x": 7}, "expected": 7, "comparison_decimals": 4, "actual": 8, "reason": "the case produced a different result", "source": "{study}/functions/first.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[0]"}}, {"phase": "validation", "condition": "function_conformance_failed", "rule": "FUNC-12", "spec_paths": ["tests[0]"], "context": {"function": "second", "call": "project.second", "case": "normal", "args": {"x": 7}, "expected": 7, "comparison_decimals": 4, "actual": 8, "reason": "the case produced a different result", "source": "{study}/functions/second.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[1]"}}]
+    },
+    {
+      "case": "each_called_function_s_binding_failure_reports_at_its_python_callable",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "identities"},
+          "functions/first.yaml": {"base": "first"},
+          "functions/second.yaml": {
+            "base": "first",
+            "edits": [{"from": "name: first", "to": "name: second"}, {"from": "project.first", "to": "project.second"}]
+          },
+          "uv.lock": {"base": "uv.lock"},
+          "entry/domain.yaml": {"base": "both"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {"bind": {"first": {"class": "ValueError", "message": "é\u0000🙂"}, "second": {"class": "ValueError", "message": "é\u0000🙂"}}}
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.environment_path"],
+      "issues": [{"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.python"], "context": {"environment_path": "functions[0]"}}, {"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.python"], "context": {"environment_path": "functions[1]"}}]
+    },
+    {
+      "case": "each_case_a_host_exception_fails_reports_the_call_failure_it_held",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "identities"},
+          "functions/first.yaml": {"base": "first"},
+          "functions/second.yaml": {
+            "base": "first",
+            "edits": [{"from": "name: first", "to": "name: second"}, {"from": "project.first", "to": "project.second"}]
+          },
+          "uv.lock": {"base": "uv.lock"},
+          "entry/domain.yaml": {"base": "both"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "first", "args": {"x": 7}, "raises": {"class": "ValueError", "message": "é\u0000🙂"}},
+            {"function": "first", "args": {"x": -9223372036854775808}, "raises": {"class": "ValueError", "message": "é\u0000🙂"}},
+            {"function": "second", "args": {"x": 7}, "raises": {"class": "ValueError", "message": "é\u0000🙂"}},
+            {"function": "second", "args": {"x": -9223372036854775808}, "raises": {"class": "ValueError", "message": "é\u0000🙂"}}
+          ]
+        }
+      },
+      "compares": ["condition", "context.function", "context.case", "context.failure"],
+      "issues": [{"condition": "function_conformance_failed", "context": {"function": "first", "case": "normal", "failure": {"phase": "derivation", "condition": "function_call_failed", "rule": "FUNC-8", "context": {"function": "first", "call": "project.first", "host_error": "ValueError", "host_message": "é\u0000🙂"}}}}, {"condition": "function_conformance_failed", "context": {"function": "first", "case": "boundary", "failure": {"phase": "derivation", "condition": "function_call_failed", "rule": "FUNC-8", "context": {"function": "first", "call": "project.first", "host_error": "ValueError", "host_message": "é\u0000🙂"}}}}, {"condition": "function_conformance_failed", "context": {"function": "second", "case": "normal", "failure": {"phase": "derivation", "condition": "function_call_failed", "rule": "FUNC-8", "context": {"function": "second", "call": "project.second", "host_error": "ValueError", "host_message": "é\u0000🙂"}}}}, {"condition": "function_conformance_failed", "context": {"function": "second", "case": "boundary", "failure": {"phase": "derivation", "condition": "function_call_failed", "rule": "FUNC-8", "context": {"function": "second", "call": "project.second", "host_error": "ValueError", "host_message": "é\u0000🙂"}}}}]
+    },
+    {
+      "case": "a_conformance_failure_keeps_the_extreme_integers_it_compared",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "identities",
+            "edits": [{"from": "functions: [functions/first.yaml, functions/second.yaml]", "to": "functions: [functions/integer.yaml]"}]
+          },
+          "functions/integer.yaml": {
+            "base": "first",
+            "edits": [{"from": "name: first", "to": "name: integer"}, {"from": "project.first", "to": "project.integer"}]
+          },
+          "uv.lock": {"base": "uv.lock"},
+          "entry/domain.yaml": {"base": "domain", "edits": [{"from": "name: id,", "to": "name: integer,"}]}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "integer", "args": {"x": 7}, "returns": 7},
+            {"function": "integer", "args": {"x": -9223372036854775808}, "returns": 9223372036854775807}
+          ]
+        }
+      },
+      "compares": ["condition", "spec_paths", "context.args", "context.expected", "context.actual"],
+      "issues": [{"condition": "function_conformance_failed", "spec_paths": ["tests[1]"], "context": {"args": {"x": -9223372036854775808}, "expected": -9223372036854775808, "actual": 9223372036854775807}}]
+    },
+    {
+      "case": "a_conformance_failure_keeps_the_escaped_text_it_compared",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "identities",
+            "edits": [{"from": "functions: [functions/first.yaml, functions/second.yaml]", "to": "functions: [functions/text.yaml]"}]
+          },
+          "functions/text.yaml": {"base": "text"},
+          "uv.lock": {"base": "uv.lock"},
+          "entry/domain.yaml": {
+            "base": "domain",
+            "edits": [{"from": "{name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}", "to": "{name: VALUE, type: str, derivation: {function: {name: text, args: {}}}}"}]
+          }
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "functions": {"calls": [{"function": "text", "args": {}, "returns": "actual é\u0000🙂"}]}
+      },
+      "compares": ["condition", "context.expected", "context.actual"],
+      "issues": [{"condition": "function_conformance_failed", "context": {"expected": "authored é\u0000🙂", "actual": "actual é\u0000🙂"}}]
+    }
+  ]
+}
