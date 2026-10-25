@@ -232,7 +232,9 @@ impl Resolver for Group<'_> {
             .0
             .iter()
             .find(|(column, _)| column == name)
-            .unwrap_or_else(|| panic!("the evaluation reads {name:?}, which is no grouping column"));
+            .unwrap_or_else(|| {
+                panic!("the evaluation reads {name:?}, which is no grouping column")
+            });
         Ok(Selection::Present(value(held)))
     }
 }

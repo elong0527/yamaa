@@ -620,7 +620,7 @@ does. The pair's comparison ([LOOKUP-9](#lookup-9)) uses the expression's
 result type ([EXPR-14](expressions.md#expr-14)) before any record is matched;
 a result type decided per value is compared when each value is matched.
 
-Evidence: `adam-adlb-supplb-padded-key`, `adam-adlb-end-of-treatment`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`.
+Evidence: `adam-adlb-supplb-padded-key`, `adam-adlb-end-of-treatment`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_computed_int_key_of_a_text_donor_column_is_refused_before_matching`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_computed_int_key_of_an_int_donor_column_binds`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_key_whose_type_is_decided_per_value_binds_and_is_compared_when_matched`.
 
 The result type is the expression's ordinary non-missing result: a local
 `missing`, `invalid` or `no_match` replacement takes no part, and a non-missing

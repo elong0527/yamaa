@@ -1,4 +1,11 @@
-//! Independently authored native diagnostic contexts.
+//! Independently authored native diagnostic contexts. Each test here proves
+//! a seam core's issue-only readers cannot reach, which its first comment
+//! names: a projection's refusal, a fact borrowed by address, a count of
+//! `usize::MAX`, a context of megabytes, a rendered message or a composed
+//! model. The findings these families report are replay cases: a derive
+//! binding's in `aggregates.json`, an expression's text in `grammar.json`, a
+//! lock's facts in `runtime.json` and a cited terminology standard's in
+//! `submission.json`.
 mod diagnostics {
     mod diagnostic {
         /// A text context value.
@@ -14,8 +21,9 @@ mod diagnostics {
                 json::Value as V,
                 value::{Value, ValueType},
             };
+            /// Seam: the projection's `InvalidContext` refusals of constructed
+            /// findings, and a 1,000,000-byte group value kept at its address.
             #[test]
-
             fn invalid_causes_refuse_and_large_group_values_stay_complete() {
                 for types in [
                     &[ValueType::Int, ValueType::Float][..],
@@ -81,6 +89,7 @@ mod diagnostics {
                 assert_eq!(huge.as_ptr(), address);
                 assert_eq!(group[0].1, Value::Str(huge));
             }
+            /// Seam: a record count of `usize::MAX`, on 64-bit targets only.
             #[test]
             #[cfg(target_pointer_width = "64")]
             fn record_counts_keep_the_complete_unsigned_range() {
@@ -96,81 +105,12 @@ mod diagnostics {
                 .unwrap();
                 assert_eq!(diagnostic.context["record_count"], V::from(usize::MAX));
             }
-            /// Preparation refuses each faulty derive binding with its own
-            /// cause, located inside the aggregate that declares the binding
-            /// (LOOKUP-22).
-            #[test]
-            fn each_derive_binding_refusal_has_its_cause_inside_its_aggregate() {
-                use crate::support::{
-                    project_call_compiler::{specification, Tree as T},
-                    specification::prepare,
-                };
-                use yamaa_core::{
-                    schema::DocumentNode,
-                    specification::{PreflightFinding, PrepareError},
-                };
-                // An aggregate's bindings are a map keyed by name (P-BIND-1).
-                let binding = |value| {
-                    (
-                        "V",
-                        T::map(vec![
-                            ("type", T::text("float")),
-                            ("derivation", T::map(vec![("value", value)])),
-                        ]),
-                    )
-                };
-                for (bindings, code, label) in [
-                    (
-                        vec![],
-                        ConditionCode::AggregateDeriveDeclaration,
-                        "derivations that bind nothing",
-                    ),
-                    (
-                        vec![binding(T::Scalar(DocumentNode::Integer("1".into())))],
-                        ConditionCode::AggregateDeriveRelation,
-                        "a binding that reads no relation",
-                    ),
-                    (
-                        vec![binding(T::text("W"))],
-                        ConditionCode::AggregateDeriveVariable,
-                        "a binding that reads an unbound name",
-                    ),
-                ] {
-                    let document = specification(vec![(
-                        "RESULT",
-                        "float",
-                        T::map(vec![(
-                            "aggregate",
-                            T::map(vec![
-                                ("derivations", T::map(bindings)),
-                                ("expr", T::text("SUM(V)")),
-                            ]),
-                        )]),
-                    )]);
-                    let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
-                        panic!("{label}: the invalid derive declaration was admitted");
-                    };
-                    let diagnostic = findings
-                        .iter()
-                        .find_map(|finding| match finding {
-                            PreflightFinding::Scalar(diagnostic) if diagnostic.code == code => {
-                                Some(diagnostic)
-                            }
-                            _ => None,
-                        })
-                        .unwrap_or_else(|| panic!("{label}: no {code:?} finding"));
-                    assert!(
-                        diagnostic.spec_paths[0].starts_with("columns.RESULT.derivation.aggregate"),
-                        "{label}: {:?}",
-                        diagnostic.spec_paths
-                    );
-                }
-            }
         }
         mod binding {
             use yamaa_core::column_dependencies;
+            /// Seam: the projection of `analyze`'s internal diagnostics over
+            /// malformed graph metadata.
             #[test]
-
             fn malformed_dependency_metadata_has_no_projection_or_panic() {
                 let analysis =
                     column_dependencies::analyze(&[Some(vec![1]), Some(vec![0])], &[], false)
@@ -189,8 +129,10 @@ mod diagnostics {
                 temporal::{Date, DateTime, Precision},
                 value::{Value, ValueType},
             };
+            /// Seam: constructed findings: a datetime over a date collected to
+            /// the year, which no case's value writes, and the spelling of each
+            /// non-numeric type beside it.
             #[test]
-
             fn temporal_spelling_and_nonnumeric_reduction_types_remain_complete() {
                 let date = Date::new(1, 1, 1, Precision::Year).unwrap();
                 let datetime =
@@ -222,8 +164,9 @@ mod diagnostics {
                     assert_eq!(diagnostic.context["actual"], text(spelling));
                 }
             }
+            /// Seam: a 3,000,000-byte context value kept at its address, and
+            /// the projection's `InvalidContext` refusals.
             #[test]
-
             fn large_context_and_invalid_causes_preserve_borrowed_facts() {
                 let huge = "x".repeat(3_000_000);
                 let address = huge.as_ptr();
@@ -293,6 +236,7 @@ mod diagnostics {
                     Err(ProjectionError::InvalidContext)
                 );
             }
+            /// Seam: counts of `usize::MAX`, on 64-bit targets only.
             #[test]
             #[cfg(target_pointer_width = "64")]
             fn counts_above_i64_remain_mathematical_diagnostic_integers() {
@@ -318,11 +262,14 @@ mod diagnostics {
         mod grammar {
             use super::text;
             use yamaa_core::expression::{compile, CompileError, Context as Field};
+            /// Seam: the identifiers of the compiled predicate. The refusals of
+            /// `AGE >> 65` and `A >`, with their text and position, are the
+            /// cases
+            /// `grammar.json::a_doubled_greater_than_sign_is_an_invalid_predicate_at_the_second_sign`
+            /// and
+            /// `grammar.json::an_incomplete_predicate_is_an_invalid_expression`.
             #[test]
-
-            fn arithmetic_is_a_comparison_operand_and_refusals_keep_their_text_and_position() {
-                use yamaa_core::json::Value as V;
-                // Arithmetic in a comparison operand is admitted, with its names.
+            fn arithmetic_in_a_comparison_operand_is_admitted_with_its_names() {
                 for (text, names) in [
                     ("SBPSTD - SBPSUP <= -20", vec!["SBPSTD", "SBPSUP"]),
                     ("VS.SBPSTD - VS.SBPSUP < 0", vec!["VS.SBPSTD", "VS.SBPSUP"]),
@@ -336,35 +283,11 @@ mod diagnostics {
                     .unwrap();
                     assert_eq!(compiled.identifiers().collect::<Vec<_>>(), names, "{text}");
                 }
-                // A refused predicate reports its text, as the expression and as
-                // the predicate, and its position, and nothing else.
-                for (text, position) in [("AGE >> 65", 5), ("A >", 3)] {
-                    let Err(CompileError::Invalid {
-                        position: actual,
-                        failure,
-                        ..
-                    }) = compile(text, Field::Predicate, "filter")
-                    else {
-                        panic!("predicate must fail: {text}")
-                    };
-                    assert_eq!(actual.character, position, "{text}");
-                    let d = failure.diagnostic(Field::Predicate, "filter", text, position);
-                    assert_eq!(d.definition().condition, "invalid_expression");
-                    assert_eq!(d.definition().rule, Some("FORMULA-1"));
-                    assert_eq!(
-                        d.context,
-                        [
-                            ("expr".into(), V::String(text.into())),
-                            ("predicate".into(), V::String(text.into())),
-                            ("position".into(), V::from(position)),
-                        ]
-                        .into(),
-                        "{text}"
-                    );
-                }
             }
+            /// Seam: a failure projected over another expression's text, which
+            /// `expression_refusal` never passes, so the function's name can
+            /// come only from the failure.
             #[test]
-
             fn a_function_finding_carries_its_own_written_name() {
                 for (field, written, function) in [
                     (Field::Derivation, "  foo(1)", "foo"),
@@ -390,8 +313,10 @@ mod diagnostics {
                 inheritance::Named,
                 json::Value as JsonValue,
             };
+            /// Seam: the projection's `InvalidContext` refusals of
+            /// contradictory cycle carriers, beside the record of a consistent
+            /// one.
             #[test]
-
             fn contradictory_cycle_carriers_refuse_without_relabeling_the_cause() {
                 for path in [
                     vec![],
@@ -450,8 +375,9 @@ mod diagnostics {
                 json::Value as V,
                 value::Value,
             };
+            /// Seam: the rendered message of 400-character escaped facts,
+            /// beside the records of constructed findings.
             #[test]
-
             fn complete_odm_projection_preserves_nested_values_and_escaped_metadata() {
                 let large = "\"".repeat(400);
                 let names = [large.clone()];
@@ -524,6 +450,9 @@ mod diagnostics {
                 assert_eq!(diagnostic.source_span, None);
                 assert_eq!(diagnostic.operand_route, None);
             }
+            /// Seam: each refusal's rendered message, which an issue row does
+            /// not hold.
+            ///
             /// Each refusal of the ODM source `read_odm` reads renders its
             /// condition's message from its facts (ODM-1, P-MSG-1).
             #[test]
@@ -690,8 +619,8 @@ mod diagnostics {
                     stored_type: "int64".into(),
                 }
             }
+            /// Seam: how many fields the codec inspects before it refuses.
             #[test]
-
             fn alignment_and_early_profile_failure_do_not_inspect_later_codec_metadata() {
                 let mut inspected = 0;
                 let fields = ["I", ""].into_iter().map(|name| {
@@ -748,8 +677,10 @@ mod diagnostics {
                     }
                 }
             }
+            /// Seam: the parser's own syntax facts and message, kept at their
+            /// address, and a 1,400,000-byte expression at position
+            /// `usize::MAX`.
             #[test]
-
             fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
                 for (expression, rule, character, detail) in [
                     ("STR_CONTAINS(ID, '(')", "FORMULA-8", 17, "pattern_byte"),
@@ -837,8 +768,9 @@ mod diagnostics {
                     .into()
                 );
             }
+            /// Seam: a resolver's opaque payload kept at its address, and the
+            /// names the resolver is asked for.
             #[test]
-
             fn upper_resolution_outranks_lower_type_error_and_projection_never_retries() {
                 let original = Box::new(41);
                 let pointer = &*original as *const u8;
@@ -869,8 +801,9 @@ mod diagnostics {
                 assert_eq!(identifier, "high");
                 assert_eq!(&*payload.original as *const u8, pointer);
             }
+            /// Seam: a constructed evaluation error's routes, 65,536 steps
+            /// long, and a 1,400,000-byte identifier.
             #[test]
-
             fn complete_long_context_and_full_width_routes_are_preserved() {
                 let mut error: EvaluationError<Infallible> = EvaluationError {
                     spec_path: "rows[0].filter".into(),
@@ -950,6 +883,8 @@ mod diagnostics {
                 },
                 value::{FiniteFloat, Value},
             };
+            /// Seam: projected facts borrowed by address from the failure.
+            ///
             /// A projection borrows the facts it names from the failure it
             /// projects: the invoked function's name, and the result a
             /// conformance case produced.
@@ -990,8 +925,9 @@ mod diagnostics {
                     matches!(&failures[0], TestFailure::Result { actual, .. } if std::ptr::eq(held, actual))
                 );
             }
+            /// Seam: an opaque host payload kept at its address, with its
+            /// reference count.
             #[test]
-
             fn opaque_payloads_remain_borrowed_with_original_precedence() {
                 struct Payload(Rc<()>); // no Clone, Display, Send or Sync requirement
                 let payload = Payload(Rc::new(()));
@@ -1026,8 +962,9 @@ mod diagnostics {
                 };
                 assert!(std::ptr::eq(*held, &payload));
             }
+            /// Seam: host details of 2,048 repetitions borrowed by address in
+            /// three projections.
             #[test]
-
             fn complete_host_details_are_borrowed_in_runtime_binding_and_nested_case_diagnostics() {
                 let function = support::function("id");
                 let definition = function.definition();
@@ -1164,8 +1101,8 @@ mod diagnostics {
                     );
                 }
             }
+            /// Seam: the projection's `InvalidContext` refusals.
             #[test]
-
             fn late_contradictions_return_no_partial_report() {
                 let function = support::function("id");
                 let definitions = [DefinitionSource {
@@ -1204,8 +1141,9 @@ mod diagnostics {
                     Err(Error::InvalidContext)
                 ));
             }
+            /// Seam: a nested failure's facts and a row's keys borrowed by
+            /// address.
             #[test]
-
             fn nested_invocation_and_row_keys_preserve_borrowed_scalar_geometry() {
                 let function = support::function("id");
                 let identity = ProjectFunctionIdentity {
@@ -1298,42 +1236,9 @@ mod diagnostics {
                     actual: actual.map(str::to_owned),
                 }
             }
+            /// Seam: `lock_diagnostics`'s `InvalidContext` refusals, which no
+            /// reader returns.
             #[test]
-
-            fn spelling_missing_and_empty_facts_are_preserved_without_version_comparison() {
-                let records = lock_diagnostics(
-                    Some(LockOrigins {
-                        source: "é\0🙂/environment.yaml",
-                        entry: "\u{e9}\0\u{1f642}/project.yaml",
-                        field: "lock",
-                        lock_source: "captured-lock",
-                        written: "../declared/uv.lock",
-                    }),
-                    &[
-                        finding(R::InvalidInstalledVersion, &["1.0"], None),
-                        finding(R::InvalidLockedVersion, &[], None),
-                        finding(R::VersionMismatch, &[" 1.0 "], Some(" 1.0 ")),
-                        finding(R::VersionMismatch, &[""], Some("")),
-                    ],
-                )
-                .unwrap();
-                assert_eq!(records[0].context["actual"], V::Null);
-                assert_eq!(records[1].context["expected"], V::Array(vec![]));
-                assert_eq!(
-                    records[2].context["expected"],
-                    V::Array(vec![text(" 1.0 ")])
-                );
-                assert_eq!(records[2].context["actual"], text(" 1.0 "));
-                assert_eq!(records[3].context["actual"], text(""));
-                assert_eq!(records[0].context["source"], text("é\0🙂/environment.yaml"));
-                assert_eq!(
-                    records[0].context["entry"],
-                    text("\u{e9}\0\u{1f642}/project.yaml")
-                );
-                assert_eq!(records[0].context["lock"], text("../declared/uv.lock"));
-            }
-            #[test]
-
             fn contradictory_shapes_refuse_the_complete_report() {
                 assert_eq!(lock_diagnostics(None, &[]).unwrap(), vec![]);
                 let first = || finding(R::VersionMismatch, &["1.0"], Some("2.0"));
@@ -1370,8 +1275,9 @@ mod diagnostics {
                     );
                 }
             }
+            /// Seam: generated facts of 65,537 bytes, 2,050 findings and 65,537
+            /// versions.
             #[test]
-
             fn long_lock_facts_and_all_ordered_versions_remain_complete() {
                 let source = "\0".repeat(65_537);
                 let package = "p".repeat(2049);
@@ -1446,6 +1352,9 @@ mod diagnostics {
                 table::{CellError, Column, TableAccess, TableSchema, ValueRef},
                 value::{ColumnType, Value},
             };
+            /// Seam: the number of facts the refusal names, which no case
+            /// states without deriving all eight.
+            ///
             /// CT-11: transport admission refuses a published value outside
             /// the study's dataset inventory with eight facts; the case
             /// `submission.json::a_published_value_outside_the_dataset_inventory_fails`
@@ -1495,6 +1404,8 @@ mod diagnostics {
                     finding.context
                 );
             }
+            /// Seam: an 8,388,609-byte codelist value kept in the composed
+            /// study, and the redundancy finding over it.
             #[test]
             fn large_binding_values_are_retained_and_a_restating_verification_is_redundant() {
                 // Held semantic metadata has no cumulative copy allowance. File loaders
@@ -1537,15 +1448,20 @@ mod diagnostics {
                     JsonValue::String("sdtm.specs[0].columns.VALUE.submission.codelist".into())
                 );
             }
+            /// Seam: the composed study's standards and codelists, a model no
+            /// reader returns.
+            ///
             /// DEFINE-9 and DEFINE-10: a terminology standard's identifier is
             /// `CT_` and its publishing set. Sources that cite one standard
-            /// share its definition, a source the document binds nothing from
-            /// cites none (CT-10), and another release or another standard
+            /// share its definition, and a source the document binds nothing
+            /// from cites none (CT-10). Another release or another standard
             /// name under that publishing set is refused at its own source
-            /// instead of being numbered.
+            /// instead of being numbered: the cases
+            /// `submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`
+            /// and
+            /// `submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`.
             #[test]
-            fn sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused(
-            ) {
+            fn sources_citing_one_terminology_standard_share_one_definition() {
                 const NCI: &str = "CDISC/NCI";
                 let source = |name: &str, version: &str, list: &str| {
                     rt::Source {
@@ -1623,38 +1539,10 @@ mod diagnostics {
                     .standards()
                     .iter()
                     .all(|standard| standard.version != later));
-                // A later release, or another of the standard names Define-XML
-                // publishes, under the publishing set already cited.
-                for (name, version) in [(NCI, later), ("BIMO", cited)] {
-                    let findings = compose(vec![
-                        source(NCI, cited, "FIRST"),
-                        source(NCI, later, "UNBOUND"),
-                        source(name, version, "SECOND"),
-                    ])
-                    .unwrap_err();
-                    assert_eq!(findings.len(), 1, "{name} {version}: {findings:?}");
-                    let definition = findings[0].definition();
-                    assert_eq!(
-                        (definition.phase, definition.condition, definition.rule),
-                        (
-                            "validation",
-                            "duplicate_define_identifier",
-                            Some("DEFINE-10")
-                        )
-                    );
-                    assert_eq!(findings[0].path, "codelists[2].standard.publishing_set");
-                    assert_eq!(
-                        findings[0].context,
-                        [
-                            ("detail".into(), JsonValue::String("STD.CT_SDTM".into())),
-                            ("identifier".into(), JsonValue::String("STD.CT_SDTM".into())),
-                        ]
-                        .into()
-                    );
-                }
             }
+            /// Seam: a table port of 10,000,001 rows that panics if a cell is
+            /// read.
             #[test]
-
             fn transport_refuses_oversized_geometry_before_reading_cells() {
                 use yamaa_core::limits::Limits;
                 struct Oversized(TableSchema);
@@ -1785,8 +1673,9 @@ mod diagnostics {
                     _ => panic!("complete context"),
                 }
             }
+            /// Seam: the observation a warning projects, which no issue row
+            /// holds, with counts of `usize::MAX` and keys borrowed by address.
             #[test]
-
             fn warning_display_is_bounded_but_all_keys_and_exact_scalars_remain_in_order() {
                 let compiled = compiled();
                 let rows: Vec<_> = (0..7)
@@ -1842,8 +1731,9 @@ mod diagnostics {
                 };
                 assert_eq!(logged.len(), 7);
             }
+            /// Seam: projected facts and observations of constructed check
+            /// records, with a count of `usize::MAX`.
             #[test]
-
             fn output_missing_keys_are_not_rejected_or_lost_and_row_count_keeps_full_width() {
                 let compiled = compiled();
                 let rows = [Row(vec![Value::Missing])];
@@ -1879,8 +1769,8 @@ mod diagnostics {
                     Fact::Sequence(vec![Fact::Object(Default::default())])
                 );
             }
+            /// Seam: the projection's `InvalidObservation` refusal.
             #[test]
-
             fn later_invalid_geometry_refuses_the_entire_projection() {
                 let compiled = compiled();
                 let good = [Row(vec![Value::Int(1)])];
@@ -1902,8 +1792,8 @@ mod diagnostics {
                     Err(Error::InvalidObservation)
                 ));
             }
+            /// Seam: the projection's `UnsupportedOutcome` refusal.
             #[test]
-
             fn typed_wrong_family_or_phase_refuses_the_entire_projection() {
                 let compiled = compiled();
                 let rows = [Row(vec![Value::Int(1)])];
@@ -1931,8 +1821,8 @@ mod diagnostics {
                 project_diagnostics::Fact,
                 yaml_diagnostics::{diagnostics, Failure, UnicodeIssue},
             };
+            /// Seam: facts borrowed by address, and an offset of `usize::MAX`.
             #[test]
-
             fn reason_and_identity_borrow_original_facts_and_unicode_order_is_complete() {
                 let reason = String::from("retained parser reason");
                 let identity = String::from("source.yaml");
