@@ -1,14 +1,13 @@
-//! The safe client over the engine's C ABI, through which a host binding
-//! reaches the engine (the design on #2870, sections 3.3 to 3.6): the gate
-//! that holds the negotiated function table, handles each owned by one
-//! value, typed calls of the table's entries, and a host's callbacks behind
-//! the engine's callback ABI.
+//! Unused safe client of the retired engine C ABI (the design on #2870,
+//! sections 3.3 to 3.6). It retains a legacy function-table gate, owned
+//! handles, typed calls and callback adapters until the final removal step
+//! of #3877.
 //!
-//! A binding answers its generated layer's request with [`Gate::negotiate`],
-//! which sends it to the engine as the C request a client sends and reads
-//! the outcome back; the first acceptance opens the gate, which hands out
-//! the [`Engine`] every other native call goes through. A binding that
-//! links the engine passes its negotiation entry, `yamaa_engine::negotiate`.
+//! The former engine crate and its negotiation entry no longer exist.
+//! Neither host binding uses this client: both call the `yamaa` facade
+//! directly and use [`crate::Gate`] for their active negotiation and gating.
+//! The [`Gate`] below and the following safety notes document the legacy
+//! function-table contract.
 //!
 //! # Safety
 //!
@@ -31,17 +30,15 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::abi::{self, Handle, Str};
 use crate::{Accepted, Closed, HandleKind, Outcome, Reason, Refusal, Value};
 
-/// An engine's negotiation entry: `yamaa_engine::negotiate` when a binding
-/// links the engine.
+/// The negotiation entry signature of the unused legacy C ABI.
 pub type Negotiate = unsafe extern "C" fn(
     request: *const abi::Request,
     outcome: *mut abi::Outcome,
 ) -> *const abi::Engine;
 
-/// A binding's gate: closed until a negotiation is accepted, then holding
-/// the engine's table for the life of the process; nothing closes it again.
-/// A binding keeps one in a `static`, so a replaced native module starts
-/// closed.
+/// The unused legacy client's gate: closed until a negotiation is accepted,
+/// then holding the engine's table for the life of the process; nothing
+/// closes it again.
 #[derive(Debug, Default)]
 pub struct Gate {
     table: AtomicPtr<abi::Engine>,
