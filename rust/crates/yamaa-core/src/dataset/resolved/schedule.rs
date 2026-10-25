@@ -399,13 +399,32 @@ impl ResolvedPlan {
     /// (#3763), a window or an aggregate that groups by every one of them
     /// needs no more than its partition ([`StepInfo::class`]); zero `keys`
     /// asks for partitions of consecutive records.
+    ///
+    /// A run that holds one partition of its driver input at a time (#3830)
+    /// reads together only records one partition holds, so a plan whose
+    /// records must meet needs the whole table unless its partitions keep
+    /// them together (the confinement gate):
+    /// - the driver step of a template driven by a named intermediate over
+    ///   the driver input, and the verification of such an intermediate's
+    ///   `unique` checks, whose records span every partition;
+    /// - under key-bounded partitions, a grouped template or an ODM read
+    ///   whose fields omit a partition key field, or any of them when the
+    ///   driver input does not hold every partition key;
+    /// - under consecutive partitions, the cross-record reads (grouped
+    ///   templates, the key grain and ODM reads) once they share no driver
+    ///   field to cut by ([`Self::cut_fields`]).
     pub fn whole_table_step(&self, keys: usize) -> Option<Step> {
+        let unconfined = self.unconfined_step(keys);
         self.region_schedule(RegionId::DATASET)
             .iter()
             .find(|info| match info.step {
+                _ if Some(info.step) == unconfined => true,
                 // Pair ports are materialized globally at this checkpoint,
-                // before any row, even when both sides read one input.
-                Step::VerifyIntermediates { self_rows: false } => self.pair_ports() != 0,
+                // before any row, even when both sides read one input; so is
+                // an intermediate over the driver input it verifies.
+                Step::VerifyIntermediates { self_rows: false } => {
+                    self.pair_ports() != 0 || self.verified_driver_intermediate().is_some()
+                }
                 Step::Admit
                 | Step::VerifyIntermediates { .. }
                 | Step::PublishSelf(_)
@@ -420,7 +439,8 @@ impl ResolvedPlan {
                         )
                 }
                 // The schedule marks a driver a combine step; a named one
-                // materializes its intermediate in that step.
+                // materializes its intermediate in that step, over every
+                // record when it reads the driver input.
                 Step::Driver(template) => {
                     info.effects == Effects::Callbacks
                         || self
@@ -429,11 +449,93 @@ impl ResolvedPlan {
                             .named
                             .is_some_and(|relation| {
                                 materialized_class(self, relation) == PartitionClass::Global
+                                    || self.over_driver(relation)
                             })
                 }
                 _ => info.class(keys) == PartitionClass::Global,
             })
             .map(|info| info.step)
+    }
+
+    /// The driver fields a partitioned run cuts its driver input by, so that
+    /// no partition splits what a step reads together (#3830): under
+    /// key-bounded partitions, [`Self::partition_fields`]; under consecutive
+    /// ones, the fields every cross-record read shares (a grouped template's
+    /// group fields, the fields the key grain's keys copy, an ODM read's
+    /// scope fields), none when the plan has no cross-record read. The cut
+    /// keeps whole the runs of records whose fields are equal (`dataset::cut`).
+    /// None when nothing keeps those records together: the input is then one
+    /// partition, or, with a cross-record read, [`Self::whole_table_step`]
+    /// names the step that refuses the run.
+    pub fn cut_fields(&self, keys: usize) -> Option<Vec<usize>> {
+        if keys > 0 {
+            return self.partition_fields(keys);
+        }
+        let mut reads = cross_record_reads(self).into_iter();
+        let Some((_, first)) = reads.next() else {
+            return Some(Vec::new());
+        };
+        let shared = reads.fold(first, |mut shared, (_, fields)| {
+            shared.retain(|field| fields.contains(field));
+            shared
+        });
+        (!shared.is_empty()).then(|| shared.into_iter().map(|field| field as usize).collect())
+    }
+
+    /// The first cross-record step whose records no partition of the run's
+    /// keeps together (#3830): under key-bounded partitions over `keys`, one
+    /// whose fields omit a partition field, or the first when the driver
+    /// input does not hold every partition key; under consecutive ones, the
+    /// one whose fields leave no field shared with every earlier one.
+    fn unconfined_step(&self, keys: usize) -> Option<Step> {
+        let reads = cross_record_reads(self);
+        if keys > 0 {
+            let fields = self.partition_fields(keys);
+            return reads
+                .into_iter()
+                .find(|(_, read)| {
+                    fields.as_ref().is_none_or(|fields| {
+                        fields.iter().any(|&field| !read.contains(&(field as u32)))
+                    })
+                })
+                .map(|(step, _)| step);
+        }
+        let mut shared: Option<Vec<u32>> = None;
+        for (step, fields) in reads {
+            let shared = shared.get_or_insert_with(|| fields.clone());
+            shared.retain(|field| fields.contains(field));
+            if shared.is_empty() {
+                return Some(step);
+            }
+        }
+        None
+    }
+
+    /// Whether named relation `relation` is an intermediate over the driver
+    /// input, whose records span every partition.
+    fn over_driver(&self, relation: RelationId) -> bool {
+        self.relation(relation)
+            .named
+            .as_deref()
+            .is_some_and(|item| {
+                matches!(
+                    item.source,
+                    crate::dataset::IntermediateSource::Primary { .. }
+                )
+            })
+    }
+
+    /// The first intermediate over the driver input with a `unique` check,
+    /// which the run verifies over every record before any row.
+    fn verified_driver_intermediate(&self) -> Option<RelationId> {
+        self.region_relations(RegionId::DATASET).find(|&relation| {
+            self.over_driver(relation)
+                && self
+                    .relation(relation)
+                    .named
+                    .as_deref()
+                    .is_some_and(|item| !item.unique.is_empty())
+        })
     }
 
     /// The driver fields that key-bounded partitions over the leading `keys`
@@ -455,11 +557,13 @@ impl ResolvedPlan {
     }
 
     /// The authored path a dataset step evaluates: its binding's, its
-    /// filter's, its column's first binding's, its check's, or a named
-    /// driver's intermediate; empty for a step that evaluates nothing
-    /// authored.
-    pub fn step_path(&self, step: Step) -> &str {
-        match step {
+    /// filter's, its column's first binding's, its check's, a named driver's
+    /// intermediate, a grouped template's `group_by`, the `keys` the key
+    /// grain groups by, or the pair relation or intermediate over the driver
+    /// input the first intermediate verification materializes; empty for a
+    /// step that evaluates nothing authored.
+    pub fn step_path(&self, step: Step) -> std::borrow::Cow<'_, str> {
+        let path: &str = match step {
             Step::Row(binding) | Step::Window(binding) => &self.binding(binding).path,
             Step::Filter(template) | Step::PostwindowFilter(template) => self
                 .template(template)
@@ -473,15 +577,117 @@ impl ResolvedPlan {
             Step::VerifyIntermediates { self_rows: false } => self
                 .region_relations(RegionId::DATASET)
                 .find(|&relation| self.relation(relation).donor == Donor::Pairs)
+                .or_else(|| self.verified_driver_intermediate())
                 .map_or("", |relation| &self.relation(relation).path),
-            Step::Driver(template) => self
-                .template(template)
-                .driver
-                .named
-                .map_or("", |relation| &self.relation(relation).path),
+            Step::Driver(template) => {
+                let node = self.template(template);
+                match (node.driver.named, &node.row) {
+                    (Some(relation), _) => &self.relation(relation).path,
+                    (None, Some(row)) => return format!("rows.{row}.group_by").into(),
+                    (None, None) => "",
+                }
+            }
+            Step::KeyGrain => "keys",
             _ => "",
+        };
+        path.into()
+    }
+}
+
+/// The cross-record reads of the dataset (#3830), in schedule order, each
+/// with the driver fields whose equal values keep its records together: a
+/// grouped template that reads the driver input, its group fields; the key
+/// grain, the fields its keys copy; an ODM read of the driver input, the
+/// fields of its scope. An ODM read scoped by the keys reads its own row's
+/// records, which the key grain or its template keeps together.
+fn cross_record_reads(plan: &ResolvedPlan) -> Vec<(Step, Vec<u32>)> {
+    let primary = plan.region_sources(RegionId::DATASET).next();
+    let reads_driver =
+        |driver: &DriverContext| driver.named.is_none() && Some(driver.source) == primary;
+    let mut reads = Vec::new();
+    for info in plan.region_schedule(RegionId::DATASET) {
+        let step = info.step;
+        match step {
+            Step::Driver(template) if plan.reads_driver(template) => {
+                if let Grain::Groups(fields) = &plan.template(template).driver.grain {
+                    reads.push((step, fields.clone()));
+                }
+            }
+            Step::KeyGrain => {
+                let fields = key_fields(plan).into_iter().flatten().collect();
+                reads.push((step, fields));
+            }
+            _ => (),
+        }
+        // Whether a read of the step's own driver reads the driver input.
+        let over_driver = match step {
+            Step::Row(binding) | Step::Window(binding) => {
+                reads_driver(&plan.binding(binding).driver)
+            }
+            Step::Filter(template) | Step::PostwindowFilter(template) => {
+                reads_driver(&plan.template(template).driver)
+            }
+            Step::Column(column) => plan
+                .column_bindings(column)
+                .any(|binding| reads_driver(&plan.binding(binding).driver)),
+            _ => false,
+        };
+        for fields in odm_scopes(plan, step, over_driver) {
+            reads.push((step, fields));
         }
     }
+    reads
+}
+
+/// The scope fields of each ODM read of the driver input `step` evaluates;
+/// `own` says whether a read of the step's own driver reads it.
+fn odm_scopes(plan: &ResolvedPlan, step: Step, own: bool) -> Vec<Vec<u32>> {
+    use crate::dataset::{AggregateSource, OdmScope};
+    let mut scopes = Vec::new();
+    let mut pending = step_exprs(plan, step);
+    let mut seen = std::collections::BTreeSet::new();
+    while let Some(expr) = pending.pop() {
+        if !seen.insert(expr) {
+            continue;
+        }
+        pending.extend(plan.operands(expr).iter().map(|operand| operand.expr));
+        for read in plan.reads(expr) {
+            if let Read::Window(window) = *read {
+                pending.extend(plan.window(window).filter);
+            }
+        }
+        let Op::Odm(bound) = &plan.expr(expr).op else {
+            continue;
+        };
+        let read = bound.read();
+        let over_driver = match read.source {
+            None => own,
+            Some(AggregateSource::Primary) => true,
+            Some(AggregateSource::Secondary(_)) => false,
+        };
+        let fields: Option<Vec<usize>> = match &read.scope {
+            OdmScope::Keys => None,
+            OdmScope::Records => Some(crate::odm_source::HIERARCHY.to_vec()),
+            OdmScope::Groups(fields) => Some(fields.clone()),
+            OdmScope::Templates(contexts) => Some(
+                crate::odm_source::HIERARCHY
+                    .into_iter()
+                    .filter(|field| {
+                        contexts.iter().all(|context| {
+                            context
+                                .groups
+                                .as_ref()
+                                .is_none_or(|groups| groups.contains(field))
+                        })
+                    })
+                    .collect(),
+            ),
+        };
+        if let (true, Some(fields)) = (over_driver, fields) {
+            scopes.push(fields.into_iter().map(|field| field as u32).collect());
+        }
+    }
+    scopes
 }
 
 /// The partition class of materializing a named relation: the strongest
