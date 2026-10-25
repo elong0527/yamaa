@@ -20,7 +20,7 @@ repeated entry or an entry naming an undeclared column fails, reporting the
 column name.
 
 Fails: `duplicate_identifier`, `undeclared_column`.
-Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::duplicate`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::undeclared`, `rust/tests/host-fixtures/cases.json::an_output_column_that_no_column_declares`, `rust/tests/host-fixtures/cases.json::an_output_column_listed_twice`.
+Evidence: `schema-structure`, `rust/crates/yamaa-application/tests/fixtures/output_declarations.tsv::duplicate`, `rust/crates/yamaa-application/tests/fixtures/output_declarations.tsv::undeclared`, `rust/tests/host-fixtures/cases.json::an_output_column_that_no_column_declares`, `rust/tests/host-fixtures/cases.json::an_output_column_listed_twice`.
 
 A declared column that `output.columns` does not list is internal
 ([SPEC-7](specification.md#spec-7)). `output.order_by` orders the artifact's
@@ -47,7 +47,7 @@ list, an unknown or internal column, or a repeated column, and reports the
 invalid name when there is one.
 
 Fails: `duplicate_identifier`, `internal_column_in_keys`, `invalid_field_type`, `undeclared_column`.
-Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`, `rust/tests/host-fixtures/cases.json::a_key_that_is_not_an_output_column`, `rust/tests/host-fixtures/cases.json::a_key_that_no_column_declares`, `rust/tests/host-fixtures/cases.json::a_key_listed_twice`, `rust/tests/host-fixtures/cases.json::an_empty_key_list`.
+Evidence: `negative-keys-internal`, `rust/crates/yamaa-application/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-application/tests/fixtures/preflight.tsv::declaration-order`, `rust/tests/host-fixtures/cases.json::a_key_that_is_not_an_output_column`, `rust/tests/host-fixtures/cases.json::a_key_that_no_column_declares`, `rust/tests/host-fixtures/cases.json::a_key_listed_twice`, `rust/tests/host-fixtures/cases.json::an_empty_key_list`.
 
 An empty list fails as `invalid_field_type`, an unknown column as
 `undeclared_column`, an internal column as `internal_column_in_keys` and a
@@ -136,7 +136,7 @@ validation, reporting the path. No extension is treated as a default, and a
 profile is never inferred from file contents.
 
 Fails: `unknown_artifact_profile`.
-Evidence: `negative-output-transport`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::profile`, `schema-parquet`.
+Evidence: `negative-output-transport`, `rust/crates/yamaa-application/tests/fixtures/output_declarations.tsv::profile`, `schema-parquet`.
 
 | Extension | Profile | Container | Fixed exactly |
 |---|---|---|---|
@@ -195,7 +195,7 @@ value's lifecycle, key validation and verification under
 [Column derivation](columns.md), and after its rows are ordered.
 Rows are not streamed to the target as they are constructed.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_case_predicates.json::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication`.
 
 A conversion failure with no `unconvertible` on the result wrapper fails the
 run ([VALUE-3](values.md#value-3)), and no artifact is published; the failed
@@ -264,7 +264,7 @@ report extension the mapping does not name fails validation as it does for
 `output.path`.
 
 Fails: `artifact_path_collision`, `unknown_artifact_profile`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_is_not_the_output_file`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_extension_names_a_known_profile`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::outside_the_sdtm_scope_a_collision_is_not_part_of_the_run`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::two_run_scope_files_at_one_location_refuse_the_whole_run`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_output`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_report`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_is_not_the_output_file`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_extension_names_a_known_profile`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::outside_the_sdtm_scope_a_collision_is_not_part_of_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::two_run_scope_files_at_one_location_refuse_the_whole_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_report`.
 
 Two spellings that resolve to the same file collide as well; the comparison
 uses the resolved locations without requiring either file or its parent to

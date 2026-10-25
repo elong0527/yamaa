@@ -373,6 +373,7 @@ class CandidateRelease(ReleaseTree):
         for name in (
             "yamaa",
             "yamaa-adapters",
+            "yamaa-application",
             "yamaa-boundary",
             "yamaa-cli",
             "yamaa-core",

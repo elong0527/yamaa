@@ -5,6 +5,7 @@ extendr_module! {
     fn spec_check;
     fn check_status;
     fn check_issues;
+    fn check_timings;
     fn check_summary;
     fn spec_summary;
     fn plans;
@@ -15,6 +16,7 @@ extendr_module! {
     fn run_output;
     fn run_issues;
     fn run_report;
+    fn run_timings;
     fn run_save;
     fn run_summary;
     fn run_observations;
@@ -29,15 +31,18 @@ extendr_module! {
     fn project_run_output;
     fn project_run_member_issues;
     fn project_run_member_report;
+    fn project_run_member_timings;
     fn project_run_member_summary;
     fn project_run_issues;
     fn project_run_report;
+    fn project_run_timings;
     fn project_run_save;
     fn project_run_summary;
     fn project_submission;
     fn submission_status;
     fn submission_created;
     fn submission_issues;
+    fn submission_timings;
     fn submission_save;
     fn submission_summary;
     fn lint;

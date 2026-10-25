@@ -33,6 +33,7 @@ mod partitioned_reading;
 mod plan;
 mod plan_reuse;
 mod printed_text;
+mod progress;
 mod project_binding;
 mod project_operations;
 mod read_odm;

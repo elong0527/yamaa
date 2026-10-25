@@ -1334,7 +1334,7 @@ whole table everywhere else:
 | Table | What the row and cell limits bound |
 | --- | --- |
 | A CSV or Parquet driver input that is the specification's only input, in a run with no step that needs the whole table | Each partition, decoded one at a time |
-| The output of such a run | Each partition, which holds at most as many rows as its largest driver partition; a CSV or Parquet file is written one partition after another, with the whole-table write's bytes, row groups included |
+| The output of such a run | Each partition, which holds at most as many rows as its largest driver partition; the run holds the whole output once, a column at a time, and a CSV or Parquet file is written one partition after another, with the whole-table write's bytes, row groups included |
 | The run report | The whole report, built once from every partition's counts |
 | A SAS, ODM or Dataset-JSON input, and its output | The whole table |
 | Every input of a specification that reads more than one, such as the source of a lookup, join or named relation | Each whole table |

@@ -1351,6 +1351,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "yamaa-application"
+version = "1.0.0-rc.1"
+dependencies = [
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ipc",
+ "arrow-schema",
+ "base64",
+ "flatbuffers",
+ "parquet",
+ "rustix",
+ "serde",
+ "serde_json",
+ "yamaa-adapters",
+ "yamaa-core",
+]
+
+[[package]]
 name = "yamaa-boundary"
 version = "1.0.0-rc.1"
 dependencies = [

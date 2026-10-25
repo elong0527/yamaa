@@ -120,7 +120,7 @@ missing. `DATE '...'` and `DATETIME '...'` are temporal literals whose text
 must parse under [Values](values.md) for the named type.
 
 Fails: `invalid_expression`, `integer_overflow`.
-Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_literals.tsv`.
+Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-application/tests/fixtures/predicate_diagnostics.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_literals.tsv`.
 
 `-9223372036854775808` is the least `int`, and `- 1` is the literal `-1`. An
 integer literal outside the `int` range of [VALUE-5](values.md#value-5),
@@ -155,7 +155,7 @@ written. A call of a function or reducer its field does not admit fails, as
 does an admitted function called with another number of arguments.
 
 Fails: `prohibited_construct`, `prohibited_function`.
-Evidence: `negative-formula-flag`, `negative-row-aggregate`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`.
+Evidence: `negative-formula-flag`, `negative-row-aggregate`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-application/tests/fixtures/grammar_diagnostics.tsv`.
 
 | Written in | Root | Admits | Refuses |
 | --- | --- | --- | --- |
@@ -203,7 +203,7 @@ undeclared relation. Identifiers are collected for dependency ordering, so an
 unresolved name fails rather than leaving an expression dependency-free.
 
 Fails: `unresolvable_name`, `unknown_field`, `qualified_identifier`.
-Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-adsl-bmi`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs`.
+Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-adsl-bmi`, `rust/crates/yamaa-application/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-application/tests/scalar_language.rs`.
 
 | Site | Visible names |
 | --- | --- |
@@ -359,7 +359,7 @@ string literal of exactly one scalar value, which marks the next pattern scalar
 as literal. An invalid `ESCAPE` literal or a trailing escape character fails.
 
 Fails: `invalid_expression`.
-Evidence: `adam-adae-protocol-review`, `schema-predicates`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
+Evidence: `adam-adae-protocol-review`, `schema-predicates`, `rust/crates/yamaa-application/tests/fixtures/syntax_controls.json`.
 
 A non-string operand fails with `incompatible_input_type` under
 [FORMULA-5](#formula-5). An invalid
@@ -428,7 +428,7 @@ one and `LN(x) / LN(b)` for another base. Widening the vocabulary amends this
 list.
 
 Fails: `prohibited_function`.
-Evidence: `schema-numeric-functions`, `adam-adlb-reference-limits`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
+Evidence: `schema-numeric-functions`, `adam-adlb-reference-limits`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-application/tests/fixtures/grammar_diagnostics.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
 - `ABS(x)`: absolute value.
 - `CEIL(x)`: least integer value not less than `x`.
@@ -552,7 +552,7 @@ positive zero. The `round_half_away_from_zero` verb, CSV display precision
 rounding exists.
 
 Fails: `incompatible_input_type`.
-Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::malformed_digits_precede_unknown_source_and_missing_study_data`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::a_driver_qualified_rounding_source_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::rounding_nested_in_a_case_result_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::rounding_in_a_row_template_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::unselected_case_uses_static_known_type_validation_before_study_capture`.
+Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::malformed_digits_precede_unknown_source_and_missing_study_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_driver_qualified_rounding_source_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_nested_in_a_case_result_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_in_a_row_template_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::unselected_case_uses_static_known_type_validation_before_study_capture`.
 
 `2^-26` is `sqrt(2^-52)`. At two places, `2.675` (stored as
 `2.674999999999999822...`, inside the window) rounds to `2.68`, and
@@ -774,7 +774,7 @@ with the numeric `/`, inheriting the binary64 rounding of `SUM`, and
 sort the records, except as `STR_JOIN` and the quantiles do
 ([FORMULA-18](#formula-18)).
 
-Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-reference-limits`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_loses_a_one_added_before_the_sum_cancels`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_keeps_a_one_added_after_the_sum_cancels_and_mean_divides_that_sum`.
+Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-reference-limits`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_loses_a_one_added_before_the_sum_cancels`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_keeps_a_one_added_after_the_sum_cancels_and_mean_divides_that_sum`.
 
 `VARIANCE(x)` takes two passes in relation record order. The first is the
 ordered `MEAN(x)` above, `m`, so a value that is not a number, or the `int`
@@ -843,7 +843,7 @@ that artifact as an ordinary source under
 through `dataset_class.schema`.
 
 Fails: `nested_reduction`.
-Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
+Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-application/tests/fixtures/syntax_controls.json`.
 
 The link through `dataset_class.schema`
 ([INPUT-10](inputs.md#input-10)) types the stored fields from the
@@ -874,7 +874,7 @@ the failure reports the identifier. For a grouped-row aggregate, the
 enclosing `row.group_by` supplies the grouped columns.
 
 Fails: `aggregate_identifier_not_grouped`.
-Evidence: `negative-dose-intensity`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
+Evidence: `negative-dose-intensity`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`.
 
 `SUM(EX.EXDOSE) / EX.EXPLDOS` is legal exactly when `EX.EXPLDOS` is declared
 in `group_by`.

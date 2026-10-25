@@ -25,6 +25,8 @@ pub enum Phase {
     Input,
     Dataset(ExecutionPhase),
     Output,
+    /// One submission section composed (#3762), which the facade observes.
+    Composition,
     Finished,
 }
 
@@ -76,6 +78,12 @@ pub enum Event {
     Refusal {
         phase: Phase,
         refusal: Refusal,
+    },
+    /// A partitioned run enters its partition `number`, from 1, of `records`
+    /// driver records (#3762).
+    Partition {
+        number: usize,
+        records: usize,
     },
     /// How a run divided its driver input, with the most records its
     /// partitions hold when it ran divided (#3794).
@@ -156,6 +164,9 @@ impl<'a> Scope<'a> {
     }
     pub fn refusal(self, phase: Phase, refusal: Refusal) {
         self.observer.observe(Event::Refusal { phase, refusal });
+    }
+    pub fn partition(self, number: usize, records: usize) {
+        self.observer.observe(Event::Partition { number, records });
     }
     /// Report how a run divided its driver input (#3794), under the
     /// scope's partitions.

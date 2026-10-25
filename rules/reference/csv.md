@@ -16,7 +16,7 @@ and no other delimiter is defined. `U+000A` terminates every record, including
 the last, so every artifact ends with it. `U+000D` is never written as part of
 a terminator; it appears only inside a quoted field that contains one.
 
-Evidence: `schema-text-functions`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
+Evidence: `schema-text-functions`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
 
 [Values](../values.md) owns the text being encoded. Writing a
 byte-order mark, a `U+000D` record terminator, or a quoting that differs from
@@ -32,7 +32,7 @@ row, in the order [OUTPUT-11](../output.md#output-11) fixes, holding one field
 per header name in the same order. An artifact with no rows is the header
 record and its terminator alone.
 
-Evidence: `schema-ordering`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::header_only_and_projection_order_are_exact`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `schema-ordering`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::header_only_and_projection_order_are_exact`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 An artifact with no rows is not empty: the columns exist whether or not a row
 does.
@@ -47,7 +47,7 @@ written bare. A quoted field is wrapped in `U+0022`, and each `U+0022` within
 its text is written twice. Nothing else is escaped: a quoted field carries its
 newlines, delimiters and every other scalar exactly.
 
-Evidence: `adam-adsl-investigator-comment`, `adam-adcm-atc-classes`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`.
+Evidence: `adam-adsl-investigator-comment`, `adam-adcm-atc-classes`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`.
 
 A writer that quotes a field this condition leaves bare, or leaves bare a field
 this condition quotes, does not conform even if ordinary readers accept its
@@ -63,7 +63,7 @@ the artifact, and no text stands in for absence. Reading does not restore the
 pair: [INPUT-8](../inputs.md#input-8) reads an empty field as
 missing whether it was bare or quoted.
 
-Evidence: `schema-str-replace`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `schema-str-replace`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 A collected empty string written here therefore returns as missing if the
 artifact is later read as a delimited source.
@@ -89,7 +89,7 @@ written by [Values](../values.md)'s conversion to `str`:
 the shortest round-tripping digits in positional notation, with a trailing
 `.0` omitted. That conversion has no exponent.
 
-Evidence: `adam-adlb-bds`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::scalar_output_uses_exact_integer_and_shortest_positional_float_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
+Evidence: `adam-adlb-bds`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::scalar_output_uses_exact_integer_and_shortest_positional_float_text`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
 
 | Column type | Text written |
 |---|---|
@@ -113,7 +113,7 @@ has no rows or no `float` columns. An invalid value fails validation at
 mapping resolves to `parquet`.
 
 Fails: `invalid_field_type`, `decimals_not_applicable`.
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::negative_decimals_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::decimals_above_eighteen_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::decimals_beyond_any_integer_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::decimals_on_a_parquet_output_are_not_applicable_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_records`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_an_int_output`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_study_data`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_precision.json::negative_decimals_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_precision.json::decimals_above_eighteen_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_precision.json::decimals_beyond_any_integer_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_precision.json::decimals_on_a_parquet_output_are_not_applicable_and_publish_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_records`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_an_int_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_study_data`.
 
 An invalid value fails with `invalid_field_type`. A declaration on a `parquet`
 path fails with `decimals_not_applicable`: a display precision that cannot
@@ -151,7 +151,7 @@ ordering. No dependent column, predicate, aggregate, verification, key or
 order term sees a rounded value, and changing `output.decimals` cannot change
 whether a run passes or which rows it produces.
 
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::two_decimals_round_the_saved_bytes_and_leave_the_output_unrounded`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::a_result_reads_its_input_once_and_records_its_rounded_bytes_only_when_saved`, `python/tests/installed/installed_public_environment.py::test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_precision.json::two_decimals_round_the_saved_bytes_and_leave_the_output_unrounded`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::a_result_reads_its_input_once_and_records_its_rounded_bytes_only_when_saved`, `python/tests/installed/installed_public_environment.py::test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values`.
 
 <a id="csv-9"></a>
 
@@ -164,7 +164,7 @@ rounds that exact value with the one rounding of
 written directly, and a value that rounds to zero is written without a sign.
 No host rounding or formatting routine may be assumed to do this.
 
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::precision_serializes_float_projection_only_and_preserves_missing_and_empty_text`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::precision_serializes_float_projection_only_and_preserves_missing_and_empty_text`.
 
 The difference is observable:
 
@@ -302,7 +302,7 @@ no header synthesis or renaming, and no missing-value sentinel. A reader does
 not repair a rejected file by skipping a mark, trimming a field, padding a
 record, renaming a duplicate name or normalizing a terminator inside a value.
 
-Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/typed_csv_sources.json::missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
+Evidence: `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
 
 [Inputs](../inputs.md) fixes what a stored field means,
 including that no text spells absence.

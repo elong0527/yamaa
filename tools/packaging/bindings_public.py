@@ -51,6 +51,8 @@ _PY_ANNOTATION = {
     "optional_path": None,
     "text": "str",
     "optional_text": "str | None",
+    # A progress callback, which the native call checks (#3762).
+    "progress": None,
     "count": "int",
     "flag": "bool",
     "names": "list[str]",
@@ -89,6 +91,7 @@ _ARGUMENT_TOKENS = {
     "optional_path",
     "text",
     "optional_text",
+    "progress",
     "count",
     "flag",
     "file_type",
@@ -97,6 +100,7 @@ _ARGUMENT_TOKENS = {
 _DEFAULTS = {
     "optional_path": {"None"},
     "optional_text": {"None"},
+    "progress": {"None"},
     "schema_request": {"None"},
     "flag": {"false", "true"},
     "count": None,  # a nonnegative integer
@@ -114,6 +118,7 @@ _R_ARGUMENT = {
     "text": ".text",
     "optional_text": ".optional_text",
     "file_type": ".text",
+    "progress": ".progress",
 }
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}

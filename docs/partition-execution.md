@@ -531,7 +531,10 @@ per cell of the end states. That a run holds one decoded partition at a time is
 proved by `partitioned_execution.rs`'s partition source, which counts the
 partitions it has decoded and not yet dropped, and by the facade's
 `partitioned_memory.rs`, which measures a run's peak with a counting allocator
-over ten partitions and over one. The partitioned publication's are the facade's
+over ten partitions and over one, and shows that a run with a row per record
+keeps at most twice what the same run read as a stream keeps, the dataset and
+the encoded file, so it holds its output once (#3870). The partitioned
+publication's are the facade's
 `partitioned_publication.rs` and `partitioned_reading.rs`, the adapters'
 `table_parquet_bytes.rs` and `table_arrow_table.rs` for the encoders, and
 `file_application.rs`'s save that fails or is cancelled between two

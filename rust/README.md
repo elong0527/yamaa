@@ -245,9 +245,15 @@ project's use cases are the operations of one request each, which
 `Engine::spec` and `Engine::project` give, as a host's lazy object holds one
 path (#3765). The options and the requests are `#[non_exhaustive]` structs,
 so fields can be added without breaking callers. There is no public
-compile-once plan handle and no progress port (#3030 D22, D72): a host's
-lazy object keeps its compiled plans in a `Plans` holder, and progress
-reporting is later and additive.
+compile-once plan handle (#3030 D22, D72): a host's lazy object keeps its
+compiled plans in a `Plans` holder. Progress is reported additively
+(#3762): `EngineOptions::with_progress` takes a callback that every
+operation calls with one `ProgressEvent` as each phase starts and ends, as a
+partitioned run enters each partition and as a streamed run hands out each
+batch, and every `Check`, `Run`, `ProjectRun` and `Submission` gives the
+`Timings` of the phases it ran. A callback that panics or returns an error
+fails the result with `engine_rejected` (`host_progress_failure`), so it
+saves nothing. Timings never enter a saved file (P10).
 
 ```rust
 pub struct Engine { /* resolver + host configuration, Arc-shared */ }
@@ -260,6 +266,7 @@ pub struct EngineOptions {
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
     pub partitions: Option<Partitions>,       // none: every run whole
+    pub progress: Option<ProgressCallback>,   // none: no progress reported
 }
 
 impl EngineOptions {
@@ -739,7 +746,7 @@ Any module not listed here is internal by default.
 | `specification_report` | Facade -- the one result builder behind `Run`; its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
 | `style_values` | Internal -- the value comparison that proves `lint`'s fixes. |
 | `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`FailureKind::Unavailable`. |
-| `yamaa_core::application_observer` | Internal -- the observer port: each build's phase and stage events reach the adapters' measurements, which the facade passes in the build's `Scope` beside its cancellation probe; there is no public progress port (#3030 D72). |
+| `yamaa_core::application_observer` | Internal -- the observer port: each build's phase and stage events reach the adapters' measurements, which the facade passes in the build's `Scope` beside its cancellation probe, and the facade's progress port, which reports the public phases, partitions and batches to an engine's callback and reads each result's timings from those measurements (#3762). |
 | `yamaa_core::domain_entry` | Internal -- the observed preparation and build phases behind `Engine`. |
 | `yamaa_core::function_batch` | Facade -- `ProjectFunctions::call_batch` with facade scalar arguments; the batch invocation of the core host-functions port stays internal. |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |

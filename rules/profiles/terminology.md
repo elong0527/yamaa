@@ -48,7 +48,7 @@ rather than unknown; exactly one of published or sponsor-defined holds for any
 codelist. A codelist's `alias` carries the published concept identifier of the
 codelist itself, and an item's `alias` the published identifier of that value.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-vs-epoch-from-subject-elements`, `negative-terminology-standard-unknown`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_terminology_standard_name_outside_the_vocabulary_fails_where_the_project_is_read`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_terminology_standard_name_outside_the_vocabulary_is_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-vs-epoch-from-subject-elements`, `negative-terminology-standard-unknown`, `rust/crates/yamaa-application/tests/project_domain_submission.rs::a_terminology_standard_name_outside_the_vocabulary_fails_where_the_project_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_terminology_standard_name_outside_the_vocabulary_is_not_permitted`.
 
 Both aliases are optional here; [DEFINE-4](define-xml.md#define-4) states when a
 document requires an alias, and [CT-6](#ct-6) refuses one on a sponsor-extended
@@ -73,7 +73,7 @@ with `$`, or an `integer` or `float` codelist declaring one that does, fails
 validation.
 
 Fails: `value_not_permitted`.
-Evidence: `negative-format-name-without-dollar`, `negative-numeric-format-name-with-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::format_names_begin_with_a_dollar_sign_exactly_for_text_codelists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_format_name_begins_with_a_dollar_sign_exactly_when_its_codelist_is_text`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_files.json::a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written`.
+Evidence: `negative-format-name-without-dollar`, `negative-numeric-format-name-with-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::format_names_begin_with_a_dollar_sign_exactly_for_text_codelists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_format_name_begins_with_a_dollar_sign_exactly_when_its_codelist_is_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_files.json::a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written`.
 
 A `text` codelist's `format_name` that does not begin with `$`, or an
 `integer` or `float` codelist's that does, fails with `value_not_permitted` at
@@ -113,7 +113,7 @@ document. A duplicate coded value, or one not of the codelist's `data_type`,
 fails validation.
 
 Fails: `codelist_duplicate_value`, `codelist_shape_invalid`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::numeric_equality_is_exact_at_i64_and_binary64_boundaries`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::numeric_equality_is_exact_at_i64_and_binary64_boundaries`, `rust/crates/yamaa-application/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
 
 A duplicate coded value within one codelist fails with
 `codelist_duplicate_value`. A coded value that is not of the codelist's
@@ -221,7 +221,7 @@ A value-level binding decides the rows its entry selects. Binding an `external`
 codelist enforces nothing.
 
 Fails: `allowed_values_failed`.
-Evidence: `negative-epoch-outside-extensible-list`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::per_value_codelists_check_the_rows_their_where_column_completes`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::an_external_dictionary_entry_replaces_the_columns_list_on_its_rows_and_saves`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_per_value_extensible_list_checks_its_own_rows_alone`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_value_outside_the_default_list_beside_an_extensible_entry_fails_its_allowed_values`, `rust/crates/yamaa-core/tests/project_execution.rs::owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms`.
+Evidence: `negative-epoch-outside-extensible-list`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::per_value_codelists_check_the_rows_their_where_column_completes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_external_dictionary_entry_replaces_the_columns_list_on_its_rows_and_saves`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_extensible_list_checks_its_own_rows_alone`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_outside_the_default_list_beside_an_extensible_entry_fails_its_allowed_values`, `rust/crates/yamaa-core/tests/project_execution.rs::owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms`.
 
 Missing values pass exactly as [Verification](../verification.md)'s
 `allowed_values` treats them; a column that also prohibits absence resolves
@@ -255,7 +255,7 @@ a `float` codelist to a `float` column. A binding whose codelist `data_type` the
 column's declared type does not admit fails validation.
 
 Fails: `codelist_type_mismatch`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_codelist_whose_data_type_its_column_does_not_admit_is_refused_when_prepared`, `rust/crates/yamaa-core/tests/project_execution.rs::binding_checks_exact_column_type_and_rejects_restated_item_sets`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::integer_terminology_items_admit_equal_float_published_values`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_codelist_whose_data_type_its_column_does_not_admit_is_refused_when_prepared`, `rust/crates/yamaa-core/tests/project_execution.rs::binding_checks_exact_column_type_and_rejects_restated_item_sets`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::integer_terminology_items_admit_equal_float_published_values`.
 
 A coded value a column could never hold is a defect in the specification rather
 than a constraint that never fires.
@@ -273,7 +273,7 @@ A value-level binding governs only its own rows and leaves the column's
 verification standing.
 
 Fails: `redundant_declaration`.
-Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::an_allowed_values_check_beside_its_codelist_is_redundant`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::an_extensible_catalogue_states_the_value_set_once`.
+Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_allowed_values_check_beside_its_codelist_is_redundant`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::an_extensible_catalogue_states_the_value_set_once`.
 
 The failure reports the verification's path and, in `stated_by`, the binding's
 path, with the column and the codelist. A binding's items are known where a
@@ -294,7 +294,7 @@ controlled-terminology standards cited by those sources. Unbound codelists may
 serve another submission section and are omitted without an
 unreferenced-codelist failure.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 
 <a id="ct-11"></a>
 
@@ -309,7 +309,7 @@ whichever section composes the column. Missing values pass, exactly as
 completed column, and fails the same way.
 
 Fails: `allowed_values_failed`.
-Evidence: `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inventory_uses_inherited_declared_dataset_names_and_retained_original_metadata_in_both_hosts`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::the_inventory_names_an_inherited_dataset_for_python`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::the_inventory_names_an_inherited_dataset_for_r`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::the_inventory_of_a_specs_only_section_names_an_inherited_dataset_for_python`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::the_inventory_of_a_specs_only_section_names_an_inherited_dataset_for_r`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::an_inventory_of_a_project_without_datasets_admits_a_missing_value`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::an_inventory_of_a_project_without_datasets_admits_only_missing_values`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::the_inventory_names_the_datasets_of_every_submission_section`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_published_name_outside_the_study_inventory_fails_its_recheck`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::without_the_sdtm_section_a_predecessor_names_no_dataset_of_the_study`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_value_outside_the_dataset_inventory_fails`.
+Evidence: `rust/crates/yamaa-application/tests/project_domain_submission.rs::inventory_uses_inherited_declared_dataset_names_and_retained_original_metadata_in_both_hosts`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_inventory_names_an_inherited_dataset_for_python`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_inventory_names_an_inherited_dataset_for_r`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_inventory_of_a_specs_only_section_names_an_inherited_dataset_for_python`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_inventory_of_a_specs_only_section_names_an_inherited_dataset_for_r`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_inventory_of_a_project_without_datasets_admits_a_missing_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_inventory_of_a_project_without_datasets_admits_only_missing_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_inventory_names_the_datasets_of_every_submission_section`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_name_outside_the_study_inventory_fails_its_recheck`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::without_the_sdtm_section_a_predecessor_names_no_dataset_of_the_study`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_value_outside_the_dataset_inventory_fails`.
 
 The admitted values are the study's dataset inventory, which no static list can
 enumerate; that distinguishes this vocabulary from a codelist, whose values

@@ -67,6 +67,8 @@ vocabulary! {
         EnvironmentBoundary => "environment_boundary",
         ExecutionBoundary => "execution_boundary",
         ExecutionLimit => "execution_limit",
+        /// A progress callback panicked or raised (#3762).
+        HostProgressFailure => "host_progress_failure",
         HostPublicationFailure => "host_publication_failure",
         HostResourceFailure => "host_resource_failure",
         InheritanceRequired => "inheritance_required",

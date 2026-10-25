@@ -308,6 +308,8 @@ def run_graph(source, destination, graph, python, prepare_only=False):
             "--locked",
             "-p",
             "yamaa-adapters",
+            "-p",
+            "yamaa-application",
             "--no-default-features",
             cwd=rust,
         )

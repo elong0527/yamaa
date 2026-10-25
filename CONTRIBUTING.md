@@ -17,6 +17,7 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, binding (one walk, which `run()` takes over the captured input schemas and `check()` over the declared ones), dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
+| `rust/crates/yamaa-application/` | The application layer: for now its integration suite, the tests that run specifications, projects and saves through the file route, which the orchestration modules of `yamaa-adapters` join next (#3761). |
 | `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
@@ -32,10 +33,12 @@ results. Explicit Save publishes held bytes in contract order. Diagnostic codes
 belong to the shared registry. Resource policies and supported platforms have
 one owner in [release guidance](docs/release.md).
 
-The workspace has seven crates. `yamaa-core` owns preparation, project ports,
+The workspace has eight crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
 `yamaa-adapters` implements physical boundaries, and the `yamaa` facade
-composes the two. The two binding crates and the `yamaa-cli` command line
+composes the two. `yamaa-application`, between them, depends on the adapters
+and core alone, and holds the application layer's integration suite until its
+modules move there (#3761). The two binding crates and the `yamaa-cli` command line
 implement their host boundaries and depend on the facade; the bindings also
 depend on `yamaa-boundary`, which holds their interface handshake and depends
 on nothing else in the workspace (D281 on #3673 restores these edges of
@@ -468,15 +471,16 @@ the AST roots a project file produces, `support::ports` (core) holds the
 scripted ports that log each effect and panic on an unexpected request, and
 the `no_tables!`, `no_raw!`, `no_project_files!` and `no_documents!` halves
 of the decoder port for a test decoder that serves only the others,
-`support::specification_run` (adapters) prepares, compiles and lowers a
+`support::specification_run` (application) prepares, compiles and lowers a
 document and replays authored reports against it, `support::benchmarks`
-(adapters) reads what a live benchmark states (D120),
-`support::inheritance::Files` (adapters) resolves parents beside their
-declaring file, `support::NoFunctions` (yamaa) stands for a project that
-calls no function, and `support::Scratch` (adapters and yamaa) is a scratch
-directory removed on drop. The core and adapters
-trees hold copies of five modules by design (#2158): a change to one is
-made to both, and `make check-repository` fails while they differ
+(application) reads what a live benchmark states (D120),
+`support::inheritance::Files` (adapters and application) resolves parents
+beside their declaring file, `support::NoFunctions` (yamaa) stands for a
+project that calls no function, and `support::Scratch` (adapters,
+application and yamaa) is a scratch directory removed on drop. The core,
+adapters and application trees hold copies of some of each other's modules
+by design (#2158): a change to one is made to every copy, and
+`make check-repository` fails while they differ
 (`tools.validation.check_test_support`).
 
 - Authored controls are files under `tests/fixtures/`, read with
@@ -494,7 +498,7 @@ made to both, and `make check-repository` fails while they differ
   same complete rows, compared with each other whatever `compares`,
   `prefix` and `among` leave out. Core's input holds a specification as
   a JSON object, or a document of the file's `documents` with edits that
-  set or remove a member. The adapters' input holds the `files` its
+  set or remove a member. The application's input holds the `files` its
   operation writes to a fresh study directory, each its text, a
   `documents` entry (`base`) or an authored file named by its path from
   the repository root (`file`), such as a benchmark's `expected/` dataset,
@@ -506,7 +510,7 @@ made to both, and `make check-repository` fails while they differ
   those files as the engine spells its path. Each crate's
   `support::diagnostic::replay` replays every case once: core's inside
   `diagnostics.rs`'s registry walk, which renders each issue's message,
-  and the adapters' in `diagnostics.rs`. A case of an existing operation
+  and the application's in `diagnostics.rs`. A case of an existing operation
   is data alone; a new operation's reader, and a new fixture file, are
   declared in their module under `support::diagnostic::operations`.
 - A positive case also states what its operation built and saved.
@@ -556,7 +560,7 @@ made to both, and `make check-repository` fails while they differ
   never matched by a substring, and `select` names at least one path. A
   case states a table only when its operation reports one, and `saved`
   exactly when its operation saves: the
-  adapters' `build` reports the tables a built result holds, `save`
+  application's `build` reports the tables a built result holds, `save`
   builds as `build` does, then saves, and `define` composes a project's
   submission section, then saves it, each reporting its issues after the
   save, a save's own refusal included; core's operations report issues
@@ -576,7 +580,8 @@ made to both, and `make check-repository` fails while they differ
   its rows no authored position. These are the two exceptions to comparing
   the whole issue list, and a case writes at most one (`form::Order`).
 - A variant of a document comes from an exact-once edit,
-  `document.edit(from, to)` through the adapters' `support::Edit`, never
+  `document.edit(from, to)` through the `support::Edit` of the adapters and
+  the application, never
   from `str::replace`, which does nothing when its pattern is missing.
   `replace` stays only where every occurrence is meant to change, which
   may be none.
