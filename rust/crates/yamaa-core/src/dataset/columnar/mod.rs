@@ -535,7 +535,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         {
             if let Some(step) = plan.whole_table_step(partitions.keys) {
                 return Err(Box::new(ExecutionError::PartitionGlobal {
-                    path: plan.step_path(step).to_owned(),
+                    path: plan.step_path(step).into_owned(),
                 }));
             }
         }
