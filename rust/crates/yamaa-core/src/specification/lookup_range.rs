@@ -92,13 +92,17 @@ impl Declaration {
     pub(super) fn current_value(
         &self,
         catalog: &Catalog,
-        inputs: binder::Inputs<'_>,
-        secondary: &[SecondarySource],
-        intermediates: &[Option<Intermediate>],
+        donors: binder::Donors<'_>,
         driver: Option<&str>,
         available: Option<&[usize]>,
         edges: &mut Vec<usize>,
     ) -> Result<Option<(CurrentRead, Option<ValueType>)>, BindError> {
+        let binder::Donors {
+            secondary,
+            items: intermediates,
+            inputs,
+            ..
+        } = donors;
         let name = self.value.as_str();
         let Some((qualifier, field)) = name.split_once('.') else {
             return Ok(match catalog.bind(name) {

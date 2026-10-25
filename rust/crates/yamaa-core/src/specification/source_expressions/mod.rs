@@ -544,15 +544,8 @@ impl Declaration {
             )));
             return Ok(None);
         }
-        let Some((read, kind)) = range.current_value(
-            catalog,
-            cx.donors.inputs,
-            secondary,
-            intermediates,
-            driver,
-            available,
-            edges,
-        )?
+        let Some((read, kind)) =
+            range.current_value(catalog, cx.donors, driver, available, edges)?
         else {
             findings.push(wrap(range.unknown_value(owner)));
             return Ok(None);

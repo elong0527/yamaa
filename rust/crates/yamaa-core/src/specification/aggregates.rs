@@ -1791,16 +1791,7 @@ fn bind_range(
         }
         return Ok(None);
     };
-    let Some((read, kind)) = range.current_value(
-        catalog,
-        donors.inputs,
-        donors.secondary,
-        donors.items,
-        None,
-        None,
-        edges,
-    )?
-    else {
+    let Some((read, kind)) = range.current_value(catalog, donors, None, None, edges)? else {
         findings.push(BindFinding::AggregateDiagnostic(
             range.unknown_value(Owner::Unnamed),
         ));

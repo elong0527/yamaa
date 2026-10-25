@@ -627,15 +627,17 @@ impl Declaration {
         };
         let invalid = if !matches!(date_kind, ColumnType::Date | ColumnType::DateTime) {
             Some(("date", date, "date or datetime", date_kind))
-        } else if let Some(reference_kind) = reference_kind.filter(|kind| *kind != date_kind) {
-            Some((
-                "reference_date",
-                reference_date,
-                type_name(date_kind),
-                reference_kind,
-            ))
         } else {
-            None
+            reference_kind
+                .filter(|kind| *kind != date_kind)
+                .map(|reference_kind| {
+                    (
+                        "reference_date",
+                        reference_date,
+                        type_name(date_kind),
+                        reference_kind,
+                    )
+                })
         };
         let (operand, source, expected, actual) = invalid?;
         // The date is the first read and the reference the second.

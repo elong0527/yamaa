@@ -368,6 +368,64 @@ fn bind_nearest(
     }))
 }
 
+/// The field of the lookup's relation that `name` selects in its order:
+/// one the relation admits, qualified by its dataset, or written bare for
+/// SELF (`self_rows`). Any other name refuses the lookup (LOOKUP-7), with
+/// the qualified field a bare name names as its suggestion, which is
+/// withheld unless the donor's schema decides whether it stores the name,
+/// or the lookup derives it.
+fn select_field(
+    relation: &Donor<'_>,
+    self_rows: bool,
+    inputs: binder::Inputs<'_>,
+    name: &str,
+    path: &str,
+    findings: &mut Vec<BindFinding>,
+) -> Option<usize> {
+    let Donor {
+        lookup,
+        dataset,
+        schema,
+        admits,
+        ..
+    } = *relation;
+    let bare = name
+        .strip_prefix(&format!("{dataset}."))
+        .or_else(|| self_rows.then_some(name));
+    let field = bare
+        .and_then(|name| {
+            schema
+                .columns()
+                .iter()
+                .position(|column| column.name == name)
+        })
+        .filter(|&column| admits(column));
+    if field.is_none() {
+        let suggestion = (!name.contains('.')
+            && schema.columns().iter().any(|column| column.name == name))
+        .then(|| format!("{dataset}.{name}"));
+        let derived = suggestion.is_some()
+            && inputs
+                .schema(dataset)
+                .is_some_and(|stored| stored.position(name).is_none());
+        let finding = BindFinding::Lookup(LookupFinding::reference(
+            path,
+            name,
+            Some(lookup),
+            ReferenceCause::Selection,
+            suggestion,
+        ));
+        findings.push(
+            if name.contains('.') || derived || inputs.decides(dataset, name) {
+                finding
+            } else {
+                BindFinding::Withheld(std::boxed::Box::new(finding))
+            },
+        );
+    }
+    field
+}
+
 /// Bind one lookup over its relation: its derivations, its keys' types and
 /// fields, its key values and nearest reference in the current row, then
 /// its filter, order, projection, range and `unique` checks.
@@ -450,51 +508,16 @@ fn bind_one(
             || column >= output.columns().len()
             || self_columns.is_some_and(|columns| columns.contains(&column))
     };
-    let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {
-        let bare = name
-            .strip_prefix(&format!("{source_name}."))
-            .or_else(|| matches!(item.source, self_relations::Relation::SelfRows).then_some(name));
-        let field = bare.and_then(|name| {
-            schema
-                .columns()
-                .iter()
-                .position(|column| column.name == name)
-        });
-        let field = field.filter(|&column| admits(column));
-        if field.is_none() {
-            let suggestion = (!name.contains('.')
-                && schema.columns().iter().any(|c| c.name == name))
-            .then(|| format!("{source_name}.{name}"));
-            let derived_suggestion = suggestion.is_some();
-            let finding = BindFinding::Lookup(LookupFinding::reference(
-                path,
-                name,
-                Some(&item.name),
-                ReferenceCause::Selection,
-                suggestion,
-            ));
-            // A bare name's suggestion is withheld unless the donor's schema
-            // decides whether it stores the name, or the lookup derives it.
-            let derived = derived_suggestion
-                && inputs
-                    .schema(source_name)
-                    .is_some_and(|stored| stored.position(name).is_none());
-            findings.push(
-                if name.contains('.') || derived || inputs.decides(source_name, name) {
-                    finding
-                } else {
-                    BindFinding::Withheld(std::boxed::Box::new(finding))
-                },
-            );
-        }
-        field
-    };
     let donor = Donor {
         lookup: &item.name,
         dataset: source_name,
         schema,
         kind: &donor_kind,
         admits: &admits,
+    };
+    let self_rows = matches!(item.source, self_relations::Relation::SelfRows);
+    let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {
+        select_field(&donor, self_rows, inputs, name, path, findings)
     };
     let catalog = current_catalog(output, inputs)?;
     // An intermediate without `key` drives rows and is never a keyed lookup

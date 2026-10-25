@@ -44,12 +44,6 @@ pub(super) fn bind(
     donors: binder::Donors<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationRange>, BindError> {
-    let binder::Donors {
-        secondary,
-        items: previous,
-        inputs,
-        ..
-    } = donors;
     let intermediates::Donor {
         lookup: intermediate,
         schema: donor,
@@ -81,15 +75,7 @@ pub(super) fn bind(
             },
         );
     }
-    let current = declaration.current_value(
-        catalog,
-        inputs,
-        secondary,
-        previous,
-        None,
-        None,
-        &mut Vec::new(),
-    )?;
+    let current = declaration.current_value(catalog, donors, None, None, &mut Vec::new())?;
     let Some((read, kind)) = current else {
         findings.push(wrap(declaration.unknown_value(owner)));
         return Ok(None);
