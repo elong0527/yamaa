@@ -40,6 +40,7 @@ pub mod document;
 pub mod shipped_schema;
 pub mod specification_source;
 
+pub mod source_decoding;
 mod source_profile_inspection;
 pub mod specification_run;
 
@@ -75,6 +76,7 @@ pub mod file_workflow;
 pub mod host_resources;
 pub mod issue_location;
 pub mod publication;
+pub mod publisher;
 pub mod resolved_artifact;
 pub mod table_artifact;
 

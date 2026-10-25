@@ -417,7 +417,7 @@ pub(crate) fn save(
         Some(_) => None,
         None => Some(publication::stage_with(&files, |_, _| {
             if token.is_cancelled() {
-                Err(publication::Interruption::Cancelled)
+                Err(yamaa_adapters::publisher::Interruption::Cancelled)
             } else {
                 Ok(())
             }

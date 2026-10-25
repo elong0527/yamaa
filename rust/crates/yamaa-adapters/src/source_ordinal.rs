@@ -2,7 +2,7 @@
 use crate::{
     column_table::{Column, ColumnTable},
     csv_source::TextTableError,
-    specification_run::Error,
+    source_decoding::Error,
 };
 use yamaa_core::table::TableAccess;
 use yamaa_core::{source_ordinal, specification::SourceDeclaration};

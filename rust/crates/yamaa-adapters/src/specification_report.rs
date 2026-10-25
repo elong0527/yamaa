@@ -58,22 +58,7 @@ impl<'a> Identity<'a> {
         }
     }
 }
-#[derive(Debug)]
-pub enum Error {
-    UnsupportedOutcome,
-    CapabilityUnavailable { feature: &'static str },
-    InvalidObservation,
-    ResourceLimit(crate::resource_diagnostics::Refusal),
-}
-impl From<crate::source_diagnostics::SourceProjectionError> for Error {
-    fn from(error: crate::source_diagnostics::SourceProjectionError) -> Self {
-        match error {
-            crate::source_diagnostics::SourceProjectionError::InvalidContext => {
-                Self::InvalidObservation
-            }
-        }
-    }
-}
+pub use crate::report_storage::Error;
 /// One authored scalar as a plain context value: text, number, boolean or null.
 fn plain(value: &Scalar) -> Value {
     match value {
@@ -452,7 +437,7 @@ fn observation_ranges(
 /// when the observations are serialized, so they are the rows a whole read
 /// would give.
 fn scanned_observation(
-    scanned: &std::sync::Arc<crate::specification_run::Scanned>,
+    scanned: &std::sync::Arc<crate::source_decoding::Scanned>,
     bytes: std::sync::Arc<[u8]>,
     id: &Identity<'_>,
     name: &str,
@@ -464,7 +449,7 @@ fn scanned_observation(
         rows: Rows::Deferred(std::sync::Arc::new(move || {
             let mut writer = crate::report_storage::RowWriter::default();
             for range in observation_ranges(&scanned.partitions) {
-                let part = crate::specification_run::decode_range(&scanned, &bytes, range)
+                let part = crate::source_decoding::decode_range(&scanned, &bytes, range)
                     .map_err(|_| Error::InvalidObservation)?;
                 writer.table(&part)?;
             }

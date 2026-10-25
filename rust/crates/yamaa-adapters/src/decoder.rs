@@ -7,11 +7,11 @@
 //! partitions' tables. Snapshot cells remain infallible; the error type is
 //! only the engine's shared callback boundary. This grants no host access or
 //! activation authority.
-use crate::specification_run::Scanned;
+use crate::source_decoding::Scanned;
 use crate::{
     column_table::ColumnTable,
     document::Closures,
-    specification_run::Error,
+    source_decoding::Error,
     specification_source::{self, CapturedDocument, Source},
     yaml_decode::{decode_yaml, DecodedYaml},
 };
@@ -53,7 +53,7 @@ impl<E> Snapshot<E> {
     }
     /// What the scan of an input read by partition keeps (#3830); `None`
     /// for one read whole.
-    pub(crate) fn scan(&self) -> Option<&Arc<Scanned>> {
+    pub fn scan(&self) -> Option<&Arc<Scanned>> {
         match &self.storage {
             Storage::Whole(..) => None,
             Storage::Scanned(scanned, _) => Some(scanned),
@@ -153,7 +153,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         contract: Option<&yamaa_core::producer_contract::Contract>,
     ) -> Option<Result<Self::Table, Error>> {
         table.downcast_ref::<ColumnTable>().map(|table| {
-            crate::specification_run::decode_frame(source, table.clone(), interpretation, contract)
+            crate::source_decoding::decode_frame(source, table.clone(), interpretation, contract)
                 .map(Snapshot::whole)
         })
     }
@@ -195,7 +195,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         interpretation: yamaa_core::specification::SourceInterpretation,
         contract: Option<&yamaa_core::producer_contract::Contract>,
     ) -> Result<Snapshot<E>, Error> {
-        crate::specification_run::decode_source(source, bytes, interpretation, contract)
+        crate::source_decoding::decode_source(source, bytes, interpretation, contract)
             .map(Snapshot::whole)
     }
     /// A CSV input's header or a Parquet input's footer gives the schema;
@@ -206,7 +206,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         bytes: &[u8],
         interpretation: yamaa_core::specification::SourceInterpretation,
     ) -> Option<TableSchema> {
-        crate::specification_run::source_schema(source, bytes, interpretation)
+        crate::source_decoding::source_schema(source, bytes, interpretation)
     }
     /// A CSV or Parquet input scans a partition at a time, each table
     /// visited and dropped (#3830); every other profile is read whole.
@@ -219,7 +219,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         rows: std::num::NonZeroUsize,
         visit: &mut dyn FnMut(&Snapshot<E>, usize),
     ) -> Option<Result<Snapshot<E>, Error>> {
-        let scanned = crate::specification_run::scan_partitions(
+        let scanned = crate::source_decoding::scan_partitions(
             source,
             bytes,
             interpretation,
@@ -241,7 +241,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         let scan = scanned
             .scan()
             .unwrap_or_else(|| unreachable!("{} was not scanned by partition", source.name));
-        crate::specification_run::decode_range(scan, bytes, range).map(Snapshot::whole)
+        crate::source_decoding::decode_range(scan, bytes, range).map(Snapshot::whole)
     }
 }
 

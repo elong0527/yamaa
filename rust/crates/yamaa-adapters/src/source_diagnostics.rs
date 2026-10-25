@@ -1,5 +1,5 @@
 //! Project retained codec facts without repeating capture or decoding effects.
-use crate::{csv_source::TextTableError, specification_run::Error};
+use crate::{csv_source::TextTableError, source_decoding::Error};
 use yamaa_core::diagnostic::{Diagnostic, SourceFinding};
 use yamaa_core::specification::SourceDeclaration;
 

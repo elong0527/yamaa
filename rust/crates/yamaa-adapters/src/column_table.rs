@@ -60,7 +60,7 @@ pub(crate) fn limit(error: yamaa_core::limits::LimitExceeded) -> TableError {
 pub(crate) const UTF8_OFFSETS: &str = "Arrow Utf8 signed 32-bit offsets";
 
 /// Whether text values of these lengths fit [`UTF8_OFFSETS`] together.
-pub(crate) fn fits_utf8_offsets(lengths: impl IntoIterator<Item = usize>) -> bool {
+pub fn fits_utf8_offsets(lengths: impl IntoIterator<Item = usize>) -> bool {
     lengths
         .into_iter()
         .try_fold(0usize, |total, length| {

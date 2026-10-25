@@ -75,13 +75,13 @@ pub struct Publisher {
     declared: String,
 }
 /// Retain the selected physical root; an authored output cannot add authority.
-pub(crate) struct AnchoredTarget {
+pub struct AnchoredTarget {
     root: OwnedFd,
     remainder: Vec<String>,
     target: String,
 }
 impl AnchoredTarget {
-    pub(crate) fn new(root: OwnedFd, remainder: Vec<String>, target: String) -> Self {
+    pub fn new(root: OwnedFd, remainder: Vec<String>, target: String) -> Self {
         Self {
             root,
             remainder,
