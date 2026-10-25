@@ -1,0 +1,51 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, ANRLO, ANRHI]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+
+  # The parameter's 95% reference limits from the study's own results: their
+  # mean less or plus the standard normal quantile at 0.975 times their
+  # sample standard deviation (divisor n - 1). A test not done takes no part.
+  - name: ANRLO
+    type: float
+    label: Analysis Normal Range Lower Limit
+    derivation:
+      aggregate:
+        group_by: [STUDYID, PARAMCD]
+        expr: "MEAN(AVAL) - NORM_INV(0.975) * STDDEV(AVAL)"
+
+  - name: ANRHI
+    type: float
+    label: Analysis Normal Range Upper Limit
+    derivation:
+      aggregate:
+        group_by: [STUDYID, PARAMCD]
+        expr: "MEAN(AVAL) + NORM_INV(0.975) * STDDEV(AVAL)"
