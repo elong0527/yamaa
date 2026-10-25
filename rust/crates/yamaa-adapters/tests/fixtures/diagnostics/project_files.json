@@ -1,0 +1,388 @@
+{
+  "about": "A project's function files, codelist files and locks, read and admitted as a check reads them (FUNC-2, FILE-11, SCHEMA-2, CT-12), each case through both the check of the request's paths and the check of names relative to the study directory, which report the same rows. Moved at 8e662c648 from declaration_project_files.rs, whose tests read the same files through the public preparation or through a resolver that served them beside the project file, from project_environment.rs and project_diagnostics.rs, whose resolvers served held copies, and from file_project.rs. Most cases stage declaration_project_files.rs's study: the project lists one function file, holds a lock for each host and lists one codelist file, beside the specification's entry directory. The converted cases stage the 1.0 interface's adam-adsl-bmi example, its function file, its specification and the benchmark's R lock, which its tests read from the repository; the inline-codelist case stages project_environment.rs's listing, whose function file and lock it never reads. Each file is named by its path in the study.",
+  "documents": {
+    "project": "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/id.yaml]\nenvironments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\ncodelists: [ct.yaml]\n",
+    "id": "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id, r: program::id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n",
+    "uv.lock": "version = 1\npackage = []\n",
+    "renv.lock": "{\"R\": {\"Version\": \"4.6.1\"}, \"Packages\": {}}\n",
+    "codelists": "yamaa: \"1.0\"\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n",
+    "domain": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+    "sdtm": "yamaa: \"1.0\"\ntype: codelists\nstandard: {name: CDISC/NCI, publishing_set: SDTM, version: '2024-03-29'}\ncodelists:\n  - id: SEX\n    name: Sex\n    alias: C66731\n    format_name: $SEX\n    items:\n      - {value: F, decode: Female, alias: C16576}\n      - {value: M, decode: Male, alias: C20197}\n  - id: AGEGR\n    name: Age Group\n    data_type: integer\n    items: [{value: 1, decode: Young, rank: 1}, {value: 2, decode: Old, rank: 2}]\n  - id: MEDDRA\n    name: Adverse Event Dictionary\n    external: {dictionary: MedDRA, version: '26.0'}\n",
+    "listing": "yamaa: '1.0'\ntype: project\nfunctions: [function.yaml]\nenvironments: {python: {lock: uv.lock}}\n"
+  },
+  "cases": [
+    {
+      "case": "a_listed_function_file_that_is_missing_fails_at_its_listing",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["functions[0]"], "context": {"path": "functions/id.yaml"}}]
+    },
+    {
+      "case": "a_listed_codelist_file_that_is_missing_fails_at_its_listing",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["codelists[0]"], "context": {"path": "ct.yaml"}}]
+    },
+    {
+      "case": "the_host_s_lock_that_is_missing_fails_at_its_lock_field",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["environments.python.lock"], "context": {"path": "uv.lock"}}]
+    },
+    {
+      "case": "every_missing_listed_file_and_lock_fails_in_the_order_they_are_read",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {"project.yaml": {"base": "project"}, "uv.lock": {"base": "uv.lock"}, "entry/domain.yaml": {"base": "domain"}},
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "host": "r"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["environments.r.lock"], "context": {"path": "renv.lock"}}, {"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["functions[0]"], "context": {"path": "functions/id.yaml"}}, {"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["codelists[0]"], "context": {"path": "ct.yaml"}}]
+    },
+    {
+      "case": "a_listed_function_file_that_is_a_directory_fails_at_its_listing",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "directories": ["functions/id.yaml"],
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_not_regular_file", "rule": "FILE-7", "spec_paths": ["functions[0]"], "context": {"path": "functions/id.yaml"}}]
+    },
+    {
+      "case": "a_listed_file_that_is_no_yaml_fails_in_that_file_at_its_listing",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": "[unclosed\n",
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.entry", "context.path", "context.environment_path"],
+      "issues": [{"condition": "invalid_yaml", "rule": "SCHEMA-3", "spec_paths": ["$"], "context": {"entry": "{study}/project.yaml", "path": "functions/id.yaml", "environment_path": "functions[0]"}}]
+    },
+    {
+      "case": "a_listed_path_with_a_backslash_fails_in_the_project_before_any_file_is_read",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "[functions/id.yaml]", "to": "['functions\\id.yaml']"}]},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["functions[0]"], "context": {"path": "functions\\id.yaml", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_listed_path_with_a_uri_scheme_fails_in_the_project_before_any_file_is_read",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "[functions/id.yaml]", "to": "['https://example.org/id.yaml']"}]},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_uri_scheme", "rule": "FILE-5", "spec_paths": ["functions[0]"], "context": {"path": "https://example.org/id.yaml", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": "not a packaging lock\n",
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml",
+        "host": "r"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["environments.r.lock"], "context": {"source": "{study}/project.yaml", "entry": "{study}/project.yaml", "path": "renv.lock", "environment_path": "environments.r.lock", "cause": "invalid_packaging_lock", "reason": "invalid_packaging_lock"}}]
+    },
+    {
+      "case": "a_listed_file_of_an_unread_version_and_one_of_another_type_fail_at_their_listings",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "project",
+            "edits": [{"from": "codelists: [ct.yaml]", "to": "codelists:\n  - codelists: [{id: AGE, name: Age, data_type: integer, items: [{value: 1}]}]\n  - ct.yaml"}]
+          },
+          "functions/id.yaml": {"base": "id", "edits": [{"from": "yamaa: \"1.0\"", "to": "yamaa: \"1.1\""}]},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists", "edits": [{"from": "type: codelists", "to": "type: function"}]},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["functions[0]"], "context": {"source": "{study}/functions/id.yaml", "version": "1.1", "language_versions": ["1.0"]}}, {"condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["codelists[1]"], "context": {"source": "{study}/ct.yaml", "type": "function", "expected": "codelists"}}]
+    },
+    {
+      "case": "a_codelist_file_where_a_function_file_belongs_fails_at_its_listing",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "project",
+            "edits": [{"from": "codelists: [ct.yaml]", "to": "codelists:\n  - codelists: [{id: AGE, name: Age, data_type: integer, items: [{value: 1}]}]\n  - ct.yaml"}]
+          },
+          "functions/id.yaml": {"base": "codelists"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["functions[0]"], "context": {"source": "{study}/functions/id.yaml", "type": "codelists", "expected": "function"}}]
+    },
+    {
+      "case": "a_listed_file_written_in_language_0_5_fails_at_its_listing",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "project",
+            "edits": [{"from": "codelists: [ct.yaml]", "to": "codelists:\n  - codelists: [{id: AGE, name: Age, data_type: integer, items: [{value: 1}]}]\n  - ct.yaml"}]
+          },
+          "functions/id.yaml": "schema_version: '1.0'\nlock: uv.lock\n",
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["functions[0]"], "context": {"source": "{study}/functions/id.yaml", "version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_listed_function_file_without_the_header_fails_in_that_file_at_its_missing_yamaa",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "project",
+            "edits": [{"from": "codelists: [ct.yaml]", "to": "codelists:\n  - codelists: [{id: AGE, name: Age, data_type: integer, items: [{value: 1}]}]\n  - ct.yaml"}]
+          },
+          "functions/id.yaml": {"base": "id", "edits": [{"from": "yamaa: \"1.0\"\ntype: function\n", "to": ""}]},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.source", "context.entry", "context.environment_path"],
+      "issues": [{"condition": "missing_required_field", "spec_paths": ["yamaa"], "context": {"source": "{study}/functions/id.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[0]"}}]
+    },
+    {
+      "case": "a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "project",
+            "edits": [{"from": "codelists: [ct.yaml]", "to": "codelists:\n  - codelists: [{id: SEX, name: Sex, format_name: SEXF, items: [{value: F}, {value: M}]}]\n  - ct.yaml"}]
+          },
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": "yamaa: \"1.0\"\ntype: codelists\ncodelists:\n  - {id: AGEGR1N, name: Age group, data_type: integer, format_name: $AGEGRN, items: [{value: 1}, {value: 2}]}\n  - {id: DOSE, name: Dose, data_type: float, format_name: DOSEF, items: [{value: 2.5}]}\n",
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "value_not_permitted", "rule": "CT-12", "spec_paths": ["codelists[0].codelists[0].format_name"], "context": {"codelist": "SEX", "value": "SEXF", "data_type": "text", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "codelists[0]"}}, {"condition": "value_not_permitted", "rule": "CT-12", "spec_paths": ["codelists[0].format_name"], "context": {"codelist": "AGEGR1N", "value": "$AGEGRN", "data_type": "integer", "source": "{study}/ct.yaml", "entry": "{study}/project.yaml", "environment_path": "codelists[1]"}}]
+    },
+    {
+      "case": "a_codelist_integer_outside_the_int_range_fails_in_the_codelist_file_the_project_lists",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml",
+            "edits": [{"from": "  - spec.yaml\n", "to": "  - spec.yaml\ncodelists: [ct/sdtm.yaml]\n"}]
+          },
+          "functions/bmi.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml"},
+          "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
+          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"},
+          "ct/sdtm.yaml": {"base": "sdtm", "edits": [{"from": "rank: 2", "to": "rank: 99999999999999999999"}]}
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.source", "context.environment_path"],
+      "issues": [{"condition": "integer_overflow", "spec_paths": ["codelists[1].items[1].rank"], "context": {"source": "{study}/ct/sdtm.yaml", "environment_path": "codelists[0]"}}]
+    },
+    {
+      "case": "inline_codelist_integers_outside_the_int_range_fail_in_the_project_before_any_file_is_read",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "base": "listing",
+            "edits": [{"from": "environments: {python: {lock: uv.lock}}\n", "to": "environments: {python: {lock: uv.lock}}\ncodelists:\n  - {codelists: [{id: WIDE, name: Wide, data_type: integer, items: [{value: 123456789012345678901234567890, rank: -123456789012345678901234567890}, {value: 9223372036854775808}]}]}\n"}]
+          },
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["codelists[0].codelists[0].items[0].value"], "context": {"actual": 123456789012345678901234567890, "value": "123456789012345678901234567890", "minimum": -9223372036854775808, "maximum": 9223372036854775807, "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}, {"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["codelists[0].codelists[0].items[0].rank"], "context": {"actual": -123456789012345678901234567890, "value": "-123456789012345678901234567890", "minimum": -9223372036854775808, "maximum": 9223372036854775807, "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}, {"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["codelists[0].codelists[0].items[1].value"], "context": {"actual": 9223372036854775808, "value": "9223372036854775808", "minimum": -9223372036854775808, "maximum": 9223372036854775807, "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_lock_of_another_kind_and_a_repeated_name_fail_where_they_are_declared",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {
+            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml",
+            "edits": [{"from": "environments:\n  r:", "to": "environments:\n  python:\n    lock: r/renv.lock\n  r:"}, {"from": "- functions/bmi.yaml", "to": "- functions/bmi.yaml\n- functions/copy.yaml"}]
+          },
+          "functions/bmi.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml"},
+          "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
+          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"},
+          "functions/copy.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml"}
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["environments.python.lock"], "context": {"reason": "lock_kind_mismatch", "language": "python", "actual_lock_kind": "renv", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "environments.python.lock"}}, {"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["name"], "context": {"function": "bmi", "reason": "duplicate_function", "source": "{study}/functions/copy.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[1]"}}]
+    },
+    {
+      "case": "a_python_spelling_of_the_r_callable_fails_in_the_function_file_in_either_host",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml"},
+          "functions/bmi.yaml": {
+            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml",
+            "edits": [{"from": "yamaabenchmarks::bmi", "to": "yamaabenchmarks.bmi"}]
+          },
+          "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
+          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"}
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function", "context.language", "context.reason", "context.source", "context.entry", "context.environment_path"],
+      "issues": [{"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.r"], "context": {"function": "bmi", "language": "r", "reason": "invalid_callable", "source": "{study}/functions/bmi.yaml", "entry": "{study}/project.yaml", "environment_path": "functions[0]"}}]
+    },
+    {
+      "case": "a_case_date_its_declared_type_cannot_read_fails_in_the_function_file_as_written",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml"},
+          "functions/bmi.yaml": {
+            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml",
+            "edits": [{"from": "weight_kg\n  type: float", "to": "weight_kg\n  type: date"}, {"from": "weight_kg: 70.0\n    height_cm: 175.0\n    cm_per_m: 100", "to": "weight_kg: '2024-02-30'\n    height_cm: 175.0\n    cm_per_m: 100"}]
+          },
+          "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
+          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"}
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.reason", "context.value", "context.source", "context.environment_path"],
+      "issues": [{"condition": "function_file_invalid", "spec_paths": ["tests[0].args.weight_kg"], "context": {"reason": "invalid_date", "value": "2024-02-30", "source": "{study}/functions/bmi.yaml", "environment_path": "functions[0]"}}]
+    },
+    {
+      "case": "an_input_path_naming_a_directory_with_an_unknown_suffix_fails_before_activation",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain", "edits": [{"from": "input.csv", "to": "input.unknown"}]}
+        },
+        "directories": ["entry/input.unknown"],
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "prefix": true,
+      "issues": [{"condition": "resource_path_not_regular_file", "spec_paths": ["input.SRC.path"]}]
+    }
+  ]
+}
