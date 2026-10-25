@@ -122,11 +122,33 @@ order above, starting with \code{status}, and \code{length()} counts them;
 \code{ls()} lists the same names, sorted.
 }
 \examples{
-\dontrun{
-project <- yamaa_project("project.yaml")
+study <- tempfile("yamaa-")
+dir.create(study)
+writeLines(c("USUBJID,AGE", "01,35", "02,42"), file.path(study, "input.csv"))
+writeLines('yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [USUBJID]
+input: {RAW: {path: input.csv, types: {USUBJID: str, AGE: int}}}
+output: {path: dm.csv, columns: [USUBJID, AGE]}
+
+columns:
+  - {name: USUBJID, type: str, derivation: RAW.USUBJID}
+  - {name: AGE, type: int, derivation: RAW.AGE}
+', file.path(study, "dm.yaml"))
+writeLines('yamaa: "1.0"
+type: project
+sdtm: {specs: [dm.yaml]}
+', file.path(study, "project.yaml"))
+
+project <- yamaa_project(file.path(study, "project.yaml"))
+project$names
+project$check()
 runs <- project$run("sdtm")
 runs
-runs$save()
-project$submission("sdtm")$save()
-}
+runs[["DM"]]$output
+basename(runs$save())
+
+unlink(study, recursive = TRUE)
 }

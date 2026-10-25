@@ -105,10 +105,27 @@ above, starting with \code{status}, and \code{length()} counts them;
 \code{ls()} lists the same names, sorted.
 }
 \examples{
-\dontrun{
-run <- yamaa_spec("sdtm/dm.yaml")$run()
+study <- tempfile("yamaa-")
+dir.create(study)
+writeLines(c("USUBJID,AGE", "01,35", "02,42"), file.path(study, "input.csv"))
+writeLines('yamaa: "1.0"
+type: spec
+domain: DM
+keys: [USUBJID]
+input: {RAW: {path: input.csv, types: {USUBJID: str, AGE: int}}}
+output: {path: dm.csv, columns: [USUBJID, AGE]}
+
+columns:
+  - {name: USUBJID, type: str, derivation: RAW.USUBJID}
+  - {name: AGE, type: int, derivation: RAW.AGE}
+', file.path(study, "dm.yaml"))
+
+spec <- yamaa_spec(file.path(study, "dm.yaml"))
+spec$check()
+run <- spec$run()
 run
 run$output
-run$save()
-}
+basename(run$save())
+
+unlink(study, recursive = TRUE)
 }

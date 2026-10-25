@@ -22,7 +22,26 @@ A data frame with one row per clinical item. A refusal raises a condition of
 class \code{yamaa_error}.
 }
 \examples{
-\dontrun{
-items <- yamaa_read_odm("edc/odm.xml")
-}
+odm <- tempfile(fileext = ".xml")
+writeLines('<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" ODMVersion="1.3" FileOID="F.1">
+  <ClinicalData StudyOID="S.1" MetaDataVersionOID="M.1">
+    <SubjectData SubjectKey="01">
+      <StudyEventData StudyEventOID="SE.SCREEN">
+        <FormData FormOID="F.DM">
+          <ItemGroupData ItemGroupOID="IG.DM">
+            <ItemData ItemOID="IT.DM.AGE" Value="35"/>
+            <ItemData ItemOID="IT.DM.SEX" Value="F"/>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+  </ClinicalData>
+</ODM>
+', odm)
+
+items <- yamaa_read_odm(odm)
+items[, c("SubjectKey", "ItemOID", "Value")]
+
+unlink(odm)
 }

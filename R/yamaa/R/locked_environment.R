@@ -4,10 +4,14 @@
                                          version = utils::packageVersion,
                                          base_packages = NULL) {
   if (!length(calls)) return(list())
-  if (is.null(base_packages)) {
-    base_packages <- rownames(utils::installed.packages(priority = "base"))
-  }
   packages <- sub("::.*$", "", calls)
+  if (is.null(base_packages)) {
+    # Each called package's own DESCRIPTION says whether it is a base package,
+    # without installed.packages(), which reads every installed package.
+    base_packages <- packages[vapply(packages, function(package) identical(
+      suppressWarnings(utils::packageDescription(package, fields = "Priority")),
+      "base"), logical(1))]
+  }
   packages <- sort(unique(c("yamaa", packages[!packages %in% base_packages])))
   findings <- list()
   record <- function(package, reason, expected = NULL, actual = NULL) {

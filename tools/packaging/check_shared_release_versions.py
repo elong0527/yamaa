@@ -15,7 +15,8 @@ from tools.paths import ROOT
 # The selected author list: the author first, then the contributors in the
 # order the R package declares them. Python and Cargo metadata cannot
 # express contributor roles, so they carry the same people in the same
-# order; the R DESCRIPTION alone assigns the roles.
+# order; the R DESCRIPTION alone assigns the roles. There the author is also
+# a copyright holder, as CRAN asks of a package's author.
 SELECTED_PEOPLE = [
     ("Yilong Zhang", "elong0527@gmail.com"),
     ("Ming-Chun Chen", None),
@@ -255,7 +256,7 @@ def author_violations(root):
     description = read("R/yamaa/DESCRIPTION")
     if description is not None:
         expected = [
-            (name, email, {"aut", "cre"} if index == 0 else {"ctb"})
+            (name, email, {"aut", "cre", "cph"} if index == 0 else {"ctb"})
             for index, (name, email) in enumerate(SELECTED_PEOPLE)
         ] + BUNDLED_AUTHORS
         if _r_people(description) != expected:
