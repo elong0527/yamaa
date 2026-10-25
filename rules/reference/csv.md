@@ -113,7 +113,7 @@ has no rows or no `float` columns. An invalid value fails validation at
 mapping resolves to `parquet`.
 
 Fails: `invalid_field_type`, `decimals_not_applicable`.
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::output_precision_rejection_follows_original_execution_failure_and_denies_publication`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs::csv_precision_range_is_validated_for_empty_and_non_float_outputs_in_both_hosts`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::output_precision_rejection_follows_original_execution_failure_and_denies_publication`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_records`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_an_int_output`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_study_data`.
 
 An invalid value fails with `invalid_field_type`. A declaration on a `parquet`
 path fails with `decimals_not_applicable`: a display precision that cannot
