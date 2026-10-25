@@ -524,11 +524,15 @@ fn a_spec_path_is_checked_run_and_resolved_alone() {
 
 /// `--verbose` (#3762) leaves standard output as it is and writes to
 /// standard error each phase of the run as it starts and ends, the phases of
-/// a run without project functions in their documented order, then the
-/// timings table: its column names, then one row per phase with the run's
-/// path as given, its phase, two numbers of milliseconds and its outcome.
+/// a run without project functions in their documented order; then how the
+/// run divided its driver input (#3794); then the timings table: its column
+/// names, then one row per phase with the run's path as given, its phase,
+/// two numbers of milliseconds and its outcome. The command line runs
+/// key-bounded over the two leading declared keys, in partitions of at most
+/// 624,640 records (D264): DM declares one key and its input holds two
+/// records, so the run derives one key-bounded partition of 2 records.
 #[test]
-fn verbose_writes_each_phase_and_then_the_timings_to_standard_error() {
+fn verbose_writes_each_phase_the_division_and_then_the_timings_to_standard_error() {
     let study = Study::new();
     let plain = outcome(&yamaa_in(&study.0, &["run", "sdtm/dm.yaml"]));
     let (status, stdout, stderr) =
@@ -546,14 +550,20 @@ fn verbose_writes_each_phase_and_then_the_timings_to_standard_error() {
     let events = phases
         .iter()
         .flat_map(|phase| {
-            [
-                format!("sdtm/dm.yaml: {phase} start"),
-                format!("sdtm/dm.yaml: {phase} end: succeeded"),
-            ]
+            let partition = (*phase == "derivation")
+                .then(|| "sdtm/dm.yaml: derivation partition 1 (2 records)".to_owned());
+            std::iter::once(format!("sdtm/dm.yaml: {phase} start"))
+                .chain(partition)
+                .chain([format!("sdtm/dm.yaml: {phase} end: succeeded")])
         })
+        .chain(["sdtm/dm.yaml: partitions key_bounded 1".to_owned()])
         .collect::<Vec<_>>();
     let lines = stderr.lines().collect::<Vec<_>>();
-    assert_eq!(lines[..events.len()], events, "the progress events");
+    assert_eq!(
+        lines[..events.len()],
+        events,
+        "the progress events and the division"
+    );
     assert_eq!(
         lines[events.len()],
         "name\tphase\tstarted_ms\telapsed_ms\toutcome",

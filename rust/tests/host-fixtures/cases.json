@@ -8404,6 +8404,7 @@
         {"name": "{path}", "phase": "admission", "kind": "start", "outcome": null, "number": null, "rows": null},
         {"name": "{path}", "phase": "admission", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
         {"name": "{path}", "phase": "derivation", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "derivation", "kind": "partition", "outcome": null, "number": 1, "rows": 2},
         {"name": "{path}", "phase": "derivation", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
         {"name": "{path}", "phase": "output_keys", "kind": "start", "outcome": null, "number": null, "rows": null},
         {"name": "{path}", "phase": "output_keys", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},

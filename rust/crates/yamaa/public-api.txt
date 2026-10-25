@@ -32,6 +32,7 @@ yamaa::DataType: pub use yamaa::table::DataType [cfg(feature = "arrow")]
 yamaa::Date32Array: pub use yamaa::table::Date32Array [cfg(feature = "arrow")]
 yamaa::Diagnostic: pub use yamaa::diagnostic::Diagnostic
 yamaa::DiagnosticContext: pub use yamaa::diagnostic::DiagnosticContext
+yamaa::Division: pub use yamaa::progress::Division
 yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::FEATURES: pub use yamaa::info::FEATURES
@@ -575,6 +576,10 @@ yamaa::odm::OdmOptions::with_archive_member: pub fn with_archive_member(mut self
 yamaa::odm::OdmOptions::with_max_archive_members: pub fn with_max_archive_members(mut self, limit: usize) -> Self
 yamaa::odm::OdmOptions::with_max_expanded_bytes: pub fn with_max_expanded_bytes(mut self, limit: u64) -> Self
 yamaa::odm::OdmOptions::with_max_xml_depth: pub fn with_max_xml_depth(mut self, limit: usize) -> Self
+yamaa::progress::Division: pub struct Division [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::progress::Division::count: pub count: usize
+yamaa::progress::Division::name: pub name: String
+yamaa::progress::Division::strategy: pub strategy: &'static str
 yamaa::progress::PROGRESS_KINDS: pub const PROGRESS_KINDS: [&str; 4]
 yamaa::progress::PROGRESS_PHASES: pub const PROGRESS_PHASES: [&str; 9]
 yamaa::progress::ProgressCallback: pub type ProgressCallback = Arc<dyn Fn(&ProgressEvent) -> Result<(), FunctionError> + Send + Sync>
@@ -613,6 +618,7 @@ yamaa::progress::Timing::phase: pub phase: ProgressPhase
 yamaa::progress::Timing::started: pub started: Duration
 yamaa::progress::Timings: impl Timings
 yamaa::progress::Timings: pub struct Timings [derive(Clone, Debug, Default, Eq, PartialEq)]
+yamaa::progress::Timings::divisions: pub fn divisions(&self) -> &[Division]
 yamaa::progress::Timings::entries: pub fn entries(&self) -> &[Timing]
 yamaa::progress::Timings::lines: pub fn lines(&self) -> Vec<String>
 yamaa::progress::Timings::table: pub fn table(&self) -> Table

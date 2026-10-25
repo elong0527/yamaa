@@ -184,6 +184,14 @@ impl Measurements {
             })
             .collect()
     }
+    /// How the run divided its driver input, as its evidence names it (#3794):
+    /// the strategy and the number of partitions; none before it divided.
+    pub fn division(&self) -> Option<(&'static str, usize)> {
+        self.state()
+            .partitions
+            .as_ref()
+            .map(|partitions| (partitions.strategy, partitions.count))
+    }
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
         self.state
             .lock()

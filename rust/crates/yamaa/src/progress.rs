@@ -202,12 +202,27 @@ pub struct Timing {
 /// The columns of a timings table, in order.
 pub const TIMING_COLUMNS: [&str; 5] = ["name", "phase", "started_ms", "elapsed_ms", "outcome"];
 
+/// How one run divided its driver input (#3794), as its measured
+/// observations name it.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Division {
+    /// What the run is named by, as [`ProgressEvent::name`] names it.
+    pub name: String,
+    /// `whole_table`, `key_bounded` or `consecutive`.
+    pub strategy: &'static str,
+    /// How many partitions the run derived, 1 for the whole table.
+    pub count: usize,
+}
+
 /// The phases a result ran, in the order they started: a project run's
 /// specifications in run order, a project check's in listed order and a
-/// submission's sections in section order.
+/// submission's sections in section order. Beside them, how each run among
+/// them divided its driver input.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Timings {
     entries: Vec<Timing>,
+    divisions: Vec<Division>,
 }
 
 /// Milliseconds, with the nanoseconds a duration holds.
@@ -219,6 +234,12 @@ impl Timings {
     /// Every phase, in the order it started.
     pub fn entries(&self) -> &[Timing] {
         &self.entries
+    }
+
+    /// How each run divided its driver input, in run order: none for a
+    /// check, a submission or a run that never reached its derivation.
+    pub fn divisions(&self) -> &[Division] {
+        &self.divisions
     }
 
     /// The timings table with the [`TIMING_COLUMNS`], one row per phase:
@@ -273,9 +294,12 @@ impl Timings {
 
     /// The timings of every part, in order.
     pub(crate) fn joined(parts: impl IntoIterator<Item = Timings>) -> Self {
-        Self {
-            entries: parts.into_iter().flat_map(|part| part.entries).collect(),
+        let mut joined = Self::default();
+        for part in parts {
+            joined.entries.extend(part.entries);
+            joined.divisions.extend(part.divisions);
         }
+        joined
     }
 }
 
@@ -327,6 +351,16 @@ impl Measured {
                         outcome: stage.outcome.map(status),
                     })
                 })
+                .collect(),
+            divisions: self
+                .measurements
+                .division()
+                .map(|(strategy, count)| Division {
+                    name: self.name.to_string(),
+                    strategy,
+                    count,
+                })
+                .into_iter()
                 .collect(),
         }
     }

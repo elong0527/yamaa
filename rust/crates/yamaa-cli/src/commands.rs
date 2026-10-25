@@ -52,9 +52,12 @@
 //! `--verbose` makes `check`, `run` and `submission` write to standard error
 //! (#3762), never to standard output: one line per progress event,
 //! `<name>: <phase> <kind>`, with a partition's number and records or an
-//! end's outcome, such as `dm.yaml: derivation end: succeeded`, then the
-//! timings table as the facade's `Timings::lines` gives it: a line of its
-//! column names, then one line per phase, each cell separated by a tab.
+//! end's outcome, such as `dm.yaml: derivation end: succeeded`; then, for
+//! each run, how it divided its driver input (#3794),
+//! `<name>: partitions <strategy> <count>`, such as
+//! `dm.yaml: partitions key_bounded 1`; then the timings table as the
+//! facade's `Timings::lines` gives it: a line of its column names, then one
+//! line per phase, each cell separated by a tab.
 //!
 //! `check`, `run`, `submission` and `resolve` dispatch on the type their PATH
 //! declares in its `type:` header, which the facade reads before anything
@@ -135,17 +138,29 @@ pub(crate) fn execute(call: &Call, format: Format, token: &CancellationToken) ->
 }
 
 /// What `--verbose` adds (#3762): each progress event on standard error as
-/// it happens, and, once the command ran, the timings table of its result.
+/// it happens, and, once the command ran, how each run divided its driver
+/// input (#3794) and the timings table of its result.
 struct Verbose {
     on: bool,
     timings: RefCell<Vec<String>>,
 }
 
 impl Verbose {
-    /// Keep the lines of `timings`, the result's, for standard error.
+    /// Keep the lines of `timings`, the result's, for standard error: each
+    /// run's division, then the table.
     fn timings(&self, timings: &Timings) {
         if self.on {
-            *self.timings.borrow_mut() = timings.lines();
+            *self.timings.borrow_mut() = timings
+                .divisions()
+                .iter()
+                .map(|division| {
+                    format!(
+                        "{}: partitions {} {}",
+                        division.name, division.strategy, division.count
+                    )
+                })
+                .chain(timings.lines())
+                .collect();
         }
     }
 }

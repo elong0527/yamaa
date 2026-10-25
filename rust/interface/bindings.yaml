@@ -847,8 +847,10 @@ cli:
       failed; the panic message of a selftest case that panicked, which
       fails that case; and under --verbose (#3762), one line per progress
       event as it happens, `<name>: <phase> <kind>` with a partition's number
-      and records or an end's outcome, then the timings table, its column
-      names and one line per phase, each cell separated by a tab
+      and records or an end's outcome; then, for each run, how it divided its
+      driver input (#3794), `<name>: partitions <strategy> <count>`; then
+      the timings table, its column names and one line per phase, each cell
+      separated by a tab
   # D68, D98: an unknown section, an unknown schema TYPE and a PATH whose type
   # cannot be read are refusals the facade explains with issues (D125, D149).
   exit_status:

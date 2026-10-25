@@ -105,8 +105,8 @@ pub use info::{info, Host, Info, FEATURES, HOSTS};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
 pub use odm::{OdmOptions, ODM_COLUMNS};
 pub use progress::{
-    ProgressCallback, ProgressEvent, ProgressKind, ProgressPhase, Timing, Timings, PROGRESS_KINDS,
-    PROGRESS_PHASES, TIMING_COLUMNS,
+    Division, ProgressCallback, ProgressEvent, ProgressKind, ProgressPhase, Timing, Timings,
+    PROGRESS_KINDS, PROGRESS_PHASES, TIMING_COLUMNS,
 };
 pub use schema::schema;
 pub use selftest::{selftest, SelfTest, SelfTestCase, SELFTEST_COLUMNS};

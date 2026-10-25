@@ -1144,9 +1144,13 @@ case that panics fails, and the panic message, which shows where the engine
 panicked, goes to standard error. And `check`, `run` and `submission` with
 `--verbose` write each progress event there as it happens, as
 `<name>: <phase> <kind>` with a partition's number and records or an end's
-outcome, such as `sdtm/dm.yaml: derivation end: succeeded`, then the
-timings table of the result, its column names and one line per phase, each
-cell separated by a tab ([Progress and timings](#progress-and-timings)).
+outcome, such as `sdtm/dm.yaml: derivation end: succeeded`. Then, for each
+run, they write how it divided its driver input, as
+`<name>: partitions <strategy> <count>`, where the strategy is
+`whole_table`, `key_bounded` or `consecutive`, such as
+`sdtm/dm.yaml: partitions key_bounded 1`. Last comes the timings table of
+the result, its column names and one line per phase, each cell separated by
+a tab ([Progress and timings](#progress-and-timings)).
 Standard output is the same with or without `--verbose`.
 
 ### Exit status
