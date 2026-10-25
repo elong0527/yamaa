@@ -1,5 +1,5 @@
 {
-  "about": "One submission section composed and saved (DEFINE, SUB, JSON, PROJECT, CT, INPUT): what refuses a composition before any specification is read, what its metadata refutes, how it rechecks a published dataset, and where its save publishes each file. Moved from file_resources.rs's shared_define module. A case stages a benchmark's files and takes a published dataset from the benchmark's expected/ files, as the tests copied them; the two refusals that come before any specification is read stage the project file and the published dataset alone, since their tests deleted the specification. Each case compares what its test compared: rows found by their cause are among the issues, and a refused composition's saved is {}, the absent define.xml and transport file its test asserted. The tests that stay in file_resources.rs compare fragments of a generated document, which a case states only whole, or what a composition holds and reads between its preparation and its save. The three compositions that relocate the DM benchmark's dataset publish the benchmark's own documents: nothing either document writes depends on the specification's path, and each names the other relative to itself, the transport file beside the document (JSON-1).",
+  "about": "One submission section composed and saved (DEFINE, SUB, JSON, PROJECT, CT, INPUT): what refuses a composition before any specification is read, what its metadata refutes, how it rechecks a published dataset, and where its save publishes each file. Moved from file_resources.rs's shared_define module. A case stages a benchmark's files and takes a published dataset from the benchmark's expected/ files, as the tests copied them; the two refusals that come before any specification is read stage the project file and the published dataset alone, since their tests deleted the specification. Each case compares what its test compared: rows found by their cause are among the issues, and a refused composition's saved is {}, the absent define.xml and transport file its test asserted. A document no authored file holds, such as the Define-XML of an edited or a metadata-only composition, is stated by the parts its test compared, each selected whole (select): an element from its start tag through its end tag, an attribute's value or a JSON value, and the complete list a path selects stands for a test's count or absence. The unused-terminology composition stages the specification and the project file alone, as its test did, since it also proves that no study file is read or written beside the document. The tests that stay in file_resources.rs compare what a composition holds and reads between its preparation and its save, or stay by design. The three compositions that relocate the DM benchmark's dataset publish the benchmark's own documents: nothing either document writes depends on the specification's path, and each names the other relative to itself, the transport file beside the document (JSON-1).",
   "documents": {
     "study_lb": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origins: [{type: Assigned, source: Sponsor}]}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origins: [{type: Assigned, source: Sponsor}]}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n",
     "study_adlb": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origins: [{type: Predecessor, description: LB.USUBJID}]}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Predecessor, description: LB.LBTESTCD}]}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: \"'LB'\"\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origins: [{type: Assigned}]}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n",
@@ -529,6 +529,241 @@
       "compares": ["condition", "context.value"],
       "issues": [{"condition": "allowed_values_failed", "context": {"value": "LB"}}],
       "saved": {}
+    },
+    {
+      "case": "the_ae_metadata_only_document_has_its_fixed_time_and_independent_structure",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-ae-coding",
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/@CreationDateTime": ["2026-09-30T00:00:00"],
+          "/ODM/@SourceSystemVersion": ["1.0"],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.AE']/@Name": ["AE"],
+          "/ODM/Study/MetaDataVersion/ItemDef/@Name": ["DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"],
+          "/ODM/Study/MetaDataVersion/def:AnnotatedCRF": ["<def:AnnotatedCRF>\n        <def:DocumentRef leafID=\"LF.acrf\"/>\n      </def:AnnotatedCRF>"],
+          "/ODM/Study/MetaDataVersion/CodeList/@OID": ["CL.MEDDRA"],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef/ItemRef[@ItemOID='IT.AE.AEDECOD']": ["<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\" Role=\"Synonym Qualifier\" MethodOID=\"MT.AE.AEDECOD\"/>"]
+        }}
+      }
+    },
+    {
+      "case": "the_vs_metadata_only_document_has_its_fixed_time_and_independent_structure",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-vs-epoch-from-subject-elements",
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/@CreationDateTime": ["2026-09-30T00:00:00"],
+          "/ODM/@SourceSystemVersion": ["1.0"],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.VS']/@Name": ["VS"],
+          "/ODM/Study/MetaDataVersion/ItemDef/@Name": ["DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES", "VSDTC", "EPOCH"],
+          "/ODM/Study/MetaDataVersion/def:AnnotatedCRF": ["<def:AnnotatedCRF>\n        <def:DocumentRef leafID=\"LF.acrf\"/>\n      </def:AnnotatedCRF>"],
+          "/ODM/Study/MetaDataVersion/CodeList/@OID": ["CL.EPOCH"],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef/ItemRef[@ItemOID='IT.VS.VSORRES']": ["<ItemRef ItemOID=\"IT.VS.VSORRES\" OrderNumber=\"6\" Mandatory=\"No\" Role=\"Result Qualifier\"/>"],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef/ItemRef[@ItemOID='IT.VS.VSDTC']": ["<ItemRef ItemOID=\"IT.VS.VSDTC\" OrderNumber=\"7\" Mandatory=\"No\" Role=\"Timing\"/>"],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef/ItemRef[@ItemOID='IT.VS.EPOCH']": ["<ItemRef ItemOID=\"IT.VS.EPOCH\" OrderNumber=\"8\" Mandatory=\"No\" Role=\"Timing\" MethodOID=\"MT.VS.EPOCH\"/>"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.VS.VSORRES']/def:Origin": ["<def:Origin Type=\"Collected\" Source=\"Investigator\">\n          <def:DocumentRef leafID=\"LF.acrf\"/>\n        </def:Origin>"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.VS.VSDTC']/def:Origin": ["<def:Origin Type=\"Collected\" Source=\"Investigator\">\n          <def:DocumentRef leafID=\"LF.acrf\"/>\n        </def:Origin>"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.VS.EPOCH']/def:Origin": ["<def:Origin Type=\"Derived\" Source=\"Sponsor\"/>"]
+        }}
+      }
+    },
+    {
+      "case": "integer_terminology_items_admit_equal_float_published_values",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {
+          "spec.yaml": [
+            {"from": "name: AGE\n    type: int", "to": "name: AGE\n    type: float"},
+            {"from": "core: Exp\n      role: Record Qualifier\n      length: 3", "to": "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES"}
+          ],
+          "project.yaml": [
+            {"from": "study:\n", "to": "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nstudy:\n"}
+          ]
+        },
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.AGE']/@DataType": ["float"]
+        }},
+        "dm.json": {"select": {
+          "/columns/5/dataType": ["\"float\""],
+          "/rows/0/5": ["34"]
+        }}
+      }
+    },
+    {
+      "case": "unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files",
+      "operation": "define",
+      "input": {
+        "files": {
+          "spec.yaml": {"file": "benchmarks/sdtm-dm-metadata/spec.yaml"},
+          "project.yaml": {"file": "benchmarks/sdtm-dm-metadata/project.yaml", "edits": [
+            {"from": "  transport: dataset_json\n", "to": ""},
+            {"from": "study:\n", "to": "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nstudy:\n"}
+          ]}
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/CodeList/@OID": ["CL.DOMAIN", "CL.AGEU", "CL.SEX", "CL.COUNTRY"],
+          "/ODM/Study/MetaDataVersion/def:leaf[@ID='LF.acrf']": ["<def:leaf ID=\"LF.acrf\" xlink:href=\"acrf.pdf\">\n        <def:title>Annotated Case Report Form</def:title>\n      </def:leaf>"]
+        }}
+      }
+    },
+    {
+      "case": "a_collected_origin_without_its_form_cites_the_form_without_a_page_under_other",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {
+          "spec.yaml": [
+            {"from": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n", "to": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n"}
+          ],
+          "project.yaml": [
+            {"from": "  transport: dataset_json\n", "to": ""},
+            {"from": "sdtm:\n", "to": "sdtm:\n  context: Other\n"}
+          ]
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/@def:Context": ["Other"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.SITEID']/def:Origin": ["<def:Origin Type=\"Collected\" Source=\"Investigator\">\n          <def:DocumentRef leafID=\"LF.acrf\"/>\n        </def:Origin>"]
+        }}
+      }
+    },
+    {
+      "case": "a_collected_origin_citing_its_form_without_a_page_is_admitted_under_other",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {
+          "spec.yaml": [
+            {"from": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n", "to": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents: [acrf]\n"}
+          ],
+          "project.yaml": [
+            {"from": "  transport: dataset_json\n", "to": ""},
+            {"from": "sdtm:\n", "to": "sdtm:\n  context: Other\n"}
+          ]
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/@def:Context": ["Other"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.SITEID']/def:Origin": ["<def:Origin Type=\"Collected\" Source=\"Investigator\">\n          <def:DocumentRef leafID=\"LF.acrf\"/>\n        </def:Origin>"]
+        }}
+      }
+    },
+    {
+      "case": "send_keeps_an_unsourced_not_available_origin_that_says_why",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {
+          "spec.yaml": [
+            {"from": "model: SDTM\n", "to": "model: SEND\n"},
+            {"from": "codelist: AGEU\n      origins:\n        - type: Assigned\n          source: Sponsor\n", "to": "codelist: AGEU\n      origins:\n        - type: Not Available\n          description: Age units were not collected.\n"}
+          ],
+          "project.yaml": [
+            {"from": "  transport: dataset_json\n", "to": ""},
+            {"from": "sdtm:\n", "to": "send:\n  context: Submission\n"},
+            {"from": "  - name: SDTMIG\n", "to": "  - name: SENDIG\n"}
+          ]
+        },
+        "project": "project.yaml",
+        "section": "send",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.AGEU']/def:Origin": ["<def:Origin Type=\"Not Available\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">Age units were not collected.</TranslatedText>\n          </Description>\n        </def:Origin>"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.SITEID']/def:Origin": ["<def:Origin Type=\"Collected\" Source=\"Investigator\">\n          <def:DocumentRef leafID=\"LF.acrf\">\n            <def:PDFPageRef PageRefs=\"1\" Type=\"PhysicalRef\"/>\n          </def:DocumentRef>\n        </def:Origin>"]
+        }}
+      }
+    },
+    {
+      "case": "send_keeps_an_unsourced_assigned_origin",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {
+          "spec.yaml": [
+            {"from": "model: SDTM\n", "to": "model: SEND\n"},
+            {"from": "codelist: AGEU\n      origins:\n        - type: Assigned\n          source: Sponsor\n", "to": "codelist: AGEU\n      origins:\n        - type: Assigned\n"}
+          ],
+          "project.yaml": [
+            {"from": "  transport: dataset_json\n", "to": ""},
+            {"from": "sdtm:\n", "to": "send:\n  context: Submission\n"},
+            {"from": "  - name: SDTMIG\n", "to": "  - name: SENDIG\n"}
+          ]
+        },
+        "project": "project.yaml",
+        "section": "send",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.AGEU']/def:Origin": ["<def:Origin Type=\"Assigned\"/>"]
+        }}
+      }
+    },
+    {
+      "case": "predecessor_labels_and_the_dataset_inventory_span_every_section",
+      "operation": "define",
+      "input": {
+        "files": {
+          "sdtm/lb.yaml": {"base": "study_lb"},
+          "adlb.yaml": {"base": "study_adlb"},
+          "adlb.csv": "USUBJID,PARAMCD,SRCDOM\nS01-001,GLUC,LB\n",
+          "project.yaml": {"base": "cross_section_project"}
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "adlb.json": {"select": {
+          "/rows": ["[\n    [\"S01-001\", \"GLUC\", \"LB\"]\n  ]"]
+        }},
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemGroupDef/@OID": ["IG.ADLB"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.ADLB.PARAMCD']/Description/TranslatedText": ["<TranslatedText xml:lang=\"en\">Parameter Code</TranslatedText>"],
+          "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.ADLB.PARAMCD']/def:Origin": ["<def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">LB.LBTESTCD</TranslatedText>\n          </Description>\n        </def:Origin>"]
+        }}
+      }
     }
   ]
 }

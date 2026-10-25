@@ -115,6 +115,25 @@
     "shared_define.json::without_the_sdtm_section_a_predecessor_names_no_dataset_of_the_study": {
       "save": false,
       "absent": []
+    },
+    "shared_define.json::predecessor_labels_and_the_dataset_inventory_span_every_section": {
+      "save": true,
+      "artifacts": ["adlb.json", "define.xml"],
+      "absent": ["sdtm/define.xml"]
+    },
+    "shared_define.json::the_ae_metadata_only_document_has_its_fixed_time_and_independent_structure": {
+      "save": true,
+      "artifacts": ["define.xml"],
+      "absent": ["ae.csv"]
+    },
+    "shared_define.json::the_vs_metadata_only_document_has_its_fixed_time_and_independent_structure": {
+      "save": true,
+      "artifacts": ["define.xml"],
+      "absent": ["vs.csv"]
+    },
+    "shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files": {
+      "save": true,
+      "absent": ["acrf.pdf", "input"]
     }
   },
   "written_paths": [

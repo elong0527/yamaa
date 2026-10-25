@@ -525,13 +525,13 @@ mod file {
     }
     #[cfg(feature = "yaml")]
     mod shared_define {
-        //! Independent fixed-byte DM and structural AE/VS shared-generation
-        //! witnesses. The compositions that compare what one call reports, its
-        //! issues and the files its save publishes, are the cases of
+        //! Shared Define-XML generation over the DM, LB and AE benchmarks. The
+        //! compositions that compare what one call reports, its issues and the
+        //! files its save publishes, whole or by the parts of a generated
+        //! document they select, are the cases of
         //! `fixtures/diagnostics/shared_define.json`; the tests here compare
-        //! fragments of a generated document, which a case states only whole,
-        //! or what a composition holds and reads between its preparation and
-        //! its save, or stay by design (#3778).
+        //! what a composition holds and reads between its preparation and its
+        //! save, or stay by design (#3778).
         use crate::support::Edit as _;
         use std::{
             fs,
@@ -593,9 +593,9 @@ mod file {
             }
         }
         /// Seam: what the save writes after the composition's sources change
-        /// or go, and that it reads nothing again; the test also compares
-        /// fragments and counts of the generated Define-XML, which a case
-        /// states only whole, and no authored file holds this document.
+        /// or go, and that it reads nothing again. The parts of the generated
+        /// Define-XML it compares first are the document the save then writes
+        /// from what the composition holds.
         #[test]
         fn lb_value_metadata_uses_original_published_bytes_and_family_valid_completion() {
             let temp = Temp::fixture("sdtm-lb-metadata", true);
@@ -838,65 +838,6 @@ mod file {
                 }
             }
         }
-        /// Stays beside the replay: it compares fragments and counts of the
-        /// generated Define-XML, which a case states only whole, and neither
-        /// benchmark holds an expected document.
-        #[test]
-        fn ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure() {
-            for (name, id, count, codelist) in [
-                ("sdtm-ae-coding", "AE", 7, "MEDDRA"),
-                ("sdtm-vs-epoch-from-subject-elements", "VS", 8, "EPOCH"),
-            ] {
-                let temp = Temp::fixture(name, false);
-                let run = temp.run("2026-09-30T00:00:00");
-                assert!(run.issues().is_empty(), "{:?}", run.issues());
-                let artifacts: Vec<_> = run.artifacts().collect();
-                assert_eq!(artifacts.len(), 1);
-                let xml = std::str::from_utf8(artifacts[0].1).unwrap();
-                assert!(xml.contains("CreationDateTime=\"2026-09-30T00:00:00\""));
-                assert!(xml.contains("SourceSystemVersion=\"1.0\""));
-                assert!(xml.contains(&format!("OID=\"IG.{id}\" Name=\"{id}\"")));
-                assert_eq!(xml.matches("<ItemDef ").count(), count);
-                // Each project declares the annotated case report form its
-                // collected values reference.
-                assert!(xml.contains("<def:AnnotatedCRF>"));
-                assert!(xml.contains(&format!("OID=\"CL.{codelist}\"")));
-                if id == "AE" {
-                    // SDTMIG requires the dictionary-derived term, a synonym
-                    // of the reported term.
-                    assert!(xml.contains(
-                        "<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\" Role=\"Synonym Qualifier\""
-                    ));
-                } else {
-                    // The investigator collects the result and its date-time,
-                    // and under Other each references the annotated form with
-                    // no page. EPOCH is a permissible timing variable the
-                    // sponsor derives from the subject's elements.
-                    for fragment in [
-                        "<ItemRef ItemOID=\"IT.VS.VSORRES\" OrderNumber=\"6\" Mandatory=\"No\" Role=\"Result Qualifier\"/>",
-                        "<ItemRef ItemOID=\"IT.VS.VSDTC\" OrderNumber=\"7\" Mandatory=\"No\" Role=\"Timing\"/>",
-                        "<ItemRef ItemOID=\"IT.VS.EPOCH\" OrderNumber=\"8\" Mandatory=\"No\" Role=\"Timing\" MethodOID=\"MT.VS.EPOCH\"/>",
-                    ] {
-                        assert!(xml.contains(fragment), "{fragment}");
-                    }
-                    let collected = "<def:Origin Type=\"Collected\" Source=\"Investigator\">\n          <def:DocumentRef leafID=\"LF.acrf\"/>\n        </def:Origin>";
-                    for (oid, origin) in [
-                        ("IT.VS.VSORRES", collected),
-                        ("IT.VS.VSDTC", collected),
-                        (
-                            "IT.VS.EPOCH",
-                            "<def:Origin Type=\"Derived\" Source=\"Sponsor\"/>",
-                        ),
-                    ] {
-                        assert!(item(xml, oid).contains(origin), "{oid}");
-                    }
-                }
-                assert!(!temp
-                    .0
-                    .join(format!("{}.csv", id.to_ascii_lowercase()))
-                    .exists());
-            }
-        }
         /// Seam: a target that becomes a directory between the composition
         /// and its save, which a case's staged files cannot change, since the
         /// composition admits its targets when it is prepared, and the
@@ -1022,49 +963,6 @@ mod file {
             assert!(run.save().is_err());
             assert!(!temp.0.join("dm.json").exists());
         }
-        /// Stays beside the replay: it reads two values of the generated
-        /// Dataset-JSON document, which a case states only whole.
-        #[test]
-        fn integer_terminology_items_admit_equal_float_published_values() {
-            let temp = Temp::fixture("sdtm-dm-metadata", true);
-            let spec = fs::read_to_string(temp.0.join("spec.yaml"))
-        .unwrap()
-        .edit("name: AGE\n    type: int", "name: AGE\n    type: float")
-        .edit(
-            "core: Exp\n      role: Record Qualifier\n      length: 3",
-            "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES",
-        );
-            fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            temp.edit_project(&[(
-                "study:\n",
-                "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nstudy:\n",
-            )]);
-            let result = temp.run("2026-09-11T00:00:00");
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let data: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode_slice(result.artifacts().next().unwrap().1)
-                    .unwrap();
-            assert_eq!(data["columns"][5]["dataType"], "float");
-            assert_eq!(data["rows"][0][5].as_f64(), Some(34.0));
-        }
-        /// Stays beside the replay: it compares fragments and a count of the
-        /// generated Define-XML, which a case states only whole.
-        #[test]
-        fn unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files() {
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            temp.edit_project(&[
-                ("  transport: dataset_json\n", ""),
-                ("study:\n", "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nstudy:\n"),
-            ]);
-            let result = temp.run("2026-09-11T00:00:00");
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let xml = std::str::from_utf8(result.artifacts().next().unwrap().1).unwrap();
-            assert!(!xml.contains("UNUSED"));
-            assert_eq!(xml.matches("<CodeList ").count(), 4);
-            assert!(xml.contains("xlink:href=\"acrf.pdf\""));
-            assert!(!temp.0.join("acrf.pdf").exists());
-            assert!(!temp.0.join("input").exists());
-        }
         /// Stays beside the replay by design (#3778): it finds its issue by a
         /// substring of its first spec path, and asserts that a plain lookup
         /// raises no such issue. The DM refutations are `shared_define.json`'s
@@ -1103,175 +1001,6 @@ mod file {
                     result.issues()
                 );
             }
-        }
-        /// Rewrite the DM fixture's project to compose Define-XML alone for
-        /// one section under `context`. A send section lists a specification
-        /// of its own model (SUB-23).
-        fn metadata_only(temp: &Temp, section: &str, context: &str) {
-            let guide = if section == "send" {
-                "SENDIG"
-            } else {
-                "SDTMIG"
-            };
-            let header = format!("{section}:\n  context: {context}\n");
-            let standard = format!("  - name: {guide}\n");
-            temp.edit_project(&[
-                ("  transport: dataset_json\n", ""),
-                ("sdtm:\n", header.as_str()),
-                ("  - name: SDTMIG\n", standard.as_str()),
-            ]);
-            if section == "send" {
-                replace_spec(temp, "model: SDTM\n", "model: SEND\n");
-            }
-        }
-        fn replace_spec(temp: &Temp, from: &str, to: &str) {
-            let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
-            assert!(spec.contains(from), "{from}");
-            fs::write(temp.0.join("spec.yaml"), spec.replacen(from, to, 1)).unwrap();
-        }
-        fn item<'a>(xml: &'a str, oid: &str) -> &'a str {
-            let begin = xml.find(&format!("<ItemDef OID=\"{oid}\"")).unwrap();
-            &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()]
-        }
-        /// Stays beside the replay: it compares fragments of the generated
-        /// Define-XML, which a case states only whole. Under Submission the
-        /// page is required: `shared_define.json`'s
-        /// `a_collected_origin_without_its_form_is_refused_under_submission`
-        /// and `a_collected_origin_citing_its_form_without_a_page_is_refused_under_submission`.
-        #[test]
-        fn collected_origins_cite_their_form_without_a_page_under_other() {
-            // SITEID is collected by the investigator on the first form page.
-            let paged = "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n";
-            let pageless = "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n";
-            let unpaged = format!("{pageless}          documents: [acrf]\n");
-            for replacement in [pageless, unpaged.as_str()] {
-                let temp = Temp::fixture("sdtm-dm-metadata", false);
-                replace_spec(&temp, paged, replacement);
-                metadata_only(&temp, "sdtm", "Other");
-                let run = temp.run("2026-09-11T00:00:00");
-                // Under Other the reference to the form needs no page.
-                assert!(run.issues().is_empty(), "{:?}", run.issues());
-                let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
-                assert!(xml.contains("def:Context=\"Other\""));
-                assert!(item(xml, "IT.DM.SITEID").contains("<def:DocumentRef leafID=\"LF.acrf\"/>"));
-            }
-        }
-        /// Stays beside the replay: it compares fragments of the generated
-        /// Define-XML, which a case states only whole. The sources neither
-        /// family admits are `shared_define.json`'s
-        /// `a_not_available_origin_is_not_admitted_under_sdtm`,
-        /// `a_not_available_origin_with_a_source_is_not_admitted_under_sdtm`,
-        /// `an_assigned_origin_from_the_investigator_is_not_admitted_under_send`
-        /// and `a_not_available_origin_with_a_source_is_not_admitted_under_send`.
-        #[test]
-        fn send_keeps_an_unsourced_not_available_origin_and_an_unsourced_assigned_one() {
-            let assigned =
-                "codelist: AGEU\n      origins:\n        - type: Assigned\n          source: Sponsor\n";
-            let not_available = "codelist: AGEU\n      origins:\n        - type: Not Available\n          description: Age units were not collected.\n";
-            // send takes the sources the sdtm table admits, or none, and keeps
-            // a Not Available origin that declares no source and says why.
-            let send = |temp: &Temp| {
-                Define::prepare(
-                    temp.0.join("project.yaml").to_str().unwrap(),
-                    Submission::Send,
-                    Some("2026-09-11T00:00:00"),
-                    "0.3.0",
-                    Some(Language::Python),
-                    None,
-                )
-            };
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            replace_spec(&temp, assigned, not_available);
-            metadata_only(&temp, "send", "Submission");
-            let run = send(&temp);
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
-            let ageu = item(xml, "IT.DM.AGEU");
-            assert!(
-                ageu.contains("<def:Origin Type=\"Not Available\">"),
-                "{ageu}"
-            );
-            assert!(ageu.contains(">Age units were not collected.</TranslatedText>"));
-            assert!(item(xml, "IT.DM.SITEID")
-                .contains("<def:Origin Type=\"Collected\" Source=\"Investigator\">"));
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            metadata_only(&temp, "send", "Submission");
-            replace_spec(
-                &temp,
-                assigned,
-                "codelist: AGEU\n      origins:\n        - type: Assigned\n",
-            );
-            let run = send(&temp);
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
-            assert!(item(xml, "IT.DM.AGEU").contains("<def:Origin Type=\"Assigned\"/>"));
-        }
-        /// A document of `shared_define.json`, which holds the cross-section
-        /// study's files for its cases and this test alike.
-        fn document(name: &str) -> String {
-            let fixture: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
-                "fixtures/diagnostics/shared_define.json"
-            ))
-            .unwrap();
-            fixture["documents"][name].as_str().unwrap().to_owned()
-        }
-        /// Stays beside the replay: it compares fragments of the generated
-        /// Define-XML, which a case states only whole. The refusals across
-        /// the sections are `shared_define.json`'s
-        /// `a_predecessor_column_keeps_its_predecessors_label`,
-        /// `a_published_name_outside_the_study_inventory_fails_its_recheck` and
-        /// `without_the_sdtm_section_a_predecessor_names_no_dataset_of_the_study`.
-        #[test]
-        fn predecessor_labels_and_the_dataset_inventory_span_every_section() {
-            // ADLB copies LB from the sdtm section: USUBJID keeps its name and
-            // label, PARAMCD renames LBTESTCD with its own label, and SRCDOM
-            // names the sdtm section's LB.
-            let temp = Temp::new();
-            fs::create_dir(temp.0.join("sdtm")).unwrap();
-            fs::write(temp.0.join("sdtm/lb.yaml"), document("study_lb")).unwrap();
-            fs::write(temp.0.join("adlb.yaml"), document("study_adlb")).unwrap();
-            fs::write(
-                temp.0.join("adlb.csv"),
-                "USUBJID,PARAMCD,SRCDOM\nS01-001,GLUC,LB\n",
-            )
-            .unwrap();
-            fs::write(
-                temp.0.join("project.yaml"),
-                document("cross_section_project"),
-            )
-            .unwrap();
-            let mut run = Define::prepare(
-                temp.0.join("project.yaml").to_str().unwrap(),
-                Submission::Adam,
-                Some("2026-09-30T00:00:00"),
-                "0.3.0",
-                Some(Language::Python),
-                None,
-            );
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-            let artifacts: Vec<_> = run
-                .artifacts()
-                .map(|(name, bytes, _)| (name.to_owned(), bytes.to_vec()))
-                .collect();
-            assert_eq!(
-                artifacts.iter().map(|a| a.0.as_str()).collect::<Vec<_>>(),
-                ["adlb.json", "define.xml"]
-            );
-            let xml = std::str::from_utf8(&artifacts[1].1).unwrap();
-            let paramcd = item(xml, "IT.ADLB.PARAMCD");
-            assert!(paramcd.contains(">Parameter Code</TranslatedText>"));
-            assert!(
-                paramcd.contains("<def:Origin Type=\"Predecessor\">"),
-                "{paramcd}"
-            );
-            assert!(paramcd.contains(">LB.LBTESTCD</TranslatedText>"));
-            assert!(
-                !xml.contains("IG.LB"),
-                "the sdtm section is read, not represented"
-            );
-            assert!(run.save().unwrap());
-            assert!(temp.0.join("adlb.json").is_file());
-            assert!(!temp.0.join("sdtm/define.xml").exists());
         }
     }
 }
