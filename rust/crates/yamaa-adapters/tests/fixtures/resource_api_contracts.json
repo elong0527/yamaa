@@ -124,12 +124,12 @@
     "shared_define.json::the_ae_metadata_only_document_has_its_fixed_time_and_independent_structure": {
       "save": true,
       "artifacts": ["define.xml"],
-      "absent": ["ae.csv"]
+      "absent": ["ae.csv", "input"]
     },
     "shared_define.json::the_vs_metadata_only_document_has_its_fixed_time_and_independent_structure": {
       "save": true,
       "artifacts": ["define.xml"],
-      "absent": ["vs.csv"]
+      "absent": ["vs.csv", "input"]
     },
     "shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files": {
       "save": true,
