@@ -340,7 +340,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        534,
+        595,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -535,8 +535,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (357, 23, 44, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (226, 62, 246));
+    assert_eq!((domains, preparation, either, checks), (387, 54, 44, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (250, 68, 277));
     assert_eq!(published_reports, 2, "every published report is authored");
 }
 
@@ -748,7 +748,7 @@ fn host_function_cases_keep_the_calls_their_port_received() {
         contracts.keys().cloned().collect(),
         "every case with authored calls remains present"
     );
-    assert_eq!(seen.len(), 32);
+    assert_eq!(seen.len(), 51);
 }
 
 /// Seam: the R-host calls of the language-header tests whose cases build,
