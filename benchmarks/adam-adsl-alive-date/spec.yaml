@@ -4,79 +4,199 @@ model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSL_RAW:
-    path: input/adsl.csv
-    types:
-      TRTEDT: date
-  ADAE:
-    path: input/adae.csv
-    types:
-      AENDT: date
-    key: [STUDYID, USUBJID]
-  ADVS:
-    path: input/advs.csv
-    types:
-      ADATE: date
-    key: [STUDYID, USUBJID]
-base: ADSL_RAW
+  DM: input/dm.csv
+  EX: input/ex.csv
+  AE: input/ae.csv
+  DS: input/ds.csv
+  SV: input/sv.csv
+  VS: input/vs.csv
+  SS: input/ss.csv
+base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TRTEDT, LSTCNTDC, LSTCNTDT, LSTALVDT]
+  columns: [STUDYID, USUBJID, LSTALVDT, DTHFL, DTHDT, DTHDTF]
+
+# Every source date is completed the same way: a year and month take the
+# month's first day, a year alone 1 January, and a date with a time keeps
+# its date. A study adds or drops a source domain by adding or dropping its
+# column below and its name in ALIVEDT.
 
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADSL_RAW.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADSL_RAW.USUBJID
+    derivation: DM.USUBJID
 
-  - name: TRTEDT
+  # The subject's latest exposure start or end.
+  - name: EXLSTDT
     type: date
-    label: Date of Last Exposure to Treatment
-    derivation: ADSL_RAW.TRTEDT
-
-  - name: LSTCNTDC
-    type: str
-    label: Date of Last Contact
-    derivation: ADSL_RAW.LSTCNTDC
-
-  # A year and month take the month's first day, a year alone 1 January;
-  # blank or non-date text leaves the date empty.
-  - name: LSTCNTDT
-    type: date
-    label: Analysis Date of Last Contact
+    label: Latest Exposure Date
     derivation:
-      impute:
-        type: date
-        source: LSTCNTDC
-        month: 1
-        day: first
-        invalid: null
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          STDT:
+            type: date
+            derivation:
+              impute: {type: date, source: EX.EXSTDTC, month: 1, day: first}
+          ENDT:
+            type: date
+            derivation:
+              impute: {type: date, source: EX.EXENDTC, month: 1, day: first}
+          LATEST:
+            type: date
+            derivation: {greatest: {sources: [STDT, ENDT]}}
+        expr: "MAX(LATEST)"
 
-  # The subject's latest adverse event end and vital signs date, matched on
-  # STUDYID and USUBJID; empty with no records or only missing dates.
-  - name: ADAE_LST
+  # The subject's latest adverse event start or end: an ongoing event with
+  # no end still counts by its start.
+  - name: AELSTDT
     type: date
     label: Latest Adverse Event Date
     derivation:
-      aggregate: "MAX(ADAE.AENDT)"
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          STDT:
+            type: date
+            derivation:
+              impute: {type: date, source: AE.AESTDTC, month: 1, day: first}
+          ENDT:
+            type: date
+            derivation:
+              impute: {type: date, source: AE.AEENDTC, month: 1, day: first}
+          LATEST:
+            type: date
+            derivation: {greatest: {sources: [STDT, ENDT]}}
+        expr: "MAX(LATEST)"
 
-  - name: ADVS_LST
+  # A death record's date is the death itself, and a lost-to-follow-up date
+  # records when the site stopped trying: neither shows the subject alive.
+  - name: DSLSTDT
+    type: date
+    label: Latest Disposition Date
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        filter: "DS.DSDECOD NOT IN ('DEATH', 'LOST TO FOLLOW-UP')"
+        derivations:
+          DSDT:
+            type: date
+            derivation:
+              impute: {type: date, source: DS.DSSTDTC, month: 1, day: first}
+        expr: "MAX(DSDT)"
+
+  - name: SVLSTDT
+    type: date
+    label: Latest Visit Date
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          SVDT:
+            type: date
+            derivation:
+              impute: {type: date, source: SV.SVSTDTC, month: 1, day: first}
+        expr: "MAX(SVDT)"
+
+  - name: VSLSTDT
     type: date
     label: Latest Vital Signs Date
     derivation:
-      aggregate: "MAX(ADVS.ADATE)"
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          VSDT:
+            type: date
+            derivation:
+              impute: {type: date, source: VS.VSDTC, month: 1, day: first}
+        expr: "MAX(VSDT)"
 
-  # The latest of the four, passing over missing ones; empty only when all
-  # four are missing.
+  # Only a survival follow-up that found the subject alive counts; an
+  # unknown or dead status is not evidence of life on that date.
+  - name: SSLSTDT
+    type: date
+    label: Latest Date Found Alive at Follow-up
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        filter: "SS.SSTESTCD = 'SURVSTAT' AND SS.SSSTRESC = 'ALIVE'"
+        derivations:
+          SSDT:
+            type: date
+            derivation:
+              impute: {type: date, source: SS.SSDTC, month: 1, day: first}
+        expr: "MAX(SSDT)"
+
+  # The latest evidence of life across the domains, before the death date
+  # bounds it; empty only when no domain has a date.
+  - name: ALIVEDT
+    type: date
+    label: Latest Date of Evidence of Life
+    derivation:
+      greatest:
+        sources: [EXLSTDT, AELSTDT, DSLSTDT, SVLSTDT, VSLSTDT, SSLSTDT]
+
+  - name: DTHFL
+    type: str
+    label: Subject Death Flag
+    derivation: DM.DTHFL
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+  # A partial death date takes the first day of its month, or 1 January,
+  # moved forward to the latest evidence of life when that evidence falls
+  # inside the collected month or year. A complete date is never moved.
+  - name: DTHDT
+    type: date
+    label: Date of Death
+    derivation:
+      impute:
+        type: date
+        source: DM.DTHDTC
+        month: 1
+        day: first
+        not_before: ALIVEDT
+
+  - name: DTHDTF
+    type: str
+    label: Date of Death Imputation Flag
+    derivation:
+      imputation_flag:
+        source: DTHDT
+        part: date
+    verifications:
+      - allowed_values:
+          values: [M, D]
+
+  # Evidence dated after the death date is a data error and cannot extend
+  # the date last known alive past death. The death date is not itself
+  # evidence of life: with no evidence the date stays empty.
   - name: LSTALVDT
     type: date
     label: Date Last Known Alive
     derivation:
-      greatest:
-        sources: [TRTEDT, LSTCNTDT, ADAE_LST, ADVS_LST]
+      case:
+        - when: "ALIVEDT > DTHDT"
+          then: DTHDT
+        - otherwise: ALIVEDT
+
+verifications:
+  - row_count:
+      min: 11
+      max: 11
+  - assert:
+      id: alive-date-not-after-death
+      when: "DTHDT IS NOT NULL"
+      require: "LSTALVDT IS NULL OR LSTALVDT <= DTHDT"
+  - assert:
+      id: death-date-marks-the-subject
+      when: "DTHDT IS NOT NULL"
+      require: "DTHFL = 'Y'"
