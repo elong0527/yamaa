@@ -1,0 +1,423 @@
+{
+  "about": "Run report rows (CHECK-23, CHECK-24) and report publication (OUTPUT-10), moved from the run_report module of scalar_language.rs at a47519f5d, whose tests compared the saved report CSV line by line, the saved output CSV and the condition of the issues. A case whose test saved and read back every file it wrote states them as saved. One whose test read back only the output and some report rows builds and states the output table and the report rows of each kind its test compared, every column named: COUNT and TOTAL are int (CHECK-24), an empty cell is null, and an output cell takes its column's declared type. A failed run publishes only its report, keeping a primary file already there; a run that declares no report file writes none, though its report has the same rows as the declared run's, which its test compared equal; and a run that never read its input reports a missing count and null bytes. The schema-verification-log cases stage that benchmark with its spec.yaml edited, or its spec.yaml alone. Derived values: an undeclared run's out.csv is the CSV profile's header and one row, ID\\n1\\n; the grouped row_count's three check rows are the report's every check row, since the specification declares those three dataset verifications and no other check (CHECK-23); and a read that feeds another lookup or a predicate is two cases, one per column order of its test's loop. No engine output supplied these values.",
+  "documents": {
+    "one_column": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+    "read_feeds": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input/src.csv, types: {ID: int}}\n  BASE: {path: input/base.csv, types: {ID: int, REF: int}}\n  RNG: {path: input/rng.csv, types: {ID: int, LO: int, HI: int}}\noutput: {path: out.csv, columns: [ID, V, F], report: report.csv}\nintermediates:\n  - id: Q\n    dataset: BASE\n    key: [ID]\n    filter: \"BASE.REF IS NOT NULL\"\n  - id: P\n    dataset: RNG\n    key: [ID]\n    between: {value: Q.REF, lower: LO, upper: HI}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: str, derivation: P.VAL}\n  - {name: F, type: str, derivation: {flag: {condition: \"P.VAL IS NOT NULL\", false_value: N, missing: N}}}\n"
+  },
+  "cases": [
+    {
+      "case": "failed_save_publishes_only_the_report_and_preserves_the_primary",
+      "operation": "save",
+      "input": {
+        "benchmark": "schema-verification-log",
+        "edits": {"spec.yaml": [{"from": "severity: warning", "to": "severity: error"}]},
+        "files": {"adsl.csv": "sentinel", "adsl-checks.csv": "sentinel"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "issues": [
+        {"condition": "range_failed"}
+      ],
+      "saved": {
+        "adsl-checks.csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nadsl.csv,run,output,,,,,,failed,range_failed,,,,{}\nadsl.csv,input,input.DM,DM,,,,,,,3,,,\"{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nadsl.csv,rows,base,DM,,,,,,,3,3,,{}\nadsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{}\nadsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,error,violated,range_failed,1,3,\"[{\"\"USUBJID\"\":\"\"S-2\"\"}]\",\"{\"\"column\"\":\"\"AGE\"\"}\"\n"
+      }
+    },
+    {
+      "case": "every_run_reports_and_an_undeclared_report_file_is_not_written",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "one_column"}, "input/input.csv": "ID\n1\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "run": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "output", null, null, null, null, null, "succeeded", null, 1, null, null, "{}"]
+        ],
+        "input": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "input.SRC", "SRC", null, null, null, null, null, null, 1, null, null, "{\"bytes\":5,\"path\":\"input/input.csv\",\"profile\":\"csv\"}"]
+        ],
+        "rows": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "base", "SRC", null, null, null, null, null, null, 1, 1, null, "{}"]
+        ],
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ],
+        "column": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.ID", "ID", null, null, null, null, null, null, 0, 1, null, "{}"]
+        ],
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ]
+      },
+      "saved": {
+        "out.csv": "ID\n1\n"
+      }
+    },
+    {
+      "case": "only_a_declared_report_file_is_written_and_replaces_a_stale_one",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "one_column", "edits": [{"from": "columns: [ID]}", "to": "columns: [ID], report: report.csv}"}]}, "input/input.csv": "ID\n1\n", "report.csv": "stale"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID\n1\n",
+        "report.csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nout.csv,run,output,,,,,,succeeded,,1,,,{}\nout.csv,input,input.SRC,SRC,,,,,,,1,,,\"{\"\"bytes\"\":5,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nout.csv,rows,base,SRC,,,,,,,1,1,,{}\nout.csv,column,columns.ID,ID,,,,,,,0,1,,{}\n"
+      }
+    },
+    {
+      "case": "failed_runs_report_the_prefix_they_reached_and_no_columns",
+      "operation": "save",
+      "input": {
+        "benchmark": "schema-verification-log",
+        "edits": {"spec.yaml": [{"from": "\nverifications:\n", "to": "\n  - name: FAIL\n    type: float\n    derivation: '1 / 0'\n\nverifications:\n"}, {"from": "columns: [USUBJID, AGE]", "to": "columns: [USUBJID, AGE, FAIL]"}]},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "issues": [
+        {"condition": "division_by_zero"}
+      ],
+      "saved": {
+        "adsl-checks.csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nadsl.csv,run,output,,,,,,failed,division_by_zero,,,,{}\nadsl.csv,input,input.DM,DM,,,,,,,3,,,\"{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nadsl.csv,rows,base,DM,,,,,,,3,3,,{}\nadsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{}\nadsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,warning,violated,range_failed,1,3,\"[{\"\"USUBJID\"\":\"\"S-2\"\"}]\",\"{\"\"column\"\":\"\"AGE\"\"}\"\n"
+      }
+    },
+    {
+      "case": "unread_inputs_report_missing_counts_and_null_bytes",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/schema-verification-log/spec.yaml"}},
+        "directories": ["input"],
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "prefix": true,
+      "issues": [
+        {"condition": "resource_path_missing"}
+      ],
+      "saved": {
+        "adsl-checks.csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nadsl.csv,run,output,,,,,,failed,resource_path_missing,,,,{}\nadsl.csv,input,input.DM,DM,,,,,,,,,,\"{\"\"bytes\"\":null,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nadsl.csv,rows,base,DM,,,,,,,,,,{}\n"
+      }
+    },
+    {
+      "case": "template_and_handler_rows_count_each_construction_and_answer",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, KIND]\ninput: {SRC: input/input.csv}\noutput: {path: out.csv, columns: [ID, KIND, LABEL, N], report: report.csv}\ncolumns:\n  - {name: ID, type: str}\n  - {name: KIND, type: str}\n  - {name: LABEL, type: str}\n  - {name: N, type: int}\nrows:\n  - id: each\n    filter: \"SRC.KEEP = 'Y'\"\n    derivations:\n      ID: SRC.ID\n      KIND: \"'each'\"\n      LABEL:\n        mapping:\n          source: SRC.CODE\n          dict: {A: Alpha}\n          unmapped: Other\n      N: {value: SRC.NUM, unconvertible: -1}\n  - id: grouped\n    group_by: [SRC.GRP]\n    derivations: {ID: SRC.GRP, KIND: \"'group'\", LABEL: \"'Group'\", N: 0}\n", "input/input.csv": "ID,GRP,KEEP,CODE,NUM\n1,g1,Y,A,10\n2,g1,N,B,x\n3,g2,Y,,7\n4,g2,Y,A,8\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "run": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "output", null, null, null, null, null, "succeeded", null, 5, null, null, "{}"]
+        ],
+        "input": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "input.SRC", "SRC", null, null, null, null, null, null, 4, null, null, "{\"bytes\":65,\"path\":\"input/input.csv\",\"profile\":\"csv\"}"]
+        ],
+        "rows": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "rows.each", "SRC", null, null, null, null, null, null, 3, 4, null, "{}"],
+          ["out.csv", "rows.grouped", "SRC", null, null, null, null, null, null, 2, 4, null, "{}"]
+        ],
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "rows.each.derivations.N.unconvertible", "unconvertible", null, "N", "VALUE-3", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "rows.each.derivations.LABEL.mapping.missing", "missing", null, "LABEL", null, null, null, null, 1, null, null, "{}"],
+          ["out.csv", "rows.each.derivations.LABEL.mapping.unmapped", "unmapped", null, "LABEL", "COLUMN-10", null, null, null, 1, null, null, "{}"]
+        ],
+        "column": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.ID", "ID", null, null, null, null, null, null, 0, 5, null, "{\"max_length\":2}"],
+          ["out.csv", "columns.KIND", "KIND", null, null, null, null, null, null, 0, 5, null, "{\"max_length\":5}"],
+          ["out.csv", "columns.LABEL", "LABEL", null, null, null, null, null, null, 1, 5, null, "{\"max_length\":5}"],
+          ["out.csv", "columns.N", "N", null, null, null, null, null, null, 0, 5, null, "{}"]
+        ],
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ]
+      }
+    },
+    {
+      "case": "a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [USUBJID]\ninput:\n  AE: input/ae.csv\n  ADSL: {path: input/adsl.csv, key: [USUBJID]}\nintermediates:\n  - {id: SAFETY, dataset: ADSL, key: [USUBJID], filter: \"ADSL.SAFFL = 'Y'\"}\noutput: {path: out.csv, columns: [USUBJID, ARM, TRTSDT], report: report.csv}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: ARM, type: str}\n  - {name: TRTSDT, type: str}\nrows:\n  - id: event\n    dataset: AE\n    derivations:\n      USUBJID: AE.USUBJID\n      ARM: SAFETY.ARM\n      TRTSDT: ADSL.TRTSDT\n", "input/ae.csv": "USUBJID\nS-1\nS-2\nS-3\n", "input/adsl.csv": "USUBJID,ARM,TRTSDT,SAFFL\nS-1,drug a,2025-01-10,Y\nS-3,drug b,2025-02-01,N\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "USUBJID,ARM,TRTSDT\nS-1,drug a,2025-01-10\nS-2,,\nS-3,,2025-02-01\n",
+        "report.csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nout.csv,run,output,,,,,,succeeded,,3,,,{}\nout.csv,input,input.AE,AE,,,,,,,3,,,\"{\"\"bytes\"\":20,\"\"path\"\":\"\"input/ae.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nout.csv,input,input.ADSL,ADSL,,,,,,,2,,,\"{\"\"bytes\"\":73,\"\"path\"\":\"\"input/adsl.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nout.csv,rows,rows.event,AE,,,,,,,3,3,,{}\nout.csv,handler,rows.event.derivations.ARM.source.absent,absent,,ARM,LOOKUP-24,,,,2,,,{}\nout.csv,handler,rows.event.derivations.TRTSDT.source.absent,absent,,TRTSDT,LOOKUP-24,,,,1,,,{}\nout.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,\"{\"\"max_length\"\":3}\"\nout.csv,column,columns.ARM,ARM,,,,,,,2,3,,\"{\"\"max_length\"\":6}\"\nout.csv,column,columns.TRTSDT,TRTSDT,,,,,,,1,3,,\"{\"\"max_length\"\":10}\"\n"
+      }
+    },
+    {
+      "case": "handler_rows_register_every_path_at_zero_in_one_order",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input/src.csv, types: {ID: int}}\n  LKP: {path: input/lkp.csv, types: {ID: int, SEQ: int}}\noutput: {path: out.csv, columns: [ID, N, LAST, UP, ANY, SELFV, MUSTV, BYC], report: report.csv}\nintermediates:\n  - id: PICK\n    dataset: LKP\n    key: [ID]\n    filter: \"LKP.KEEP = 'Y'\"\n    order_by: [LKP.SEQ]\n    keep: last\n  - id: SELFREF\n    dataset: SRC\n    key: [ID]\n    filter: \"SRC.ID IS NOT NULL\"\n  - id: MUST\n    dataset: SRC\n    key: [ID]\n    filter: \"SRC.ID IS NOT NULL\"\n    require_match: true\n  - id: BYCODE\n    dataset: LKP\n    key:\n      VAL: {mapping: {source: SRC.CODE, dict: {A: one, B: dos}}}\n    absent: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: {value: SRC.NUM, unconvertible: -1}}\n  - {name: LAST, type: str, derivation: PICK.VAL}\n  - {name: UP, type: str, derivation: {str_case: {source: PICK.VAL, to: upper}}}\n  - {name: ANY, type: str, derivation: {first_available: {sources: [PICK.VAL, SRC.ALT]}}}\n  - {name: SELFV, type: str, derivation: SELFREF.CODE}\n  - {name: MUSTV, type: str, derivation: MUST.ALT}\n  - {name: BYC, type: int, derivation: BYCODE.SEQ}\n", "input/src.csv": "ID,NUM,CODE,ALT\n1,10,A,x\n2,y,,z\n3,30,B,\n", "input/lkp.csv": "ID,SEQ,VAL,KEEP\n1,1,one,Y\n1,2,two,N\n2,1,uno,N\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "N", "LAST", "UP", "ANY", "SELFV", "MUSTV", "BYC"],
+        [1, 10, "one", "ONE", "one", "A", "x", 1],
+        [2, -1, null, null, "z", null, "z", null],
+        [3, 30, null, null, null, "B", null, null]
+      ],
+      "report": {
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.N.derivation.unconvertible", "unconvertible", null, "N", "VALUE-3", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.LAST.derivation.source.multiple_matches", "multiple_matches", null, "LAST", "LOOKUP-10", null, null, null, 0, null, null, "{}"],
+          ["out.csv", "columns.LAST.derivation.source.absent", "absent", null, "LAST", "LOOKUP-24", null, null, null, 2, null, null, "{}"],
+          ["out.csv", "columns.UP.derivation.str_case.missing", "missing", null, "UP", null, null, null, null, 2, null, null, "{}"],
+          ["out.csv", "columns.UP.derivation.str_case.source.multiple_matches", "multiple_matches", null, "UP", "LOOKUP-10", null, null, null, 0, null, null, "{}"],
+          ["out.csv", "columns.UP.derivation.str_case.source.absent", "absent", null, "UP", "LOOKUP-24", null, null, null, 2, null, null, "{}"],
+          ["out.csv", "columns.ANY.derivation.first_available.missing", "missing", null, "ANY", null, null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.ANY.derivation.first_available.sources[0].multiple_matches", "multiple_matches", null, "ANY", "LOOKUP-10", null, null, null, 0, null, null, "{}"],
+          ["out.csv", "columns.ANY.derivation.first_available.sources[0].absent", "absent", null, "ANY", "LOOKUP-24", null, null, null, 2, null, null, "{}"],
+          ["out.csv", "columns.SELFV.derivation.source.absent", "absent", null, "SELFV", "LOOKUP-24", null, null, null, 0, null, null, "{}"],
+          ["out.csv", "columns.BYC.derivation.source.absent", "absent", null, "BYC", "LOOKUP-24", null, null, null, 2, null, null, "{}"],
+          ["out.csv", "intermediates.BYCODE.key.VAL.mapping.missing", "missing", null, null, null, null, null, null, 1, null, null, "{}"]
+        ]
+      }
+    },
+    {
+      "case": "intermediate_derivation_handlers_count_each_build_of_the_donor_records",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input/src.csv, types: {ID: int, REF: int}}\n  LAB: {path: input/lab.csv, types: {ID: int, SEQ: int, DAY: int}}\noutput: {path: out.csv, columns: [ID, CAT, NEAR, TAGN], report: report.csv}\nintermediates:\n  - id: CODED\n    dataset: LAB\n    key: [ID]\n    derivations:\n      GRADE: {mapping: {source: FLAG, dict: {H: high, L: low}}}\n      FLAGN: {type: int, derivation: FLAG, unconvertible: null}\n    order_by: [LAB.SEQ]\n    keep: first\n  - id: NEAREST\n    dataset: LAB\n    key: [ID]\n    derivations:\n      DIST: \"ABS(DAY - SRC.REF)\"\n      G2: CODED.GRADE\n    filter: \"LAB.DIST IS NOT NULL\"\n    order_by: [LAB.DIST]\n    keep: first\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CAT, type: str, derivation: CODED.GRADE}\n  - {name: NEAR, type: int, derivation: NEAREST.SEQ}\n  - {name: TAGN, type: int, derivation: {value: SRC.TAG, unconvertible: -1}}\n", "input/src.csv": "ID,REF,TAG\n1,5,7\n2,,x\n3,1,\n", "input/lab.csv": "ID,SEQ,DAY,FLAG\n1,1,2,H\n1,2,6,\n2,1,4,L\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "CAT", "NEAR", "TAGN"],
+        [1, "high", 2, 7],
+        [2, "low", null, -1],
+        [3, null, null, null]
+      ],
+      "report": {
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.TAGN.derivation.unconvertible", "unconvertible", null, "TAGN", "VALUE-3", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.CAT.derivation.source.multiple_matches", "multiple_matches", null, "CAT", "LOOKUP-10", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.CAT.derivation.source.absent", "absent", null, "CAT", "LOOKUP-24", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.NEAR.derivation.source.multiple_matches", "multiple_matches", null, "NEAR", "LOOKUP-10", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.NEAR.derivation.source.absent", "absent", null, "NEAR", "LOOKUP-24", null, null, null, 2, null, null, "{}"],
+          ["out.csv", "intermediates.CODED.derivations.FLAGN.unconvertible", "unconvertible", null, null, "VALUE-3", null, null, null, 6, null, null, "{}"],
+          ["out.csv", "intermediates.CODED.derivations.GRADE.mapping.missing", "missing", null, null, null, null, null, null, 3, null, null, "{}"],
+          ["out.csv", "intermediates.NEAREST.derivations.G2.source.multiple_matches", "multiple_matches", null, null, "LOOKUP-10", null, null, null, 2, null, null, "{}"],
+          ["out.csv", "intermediates.NEAREST.derivations.G2.source.absent", "absent", null, null, "LOOKUP-24", null, null, null, 0, null, null, "{}"]
+        ]
+      }
+    },
+    {
+      "case": "a_read_that_feeds_another_lookup_or_a_predicate_counts_nothing_with_the_value_read_first",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "read_feeds"}, "input/src.csv": "ID\n1\n2\n3\n", "input/base.csv": "ID,REF\n1,5\n3,20\n", "input/rng.csv": "ID,LO,HI,VAL\n1,1,10,a\n3,1,10,c\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "V", "F"],
+        [1, "a", "Y"],
+        [2, null, "N"],
+        [3, null, "N"]
+      ],
+      "report": {
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.V.derivation.source.absent", "absent", null, "V", "LOOKUP-24", null, null, null, 2, null, null, "{}"],
+          ["out.csv", "columns.F.derivation.flag.missing", "missing", null, "F", null, null, null, null, 0, null, null, "{}"]
+        ]
+      }
+    },
+    {
+      "case": "a_read_that_feeds_another_lookup_or_a_predicate_counts_nothing_with_the_flag_read_first",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "read_feeds", "edits": [{"from": "  - {name: V, type: str, derivation: P.VAL}\n  - {name: F, type: str, derivation: {flag: {condition: \"P.VAL IS NOT NULL\", false_value: N, missing: N}}}\n", "to": "  - {name: F, type: str, derivation: {flag: {condition: \"P.VAL IS NOT NULL\", false_value: N, missing: N}}}\n  - {name: V, type: str, derivation: P.VAL}\n"}]}, "input/src.csv": "ID\n1\n2\n3\n", "input/base.csv": "ID,REF\n1,5\n3,20\n", "input/rng.csv": "ID,LO,HI,VAL\n1,1,10,a\n3,1,10,c\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "V", "F"],
+        [1, "a", "Y"],
+        [2, null, "N"],
+        [3, null, "N"]
+      ],
+      "report": {
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.F.derivation.flag.missing", "missing", null, "F", null, null, null, null, 0, null, null, "{}"],
+          ["out.csv", "columns.V.derivation.source.absent", "absent", null, "V", "LOOKUP-24", null, null, null, 2, null, null, "{}"]
+        ]
+      }
+    },
+    {
+      "case": "a_grouped_row_count_names_every_offending_count_even_for_one_group",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, ARM], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: ARM, type: str, derivation: SRC.ARM}\nverifications:\n  - row_count: {group_by: [ARM], max: 1, severity: warning}\n  - row_count: {max: 2, severity: warning}\n  - row_count: {filter: \"ARM = 'A'\", max_fraction: 0.5, severity: warning}\n", "input/input.csv": "ID,ARM\n1,A\n2,A\n3,B\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "verifications[0].row_count", "row_count", null, null, "CHECK-13", "warning", "violated", "row_count_failed", 1, 2, "[{\"ARM\":\"A\"}]", "{\"counts\":[2]}"],
+          ["out.csv", "verifications[1].row_count", "row_count", null, null, "CHECK-13", "warning", "violated", "row_count_failed", 1, 1, "[{}]", "{\"count\":3}"],
+          ["out.csv", "verifications[2].row_count", "row_count", null, null, "CHECK-13", "warning", "violated", "row_count_failed", 1, 1, "[{}]", "{\"count\":2,\"denominator\":3}"]
+        ]
+      }
+    },
+    {
+      "case": "temporal_handlers_cite_the_condition_they_answer",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, START, STAMP, SPAN, PR], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: START\n    type: date\n    derivation: {impute: {type: date, source: SRC.DTC, day: first, invalid: null}}\n  - name: STAMP\n    type: datetime\n    derivation: {impute: {type: datetime, source: SRC.DTM, time: first, invalid: null}}\n  - name: SPAN\n    type: float\n    derivation: {duration_value: {source: SRC.DUR, unit: day, invalid: null}}\n  - name: PR\n    type: str\n    derivation: {precision: {type: datetime, source: SRC.DTM, invalid: null}}\n", "input/input.csv": "ID,DTC,DTM,DUR\n1,2025-03,2025-03-05T10:20,P1D\n2,,bad,bad\n3,bad,,P2D\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "run": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "output", null, null, null, null, null, "succeeded", null, 3, null, null, "{}"]
+        ],
+        "input": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "input.SRC", "SRC", null, null, null, null, null, null, 3, null, null, "{\"bytes\":68,\"path\":\"input/input.csv\",\"profile\":\"csv\"}"]
+        ],
+        "rows": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "base", "SRC", null, null, null, null, null, null, 3, 3, null, "{}"]
+        ],
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.START.derivation.impute.missing", "missing", null, "START", null, null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.START.derivation.impute.invalid", "invalid", null, "START", "TIME-13", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.STAMP.derivation.impute.missing", "missing", null, "STAMP", null, null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.STAMP.derivation.impute.invalid", "invalid", null, "STAMP", "TIME-13", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.SPAN.derivation.duration_value.invalid", "invalid", null, "SPAN", "TIME-17", null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.PR.derivation.precision.missing", "missing", null, "PR", null, null, null, null, 1, null, null, "{}"],
+          ["out.csv", "columns.PR.derivation.precision.invalid", "invalid", null, "PR", "TIME-13", null, null, null, 1, null, null, "{}"]
+        ],
+        "column": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.ID", "ID", null, null, null, null, null, null, 0, 3, null, "{}"],
+          ["out.csv", "columns.START", "START", null, null, null, null, null, null, 2, 3, null, "{}"],
+          ["out.csv", "columns.STAMP", "STAMP", null, null, null, null, null, null, 2, 3, null, "{}"],
+          ["out.csv", "columns.SPAN", "SPAN", null, null, null, null, null, null, 1, 3, null, "{}"],
+          ["out.csv", "columns.PR", "PR", null, null, null, null, null, null, 2, 3, null, "{\"max_length\":6}"]
+        ],
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ]
+      }
+    },
+    {
+      "case": "intermediate_warning_checks_lead_the_check_rows_in_declaration_order",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, STAGE]\nbase: SRC\ninput: {SRC: {path: input/src.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, STAGE, VALUE], report: report.csv}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: [ID]\n    derivations:\n      TWICE: 'SELF.VALUE * 2'\n      PLUS: 'TWICE + 1'\n    order_by: [SELF.STAGE]\n    keep: last\n    verifications:\n      - unique: {columns: [ID], severity: warning}\n  - id: A\n    dataset: SRC\n    key: [ID]\n    derivations: {NEXT: B.VAL}\n    order_by: [SRC.VAL]\n    keep: first\n    verifications:\n      - unique: {columns: [NEXT], severity: warning}\n      - unique: [ID]\n  - id: B\n    dataset: SRC\n    key: [ID]\n    order_by: [SRC.VAL]\n    keep: first\n    verifications:\n      - unique: {columns: [VAL], severity: warning}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: STAGE, type: int}\n  - {name: VALUE, type: int, verifications: [not_missing]}\nrows:\n  - id: first\n    derivations: {STAGE: 1, VALUE: SRC.VAL}\n  - id: second\n    derivations: {STAGE: 2, VALUE: P.PLUS}\n  - id: third\n    derivations: {STAGE: 3, VALUE: P.PLUS}\n", "input/src.csv": "ID,VAL\n1,10\n2,10\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "STAGE", "VALUE"],
+        [1, 1, 10],
+        [2, 1, 10],
+        [1, 2, 21],
+        [2, 2, 21],
+        [1, 3, 43],
+        [2, 3, 43]
+      ],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "intermediates.A.verifications[0].unique", "unique", null, null, "LOOKUP-17", "warning", "violated", "duplicate_intermediate_records", 1, 1, "[{\"NEXT\":10}]", "{\"columns\":[\"NEXT\"],\"dataset\":\"SRC\",\"intermediate\":\"A\"}"],
+          ["out.csv", "intermediates.B.verifications[0].unique", "unique", null, null, "LOOKUP-17", "warning", "violated", "duplicate_intermediate_records", 1, 1, "[{\"VAL\":10}]", "{\"columns\":[\"VAL\"],\"dataset\":\"SRC\",\"intermediate\":\"B\"}"],
+          ["out.csv", "intermediates.P.verifications[0].unique", "unique", null, null, "LOOKUP-17", "warning", "violated", "duplicate_intermediate_records", 2, 2, "[{\"ID\":1},{\"ID\":2}]", "{\"columns\":[\"ID\"],\"dataset\":\"SELF\",\"intermediate\":\"P\"}"],
+          ["out.csv", "columns.VALUE.verifications[0].not_missing", "not_missing", null, "VALUE", "CHECK-5", "error", "held", null, 0, 6, null, "{}"]
+        ]
+      }
+    },
+    {
+      "case": "a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: REF\ninput:\n  REF: {path: input/ref.csv, types: {ID: int, REFDT: date}}\n  VIS: {path: input/visits.csv, types: {ID: int, VDT: date}}\noutput: {path: out.csv, columns: [ID, VAL], report: report.csv}\nintermediates:\n  - id: NEAR\n    dataset: VIS\n    key: [ID]\n    nearest: {source: VDT, to: REF.REFDT, unit: day}\n    verifications:\n      - unique: {columns: [ID], severity: warning}\ncolumns:\n  - {name: ID, type: int, derivation: REF.ID}\n  - {name: VAL, type: str, derivation: NEAR.VAL}\n", "input/ref.csv": "ID,REFDT\n1,2025-01-10\n2,2025-01-10\n", "input/visits.csv": "ID,VDT,VAL\n1,2025-01-01,a\n1,2025-01-12,b\n2,2025-01-09,c\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "VAL"],
+        [1, "b"],
+        [2, "c"]
+      ],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "intermediates.NEAR.verifications[0].unique", "unique", null, null, "LOOKUP-17", "warning", "violated", "duplicate_intermediate_records", 1, 2, "[{\"ID\":1}]", "{\"columns\":[\"ID\"],\"dataset\":\"VIS\",\"intermediate\":\"NEAR\"}"]
+        ]
+      }
+    },
+    {
+      "case": "a_not_missing_when_waits_for_the_later_column_it_reads",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, KIND]\ninput: {SRC: input/src.csv}\noutput: {path: out.csv, columns: [ID, KIND, V, LATER], report: report.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: KIND, type: str}\n  - name: V\n    type: str\n    derivation: SRC.V\n    verifications:\n      - not_missing: {when: \"LATER = 'Y'\", severity: warning}\n  - name: LATER\n    type: str\n    derivation: SRC.FLAG\n    verifications: [not_missing]\nrows:\n  - id: fixed\n    filter: \"SRC.KIND = 'fixed'\"\n    derivations: {KIND: \"'fixed'\", LATER: \"'Y'\"}\n  - id: read\n    filter: \"SRC.KIND = 'read'\"\n    derivations: {KIND: \"'read'\"}\n", "input/src.csv": "ID,KIND,V,FLAG\n1,fixed,,N\n2,read,,Y\n3,read,,N\n4,read,x,Y\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "KIND", "V", "LATER"],
+        ["1", "fixed", null, "Y"],
+        ["2", "read", null, "Y"],
+        ["3", "read", null, "N"],
+        ["4", "read", "x", "Y"]
+      ],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.V.verifications[0].not_missing", "not_missing", null, "V", "CHECK-5", "warning", "violated", "not_missing_failed", 2, 4, "[{\"ID\":\"1\",\"KIND\":\"fixed\"},{\"ID\":\"2\",\"KIND\":\"read\"}]", "{\"column\":\"V\"}"],
+          ["out.csv", "columns.LATER.verifications[0].not_missing", "not_missing", null, "LATER", "CHECK-5", "error", "held", null, 0, 4, null, "{}"]
+        ]
+      }
+    },
+    {
+      "case": "a_column_only_a_when_reads_stays_live",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: input/src.csv}\noutput: {path: out.csv, columns: [ID, V], report: report.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: V\n    type: str\n    derivation: SRC.V\n    verifications:\n      - not_missing: {when: \"FLAGGED = 'Y'\", severity: warning}\n  - {name: FLAGGED, type: str, derivation: SRC.FLAG}\n", "input/src.csv": "ID,V,FLAG\n1,,Y\n2,,N\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "columns.V.verifications[0].not_missing", "not_missing", null, "V", "CHECK-5", "warning", "violated", "not_missing_failed", 1, 2, "[{\"ID\":\"1\"}]", "{\"column\":\"V\"}"]
+        ]
+      }
+    },
+    {
+      "case": "an_intermediate_warning_needs_a_report_file",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: input/src.csv, EX: input/ex.csv}\nbase: SRC\noutput: {path: out.csv, columns: [ID, LAST]}\nintermediates:\n  - id: LASTEX\n    dataset: EX\n    key: [ID]\n    order_by: [EX.SEQ]\n    keep: last\n    verifications:\n      - unique: {columns: [ID], severity: warning}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: LAST, type: str, derivation: LASTEX.SEQ}\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "missing_report", "rule": "CHECK-22", "spec_paths": ["output.report"], "context": {"warnings": ["intermediates.LASTEX.verifications[0].unique"]}}
+      ]
+    }
+  ]
+}

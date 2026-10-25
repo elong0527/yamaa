@@ -12,25 +12,33 @@ use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
 };
 
+fn resource_contracts() -> Value {
+    yamaa_adapters::json_wire::decode(include_str!("fixtures/resource_api_contracts.json")).unwrap()
+}
+
 struct Calls {
     study: crate::support::Scratch,
     checked: Vec<Diagnostic>,
     built: Result<file_application::Domain, Vec<Diagnostic>>,
 }
 
+/// The static check of a case's input, with the project it names if any,
+/// which leaves the staged study as it was.
 fn check_call(
     input: &Value,
     host: Language,
     label: &str,
 ) -> (crate::support::Scratch, Vec<Diagnostic>) {
-    assert!(input.get("project").is_none());
     assert!(input.get("built").is_none());
     let study = operations::study(input);
     let staged = operations::state(&study);
     let specification = study.identity(replay::text(replay::field(input, "specification")));
+    let project = input
+        .get("project")
+        .map(|name| study.identity(replay::text(name)));
     let request = || Request {
         specification: &specification,
-        environment: None,
+        environment: project.as_deref(),
     };
     let identity = || crate::support::study::identity("diagnostics", &specification);
     let checked = file_application::check(host, request(), identity());
@@ -43,6 +51,8 @@ fn check_call(
 }
 
 fn calls(input: &Value, host: Language, label: &str) -> Calls {
+    // The build below names no project, so neither call does.
+    assert!(input.get("project").is_none());
     let (study, checked) = check_call(input, host, label);
     let staged = operations::state(&study);
     let specification = study.identity(replay::text(replay::field(input, "specification")));
@@ -90,7 +100,9 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
             "{}: the original call contract is equality or an unknown-read subsequence",
             case.label
         );
-        let first = case.among;
+        // An `among` row is the issue its test read first, which this seam
+        // places; the replay places a `prefix` case's rows itself.
+        let first = case.order == form::Order::Among;
         first_issues += usize::from(first);
         if first {
             assert_eq!(
@@ -99,20 +111,26 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
                 "{}: one authored first issue",
                 case.label
             );
-            case.among = false;
+            case.order = form::Order::Prefix;
         }
-        let hosts = match case.input.get("host").map(replay::text) {
-            Some("python") => vec![Language::Python],
-            Some("r") => vec![Language::R],
-            None if index == 0 => vec![Language::Python, Language::R],
-            None => vec![Language::Python],
-            other => panic!("{}: unknown host {other:?}", case.label),
+        // The host is read only for a project's environment, functions or
+        // lock, and no check case names a project, so each case is stated
+        // once and the replay runs it for the default host. The tests of the
+        // first three families also called the R host, as this seam does.
+        assert!(
+            case.input.get("host").is_none(),
+            "{}: a check case is stated once, for every host",
+            case.label
+        );
+        let hosts: &[Language] = match index {
+            0..=2 => &[Language::Python, Language::R],
+            _ => &[Language::Python],
         };
-        for host in hosts {
+        for &host in hosts {
             // The shared replay now owns complete list-operation parity.
             // This seam retains first positions, cross-case subsequences,
-            // and the keyless/donor family's original R-host calls.
-            let original_r_call = index == 0 && matches!(host, Language::R);
+            // and the original R-host calls.
+            let original_r_call = matches!(host, Language::R);
             if !(first || subsequence || original_r_call) {
                 continue;
             }
@@ -139,12 +157,8 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
                 assert_eq!(checked_rows, built_rows, "{label}: complete call parity");
             }
             if first {
-                assert!(
-                    !checked.is_empty() && !built.is_empty(),
-                    "{label}: a first issue"
-                );
-                replay::compare_issues(&case, &checked[..1], Some(&study), &label);
-                replay::compare_issues(&case, &built[..1], Some(&study), &label);
+                replay::compare_issues(&case, &checked, Some(&study), &label);
+                replay::compare_issues(&case, &built, Some(&study), &label);
             } else {
                 for operation in &case.operations {
                     let issues = if operation == "check" {
@@ -159,10 +173,10 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     }
     assert_eq!(
         counts,
-        [178, 474, 36, 87],
+        [177, 237, 18, 87],
         "every migrated case retains its API contract"
     );
-    assert_eq!((subsequences, first_issues, executions), (24, 262, 464));
+    assert_eq!((subsequences, first_issues, executions), (12, 162, 606));
 }
 
 #[test]
@@ -182,7 +196,7 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
                 "check_admits_an_intermediate_range_value_no_row_reads"
                     | "check_admits_an_intermediate_range_value_of_the_base_driver_record"
             );
-        let first = case.among;
+        let first = case.order == form::Order::Among;
         first_issues += usize::from(first);
         parity += usize::from(complete_parity);
         saves += usize::from(must_save);
@@ -201,9 +215,8 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
                 "{}: one authored first issue",
                 case.label
             );
-            assert!(!issues.is_empty(), "{}: a first issue", case.label);
-            case.among = false;
-            replay::compare_issues(&case, &issues[..1], Some(&study), &case.label);
+            case.order = form::Order::Prefix;
+            replay::compare_issues(&case, &issues, Some(&study), &case.label);
         }
         if must_save {
             let mut domain = built
@@ -254,7 +267,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        236,
+        306,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -351,15 +364,18 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         );
                         saved_bytes(&study, expected, &case.label);
                     } else {
-                        assert_eq!(
-                            case.label,
-                            "row_scopes.json::when_binds_groups_without_changing_the_fraction_denominator",
-                            "an authored positive save states its bytes"
+                        // A test that saved only to read its report back
+                        // states the report's rows, and its case builds.
+                        assert!(
+                            case.stated.report.is_some(),
+                            "{}: an authored positive save states its bytes",
+                            case.label
                         );
                         assert_eq!(
                             case.operations,
                             ["build"],
-                            "the return-value-only case builds without saving in the replay"
+                            "{}: the return-value-only case builds without saving in the replay",
+                            case.label
                         );
                     }
                 } else {
@@ -368,12 +384,34 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         "{}: expected FailedBuild, got {result:?}",
                         case.label
                     );
-                    assert_eq!(
-                        operations::state(&study),
-                        before,
-                        "{}: a refused save preserves every staged path",
-                        case.label
-                    );
+                    // A failed run publishes only its declared report
+                    // (OUTPUT-10): the bytes its case states as saved, whose
+                    // whole delta the replay compares. Without one, every
+                    // staged path stays.
+                    match case.stated.saved.as_ref().filter(|saved| !saved.is_empty()) {
+                        Some(report) => {
+                            saved_bytes(&study, report, &case.label);
+                            let published = operations::state(&study);
+                            let again = domain.save();
+                            assert!(
+                                matches!(again, Err(file_application::FailedBuild)),
+                                "{}: repeated refused save: {again:?}",
+                                case.label
+                            );
+                            assert_eq!(
+                                operations::state(&study),
+                                published,
+                                "{}: repeated refused save preserves the report and every staged path",
+                                case.label
+                            );
+                        }
+                        None => assert_eq!(
+                            operations::state(&study),
+                            before,
+                            "{}: a refused save preserves every staged path",
+                            case.label
+                        ),
+                    }
                 }
             }
         }
@@ -383,6 +421,149 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (178, 1, 4, 53));
-    assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 93));
+    assert_eq!((domains, preparation, either, checks), (195, 2, 4, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (127, 33, 146));
+}
+
+/// Seam: the composition's save return, held artifact set and capture counter
+/// are independent of the replay's issue rows and saved-file delta.
+#[test]
+fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
+    let authored = resource_contracts();
+    let contracts = replay::object(replay::field(&authored, "define"));
+    let mut seen = BTreeSet::new();
+    let (mut accepted, mut refused, mut artifact_contracts) = (0, 0, 0);
+    for case in replay::cases() {
+        let Some(expected) = contracts.get(&case.label) else {
+            continue;
+        };
+        assert!(seen.insert(case.label.clone()));
+        replay::closed(expected, &["save", "empty_artifacts", "absent"]);
+        let study = operations::study(&case.input);
+        let staged = operations::state(&study);
+        let project = study.identity(replay::text(replay::field(&case.input, "project")));
+        let section = operations::section(replay::field(&case.input, "section"));
+        let host =
+            crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
+        let mut define = yamaa_adapters::file_define::Define::prepare(
+            &project,
+            section,
+            Some(replay::text(replay::field(&case.input, "created"))),
+            "0.3.0",
+            Some(host),
+            None,
+        );
+        assert_eq!(
+            operations::state(&study),
+            staged,
+            "{}: preparation publishes no files or directories",
+            case.label
+        );
+        if let Some(empty) = expected.get("empty_artifacts") {
+            artifact_contracts += 1;
+            assert_eq!(
+                &Value::Bool(define.artifacts().len() == 0),
+                empty,
+                "{}: the authored held-artifact contract",
+                case.label
+            );
+        }
+        let reads = define.capture_reads();
+        let result = define.save();
+        match replay::field(expected, "save") {
+            Value::Bool(true) => {
+                accepted += 1;
+                assert!(
+                    matches!(result, Ok(true)),
+                    "{}: expected Ok(true), got {result:?}",
+                    case.label
+                );
+                saved_bytes(&study, case.stated.saved.as_ref().unwrap(), &case.label);
+            }
+            Value::Bool(false) => {
+                refused += 1;
+                assert!(
+                    result.is_err(),
+                    "{}: refused composition must fail its save, got {result:?}",
+                    case.label
+                );
+                assert_eq!(
+                    operations::state(&study),
+                    staged,
+                    "{}: refused save preserves every staged path",
+                    case.label
+                );
+            }
+            other => panic!("{}: unknown save contract {other:?}", case.label),
+        }
+        assert_eq!(
+            define.capture_reads(),
+            reads,
+            "{}: save reads no source again",
+            case.label
+        );
+        for path in replay::items(replay::field(expected, "absent")) {
+            let path = replay::text(path);
+            assert!(
+                !study.join(path).exists(),
+                "{}: {path} remains absent, including empty directories",
+                case.label
+            );
+        }
+    }
+    assert_eq!(
+        seen,
+        contracts.keys().cloned().collect(),
+        "every define API case remains present"
+    );
+    assert_eq!((accepted, refused, artifact_contracts), (3, 23, 3));
+}
+
+/// Seam: a refused written path has no accepted output and cannot publish,
+/// independently of the diagnostic projection or the save's byte delta.
+#[test]
+fn migrated_written_paths_keep_output_and_publication_contracts() {
+    let authored = resource_contracts();
+    let contracts = replay::items(replay::field(&authored, "written_paths"))
+        .iter()
+        .map(|name| replay::text(name).to_owned())
+        .collect::<BTreeSet<_>>();
+    let mut seen = BTreeSet::new();
+    for case in replay::cases() {
+        if !contracts.contains(&case.label) {
+            continue;
+        }
+        assert!(seen.insert(case.label.clone()));
+        let Calls { study, built, .. } = calls(&case.input, Language::Python, &case.label);
+        let staged = operations::state(&study);
+        if let Ok(mut domain) = built {
+            assert!(
+                domain.output().is_none(),
+                "{}: refused path has no accepted output",
+                case.label
+            );
+            let saved = domain.save();
+            assert!(
+                matches!(saved, Err(file_application::FailedBuild)),
+                "{}: refused domain save: {saved:?}",
+                case.label
+            );
+        }
+        assert_eq!(
+            operations::state(&study),
+            staged,
+            "{}: refusal publishes no path",
+            case.label
+        );
+        assert!(
+            !study.join("entry/output.csv").exists(),
+            "{}: refused build leaves output absent",
+            case.label
+        );
+    }
+    assert_eq!(
+        seen, contracts,
+        "every written-path API case remains present"
+    );
+    assert_eq!(seen.len(), 9);
 }

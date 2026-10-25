@@ -110,7 +110,7 @@ pub fn study(input: &Value) -> Scratch {
 }
 
 /// The submission section `name` names: `sdtm`, `adam` or `send`.
-fn section(name: &Value) -> Submission {
+pub fn section(name: &Value) -> Submission {
     match text(name) {
         "sdtm" => Submission::Sdtm,
         "adam" => Submission::Adam,
