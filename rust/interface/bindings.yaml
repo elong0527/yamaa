@@ -273,7 +273,7 @@ tables:
         meaning: the name it had before a release renamed it; missing when no release did
       - name: retired_in
         type: optional<str>
-        meaning: the release that retired it, such as 1.0.0; missing for a condition the engine may report
+        meaning: the release that retired it, such as 0.6.0; missing for a condition the engine may report
 
 # Named records a host returns as a dict or named list.
 records:

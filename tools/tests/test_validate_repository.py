@@ -352,7 +352,7 @@ class TestConditionRegistry(unittest.TestCase):
         retired = changed["retired"]
         retired["day_required"]["retired_in"] = "1.0"
         retired["month_required"]["reason"] = "gone"
-        retired["aggregate_multiple_records"] = {"retired_in": "1.0.0"}
+        retired["aggregate_multiple_records"] = {"retired_in": "0.6.0"}
 
         errors = OWNER_REPOSITORY_MANIFESTS.validate_condition_registry(
             self.root, changed
@@ -364,7 +364,7 @@ class TestConditionRegistry(unittest.TestCase):
             [
                 f"{label}.retired: expected sorted keys",
                 f"{label}.retired.day_required.retired_in: expected the release "
-                "that retired it, such as '1.0.0'",
+                "that retired it, such as '0.6.0'",
                 f"{label}.retired.month_required.reason: unknown field",
                 f"{label}.retired.aggregate_multiple_records: a registered "
                 "condition is not retired",

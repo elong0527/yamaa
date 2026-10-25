@@ -16,7 +16,7 @@ version: "1.0"
 # condition and rule, never on message.
 #
 # A condition's history goes with it, from the `conditions` section of
-# tools/migrate/renames.yaml for 1.0.0: `renamed_from` gives the name it had
+# tools/migrate/renames.yaml for 0.6.0: `renamed_from` gives the name it had
 # before a release renamed it, and `retired` below lists each condition a
 # release retired, with that release as `retired_in`. With them, the
 # catalogue that `conditions()` returns names every condition a program
@@ -714,16 +714,16 @@ conditions:
 # implementation raises them, so no card, cause or benchmark names them.
 retired:
   bare_derivation_scalar:
-    retired_in: "1.0.0"
+    retired_in: "0.6.0"
   day_not_permitted:
-    retired_in: "1.0.0"
+    retired_in: "0.6.0"
   day_required:
-    retired_in: "1.0.0"
+    retired_in: "0.6.0"
   model_contract_mismatch:
-    retired_in: "1.0.0"
+    retired_in: "0.6.0"
   month_not_permitted:
-    retired_in: "1.0.0"
+    retired_in: "0.6.0"
   month_required:
-    retired_in: "1.0.0"
+    retired_in: "0.6.0"
   window_order_by_forbidden:
-    retired_in: "1.0.0"
+    retired_in: "0.6.0"

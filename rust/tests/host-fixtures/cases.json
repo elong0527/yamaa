@@ -6487,20 +6487,20 @@
       ],
       "rows": [
         ["allowed_values_failed", "error", ["verification"], ["CHECK-6", "CT-7", "CT-11"], "column {column} holds a value outside its allowed values", null, null],
-        ["bare_derivation_scalar", "error", [], [], null, null, "1.0.0"],
+        ["bare_derivation_scalar", "error", [], [], null, null, "0.6.0"],
         ["conversion_failed", "error", ["convert", "validation"], ["TIME-14", "TIME-21", "VALUE-3", "VALUE-7", "VALUE-15", "VALUE-24"], "{spec_path} gives a value that does not convert to {to}, or that leaves the range of {to}", null, null],
-        ["day_not_permitted", "error", [], [], null, null, "1.0.0"],
-        ["day_required", "error", [], [], null, null, "1.0.0"],
+        ["day_not_permitted", "error", [], [], null, null, "0.6.0"],
+        ["day_required", "error", [], [], null, null, "0.6.0"],
         ["duplicate_layer", "error", ["validation"], ["LAYER-3"], "include {path} names a layer the specification already composes", null, null],
         ["engine_rejected", "error", ["engine"], [], "the engine refused the operation in its {step} step: {code}", null, null],
         ["function_file_invalid", "error", ["validation"], ["FUNC-2"], "a function file or lock cannot be admitted ({reason})", "project_environment_invalid", null],
         ["function_implementation_missing", "error", ["validation"], ["FUNC-1"], "project function {function} has no implementation for {language}", "project_environment_missing", null],
-        ["model_contract_mismatch", "error", [], [], null, null, "1.0.0"],
-        ["month_not_permitted", "error", [], [], null, null, "1.0.0"],
-        ["month_required", "error", [], [], null, null, "1.0.0"],
+        ["model_contract_mismatch", "error", [], [], null, null, "0.6.0"],
+        ["month_not_permitted", "error", [], [], null, null, "0.6.0"],
+        ["month_required", "error", [], [], null, null, "0.6.0"],
         ["standard_model_mismatch", "error", ["validation"], ["DEFINE-6", "SUB-3"], "{value} is outside the {model} model of section {section}", "unknown_standard_family", null],
         ["unsupported_language_version", "error", ["validation"], ["LAYER-4", "SCHEMA-2"], "this engine does not read language version {version}", "schema_version_mismatch", null],
-        ["window_order_by_forbidden", "error", [], [], null, null, "1.0.0"]
+        ["window_order_by_forbidden", "error", [], [], null, null, "0.6.0"]
       ]
     },
     "issue-locations": {
