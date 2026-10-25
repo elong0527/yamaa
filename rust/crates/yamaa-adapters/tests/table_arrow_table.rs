@@ -1,8 +1,14 @@
 //! Table contracts: column table, epoch conversions, CSV artifact, CSV
 //! precision, CSV source, parquet artifact, predicate diagnostics and public
 //! table.
+//!
+//! Each module names the seam its tests prove. What a save with output
+//! decimals writes or refuses is a case of
+//! `fixtures/diagnostics/csv_precision.json` (#3798).
 mod table {
     mod column_table {
+        // Seam, for every test here: the in-memory column table, its storage,
+        // projection, appended columns, validity and limits, which no case builds.
         use crate::support::table_schema as logical_schema;
         use yamaa_adapters::{
             column_table::{Column, ColumnTable, TableError},
@@ -283,6 +289,8 @@ mod table {
         }
     }
     mod epoch {
+        // Seam, for every test here: the epoch kernel over generated calendar
+        // and datetime ranges.
         use yamaa_adapters::epoch::{
             date_days, date_from_days, datetime_from_seconds, datetime_seconds,
         };
@@ -347,6 +355,8 @@ mod table {
         }
     }
     mod csv_artifact {
+        // Seam, for every test here: the CSV encoder over tables built in
+        // memory, which a case reaches only through a run.
         use std::convert::Infallible;
         use yamaa_adapters::csv_artifact::{self, Error};
         use yamaa_core::{
@@ -656,6 +666,10 @@ mod table {
     }
     #[cfg(feature = "yaml")]
     mod csv_precision {
+        // What a save of a specification with output decimals writes, and how
+        // its refusals publish nothing, are the cases of
+        // `fixtures/diagnostics/csv_precision.json`. The tests left here
+        // compare what no case states.
         use crate::support::ports::{NoFunctions, Sources};
         use crate::support::Edit as _;
         use yamaa_adapters::{
@@ -664,18 +678,13 @@ mod table {
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
-        use yamaa_core::value::Value;
 
         const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}\n";
-        fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
-            let bytes = SPEC
-                .edit("PRECISION", precision)
-                .edit("output.csv", path)
-                .edit("VALUE + VALUE", expression);
+        fn prepared(precision: &str) -> PreparedRun {
             let document = yamaa_adapters::shipped_schema::prepare(
                 Source {
                     identity: "spec.yaml".into(),
-                    bytes: bytes.into_bytes(),
+                    bytes: SPEC.edit("PRECISION", precision).into_bytes(),
                 },
                 "spec.yaml".into(),
                 &mut crate::support::inheritance::Files,
@@ -701,28 +710,16 @@ mod table {
             }
         }
 
+        /// Seam: the scripted `Sources` port's read count and the result's
+        /// observation records: no artifact before the save, and the saved
+        /// report's artifact holding the rounded bytes once the run is gone.
+        /// The unrounded output and the bytes a save writes are the case
+        /// `csv_precision.json::two_decimals_round_the_saved_bytes_and_leave_the_output_unrounded`.
         #[test]
-        fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once() {
-            let run = prepared("2", "output.csv", "VALUE + VALUE");
+        fn a_result_reads_its_input_once_and_records_its_rounded_bytes_only_when_saved() {
+            let run = prepared("2");
             let mut study = study();
             let attempt = run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
-            // The attempt's own checked dataset keeps the unrounded
-            // derivation; only the saved bytes round.
-            let dataset = &attempt
-                .dataset
-                .result
-                .as_ref()
-                .unwrap()
-                .result
-                .as_ref()
-                .unwrap()
-                .dataset;
-            let bits = |column: usize| match &dataset.rows()[1][column] {
-                Value::Float(value) => value.get().to_bits(),
-                other => panic!("a float cell, not {other:?}"),
-            };
-            assert_eq!(bits(1), 0x3ff3_be76_c8b4_3958);
-            assert_eq!(bits(2), 0x4003_be76_c8b4_3958);
             let result =
                 specification_report::build_result(&run, &attempt, identity(), &[]).unwrap();
             assert_eq!(
@@ -733,7 +730,6 @@ mod table {
             drop(run);
             // The saved bytes belong to the result, not to the run.
             let expected = b"ID,VALUE,DOUBLE\n1,0.13,0.25\n2,1.23,2.47\n3,2.35,4.69\n";
-            assert_eq!(result.files(), [("output.csv", expected.as_slice())]);
             let report = result.saved_observations().unwrap();
             assert_eq!(
                 report["artifacts"][0]["content"]
@@ -745,39 +741,8 @@ mod table {
             assert_eq!(study.reads(), 1);
         }
 
-        #[test]
-        fn output_precision_rejection_follows_original_execution_failure_and_denies_publication() {
-            for (precision, path, expression, condition) in [
-                ("-1", "output.csv", "VALUE + VALUE", "invalid_field_type"),
-                ("19", "output.csv", "VALUE + VALUE", "invalid_field_type"),
-                (
-                    "999999999999999999999999999999",
-                    "output.csv",
-                    "VALUE + VALUE",
-                    "invalid_field_type",
-                ),
-                (
-                    "2",
-                    "output.parquet",
-                    "VALUE + VALUE",
-                    "decimals_not_applicable",
-                ),
-                ("-1", "output.csv", "1 / 0", "division_by_zero"),
-                ("19", "output.csv", "1 / 0", "division_by_zero"),
-            ] {
-                let run = prepared(precision, path, expression);
-                let attempt =
-                    run.execute_with_ports(&mut NoFunctions, &mut study(), Scope::default());
-                let result =
-                    specification_report::build_result(&run, &attempt, identity(), &[]).unwrap();
-                let report = result.observations();
-                assert!(result.output().is_none());
-                assert_eq!(report["diagnostics"].as_array().unwrap().len(), 1);
-                assert_eq!(report["diagnostics"][0]["condition"], condition);
-                assert!(result.files().is_empty());
-            }
-        }
-
+        /// Seam: the compiled specification's retained decimals, which no
+        /// case reads.
         #[test]
         fn compiler_keeps_arbitrary_width_precision_without_a_metadata_copy_allowance() {
             let precision = "9".repeat(1000);
@@ -795,6 +760,7 @@ mod table {
         }
     }
     mod csv_source {
+        // Seam: the untyped text table's owned cells and its limits.
         #[test]
         fn untyped_text_table_owns_exact_source_cells_and_limits() {
             use yamaa_adapters::csv_source::{parse_text_table, TextTableError};
@@ -828,6 +794,8 @@ mod table {
     }
     #[cfg(feature = "parquet")]
     mod parquet_artifact {
+        // Seam, for every test here: the Parquet encoder over tables built in
+        // memory, its file read back with the `parquet` crate.
         use parquet::{
             basic::{Compression, LogicalType, Repetition, Type},
             file::{reader::FileReader, serialized_reader::SerializedFileReader},
@@ -1288,6 +1256,10 @@ mod table {
     #[cfg(feature = "yaml")]
     mod predicate_diagnostics {
         //! Complete original-document outcomes captured independently from Python.
+        //!
+        //! Already data: the authored reports of
+        //! `fixtures/predicate_context_diagnostics.tsv`, with the scripted
+        //! port's captured inputs.
         use crate::support::ports::NoFunctions;
         use yamaa_adapters::{
             specification_report::{self, Identity},
@@ -1350,6 +1322,7 @@ mod table {
     }
     #[cfg(feature = "arrow")]
     mod public_table {
+        // Seam, for every test here: the public table's Arrow arrays.
         use arrow_array::{
             Array, Date32Array, Float64Array, Int64Array, StringArray, TimestampSecondArray,
         };
