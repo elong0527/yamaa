@@ -351,7 +351,6 @@ mod file {
             let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
             assert!(attempt.boundary.is_ok());
             assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
-
         }
         /// Seam: held environment locks, typed activation boundaries and observations,
         /// and dataset/capture state after refusal; public replay cases own rows and logs.
