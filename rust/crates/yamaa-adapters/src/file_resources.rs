@@ -7,6 +7,8 @@ use crate::{
     file_resolver::FileResolver,
     host_resources::{Failure, Kind, PathRefusal, ResourceKind},
 };
+use yamaa_core::application_issue::{Fault, Step};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::limits::{LimitExceeded, Limits};
 use yamaa_core::resolver::{self, Captured, File, Located, Name, Origin, Resolver};
 
@@ -111,7 +113,7 @@ pub struct Resources {
 
 /// Whether two resource locations name one file: ordinal case-insensitive on
 /// Windows, where child opens are, and exact elsewhere.
-pub(crate) fn same_location(left: &str, right: &str) -> bool {
+pub fn same_location(left: &str, right: &str) -> bool {
     #[cfg(windows)]
     {
         crate::windows_file::equal_name(left, right)
@@ -154,7 +156,7 @@ impl HeldArtifacts {
 /// One input that reads a producing specification's artifact through a
 /// `schema` link, with the location its `path` names.
 #[derive(Clone, Debug)]
-pub(crate) struct LinkedInput {
+pub struct LinkedInput {
     dataset: String,
     producer: String,
     location: String,
@@ -162,7 +164,7 @@ pub(crate) struct LinkedInput {
 
 /// The linked inputs of one prepared document. Locations are lexical: no file
 /// is opened, and an input whose location cannot be formed reads its file.
-pub(crate) fn linked_inputs(
+pub fn linked_inputs(
     resources: &Resources,
     document: &crate::specification_source::PreparedDocument,
     links: &[crate::specification_source::LinkedSpecification],
@@ -185,13 +187,13 @@ pub(crate) fn linked_inputs(
 
 /// A run's study port that serves held producer artifacts to linked inputs
 /// and reads every other input through the run's resources.
-pub(crate) struct HeldPort<'a> {
+pub struct HeldPort<'a> {
     resources: &'a mut Resources,
     held: Option<Arc<HeldArtifacts>>,
     inputs: &'a [LinkedInput],
 }
 impl<'a> HeldPort<'a> {
-    pub(crate) fn new(run: &'a mut RunScope, inputs: &'a [LinkedInput]) -> Self {
+    pub fn new(run: &'a mut RunScope, inputs: &'a [LinkedInput]) -> Self {
         let held = run.held();
         Self {
             resources: run.resources_mut(),
@@ -280,7 +282,7 @@ impl RunScope {
     pub fn hold(&mut self, held: Arc<HeldArtifacts>) {
         self.held = Some(held);
     }
-    pub(crate) fn held(&self) -> Option<Arc<HeldArtifacts>> {
+    pub fn held(&self) -> Option<Arc<HeldArtifacts>> {
         self.held.clone()
     }
     /// Snapshots created so far in this scope, including those it inherited.
@@ -294,10 +296,10 @@ impl RunScope {
         sources.extend(self.resources.retain_sources());
         sources
     }
-    pub(crate) fn resources(&self) -> &Resources {
+    pub fn resources(&self) -> &Resources {
         &self.resources
     }
-    pub(crate) fn resources_mut(&mut self) -> &mut Resources {
+    pub fn resources_mut(&mut self) -> &mut Resources {
         &mut self.resources
     }
 }
@@ -317,12 +319,23 @@ impl Resources {
     /// requests come from `base`.
     fn through_files((resolver, base): (FileResolver, String)) -> Self {
         let resolver = Arc::new(resolver);
+        Self::with_file_resolver(
+            Arc::clone(&resolver) as Arc<dyn crate::host_resources::Resolver>,
+            base,
+            resolver,
+        )
+    }
+    /// Snapshots captured through `resolver`, whose undeclared requests come
+    /// from `base`, with the local file resolver `files` that it stands in
+    /// front of anchoring locations and publication targets.
+    pub fn with_file_resolver(
+        resolver: Arc<dyn crate::host_resources::Resolver>,
+        base: String,
+        files: Arc<FileResolver>,
+    ) -> Self {
         Self {
-            store: crate::host_resources::Resources::at(
-                Arc::clone(&resolver) as Arc<dyn crate::host_resources::Resolver>,
-                base,
-            ),
-            file: Some(resolver),
+            store: crate::host_resources::Resources::at(resolver, base),
+            file: Some(files),
             host_sources: vec![],
             entry: None,
             reads: 0,
@@ -384,7 +397,7 @@ impl Resources {
     /// [`FileResolver::select_caller_parent`] describes. A caller resolver
     /// selects nothing. Configuration calls this before any run scope shares
     /// the roots.
-    pub(crate) fn select_caller_parent(&mut self, path: &str) {
+    pub fn select_caller_parent(&mut self, path: &str) {
         if let Some(file) = &self.file {
             file.select_caller_parent(path);
         }
@@ -396,13 +409,12 @@ impl Resources {
     pub fn capture_reads(&self) -> usize {
         self.reads
     }
-    #[cfg(test)]
-    pub(crate) fn snapshot_count(&self) -> usize {
+    pub fn snapshot_count(&self) -> usize {
         self.store.len()
     }
     /// Immutable raw prefix evidence survives failed decoding and inheritance.
     /// This view grants no resource, execution or publication port.
-    pub(crate) fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
+    pub fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
         self.host_sources
             .iter()
             .map(|(name, bytes)| (name.clone(), bytes.as_ref()))
@@ -410,18 +422,18 @@ impl Resources {
     /// Verify every held snapshot again, naming a failed one by the identity
     /// its documents carry: the canonical path of a local file, the logical
     /// location of a host object.
-    pub(crate) fn verify_held(&self) -> Result<(), (String, Error)> {
+    pub fn verify_held(&self) -> Result<(), (String, Error)> {
         self.store
             .verify(self.store.len())
             .map_err(|(identity, failure)| (identity, Error::from_failure(failure)))
     }
     /// Own immutable raw evidence without copying content or reopening files.
-    pub(crate) fn retain_sources(&self) -> RetainedSources {
+    pub fn retain_sources(&self) -> RetainedSources {
         self.store.sources(None)
     }
     /// Metadata captures alone can hold YAML diagnostic locations. Input
     /// data remains in the complete evidence returned by `retain_sources`.
-    pub(crate) fn retain_metadata_sources(&self) -> RetainedSources {
+    pub fn retain_metadata_sources(&self) -> RetainedSources {
         self.store.sources(Some(Kind::Metadata))
     }
     /// Metadata only: no bytes read and no snapshot created.
@@ -468,16 +480,16 @@ impl Resources {
     /// Retain its physical descriptor; the parent chain is checked at save.
     /// Retain the original declaring-layer location without rebasing through
     /// another entry. The declaring identity comes from this reader.
-    pub(crate) fn publication_target_from(
+    pub fn publication_target_from(
         &self,
         declaring: &str,
         written: &str,
-    ) -> Result<crate::publication::AnchoredTarget, Error> {
+    ) -> Result<crate::publisher::AnchoredTarget, Error> {
         match &self.file {
             Some(file) => file
                 .publication_target(declaring, written)
-                .map(crate::publication::AnchoredTarget::File),
-            None => Ok(crate::publication::AnchoredTarget::Host {
+                .map(crate::publisher::AnchoredTarget::File),
+            None => Ok(crate::publisher::AnchoredTarget::Host {
                 resolver: Arc::clone(&self.store.resolver),
                 declaring: declaring.into(),
                 written: written.into(),
@@ -524,14 +536,11 @@ impl Resources {
     /// (see [`FileResolver::publication_target_named`]); through a caller's
     /// resolver, the object that resolver's target reply names for `name`
     /// from the entry, as it names a specification's output.
-    pub(crate) fn caller_target(
-        &self,
-        name: &str,
-    ) -> Result<crate::publication::AnchoredTarget, Error> {
+    pub fn caller_target(&self, name: &str) -> Result<crate::publisher::AnchoredTarget, Error> {
         match &self.file {
             Some(file) => file
                 .publication_target_named(&self.store.base, name)
-                .map(crate::publication::AnchoredTarget::File)
+                .map(crate::publisher::AnchoredTarget::File)
                 .map_err(Error::from_failure),
             None => self.publication_target_from(&self.store.base, name),
         }
@@ -567,7 +576,7 @@ impl Resources {
     }
 }
 
-pub(crate) fn resource_failure(error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
+pub fn resource_failure(error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
     use yamaa_core::resource::ResourceFailure;
     match error {
         Error::Missing => Some(ResourceFailure::Missing),
@@ -577,6 +586,35 @@ pub(crate) fn resource_failure(error: &Error) -> Option<yamaa_core::resource::Re
         Error::Changed => Some(ResourceFailure::ContentChanged),
         Error::Limit(bound) => Some(ResourceFailure::Boundary(*bound)),
         _ => None,
+    }
+}
+
+/// The closed code of the opaque refusal a resource failure reports. A bound
+/// reports its facts beside the code (`resource_limit`).
+pub fn resource_fault(error: &Error) -> Fault {
+    use Error as E;
+    match error {
+        E::Host(_) => Fault::HostResourceFailure,
+        E::Missing => Fault::ResourceMissing,
+        E::Unreadable => Fault::ResourceUnreadable,
+        E::NotRegularFile => Fault::ResourceNotRegular,
+        E::InvalidRoot => Fault::ResourceRoot,
+        E::InvalidBase => Fault::ResourceBase,
+        E::InvalidPath => Fault::ResourcePath,
+        E::WrittenForm(_) => Fault::ResourcePath,
+        E::OutsideRoots => Fault::ResourceOutsideRoots,
+        E::Symlink => Fault::ResourceLink,
+        E::Changed => Fault::ResourceChanged,
+        E::Limit(_) => Fault::ResourceLimit,
+    }
+}
+/// The refusal of a file a caller names that cannot be read: a classified
+/// failure is its file rule's condition naming the path as given (FILE-7,
+/// FILE-8, FILE-11), and any other stays an opaque resource refusal.
+pub fn caller_read_failure(path: &str, error: &Error) -> Diagnostic {
+    match resource_failure(error) {
+        Some(failure) => failure.caller_diagnostic(path),
+        None => yamaa_core::application_issue::rejected(Step::Prepare, resource_fault(error)),
     }
 }
 
@@ -1136,80 +1174,5 @@ mod declaring_publication_tests {
         assert!(!study.0.join("entry/out/held.csv").exists());
         assert!(!study.0.join("shared/moved/held.csv").exists());
         assert_eq!(resources.capture_reads(), 0);
-    }
-}
-
-#[cfg(all(test, feature = "yaml"))]
-mod default_resolver_tests {
-    use super::*;
-    use crate::host_resources::{Operation, Reply, Request, Resolver};
-    use std::sync::Mutex;
-
-    /// The local file resolver, with every request it serves recorded.
-    struct Recording {
-        files: Arc<FileResolver>,
-        requests: Mutex<Vec<(Operation, Kind, String)>>,
-    }
-    impl Resolver for Recording {
-        fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
-            self.requests.lock().unwrap().push((
-                request.operation,
-                request.kind,
-                request.written.to_owned(),
-            ));
-            self.files.request(request)
-        }
-    }
-
-    #[test]
-    fn a_build_on_local_files_reads_every_file_through_the_file_resolver() {
-        let directory =
-            std::env::temp_dir().join(format!("yamaa-default-resolver-{}", std::process::id()));
-        std::fs::create_dir_all(directory.join("input")).unwrap();
-        std::fs::write(
-            directory.join("spec.yaml"),
-            "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
-        )
-        .unwrap();
-        std::fs::write(directory.join("input/src.csv"), "ID\n1\n2\n").unwrap();
-        let (files, base) = FileResolver::for_entry(directory.to_str().unwrap()).unwrap();
-        let files = Arc::new(files);
-        let recording = Arc::new(Recording {
-            files: Arc::clone(&files),
-            requests: Mutex::new(Vec::new()),
-        });
-        let resources = Resources {
-            store: crate::host_resources::Resources::at(
-                Arc::clone(&recording) as Arc<dyn crate::host_resources::Resolver>,
-                base,
-            ),
-            file: Some(files),
-            host_sources: vec![],
-            entry: None,
-            reads: 0,
-        };
-        let prepared =
-            crate::file_preparation::FileSpecification::prepare(resources, "spec.yaml").unwrap();
-        let mut run = prepared.run_scope(None);
-        let attempt = prepared.build(
-            &mut run,
-            &mut yamaa_core::host_functions::Empty::<std::convert::Infallible>::new(),
-            yamaa_core::application_observer::Scope::default(),
-        );
-        std::fs::remove_dir_all(&directory).unwrap();
-        assert!(attempt.dataset.result.is_ok());
-        assert_eq!(run.capture_reads(), 2);
-        let requests = recording.requests.lock().unwrap().clone();
-        let captured = |kind, written: &str| {
-            requests
-                .iter()
-                .any(|request| *request == (Operation::Capture, kind, written.to_owned()))
-        };
-        assert!(captured(Kind::Metadata, "spec.yaml"), "{requests:?}");
-        assert!(captured(Kind::Input, "input/src.csv"), "{requests:?}");
-        assert!(requests.iter().all(|(operation, _, written)| {
-            matches!(operation, Operation::Inspect | Operation::Capture)
-                && ["spec.yaml", "input/src.csv"].contains(&written.as_str())
-        }));
     }
 }

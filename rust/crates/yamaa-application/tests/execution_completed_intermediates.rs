@@ -97,7 +97,7 @@ mod execution {
     mod completed_lookup_assertions {
         //! Independent completed-row assertion scope, order and whole-record truth.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);

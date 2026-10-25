@@ -99,9 +99,20 @@ def qualify(selection, enabled):
     if ("cc" in tree) != bool({"parquet", "readstat"}.intersection(enabled)):
         raise RuntimeError(f"unexpected native C build dependency for {selection}")
     cargo("check", "--locked", "-p", "yamaa", *features)
-    # The adapters' unit tests behind a disabled reader, such as the
-    # sas_source refusal without readstat, compile in no other build.
-    cargo("test", "--locked", "-p", "yamaa-adapters", *features, "--lib", "--no-run")
+    # The adapters' and the application layer's unit tests behind a disabled
+    # reader, such as the sas_source refusal without readstat, compile in no
+    # other build.
+    cargo(
+        "test",
+        "--locked",
+        "-p",
+        "yamaa-adapters",
+        "-p",
+        "yamaa-application",
+        *features,
+        "--lib",
+        "--no-run",
+    )
     messages = cargo(
         "test",
         "--locked",
@@ -161,6 +172,8 @@ def main():
         }
     ):
         raise RuntimeError("semantic core depends on a physical reader")
+    if core.intersection({"yamaa-adapters", "yamaa-application"}):
+        raise RuntimeError("semantic core depends on the adapters or the application")
     for selection, enabled in FORMATS.items():
         qualify(selection, enabled)
     qualify_without_parquet()

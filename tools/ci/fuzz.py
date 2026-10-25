@@ -75,8 +75,8 @@ SOURCE_DECODE = (
     "rust/crates/yamaa-adapters/src/columns.rs",
     "rust/crates/yamaa-adapters/src/decoder.rs",
     "rust/crates/yamaa-adapters/src/epoch.rs",
+    "rust/crates/yamaa-adapters/src/source_decoding.rs",
     "rust/crates/yamaa-adapters/src/source_ordinal.rs",
-    "rust/crates/yamaa-adapters/src/specification_run.rs",
     "rust/crates/yamaa-core/src/odm_source.rs",
 )
 SAS = (
@@ -160,12 +160,13 @@ TARGETS = {
         (
             "rust/crates/yamaa-adapters/schema/",
             "rust/crates/yamaa-adapters/src/shipped_schema/",
-            "rust/crates/yamaa-adapters/src/specification_run.rs",
             "rust/crates/yamaa-adapters/src/specification_source/",
             "rust/crates/yamaa-adapters/src/yaml_decode.rs",
             "rust/crates/yamaa-adapters/src/yaml_decode/",
             "rust/crates/yamaa-adapters/src/yaml_source.rs",
             "rust/crates/yamaa-adapters/src/yaml_source/",
+            "rust/crates/yamaa-application/Cargo.toml",
+            "rust/crates/yamaa-application/src/specification_run.rs",
             "rust/crates/yamaa-core/src/dictionary_preparation.rs",
             "rust/crates/yamaa-core/src/domain.rs",
             "rust/crates/yamaa-core/src/expression/",

@@ -257,11 +257,11 @@ fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
 
 /// One execution attempt as its report reads it: the typed outcome and the
 /// evidence the attempt retained, borrowed from it.
-pub(crate) struct Response<'a> {
-    pub(crate) outcome: Outcome,
-    pub(crate) retained_verifications: &'a [CheckRecord],
-    pub(crate) intermediate_diagnostics: &'a [Diagnostic],
-    pub(crate) failed_verifications: Option<(
+pub struct Response<'a> {
+    pub outcome: Outcome,
+    pub retained_verifications: &'a [CheckRecord],
+    pub intermediate_diagnostics: &'a [Diagnostic],
+    pub failed_verifications: Option<(
         yamaa_core::verification_diagnostics::Phase,
         &'a [CheckRecord],
     )>,
@@ -270,7 +270,7 @@ pub(crate) struct Response<'a> {
 /// Classify one execution attempt without moving or encoding anything. A
 /// project-function failure keeps its own formatter with the original host
 /// payload; any other failure the language does not name is refused.
-pub(crate) fn response<E>(attempt: &dataset::ExecutionAttempt<E>) -> Result<Response<'_>, Error> {
+pub fn response<E>(attempt: &dataset::ExecutionAttempt<E>) -> Result<Response<'_>, Error> {
     use yamaa_core::verification_diagnostics::Phase;
     let (outcome, intermediate_diagnostics, failed_verifications) = match &attempt.result {
         Ok(_) => (Outcome::Success, &[][..], None),
@@ -308,7 +308,7 @@ pub fn outcome<E>(attempt: &dataset::ExecutionAttempt<E>) -> Result<Outcome, Err
 }
 
 /// Classify an execution from held bytes and keep its checked dataset.
-pub(crate) fn specification_response(
+pub fn specification_response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
     let outcome = self::outcome(&attempt)?;

@@ -7,7 +7,11 @@ that compiles the engine again.
 
 import contextlib
 import io
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import yaml
 from tools.commands import r_tests
@@ -68,6 +72,53 @@ class SharedBuild(unittest.TestCase):
             RuntimeError, "compiled yamaa-adapters, yamaa-r again instead of reusing"
         ):
             r_tests.check_shared_build(INSTALL_LOG.format(cargo=cargo, time="1m 52s"))
+
+
+class InstalledSuites(unittest.TestCase):
+    def test_all_r_suites_use_the_installed_library_and_a_failure_does_not_hide_later_suites(
+        self,
+    ):
+        catalog = {
+            "suites": [
+                {"runtime": runtime, "staged_path": path}
+                for runtime, path in (
+                    ("python", "installed_info.py"),
+                    ("r", "selftest.R"),
+                    ("r", "saved_readers.R"),
+                )
+            ]
+        }
+        environment = {"R_LIBS": "/fresh/library"}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.object(r_tests.inventory, "load_catalog", return_value=catalog),
+            mock.patch.object(r_tests.installed, "stage") as stage,
+            mock.patch.object(
+                r_tests.subprocess,
+                "run",
+                side_effect=[
+                    subprocess.CompletedProcess([], 1, "selftest failed\n"),
+                    subprocess.CompletedProcess([], 0, "readers passed\n"),
+                ],
+            ) as run,
+            contextlib.redirect_stdout(io.StringIO()),
+            self.assertRaisesRegex(
+                RuntimeError, "installed R suites failed: selftest.R"
+            ),
+        ):
+            work = Path(directory)
+            r_tests.run_installed_suites(work, environment)
+        stage.assert_called_once_with("r", work)
+        self.assertEqual(
+            [
+                (call.args[0], call.kwargs["cwd"], call.kwargs["env"])
+                for call in run.call_args_list
+            ],
+            [
+                (["Rscript", "--vanilla", path], work, environment)
+                for path in ("selftest.R", "saved_readers.R")
+            ],
+        )
 
 
 if __name__ == "__main__":

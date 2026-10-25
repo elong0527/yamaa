@@ -595,7 +595,7 @@ lower case, numbers in [Values](values.md)'s `str` form, and strings escaped to
 ASCII by JSON's short escapes where one exists and lower-case `\\u`
 hexadecimal escapes otherwise.
 
-Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/src/run_report.rs::governed_projection_preserves_ascii_details_and_all_keys`.
+Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-application/src/run_report.rs::governed_projection_preserves_ascii_details_and_all_keys`.
 
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per

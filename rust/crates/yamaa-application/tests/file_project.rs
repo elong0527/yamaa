@@ -5,10 +5,12 @@ mod file {
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::{
-            file_preparation::FileSpecification,
-            file_project::{self, Error},
             file_resources::{Error as ResourceError, Resources},
             project_source::{CaptureFailure, Failure as EnvironmentFailure, Origin},
+        };
+        use yamaa_application::{
+            file_preparation::FileSpecification,
+            file_project::{self, Error},
             specification_run::BoundaryFailure,
         };
         use yamaa_core::application_observer::Scope;
@@ -94,7 +96,7 @@ mod file {
             // Seam: the public preparation's capture reads, which a check does not return.
             let study = Study::new();
             study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
-            let project = yamaa_adapters::project_application::prepare(
+            let project = yamaa_application::project_application::prepare(
                 &study.text("entry/domain.yaml"),
                 &study.text("project.yaml"),
                 Language::Python,
@@ -177,10 +179,10 @@ mod file {
             let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
             study.write("env/id.yaml", "changed after preparation");
             study.write("project.yaml", "changed root after preparation");
-            let result = yamaa_adapters::specification_report::build_result(
+            let result = yamaa_application::specification_report::build_result(
                 project.run(),
                 &attempt,
-                yamaa_adapters::specification_report::Identity {
+                yamaa_application::specification_report::Identity {
                     runtime: "test",
                     runtime_version: "1",
                     engine_version: "0.1.0",
@@ -557,7 +559,7 @@ mod file {
         ) {
             // Seam: one selection built three times, the last two sharing a snapshot, and the bytes
             // it retains.
-            use yamaa_adapters::file_workflow;
+            use yamaa_application::file_workflow;
             let study = Study::new();
             study.write("parent/base.yaml", &DOMAIN.edit("input.csv", "data.csv"));
             study.write(

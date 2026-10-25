@@ -1318,6 +1318,7 @@ dependencies = [
  "arrow-array",
  "arrow-schema",
  "yamaa-adapters",
+ "yamaa-application",
  "yamaa-core",
 ]
 

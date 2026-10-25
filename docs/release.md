@@ -314,7 +314,8 @@ starts at 1.0.0 (#3030 D1).
   flags, exit statuses and `--format json` keys.
 - The Rust facade: the public items of the `yamaa` crate, as
   `rust/crates/yamaa/public-api.txt` lists them. The internal crates
-  `yamaa-core`, `yamaa-adapters` and `yamaa-boundary` are not covered, nor
+  `yamaa-core`, `yamaa-adapters`, `yamaa-application` and `yamaa-boundary`
+  are not covered, nor
   are the native modules (`yamaa._native` and the R package's registered
   routines), which are internal (#3679).
 - Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
@@ -903,7 +904,7 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 
 `tools/staging/engine_bundle.py` stages each host's engine source bundle,
 from which both source packages build (#3030 D55). The bundle holds the
-engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`
+engine crates `yamaa-core`, `yamaa-adapters`, `yamaa-application` and `yamaa` with `yamaa-boundary`
 and that host's binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates, and with the profiles
 that the host builds with, so that the R bundle's leaves out
@@ -1032,15 +1033,19 @@ bundles its declared authors, license and repository, and names the files
 left out; `DESCRIPTION` credits those authors, and the authors of the bundled
 ReadStat C sources, as contributors and copyright holders.
 
-The R source package carries the inputs that its tests read in `tests/`,
-beside the suites: `R CMD check` copies that directory and runs the suites
-from it, and R never installs it, so the installed package holds no test
-inputs (#3105). Its `inst/` holds `AUTHORS`, the license notices and the
-component inventory. Native qualification stages the same inputs beside the
-installed suites that it runs, as it stages the Python suites' inputs, and
-each third-party SAS fixture keeps its license beside it.
-`tools/staging/stage_r_package.py` lists the staged inputs that no R suite
-reads, which neither route carries.
+The R source package carries a small base-R smoke suite in `tests/`, with
+only its project study. It runs the embedded format selftest and checks the
+public R specification/project API, R callbacks and saved bytes. `R CMD
+check` copies that directory and runs it without suggested packages; R
+never installs it (#3105). Its `inst/` holds `AUTHORS`, the license notices
+and the component inventory.
+
+The full R regression suites and fixtures remain in the repository. `make
+test-r`, pull-request CI and native qualification stage them outside the
+checkout and run them against the installed package, separately from the
+CRAN smoke checks. Each third-party SAS fixture keeps its license beside
+it. `tools/staging/stage_r_package.py` lists the staged inputs that no full
+R suite reads, which that staging leaves out.
 
 Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its

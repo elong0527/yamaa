@@ -193,7 +193,7 @@ mod project {
         use crate::support::project_call_compiler as support;
         use crate::support::roots::{Case, Definition};
         use std::rc::Rc;
-        use yamaa_adapters::project_activation_diagnostics::{
+        use yamaa_application::project_activation_diagnostics::{
             binding_issues, test_issues, DefinitionSource, Error, HostDetails,
         };
         use yamaa_core::{
@@ -526,7 +526,7 @@ mod project {
         use crate::support::project_codelist_compiler as support;
         use std::{cell::Cell, convert::Infallible};
         use support::{environment, schema, spec};
-        use yamaa_adapters::project_codelist_diagnostics::{codelist_issues, Error};
+        use yamaa_application::project_codelist_diagnostics::{codelist_issues, Error};
         use yamaa_core::dataset::{CheckRecord, CodelistObservation, ExecutionError, RowIdentity};
         use yamaa_core::table::{CellError, TableAccess, TableSchema, ValueRef};
         use yamaa_core::{specification::PreparedSpecification, value::Value};
@@ -699,9 +699,11 @@ mod project {
         use std::rc::Rc;
         use yamaa_adapters::{
             document::Closures,
-            project_environment_diagnostics::{admission, Error as ProjectionError},
             project_source::{self, CaptureFailure, Failure, Kind},
             specification_source::Source,
+        };
+        use yamaa_application::project_environment_diagnostics::{
+            admission, Error as ProjectionError,
         };
         use yamaa_core::json::Value;
         use yamaa_core::project_function::Language;
@@ -899,7 +901,7 @@ mod project {
             // Seam: a held root's scalar findings projected twice, with no
             // file the root names read. The issue rows are project_files.json's
             // inline_codelist_integers_outside_the_int_range_fail_in_the_project_before_any_file_is_read.
-            use yamaa_adapters::project_environment_diagnostics::scalar_root;
+            use yamaa_application::project_environment_diagnostics::scalar_root;
             let body = format!("{LISTING}codelists: [{{codelists: [{{id: WIDE, name: Wide, data_type: integer, items: [{{value: 123456789012345678901234567890}}]}}]}}]\n");
             let mut port = port();
             let Failure::RootScalar { root, findings } = prepare(&mut port, &body).unwrap_err()
@@ -921,7 +923,7 @@ mod project {
         fn failed_external_scalar_issues_keep_each_document_origin_and_original_other_failures() {
             // Seam: one listed file's opaque failure, kept by address beside the others' scalar
             // findings, and the reads of a repeated projection.
-            use yamaa_adapters::project_environment_diagnostics::scalar_sources;
+            use yamaa_application::project_environment_diagnostics::scalar_sources;
             let mut port = port();
             port.wide = true;
             let payload = Rc::clone(&port.payload);
@@ -965,10 +967,8 @@ mod project {
         fn root_schema_issues_keep_actual_closed_fields_and_source_without_dependency_reads() {
             // Seam: a held root's schema findings projected twice, with no file the root names
             // read.
-            use yamaa_adapters::{
-                project_environment_diagnostics::schema_root,
-                specification_source::Error as SourceError,
-            };
+            use yamaa_adapters::specification_source::Error as SourceError;
+            use yamaa_application::project_environment_diagnostics::schema_root;
             let mut port = port();
             let body = format!("{LISTING}parent: base.yaml\nruntime: {{}}\nversion: '1'\n");
             let Failure::Root(SourceError::Findings(captured)) =
@@ -997,7 +997,7 @@ mod project {
         fn failed_external_schema_issues_use_held_arenas_and_keep_original_other_failures() {
             // Seam: one listed file's opaque failure, kept by address beside the others' schema
             // findings.
-            use yamaa_adapters::project_environment_diagnostics::schema_sources;
+            use yamaa_application::project_environment_diagnostics::schema_sources;
             let mut port = port();
             port.shape = true;
             let payload = Rc::clone(&port.payload);
@@ -1053,7 +1053,9 @@ mod project {
         fn large_capture_counts_preserve_complete_reports_and_original_origins() {
             // Seam: 129 generated listings of one file, with its opaque failure or its findings
             // each time.
-            use yamaa_adapters::project_environment_diagnostics::{scalar_sources, schema_sources};
+            use yamaa_application::project_environment_diagnostics::{
+                scalar_sources, schema_sources,
+            };
             for written in ["bad.yaml", "ct.yaml"] {
                 let mut port = port();
                 let payload = Rc::clone(&port.payload);

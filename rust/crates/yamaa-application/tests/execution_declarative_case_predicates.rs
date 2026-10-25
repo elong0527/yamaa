@@ -11,7 +11,7 @@ mod execution {
     mod declarative_case_predicates {
         //! Independently authored full case reports and unchanged original CSV truth.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -240,7 +240,7 @@ mod execution {
     mod declarative_flags {
         //! Unchanged public originals and independently captured authored witnesses.
         use std::{fs, path::Path};
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -449,7 +449,7 @@ mod execution {
     mod declarative_intermediate_keys {
         //! Unchanged public YAML and independent plain-reference outputs/findings.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -531,7 +531,7 @@ mod execution {
     mod declarative_intermediate_ranges {
         //! Complete independent reports for inclusive ranges and visible donor columns.
         use std::{fs, path::PathBuf};
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -603,7 +603,7 @@ mod execution {
         //! Authored public-file observations and immutable original benchmark artifacts.
         use crate::support::issues::assert_issues;
         use std::{fs, path::Path};
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -767,7 +767,7 @@ columns:
     mod declarative_row_intermediates {
         //! Unchanged public YAML and independent plain-reference outputs/findings.
         use std::fs;
-        use yamaa_adapters::file_application;
+        use yamaa_application::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {

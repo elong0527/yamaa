@@ -22,7 +22,7 @@ mod declaration {
         use std::path::{Component, Path, PathBuf};
 
         use yamaa_adapters::document::{self, Closures, PreparedSpecification, SpecificationError};
-        use yamaa_adapters::resolved_artifact::{self, model::specification_value};
+        use yamaa_application::resolved_artifact::{self, model::specification_value};
 
         use yamaa_adapters::specification_source::Source;
         use yamaa_core::inheritance::Source as GraphSource;
@@ -333,7 +333,7 @@ output: {path: out.csv, columns: [CODE, REASON]}
         /// states.
         #[test]
         fn resolve_writes_out_a_1_0_chain_with_the_origin_of_every_value() {
-            use yamaa_adapters::resolved_artifact::model::{
+            use yamaa_application::resolved_artifact::model::{
                 Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
             };
             let study = Study::new();
@@ -584,7 +584,7 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
         /// states.
         #[test]
         fn resolve_lists_each_layer_and_each_include_entry_in_contribution_order() {
-            use yamaa_adapters::resolved_artifact::model::{Location, RelativeTo, ResourceRole};
+            use yamaa_application::resolved_artifact::model::{Location, RelativeTo, ResourceRole};
             let study = Study::new();
             study.write("base.yaml", BASE);
             study.write(

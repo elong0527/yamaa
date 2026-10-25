@@ -12,7 +12,7 @@ mod file {
         /// twice; a case stages its files once, before its one call.
         #[test]
         fn entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts() {
-            use yamaa_adapters::specification_report::Identity;
+            use yamaa_application::specification_report::Identity;
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
             fs::write(study.0.join("shared/base.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n").unwrap();
@@ -128,9 +128,9 @@ mod file {
         use std::fs;
         use yamaa_adapters::{
             file_configuration,
-            file_preparation::FileSpecification,
             file_resources::{Error, Resources},
         };
+        use yamaa_application::file_preparation::FileSpecification;
         use yamaa_core::application_observer::Scope;
 
         struct Study(crate::support::Scratch);
@@ -156,7 +156,7 @@ mod file {
         /// `saved` states every file whole.
         #[test]
         fn complete_output_replacement_resets_the_base_for_primary_and_report_files() {
-            use yamaa_adapters::specification_report::Identity;
+            use yamaa_application::specification_report::Identity;
             use yamaa_core::{domain_entry::Request, schema::DocumentNode};
 
             for inherited_base in ["", "relative_to: entry, "] {
@@ -237,7 +237,7 @@ mod file {
         /// `local_paths.json::a_uri_input_source_keeps_its_normative_cause_and_authored_path`.
         #[test]
         fn public_symlink_sources_keep_their_normative_cause_and_authored_path() {
-            use yamaa_adapters::specification_report::Identity;
+            use yamaa_application::specification_report::Identity;
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
             fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
@@ -537,7 +537,7 @@ mod file {
             fs,
             path::{Path, PathBuf},
         };
-        use yamaa_adapters::file_define::{Define, PublicationState};
+        use yamaa_application::file_define::{Define, PublicationState};
         use yamaa_core::{project_environment::Submission, project_function::Language};
         struct Temp(crate::support::Scratch);
         impl Temp {
@@ -869,7 +869,7 @@ mod file {
                 && text(i, "path").as_deref() == Some("define.xml")));
             assert!(matches!(
                 run.failure(),
-                Some(yamaa_adapters::file_define::Failure::TargetAdmission { index: 1, .. })
+                Some(yamaa_application::file_define::Failure::TargetAdmission { index: 1, .. })
             ));
             let states: Vec<_> = run.artifacts().map(|(_, _, state)| state).collect();
             assert_eq!(

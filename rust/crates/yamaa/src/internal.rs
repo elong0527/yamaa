@@ -13,8 +13,8 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use yamaa_adapters::file_application::Domain;
-use yamaa_adapters::specification_report::HostView;
+use yamaa_application::file_application::Domain;
+use yamaa_application::specification_report::HostView;
 use yamaa_core::host_functions::{Empty, HostFunctions, Lock};
 
 use crate::cancel::{CancellationToken, Cancelled};
@@ -115,8 +115,8 @@ impl EngineShared {
         &'a self,
         example: &'a str,
         specification: &'a str,
-    ) -> yamaa_adapters::specification_report::Identity<'a> {
-        yamaa_adapters::specification_report::Identity {
+    ) -> yamaa_application::specification_report::Identity<'a> {
+        yamaa_application::specification_report::Identity {
             runtime: &self.runtime_name,
             runtime_version: &self.runtime_version,
             engine_version: crate::VERSION,
@@ -145,8 +145,8 @@ pub(crate) type Unread = (Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>)
 pub(crate) fn read_project(
     shared: &EngineShared,
     project: &str,
-) -> Result<yamaa_adapters::project_scope::Project, Unread> {
-    yamaa_adapters::project_scope::Project::read_located(
+) -> Result<yamaa_application::project_scope::Project, Unread> {
+    yamaa_application::project_scope::Project::read_located(
         project,
         shared.language,
         resolver_bridge(shared),
@@ -256,9 +256,9 @@ fn host_error(error: CallError) -> yamaa_core::function_invocation::HostError<Fu
 
 /// Classify one retained host failure: ordinary facts project into
 /// diagnostics while opaque failures stay held without classification facts.
-fn classify(failure: &FunctionError) -> yamaa_adapters::file_application::Classification {
+fn classify(failure: &FunctionError) -> yamaa_application::file_application::Classification {
     use yamaa_adapters::callback::CallbackError;
-    use yamaa_adapters::file_application::Classification;
+    use yamaa_application::file_application::Classification;
     match failure {
         FunctionError::Exception { class, message, .. } => {
             Classification::Host(CallbackError::Exception {
@@ -308,7 +308,7 @@ pub(crate) fn run_check(
     let (issues, locator) = observed.phase(
         yamaa_core::application_observer::Phase::Preparation,
         || {
-            yamaa_adapters::file_application::check_located(
+            yamaa_application::file_application::check_located(
                 shared.language,
                 yamaa_core::domain_entry::Request {
                     specification,
@@ -341,7 +341,7 @@ pub(crate) fn run_check_on(
         .phase(
             yamaa_core::application_observer::Phase::Preparation,
             || {
-                yamaa_adapters::file_application::check_fragment_located(
+                yamaa_application::file_application::check_fragment_located(
                     shared.language,
                     yamaa_core::domain_entry::Request {
                         specification,
@@ -366,7 +366,7 @@ pub(crate) fn run_check_on(
 /// what locates the issues of its runs (P-ISSUE-1).
 pub(crate) enum Compiled {
     Ready(
-        Box<yamaa_adapters::file_preparation::FileSpecification>,
+        Box<yamaa_application::file_preparation::FileSpecification>,
         Arc<Locator>,
     ),
     Refused {
@@ -404,7 +404,7 @@ pub(crate) fn compile(
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> Compiled {
     let prepared = yamaa_core::domain_entry::compile(scope, || {
-        yamaa_adapters::file_application::select(
+        yamaa_application::file_application::select(
             shared.language,
             yamaa_core::domain_entry::Request {
                 specification,
@@ -415,18 +415,18 @@ pub(crate) fn compile(
     });
     match prepared {
         Ok(prepared) => {
-            let locator = Arc::new(yamaa_adapters::issue_location::prepared(&prepared));
+            let locator = Arc::new(yamaa_application::issue_location::prepared(&prepared));
             Compiled::Ready(Box::new(prepared), locator)
         }
         Err(error) => Compiled::Refused {
-            issues: yamaa_adapters::project_application::selection_failure(&error),
+            issues: yamaa_application::project_application::selection_failure(&error),
             name: match &error {
-                yamaa_adapters::file_workflow::SelectionError::Compile(rejected) => {
+                yamaa_application::file_workflow::SelectionError::Compile(rejected) => {
                     rejected.run().document.domain().map(str::to_owned)
                 }
-                yamaa_adapters::file_workflow::SelectionError::Preparation(_) => None,
+                yamaa_application::file_workflow::SelectionError::Preparation(_) => None,
             },
-            locator: Arc::new(yamaa_adapters::issue_location::selection(&error)),
+            locator: Arc::new(yamaa_application::issue_location::selection(&error)),
         },
     }
 }
@@ -549,7 +549,10 @@ fn run_with(
 /// for a run whose output is read as a stream, its accepted dataset with the
 /// most rows one partition of it holds (D264).
 type Ran = (
-    Result<Box<yamaa_adapters::file_application::Domain>, Vec<yamaa_core::diagnostic::Diagnostic>>,
+    Result<
+        Box<yamaa_application::file_application::Domain>,
+        Vec<yamaa_core::diagnostic::Diagnostic>,
+    >,
     Vec<FunctionError>,
     Option<(yamaa_core::dataset::Dataset, Option<std::num::NonZeroUsize>)>,
 );
@@ -564,7 +567,7 @@ type Ran = (
 fn run_member(
     shared: &EngineShared,
     specification: &str,
-    prepared: &yamaa_adapters::file_preparation::FileSpecification,
+    prepared: &yamaa_application::file_preparation::FileSpecification,
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
     view: HostView,
@@ -578,7 +581,7 @@ fn run_member(
     // attempt's host failures are read.
     let streamed = |accepted: bool| view == HostView::Deferred && accepted;
     let Some(mut functions) = shared.functions.as_deref() else {
-        let (mut attempt, result) = yamaa_adapters::file_application::run_with_view(
+        let (mut attempt, result) = yamaa_application::file_application::run_with_view(
             prepared,
             &mut run_scope,
             &mut Empty::<FunctionError>::new(),
@@ -588,11 +591,11 @@ fn run_member(
             view,
         );
         let dataset = streamed(result.as_ref().is_ok_and(Domain::accepted))
-            .then(|| yamaa_adapters::file_application::take_dataset(&mut attempt))
+            .then(|| yamaa_application::file_application::take_dataset(&mut attempt))
             .flatten();
         return (result.map(Box::new), Vec::new(), dataset);
     };
-    let (mut attempt, result) = yamaa_adapters::file_application::run_with_view(
+    let (mut attempt, result) = yamaa_application::file_application::run_with_view(
         prepared,
         &mut run_scope,
         &mut functions,
@@ -604,12 +607,12 @@ fn run_member(
     // A member with a project reports the host failures it retained.
     let mut failures = Vec::new();
     if prepared.run().has_project() {
-        yamaa_adapters::project_attempt::visit_host_failures(&attempt, |_, failure| {
+        yamaa_application::project_attempt::visit_host_failures(&attempt, |_, failure| {
             failures.push(failure.clone());
         });
     }
     let dataset = streamed(result.as_ref().is_ok_and(Domain::accepted))
-        .then(|| yamaa_adapters::file_application::take_dataset(&mut attempt))
+        .then(|| yamaa_application::file_application::take_dataset(&mut attempt))
         .flatten();
     (result.map(Box::new), failures, dataset)
 }

@@ -35,7 +35,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use yamaa_adapters::application_measurements::Measurements;
+use yamaa_application::application_measurements::Measurements;
 use yamaa_core::application_issue::Step;
 use yamaa_core::application_observer::{Event, Observer, Outcome, Phase};
 use yamaa_core::dataset::ExecutionPhase;
