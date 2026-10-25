@@ -5,13 +5,16 @@ demographics received as a Dataset-JSON file.
 
 **Input:** the received demographics `input/dm.ndjson`, a Clinical Data
 Interchange Standards Consortium (CDISC) Dataset-JSON 1.1 file in its
-newline-delimited form: the first line describes four columns, and each
-later line is one record. The second subject's record holds three values.
+newline-delimited form: the first line describes the columns, and each
+later line is one record. A record holds fewer values than the file
+declares.
 
 **Variables:**
 
-- `SITEID` would be the site the subject enrolled at, and `AGE` the age in
-  whole years, each taken directly from the received demographics.
+- `SITEID` would identify the site where the subject enrolled. The rejected
+  file produces no output value.
+- `AGE` would give the subject's age in whole years. The rejected file
+  produces no output value.
 
 A record lists its values in column order, so a record with a value too few
 does not say which column lost its value: reading the rest in order could

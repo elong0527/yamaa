@@ -1,5 +1,5 @@
 {
-  "about": "The scopes a run reads within (CHECK-13, COLUMN-7, ROW-2, ROW-4, ROW-8, OUTPUT-3, LOOKUP-8, WINDOW-3, WINDOW-7). A row count's when binds the groups it counts without changing its fraction's denominator; a named intermediate drives rows from its filtered records in stored order and groups them in first-occurrence order, and its column projection hides the fields it leaves out from a derivation and from a group key; a filtered source keeps its selected record's missing value in every arrival order; reordered key names keep their typed values and dependencies, and a missing key is refused apart from text that spells the missing marker, in either record order; and a row lag reads its partition's previous row, keeps construction order when ordered by its partition key, lags within its own template, reads completed lags and scalars, and two windows of one case column keep their own orderings. Moved from execution_retired_odm_context.rs, its scoped_windows_checks module. The report's check row is the line the row-count test found in the saved report, at the columns from NAME on. Each row-window test compared one output column; its case states the whole output, whose GRP, SEQ and VAL copy each input record's G, S and X in the row order the test's own column gives, and whose PREV, in the chained cases, is the lag the first case states for the same window. A test that saved is a save case with the bytes it compared, one whose save failed states that it saved nothing, a test that compared some fields of the issues names them in compares, and one that found its issue among others is among. Also moved, from execution_no_rows_record_reads.rs: without row templates a key derived by a window gives each record its own row, so a flag, a case, a first_available and an odm read take that one record, and an odm record reads no item of another item group occurrence; a key reads a named intermediate for its record; a key that reads an aggregate, an odm item or a non-key column fails before any data is read, at its derivation. Each test's run is a save case, which states the saved out.csv or the issues and that nothing was saved, a refusal its test also checked is a check and a build reporting the same complete rows, and each compares the five fields support::study::issue_row compared; the key that reads another item group's item is the first issue its test read (prefix). Their specifications are the tests' format! templates, as documents with edits. Every other value is its test's.",
+  "about": "The scopes a run reads within (CHECK-13, COLUMN-7, ROW-2, ROW-4, ROW-8, OUTPUT-3, LOOKUP-8, WINDOW-3, WINDOW-7). A row count's when binds the groups it counts without changing its fraction's denominator; a named intermediate drives rows from its filtered records in stored order and groups them in first-occurrence order, and its column projection hides the fields it leaves out from a derivation and from a group key; a filtered source keeps its selected record's missing value in every arrival order; reordered key names keep their typed values and dependencies, and a missing key is refused apart from text that spells the missing marker, in either record order; and a row lag reads its partition's previous row, keeps construction order when ordered by its partition key, lags within its own template, reads completed lags and scalars, and two windows of one case column keep their own orderings. Moved from execution_retired_odm_context.rs, its scoped_windows_checks module. The report's check row is the line the row-count test found in the saved report, at the columns from NAME on. Each row-window test compared one output column; its case states the whole output, whose GRP, SEQ and VAL copy each input record's G, S and X in the row order the test's own column gives, and whose PREV, in the chained cases, is the lag the first case states for the same window. A test that saved is a save case with the bytes it compared, one whose save failed states that it saved nothing, a test that compared some fields of the issues names them in compares, and one that found its issue among others is among. Also moved, from execution_no_rows_record_reads.rs: without row templates a key derived by a window gives each record its own row, so a flag, a case, a first_available and an odm read take that one record, and an odm record reads no item of another item group occurrence; a key reads a named intermediate for its record; a key that reads an aggregate, an odm item or a non-key column fails before any data is read, at its derivation. Each test's run is a save case, which states the saved out.csv or the issues and that nothing was saved, a refusal its test also checked is a check and a build reporting the same complete rows, and each compares the five fields support::study::issue_row compared; the key that reads another item group's item is the first issue its test read (prefix). Their specifications are the tests' format! templates, as documents with edits. Every other value is its test's. From the same module at 8323a87e4, its four benchmark-copy tests, which stage a benchmark since #3875: negative-count-unnamed's grouped row count without an id fails with the two groups it retains and their counts, the one issue of the build, at the row its expected/error.yaml states; schema-source-ordinal numbers its records as stored, so two records swapped swap their numbers, and rows ordered by an ordinal the output leaves out keep that order; an ordinal window keeps each record's input position in a second template that reads the same input; and a grouped template reduces the ordinal before it numbers its groups, under another specification over the benchmark's own input, staged from its path. Each edit is its test's: the two records it wrote over the input's, the column and output name it removed, and the template it appended.",
   "documents": {
     "named_driver": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, V: int}}}\nintermediates:\n  - {id: DRV, dataset: SRC, filter: \"SRC.K = 'Y'\"}\ncolumns:\n  - {name: I, type: int}\n  - {name: G, type: str}\n  - {name: V, type: int}\nrows:\n  - id: selected\n    dataset: DRV\n    derivations:\n      I: DRV.I\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: DRV.V\noutput: {path: out.csv, columns: [I, G, V]}\n",
     "driver_records": "I,G,V,K\n1,B,10,Y\n2,A,20,N\n3,A,30,Y\n4,B,40,Y\n5,C,50,N\n",
@@ -344,6 +344,70 @@
         ["b", 1, 10.0, 20.0],
         ["b", 2, 20.0, 10.0]
       ]
+    },
+    {
+      "case": "original_unnamed_grouped_count_reports_two_retained_groups_and_counts",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-count-unnamed",
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.failure_count", "context.keys", "context.counts"],
+      "issues": [{"phase": "verification", "condition": "row_count_failed", "rule": "CHECK-13", "spec_paths": ["verifications[0].row_count"], "context": {"failure_count": 2, "keys": [{"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-101", "PARAMCD": "ALT"}, {"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-102", "PARAMCD": "ALT"}], "counts": [2, 0]}}]
+    },
+    {
+      "case": "original_source_ordinals_follow_physical_swaps_row_b_then_row_a",
+      "operation": "save",
+      "input": {
+        "benchmark": "schema-source-ordinal",
+        "edits": {"input/source.csv": [{"from": "G2,ROW_B,Y\nG1,ROW_B,Y\nG1,SKIPPED,N\nG2,ROW_A,Y\nG1,ROW_A,Y\nG1,ROW_A,Y\n", "to": "G1,ROW_B,Y\nG1,ROW_A,Y\n"}]},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"records.csv": "GROUP_ID,ROW_SEQUENCE,RECORD_LABEL,SOURCE_ORDINAL\nG1,1,ROW_B,1\nG1,2,ROW_A,2\n"}
+    },
+    {
+      "case": "original_source_ordinals_follow_physical_swaps_row_a_then_row_b",
+      "operation": "save",
+      "input": {
+        "benchmark": "schema-source-ordinal",
+        "edits": {"input/source.csv": [{"from": "G2,ROW_B,Y\nG1,ROW_B,Y\nG1,SKIPPED,N\nG2,ROW_A,Y\nG1,ROW_A,Y\nG1,ROW_A,Y\n", "to": "G1,ROW_A,Y\nG1,ROW_B,Y\n"}]},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"records.csv": "GROUP_ID,ROW_SEQUENCE,RECORD_LABEL,SOURCE_ORDINAL\nG1,1,ROW_A,1\nG1,2,ROW_B,2\n"}
+    },
+    {
+      "case": "original_source_ordinals_order_rows_without_adding_output_fields",
+      "operation": "save",
+      "input": {
+        "benchmark": "schema-source-ordinal",
+        "edits": {"spec.yaml": [{"from": "  - name: SOURCE_ORDINAL\n    type: int\n    label: Original Source Record Position\n    derivation: SOURCE.SourceOrdinal\n\n", "to": ""}, {"from": ", SOURCE_ORDINAL]", "to": "]"}]},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"records.csv": "GROUP_ID,ROW_SEQUENCE,RECORD_LABEL\nG1,1,ROW_B\nG1,2,ROW_A\nG1,3,ROW_A\nG2,1,ROW_B\nG2,2,ROW_A\n"}
+    },
+    {
+      "case": "original_ordinal_windows_keep_input_positions_across_reused_templates",
+      "operation": "save",
+      "input": {
+        "benchmark": "schema-source-ordinal",
+        "edits": {"spec.yaml": [{"from": "    filter: \"SOURCE.Include = 'Y'\"\n", "to": "    filter: \"SOURCE.Include = 'Y'\"\n  - id: second\n    dataset: SOURCE\n    filter: SOURCE.SourceOrdinal = 1\n"}]},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"records.csv": "GROUP_ID,ROW_SEQUENCE,RECORD_LABEL,SOURCE_ORDINAL\nG1,1,ROW_B,2\nG1,2,ROW_A,5\nG1,3,ROW_A,6\nG2,1,ROW_B,1\nG2,2,ROW_B,1\nG2,3,ROW_A,4\n"}
+    },
+    {
+      "case": "original_ordinal_group_reductions_run_before_group_numbering",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: RECORDS\nkeys: [GROUP_ID]\ninput:\n  SOURCE: {path: input/source.csv, ordinal: SourceOrdinal}\noutput:\n  path: records.csv\n  columns: [GROUP_ID, SOURCE_ORDINAL, ROW_SEQUENCE]\n  order_by: [GROUP_ID, ROW_SEQUENCE]\ncolumns:\n  - {name: GROUP_ID, type: str, derivation: SOURCE.GroupID}\n  - {name: ROW_SEQUENCE, type: int}\n  - {name: SOURCE_ORDINAL, type: int}\nrows:\n  - id: included\n    dataset: SOURCE\n    group_by: [SOURCE.GroupID]\n    derivations:\n      SOURCE_ORDINAL: {aggregate: \"MIN(SOURCE.SourceOrdinal)\"}\n      ROW_SEQUENCE: {row_number: {window: {order_by: [SOURCE_ORDINAL]}}}\n", "input/source.csv": {"file": "benchmarks/schema-source-ordinal/input/source.csv"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"records.csv": "GROUP_ID,SOURCE_ORDINAL,ROW_SEQUENCE\nG1,2,2\nG2,1,1\n"}
     },
     {
       "case": "a_window_key_row_s_flag_reads_its_own_record",

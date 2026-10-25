@@ -144,8 +144,10 @@ pub fn invocation<'a, 'e: 'a, E>(
                 Fact::Sequence(names.iter().map(|name| Fact::Text(name)).collect()),
             );
         }
+        // A call's arguments are named by their parameters, so the argument
+        // a run refuses is spelt as preparation spells it.
         FailureKind::MissingRequired { parameter } => {
-            context.insert("parameter", Fact::Text(parameter));
+            context.insert("argument", Fact::Text(parameter));
             context.insert("reason", Fact::Text("a required argument was not supplied"));
         }
         FailureKind::ArgumentType {
@@ -153,9 +155,9 @@ pub fn invocation<'a, 'e: 'a, E>(
             expected,
             actual,
         } => {
-            context.insert("parameter", Fact::Text(parameter));
-            context.insert("expected", Fact::Text(kind(*expected)));
-            context.insert("actual", Fact::Text(kind(*actual)));
+            context.insert("argument", Fact::Text(parameter));
+            context.insert("expected_type", Fact::Text(kind(*expected)));
+            context.insert("actual_type", Fact::Text(kind(*actual)));
         }
         FailureKind::CallFailed(_) | FailureKind::InvalidHostResult(_) => {
             host_context(&mut context, host.expect("classified above"))

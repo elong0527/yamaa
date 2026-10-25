@@ -10,8 +10,10 @@ middle of it.
 
 **Variables:**
 
-- `SITEID` would be the site the subject enrolled at, and `AGE` the age in
-  whole years, each taken directly from the received demographics.
+- `SITEID` would identify the site where the subject enrolled. The rejected
+  file produces no output value.
+- `AGE` would give the subject's age in whole years. The rejected file
+  produces no output value.
 
 A file that stops before its end is not a complete dataset: the records it
 was cut from are unknown, and reading the part that arrived could quietly

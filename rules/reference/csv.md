@@ -113,7 +113,7 @@ has no rows or no `float` columns. An invalid value fails validation at
 mapping resolves to `parquet`.
 
 Fails: `invalid_field_type`, `decimals_not_applicable`.
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::output_precision_rejection_follows_original_execution_failure_and_denies_publication`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_records`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_an_int_output`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_study_data`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::negative_decimals_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::decimals_above_eighteen_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::decimals_beyond_any_integer_fail_the_output_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::decimals_on_a_parquet_output_are_not_applicable_and_publish_nothing`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_records`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_an_int_output`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_output_validation.json::a_csv_precision_of_19_is_refused_for_a_float_output_without_study_data`.
 
 An invalid value fails with `invalid_field_type`. A declaration on a `parquet`
 path fails with `decimals_not_applicable`: a display precision that cannot
@@ -151,7 +151,7 @@ ordering. No dependent column, predicate, aggregate, verification, key or
 order term sees a rounded value, and changing `output.decimals` cannot change
 whether a run passes or which rows it produces.
 
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once`, `python/tests/installed/installed_public_environment.py::test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/csv_precision.json::two_decimals_round_the_saved_bytes_and_leave_the_output_unrounded`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::a_result_reads_its_input_once_and_records_its_rounded_bytes_only_when_saved`, `python/tests/installed/installed_public_environment.py::test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values`.
 
 <a id="csv-9"></a>
 
@@ -302,7 +302,7 @@ no header synthesis or renaming, and no missing-value sentinel. A reader does
 not repair a rejected file by skipping a mark, trimming a field, padding a
 record, renaming a duplicate name or normalizing a terminator inside a value.
 
-Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::retired_python_missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
+Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/typed_csv_sources.json::missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
 
 [Inputs](../inputs.md) fixes what a stored field means,
 including that no text spells absence.
