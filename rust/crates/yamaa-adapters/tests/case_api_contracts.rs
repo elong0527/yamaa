@@ -94,12 +94,20 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     ];
     let mut counts = [0; 4];
     let (mut subsequences, mut first_issues, mut executions) = (0, 0, 0);
+    let mut row_phase_saves = 0;
     for mut case in replay::cases() {
         let family = case.label.split_once("::").unwrap().0;
         let Some(index) = FAMILIES.iter().position(|name| *name == family) else {
             continue;
         };
         counts[index] += 1;
+        // The save cases moved from execution_row_phase_reads.rs keep their
+        // route and save results in migrated_api_contracts.json; their tests
+        // built and saved for the Python host alone, and called no check.
+        if index == 2 && case.operations == ["save"] {
+            row_phase_saves += 1;
+            continue;
+        }
         let subsequence = case.operations.len() == 1;
         subsequences += usize::from(subsequence);
         assert!(
@@ -181,8 +189,12 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     }
     assert_eq!(
         counts,
-        [177, 237, 18, 87],
+        [177, 237, 33, 87],
         "every migrated case retains its API contract"
+    );
+    assert_eq!(
+        row_phase_saves, 15,
+        "the save cases moved from execution_row_phase_reads.rs"
     );
     assert_eq!((subsequences, first_issues, executions), (12, 162, 606));
 }
@@ -197,8 +209,10 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
         count += 1;
         let complete_parity = case.operations == ["check", "build"];
         // The two admitted variants called saved() without comparing bytes;
-        // all 28 save cases also called saved(), which required Ok(true).
-        let must_save = case.operations == ["save"]
+        // every save case without issues also called saved() or unwrapped
+        // save(), which required Ok(true). A refused save's contract is in
+        // migrated_api_contracts.json.
+        let must_save = (case.operations == ["save"] && case.issues.is_empty())
             || matches!(
                 case.label.split_once("::").unwrap().1,
                 "check_admits_an_intermediate_range_value_no_row_reads"
@@ -242,7 +256,7 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
             );
         }
     }
-    assert_eq!((count, first_issues, parity, saves), (95, 4, 38, 30));
+    assert_eq!((count, first_issues, parity, saves), (123, 4, 38, 43));
 }
 
 /// Seam: the R-host calls of the tests that moved into `case_item_order.json`
@@ -339,7 +353,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        446,
+        484,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -504,8 +518,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (275, 22, 39, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (160, 47, 239));
+    assert_eq!((domains, preparation, either, checks), (301, 22, 51, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (170, 58, 256));
 }
 
 /// Seam: the composition's save return, held artifact order, capture counter

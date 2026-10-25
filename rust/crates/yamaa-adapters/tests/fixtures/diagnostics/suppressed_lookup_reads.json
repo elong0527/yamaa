@@ -1,0 +1,108 @@
+{
+  "about": "A named lookup is read only by the rows that read it (LOOKUP-12): a candidate that a row template's filter discards never becomes a row, so it never reads a lookup its key column's default derives from, whether keys lists that column or not, and whether the lookup requires a match or declares no absent; a kept row that reads the lookup still fails when nothing matches (#2699, #2754). Moved from execution_key_lookup_reads.rs and execution_per_template_defaults.rs. The document vs holds S1's two blood pressure results and an S2 record without one, and vs_kept gives S2 a result of 90. LAST is the subject's latest record of the test with a result. grouped_means reads it for SRCSEQ under a grouped template that suppresses a group without a mean, and record_results for LASTSEQ under an ungrouped template that suppresses a record without a result; each lists that column in keys and requires a match. A test that built a specification with that column in keys and without it, required each to save, and compared the two saved files with each other and the first with one literal, is two save cases, each stating that literal. A test that found unmatched_key and LOOKUP-24 among the issues once LAST keeps only results above 100, so the kept S2 row finds nothing, is a build case finding that condition and rule among them. In keeper_means and keeper_results a first template over DM, which holds S1 alone, completes its keys from LAST, which declares no absent, and a second template over VS inherits SRCSEQ's default and suppresses S2's candidate.",
+  "documents": {
+    "vs": "USUBJID,VSSEQ,VSTESTCD,VSDTC,VSSTRESN\nS1,1,SYSBP,2025-01-01,120\nS1,2,SYSBP,2025-01-02,124\nS2,1,SYSBP,2025-01-01,\n",
+    "vs_kept": "USUBJID,VSSEQ,VSTESTCD,VSDTC,VSSTRESN\nS1,1,SYSBP,2025-01-01,120\nS1,2,SYSBP,2025-01-02,124\nS2,1,SYSBP,2025-01-01,90\n",
+    "dm": "USUBJID\nS1\n",
+    "grouped_means": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, VSSTRESN: float}}\nintermediates:\n  - id: LAST\n    dataset: VS\n    key: {USUBJID: USUBJID, VSTESTCD: PARAMCD}\n    filter: \"VS.VSSTRESN IS NOT NULL\"\n    order_by: [VS.VSDTC]\n    keep: last\n    require_match: true\nkeys: [USUBJID, PARAMCD, SRCSEQ]\noutput: {path: advs.csv, columns: [USUBJID, PARAMCD, SRCSEQ, AVAL]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: SRCSEQ, type: int, derivation: LAST.VSSEQ}\n  - {name: AVAL, type: float}\nrows:\n  - id: mean\n    dataset: VS\n    group_by: [VS.USUBJID, VS.VSTESTCD]\n    filter: \"AVAL IS NOT NULL\"\n    derivations:\n      USUBJID: VS.USUBJID\n      PARAMCD: VS.VSTESTCD\n      AVAL: {aggregate: \"MEAN(VS.VSSTRESN)\"}\n",
+    "record_results": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, VSSTRESN: float}}\nintermediates:\n  - id: LAST\n    dataset: VS\n    key: {USUBJID: USUBJID, VSTESTCD: PARAMCD}\n    filter: \"VS.VSSTRESN IS NOT NULL\"\n    order_by: [VS.VSDTC]\n    keep: last\n    require_match: true\nkeys: [USUBJID, VSSEQ, LASTSEQ]\noutput: {path: advs.csv, columns: [USUBJID, VSSEQ, LASTSEQ, AVAL]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: VSSEQ, type: int}\n  - {name: LASTSEQ, type: int, derivation: LAST.VSSEQ}\n  - {name: AVAL, type: float}\nrows:\n  - id: results\n    dataset: VS\n    filter: \"VS.VSSTRESN IS NOT NULL\"\n    derivations:\n      USUBJID: VS.USUBJID\n      PARAMCD: VS.VSTESTCD\n      VSSEQ: VS.VSSEQ\n      AVAL: VS.VSSTRESN\n",
+    "keeper_means": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, VSSTRESN: float}}\n  DM: dm.csv\nintermediates:\n  - id: LAST\n    dataset: VS\n    key: {USUBJID: USUBJID, VSTESTCD: PARAMCD}\n    filter: \"VS.VSSTRESN IS NOT NULL\"\n    order_by: [VS.VSDTC]\n    keep: last\nkeys: [USUBJID, PARAMCD, SRCSEQ, ROWSRC]\noutput: {path: advs.csv, columns: [USUBJID, PARAMCD, SRCSEQ, AVAL, ROWSRC]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: SRCSEQ, type: int, derivation: LAST.VSSEQ}\n  - {name: AVAL, type: float}\n  - {name: ROWSRC, type: str}\nrows:\n  - id: keeper\n    dataset: DM\n    derivations:\n      USUBJID: DM.USUBJID\n      PARAMCD: \"'SYSBP'\"\n      SRCSEQ: LAST.VSSEQ\n      AVAL: LAST.VSSTRESN\n      ROWSRC: \"'A'\"\n  - id: mean\n    dataset: VS\n    group_by: [VS.USUBJID, VS.VSTESTCD]\n    filter: \"AVAL IS NOT NULL\"\n    derivations:\n      USUBJID: VS.USUBJID\n      PARAMCD: VS.VSTESTCD\n      AVAL: {aggregate: \"MEAN(VS.VSSTRESN)\"}\n      ROWSRC: \"'B'\"\n",
+    "keeper_results": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, VSSTRESN: float}}\n  DM: dm.csv\nintermediates:\n  - id: LAST\n    dataset: VS\n    key: {USUBJID: USUBJID, VSTESTCD: PARAMCD}\n    filter: \"VS.VSSTRESN IS NOT NULL\"\n    order_by: [VS.VSDTC]\n    keep: last\nkeys: [USUBJID, VSSEQ, SRCSEQ, ROWSRC]\noutput: {path: advs.csv, columns: [USUBJID, VSSEQ, SRCSEQ, AVAL, ROWSRC]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: VSSEQ, type: int}\n  - {name: SRCSEQ, type: int, derivation: LAST.VSSEQ}\n  - {name: AVAL, type: float}\n  - {name: ROWSRC, type: str}\nrows:\n  - id: keeper\n    dataset: DM\n    derivations:\n      USUBJID: DM.USUBJID\n      PARAMCD: \"'SYSBP'\"\n      VSSEQ: LAST.VSSEQ\n      SRCSEQ: LAST.VSSEQ\n      AVAL: LAST.VSSTRESN\n      ROWSRC: \"'A'\"\n  - id: results\n    dataset: VS\n    filter: \"VS.VSSTRESN IS NOT NULL\"\n    derivations:\n      USUBJID: VS.USUBJID\n      PARAMCD: VS.VSTESTCD\n      VSSEQ: VS.VSSEQ\n      AVAL: VS.VSSTRESN\n      ROWSRC: \"'B'\"\n"
+  },
+  "cases": [
+    {
+      "case": "grouped_key_column_is_not_read_for_a_suppressed_group",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "grouped_means"}, "vs.csv": {"base": "vs"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"advs.csv": "USUBJID,PARAMCD,SRCSEQ,AVAL\nS1,SYSBP,2,122\n"}
+    },
+    {
+      "case": "grouped_key_column_left_out_of_the_keys_builds_the_same_rows",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "grouped_means", "edits": [
+            {"from": "keys: [USUBJID, PARAMCD, SRCSEQ]", "to": "keys: [USUBJID, PARAMCD]"}
+          ]},
+          "vs.csv": {"base": "vs"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"advs.csv": "USUBJID,PARAMCD,SRCSEQ,AVAL\nS1,SYSBP,2,122\n"}
+    },
+    {
+      "case": "ungrouped_key_column_is_not_read_for_a_suppressed_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "record_results"}, "vs.csv": {"base": "vs"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"advs.csv": "USUBJID,VSSEQ,LASTSEQ,AVAL\nS1,1,2,120\nS1,2,2,124\n"}
+    },
+    {
+      "case": "ungrouped_key_column_left_out_of_the_keys_builds_the_same_rows",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "record_results", "edits": [
+            {"from": "keys: [USUBJID, VSSEQ, LASTSEQ]", "to": "keys: [USUBJID, VSSEQ]"}
+          ]},
+          "vs.csv": {"base": "vs"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"advs.csv": "USUBJID,VSSEQ,LASTSEQ,AVAL\nS1,1,2,120\nS1,2,2,124\n"}
+    },
+    {
+      "case": "grouped_unmatched_key_still_fails_for_a_kept_group",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "grouped_means", "edits": [
+            {"from": "    filter: \"VS.VSSTRESN IS NOT NULL\"\n    order_by", "to": "    filter: \"VS.VSSTRESN > 100\"\n    order_by"}
+          ]},
+          "vs.csv": {"base": "vs_kept"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [
+        {"condition": "unmatched_key", "rule": "LOOKUP-24"}
+      ]
+    },
+    {
+      "case": "ungrouped_unmatched_key_still_fails_for_a_kept_record",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "record_results", "edits": [
+            {"from": "    filter: \"VS.VSSTRESN IS NOT NULL\"\n    order_by", "to": "    filter: \"VS.VSSTRESN > 100\"\n    order_by"}
+          ]},
+          "vs.csv": {"base": "vs_kept"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [
+        {"condition": "unmatched_key", "rule": "LOOKUP-24"}
+      ]
+    },
+    {
+      "case": "grouped_suppressed_candidate_does_not_read_lookup",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "keeper_means"}, "vs.csv": {"base": "vs"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"advs.csv": "USUBJID,PARAMCD,SRCSEQ,AVAL,ROWSRC\nS1,SYSBP,2,124,A\nS1,SYSBP,2,122,B\n"}
+    },
+    {
+      "case": "ungrouped_suppressed_candidate_does_not_read_lookup",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "keeper_results"}, "vs.csv": {"base": "vs"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"advs.csv": "USUBJID,VSSEQ,SRCSEQ,AVAL,ROWSRC\nS1,2,2,124,A\nS1,1,2,120,B\nS1,2,2,124,B\n"}
+    }
+  ]
+}
