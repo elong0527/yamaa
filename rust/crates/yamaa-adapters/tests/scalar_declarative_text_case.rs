@@ -6,9 +6,9 @@
 //! authored rows, and lays them out by code, one column for each delimiter
 //! list a row declares. The case form reads no shared row table, so this
 //! stays a function; the family's other cases are data in
-//! `tests/fixtures/diagnostics/text_case.json` (#3798).
-//! A second seam retains the absence of output when invalid declared
-//! source types return a domain: the replay only compares issue rows.
+//! `tests/fixtures/diagnostics/text_case.json` (#3798), and the API
+//! sidecar `fixtures/migrated_api_contracts.json` holds what their refused
+//! runs return.
 /// `list` as a YAML double-quoted scalar. A list a row declares is
 /// printable ASCII or the tab, which the scalar writes as its escape.
 fn yaml_quoted(list: &str) -> String {
@@ -27,6 +27,9 @@ fn yaml_quoted(list: &str) -> String {
     quoted.push('"');
     quoted
 }
+/// Already data: the shared proper-case rows of
+/// `fixtures/text_case_reference.json`, a row table the case form does not
+/// read.
 #[test]
 fn proper_raises_the_first_scalar_and_each_scalar_after_a_delimiter() {
     // The shared proper-case rows (TEXT-5), each read in the column
@@ -109,36 +112,5 @@ fn proper_raises_the_first_scalar_and_each_scalar_after_a_delimiter() {
             ),
             "{label}"
         );
-    }
-}
-
-/// The absence of an output table is not expressible by the case form.
-#[test]
-fn incompatible_declared_sources_return_no_output_if_the_run_returns_a_domain() {
-    use crate::support::{diagnostic, study};
-
-    let cases = diagnostic::replay::cases()
-        .into_iter()
-        .filter(|case| case.label.starts_with("text_case.json::") && !case.issues.is_empty())
-        .collect::<Vec<_>>();
-    assert_eq!(
-        cases.len(),
-        4,
-        "the four authored incompatible source types"
-    );
-    for case in cases {
-        let directory = diagnostic::operations::study(&case.input);
-        let specification = directory.join(case.input["specification"].as_str().unwrap());
-        let specification = specification.to_str().unwrap();
-        if let Ok(result) = study::domain(
-            yamaa_core::project_function::Language::Python,
-            yamaa_core::domain_entry::Request {
-                specification,
-                environment: None,
-            },
-            study::identity("str-case", specification),
-        ) {
-            assert!(result.output().is_none(), "{}: no output", case.label);
-        }
     }
 }
