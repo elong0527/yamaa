@@ -1,0 +1,171 @@
+{
+  "about": "Declaration contracts of two retired suites, each specification written as the JSON its test encoded. ODM declarations (ODM-1 to ODM-4): a column's odm read keeps its ODM scope when a row template over another input overrides the column, so binding fails on that template's own keys; an odm read outside a column, in an intermediate or an aggregate's derive binding, or a filter that names a vendor field, is refused before any metadata is read; an ODM input missing a fixed field, or one that declares types or an ordinal, is refused naming the dataset. Moved from declaration_contract_vectors.rs's odm_declaration_fixture module, whose tests read the first issue of a projection over authored headers: a refusal of the declaration is a public check here, and a refusal of the headers or of binding a build over CSV files holding just those headers, the never-read names of its specification kept. Original intermediate verifications (LOOKUP-17, SCHEMA-15), the successors of specification/test_intermediate_verification.py retired in #2110: short and named unique checks and absent verifications are admitted, a mapping holding only its columns restates the list, and the singular verification field is unknown. Moved from its original_intermediate_verifications module, whose tests compared the fields each case's compares names; the restated list's test set the layer keys aside, which name the entry, the file its finding is in, as both source and entry, as the entry's own findings do, and compared its field and shorthand.",
+  "documents": {
+    "odm": "{\"columns\":[{\"derivation\":\"ODM.SubjectKey\",\"label\":\"Subject\",\"name\":\"USUBJID\",\"type\":\"str\"},{\"derivation\":{\"odm\":\"ODM.IT.DM.AGE\"},\"label\":\"Age\",\"name\":\"AGE\",\"type\":\"int\"}],\"domain\":\"RESULT\",\"input\":{\"ODM\":\"never-read.csv\"},\"keys\":[\"USUBJID\"],\"output\":{\"columns\":[\"USUBJID\",\"AGE\"],\"path\":\"never-written.csv\"},\"type\":\"spec\",\"yamaa\":\"1.0\"}",
+    "intermediate": "{\"base\":\"DS\",\"columns\":[{\"derivation\":\"DS.STUDYID\",\"name\":\"STUDYID\",\"type\":\"str\"},{\"derivation\":\"DS.USUBJID\",\"name\":\"USUBJID\",\"type\":\"str\"}],\"domain\":\"OUT\",\"input\":{\"DS\":{\"path\":\"never-read.csv\",\"types\":{\"STUDYID\":\"str\",\"USUBJID\":\"str\"}}},\"intermediates\":[],\"keys\":[\"STUDYID\",\"USUBJID\"],\"output\":{\"columns\":[\"STUDYID\",\"USUBJID\"],\"path\":\"out.csv\"},\"type\":\"spec\",\"yamaa\":\"1.0\"}"
+  },
+  "cases": [
+    {
+      "case": "an_overridden_odm_column_keeps_its_scope_and_binding_refuses_the_template_keys",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm", "edits": [
+            {"from": "\"input\":{\"ODM\":\"never-read.csv\"}", "to": "\"input\":{\"DM\":\"never-read-other.csv\",\"ODM\":\"never-read.csv\"}"},
+            {"from": "\"type\":\"spec\"", "to": "\"rows\":[{\"dataset\":\"DM\",\"derivations\":{\"AGE\":0},\"id\":\"other_source\"}],\"type\":\"spec\""}
+          ]},
+          "never-read-other.csv": "USUBJID\n",
+          "never-read.csv": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "prefix": true,
+      "issues": [{"condition": "no_applicable_keys"}]
+    },
+    {
+      "case": "an_odm_column_a_row_template_leaves_unset_is_refused_in_its_column",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm", "edits": [
+            {"from": "\"input\":{\"ODM\":\"never-read.csv\"}", "to": "\"input\":{\"DM\":\"never-read-other.csv\",\"ODM\":\"never-read.csv\"}"},
+            {"from": "\"type\":\"spec\"", "to": "\"rows\":[{\"dataset\":\"DM\",\"derivations\":{},\"id\":\"other_source\"}],\"type\":\"spec\""}
+          ]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"condition": "invalid_odm_context", "spec_paths": ["columns.AGE.derivation.odm"], "context": {"dataset": "ODM", "location": "column"}}]
+    },
+    {
+      "case": "an_odm_filter_that_names_a_vendor_field_is_unknown",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm", "edits": [{"from": "{\"odm\":\"ODM.IT.DM.AGE\"}", "to": "{\"odm\":{\"filter\":\"ODM.SITEID = '9'\",\"item\":\"ODM.IT.DM.AGE\"}}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"condition": "unknown_field", "spec_paths": ["columns.AGE.derivation.odm.filter"], "context": {"identifier": "ODM.SITEID", "dataset": "ODM"}}]
+    },
+    {
+      "case": "an_odm_read_in_an_intermediate_is_refused_before_metadata",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm", "edits": [
+            {"from": "{\"odm\":\"ODM.IT.DM.AGE\"}", "to": "\"AGES.AGE\""},
+            {"from": "\"input\":{\"ODM\":\"never-read.csv\"}", "to": "\"input\":{\"ODM\":\"never-read.csv\"},\"intermediates\":[{\"dataset\":\"ODM\",\"derivations\":{\"AGE\":{\"odm\":\"ODM.IT.DM.AGE\"}},\"id\":\"AGES\",\"key\":[\"USUBJID\"]}]"}
+          ]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"condition": "invalid_odm_context", "spec_paths": ["intermediates.AGES.derivations.AGE.odm"], "context": {"dataset": "ODM", "location": "intermediate"}}]
+    },
+    {
+      "case": "an_odm_read_in_an_aggregate_derive_binding_is_refused_before_metadata",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm", "edits": [{"from": "{\"odm\":\"ODM.IT.DM.AGE\"}", "to": "{\"aggregate\":{\"derivations\":{\"VALUE\":{\"derivation\":{\"odm\":\"ODM.IT.DM.AGE\"},\"type\":\"int\"}},\"expr\":\"SUM(VALUE)\"}}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"condition": "invalid_odm_context", "spec_paths": ["columns.AGE.derivation.aggregate.derivations.VALUE.derivation.odm"], "context": {"dataset": "ODM", "location": "derive"}}]
+    },
+    {
+      "case": "an_odm_input_missing_fixed_fields_names_each_one",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm"},
+          "never-read.csv": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "context"],
+      "prefix": true,
+      "issues": [{"condition": "odm_schema_field_missing", "context": {"dataset": "ODM", "fields": ["FormOID", "FormRepeatKey"]}}]
+    },
+    {
+      "case": "an_odm_input_that_declares_types_is_refused_at_its_types",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm", "edits": [{"from": "\"input\":{\"ODM\":\"never-read.csv\"}", "to": "\"input\":{\"ODM\":{\"path\":\"never-read.csv\",\"types\":{\"Value\":\"int\"}}}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"condition": "odm_schema_field_type", "spec_paths": ["input.ODM.types"], "context": {"dataset": "ODM", "declared": "types"}}]
+    },
+    {
+      "case": "an_odm_input_that_declares_an_ordinal_is_refused_at_its_ordinal",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm", "edits": [{"from": "\"input\":{\"ODM\":\"never-read.csv\"}", "to": "\"input\":{\"ODM\":{\"ordinal\":\"SourceOrdinal\",\"path\":\"never-read.csv\"}}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"condition": "odm_schema_field_type", "spec_paths": ["input.ODM.ordinal"], "context": {"dataset": "ODM", "declared": "ordinal"}}]
+    },
+    {
+      "case": "original_short_and_named_intermediate_unique_checks_are_admitted",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "intermediate", "edits": [{"from": "\"intermediates\":[]", "to": "\"intermediates\":[{\"dataset\":\"DS\",\"id\":\"DS_EOS\",\"key\":[\"STUDYID\",\"USUBJID\"],\"verifications\":[{\"unique\":[\"STUDYID\",\"USUBJID\"]},{\"unique\":{\"columns\":[\"USUBJID\"],\"id\":\"one-row-per-subject\"}}]}]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_intermediate_unique_mapping_holding_only_its_columns_restates_the_list",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "intermediate", "edits": [{"from": "\"intermediates\":[]", "to": "\"intermediates\":[{\"dataset\":\"DS\",\"id\":\"DS_EOS\",\"key\":[\"STUDYID\",\"USUBJID\"],\"verifications\":[{\"unique\":{\"columns\":[\"STUDYID\"]}}]}]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "redundant_long_form", "spec_paths": ["intermediates.DS_EOS.verifications[0].unique"], "context": {"field": "columns", "shorthand": "[\"STUDYID\"]", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "original_singular_intermediate_verification_field_stays_unknown",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "intermediate", "edits": [{"from": "\"intermediates\":[]", "to": "\"intermediates\":[{\"dataset\":\"DS\",\"id\":\"DS_EOS\",\"verification\":{\"unique\":[\"USUBJID\"]}}]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "unknown_field", "spec_paths": ["intermediates.DS_EOS.verification"]}]
+    },
+    {
+      "case": "original_absent_intermediate_verifications_remain_optional",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "intermediate", "edits": [{"from": "\"intermediates\":[]", "to": "\"intermediates\":[{\"dataset\":\"DS\",\"id\":\"DS_EOS\",\"key\":[\"STUDYID\",\"USUBJID\"],\"require_match\":true}]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    }
+  ]
+}
