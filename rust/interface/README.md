@@ -15,21 +15,24 @@ native qualification lane compare the generated files with this definition
 the version and feature handshake below before any other native call, and the
 boundary compatibility and lifetime tests of
 [#2692](https://github.com/elong0527/yamaa/issues/2692) run in both installed
-suites. Both bindings call the `yamaa` facade directly (D281 on #3673); no
-engine loads or links separately from the host packages.
+suites. Both bindings call the `yamaa` facade directly and use
+`yamaa-boundary` for the handshake, gate and handle census. Each package
+links its engine (below).
 
-## Boundary choice and source ownership
+## The boundary
 
-Choose Rust-level generated host glue. Each host package builds the shared
-engine, adapters and its binding crate together with the selected toolchain and
-lock. Rust values never cross between independently built shared libraries.
-There is no stable Rust binary layout promise, and no engine C ABI: no handle
-table, allocator API, C record layouts or callback ABI. The existing Arrow C
-Data/Stream interface remains the standard C ABI for tables. Its ownership
-contract below applies to both generated host boundaries. Neither the wheel's
-module nor the R package's library exports a symbol beyond its host's
-registration, so the Python and R packages in one process, through reticulate
-or rpy2, cannot clash.
+Each binding's generated Rust glue registers its host's functions with PyO3
+or extendr. Its handwritten implementations call the facade's public Rust
+items and keep their results in owned native handles. The binding's
+`yamaa-boundary::Gate` negotiates from the facade's engine information and
+opens on the first acceptance. The Arrow C Data/Stream interface carries
+tables between native code and host libraries, with the ownership contract
+below applying to both hosts.
+
+Each host package builds the facade, adapters, core, boundary and its binding
+crate together with the selected toolchain and lock. No stable Rust ABI is
+required. The boundary's unused `abi` and `client` modules remain temporarily
+for removal in the final step of #3877; no binding links or calls them.
 
 The IDL owns export names, ordered arguments, defaults, host projections, Rust
 implementation paths, feature names and semantic pairings. The adjacent document
@@ -284,8 +287,8 @@ handle. The generated `yamaa/__init__.py` imports `_native` and calls
 the package, and the generated `.onLoad` of the R package calls the
 `interface_handshake` routine. Both send the request that the `handshake`
 section declares, with the version `yamaa_boundary::BOUNDARY_VERSION`, and the
-binding answers through `rust/crates/yamaa-boundary`. Negotiation reads
-nothing, calls nothing and publishes nothing.
+binding negotiates through `yamaa-boundary::Gate` using the facade's engine facts.
+Negotiation reads nothing, calls nothing and publishes nothing.
 
 | | Contents |
 | --- | --- |
@@ -362,11 +365,11 @@ extendr's own routines that describe each module and write its R wrappers,
 are exempt. The generator checks that every registered native function
 reaches the gate, so a new export cannot skip it.
 
-Each binding counts its live native handles by kind (`check`, `run`,
+Each binding counts its live handles by kind (`check`, `run`,
 `project_run`, `submission`, `selftest`, `plans` and `table`, which only
-Python hands out; R copies each table) in a census that the private accessors
-`_native._live_handles()` and `.native_live_handles()` read for the handle
-lifetime suites.
+Python hands out; R copies each table into host values) in a census
+that the private accessors `_native._live_handles()` and
+`.native_live_handles()` read for the handle lifetime suites.
 
 The `handshake` section, its two errors and the census stay outside the frozen
 manifest. The boundary version and the identifiers are internal: any release
