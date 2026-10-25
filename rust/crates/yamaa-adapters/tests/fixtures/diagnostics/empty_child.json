@@ -1,0 +1,101 @@
+{
+  "about": "An empty child equals its parent (LAYER-5): for each of four negative benchmarks, a child that names the benchmark's spec.yaml as its parent and writes nothing else reports the parent's first issue, though the layered path resolves column dependencies before final validation runs (#2292). The child orders its columns before binding (LAYER-13), and an unbound reducer name of an aggregate with bindings is no column that ordering could miss (#3593). No benchmark builds an empty child: the one empty layer, negative-cyclic-parent's layers/parent.yaml, sits in a refused cycle. Moved from the empty_child_condition module of execution_declarative_self.rs at 8323a87e4. Each case stages the benchmark's own files (benchmark) and the child its test wrote beside them, __child.yaml, in its parent's language (LAYER-4), and builds the parent or the child. Each row is the first issue the benchmark's expected/error.yaml states, at its phase, condition, rule, spec paths and each context field it writes, for the parent and the child alike; the tests compared the phase, condition and rule of each first issue with their own literal, the same three fields error.yaml states, and the child's with the parent's. No engine output supplied these values.",
+  "cases": [
+    {
+      "case": "negative_odm_context_reports_invalid_odm_context_first",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-odm-context",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.location"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_odm_context", "rule": "NAME-11", "spec_paths": ["columns.SEX.derivation.odm"], "context": {"dataset": "ODM", "location": "column"}}]
+    },
+    {
+      "case": "empty_child_of_negative_odm_context_reports_invalid_odm_context",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-odm-context",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "__child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.location"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "invalid_odm_context", "rule": "NAME-11", "spec_paths": ["columns.SEX.derivation.odm"], "context": {"dataset": "ODM", "location": "column"}}]
+    },
+    {
+      "case": "negative_review_unknown_date_reports_unknown_field_first",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-review-unknown-date",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.REVIEWFL.derivation.flag.condition"], "context": {"identifier": "UNKNOWNDT"}}]
+    },
+    {
+      "case": "empty_child_of_negative_review_unknown_date_reports_unknown_field",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-review-unknown-date",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "__child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.REVIEWFL.derivation.flag.condition"], "context": {"identifier": "UNKNOWNDT"}}]
+    },
+    {
+      "case": "negative_lookup_mismatched_reports_unknown_field_first",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-lookup-mismatched",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier", "context.intermediate"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.REFRANGE.key"], "context": {"identifier": "UNIT", "intermediate": "REFRANGE"}}]
+    },
+    {
+      "case": "empty_child_of_negative_lookup_mismatched_reports_unknown_field",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-lookup-mismatched",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "__child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier", "context.intermediate"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.REFRANGE.key"], "context": {"identifier": "UNIT", "intermediate": "REFRANGE"}}]
+    },
+    {
+      "case": "negative_aggregate_unbound_variable_reports_unknown_derive_variable_first",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-aggregate-unbound-variable",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.variable"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_derive_variable", "rule": "LOOKUP-22", "spec_paths": ["columns.TOTDOSE.derivation.aggregate.expr"], "context": {"variable": "DOSE_MG"}}]
+    },
+    {
+      "case": "empty_child_of_negative_aggregate_unbound_variable_reports_unknown_derive_variable",
+      "operation": "build",
+      "input": {
+        "benchmark": "negative-aggregate-unbound-variable",
+        "files": {"__child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"},
+        "specification": "__child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.variable"],
+      "prefix": true,
+      "issues": [{"phase": "validation", "condition": "unknown_derive_variable", "rule": "LOOKUP-22", "spec_paths": ["columns.TOTDOSE.derivation.aggregate.expr"], "context": {"variable": "DOSE_MG"}}]
+    }
+  ]
+}
