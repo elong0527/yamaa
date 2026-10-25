@@ -1,5 +1,5 @@
 {
-  "about": "Authored API contracts from execution_declarative_self.rs before #3834 (b726fef57 parent) and #3854 (980dc48ea). Required domain routes come from unwrap/build helpers; qualifier collisions require .err().unwrap(); SELF issue collection, integer overflow and named-window refusals originally accept either route. Every primary starts absent; refused builds and saves leave it absent, and successful builds do not publish before saving. Positive saves return Ok(true). The three named-window save cases retain their original second save after input.csv changes. Absent inputs come from the original assertions. Issue rows and saved bytes remain solely in diagnostics fixtures. No engine run supplied these expectations.",
+  "about": "Authored API contracts from execution_declarative_self.rs before #3834 (b726fef57 parent) and #3854 (980dc48ea). Required domain routes come from unwrap/build helpers; qualifier collisions require .err().unwrap(); SELF issue collection, integer overflow and named-window refusals originally accept either route. Every primary starts absent; refused builds and saves leave it absent, and successful builds do not publish before saving. Positive saves return Ok(true). The three named-window save cases retain their original second save after input.csv changes. Absent inputs come from the original assertions. From prune_all_specifications.rs at 144fc5559: each build of a flat entry or of its empty child required a domain without issues and an accepted output, and its save Ok(true). Issue rows and saved bytes remain solely in diagnostics fixtures. No engine run supplied these expectations. From execution_window_semantics.rs at 144fc5559: each build whose test saved required a domain without issues and Ok(true), and each refusal, whose test accepted either route, required no output, a failed save and out.csv absent.",
   "cases": {
     "declarative_self.json::completed_templates_are_borrowed_and_republished_in_construction_order": {"route": "domain", "primary": "result.csv", "absent": [], "save": "true", "retained": false},
     "declarative_self.json::first_template_read_preserves_full_phase_context_before_study_access": {"route": "either", "primary": "result.csv", "absent": ["src.csv"], "save": "failed", "retained": false},
@@ -174,6 +174,31 @@
     "verification.json::assertion_when_exempts_false_and_unknown_rows_but_require_must_be_true": {"route": "domain", "primary": "out.csv", "absent": [], "save": "failed", "retained": false},
     "missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
     "missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
-    "missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false}
+    "missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::numbering_and_rank_order_integers_above_2_53_exactly_with_missing_values_last_in_one_missing_partition": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::numbering_and_rank_place_missing_values_first_under_a_descending_order_that_declares_it": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::rank_orders_floats_numerically_so_negative_and_positive_zero_tie": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_window_filter_evaluates_the_right_operand_of_and_after_a_false_left_one": {"route": "either", "primary": "out.csv", "absent": [], "save": "failed", "retained": false},
+    "windows.json::baseline_flag_judges_each_row_by_its_own_reference_within_its_partition": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_baseline_flag_s_filtered_later_row_takes_no_baseline_from_an_earlier_date": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_baseline_flag_s_filtered_same_date_twin_does_not_tie": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_date_after_its_reference_and_a_missing_date_are_never_eligible_for_baseline_flag": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::the_latest_eligible_date_is_the_baseline": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_same_date_row_after_its_own_reference_is_not_eligible_for_baseline_flag": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::ineligible_rows_do_not_end_the_baseline_search": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::filtered_and_ineligible_rows_do_not_end_the_baseline_search": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_date_equal_to_its_own_reference_is_eligible_for_baseline_flag": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_descending_time_tie_break_prefers_the_smallest_time_and_keeps_a_missing_time_lowest": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_tie_break_declaring_nulls_last_places_a_missing_time_last": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::a_descending_sequence_tie_break_picks_the_lowest_sequence_number": {"route": "domain", "primary": "out.csv", "absent": [], "save": "true", "retained": false},
+    "windows.json::same_date_rows_still_tied_on_every_tie_break_term_fail_naming_the_date_the_count_and_the_partition": {"route": "either", "primary": "out.csv", "absent": [], "save": "failed", "retained": false},
+    "inheritance.json::dead_intermediate_with_unknown_dataset_is_pruned_in_a_flat_specification": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false},
+    "inheritance.json::dead_intermediate_with_unknown_dataset_is_pruned_through_an_empty_child": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false},
+    "inheritance.json::dead_intermediate_with_unknown_filter_field_is_pruned_in_a_flat_specification": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false},
+    "inheritance.json::dead_intermediate_with_unknown_filter_field_is_pruned_through_an_empty_child": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false},
+    "inheritance.json::dead_spare_column_is_pruned_in_a_flat_specification": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false},
+    "inheritance.json::dead_spare_column_is_pruned_through_an_empty_child": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false},
+    "inheritance.json::valid_dead_declarations_build_with_equal_outputs_in_a_flat_specification": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false},
+    "inheritance.json::valid_dead_declarations_build_with_equal_outputs_through_an_empty_child": {"route": "domain", "primary": "xa.csv", "absent": [], "save": "true", "retained": false}
   }
 }

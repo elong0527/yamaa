@@ -3,7 +3,7 @@
 //! functions, a project's scope findings, the schema language's validation
 //! of a document or a layer, and the headers a call reads.
 use super::{
-    codelist_source,
+    codelist_source, column_type,
     document::{prepared, schemas, tree},
     language, text, value, File,
 };
@@ -328,18 +328,20 @@ fn staleness(input: &Json) -> Vec<Diagnostic> {
 
 /// The findings preparing the consuming `document`, held at `identity`,
 /// refuses with when each of its `links` names the producing specification
-/// a `schema` link reads, `{document, identity, links}`: each link is the
-/// input it serves mapped to `{identity, document}` (INPUT-6, INPUT-10).
+/// a `schema` link reads, `{document, identity, links}`: `links` lists each
+/// link, in order, as `{dataset, identity, document}`, the input it serves
+/// and the producing specification held at `identity`, so two links may
+/// name one input (INPUT-6, INPUT-10).
 fn prepare_linked(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["document", "identity", "links"]);
     let producers = input
         .field("links")
-        .members()
+        .items()
         .iter()
-        .map(|(dataset, link)| {
-            let link = link.closed(&["identity", "document"]);
+        .map(|link| {
+            let link = link.closed(&["dataset", "identity", "document"]);
             (
-                dataset.as_str(),
+                text(link, "dataset"),
                 text(link, "identity"),
                 tree(link.field("document")).document(),
             )
@@ -394,23 +396,38 @@ fn function_finding(input: &Json) -> Vec<Diagnostic> {
     vec![finding.diagnostic()]
 }
 
-/// The finding of a stored `header` that the contract of the `producer`
+/// The finding of stored metadata that the contract of the `producer`
 /// specification does not admit for the input `dataset`, `{producer,
-/// dataset, header}` (INPUT-11).
+/// dataset, header, types}` (INPUT-11): the stored `header` alone, or, with
+/// `types`, one for each of its names, the typed fields a self-describing
+/// artifact stores.
 fn producer_header(input: &Json) -> Vec<Diagnostic> {
-    let input = input.closed(&["producer", "dataset", "header"]);
+    let input = input.closed(&["producer", "dataset", "header", "types"]);
     let header = input
         .field("header")
         .items()
         .iter()
         .map(Json::text)
         .collect::<Vec<_>>();
-    prepare_document(&tree(input.field("producer")).document())
-        .expect("a producer contract")
-        .validate_header(text(input, "dataset"), &header)
-        .expect("a header the contract reads")
-        .into_iter()
-        .collect()
+    let contract =
+        prepare_document(&tree(input.field("producer")).document()).expect("a producer contract");
+    let dataset = text(input, "dataset");
+    match input.get("types") {
+        None => contract.validate_header(dataset, &header),
+        Some(types) => {
+            let types = types.items();
+            assert_eq!(types.len(), header.len(), "a type for each stored field");
+            let fields = header
+                .iter()
+                .zip(types)
+                .map(|(name, kind)| (*name, column_type(kind)))
+                .collect::<Vec<_>>();
+            contract.validate_typed_fields(dataset, &fields)
+        }
+    }
+    .expect("metadata the contract reads")
+    .into_iter()
+    .collect()
 }
 
 /// The layers of a chain, `{layers}`, as the documents they are, and their

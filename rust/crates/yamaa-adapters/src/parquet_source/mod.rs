@@ -6,16 +6,19 @@
 #[cfg(feature = "parquet")]
 mod closed_profile;
 #[cfg(feature = "parquet")]
+mod columns;
+#[cfg(feature = "parquet")]
 mod compact;
 #[cfg(feature = "parquet")]
 mod compression;
+#[cfg(feature = "parquet")]
+mod conversion;
 #[cfg(feature = "parquet")]
 mod delta;
 /// The differential harness against parquet 55 (#3878).
 #[cfg(all(test, feature = "parquet"))]
 mod differential;
-/// The native footer model, which the next pull request of #3878 reads by.
-#[cfg(all(test, feature = "parquet"))]
+#[cfg(feature = "parquet")]
 mod footer;
 #[cfg(feature = "parquet")]
 pub(crate) mod format;
@@ -25,7 +28,8 @@ mod framing;
 mod metadata;
 #[cfg(feature = "parquet")]
 mod payload;
-#[cfg(feature = "parquet")]
+/// parquet 55's column reader, which the differential harness reads by.
+#[cfg(all(test, feature = "parquet"))]
 mod physical;
 #[cfg(feature = "parquet")]
 mod profile;
@@ -33,7 +37,8 @@ mod profile;
 mod reader;
 #[cfg(feature = "parquet")]
 mod rle;
-#[cfg(feature = "parquet")]
+/// parquet 55's metadata decoder, which the differential harness reads by.
+#[cfg(all(test, feature = "parquet"))]
 mod row_groups;
 #[cfg(feature = "parquet")]
 mod schema;
@@ -184,10 +189,9 @@ pub fn parse_odm(content: &[u8]) -> Result<ColumnTable, Error> {
 /// nullability, so two equal tables can be stored differently. Annotations
 /// are kept as stored: a legacy converted type alone differs from the logical
 /// type that the runner's reader derives from it. The exception is a variant,
-/// geometry or geography annotation, which the pinned Parquet release does
-/// not know: admission removes it before the footer is decoded, so it is
-/// reported absent, and [`parse`] refuses its column (PARQUET-7). Each type
-/// is spelled as the Parquet crate names it, which is stable within one
+/// geometry or geography annotation, which the footer reads as none, so it
+/// is reported absent, and [`parse`] refuses its column (PARQUET-7). Each
+/// type is spelled as parquet 55.2.0 named it, which is stable within one
 /// build.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnSignature {
@@ -212,7 +216,9 @@ pub fn signature(content: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
 /// decodes any range of its records again (#3830).
 #[cfg(feature = "parquet")]
 pub struct Scanned {
-    runs: reader::Runs,
+    /// Boxed: the held file's footer and pages are large beside a CSV
+    /// reader's offsets.
+    runs: Box<reader::Runs>,
 }
 
 /// A held file read by partition, which this build cannot read.
@@ -248,7 +254,7 @@ pub fn scan(
     visit: &mut dyn FnMut(ColumnTable, usize),
 ) -> Result<Scanned, Error> {
     use yamaa_core::table::TableAccess;
-    let runs = reader::Runs::open(content, odm, Some(rows))?;
+    let runs = reader::Runs::open(content, odm, Some(rows), reader::NATIVE)?;
     let ready = runs.deferred().is_ok();
     let mut first: Option<(reader::Position, Error)> = None;
     let mut before = 0usize;
@@ -284,7 +290,9 @@ pub fn scan(
     runs.deferred()?;
     match first {
         Some((_, error)) => Err(error),
-        None => Ok(Scanned { runs }),
+        None => Ok(Scanned {
+            runs: Box::new(runs),
+        }),
     }
 }
 
@@ -310,7 +318,7 @@ pub fn decode_range(
 /// read from the footer alone (#3792); `None` when the footer does not read.
 #[cfg(feature = "parquet")]
 pub fn schema(content: &[u8], odm: bool) -> Option<yamaa_core::table::TableSchema> {
-    reader::table_schema(content, odm).ok()
+    reader::table_schema(content, odm, reader::NATIVE).ok()
 }
 
 #[cfg(feature = "parquet")]

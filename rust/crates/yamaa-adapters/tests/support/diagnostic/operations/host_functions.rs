@@ -21,7 +21,8 @@
 //!   other binding succeeds;
 //! - `calls`, the reply to each invocation, found by its `function` and its
 //!   `args`, each argument's name and value written as a table cell: the
-//!   value it `returns`, the failure it `raises`, or a panic (`"unwinds":
+//!   value it `returns`, the failure it `raises`, a result the host could not
+//!   represent, with its failure (`rejects`), or a panic (`"unwinds":
 //!   true`). An invocation the script gives no reply refuses the input.
 //!
 //! A failure is a host exception (`class` and `message`), a value the host
@@ -32,8 +33,8 @@
 //!
 //! The double logs what the port received and where the run starts reading
 //! its study input, in order ([`logged`]): `lock <language> <kind>
-//! <written>: <function>, ...` for the lock verification and the functions it
-//! names, `bind <function>: <call>(<parameter>, ...)` for a binding,
+//! <written>: <function>=<call>, ...` for the lock verification and the
+//! functions it names, `bind <function>: <call>(<parameter>, ...)` for a binding,
 //! `<function>(<name>=<value>, ...)` for an invocation, each value written as
 //! a table cell, and `input` for the study input. The case form holds no
 //! call log, so `fixtures/function_call_contracts.json` states each case's,
@@ -61,7 +62,10 @@ use yamaa_core::{
     value::{FiniteFloat, Value as Scalar},
 };
 
-pub(super) const FILES: &[File] = &[fixture!("project_functions.json")];
+pub(super) const FILES: &[File] = &[
+    fixture!("project_activation.json"),
+    fixture!("project_functions.json"),
+];
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     logged(operation, input).map(|(reported, _)| reported)
@@ -264,6 +268,7 @@ fn classify(failure: &Failure) -> Classification {
 enum Reply {
     Returns(Scalar),
     Raises(Failure),
+    Rejects(Failure),
     Unwinds,
 }
 
@@ -294,17 +299,22 @@ impl Script {
                 .collect(),
             calls: calls
                 .map(|call| {
-                    let members =
-                        closed(call, &["function", "args", "returns", "raises", "unwinds"]);
-                    let reply = match (
-                        members.get("returns"),
-                        members.get("raises"),
-                        members.get("unwinds"),
-                    ) {
-                        (Some(value), None, None) => Reply::Returns(scalar(value)),
-                        (None, Some(failure), None) => Reply::Raises(Failure::read(failure)),
-                        (None, None, Some(Value::Bool(true))) => Reply::Unwinds,
-                        _ => panic!("a call returns, raises or unwinds: {call:?}"),
+                    let members = closed(
+                        call,
+                        &[
+                            "function", "args", "returns", "raises", "rejects", "unwinds",
+                        ],
+                    );
+                    let replies = ["returns", "raises", "rejects", "unwinds"]
+                        .into_iter()
+                        .filter_map(|reply| members.get(reply).map(|value| (reply, value)))
+                        .collect::<Vec<_>>();
+                    let reply = match replies.as_slice() {
+                        [("returns", value)] => Reply::Returns(scalar(value)),
+                        [("raises", failure)] => Reply::Raises(Failure::read(failure)),
+                        [("rejects", failure)] => Reply::Rejects(Failure::read(failure)),
+                        [("unwinds", Value::Bool(true))] => Reply::Unwinds,
+                        _ => panic!("a call returns, raises, rejects or unwinds: {call:?}"),
                     };
                     let args = field(call, "args");
                     object(args);
@@ -362,7 +372,9 @@ impl HostFunctions for Port {
             LockKind::Uv => "uv",
             LockKind::Renv => "renv",
         };
-        let names = functions.iter().map(|function| function.name.as_str());
+        let names = functions
+            .iter()
+            .map(|function| format!("{}={}", function.name, function.call));
         self.log.push(format!(
             "lock {} {kind} {}: {}",
             language.key(),
@@ -422,6 +434,7 @@ impl HostFunctions for Port {
         match reply.map(|(_, _, reply)| reply) {
             Some(Reply::Returns(value)) => Ok(value.clone()),
             Some(Reply::Raises(failure)) => Err(HostError::Raised(failure.clone())),
+            Some(Reply::Rejects(failure)) => Err(HostError::InvalidResult(failure.clone())),
             // The engine contains a panic in a host call as it contains a
             // host's; resuming one skips the panic hook's message.
             Some(Reply::Unwinds) => std::panic::resume_unwind(Box::new("a scripted unwind")),
