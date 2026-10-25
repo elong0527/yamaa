@@ -1,4 +1,6 @@
-//! Project contracts: function invocation and producer links.
+//! Project contracts: function invocation and producer links. The seams
+//! here are scripted function ports and the values preparation returns;
+//! producer-link refusals are cases of `fixtures/diagnostics/producers.json`.
 mod project {
     mod function_invocation {
         use std::collections::BTreeMap;
@@ -170,7 +172,8 @@ mod project {
                 }
             }
         }
-        /// Shared hand-written truth also runs through the real Python BoundFunction.
+        /// Already data: `fixtures/function_invocation.tsv`, hand-written truth
+        /// that also runs through the real Python BoundFunction.
         #[test]
         fn shared_function_invocation_vectors() {
             let mut count = 0;
@@ -223,7 +226,8 @@ mod project {
             assert_eq!(count, 42);
         }
 
-        /// Reuse repeats effects, including after failures; returned text owns its memory.
+        /// Seam: a scripted `FunctionPort`'s calls and trace (core ports). Reuse
+        /// repeats effects, including after failures; returned text owns its memory.
         #[test]
         fn synchronous_effects_are_never_retried_memoized_or_rolled_back() {
             let plan = InvocationPlan::new(
@@ -254,7 +258,9 @@ mod project {
             assert_eq!(plan.identity(), &identity());
         }
 
-        /// Host-independent values retain precision until an actual host encoder consumes them.
+        /// Seam: the precision a scripted, non-`Send` `FunctionPort` observes
+        /// (core ports). Host-independent values retain precision until an
+        /// actual host encoder consumes them.
         #[test]
         fn typed_port_retains_temporal_precision_and_needs_no_send_bound() {
             struct Local(std::rc::Rc<std::cell::Cell<usize>>);
@@ -297,6 +303,8 @@ mod project {
             assert_eq!(calls.get(), 1);
         }
 
+        /// Seam: a versionless plan's defaults, values and failure kinds through a
+        /// scripted `FunctionPort`, with its calls and trace (core ports).
         #[test]
         fn versionless_invocation_defaults_missing_types_and_repeated_effects_share_one_service() {
             let id = ProjectFunctionIdentity {
@@ -359,6 +367,8 @@ mod project {
             assert_eq!(port.calls, 2);
         }
 
+        /// Seam: the opaque host payload and the result failure kinds a scripted
+        /// `FunctionPort` produces, with its call counts (core ports).
         #[test]
         fn versionless_failures_keep_opaque_host_payload_and_exact_result_rules() {
             let id = ProjectFunctionIdentity {
@@ -402,34 +412,17 @@ mod project {
         }
     }
     mod producer_links {
-        //! A 1.0 consumer prepared with the output contracts its `schema` links name.
+        //! A 1.0 consumer prepared with the output contracts its `schema` links
+        //! name. Its refusals are cases of `fixtures/diagnostics/producers.json`.
         use crate::support::producer as support;
-        use crate::support::specification::{prepare, prepare_linked};
-        use support::{consumer, document, link, links, producer, Tree, CONSUMER};
-        use yamaa_core::json::Value as V;
-        use yamaa_core::schema::DocumentNode as N;
-        use yamaa_core::{
-            diagnostic::Diagnostic,
-            producer_contract::{self, Link, Links},
-            specification::{PrepareError, PreparedSpecification},
-            value::ColumnType,
-        };
-        fn invalid(result: Result<PreparedSpecification, PrepareError>) -> Vec<Diagnostic> {
-            match result {
-                Err(PrepareError::Invalid(findings)) => findings
-                    .iter()
-                    .map(|finding| finding.diagnostic())
-                    .collect(),
-                _ => panic!("link admission findings"),
-            }
-        }
-        fn text(s: &str) -> V {
-            V::String(s.into())
-        }
-        /// A producer whose copies lead back to a specification being resolved
-        /// names each specification on the cycle in its message (SPEC-9). The
-        /// refusal's record is a case of `fixtures/diagnostics/producers.json`,
-        /// whose rows hold no message.
+        use crate::support::specification::prepare_linked;
+        use support::{consumer, document, link, links, producer, Tree};
+        use yamaa_core::{specification::PrepareError, value::ColumnType};
+        /// Seam: the rendered message of a producer cycle, which an issue row
+        /// does not hold. A producer whose copies lead back to a specification
+        /// being resolved names each specification on the cycle in its message
+        /// (SPEC-9); the refusal's record is a case of
+        /// `fixtures/diagnostics/producers.json`.
         #[test]
         fn a_copy_cycle_names_each_specification_on_it_in_its_message() {
             let cycle = yamaa_core::copy_expansion::producer_cycle(
@@ -441,6 +434,8 @@ mod project {
                 "the producer links form a cycle: /adae.yaml, /adsl.yaml, /adae.yaml"
             );
         }
+        /// Seam: the compiled sources and source contract a linked preparation
+        /// returns (core outcome).
         #[test]
         fn linked_contract_types_the_stored_fields_without_compiling_the_producer() {
             // The producer's own source and derivations never enter the
@@ -474,6 +469,7 @@ mod project {
             assert_eq!(compiled.projection(), ["ID"]);
             assert!(compiled.called_functions().is_empty());
         }
+        /// Seam: the order and contracts of the compiled sources (core outcome).
         #[test]
         fn input_declaration_order_is_independent_of_supplied_link_order() {
             let input = Tree::map(vec![
@@ -514,113 +510,8 @@ mod project {
             );
             assert!(compiled.sources()[1].types.is_empty());
         }
-        #[test]
-        fn inline_types_are_redundant_even_when_equal_empty_or_null() {
-            let source = producer();
-            for types in [
-                Tree::map(vec![("ID", Tree::text("int"))]),
-                Tree::map(vec![]),
-                Tree::Scalar(N::Null),
-            ] {
-                let findings = invalid(prepare_linked(
-                    &consumer(Some(types)),
-                    None,
-                    links(&[link(&source)]),
-                ));
-                assert_eq!(findings.len(), 1);
-                assert_eq!(
-                    (
-                        findings[0].definition().condition,
-                        findings[0].definition().rule
-                    ),
-                    ("redundant_field_type", Some("INPUT-6"))
-                );
-                assert_eq!(findings[0].context["dataset"], text("SRC"));
-                assert!(findings[0].spec_paths[0].starts_with("input.SRC.types"));
-            }
-        }
-        #[test]
-        fn missing_duplicate_and_undeclared_metadata_are_never_external_file_reads() {
-            let source = producer();
-            let consumer = consumer(None);
-            for supplied in [Links::default(), links(&[])] {
-                let findings = invalid(prepare_linked(&consumer, None, supplied));
-                assert_eq!(findings[0].context["reason"], text("missing_metadata"));
-            }
-            let findings = invalid(prepare(&consumer));
-            assert_eq!(findings[0].context["reason"], text("missing_metadata"));
-            let findings = invalid(prepare_linked(
-                &consumer,
-                None,
-                links(&[link(&source), link(&source)]),
-            ));
-            assert_eq!(findings[0].context["reason"], text("duplicate_metadata"));
-            let mut extra = link(&source);
-            extra.dataset = "ABSENT";
-            let findings = invalid(prepare_linked(
-                &consumer,
-                None,
-                links(&[link(&source), extra]),
-            ));
-            assert_eq!(findings[0].spec_paths, ["input.ABSENT.schema"]);
-            assert_eq!(findings[0].context["reason"], text("undeclared_metadata"));
-        }
-        #[test]
-        fn a_link_cannot_name_the_consuming_specification() {
-            let consumer = consumer(None);
-            let own = Link {
-                dataset: "SRC",
-                identity: CONSUMER,
-                document: &consumer,
-            };
-            let findings = invalid(prepare_linked(&consumer, None, links(&[own])));
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
-            let definition = findings[0].definition();
-            assert_eq!(
-                (definition.phase, definition.condition, definition.rule),
-                ("validation", "invalid_producer_contract", Some("INPUT-10")),
-            );
-            assert_eq!(findings[0].context.len(), 2);
-            assert_eq!(findings[0].context["dataset"], text("SRC"));
-            assert_eq!(findings[0].context["reason"], text("self_reference"));
-        }
-        #[test]
-        fn producer_contract_findings_retain_selected_field_order() {
-            let source = document(
-                Tree::map(vec![(
-                    "RAW",
-                    Tree::map(vec![("path", Tree::text("raw.csv"))]),
-                )]),
-                &[("ID", "int", None)],
-                &["ID", "ID", "OTHER"],
-                false,
-            );
-            let findings = invalid(prepare_linked(
-                &consumer(None),
-                None,
-                links(&[link(&source)]),
-            ));
-            assert_eq!(
-                findings
-                    .iter()
-                    .map(|f| f.spec_paths[0].as_str())
-                    .collect::<Vec<_>>(),
-                [
-                    "input.SRC.schema.columns.ID.label",
-                    "input.SRC.schema.output.columns[1]",
-                    "input.SRC.schema.output.columns[2]"
-                ]
-            );
-            assert!(findings
-                .iter()
-                .all(|f| f.definition().rule == Some("INPUT-10")));
-            assert_eq!(
-                findings[2].context["declarations"],
-                V::Number(("0").parse().expect("canonical integer"))
-            );
-        }
 
+        /// Seam: `PrepareError::Unsupported`, which reports no issue.
         #[test]
         fn unrelated_unsupported_consumer_vocabulary_is_not_stripped() {
             let source = producer();
@@ -638,90 +529,6 @@ mod project {
             );
             assert!(
                 matches!(prepare_linked(&consumer, None, links(&[link(&source)])), Err(PrepareError::Unsupported(features)) if features.iter().any(|f| f.path=="parent" && f.operation == "parent"))
-            );
-        }
-        #[test]
-        fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
-            let contract = producer_contract::prepare_document(&producer()).unwrap();
-            assert!(contract
-                .validate_header("SRC", &["ID", "VALUE"])
-                .unwrap()
-                .is_none());
-            for actual in [
-                vec!["VALUE", "ID"],
-                vec!["ID"],
-                vec!["ID", "VALUE", "OTHER"],
-                vec!["ID", "ID"],
-            ] {
-                let finding = contract.validate_header("SRC", &actual).unwrap().unwrap();
-                assert_eq!(
-                    (finding.definition().condition, finding.definition().rule),
-                    ("producer_contract_mismatch", Some("INPUT-11"))
-                );
-                assert_eq!(finding.spec_paths, ["input.SRC.schema", "input.SRC.path"]);
-            }
-            let finding = contract
-                .validate_typed_fields(
-                    "SRC",
-                    &[("ID", ColumnType::Int), ("VALUE", ColumnType::Str)],
-                )
-                .unwrap()
-                .unwrap();
-            assert_eq!(
-                finding.context["expected_types"],
-                V::Array(vec![text("int"), text("float")])
-            );
-            assert_eq!(
-                finding.context["actual_types"],
-                V::Array(vec![text("int"), text("str")])
-            );
-            assert_eq!(finding.context["reordered"], V::Bool(false));
-            assert!(contract
-                .validate_header("SRC", &["ID", "VALUE"])
-                .unwrap()
-                .is_none());
-        }
-        #[test]
-        fn one_producer_identity_cannot_describe_two_different_output_contracts() {
-            let input = Tree::map(vec![
-                (
-                    "A",
-                    Tree::map(vec![
-                        ("path", Tree::text("produced.csv")),
-                        ("schema", Tree::text("a.yaml")),
-                    ]),
-                ),
-                (
-                    "B",
-                    Tree::map(vec![
-                        ("path", Tree::text("produced.csv")),
-                        ("schema", Tree::text("b.yaml")),
-                    ]),
-                ),
-            ]);
-            let consumer = document(input, &[("ID", "int", Some("ID"))], &["ID"], false);
-            let source = producer();
-            let other = document(
-                Tree::map(vec![(
-                    "RAW",
-                    Tree::map(vec![("path", Tree::text("raw.csv"))]),
-                )]),
-                &[
-                    ("ID", "int", Some("Identifier")),
-                    ("VALUE", "str", Some("Reported value")),
-                ],
-                &["ID", "VALUE"],
-                false,
-            );
-            let mut a = link(&source);
-            a.dataset = "A";
-            let mut b = link(&other);
-            b.dataset = "B";
-            let findings = invalid(prepare_linked(&consumer, None, links(&[a, b])));
-            assert_eq!(findings[0].spec_paths, ["input.B.schema"]);
-            assert_eq!(
-                findings[0].context["reason"],
-                text("contradictory_metadata")
             );
         }
     }

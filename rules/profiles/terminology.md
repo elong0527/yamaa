@@ -73,7 +73,7 @@ with `$`, or an `integer` or `float` codelist declaring one that does, fails
 validation.
 
 Fails: `value_not_permitted`.
-Evidence: `negative-format-name-without-dollar`, `negative-numeric-format-name-with-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::format_names_begin_with_a_dollar_sign_exactly_for_text_codelists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_format_name_begins_with_a_dollar_sign_exactly_when_its_codelist_is_text`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written`.
+Evidence: `negative-format-name-without-dollar`, `negative-numeric-format-name-with-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::format_names_begin_with_a_dollar_sign_exactly_for_text_codelists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_format_name_begins_with_a_dollar_sign_exactly_when_its_codelist_is_text`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_files.json::a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written`.
 
 A `text` codelist's `format_name` that does not begin with `$`, or an
 `integer` or `float` codelist's that does, fails with `value_not_permitted` at

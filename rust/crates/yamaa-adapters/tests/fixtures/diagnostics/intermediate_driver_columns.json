@@ -1,0 +1,290 @@
+{
+  "about": "A column-level derivation completed only for rows a named intermediate drives (ROW-2). The column binds against that driver as its row template does: the driver qualifier reads the record that built the row, another input is an implicit join on the key it declares (LOOKUP-1), and a qualified aggregate still reduces its declared input, never the intermediate (LOOKUP-18). The column phase reads each row through its own template's driver port (#2829), so an intermediate over any input is addressable, and a grouped intermediate's driver is read only through its group key (NAME-4). A field the intermediate derives, read by the column, by its window order or by an imputation bound, or a driver read beside an aggregate, is refused as unsupported_operation before any data is read, by check and build alike; a field the intermediate's columns list leaves out, or one its filter names that AE lacks, is unknown_field, and a failed intermediate reports only its own finding. Moved from execution_intermediate_driver_columns.rs, whose saved() helper required a clean check, a domain without issues, Ok(true) from its save and the bytes of out.csv: each such specification is a case that checks clean and one that saves, and migrated_api_contracts.json keeps the route and the save result. Its issue() helper took the one issue of either route, so each such case builds and compares the fields its test read, in a complete list; its refused() helper also compared the check's issues with the build's, so each such case names both operations and compares the phase, condition and spec paths it read. The documents are the test's specifications: records is records(\"\", \"str\", \"AE.AETERM\"), grouped grouped(\"'X'\"), mixed mixed(\"'X'\"), grouped_mixed grouped_mixed(\"AE.AETERM\", \"subjects\") and secondary secondary(\"'X'\"), and each case edits the column R and whatever else its test's arguments or edits changed; ae and dm are the test's AE and DM, staged in every case as its fixture staged them, except where its test replaced ae.csv. A test that saved two specifications is two pairs of cases, the first suffixed by what it varied. No engine output supplied these values.",
+  "documents": {
+    "ae": "USUBJID,AESEQ,AESER,AETERM\nS1,1,Y,HEADACHE\nS1,2,N,NAUSEA\nS2,1,Y,RASH\nS1,3,Y,DIZZINESS\n",
+    "dm": "USUBJID,SEX\nS1,F\nS2,M\n",
+    "records": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID, AESEQ]\noutput: {path: out.csv, columns: [USUBJID, AESEQ, R]}\ninput:\n  AE: {path: ae.csv, key: [USUBJID, AESEQ], types: {AESEQ: int}}\nintermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n  - id: serious\n    dataset: SER\n    derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - {name: R, type: str, derivation: AE.AETERM}\n",
+    "grouped": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID]\noutput: {path: out.csv, columns: [USUBJID, R]}\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int}}\nintermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n  - id: subjects\n    dataset: SER\n    group_by: [SER.USUBJID]\n    derivations: {USUBJID: SER.USUBJID}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: R, type: str, derivation: \"'X'\"}\n",
+    "mixed": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID, AESEQ, SRC]\noutput: {path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int}}\nintermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n  - id: all\n    dataset: AE\n    derivations: {USUBJID: AE.USUBJID, AESEQ: AE.AESEQ, SRC: \"'ALL'\", R: \"'OWN'\"}\n  - id: serious\n    dataset: SER\n    derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, SRC: \"'SER'\"}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - {name: SRC, type: str}\n  - {name: R, type: str, derivation: \"'X'\"}\n",
+    "grouped_mixed": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID, AESEQ, SRC]\noutput: {path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int}}\nintermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n  - id: all\n    dataset: AE\n    derivations: {USUBJID: AE.USUBJID, AESEQ: AE.AESEQ, SRC: \"'ALL'\"}\n  - id: subjects\n    dataset: SER\n    group_by: [SER.USUBJID]\n    derivations: {USUBJID: SER.USUBJID, AESEQ: {aggregate: 'MIN(SER.AESEQ)'}, SRC: \"'SER'\", R: \"'OWN'\"}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - {name: SRC, type: str}\n  - {name: R, type: str, derivation: AE.AETERM}\n",
+    "secondary": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID, AESEQ, SRC]\noutput: {path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}\ninput:\n  DM: dm.csv\n  AE: {path: ae.csv, key: [USUBJID, AESEQ], types: {AESEQ: int}}\nintermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n  - id: subjects\n    dataset: DM\n    derivations: {USUBJID: DM.USUBJID, AESEQ: 0, SRC: \"'DM'\", R: \"'OWN'\"}\n  - id: serious\n    dataset: SER\n    derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, SRC: \"'SER'\"}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - {name: SRC, type: str}\n  - {name: R, type: str, derivation: \"'X'\"}\n"
+  },
+  "cases": [
+    {
+      "case": "underlying_input_is_an_implicit_join_on_the_output_keys_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "records"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "underlying_input_is_an_implicit_join_on_the_output_keys",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "records"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,HEADACHE\nS2,1,RASH\nS1,3,DIZZINESS\n"}
+    },
+    {
+      "case": "case_reads_the_driver_record_in_conditions_and_branches_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: {case: [{when: \"SER.AETERM = 'RASH'\", then: \"'SKIN'\"}, {otherwise: SER.AETERM}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "case_reads_the_driver_record_in_conditions_and_branches",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: {case: [{when: \"SER.AETERM = 'RASH'\", then: \"'SKIN'\"}, {otherwise: SER.AETERM}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,HEADACHE\nS2,1,SKIN\nS1,3,DIZZINESS\n"}
+    },
+    {
+      "case": "declared_base_keeps_the_intermediate_driver_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "keys: [USUBJID, AESEQ]\n", "to": "keys: [USUBJID, AESEQ]\nbase: AE\n"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: \"'X'\"}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "declared_base_keeps_the_intermediate_driver",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "keys: [USUBJID, AESEQ]\n", "to": "keys: [USUBJID, AESEQ]\nbase: AE\n"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: \"'X'\"}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,X\nS2,1,X\nS1,3,X\n"}
+    },
+    {
+      "case": "window_orders_the_driver_records_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {row_number: {window: {group_by: [SER.USUBJID], order_by: [SER.AESEQ]}}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "window_orders_the_driver_records",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {row_number: {window: {group_by: [SER.USUBJID], order_by: [SER.AESEQ]}}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,1\nS2,1,1\nS1,3,2\n"}
+    },
+    {
+      "case": "columns_list_limits_the_driver_fields",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", columns: [USUBJID, AESEQ]}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "unknown_field", "spec_paths": ["columns.R.derivation.source"]}
+      ]
+    },
+    {
+      "case": "grouped_intermediate_driver_reads_its_group_key_as_a_literal_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "grouped"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "grouped_intermediate_driver_reads_its_group_key_as_a_literal",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "grouped"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,R\nS1,X\nS2,X\n"}
+    },
+    {
+      "case": "grouped_intermediate_driver_reads_its_group_key_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "grouped", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: SER.USUBJID}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "grouped_intermediate_driver_reads_its_group_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "grouped", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: SER.USUBJID}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,R\nS1,S1\nS2,S2\n"}
+    },
+    {
+      "case": "grouped_driver_field_outside_the_groups_fails_validation",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "grouped", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "ungrouped_driver_field", "rule": "NAME-4", "spec_paths": ["columns.R.derivation.source"]}
+      ]
+    },
+    {
+      "case": "mixed_specification_completes_only_the_intermediate_rows_with_a_literal_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "mixed"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "mixed_specification_completes_only_the_intermediate_rows_with_a_literal",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "mixed"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,SRC,R\nS1,1,ALL,OWN\nS1,2,ALL,OWN\nS2,1,ALL,OWN\nS1,3,ALL,OWN\nS1,1,SER,X\nS2,1,SER,X\nS1,3,SER,X\n"}
+    },
+    {
+      "case": "mixed_specification_completes_only_the_intermediate_rows_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "mixed", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "mixed_specification_completes_only_the_intermediate_rows",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "mixed", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,SRC,R\nS1,1,ALL,OWN\nS1,2,ALL,OWN\nS2,1,ALL,OWN\nS1,3,ALL,OWN\nS1,1,SER,HEADACHE\nS2,1,SER,RASH\nS1,3,SER,DIZZINESS\n"}
+    },
+    {
+      "case": "input_rows_read_their_own_record_beside_a_grouped_intermediate_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "grouped_mixed"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "input_rows_read_their_own_record_beside_a_grouped_intermediate",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "grouped_mixed"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,SRC,R\nS1,1,ALL,HEADACHE\nS1,2,ALL,NAUSEA\nS2,1,ALL,RASH\nS1,3,ALL,DIZZINESS\nS1,1,SER,OWN\nS2,1,SER,OWN\n"}
+    },
+    {
+      "case": "grouped_intermediate_rows_read_only_its_group_keys",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "grouped_mixed", "edits": [{"from": "SRC: \"'ALL'\"}", "to": "SRC: \"'ALL'\", R: \"'OWN'\"}"}, {"from": "SRC: \"'SER'\", R: \"'OWN'\"}", "to": "SRC: \"'SER'\"}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "ungrouped_driver_field", "rule": "NAME-4", "spec_paths": ["columns.R.derivation.source"], "context": {"identifier": "SER.AETERM", "dataset": "SER"}}
+      ]
+    },
+    {
+      "case": "stored_field_of_a_deriving_driver_is_read_from_its_record_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "stored_field_of_a_deriving_driver_is_read_from_its_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,HEADACHE\nS2,1,RASH\nS1,3,DIZZINESS\n"}
+    },
+    {
+      "case": "derived_driver_field_is_refused_before_reading_data",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: SER.LOWER}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.source"]}
+      ]
+    },
+    {
+      "case": "derived_driver_field_is_refused_before_reading_data_in_a_window_order",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {row_number: {window: {group_by: [SER.USUBJID], order_by: [SER.LOWER]}}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.row_number"]}
+      ]
+    },
+    {
+      "case": "derived_field_read_in_the_template_feeds_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}", "to": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, TERM: SER.LOWER}"}, {"from": "  - {name: AESEQ, type: int}\n", "to": "  - {name: AESEQ, type: int}\n  - {name: TERM, type: str}\n"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: {case: [{when: \"TERM = 'rash'\", then: \"'SKIN'\"}, {otherwise: TERM}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "derived_field_read_in_the_template_feeds_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}", "to": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, TERM: SER.LOWER}"}, {"from": "  - {name: AESEQ, type: int}\n", "to": "  - {name: AESEQ, type: int}\n  - {name: TERM, type: str}\n"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: {case: [{when: \"TERM = 'rash'\", then: \"'SKIN'\"}, {otherwise: TERM}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,headache\nS2,1,SKIN\nS1,3,dizziness\n"}
+    },
+    {
+      "case": "derived_field_in_an_imputation_bound_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "types: {AESEQ: int}", "to": "types: {AESEQ: int, AESTDT: date}"}, {"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {FLOOR: AE.AESTDT}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: date, derivation: {impute: {type: date, source: SER.AEDTC, day: 15, not_before: SER.FLOOR}}}\n"}]}, "ae.csv": "USUBJID,AESEQ,AESER,AEDTC,AESTDT\nS1,1,Y,2024-03,2024-03-20\n", "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.impute"]}
+      ]
+    },
+    {
+      "case": "aggregate_reduces_the_declared_input_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "aggregate_reduces_the_declared_input",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,3\nS2,1,1\nS1,3,3\n"}
+    },
+    {
+      "case": "aggregate_never_reduces_the_intermediate",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {aggregate: {expr: \"COUNT(SER.AESEQ)\", key: [USUBJID]}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "unknown_field", "spec_paths": ["columns.R.derivation.aggregate.expr"]}
+      ]
+    },
+    {
+      "case": "driver_read_beside_an_aggregate_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {case: [{when: \"SER.AETERM = 'RASH'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: 0}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.case"]}
+      ]
+    },
+    {
+      "case": "driver_over_another_input_completes_reads_it_can_address_with_a_literal_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "secondary"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "driver_over_another_input_completes_reads_it_can_address_with_a_literal",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "secondary"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,SRC,R\nS1,0,DM,OWN\nS2,0,DM,OWN\nS1,1,SER,X\nS2,1,SER,X\nS1,3,SER,X\n"}
+    },
+    {
+      "case": "driver_over_another_input_completes_reads_it_can_address_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "secondary", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: AE.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "driver_over_another_input_completes_reads_it_can_address",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "secondary", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: AE.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,SRC,R\nS1,0,DM,OWN\nS2,0,DM,OWN\nS1,1,SER,HEADACHE\nS2,1,SER,RASH\nS1,3,SER,DIZZINESS\n"}
+    },
+    {
+      "case": "driver_over_another_input_reads_the_record_that_built_the_row_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "secondary", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "driver_over_another_input_reads_the_record_that_built_the_row",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "secondary", "edits": [{"from": "  - {name: R, type: str, derivation: \"'X'\"}\n", "to": "  - {name: R, type: str, derivation: SER.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,AESEQ,SRC,R\nS1,0,DM,OWN\nS2,0,DM,OWN\nS1,1,SER,HEADACHE\nS2,1,SER,RASH\nS1,3,SER,DIZZINESS\n"}
+    },
+    {
+      "case": "failed_driver_intermediate_reports_only_its_own_finding",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "AE.AESER = 'Y'", "to": "AE.SERIOUS = 'Y'"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: \"'X'\"}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "unknown_field", "spec_paths": ["intermediates.SER.filter"]}
+      ]
+    }
+  ]
+}
