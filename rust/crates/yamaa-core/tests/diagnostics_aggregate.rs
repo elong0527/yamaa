@@ -603,19 +603,14 @@ mod diagnostics {
             }
         }
         mod parquet {
-            use yamaa_core::parquet_source::{
-                self as p, Converted, Field, Logical, Physical, Representation,
+            use yamaa_core::{
+                parquet_source::{self as p, Field},
+                value::ColumnType,
             };
             fn field(name: &str) -> Field {
                 Field {
                     name: name.into(),
-                    leaves: 1,
-                    path: name.into(),
-                    repetition: 0,
-                    physical: Physical::Int64,
-                    logical: Logical::None,
-                    converted: Converted::None,
-                    representation: Representation::Int64,
+                    kind: Some(ColumnType::Int),
                     stored_type: "int64".into(),
                 }
             }

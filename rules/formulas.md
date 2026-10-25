@@ -428,7 +428,7 @@ one and `LN(x) / LN(b)` for another base. Widening the vocabulary amends this
 list.
 
 Fails: `prohibited_function`.
-Evidence: `schema-numeric-functions`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
+Evidence: `schema-numeric-functions`, `adam-adlb-reference-limits`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
 - `ABS(x)`: absolute value.
 - `CEIL(x)`: least integer value not less than `x`.
@@ -774,7 +774,7 @@ with the numeric `/`, inheriting the binary64 rounding of `SUM`, and
 sort the records, except as `STR_JOIN` and the quantiles do
 ([FORMULA-18](#formula-18)).
 
-Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
+Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-reference-limits`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
 
 `VARIANCE(x)` takes two passes in relation record order. The first is the
 ordered `MEAN(x)` above, `m`, so a value that is not a number, or the `int`

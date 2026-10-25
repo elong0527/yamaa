@@ -50,18 +50,18 @@ pub enum ExecutionEvent {
 /// fit in `rows` records, a larger group alone; a window or aggregate
 /// that groups by every one of those keys is then partition-safe. A
 /// specification that declares no key runs over consecutive partitions.
-/// Each partition-safe unit of the schedule runs over one partition at a
-/// time, and the run combines only the state the partition inventory marks
-/// combinable. A step that needs the whole table refuses the run at
-/// admission, unless `whole_table_fallback` runs it over the whole input
-/// instead.
+/// Each partition runs through every derivation step before the next, one
+/// decoded partition at a time (#3830), and the run combines only the state
+/// the partition inventory marks combinable. A step that needs the whole
+/// table refuses the run at admission, unless `whole_table_fallback` runs it
+/// over the whole input instead.
 ///
 /// A run whose plan is safe under its partitions and whose one input is CSV
 /// or Parquet reads that input by partition (#3792), each partition decoded
 /// and admitted on its own: a CSV input scanned in partitions of `rows`
 /// records, a Parquet input in runs of whole row groups of at most `rows`
-/// records, a larger row group being a partition of its own. Key-bounded
-/// partitions are cut as the scan reads the records (#3830).
+/// records, a larger row group being a partition of its own. Partitions cut
+/// between runs of fields are cut as the scan reads the records (#3830).
 ///
 /// A run that divides every step admits its output a partition at a time
 /// too (D264), unless `whole_output` admits it whole, so that the row and
