@@ -530,8 +530,25 @@ made to both, and `make check-repository` fails while they differ
   directory, to its text or to `{"file": path}`, an authored expected file
   named by its path from the repository root, such as a benchmark's
   `expected/` file, and each file removed to `null`; `{}` states that
-  nothing was created, changed or removed. A case states a table only when its
-  operation reports one, and `saved` exactly when its operation saves: the
+  nothing was created, changed or removed. A file the operation generated
+  whose whole text no authored file holds, such as a composed Define-XML
+  document, is instead `{"select": {path: [text, ...]}}`, for a case whose
+  source compared parts of it; a document an authored file holds is stated
+  whole with `{"file": path}`. Each path selects nodes of the document, and
+  its list holds the text of every node it selects, each node whole and
+  spelt as the file spells it, in document order, so a count or an absence
+  is a list too, `[]` selecting nothing. In an `.xml` file a path is an
+  absolute XPath location path of child steps, such as
+  `/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.AGE']/def:Origin`: each
+  step names an element as the document spells it, prefix included, with at
+  most one `[@name='value']` predicate, and the last may be `@name`. An
+  element's text runs from its start tag through its end tag, and an
+  attribute's is its value between the quotes. In a `.json` file a path is
+  a JSON Pointer (RFC 6901), such as `/columns/5/dataType`, and a value's
+  text is its JSON text, a string's quotes included. A selected node is
+  never matched by a substring, and `select` names at least one path. A
+  case states a table only when its operation reports one, and `saved`
+  exactly when its operation saves: the
   adapters' `build` reports the tables a built result holds, `save`
   builds as `build` does, then saves, and `define` composes a project's
   submission section, then saves it, each reporting its issues after the

@@ -33,7 +33,22 @@
 //!   `{"file": path}` naming an authored expected file by its path from the
 //!   repository root, such as a benchmark's `expected/` file; and each file
 //!   it removed, as `null`. `{}` states that it created, changed and removed
-//!   nothing.
+//!   nothing. A file the operation generated whose whole text no authored
+//!   file holds, such as a composed Define-XML document, is instead
+//!   `{"select": {path: [text, ...]}}` when the case's source compared parts
+//!   of it: each path selects nodes of the document, and its list holds the
+//!   text of every node the path selects, each node whole and spelt as the
+//!   file spells it, in document order, so `[]` states that the path selects
+//!   none. A path of an `.xml` file is an absolute XPath location path of
+//!   child steps, such as `/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.AGE']`,
+//!   each step a name as the document spells it, prefix included, with at
+//!   most one `[@name='value']` predicate, and its last step may be `@name`:
+//!   an element's text runs from its start tag through its end tag, and an
+//!   attribute's is its value between the quotes. A path of a `.json` file
+//!   is a JSON Pointer (RFC 6901) such as `/columns/5/dataType`, matching a
+//!   member by its decoded name, and a value's text is its
+//!   JSON text, a string's with its quotes. `select` names at least one
+//!   path, and a selected node's text is never matched by a substring of it.
 //!
 //! The adapters' `input` stages a study directory: its `files`, each its
 //! text, a document of the fixture's `documents` (`base`) or an authored
@@ -90,6 +105,93 @@ pub type Files = BTreeMap<String, Vec<u8>>;
 /// changed, by its path there, with its bytes, and each file it removed,
 /// with none.
 pub type Saved = BTreeMap<String, Option<Vec<u8>>>;
+
+/// What a case states of one file its `saved` names.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Expected {
+    /// The file's bytes, whole.
+    Bytes(Vec<u8>),
+    /// Nodes of the document the file holds: each path, and the text of
+    /// every node it selects, in document order.
+    Select(Vec<Selection>),
+    /// The file was removed.
+    Removed,
+}
+
+/// One path of a `select`, and the text of every node it selects.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Selection {
+    /// The path as the case writes it, for a failure message.
+    path: String,
+    to: Selector,
+    texts: Vec<String>,
+}
+
+/// A path read for the format of the file it selects from.
+#[derive(Clone, Debug, PartialEq)]
+enum Selector {
+    /// An XML document's child steps from its document element, and the
+    /// attribute the last one names, if it names one.
+    Xml(Vec<Step>, Option<String>),
+    /// A JSON Pointer's reference tokens, unescaped.
+    Json(Vec<String>),
+}
+
+/// A child step of an XML path: the element's name, and the attribute and
+/// value its predicate requires, if it has one.
+#[derive(Clone, Debug, PartialEq)]
+struct Step {
+    name: String,
+    predicate: Option<(String, String)>,
+}
+
+impl Expected {
+    /// Compare what the case states of the file `name` with its `bytes`
+    /// now, or `None` once removed; `label` names the case in a failure.
+    pub fn compare(&self, name: &str, bytes: Option<&[u8]>, label: &str) {
+        match (self, bytes) {
+            (Self::Removed, None) => {}
+            (Self::Bytes(stated), Some(bytes)) => assert!(
+                stated == bytes,
+                "{label}: {name} holds\n{:?}\nnot\n{:?}",
+                String::from_utf8_lossy(bytes),
+                String::from_utf8_lossy(stated)
+            ),
+            (Self::Select(selections), Some(bytes)) => {
+                let label = format!("{label}: {name}");
+                let text = std::str::from_utf8(bytes)
+                    .unwrap_or_else(|error| panic!("{label} is not UTF-8 text: {error}"));
+                let xml = selections
+                    .iter()
+                    .any(|selection| matches!(selection.to, Selector::Xml(..)))
+                    .then(|| Xml::document(text, &label));
+                for selection in selections {
+                    let selected = match &selection.to {
+                        Selector::Xml(steps, attribute) => {
+                            let root = xml.as_ref().expect("an XML document");
+                            root.select(steps, attribute.as_deref())
+                        }
+                        Selector::Json(tokens) => JsonText::pointed(text, tokens, &label)
+                            .into_iter()
+                            .collect(),
+                    };
+                    assert!(
+                        selected == selection.texts,
+                        "{label}: {} selects\n{}\nnot\n{}",
+                        selection.path,
+                        texts(&selected),
+                        texts(&selection.texts)
+                    );
+                }
+            }
+            (Self::Removed, Some(bytes)) => panic!(
+                "{label}: {name} holds\n{:?}\nand is not removed",
+                String::from_utf8_lossy(bytes)
+            ),
+            (_, None) => panic!("{label}: {name} was removed"),
+        }
+    }
+}
 
 /// How a case's issue rows stand to the issues its operation reports, each
 /// row compared through the case's `compares`.
@@ -158,8 +260,9 @@ pub struct Stated {
     pub output: Option<Vec<Value>>,
     /// The report rows of each kind the case names, each kind's header first.
     pub report: Option<BTreeMap<String, Vec<Value>>>,
-    /// What the operation did to the study directory.
-    pub saved: Option<Saved>,
+    /// What the operation did to the study directory: each file it created,
+    /// changed or removed, and what the case states of it.
+    pub saved: Option<BTreeMap<String, Expected>>,
 }
 
 impl Stated {
@@ -208,12 +311,21 @@ impl Stated {
             (None, None) => {}
             (Some(_), None) => panic!("{label}: {operation} saves nothing to state as saved"),
             (None, Some(_)) => panic!("{label}: {operation} saves, so the case states saved"),
-            (Some(stated), Some(saved)) => assert!(
-                stated == saved,
-                "{label}: {operation} created, changed or removed\n{}\nnot\n{}",
-                listing(saved),
-                listing(stated)
-            ),
+            (Some(stated), Some(saved)) => {
+                assert!(
+                    stated.keys().eq(saved.keys()),
+                    "{label}: {operation} created, changed or removed\n{}\nnot\n{}",
+                    listing(saved),
+                    stating(stated)
+                );
+                for (name, expected) in stated {
+                    expected.compare(
+                        name,
+                        saved[name].as_deref(),
+                        &format!("{label}: {operation}"),
+                    );
+                }
+            }
         }
     }
 }
@@ -394,10 +506,10 @@ fn of_kind(report: &[Value], kind: &str, header: &Value, label: &str) -> Vec<Val
     rows
 }
 
-/// The files `saved` states: each file created or changed, with its text or
-/// the bytes of the authored file it names, and each file removed, written
-/// `null`.
-fn written(saved: &Value, label: &str) -> Saved {
+/// The files `saved` states: each file created or changed, with its text,
+/// the bytes of the authored file it names or the nodes it selects, and each
+/// file removed, written `null`.
+fn written(saved: &Value, label: &str) -> BTreeMap<String, Expected> {
     let files = saved.as_object().unwrap_or_else(|| {
         panic!("{label}: saved maps each file to its bytes or null, not {saved:?}")
     });
@@ -405,22 +517,486 @@ fn written(saved: &Value, label: &str) -> Saved {
         .iter()
         .map(|(name, bytes)| {
             relative(name, label);
-            let bytes = match bytes {
-                Value::Null => None,
-                Value::String(text) => Some(text.clone().into_bytes()),
+            let expected = match bytes {
+                Value::Null => Expected::Removed,
+                Value::String(text) => Expected::Bytes(text.clone().into_bytes()),
                 Value::Object(members) if members.len() == 1 && members.contains_key("file") => {
                     let path = members["file"].as_str().unwrap_or_else(|| {
                         panic!("{label}: {name} names its expected file by its path: {bytes:?}")
                     });
-                    Some(authored(path, &format!("{label}: {name}")))
+                    Expected::Bytes(authored(path, &format!("{label}: {name}")))
                 }
-                other => {
-                    panic!("{label}: {name} is its text, {{\"file\": path}} or null, not {other:?}")
+                Value::Object(members) if members.len() == 1 && members.contains_key("select") => {
+                    Expected::Select(selections(name, &members["select"], label))
                 }
+                other => panic!(
+                    "{label}: {name} is its text, {{\"file\": path}}, {{\"select\": paths}} \
+                     or null, not {other:?}"
+                ),
             };
-            (name.clone(), bytes)
+            (name.clone(), expected)
         })
         .collect()
+}
+
+/// The paths the `select` of the file `name` writes, each read for the
+/// file's format, which its extension names, with the texts it selects.
+fn selections(name: &str, select: &Value, label: &str) -> Vec<Selection> {
+    let label = format!("{label}: {name}");
+    let xml = match name.rsplit_once('.').map(|(_, extension)| extension) {
+        Some("xml") => true,
+        Some("json") => false,
+        _ => panic!("{label}: select reads nodes of an .xml or a .json file"),
+    };
+    let paths = select
+        .as_object()
+        .filter(|paths| !paths.is_empty())
+        .unwrap_or_else(|| {
+            panic!(
+                "{label}: select maps at least one path to the texts it selects, since {{}} \
+                 states nothing: {select:?}"
+            )
+        });
+    paths
+        .iter()
+        .map(|(path, texts)| {
+            let texts = texts
+                .as_array()
+                .unwrap_or_else(|| panic!("{label}: {path} selects a list of texts: {texts:?}"))
+                .iter()
+                .map(|text| {
+                    let text = text.as_str();
+                    text.unwrap_or_else(|| panic!("{label}: {path} selects texts: {texts:?}"))
+                        .to_owned()
+                })
+                .collect();
+            let to = if xml {
+                xml_path(path, &label)
+            } else {
+                Selector::Json(json_pointer(path, &label))
+            };
+            Selection {
+                path: path.clone(),
+                to,
+                texts,
+            }
+        })
+        .collect()
+}
+
+/// The XML path `written`: `/`, then child steps separated by `/`, each a
+/// name with at most one `[@name='value']` predicate, the last of which may
+/// be `@name`.
+fn xml_path(written: &str, label: &str) -> Selector {
+    let malformed = || -> String {
+        format!(
+            "{label}: {written:?} is an absolute path of child steps, each a name or \
+             name[@name='value'], the last of which may be @name"
+        )
+    };
+    let mut rest = written
+        .strip_prefix('/')
+        .unwrap_or_else(|| panic!("{}", malformed()));
+    let mut steps = Vec::new();
+    loop {
+        if let Some(attribute) = rest.strip_prefix('@') {
+            assert!(!steps.is_empty() && name(attribute), "{}", malformed());
+            return Selector::Xml(steps, Some(attribute.to_owned()));
+        }
+        let end = rest.find(['/', '[']).unwrap_or(rest.len());
+        let (step, tail) = rest.split_at(end);
+        assert!(name(step), "{}", malformed());
+        rest = tail;
+        let predicate = match rest.strip_prefix("[@") {
+            None => None,
+            Some(tail) => {
+                let (attribute, tail) = tail
+                    .split_once("='")
+                    .unwrap_or_else(|| panic!("{}", malformed()));
+                let (value, tail) = tail
+                    .split_once("']")
+                    .unwrap_or_else(|| panic!("{}", malformed()));
+                assert!(name(attribute) && !value.contains('\''), "{}", malformed());
+                rest = tail;
+                Some((attribute.to_owned(), value.to_owned()))
+            }
+        };
+        steps.push(Step {
+            name: step.to_owned(),
+            predicate,
+        });
+        if rest.is_empty() {
+            return Selector::Xml(steps, None);
+        }
+        rest = rest
+            .strip_prefix('/')
+            .unwrap_or_else(|| panic!("{}", malformed()));
+    }
+}
+
+/// `text` is an XML qualified name, with at most one namespace prefix.
+/// XPath operators and node tests are not literal element or attribute names.
+fn name(text: &str) -> bool {
+    let start = |c| {
+        matches!(c, 'A'..='Z' | '_' | 'a'..='z' | '\u{C0}'..='\u{D6}'
+            | '\u{D8}'..='\u{F6}' | '\u{F8}'..='\u{2FF}' | '\u{370}'..='\u{37D}'
+            | '\u{37F}'..='\u{1FFF}' | '\u{200C}'..='\u{200D}'
+            | '\u{2070}'..='\u{218F}' | '\u{2C00}'..='\u{2FEF}'
+            | '\u{3001}'..='\u{D7FF}' | '\u{F900}'..='\u{FDCF}'
+            | '\u{FDF0}'..='\u{FFFD}' | '\u{10000}'..='\u{EFFFF}')
+    };
+    let local = |text: &str| {
+        let mut chars = text.chars();
+        chars.next().is_some_and(start)
+            && chars.all(|c| {
+                start(c)
+                    || matches!(c, '-' | '.' | '0'..='9' | '\u{B7}'
+                        | '\u{300}'..='\u{36F}' | '\u{203F}'..='\u{2040}')
+            })
+    };
+    let mut parts = text.split(':');
+    local(parts.next().expect("at least one part"))
+        && parts.next().is_none_or(local)
+        && parts.next().is_none()
+}
+
+/// The reference tokens of the JSON Pointer `written` (RFC 6901), each with
+/// `~1` read as `/` and `~0` as `~`.
+fn json_pointer(written: &str, label: &str) -> Vec<String> {
+    let tokens = written.strip_prefix('/').unwrap_or_else(|| {
+        panic!("{label}: {written:?} is a JSON Pointer to a part of the file, so starts with /")
+    });
+    tokens
+        .split('/')
+        .map(|token| {
+            assert!(
+                !token.replace("~0", "").replace("~1", "").contains('~'),
+                "{label}: {written:?} writes ~ as ~0 and / as ~1"
+            );
+            token.replace("~1", "/").replace("~0", "~")
+        })
+        .collect()
+}
+
+/// An element of an XML document: its name and its attributes, each spelt
+/// as the document spells it, its whole text from its start tag through its
+/// end tag, and its child elements.
+struct Element<'a> {
+    name: &'a str,
+    attributes: Vec<(&'a str, &'a str)>,
+    text: &'a str,
+    children: Vec<Element<'a>>,
+}
+
+impl<'a> Element<'a> {
+    /// The text of every node the child `steps` select from this document
+    /// element, or of the `attribute` the last one names, in document order.
+    fn select(&self, steps: &[Step], attribute: Option<&str>) -> Vec<String> {
+        let matches = |step: &Step, element: &Element| {
+            element.name == step.name
+                && step
+                    .predicate
+                    .as_ref()
+                    .is_none_or(|(name, value)| element.attribute(name) == Some(value.as_str()))
+        };
+        let (first, steps) = steps.split_first().expect("a step");
+        let mut selected = vec![self];
+        selected.retain(|element| matches(first, element));
+        for step in steps {
+            selected = selected
+                .into_iter()
+                .flat_map(|element| element.children.iter())
+                .filter(|child| matches(step, child))
+                .collect();
+        }
+        selected
+            .into_iter()
+            .filter_map(|element| match attribute {
+                None => Some(element.text),
+                Some(name) => element.attribute(name),
+            })
+            .map(str::to_owned)
+            .collect()
+    }
+
+    /// The value of the attribute `name`, as the document spells it.
+    fn attribute(&self, name: &str) -> Option<&'a str> {
+        let mut values = self
+            .attributes
+            .iter()
+            .filter(|(written, _)| *written == name);
+        values.next().map(|(_, value)| *value)
+    }
+}
+
+/// A reader of an XML document's elements, which leaves each entity
+/// reference as written and skips comments, processing instructions and
+/// CDATA sections. A malformed tag, or an end tag that does not close the
+/// element it ends, fails the case at the byte it starts.
+struct Xml<'a> {
+    text: &'a str,
+    at: usize,
+    label: &'a str,
+}
+
+impl<'a> Xml<'a> {
+    /// The document element of the XML document `text`.
+    fn document(text: &'a str, label: &'a str) -> Element<'a> {
+        let mut xml = Self { text, at: 0, label };
+        xml.between();
+        let root = xml.element();
+        xml.between();
+        if xml.at != text.len() {
+            xml.fail("text after the document element");
+        }
+        root
+    }
+
+    fn rest(&self) -> &'a str {
+        &self.text[self.at..]
+    }
+
+    fn fail(&self, expected: &str) -> ! {
+        panic!("{}: {expected} at byte {}", self.label, self.at)
+    }
+
+    fn space(&mut self) {
+        self.at = self.text.len() - self.rest().trim_start().len();
+    }
+
+    fn expect(&mut self, token: &str) {
+        if !self.rest().starts_with(token) {
+            self.fail(&format!("{token:?}"));
+        }
+        self.at += token.len();
+    }
+
+    /// Skip what runs from `open` through `close` when it starts here.
+    fn skip(&mut self, open: &str, close: &str) -> bool {
+        if !self.rest().starts_with(open) {
+            return false;
+        }
+        let end = self.rest().find(close);
+        self.at += end.unwrap_or_else(|| self.fail(&format!("{close:?}"))) + close.len();
+        true
+    }
+
+    /// Skip the space, comments and processing instructions outside the
+    /// document element.
+    fn between(&mut self) {
+        self.space();
+        while self.skip("<?", "?>") || self.skip("<!--", "-->") {
+            self.space();
+        }
+    }
+
+    fn name(&mut self) -> &'a str {
+        let rest = self.rest();
+        let end = rest
+            .find(|c: char| c.is_whitespace() || matches!(c, '/' | '>' | '='))
+            .unwrap_or(rest.len());
+        if end == 0 {
+            self.fail("a name");
+        }
+        self.at += end;
+        &rest[..end]
+    }
+
+    fn element(&mut self) -> Element<'a> {
+        let start = self.at;
+        self.expect("<");
+        let name = self.name();
+        let mut attributes = Vec::new();
+        loop {
+            self.space();
+            if self.rest().starts_with("/>") {
+                self.at += 2;
+                let text = &self.text[start..self.at];
+                let children = Vec::new();
+                return Element {
+                    name,
+                    attributes,
+                    text,
+                    children,
+                };
+            }
+            if self.rest().starts_with('>') {
+                self.at += 1;
+                break;
+            }
+            let attribute = self.name();
+            self.space();
+            self.expect("=");
+            self.space();
+            let quote = match self.rest().chars().next() {
+                Some(quote @ ('"' | '\'')) => quote,
+                _ => self.fail("a quoted attribute value"),
+            };
+            self.at += 1;
+            let end = self.rest().find(quote);
+            let end = end.unwrap_or_else(|| self.fail("the closing quote"));
+            attributes.push((attribute, &self.rest()[..end]));
+            self.at += end + 1;
+        }
+        let mut children = Vec::new();
+        loop {
+            let next = self.rest().find('<');
+            self.at += next.unwrap_or_else(|| self.fail(&format!("the end tag of {name}")));
+            if self.rest().starts_with("</") {
+                self.at += 2;
+                if self.name() != name {
+                    self.fail(&format!("the end tag of {name}"));
+                }
+                self.space();
+                self.expect(">");
+                let text = &self.text[start..self.at];
+                return Element {
+                    name,
+                    attributes,
+                    text,
+                    children,
+                };
+            }
+            let skipped =
+                self.skip("<!--", "-->") || self.skip("<![CDATA[", "]]>") || self.skip("<?", "?>");
+            if !skipped {
+                children.push(self.element());
+            }
+        }
+    }
+}
+
+/// A reader of the text of JSON values, which it reads without decoding.
+struct JsonText<'a> {
+    text: &'a str,
+    at: usize,
+    label: &'a str,
+}
+
+impl<'a> JsonText<'a> {
+    /// The text of the value of the JSON document `text` that `tokens`
+    /// point to, if there is one.
+    fn pointed(text: &'a str, tokens: &[String], label: &'a str) -> Option<String> {
+        let mut json = Self { text, at: 0, label };
+        json.space();
+        let pointed = json.value(Some(tokens));
+        json.space();
+        if json.at != text.len() {
+            json.fail("text after the value");
+        }
+        pointed.map(str::to_owned)
+    }
+
+    fn rest(&self) -> &'a str {
+        &self.text[self.at..]
+    }
+
+    fn fail(&self, expected: &str) -> ! {
+        panic!("{}: {expected} at byte {}", self.label, self.at)
+    }
+
+    fn space(&mut self) {
+        self.at = self.text.len() - self.rest().trim_start().len();
+    }
+
+    /// Whether `token` follows, read past it when it does.
+    fn eat(&mut self, token: char) -> bool {
+        let follows = self.rest().starts_with(token);
+        if follows {
+            self.at += 1;
+        }
+        follows
+    }
+
+    fn expect(&mut self, token: char) {
+        if !self.eat(token) {
+            self.fail(&format!("{token:?}"));
+        }
+    }
+
+    /// Read the value that starts here, and return the text of the value
+    /// that `pointer` points to within it, if it has one; a value off the
+    /// pointer's way is read past.
+    fn value(&mut self, pointer: Option<&[String]>) -> Option<&'a str> {
+        let start = self.at;
+        let next = pointer.and_then(<[String]>::split_first);
+        let mut pointed = None;
+        match self.rest().chars().next() {
+            Some('{') => {
+                self.at += 1;
+                self.space();
+                if !self.eat('}') {
+                    loop {
+                        self.space();
+                        let member = super::json_string(self.string(), self.label);
+                        self.space();
+                        self.expect(':');
+                        self.space();
+                        let inner = next.filter(|(token, _)| **token == member);
+                        let found = self.value(inner.map(|(_, rest)| rest));
+                        pointed = pointed.or(found);
+                        self.space();
+                        if self.eat('}') {
+                            break;
+                        }
+                        self.expect(',');
+                    }
+                }
+            }
+            Some('[') => {
+                self.at += 1;
+                self.space();
+                if !self.eat(']') {
+                    for index in 0.. {
+                        self.space();
+                        let inner = next.filter(|(token, _)| **token == index.to_string());
+                        let found = self.value(inner.map(|(_, rest)| rest));
+                        pointed = pointed.or(found);
+                        self.space();
+                        if self.eat(']') {
+                            break;
+                        }
+                        self.expect(',');
+                    }
+                }
+            }
+            Some('"') => {
+                self.string();
+            }
+            Some(_) => {
+                let rest = self.rest();
+                let end = rest
+                    .find(|c: char| matches!(c, ',' | '}' | ']') || c.is_whitespace())
+                    .unwrap_or(rest.len());
+                if end == 0 {
+                    self.fail("a value");
+                }
+                self.at += end;
+            }
+            None => self.fail("a value"),
+        }
+        match pointer {
+            Some([]) => Some(&self.text[start..self.at]),
+            _ => pointed,
+        }
+    }
+
+    /// Read the string that starts here, and return its text including its
+    /// quotes, escapes as written.
+    fn string(&mut self) -> &'a str {
+        let start = self.at;
+        self.expect('"');
+        loop {
+            match self.text.as_bytes().get(self.at) {
+                Some(b'"') => break,
+                Some(b'\\') => self.at += 2,
+                Some(_) => self.at += 1,
+                None => self.fail("the closing quote"),
+            }
+        }
+        self.at += 1;
+        &self.text[start..self.at]
+    }
 }
 
 /// The bytes of the authored file at `path`, relative to the repository root,
@@ -501,6 +1077,36 @@ fn listing(files: &Saved) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Each file a case states and what it states of it, as `listing` writes
+/// them, its selections by path, for a failure message.
+fn stating(files: &BTreeMap<String, Expected>) -> String {
+    if files.is_empty() {
+        return "nothing".to_owned();
+    }
+    files
+        .iter()
+        .map(|(name, expected)| match expected {
+            Expected::Bytes(bytes) => format!("{name}: {:?}", String::from_utf8_lossy(bytes)),
+            Expected::Removed => format!("{name}: null"),
+            Expected::Select(selections) => {
+                let paths = selections.iter().map(|selection| selection.path.as_str());
+                format!("{name}: select {}", paths.collect::<Vec<_>>().join(", "))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Each selected text on its own line, quoted, for a failure message;
+/// `nothing` when no node was selected.
+fn texts(texts: &[String]) -> String {
+    if texts.is_empty() {
+        return "nothing".to_owned();
+    }
+    let quoted = texts.iter().map(|text| format!("{text:?}"));
+    quoted.collect::<Vec<_>>().join("\n")
 }
 
 /// Run `replay` on each of `cases`, on as many threads as the machine runs
