@@ -1,0 +1,151 @@
+{
+  "about": "The str_replace verb through file application (TEXT-1, TEXT-6, TEXT-12), moved from scalar_declarative_text_replace.rs at 144fc5559, whose tests compared the saved bytes, the run's handler counts as the report's handler rows name them (SPEC_PATH, NAME, COUNT), and each issue at the fields they read. The authored benchmark reproduces its expected bytes, and the negative one is refused before any input exists. A value without a match is kept, an empty result stays text, an empty match takes the replacement literally, a catastrophic pattern without a match scans in linear time and leaves the value unchanged (TEXT-12), and a missing source gives missing or the declared literal, counted at the verb's missing path (COLUMN-14). A non-string source and an unknown one are refused at the source. Nested case branches and row templates bind the same operation. The bespoke specifications, JSON documents in the test, are written as the same YAML documents, and each stages only the files it reads, as the test's copy of schema-str-replace held them. No engine output supplied these values.",
+  "cases": [
+    {
+      "case": "authored_positive_benchmark_reproduces_its_expected_bytes",
+      "operation": "save",
+      "input": {
+        "benchmark": "schema-str-replace",
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.AETERMS.derivation.str_replace.missing", "missing", 0],
+          ["columns.AETERMC.derivation.str_replace.missing", "missing", 0],
+          ["columns.AESPDIG.derivation.str_replace.missing", "missing", 1]
+        ]
+      },
+      "saved": {"adae.csv": {"file": "benchmarks/schema-str-replace/expected/adae.csv"}}
+    },
+    {
+      "case": "authored_negative_benchmark_is_refused_before_any_input_read",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"file": "benchmarks/negative-str-replace-invalid-regex/spec.yaml"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.pattern"],
+      "issues": [{"phase": "validation", "condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.AESPDIG.derivation.str_replace.pattern"], "context": {"pattern": "[^0-9"}}]
+    },
+    {
+      "case": "values_without_a_match_are_kept_and_empty_results_stay_text",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: RESULT, type: str, derivation: {str_replace: {source: TEXT, pattern: '[^0-9]', replacement: '', missing: 'none'}}}\n", "input.csv": "ID,TEXT\nrow1,AE-0-12\nrow2,12\nrow3,NONE\nrow4,\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.RESULT.derivation.str_replace.missing", "missing", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,TEXT,RESULT\nrow1,AE-0-12,012\nrow2,12,12\nrow3,NONE,\"\"\nrow4,,none\n"}
+    },
+    {
+      "case": "empty_matches_and_literal_replacement_survive_file_application",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: RESULT, type: str, derivation: {str_replace: {source: TEXT, pattern: 'a*', replacement: '$&'}}}\n", "input.csv": "ID,TEXT\nrow1,baa\nrow2,x\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.RESULT.derivation.str_replace.missing", "missing", 0]
+        ]
+      },
+      "saved": {"output.csv": "ID,TEXT,RESULT\nrow1,baa,$&b$&$&\nrow2,x,$&x$&\n"}
+    },
+    {
+      "case": "a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: RESULT, type: str, derivation: {str_replace: {source: TEXT, pattern: '(a+)+$', replacement: '-'}}}\n", "input.csv": "ID,TEXT\nrow1,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.RESULT.derivation.str_replace.missing", "missing", 0]
+        ]
+      },
+      "saved": {"output.csv": "ID,TEXT,RESULT\nrow1,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!\n"}
+    },
+    {
+      "case": "missing_source_without_handler_gives_missing_counted_as_the_default",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: RESULT, type: str, derivation: {str_replace: {source: TEXT, pattern: 'a', replacement: 'b'}}}\n", "input.csv": "ID,TEXT\nrow1,\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.RESULT.derivation.str_replace.missing", "missing", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,TEXT,RESULT\nrow1,,\n"}
+    },
+    {
+      "case": "a_non_string_source_fails_validation_at_the_source",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: int, derivation: SRC.TEXT}\n  - {name: RESULT, type: str, derivation: {str_replace: {source: TEXT, pattern: '1', replacement: '2'}}}\n", "input.csv": "ID,TEXT\nrow1,12\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.RESULT.derivation.str_replace.source"], "context": {"source": "TEXT", "expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "an_unknown_source_fails_validation_at_the_source",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: RESULT, type: str, derivation: {str_replace: {source: NOPE, pattern: '1', replacement: '2'}}}\n", "input.csv": "ID,TEXT\nrow1,12\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "unknown_field", "spec_paths": ["columns.RESULT.derivation.str_replace.source"]}]
+    },
+    {
+      "case": "nested_case_branches_bind_the_same_operation",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - name: RESULT\n    type: str\n    derivation:\n      case:\n        - {when: \"ID = 'row1'\", then: {str_replace: {source: TEXT, pattern: '\\s+', replacement: ' '}}}\n        - {otherwise: {str_replace: {source: TEXT, pattern: '^\\s+|\\s+$', replacement: ''}}}\n", "input.csv": "ID,TEXT\nrow1,\"a  b\"\nrow2,\" c \"\nrow3,\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.RESULT.derivation.case[0].then.str_replace.missing", "missing", 0],
+          ["columns.RESULT.derivation.case[1].otherwise.str_replace.missing", "missing", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,TEXT,RESULT\nrow1,a  b,a b\nrow2, c ,c\nrow3,,\n"}
+    },
+    {
+      "case": "row_templates_bind_the_same_operation",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: RESULT, type: str, derivation: {str_replace: {source: TEXT, pattern: '-', replacement: '/'}}}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {str_replace: {source: SRC.TEXT, pattern: '[a-z]', replacement: '-', missing: x-y}}\n", "input.csv": "ID,TEXT\nrow1,a1b\nrow2,\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["rows.records.derivations.TEXT.str_replace.missing", "missing", 1],
+          ["columns.RESULT.derivation.str_replace.missing", "missing", 0]
+        ]
+      },
+      "saved": {"output.csv": "ID,TEXT,RESULT\nrow1,-1-,/1/\nrow2,x-y,x/y\n"}
+    }
+  ]
+}

@@ -4,8 +4,9 @@
 //! return values. Inputs and first-issue expectations remain
 //! owned by the migrated fixtures. Authored route contracts also retain the
 //! original domain/preparation distinction, output and save results, staged
-//! file preservation and completed bytes across repeated saves, and the
-//! calls a scripted host-functions port received, in order
+//! file preservation and completed bytes across repeated saves, the declared
+//! report a refused save publishes alone, and the calls a scripted
+//! host-functions port received, in order
 //! (`fixtures/function_call_contracts.json`).
 use crate::support::diagnostic::{form, operations, replay};
 use std::{
@@ -333,25 +334,74 @@ fn saved_bytes(
     }
 }
 
+/// Read the published CSV, comparing the same authored report rows as the
+/// replay. CSV writes missing cells empty; other scalar cells retain their
+/// text. This checks the saved artifact independently of the in-memory report.
+fn saved_report_rows(bytes: &[u8], expected: &BTreeMap<String, Vec<Value>>, label: &str) {
+    let report = yamaa_adapters::csv_source::parse(bytes).expect("a saved report is CSV");
+    let kind_at = report.names.iter().position(|name| name == "KIND").unwrap();
+    for (kind, rows) in expected {
+        let columns = rows[0]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|name| {
+                report
+                    .names
+                    .iter()
+                    .position(|column| column == replay::text(name))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let actual = report
+            .records
+            .iter()
+            .filter(|row| row[kind_at].as_deref() == Some(kind.as_str()))
+            .map(|row| {
+                columns
+                    .iter()
+                    .map(|&at| row[at].clone().unwrap_or_default())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let stated = rows[1..]
+            .iter()
+            .map(|row| {
+                row.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|cell| match cell {
+                        Value::Null => String::new(),
+                        Value::String(text) => text.clone(),
+                        other => yamaa_adapters::json_wire::encode(other),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, stated, "{label}: the saved report's {kind} rows");
+    }
+}
+
 #[test]
 fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let routes = api_routes();
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        513,
+        595,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
     let (mut domains, mut preparation, mut either) = (0, 0, 0);
     let mut checks = 0;
     let (mut accepted_saves, mut refused_saves, mut no_save) = (0, 0, 0);
+    let mut published_reports = 0;
     for case in replay::cases() {
         let Some(expected) = contracts.get(&case.label) else {
             continue;
         };
         assert!(seen.insert(case.label.clone()));
-        replay::closed(expected, &["route", "save"]);
+        replay::closed(expected, &["route", "save", "publishes"]);
         let route = replay::text(replay::field(expected, "route"));
         match route {
             "domain" => domains += 1,
@@ -375,6 +425,20 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
             }
             other => panic!("{}: unknown save result {other:?}", case.label),
         };
+        // A build case whose test read back the report its failed save
+        // published states that report's rows, and names its path here.
+        let publishes = expected.get("publishes").map(replay::text);
+        if publishes.is_some() {
+            published_reports += 1;
+            assert!(
+                save == Some(false)
+                    && case.operations == ["build"]
+                    && case.stated.report.is_some()
+                    && case.stated.saved.is_none(),
+                "{}: a refused build case that states its report's rows publishes it",
+                case.label
+            );
+        }
         let host =
             crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
         if route == "check" {
@@ -410,6 +474,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
             // returned refused domain also retains FailedBuild (CHECK-2).
             if let Some(save) = save.or((!accepted_output).then_some(false)) {
                 let before = operations::state(&study);
+                let staged = operations::contents(&study);
                 let rows = crate::support::rows(&domain.issues());
                 let result = domain.save();
                 if save {
@@ -479,12 +544,31 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                     refused(result, &domain, "first");
                     match case.stated.saved.as_ref().filter(|saved| !saved.is_empty()) {
                         Some(report) => saved_bytes(&study, report, &case.label),
-                        None => assert_eq!(
-                            operations::state(&study),
-                            before,
-                            "{}: a refused save preserves every staged path",
-                            case.label
-                        ),
+                        // The report whose rows the build case states is
+                        // the one file the refused save publishes.
+                        None => match publishes {
+                            Some(report) => {
+                                let published = form::saved(&staged, &operations::contents(&study));
+                                assert!(
+                                    published.len() == 1
+                                        && matches!(published.get(report), Some(Some(_))),
+                                    "{}: a refused save publishes {report} alone, not {:?}",
+                                    case.label,
+                                    published.keys().collect::<Vec<_>>()
+                                );
+                                saved_report_rows(
+                                    published[report].as_ref().unwrap(),
+                                    case.stated.report.as_ref().unwrap(),
+                                    &case.label,
+                                );
+                            }
+                            None => assert_eq!(
+                                operations::state(&study),
+                                before,
+                                "{}: a refused save preserves every staged path",
+                                case.label
+                            ),
+                        },
                     }
                     let published = operations::state(&study);
                     let again = domain.save();
@@ -504,8 +588,9 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (311, 53, 39, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (189, 53, 271));
+    assert_eq!((domains, preparation, either, checks), (387, 54, 44, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (250, 68, 277));
+    assert_eq!(published_reports, 2, "every published report is authored");
 }
 
 /// Seam: the composition's save return, held artifact order, capture counter
