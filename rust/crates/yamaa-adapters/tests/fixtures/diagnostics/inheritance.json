@@ -1,5 +1,5 @@
 {
-  "about": "A child inherits its parent's meaning (LAYER-5): an empty child saves what its parent saves and fails as its parent fails. An aggregate's derive bindings stay local to it, whether a later binding reads an earlier one or a binding shares an output column's name, so none becomes a column dependency: subject 1's exposures start on 2025-01-05 and 2025-01-02, so its earliest is 2025-01-02, epoch day 20090, and subject 2's is 2025-02-10, epoch day 20129. An intermediate whose verification is its only use stays in the run (LAYER-11), so when two donor records of kind X share code A, parent and empty child both fail as duplicate_intermediate_records (LOOKUP-17), whether or not a column reads it; #2189 pruned it, and the child saved. An intermediate with empty verifications that nothing reads keeps neither itself nor its input, whose file does not exist, in the run. An intermediate a child declares under an input's name collides with it as in a flat specification, in the check as in the build (SCHEMA-8, LOOKUP-3). A lookup's or an aggregate's key keeps the current-row columns it reads when the resolver prunes, whether the key is a list or a mapping and the read is plain, in a case result, in a row template or an aggregate's, so each parent and its empty child check clean and save the same artifact: each code matches one label, and one REF record. No benchmark composes these through a child: the one empty layer, negative-cyclic-parent's layers/parent.yaml, sits in a refused cycle. negative-lookup-id-collision and negative-lookup-duplicate-intermediate refuse the flat collision and the duplicate records, and schema-inheritance keeps an unread inherited intermediate out of its run. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, an empty static check, or each issue's phase, condition, rule, spec paths and context; the collision's spec paths are the intermediate's id, then the input, as negative-lookup-id-collision's error.yaml writes them.",
+  "about": "A child inherits its parent's meaning (LAYER-5): an empty child saves what its parent saves and fails as its parent fails. An aggregate's derive bindings stay local to it, whether a later binding reads an earlier one or a binding shares an output column's name, so none becomes a column dependency: subject 1's exposures start on 2025-01-05 and 2025-01-02, so its earliest is 2025-01-02, epoch day 20090, and subject 2's is 2025-02-10, epoch day 20129. An intermediate whose verification is its only use stays in the run (LAYER-11), so when two donor records of kind X share code A, parent and empty child both fail as duplicate_intermediate_records (LOOKUP-17), whether or not a column reads it; #2189 pruned it, and the child saved. An intermediate with empty verifications that nothing reads keeps neither itself nor its input, whose file does not exist, in the run. An intermediate a child declares under an input's name collides with it as in a flat specification, in the check as in the build (SCHEMA-8, LOOKUP-3). A lookup's or an aggregate's key keeps the current-row columns it reads when the resolver prunes, whether the key is a list or a mapping and the read is plain, in a case result, in a row template or an aggregate's, so each parent and its empty child check clean and save the same artifact: each code matches one label, and one REF record. No benchmark composes these through a child: the one empty layer, negative-cyclic-parent's layers/parent.yaml, sits in a refused cycle. negative-lookup-id-collision and negative-lookup-duplicate-intermediate refuse the flat collision and the duplicate records, and schema-inheritance keeps an unread inherited intermediate out of its run. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, an empty static check, or each issue's phase, condition, rule, spec paths and context; the collision's spec paths are the intermediate's id, then the input, as negative-lookup-id-collision's error.yaml writes them. A specification that declares no parent is a composition of one layer, pruned on the same terms as one an empty child inherits (#2696): a dead intermediate over an unknown dataset or with an unknown filter field, a dead spare column whose source names nothing, and valid dead declarations are each discarded with their references, so the flat entry and its empty child each save xa.csv holding OBS's two records. Moved from prune_all_specifications.rs, which staged the flat entry, the child and input/obs.csv as each case does and required, for each entry, a domain without issues, an accepted output, Ok(true) from its save and the bytes of xa.csv; migrated_api_contracts.json keeps the route, the output and the save result.",
   "documents": {
     "child": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
     "aggregate_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: DM\ninput: {DM: dm.csv, EX: {path: ex.csv, key: [ID]}}\noutput: {path: result.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: DM.ID}\n  - name: RESULT\n    type: date\n    derivation:\n      aggregate:\n        expr: MIN(STDT)\n        derivations:\n          STDT: {type: date, derivation: {to_date: {source: EX.EXSTDTC}}}\n",
@@ -542,6 +542,62 @@
       "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: {CODE: CODE}, expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
       "issues": [],
       "saved": {"result.csv": "ID,RESULT\n1,1\n2,1\n"}
+    },
+    {
+      "case": "dead_intermediate_with_unknown_dataset_is_pruned_in_a_flat_specification",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\nintermediates:\n  - id: UNUSED\n    dataset: NODS\n    key: [ID]\n    filter: \"NODS.FLAG = 'X'\"\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "flat.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
+    },
+    {
+      "case": "dead_intermediate_with_unknown_dataset_is_pruned_through_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\nintermediates:\n  - id: UNUSED\n    dataset: NODS\n    key: [ID]\n    filter: \"NODS.FLAG = 'X'\"\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
+    },
+    {
+      "case": "dead_intermediate_with_unknown_filter_field_is_pruned_in_a_flat_specification",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\nintermediates:\n  - id: UNUSED\n    dataset: OBS\n    key: [ID]\n    filter: \"OBS.NOSUCHFIELD = 'X'\"\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "flat.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
+    },
+    {
+      "case": "dead_intermediate_with_unknown_filter_field_is_pruned_through_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\nintermediates:\n  - id: UNUSED\n    dataset: OBS\n    key: [ID]\n    filter: \"OBS.NOSUCHFIELD = 'X'\"\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
+    },
+    {
+      "case": "dead_spare_column_is_pruned_in_a_flat_specification",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n  - name: SPARE\n    type: int\n    derivation: NOSUCHCOL\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "flat.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
+    },
+    {
+      "case": "dead_spare_column_is_pruned_through_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n  - name: SPARE\n    type: int\n    derivation: NOSUCHCOL\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
+    },
+    {
+      "case": "valid_dead_declarations_build_with_equal_outputs_in_a_flat_specification",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\nintermediates:\n  - id: UNUSED\n    dataset: OBS\n    key: [ID]\n    filter: \"OBS.AGE > 45\"\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n  - name: SPARE\n    type: int\n    derivation: OBS.AGE\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "flat.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
+    },
+    {
+      "case": "valid_dead_declarations_build_with_equal_outputs_through_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"input/obs.csv": "ID,AGE\n1,40\n2,52\n", "flat.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\nintermediates:\n  - id: UNUSED\n    dataset: OBS\n    key: [ID]\n    filter: \"OBS.AGE > 45\"\ncolumns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n  - name: SPARE\n    type: int\n    derivation: OBS.AGE\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n"}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"xa.csv": "ID,AGE\n1,40\n2,52\n"}
     }
   ]
 }

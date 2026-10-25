@@ -1,0 +1,138 @@
+{
+  "about": "A column-level derivation completes the rows of every row template that leaves the column to the column phase, each row from the record that built it (#2829). The column binds once for each driver those templates read, against that driver's own record (LOOKUP-1): its qualifier reads the record that built the row, in a bare source, a flag condition or a case condition, and another input joins on the key it declares, failing as multiple_matches where the key matches two records. The bindings run one driver after another, in the order of the first template each completes, so S2's DM record in arm_b fails conversion before S2's adverse event. A column holding a qualified aggregate keeps the whole-dataset scope (LOOKUP-18), one window numbers the rows of every driver in construction order, and a field an intermediate driver derives is refused as unsupported_operation beside another driver, by check and build alike. Moved from execution_column_driver_bindings.rs, whose saved() helper required a clean check, a domain without issues, Ok(true) from its save and the bytes of out.csv: each such specification is a case that checks clean and one that saves, and migrated_api_contracts.json keeps the route and the save result. Its issue() helper took the one issue of either route, so each such case builds and compares the fields its test read, in a complete list; a test that also compared the check's issues, empty or equal to the build's, is a check case or names both operations. The documents are the test's specifications: two_drivers is specification(\"str\", \"DM.SEX\", [ae, dm], [ae]) and three_drivers specification(\"str\", \"DM.SEX\", [ae, dm, cm], [cm]), each case editing the column X and, where its test let no template state X, the cm template; ordered and serious are the specifications of column_bindings_run_one_driver_after_another and of the derived-field refusal; ae, dm and cm are the test's AE, DM and CM, staged in every case as its fixture staged them. No engine output supplied these values.",
+  "documents": {
+    "ae": "USUBJID,AESEQ,AETERM,AESER,CODE\nS1,1,HEADACHE,Y,7\nS1,2,NAUSEA,N,8\nS2,1,RASH,Y,bad-ae\n",
+    "dm": "USUBJID,SEX,ARM,CODE\nS1,F,A,1\nS2,M,B,bad-dm\nS3,F,A,3\n",
+    "cm": "USUBJID,CMSEQ,CMTRT\nS1,1,ASPIRIN\nS3,1,IBUPROFEN\n",
+    "two_drivers": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\ninput:\n  AE: {path: ae.csv, key: [USUBJID], types: {AESEQ: int}}\n  DM: {path: dm.csv, key: [USUBJID]}\n  CM: {path: cm.csv, types: {CMSEQ: int}}\nkeys: [USUBJID, SRC, SEQ]\noutput: {path: out.csv, columns: [USUBJID, SRC, SEQ, X]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: SRC, type: str}\n  - {name: SEQ, type: int}\n  - {name: X, type: str, derivation: DM.SEX}\nrows:\n  - id: ae\n    dataset: AE\n    derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ, X: \"'OWN'\"}\n  - id: dm\n    dataset: DM\n    derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}\n",
+    "three_drivers": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\ninput:\n  AE: {path: ae.csv, key: [USUBJID], types: {AESEQ: int}}\n  DM: {path: dm.csv, key: [USUBJID]}\n  CM: {path: cm.csv, types: {CMSEQ: int}}\nkeys: [USUBJID, SRC, SEQ]\noutput: {path: out.csv, columns: [USUBJID, SRC, SEQ, X]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: SRC, type: str}\n  - {name: SEQ, type: int}\n  - {name: X, type: str, derivation: DM.SEX}\nrows:\n  - id: ae\n    dataset: AE\n    derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}\n  - id: dm\n    dataset: DM\n    derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}\n  - id: cm\n    dataset: CM\n    derivations: {USUBJID: CM.USUBJID, SRC: \"'CM'\", SEQ: CM.CMSEQ, X: \"'OWN'\"}\n",
+    "ordered": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\ninput:\n  AE: {path: ae.csv, key: [USUBJID], types: {AESEQ: int}}\n  DM: {path: dm.csv, key: [USUBJID]}\n  CM: {path: cm.csv, types: {CMSEQ: int}}\nkeys: [USUBJID, SRC, SEQ]\noutput: {path: out.csv, columns: [USUBJID, SRC, SEQ, X]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: SRC, type: str}\n  - {name: SEQ, type: int}\n  - {name: X, type: int, derivation: {case: [{when: \"SRC = 'AE'\", then: AE.CODE}, {otherwise: DM.CODE}]}}\nrows:\n  - {id: arm_a, dataset: DM, filter: \"DM.ARM = 'A'\", derivations: {USUBJID: DM.USUBJID, SRC: \"'A'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n  - {id: arm_b, dataset: DM, filter: \"DM.ARM = 'B'\", derivations: {USUBJID: DM.USUBJID, SRC: \"'B'\", SEQ: 0}}\n",
+    "serious": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\ninput:\n  AE: {path: ae.csv, key: [USUBJID], types: {AESEQ: int}}\n  DM: {path: dm.csv, key: [USUBJID]}\n  CM: {path: cm.csv, types: {CMSEQ: int}}\nkeys: [USUBJID, SRC, SEQ]\noutput: {path: out.csv, columns: [USUBJID, SRC, SEQ, X]}\nintermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: SRC, type: str}\n  - {name: SEQ, type: int}\n  - {name: X, type: str, derivation: SER.LOWER}\nrows:\n  - {id: cm, dataset: CM, derivations: {USUBJID: CM.USUBJID, SRC: \"'CM'\", SEQ: CM.CMSEQ, X: \"'OWN'\"}}\n  - {id: ser, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: dm, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n"
+  },
+  "cases": [
+    {
+      "case": "second_template_driver_reads_its_own_record_through_a_bare_source_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "two_drivers"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "second_template_driver_reads_its_own_record_through_a_bare_source",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "two_drivers"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,X\nS1,AE,1,OWN\nS1,AE,2,OWN\nS2,AE,1,OWN\nS1,DM,0,F\nS2,DM,0,M\nS3,DM,0,F\n"}
+    },
+    {
+      "case": "second_template_driver_reads_its_own_record_in_a_flag_condition_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "two_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: {flag: \"DM.SEX = 'F'\"}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "second_template_driver_reads_its_own_record_in_a_flag_condition",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "two_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: {flag: \"DM.SEX = 'F'\"}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,X\nS1,AE,1,OWN\nS1,AE,2,OWN\nS2,AE,1,OWN\nS1,DM,0,Y\nS2,DM,0,\nS3,DM,0,Y\n"}
+    },
+    {
+      "case": "second_template_driver_reads_its_own_record_in_a_case_condition_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "two_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: {case: [{when: \"DM.SEX = 'F'\", then: \"'Y'\"}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "second_template_driver_reads_its_own_record_in_a_case_condition",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "two_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: {case: [{when: \"DM.SEX = 'F'\", then: \"'Y'\"}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,X\nS1,AE,1,OWN\nS1,AE,2,OWN\nS2,AE,1,OWN\nS1,DM,0,Y\nS2,DM,0,\nS3,DM,0,Y\n"}
+    },
+    {
+      "case": "each_driver_reads_its_own_record_and_joins_the_other_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "each_driver_reads_its_own_record_and_joins_the_other",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,X\nS1,AE,1,F\nS1,AE,2,F\nS2,AE,1,M\nS1,DM,0,F\nS2,DM,0,M\nS3,DM,0,F\nS1,CM,1,OWN\nS3,CM,1,OWN\n"}
+    },
+    {
+      "case": "each_driver_reads_its_own_record_where_a_condition_selects_it_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: {case: [{when: \"SRC = 'AE'\", then: AE.AETERM}, {otherwise: DM.SEX}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "each_driver_reads_its_own_record_where_a_condition_selects_it",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: {case: [{when: \"SRC = 'AE'\", then: AE.AETERM}, {otherwise: DM.SEX}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,X\nS1,AE,1,HEADACHE\nS1,AE,2,NAUSEA\nS2,AE,1,RASH\nS1,DM,0,F\nS2,DM,0,M\nS3,DM,0,F\nS1,CM,1,OWN\nS3,CM,1,OWN\n"}
+    },
+    {
+      "case": "another_drivers_records_still_join_on_the_output_keys_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: AE.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "another_drivers_records_still_join_on_the_output_keys",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: str, derivation: AE.AETERM}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [
+        {"phase": "join", "condition": "multiple_matches", "spec_paths": ["columns.X.derivation.source"]}
+      ]
+    },
+    {
+      "case": "column_bindings_run_one_driver_after_another",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "ordered"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "context"],
+      "issues": [
+        {"phase": "convert", "condition": "conversion_failed", "context": {"from": "str", "keys": [{"SEQ": 0, "SRC": "B", "USUBJID": "S2"}], "to": "int", "value": "bad-dm"}}
+      ]
+    },
+    {
+      "case": "a_column_holding_an_aggregate_keeps_the_whole_dataset_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "SRC: \"'CM'\", SEQ: CM.CMSEQ, X: \"'OWN'\"}", "to": "SRC: \"'CM'\", SEQ: CM.CMSEQ}"}, {"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: int, derivation: {case: [{when: \"DM.SEX = 'F'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: 0}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_column_holding_an_aggregate_keeps_the_whole_dataset",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "SRC: \"'CM'\", SEQ: CM.CMSEQ, X: \"'OWN'\"}", "to": "SRC: \"'CM'\", SEQ: CM.CMSEQ}"}, {"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: int, derivation: {case: [{when: \"DM.SEX = 'F'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: 0}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,X\nS1,AE,1,2\nS1,AE,2,2\nS2,AE,1,0\nS1,DM,0,2\nS2,DM,0,0\nS3,DM,0,\nS1,CM,1,2\nS3,CM,1,\n"}
+    },
+    {
+      "case": "a_column_window_spans_the_rows_of_every_driver_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "SRC: \"'CM'\", SEQ: CM.CMSEQ, X: \"'OWN'\"}", "to": "SRC: \"'CM'\", SEQ: CM.CMSEQ}"}, {"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: int, derivation: {row_number: {window: {group_by: [USUBJID], order_by: [SEQ]}}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_column_window_spans_the_rows_of_every_driver",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "three_drivers", "edits": [{"from": "SRC: \"'CM'\", SEQ: CM.CMSEQ, X: \"'OWN'\"}", "to": "SRC: \"'CM'\", SEQ: CM.CMSEQ}"}, {"from": "  - {name: X, type: str, derivation: DM.SEX}\n", "to": "  - {name: X, type: int, derivation: {row_number: {window: {group_by: [USUBJID], order_by: [SEQ]}}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,X\nS1,AE,1,2\nS1,AE,2,4\nS2,AE,1,2\nS1,DM,0,1\nS2,DM,0,1\nS3,DM,0,1\nS1,CM,1,3\nS3,CM,1,2\n"}
+    },
+    {
+      "case": "a_field_an_intermediate_driver_derives_is_refused_beside_another_driver",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "serious"}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}, "cm.csv": {"base": "cm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.X.derivation.source"]}
+      ]
+    }
+  ]
+}

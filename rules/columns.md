@@ -110,7 +110,7 @@ order. Composition orders the resolved columns
 order.
 
 Fails: `unknown_reference`, `forward_reference`.
-Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-adapters/tests/execution_column_driver_bindings.rs::column_bindings_run_one_driver_after_another`.
+Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/column_driver_bindings.json::column_bindings_run_one_driver_after_another`.
 
 [Inheritance](inheritance.md) composes and prunes every specification before
 these rules apply: a specification that declares no `parent` and includes no

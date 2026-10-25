@@ -394,7 +394,7 @@ A value of a class carries every field its class declares required and no
 field the class does not declare. An undeclared or missing class field fails.
 
 Fails: `unknown_field`, `missing_required_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::classes_keep_schema_then_input_order_in_a_complete_document`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_versionless_class_keeps_required_type_then_unknown_findings_in_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::classes_keep_schema_then_input_order_in_a_complete_document`.
 
 Schema findings report an undeclared field as `unknown_field` and a missing
 required field as `missing_required_field`.
