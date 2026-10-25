@@ -94,11 +94,21 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     ];
     let mut counts = [0; 4];
     let (mut subsequences, mut first_issues, mut executions) = (0, 0, 0);
+    let mut single_routes = 0;
     for mut case in replay::cases() {
         let family = case.label.split_once("::").unwrap().0;
         let Some(index) = FAMILIES.iter().position(|name| *name == family) else {
             continue;
         };
+        // The row-scope cases moved from execution_grouped_driver_dataset.rs
+        // and execution_window_group_sources.rs name the one operation their
+        // tests called, or each of check and build where the two report
+        // different issues; migrated_api_contracts.json holds the routes and
+        // save results those tests asserted.
+        if index == 3 && case.operations.len() == 1 {
+            single_routes += 1;
+            continue;
+        }
         counts[index] += 1;
         let subsequence = case.operations.len() == 1;
         subsequences += usize::from(subsequence);
@@ -181,10 +191,11 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     }
     assert_eq!(
         counts,
-        [177, 237, 18, 87],
+        [177, 237, 18, 89],
         "every migrated case retains its API contract"
     );
     assert_eq!((subsequences, first_issues, executions), (12, 162, 606));
+    assert_eq!(single_routes, 22, "every moved single-route row-scope case");
 }
 
 #[test]
@@ -339,7 +350,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        446,
+        460,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -504,8 +515,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (275, 22, 39, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (160, 47, 239));
+    assert_eq!((domains, preparation, either, checks), (289, 22, 39, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (167, 49, 244));
 }
 
 /// Seam: the composition's save return, held artifact order, capture counter
