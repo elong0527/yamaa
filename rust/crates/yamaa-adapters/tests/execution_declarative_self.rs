@@ -1153,15 +1153,12 @@ mod execution {
                                         "{}: retained save returns true",
                                         case.label
                                     );
-                                    for (path, bytes) in
+                                    for (path, stated) in
                                         case.stated.saved.as_ref().expect("authored saved bytes")
                                     {
-                                        assert_eq!(
-                                            Some(fs::read(study.join(path)).unwrap()),
-                                            *bytes,
-                                            "{}: retained {path}",
-                                            case.label
-                                        );
+                                        let bytes = fs::read(study.join(path)).unwrap();
+                                        let label = format!("{}: retained", case.label);
+                                        stated.compare(path, Some(&bytes), &label);
                                     }
                                 }
                             }
