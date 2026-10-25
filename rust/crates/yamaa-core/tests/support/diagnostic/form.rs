@@ -46,7 +46,7 @@
 //!   an element's text runs from its start tag through its end tag, and an
 //!   attribute's is its value between the quotes. A path of a `.json` file
 //!   is a JSON Pointer (RFC 6901) such as `/columns/5/dataType`, matching a
-//!   member by its name as the file spells it, and a value's text is its
+//!   member by its decoded name, and a value's text is its
 //!   JSON text, a string's with its quotes. `select` names at least one
 //!   path, and a selected node's text is never matched by a substring of it.
 //!
@@ -634,10 +634,30 @@ fn xml_path(written: &str, label: &str) -> Selector {
     }
 }
 
-/// `text` can be an element's or an attribute's name as a document spells
-/// it, prefix included.
+/// `text` is an XML qualified name, with at most one namespace prefix.
+/// XPath operators and node tests are not literal element or attribute names.
 fn name(text: &str) -> bool {
-    !text.is_empty() && !text.contains(|c: char| c.is_whitespace() || "/[]@='\"<>&".contains(c))
+    let start = |c| {
+        matches!(c, 'A'..='Z' | '_' | 'a'..='z' | '\u{C0}'..='\u{D6}'
+            | '\u{D8}'..='\u{F6}' | '\u{F8}'..='\u{2FF}' | '\u{370}'..='\u{37D}'
+            | '\u{37F}'..='\u{1FFF}' | '\u{200C}'..='\u{200D}'
+            | '\u{2070}'..='\u{218F}' | '\u{2C00}'..='\u{2FEF}'
+            | '\u{3001}'..='\u{D7FF}' | '\u{F900}'..='\u{FDCF}'
+            | '\u{FDF0}'..='\u{FFFD}' | '\u{10000}'..='\u{EFFFF}')
+    };
+    let local = |text: &str| {
+        let mut chars = text.chars();
+        chars.next().is_some_and(start)
+            && chars.all(|c| {
+                start(c)
+                    || matches!(c, '-' | '.' | '0'..='9' | '\u{B7}'
+                        | '\u{300}'..='\u{36F}' | '\u{203F}'..='\u{2040}')
+            })
+    };
+    let mut parts = text.split(':');
+    local(parts.next().expect("at least one part"))
+        && parts.next().is_none_or(local)
+        && parts.next().is_none()
 }
 
 /// The reference tokens of the JSON Pointer `written` (RFC 6901), each with
@@ -908,11 +928,11 @@ impl<'a> JsonText<'a> {
                 if !self.eat('}') {
                     loop {
                         self.space();
-                        let member = self.string();
+                        let member = super::json_string(self.string(), self.label);
                         self.space();
                         self.expect(':');
                         self.space();
-                        let inner = next.filter(|(token, _)| *token == member);
+                        let inner = next.filter(|(token, _)| **token == member);
                         let found = self.value(inner.map(|(_, rest)| rest));
                         pointed = pointed.or(found);
                         self.space();
@@ -961,11 +981,11 @@ impl<'a> JsonText<'a> {
         }
     }
 
-    /// Read the string that starts here, and return its text between its
+    /// Read the string that starts here, and return its text including its
     /// quotes, escapes as written.
     fn string(&mut self) -> &'a str {
-        self.expect('"');
         let start = self.at;
+        self.expect('"');
         loop {
             match self.text.as_bytes().get(self.at) {
                 Some(b'"') => break,
@@ -975,7 +995,7 @@ impl<'a> JsonText<'a> {
             }
         }
         self.at += 1;
-        &self.text[start..self.at - 1]
+        &self.text[start..self.at]
     }
 }
 
