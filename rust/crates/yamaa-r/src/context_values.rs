@@ -1,4 +1,4 @@
-//! Convert the engine's nested values to R without a host JSON decoder.
+//! Convert the facade's nested values to R without a host JSON decoder.
 //!
 //! Objects are named lists (an empty object keeps its empty `names`), arrays
 //! unnamed lists, text character and `null` is `NULL`. An integer token whose
@@ -7,7 +7,7 @@
 //! it. Fraction and exponent tokens are doubles. Text or a name containing NUL
 //! is refused.
 use extendr_api::prelude::*;
-use yamaa_boundary::client::Node;
+use yamaa::ContextValue;
 
 /// The largest magnitude every integer below it holds exactly in binary64.
 const EXACT_DOUBLE_MAGNITUDE: u128 = 1 << 53;
@@ -22,23 +22,22 @@ fn named_list(pairs: Vec<(String, Robj)>) -> std::result::Result<Robj, String> {
     Ok(list)
 }
 
-pub(crate) fn context_value(value: &Node) -> std::result::Result<Robj, String> {
+pub(crate) fn context_value(value: &ContextValue) -> std::result::Result<Robj, String> {
     Ok(match value {
-        Node::Null => NULL.into_robj(),
-        Node::Bool(value) => r!(*value),
-        Node::Int(value) => integer(i128::from(*value), || value.to_string()),
-        // An integer beyond 64 bits, or a float beyond binary64's range.
-        Node::Number(token) => r!(token.as_str()),
-        Node::Float(value) => r!(*value),
-        Node::Text(value) => text(value)?,
-        Node::List(values) => List::from_values(
+        ContextValue::Null => NULL.into_robj(),
+        ContextValue::Bool(value) => r!(*value),
+        ContextValue::Int(value) => integer(i128::from(*value), || value.to_string()),
+        ContextValue::Wide(token) => r!(token.as_str()),
+        ContextValue::Float(value) => r!(*value),
+        ContextValue::Text(value) => text(value)?,
+        ContextValue::List(values) => List::from_values(
             values
                 .iter()
                 .map(context_value)
                 .collect::<std::result::Result<Vec<_>, _>>()?,
         )
         .into_robj(),
-        Node::Map(values) => named_list(
+        ContextValue::Map(values) => named_list(
             values
                 .iter()
                 .map(|(key, value)| {
@@ -52,6 +51,8 @@ pub(crate) fn context_value(value: &Node) -> std::result::Result<Robj, String> {
                 })
                 .collect::<std::result::Result<Vec<_>, String>>()?,
         )?,
+        // The facade's value is non-exhaustive; no other kind exists.
+        _ => return Err("the resolved value holds a kind no node has".into()),
     })
 }
 

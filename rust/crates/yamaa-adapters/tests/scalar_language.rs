@@ -2,7 +2,9 @@
 //! Scalar contracts: scalar language, secondary scalar operands and run report.
 mod scalar {
     mod scalar_language {
-        use crate::support::Edit as _;
+        // Every scalar operation a run saves, refuses or checks is a case of
+        // `fixtures/diagnostics/scalar_operations.json`. The test left here
+        // reads benchmark truth.
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -27,19 +29,6 @@ mod scalar {
                 }
                 copy(&source, &path);
                 Self(path)
-            }
-            fn run(&self) -> file_application::Domain {
-                let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = crate::support::study::identity("test", &specification);
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &specification,
-                        environment: None,
-                    },
-                    identity,
-                )
-                .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -74,12 +63,6 @@ mod scalar {
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
-        fn bespoke(source: &str, input: &[u8]) -> Fixture {
-            let fixture = Fixture::new("adam-adae-text-cleanup");
-            fs::write(fixture.0.join("spec.yaml"), source).unwrap();
-            fs::write(fixture.0.join("input.csv"), input).unwrap();
-            fixture
-        }
         fn attempt(
             fixture: &Fixture,
         ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
@@ -93,6 +76,9 @@ mod scalar {
                 crate::support::study::identity("test", &specification),
             )
         }
+        /// Already data: four benchmarks' own `expected/error.yaml`, whose
+        /// context each issue holds as a subset, the mixed ones run with no
+        /// input directory.
         #[test]
         fn unchanged_scalar_benchmarks_and_negative_truth() {
             for name in [
@@ -131,168 +117,11 @@ mod scalar {
                 assert_eq!(actual, vec![expected], "{name}");
             }
         }
-        fn spec(derivation: &str, result_type: &str) -> String {
-            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{I: int, F: float, D: date}}}}}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: RESULT, type: {result_type}, derivation: {derivation}}}\n")
-        }
-        #[test]
-        fn extremes_skip_missing_and_keep_wide_integers_and_temporal_values() {
-            for (operation, result_type, input, expected) in [
-                (
-                    "{greatest: {sources: [SRC.I, SRC.F]}}",
-                    "str",
-                    "ID,I,F,D\na,9007199254740993,9007199254740992,2025-01-01\nb,,,2025-01-01\n",
-                    "ID,RESULT\na,9007199254740993\nb,\n",
-                ),
-                (
-                    "{least: {sources: [SRC.I, SRC.F]}}",
-                    "str",
-                    "ID,I,F,D\na,-9007199254740993,-9007199254740992,2025-01-01\nb,,,2025-01-01\n",
-                    "ID,RESULT\na,-9007199254740993\nb,\n",
-                ),
-                (
-                    "{greatest: {sources: [SRC.D, SRC.D]}}",
-                    "date",
-                    "ID,I,F,D\na,1,1,2025-01-01\nb,1,1,2025-01-02\n",
-                    "ID,RESULT\na,2025-01-01\nb,2025-01-02\n",
-                ),
-            ] {
-                let fixture = bespoke(&spec(operation, result_type), input.as_bytes());
-                let mut result = fixture.run();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read(fixture.0.join("output.csv")).unwrap(),
-                    expected.as_bytes()
-                );
-            }
-        }
-        #[test]
-        fn row_scalar_derivations_share_the_same_raw_contract() {
-            let source="yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_template: '[{SRC.TEXT}]'}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
-            let fixture = bespoke(source, b"ID,I,F,TEXT\na,3,2,abc\n");
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT,MAXIMUM\na,[abc],3\n"
-            );
-        }
-
-        /// A Boolean converts to no column type, so a row derivation that can
-        /// only return one fails before any record is read (VALUE-24).
-        #[test]
-        fn row_boolean_is_refused_at_validation_and_refuses_every_save() {
-            for literal in ["false", "true"] {
-                let source = format!(
-            "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {literal}\n"
-        );
-                let fixture = bespoke(&source, b"ID,TEXT\na,abc\n");
-                let mut result = fixture.run();
-                let issues = result.issues();
-                assert_eq!(issues.len(), 1);
-                let issue = issue_json(&issues[0]);
-                assert_eq!(issue["phase"], "validation");
-                assert_eq!(issue["condition"], "conversion_failed");
-                assert_eq!(issue["rule"], "VALUE-24");
-                assert_eq!(
-                    issue["spec_paths"],
-                    yamaa_adapters::json!(["columns.RESULT"])
-                );
-                assert_eq!(
-                    issue["context"],
-                    yamaa_adapters::json!({"from": "bool", "to": "str"})
-                );
-                assert!(result.output().is_none());
-                for _ in 0..2 {
-                    assert!(result.save().is_err());
-                    assert_eq!(
-                        result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                        vec![issue.clone()]
-                    );
-                    assert!(!fixture.0.join("output.csv").exists());
-                }
-            }
-        }
-
-        #[test]
-        fn csv_text_regex_declarations_are_reported_without_source_capture() {
-            for (expression, suffix, condition, rule) in [
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}",
-            "str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: '[z-a]'}}",
-            "str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: '[]a(]'}}",
-            "str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: '(a)', group: 2}}",
-            "str_extract.group",
-            "regex_group_out_of_range",
-            "TEXT-10",
-        ),
-        (
-            "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: \"'x'\"}]}",
-            "case[0].then.str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-    ] {
-        for typed in [false, true] {
-            let source = spec(expression, "str");
-            let source = if typed {
-                source.edit("I: int, F: float, D: date", "I: int, F: float, D: date, TEXT: str")
-            } else {
-                source
-            };
-            let fixture = bespoke(&source, b"ID,I,F,D,TEXT\na,1,1,2025-01-01,ab\n");
-            fs::remove_file(fixture.0.join("input.csv")).unwrap();
-            let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let identity = crate::support::study::identity("regex-preflight", &path);
-            let checked = file_application::check(yamaa_core::project_function::Language::Python,
-                Request { specification: &path, environment: None },
-                identity,
-            );
-            assert_eq!(checked.len(), 1, "{expression}: {checked:?}");
-            assert_eq!(checked[0].condition(), condition);
-            assert_eq!(checked[0].rule(), Some(rule));
-            assert_eq!(checked[0].spec_paths, [format!("columns.RESULT.derivation.{suffix}")]);
-            assert_eq!(attempt(&fixture).err().unwrap(), checked);
-            assert!(!fixture.0.join("output.csv").exists());
-        }
-    }
-        }
-
-        #[test]
-        fn nontext_csv_source_type_precedes_regex_declaration_findings() {
-            let fixture = bespoke(
-                &spec("{str_extract: {source: SRC.I, pattern: 'a)|(b'}}", "str"),
-                b"ID,I,F,D\na,1,1,2025-01-01\n",
-            );
-            fs::remove_file(fixture.0.join("input.csv")).unwrap();
-            let issues = attempt(&fixture).err().unwrap();
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "incompatible_input_type");
-            assert_eq!(issues[0].rule(), Some("TEXT-1"));
-            assert_eq!(
-                issues[0].spec_paths,
-                ["columns.RESULT.derivation.str_extract.source"]
-            );
-        }
     }
     mod secondary_scalar_operands {
         //! Implicit joins bind completed keys, preserve laziness and keep source scopes.
+        //! Every case these tests do not keep is in
+        //! `fixtures/diagnostics/secondary_operands.json`.
         use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
@@ -324,62 +153,8 @@ mod scalar {
                 fs::read(self.0.join("result.csv")).unwrap()
             }
         }
-        #[test]
-        fn row_filters_join_other_inputs_after_keys_and_preserve_eager_predicate_failures() {
-            for (driver, filter, expected) in [
-                ("SRC", "ID = 3 OR B.N = 40", "ID,VALUE\n2,0\n3,0\n"),
-                ("B", "SRC.N >= 20", "ID,VALUE\n2,0\n3,0\n"),
-            ] {
-                let fixture = Fixture::new();
-                fs::write(fixture.0.join("a.csv"), "ID,N\n1,10\n2,20\n3,30\n").unwrap();
-                fs::write(fixture.0.join("b.csv"), "ID,N\n2,40\n1,50\n3,60\n").unwrap();
-                fs::write(fixture.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {{path: a.csv, key: [ID], types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{ID: int, N: int}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: {driver}.ID}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: selected\n    dataset: {driver}\n    filter: '{filter}'\n    derivations:\n      VALUE: 0\noutput: {{path: result.csv, columns: [ID, VALUE]}}\n")).unwrap();
-                assert_eq!(fixture.saved(), expected.as_bytes());
-            }
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("a.csv"), "ID\n3\n").unwrap();
-            fs::write(fixture.0.join("b.csv"), "ID,N\n3,60\n3,70\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: a.csv, types: {ID: int}}\n  B: {path: b.csv, key: [ID], types: {ID: int, N: int}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\nrows:\n  - id: selected\n    dataset: SRC\n    filter: 'ID = 3 OR B.N = 40'\noutput: {path: result.csv, columns: [ID]}\n").unwrap();
-            let mut result = fixture.run().unwrap();
-            assert!(result.output().is_none());
-            assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition(), "multiple_matches");
-            assert_eq!(result.issues()[0].rule(), Some("LOOKUP-10"));
-            assert_eq!(result.issues()[0].spec_paths, ["rows.selected.filter"]);
-            let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
-            assert_eq!(context["match_count"], 2);
-            assert!(result.save().is_err());
-            assert!(!fixture.0.join("result.csv").exists());
-        }
-        #[test]
-        fn nested_row_text_and_date_operands_match_completed_keys_and_skip_unselected_donors() {
-            let fixture = Fixture::new();
-            fs::write(
-                fixture.0.join("a.csv"),
-                b"ID,D,USE\na,2020-01-03,Y\nb,2020-01-04,N\nc,2020-01-05,Y\n",
-            )
-            .unwrap();
-            fs::write(
-                fixture.0.join("b.csv"),
-                b"ID,D,TEXT\nb,2020-01-01,poison1\nb,2020-01-01,poison2\na,2020-01-01,Lower\n",
-            )
-            .unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, types: {D: date}}, B: {path: b.csv, key: [ID], types: {D: date}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, DAYS]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: TEXT, type: str}\n  - {name: DAYS, type: int}\nrows:\n  - id: records\n    dataset: A\n    derivations:\n      TEXT: {case: [{when: \"A.USE = 'Y'\", then: {str_case: {source: B.TEXT, to: upper}}}, {otherwise: \"'SKIP'\"}]}\n      DAYS: {case: [{when: \"A.USE = 'Y'\", then: {diff: {type: date, start: B.D, end: A.D, unit: day}}}, {otherwise: 0}]}\n").unwrap();
-            assert_eq!(fixture.saved(), b"ID,TEXT,DAYS\na,LOWER,2\nb,SKIP,0\nc,,\n");
-            let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(
-                fixture.0.join("spec.yaml"),
-                original.edit(
-                    "{str_case: {source: B.TEXT, to: upper}}",
-                    "{first_available: {sources: [B.TEXT], missing: NONE}}",
-                ),
-            )
-            .unwrap();
-            assert_eq!(
-                fixture.saved(),
-                b"ID,TEXT,DAYS\na,Lower,2\nb,SKIP,0\nc,NONE,\n"
-            );
-        }
+        /// Already data: three benchmarks' own `expected/` CSV bytes, each
+        /// reproduced from a copy of its benchmark.
         #[test]
         fn original_secondary_source_fixtures_preserve_frozen_csv_bytes() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
@@ -417,22 +192,9 @@ mod scalar {
                 );
             }
         }
-        #[test]
-        fn foreign_driver_scalar_operands_join_primary_records_and_column_predicates_share_keys() {
-            let fixture = Fixture::new();
-            fs::write(
-                fixture.0.join("a.csv"),
-                b"ID,TEXT,USE\na,lower,Y\nb,mixed,N\n",
-            )
-            .unwrap();
-            fs::write(fixture.0.join("b.csv"), b"ID,N\nb,2\na,1\nc,3\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper}}\n").unwrap();
-            assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,MIXED,\na,LOWER,Y\nc,,\n");
-            let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),original.edit("TEXT: {str_case: {source: A.TEXT, to: upper}}",
-        "TEXT: {source: {variable: A.TEXT, filter: \"A.USE = 'Y'\", order_by: [A.ID], keep: first}}" )).unwrap();
-            assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,,\na,lower,Y\nc,,\n");
-        }
+        /// Seam: every issue of the refusal is a validation issue, among
+        /// issues no test authored; a case states rows found among the
+        /// issues (`among`), not a property of every issue.
         #[test]
         fn forbidden_foreign_numeric_identifier_is_classified_before_donor_evaluation() {
             let fixture = Fixture::new();
@@ -492,6 +254,10 @@ mod scalar {
             }
         }
 
+        /// Seam: three handler counts found among the run's whole ledger
+        /// (`observations()["handler_counts"]`), whose other entries no test
+        /// authored, while a case states a report kind's rows whole.
+        ///
         /// B holds no record with SEQ 99, so ABSENT's filtered read finds no
         /// record for a or c, and its `absent` answers both (NAME-3, D67).
         #[test]
@@ -600,85 +366,29 @@ rows:
             fs::write(fixture.0.join("spec.yaml"), original.replace(case, "TEXT: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}" )).unwrap();
             assert_eq!(fixture.saved(),b"ID,TEXT,FIRST,MAP,ABSENT\na,late,late,20,EDGE\nb,hidden2,SKIP,0,SKIP\nc,,fallback,0,EDGE\n");
         }
-
-        #[test]
-        fn global_columns_join_captured_ports_after_mixed_driver_rows_and_windows() {
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("a.csv"), b"ID,TEXT\na,primary\n").unwrap();
-            fs::write(
-                fixture.0.join("b.csv"),
-                b"ID,EXTRA,TEXT\nb,ignored,beta\nc,ignored,gamma\n",
-            )
-            .unwrap();
-            fs::write(
-                fixture.0.join("spec.yaml"),
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-base: A
-input: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, key: [ID]}}
-output: {path: result.csv, columns: [ID, RN, PRIMARY, SECONDARY]}
-columns:
-  - {name: ID, type: str}
-  - {name: ORD, type: int}
-  - {name: RN, type: int, derivation: {row_number: {window: {order_by: [ORD, ID]}}}}
-  - name: PRIMARY
-    type: str
-    derivation:
-      case:
-        - when: 'RN > 0'
-          then: A.TEXT
-        - otherwise: "'SKIP'"
-  - name: SECONDARY
-    type: str
-    derivation:
-      case:
-        - when: 'RN > 0'
-          then: B.TEXT
-        - otherwise: "'SKIP'"
-rows:
-  - {id: alpha, dataset: A, derivations: {ID: A.ID, ORD: 1}}
-  - {id: beta, dataset: B, derivations: {ID: B.ID, ORD: 2}}
-"#,
-            )
-            .unwrap();
-            assert_eq!(
-                fixture.saved(),
-                b"ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
-            );
-            let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),body.edit("then: A.TEXT","then: {source: {variable: A.TEXT, filter: \"A.ID = 'a'\", order_by: [A.ID], keep: first}}" )).unwrap();
-            assert_eq!(
-                fixture.saved(),
-                b"ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
-            );
-        }
     }
     mod run_report {
+        // Every report a run builds or saves, and what a save publishes, is a
+        // case of `fixtures/diagnostics/run_report.json`. These tests keep
+        // the seams a case cannot state: what a save returns and records, and
+        // a save repeated on one held result.
         use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
         impl Study {
-            fn new() -> Self {
+            fn benchmark() -> (Self, String) {
                 let path = crate::support::Scratch::new("report-witness");
                 fs::create_dir_all(path.join("input")).unwrap();
-                Self(path.resolved(std::fs::canonicalize))
-            }
-            fn benchmark() -> (Self, String) {
-                let study = Self::new();
+                let study = Self(path.resolved(std::fs::canonicalize));
                 let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks/schema-verification-log");
                 fs::copy(source.join("input/dm.csv"), study.0.join("input/dm.csv")).unwrap();
                 let raw = fs::read_to_string(source.join("spec.yaml")).unwrap();
                 (study, raw)
             }
-            fn try_build(
-                &self,
-                raw: &str,
-            ) -> Result<file_application::Domain, file_application::Failure> {
+            fn build(&self, raw: &str) -> file_application::Domain {
                 fs::write(self.0.join("spec.yaml"), raw).unwrap();
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 crate::support::study::domain(
@@ -689,16 +399,15 @@ rows:
                     },
                     crate::support::study::identity("report", &path),
                 )
-            }
-            fn build(&self, raw: &str) -> file_application::Domain {
-                self.try_build(raw).unwrap()
+                .unwrap()
             }
         }
         const HEADER: &str = "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\n";
-        /// The report as CSV text, read back from a save into `report.csv`.
-        fn saved_report(study: &Study, name: &str) -> String {
-            fs::read_to_string(study.0.join(name)).unwrap()
-        }
+        /// Seam: the observation record a save returns, its `artifacts` and
+        /// the whole record against `fixtures/specs/schema-verification-log.json`,
+        /// and repeated saves of one held result after its input and its
+        /// specification are gone, which no case states: the replay saves
+        /// once and compares the files written.
         #[test]
         fn original_report_benchmark_matches_the_unchanged_goldens_without_build_writes() {
             let (study, raw) = Study::benchmark();
@@ -753,39 +462,9 @@ rows:
                 assert_eq!(result.observations(), expected);
             }
         }
-        #[test]
-        fn failed_save_publishes_only_the_report_and_preserves_the_primary() {
-            let (study, raw) = Study::benchmark();
-            let mut result = study.build(&raw.edit("severity: warning", "severity: error"));
-            assert!(result.output().is_none());
-            // The run, its input and base rows, then the two column checks it reached.
-            assert_eq!(result.run_report().rows(), 5);
-            assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition(), "range_failed");
-            for name in ["adsl.csv", "adsl-checks.csv"] {
-                fs::write(study.0.join(name), "sentinel").unwrap();
-            }
-            fs::remove_file(study.0.join("input/dm.csv")).unwrap();
-            fs::remove_file(study.0.join("spec.yaml")).unwrap();
-            for _ in 0..2 {
-                assert!(result.save().is_err());
-                assert_eq!(fs::read(study.0.join("adsl.csv")).unwrap(), b"sentinel");
-                let expected = format!(
-                    "{HEADER}adsl.csv,run,output,,,,,,failed,range_failed,,,,{{}}\n\
-                     adsl.csv,input,input.DM,DM,,,,,,,3,,,\"{{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     adsl.csv,rows,base,DM,,,,,,,3,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,error,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
-                );
-                assert_eq!(saved_report(&study, "adsl-checks.csv"), expected);
-                assert_eq!(
-                    result.observations()["artifacts"].as_array().unwrap().len(),
-                    1
-                );
-                assert_eq!(result.issues().len(), 1);
-            }
-        }
-
+        /// Seam: a save the whole-target preflight refuses returns `Ok(false)`
+        /// and writes nothing, and the same held result saves once the
+        /// missing directory exists; the replay saves a result once.
         #[test]
         fn whole_target_preflight_precedes_the_first_report_write_and_can_retry_held_bytes() {
             let (study, raw) = Study::benchmark();
@@ -807,852 +486,13 @@ rows:
                 result.observations()["artifacts"].as_array().unwrap().len(),
                 2
             );
-            assert!(saved_report(&study, "adsl-checks.csv")
+            assert!(fs::read_to_string(study.0.join("adsl-checks.csv"))
+                .unwrap()
                 .starts_with(&format!("{HEADER}absent/adsl.csv,run,output,")));
         }
-        #[test]
-        fn every_run_reports_and_only_a_declared_report_file_is_written() {
-            let study = Study::new();
-            fs::write(study.0.join("input/input.csv"), "ID\n1\n").unwrap();
-            let raw = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-            let mut undeclared = study.build(raw);
-            assert!(undeclared.issues().is_empty());
-            // A run, an input, a base and a column row; no handler or check.
-            assert_eq!(undeclared.run_report().rows(), 4);
-            assert!(undeclared.save().unwrap());
-            assert_eq!(
-                undeclared.observations()["artifacts"]
-                    .as_array()
-                    .unwrap()
-                    .len(),
-                1
-            );
-            assert!(!study.0.join("report.csv").exists());
-            let mut declared =
-                study.build(&raw.edit("columns: [ID]}", "columns: [ID], report: report.csv}"));
-            assert_eq!(declared.run_report(), undeclared.run_report());
-            fs::write(study.0.join("report.csv"), "stale").unwrap();
-            assert!(declared.save().unwrap());
-            assert_eq!(
-                saved_report(&study, "report.csv"),
-                format!(
-                    "{HEADER}out.csv,run,output,,,,,,succeeded,,1,,,{{}}\n\
-                     out.csv,input,input.SRC,SRC,,,,,,,1,,,\"{{\"\"bytes\"\":5,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     out.csv,rows,base,SRC,,,,,,,1,1,,{{}}\n\
-                     out.csv,column,columns.ID,ID,,,,,,,0,1,,{{}}\n"
-                )
-            );
-        }
-
-        #[test]
-        fn failed_runs_report_the_prefix_they_reached_and_no_columns() {
-            let (study, _) = Study::benchmark();
-            // The benchmark as 1.0 writes it, since the test edits its text
-            // (#3422). FAIL must be projected to stay live under pruning
-            // (LAYER-11); a dead column's division failure would be
-            // discarded with it.
-            let raw = crate::support::benchmarks::converted("schema-verification-log")
-                .edit("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: '1 / 0'\n\nverifications:\n")
-                .edit("columns: [USUBJID, AGE]", "columns: [USUBJID, AGE, FAIL]");
-            let mut result = study.build(&raw);
-            assert!(result.output().is_none());
-            assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition(), "division_by_zero");
-            assert!(result.save().is_err());
-            assert!(!study.0.join("adsl.csv").exists());
-            assert_eq!(
-                saved_report(&study, "adsl-checks.csv"),
-                format!(
-                    "{HEADER}adsl.csv,run,output,,,,,,failed,division_by_zero,,,,{{}}\n\
-                     adsl.csv,input,input.DM,DM,,,,,,,3,,,\"{{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     adsl.csv,rows,base,DM,,,,,,,3,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,warning,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
-                )
-            );
-            assert_eq!(
-                result.observations()["artifacts"].as_array().unwrap().len(),
-                1
-            );
-        }
-
-        #[test]
-        fn unread_inputs_report_missing_counts_and_null_bytes() {
-            let (study, raw) = Study::benchmark();
-            fs::remove_file(study.0.join("input/dm.csv")).unwrap();
-            let mut result = study.build(&raw);
-            assert!(result.output().is_none());
-            assert_eq!(result.issues()[0].condition(), "resource_path_missing");
-            assert!(result.save().is_err());
-            assert_eq!(
-                saved_report(&study, "adsl-checks.csv"),
-                format!(
-                    "{HEADER}adsl.csv,run,output,,,,,,failed,resource_path_missing,,,,{{}}\n\
-                     adsl.csv,input,input.DM,DM,,,,,,,,,,\"{{\"\"bytes\"\":null,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     adsl.csv,rows,base,DM,,,,,,,,,,{{}}\n"
-                )
-            );
-        }
-
-        #[test]
-        fn template_and_handler_rows_count_each_construction_and_answer() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("input/input.csv"),
-                "ID,GRP,KEEP,CODE,NUM\n1,g1,Y,A,10\n2,g1,N,B,x\n3,g2,Y,,7\n4,g2,Y,A,8\n",
-            )
-            .unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID, KIND]
-input: {SRC: input/input.csv}
-output: {path: out.csv, columns: [ID, KIND, LABEL, N], report: report.csv}
-columns:
-  - {name: ID, type: str}
-  - {name: KIND, type: str}
-  - {name: LABEL, type: str}
-  - {name: N, type: int}
-rows:
-  - id: each
-    filter: "SRC.KEEP = 'Y'"
-    derivations:
-      ID: SRC.ID
-      KIND: "'each'"
-      LABEL:
-        mapping:
-          source: SRC.CODE
-          dict: {A: Alpha}
-          unmapped: Other
-      N: {value: SRC.NUM, unconvertible: -1}
-  - id: grouped
-    group_by: [SRC.GRP]
-    derivations: {ID: SRC.GRP, KIND: "'group'", LABEL: "'Group'", N: 0}
-"#,
-            );
-            assert!(result.issues().is_empty());
-            assert!(result.save().unwrap());
-            // Record 2 is derived before the filter discards it, so its
-            // unmapped code and unconvertible number are both answered.
-            assert_eq!(
-                saved_report(&study, "report.csv"),
-                format!(
-                    "{HEADER}out.csv,run,output,,,,,,succeeded,,5,,,{{}}\n\
-                     out.csv,input,input.SRC,SRC,,,,,,,4,,,\"{{\"\"bytes\"\":65,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     out.csv,rows,rows.each,SRC,,,,,,,3,4,,{{}}\n\
-                     out.csv,rows,rows.grouped,SRC,,,,,,,2,4,,{{}}\n\
-                     out.csv,handler,rows.each.derivations.N.unconvertible,unconvertible,,N,VALUE-3,,,,1,,,{{}}\n\
-                     out.csv,handler,rows.each.derivations.LABEL.mapping.missing,missing,,LABEL,,,,,1,,,{{}}\n\
-                     out.csv,handler,rows.each.derivations.LABEL.mapping.unmapped,unmapped,,LABEL,COLUMN-10,,,,1,,,{{}}\n\
-                     out.csv,column,columns.ID,ID,,,,,,,0,5,,\"{{\"\"max_length\"\":2}}\"\n\
-                     out.csv,column,columns.KIND,KIND,,,,,,,0,5,,\"{{\"\"max_length\"\":5}}\"\n\
-                     out.csv,column,columns.LABEL,LABEL,,,,,,,1,5,,\"{{\"\"max_length\"\":5}}\"\n\
-                     out.csv,column,columns.N,N,,,,,,,0,5,,{{}}\n"
-                )
-            );
-        }
-
-        /// S-2 has no subject-level record and S-3 is outside the safety
-        /// population, so the row template's read of SAFETY answers both and
-        /// its read of ADSL through the implicit join answers S-2. Each
-        /// handler row names the column it derives and the row template by
-        /// its id, `rows.event` (P-CLR-2); both answers count under `absent`
-        /// (D202), and each cites LOOKUP-24 (D204).
-        #[test]
-        fn a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule() {
-            let specification = r#"yamaa: "1.0"
-type: spec
-domain: ADAE
-keys: [USUBJID]
-input:
-  AE: input/ae.csv
-  ADSL: {path: input/adsl.csv, key: [USUBJID]}
-intermediates:
-  - {id: SAFETY, dataset: ADSL, key: [USUBJID], filter: "ADSL.SAFFL = 'Y'"}
-output: {path: out.csv, columns: [USUBJID, ARM, TRTSDT], report: report.csv}
-columns:
-  - {name: USUBJID, type: str}
-  - {name: ARM, type: str}
-  - {name: TRTSDT, type: str}
-rows:
-  - id: event
-    dataset: AE
-    derivations:
-      USUBJID: AE.USUBJID
-      ARM: SAFETY.ARM
-      TRTSDT: ADSL.TRTSDT
-"#;
-            let study = Study::new();
-            fs::write(study.0.join("input/ae.csv"), "USUBJID\nS-1\nS-2\nS-3\n").unwrap();
-            fs::write(
-                study.0.join("input/adsl.csv"),
-                "USUBJID,ARM,TRTSDT,SAFFL\nS-1,drug a,2025-01-10,Y\nS-3,drug b,2025-02-01,N\n",
-            )
-            .unwrap();
-            let mut result = study.build(specification);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "USUBJID,ARM,TRTSDT\nS-1,drug a,2025-01-10\nS-2,,\nS-3,,2025-02-01\n"
-            );
-            assert_eq!(
-                saved_report(&study, "report.csv"),
-                format!(
-                    "{HEADER}out.csv,run,output,,,,,,succeeded,,3,,,{{}}\n\
-                     out.csv,input,input.AE,AE,,,,,,,3,,,\"{{\"\"bytes\"\":20,\"\"path\"\":\"\"input/ae.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     out.csv,input,input.ADSL,ADSL,,,,,,,2,,,\"{{\"\"bytes\"\":73,\"\"path\"\":\"\"input/adsl.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     out.csv,rows,rows.event,AE,,,,,,,3,3,,{{}}\n\
-                     out.csv,handler,rows.event.derivations.ARM.source.absent,absent,,ARM,LOOKUP-24,,,,2,,,{{}}\n\
-                     out.csv,handler,rows.event.derivations.TRTSDT.source.absent,absent,,TRTSDT,LOOKUP-24,,,,1,,,{{}}\n\
-                     out.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,\"{{\"\"max_length\"\":3}}\"\n\
-                     out.csv,column,columns.ARM,ARM,,,,,,,2,3,,\"{{\"\"max_length\"\":6}}\"\n\
-                     out.csv,column,columns.TRTSDT,TRTSDT,,,,,,,1,3,,\"{{\"\"max_length\"\":10}}\"\n"
-                )
-            );
-        }
-
-        /// The report's handler rows and the run's handler counts, as
-        /// `(path, count)` pairs in report order.
-        fn handler_rows(study: &Study, result: &file_application::Domain) -> Vec<String> {
-            let rows: Vec<String> = saved_report(study, "report.csv")
-                .lines()
-                .filter(|line| line.starts_with("out.csv,handler,"))
-                .map(String::from)
-                .collect();
-            let counts: Vec<String> = result.observations()["handler_counts"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|entry| {
-                    format!(
-                        "{},{}",
-                        entry["spec_path"].as_str().unwrap(),
-                        entry["count"].as_i64().unwrap()
-                    )
-                })
-                .collect();
-            let reported: Vec<String> = rows
-                .iter()
-                .map(|row| {
-                    let cells: Vec<&str> = row.split(',').collect();
-                    format!("{},{}", cells[2], cells[10])
-                })
-                .collect();
-            assert_eq!(reported, counts, "report rows and engine counts agree");
-            rows
-        }
-
-        #[test]
-        fn handler_rows_register_every_path_at_zero_in_one_order() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("input/src.csv"),
-                "ID,NUM,CODE,ALT\n1,10,A,x\n2,y,,z\n3,30,B,\n",
-            )
-            .unwrap();
-            fs::write(
-                study.0.join("input/lkp.csv"),
-                "ID,SEQ,VAL,KEEP\n1,1,one,Y\n1,2,two,N\n2,1,uno,N\n",
-            )
-            .unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-base: SRC
-keys: [ID]
-input:
-  SRC: {path: input/src.csv, types: {ID: int}}
-  LKP: {path: input/lkp.csv, types: {ID: int, SEQ: int}}
-output: {path: out.csv, columns: [ID, N, LAST, UP, ANY, SELFV, MUSTV, BYC], report: report.csv}
-intermediates:
-  - id: PICK
-    dataset: LKP
-    key: [ID]
-    filter: "LKP.KEEP = 'Y'"
-    order_by: [LKP.SEQ]
-    keep: last
-  - id: SELFREF
-    dataset: SRC
-    key: [ID]
-    filter: "SRC.ID IS NOT NULL"
-  - id: MUST
-    dataset: SRC
-    key: [ID]
-    filter: "SRC.ID IS NOT NULL"
-    require_match: true
-  - id: BYCODE
-    dataset: LKP
-    key:
-      VAL: {mapping: {source: SRC.CODE, dict: {A: one, B: dos}}}
-    absent: null
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: N, type: int, derivation: {value: SRC.NUM, unconvertible: -1}}
-  - {name: LAST, type: str, derivation: PICK.VAL}
-  - {name: UP, type: str, derivation: {str_case: {source: PICK.VAL, to: upper}}}
-  - {name: ANY, type: str, derivation: {first_available: {sources: [PICK.VAL, SRC.ALT]}}}
-  - {name: SELFV, type: str, derivation: SELFREF.CODE}
-  - {name: MUSTV, type: str, derivation: MUST.ALT}
-  - {name: BYC, type: int, derivation: BYCODE.SEQ}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "ID,N,LAST,UP,ANY,SELFV,MUSTV,BYC\n\
-                 1,10,one,ONE,one,A,x,1\n\
-                 2,-1,,,z,,z,\n\
-                 3,30,,,,B,,\n"
-            );
-            // Every path is registered before any row: the conversion
-            // handler first, then each column derivation's paths in
-            // expression order, then the intermediate key expression. A
-            // read of PICK counts `multiple_matches` (its `keep` never chose
-            // among several) and `absent`, declared or not; SELFREF's read
-            // never misses and MUST's read requires a match, so it has none.
-            // A read inside a `first_available` operand registers up front too.
-            assert_eq!(
-                handler_rows(&study, &result),
-                [
-                    "out.csv,handler,columns.N.derivation.unconvertible,unconvertible,,N,VALUE-3,,,,1,,,{}",
-                    "out.csv,handler,columns.LAST.derivation.source.multiple_matches,multiple_matches,,LAST,LOOKUP-10,,,,0,,,{}",
-                    "out.csv,handler,columns.LAST.derivation.source.absent,absent,,LAST,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,columns.UP.derivation.str_case.missing,missing,,UP,,,,,2,,,{}",
-                    "out.csv,handler,columns.UP.derivation.str_case.source.multiple_matches,multiple_matches,,UP,LOOKUP-10,,,,0,,,{}",
-                    "out.csv,handler,columns.UP.derivation.str_case.source.absent,absent,,UP,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,columns.ANY.derivation.first_available.missing,missing,,ANY,,,,,1,,,{}",
-                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].multiple_matches,multiple_matches,,ANY,LOOKUP-10,,,,0,,,{}",
-                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].absent,absent,,ANY,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,columns.SELFV.derivation.source.absent,absent,,SELFV,LOOKUP-24,,,,0,,,{}",
-                    "out.csv,handler,columns.BYC.derivation.source.absent,absent,,BYC,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,intermediates.BYCODE.key.VAL.mapping.missing,missing,,,,,,,1,,,{}",
-                ]
-            );
-        }
-
-        #[test]
-        fn intermediate_derivation_handlers_count_each_build_of_the_donor_records() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("input/src.csv"),
-                "ID,REF,TAG\n1,5,7\n2,,x\n3,1,\n",
-            )
-            .unwrap();
-            fs::write(
-                study.0.join("input/lab.csv"),
-                "ID,SEQ,DAY,FLAG\n1,1,2,H\n1,2,6,\n2,1,4,L\n",
-            )
-            .unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-base: SRC
-keys: [ID]
-input:
-  SRC: {path: input/src.csv, types: {ID: int, REF: int}}
-  LAB: {path: input/lab.csv, types: {ID: int, SEQ: int, DAY: int}}
-output: {path: out.csv, columns: [ID, CAT, NEAR, TAGN], report: report.csv}
-intermediates:
-  - id: CODED
-    dataset: LAB
-    key: [ID]
-    derivations:
-      GRADE: {mapping: {source: FLAG, dict: {H: high, L: low}}}
-      FLAGN: {type: int, derivation: FLAG, unconvertible: null}
-    order_by: [LAB.SEQ]
-    keep: first
-  - id: NEAREST
-    dataset: LAB
-    key: [ID]
-    derivations:
-      DIST: "ABS(DAY - SRC.REF)"
-      G2: CODED.GRADE
-    filter: "LAB.DIST IS NOT NULL"
-    order_by: [LAB.DIST]
-    keep: first
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: CAT, type: str, derivation: CODED.GRADE}
-  - {name: NEAR, type: int, derivation: NEAREST.SEQ}
-  - {name: TAGN, type: int, derivation: {value: SRC.TAG, unconvertible: -1}}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "ID,CAT,NEAR,TAGN\n1,high,2,7\n2,low,,-1\n3,,,\n"
-            );
-            // The dataset's own paths come first, its `unconvertible` before
-            // its derivations; then each intermediate in turn, its
-            // `unconvertible` first. Every build of the donor records counts.
-            // CODED is built once for CAT. NEAREST's DIST reads the current
-            // record, so NEAREST is built for each of the three rows and
-            // augments only the LAB records whose ID matches the row's
-            // (LOOKUP-15): subject 1's two records, subject 2's one, and none
-            // for subject 3. The first two builds read CODED for their
-            // records, building CODED again: three builds of CODED. FLAGN
-            // converts neither `H` nor `L` (LAB records 1 and 3), so it
-            // answers twice per build; GRADE answers record 2, which has no
-            // FLAG, once per build; and G2 chooses between subject 1's two
-            // CODED records once for each of subject 1's two LAB records.
-            assert_eq!(
-                handler_rows(&study, &result),
-                [
-                    "out.csv,handler,columns.TAGN.derivation.unconvertible,unconvertible,,TAGN,VALUE-3,,,,1,,,{}",
-                    "out.csv,handler,columns.CAT.derivation.source.multiple_matches,multiple_matches,,CAT,LOOKUP-10,,,,1,,,{}",
-                    "out.csv,handler,columns.CAT.derivation.source.absent,absent,,CAT,LOOKUP-24,,,,1,,,{}",
-                    "out.csv,handler,columns.NEAR.derivation.source.multiple_matches,multiple_matches,,NEAR,LOOKUP-10,,,,1,,,{}",
-                    "out.csv,handler,columns.NEAR.derivation.source.absent,absent,,NEAR,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,intermediates.CODED.derivations.FLAGN.unconvertible,unconvertible,,,VALUE-3,,,,6,,,{}",
-                    "out.csv,handler,intermediates.CODED.derivations.GRADE.mapping.missing,missing,,,,,,,3,,,{}",
-                    "out.csv,handler,intermediates.NEAREST.derivations.G2.source.multiple_matches,multiple_matches,,,LOOKUP-10,,,,2,,,{}",
-                    "out.csv,handler,intermediates.NEAREST.derivations.G2.source.absent,absent,,,LOOKUP-24,,,,0,,,{}",
-                ]
-            );
-        }
-
-        #[test]
-        fn a_read_that_feeds_another_lookup_or_a_predicate_counts_nothing() {
-            let value = "  - {name: V, type: str, derivation: P.VAL}\n";
-            let flag = "  - {name: F, type: str, derivation: {flag: {condition: \"P.VAL IS NOT NULL\", false_value: N, missing: N}}}\n";
-            let v_row =
-                "out.csv,handler,columns.V.derivation.source.absent,absent,,V,LOOKUP-24,,,,2,,,{}";
-            let f_row = "out.csv,handler,columns.F.derivation.flag.missing,missing,,F,,,,,0,,,{}";
-            // Either column may read P first: the flag before the value, or
-            // the value before the flag.
-            for (first, second, rows) in
-                [(value, flag, [v_row, f_row]), (flag, value, [f_row, v_row])]
-            {
-                let study = Study::new();
-                fs::write(study.0.join("input/src.csv"), "ID\n1\n2\n3\n").unwrap();
-                fs::write(study.0.join("input/base.csv"), "ID,REF\n1,5\n3,20\n").unwrap();
-                fs::write(
-                    study.0.join("input/rng.csv"),
-                    "ID,LO,HI,VAL\n1,1,10,a\n3,1,10,c\n",
-                )
-                .unwrap();
-                let mut result = study.build(&format!(
-                    "yamaa: \"1.0\"\n\
-                     type: spec\n\
-                     domain: TEST\n\
-                     base: SRC\n\
-                     keys: [ID]\n\
-                     input:\n\
-                     \x20 SRC: {{path: input/src.csv, types: {{ID: int}}}}\n\
-                     \x20 BASE: {{path: input/base.csv, types: {{ID: int, REF: int}}}}\n\
-                     \x20 RNG: {{path: input/rng.csv, types: {{ID: int, LO: int, HI: int}}}}\n\
-                     output: {{path: out.csv, columns: [ID, V, F], report: report.csv}}\n\
-                     intermediates:\n\
-                     \x20 - id: Q\n\
-                     \x20   dataset: BASE\n\
-                     \x20   key: [ID]\n\
-                     \x20   filter: \"BASE.REF IS NOT NULL\"\n\
-                     \x20 - id: P\n\
-                     \x20   dataset: RNG\n\
-                     \x20   key: [ID]\n\
-                     \x20   between: {{value: Q.REF, lower: LO, upper: HI}}\n\
-                     columns:\n\
-                     \x20 - {{name: ID, type: int, derivation: SRC.ID}}\n\
-                     {first}{second}"
-                ));
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                    "ID,V,F\n1,a,Y\n2,,N\n3,,N\n"
-                );
-                // Q supplies P's `between` value, so its miss for subject 2
-                // is answered uncounted, as in a predicate. P counts its own
-                // answer for subject 2, whose range value is missing, and for
-                // subject 3, whose 20 is out of range. The flag reads P in its
-                // condition and counts nothing, at any path.
-                assert_eq!(handler_rows(&study, &result), rows);
-            }
-        }
-
-        #[test]
-        fn a_grouped_row_count_names_every_offending_count_even_for_one_group() {
-            let study = Study::new();
-            fs::write(study.0.join("input/input.csv"), "ID,ARM\n1,A\n2,A\n3,B\n").unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: input/input.csv, types: {ID: int}}}
-output: {path: out.csv, columns: [ID, ARM], report: report.csv}
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: ARM, type: str, derivation: SRC.ARM}
-verifications:
-  - row_count: {group_by: [ARM], max: 1, severity: warning}
-  - row_count: {max: 2, severity: warning}
-  - row_count: {filter: "ARM = 'A'", max_fraction: 0.5, severity: warning}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            let report = saved_report(&study, "report.csv");
-            // Arm A's two rows exceed the per-arm maximum while arm B holds:
-            // one offending group, still reported as a sequence of counts.
-            assert!(
-                report.contains(
-                    "out.csv,check,verifications[0].row_count,row_count,,,CHECK-13,warning,violated,row_count_failed,1,2,\"[{\"\"ARM\"\":\"\"A\"\"}]\",\"{\"\"counts\"\":[2]}\"\n"
-                ),
-                "{report}"
-            );
-            // An ungrouped check names its one count; only a fraction bound
-            // adds the denominator.
-            assert!(
-                report.contains(
-                    "out.csv,check,verifications[1].row_count,row_count,,,CHECK-13,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":3}\"\n"
-                ),
-                "{report}"
-            );
-            assert!(
-                report.contains(
-                    "out.csv,check,verifications[2].row_count,row_count,,,CHECK-13,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":2,\"\"denominator\"\":3}\"\n"
-                ),
-                "{report}"
-            );
-        }
-
-        #[test]
-        fn temporal_handlers_cite_the_condition_they_answer() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("input/input.csv"),
-                "ID,DTC,DTM,DUR\n1,2025-03,2025-03-05T10:20,P1D\n2,,bad,bad\n3,bad,,P2D\n",
-            )
-            .unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: input/input.csv, types: {ID: int}}}
-output: {path: out.csv, columns: [ID, START, STAMP, SPAN, PR], report: report.csv}
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - name: START
-    type: date
-    derivation: {impute: {type: date, source: SRC.DTC, day: first, invalid: null}}
-  - name: STAMP
-    type: datetime
-    derivation: {impute: {type: datetime, source: SRC.DTM, time: first, invalid: null}}
-  - name: SPAN
-    type: float
-    derivation: {duration_value: {source: SRC.DUR, unit: day, invalid: null}}
-  - name: PR
-    type: str
-    derivation: {precision: {type: datetime, source: SRC.DTM, invalid: null}}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            // A missing source raises no condition, so its handler cites no
-            // rule; text no reader accepts cites the rule its operation
-            // raises without the handler: record 2's text for STAMP, SPAN
-            // and PR, and record 3's text for START.
-            assert_eq!(
-                saved_report(&study, "report.csv"),
-                format!(
-                    "{HEADER}out.csv,run,output,,,,,,succeeded,,3,,,{{}}\n\
-                     out.csv,input,input.SRC,SRC,,,,,,,3,,,\"{{\"\"bytes\"\":68,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     out.csv,rows,base,SRC,,,,,,,3,3,,{{}}\n\
-                     out.csv,handler,columns.START.derivation.impute.missing,missing,,START,,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.START.derivation.impute.invalid,invalid,,START,TIME-13,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.STAMP.derivation.impute.missing,missing,,STAMP,,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.STAMP.derivation.impute.invalid,invalid,,STAMP,TIME-13,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.SPAN.derivation.duration_value.invalid,invalid,,SPAN,TIME-17,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.PR.derivation.precision.missing,missing,,PR,,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.PR.derivation.precision.invalid,invalid,,PR,TIME-13,,,,1,,,{{}}\n\
-                     out.csv,column,columns.ID,ID,,,,,,,0,3,,{{}}\n\
-                     out.csv,column,columns.START,START,,,,,,,2,3,,{{}}\n\
-                     out.csv,column,columns.STAMP,STAMP,,,,,,,2,3,,{{}}\n\
-                     out.csv,column,columns.SPAN,SPAN,,,,,,,1,3,,{{}}\n\
-                     out.csv,column,columns.PR,PR,,,,,,,2,3,,\"{{\"\"max_length\"\":6}}\"\n"
-                )
-            );
-        }
-
-        /// The report's check rows, in report order.
-        fn check_rows(study: &Study) -> Vec<String> {
-            saved_report(study, "report.csv")
-                .lines()
-                .filter(|line| line.starts_with("out.csv,check,"))
-                .map(String::from)
-                .collect()
-        }
-
-        /// An intermediate's `warning` checks are the first check rows: those
-        /// of intermediates over an input, then those over `SELF`, each in
-        /// declaration order, though A's derivation reads B, so B is derived
-        /// first. A `SELF` check's one row holds its evaluation after the
-        /// last template: P's IDs are unique after `first` and repeat from
-        /// `second` on. An `error` check, A's on ID, has no row (LOOKUP-17,
-        /// CHECK-23, CHECK-24, D211).
-        #[test]
-        fn intermediate_warning_checks_lead_the_check_rows_in_declaration_order() {
-            let study = Study::new();
-            fs::write(study.0.join("input/src.csv"), "ID,VAL\n1,10\n2,10\n").unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: OUT
-keys: [ID, STAGE]
-base: SRC
-input: {SRC: {path: input/src.csv, types: {ID: int, VAL: int}}}
-output: {path: out.csv, columns: [ID, STAGE, VALUE], report: report.csv}
-intermediates:
-  - id: P
-    dataset: SELF
-    key: [ID]
-    derivations:
-      TWICE: 'SELF.VALUE * 2'
-      PLUS: 'TWICE + 1'
-    order_by: [SELF.STAGE]
-    keep: last
-    verifications:
-      - unique: {columns: [ID], severity: warning}
-  - id: A
-    dataset: SRC
-    key: [ID]
-    derivations: {NEXT: B.VAL}
-    order_by: [SRC.VAL]
-    keep: first
-    verifications:
-      - unique: {columns: [NEXT], severity: warning}
-      - unique: [ID]
-  - id: B
-    dataset: SRC
-    key: [ID]
-    order_by: [SRC.VAL]
-    keep: first
-    verifications:
-      - unique: {columns: [VAL], severity: warning}
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: STAGE, type: int}
-  - {name: VALUE, type: int, verifications: [not_missing]}
-rows:
-  - id: first
-    derivations: {STAGE: 1, VALUE: SRC.VAL}
-  - id: second
-    derivations: {STAGE: 2, VALUE: P.PLUS}
-  - id: third
-    derivations: {STAGE: 3, VALUE: P.PLUS}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "ID,STAGE,VALUE\n1,1,10\n2,1,10\n1,2,21\n2,2,21\n1,3,43\n2,3,43\n"
-            );
-            assert_eq!(
-                check_rows(&study),
-                [
-                    "out.csv,check,intermediates.A.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,1,1,\"[{\"\"NEXT\"\":10}]\",\"{\"\"columns\"\":[\"\"NEXT\"\"],\"\"dataset\"\":\"\"SRC\"\",\"\"intermediate\"\":\"\"A\"\"}\"",
-                    "out.csv,check,intermediates.B.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,1,1,\"[{\"\"VAL\"\":10}]\",\"{\"\"columns\"\":[\"\"VAL\"\"],\"\"dataset\"\":\"\"SRC\"\",\"\"intermediate\"\":\"\"B\"\"}\"",
-                    "out.csv,check,intermediates.P.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,2,2,\"[{\"\"ID\"\":1},{\"\"ID\"\":2}]\",\"{\"\"columns\"\":[\"\"ID\"\"],\"\"dataset\"\":\"\"SELF\"\",\"\"intermediate\"\":\"\"P\"\"}\"",
-                    "out.csv,check,columns.VALUE.verifications[0].not_missing,not_missing,,VALUE,CHECK-5,error,held,,0,6,,{}",
-                ]
-            );
-        }
-
-        /// A `unique` beside a nearest selection may warn, as one beside
-        /// `keep` and `order_by` may (LOOKUP-17, LOOKUP-26): ID 1's two
-        /// visits repeat it, so the check is violated, one repeated ID of
-        /// the two, and its row follows D211; every read still takes the
-        /// visit nearest the reference day, 2 days after it rather than 9
-        /// before it.
-        #[test]
-        fn a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("input/ref.csv"),
-                "ID,REFDT\n1,2025-01-10\n2,2025-01-10\n",
-            )
-            .unwrap();
-            fs::write(
-                study.0.join("input/visits.csv"),
-                "ID,VDT,VAL\n1,2025-01-01,a\n1,2025-01-12,b\n2,2025-01-09,c\n",
-            )
-            .unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: OUT
-keys: [ID]
-base: REF
-input:
-  REF: {path: input/ref.csv, types: {ID: int, REFDT: date}}
-  VIS: {path: input/visits.csv, types: {ID: int, VDT: date}}
-output: {path: out.csv, columns: [ID, VAL], report: report.csv}
-intermediates:
-  - id: NEAR
-    dataset: VIS
-    key: [ID]
-    nearest: {source: VDT, to: REF.REFDT, unit: day}
-    verifications:
-      - unique: {columns: [ID], severity: warning}
-columns:
-  - {name: ID, type: int, derivation: REF.ID}
-  - {name: VAL, type: str, derivation: NEAR.VAL}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "ID,VAL\n1,b\n2,c\n"
-            );
-            assert_eq!(
-                check_rows(&study),
-                ["out.csv,check,intermediates.NEAR.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,1,2,\"[{\"\"ID\"\":1}]\",\"{\"\"columns\"\":[\"\"ID\"\"],\"\"dataset\"\":\"\"VIS\"\",\"\"intermediate\"\":\"\"NEAR\"\"}\""]
-            );
-        }
-
-        /// A `not_missing` whose `when` reads a later column checks the rows
-        /// that column's completed values select: the `read` template leaves
-        /// LATER to its column derivation, which completes after V's, and
-        /// rows 1 and 2, both selected, lack V. The check rows keep column
-        /// declaration order (CHECK-1, CHECK-5).
-        #[test]
-        fn a_not_missing_when_waits_for_the_later_column_it_reads() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("input/src.csv"),
-                "ID,KIND,V,FLAG\n1,fixed,,N\n2,read,,Y\n3,read,,N\n4,read,x,Y\n",
-            )
-            .unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: OUT
-keys: [ID, KIND]
-input: {SRC: input/src.csv}
-output: {path: out.csv, columns: [ID, KIND, V, LATER], report: report.csv}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - {name: KIND, type: str}
-  - name: V
-    type: str
-    derivation: SRC.V
-    verifications:
-      - not_missing: {when: "LATER = 'Y'", severity: warning}
-  - name: LATER
-    type: str
-    derivation: SRC.FLAG
-    verifications: [not_missing]
-rows:
-  - id: fixed
-    filter: "SRC.KIND = 'fixed'"
-    derivations: {KIND: "'fixed'", LATER: "'Y'"}
-  - id: read
-    filter: "SRC.KIND = 'read'"
-    derivations: {KIND: "'read'"}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "ID,KIND,V,LATER\n1,fixed,,Y\n2,read,,Y\n3,read,,N\n4,read,x,Y\n"
-            );
-            assert_eq!(
-                check_rows(&study),
-                [
-                    "out.csv,check,columns.V.verifications[0].not_missing,not_missing,,V,CHECK-5,warning,violated,not_missing_failed,2,4,\"[{\"\"ID\"\":\"\"1\"\",\"\"KIND\"\":\"\"fixed\"\"},{\"\"ID\"\":\"\"2\"\",\"\"KIND\"\":\"\"read\"\"}]\",\"{\"\"column\"\":\"\"V\"\"}\"",
-                    "out.csv,check,columns.LATER.verifications[0].not_missing,not_missing,,LATER,CHECK-5,error,held,,0,4,,{}",
-                ]
-            );
-        }
-
-        /// A column that only a `not_missing`'s `when` reads stays live, as
-        /// one a dataset check's predicate reads does: FLAGGED is no output
-        /// column, and nothing else reads it (LAYER-11, CHECK-5).
-        #[test]
-        fn a_column_only_a_when_reads_stays_live() {
-            let study = Study::new();
-            fs::write(study.0.join("input/src.csv"), "ID,V,FLAG\n1,,Y\n2,,N\n").unwrap();
-            let mut result = study.build(
-                r#"yamaa: "1.0"
-type: spec
-domain: OUT
-keys: [ID]
-input: {SRC: input/src.csv}
-output: {path: out.csv, columns: [ID, V], report: report.csv}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - name: V
-    type: str
-    derivation: SRC.V
-    verifications:
-      - not_missing: {when: "FLAGGED = 'Y'", severity: warning}
-  - {name: FLAGGED, type: str, derivation: SRC.FLAG}
-"#,
-            );
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                check_rows(&study),
-                ["out.csv,check,columns.V.verifications[0].not_missing,not_missing,,V,CHECK-5,warning,violated,not_missing_failed,1,2,\"[{\"\"ID\"\":\"\"1\"\"}]\",\"{\"\"column\"\":\"\"V\"\"}\""]
-            );
-        }
-
-        /// A `warning` on an intermediate's `unique` needs `output.report`,
-        /// as every warning does, and the finding names its path (CHECK-22,
-        /// LOOKUP-17).
-        #[test]
-        fn an_intermediate_warning_needs_a_report_file() {
-            let study = Study::new();
-            let issues = study
-                .try_build(
-                    r#"yamaa: "1.0"
-type: spec
-domain: OUT
-keys: [ID]
-input: {SRC: input/src.csv, EX: input/ex.csv}
-base: SRC
-output: {path: out.csv, columns: [ID, LAST]}
-intermediates:
-  - id: LASTEX
-    dataset: EX
-    key: [ID]
-    order_by: [EX.SEQ]
-    keep: last
-    verifications:
-      - unique: {columns: [ID], severity: warning}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - {name: LAST, type: str, derivation: LASTEX.SEQ}
-"#,
-                )
-                .err()
-                .expect("a warning without a report file is refused");
-            assert_eq!(
-                issues
-                    .iter()
-                    .map(crate::support::study::issue_row)
-                    .collect::<Vec<_>>(),
-                [yamaa_adapters::json!({
-                    "phase": "validation",
-                    "condition": "missing_report",
-                    "rule": "CHECK-22",
-                    "spec_paths": ["output.report"],
-                    "context": {"warnings": ["intermediates.LASTEX.verifications[0].unique"]}
-                })]
-            );
-        }
-
+        /// Seam: a Parquet report's bytes, its integer column types and the
+        /// governed records its observation holds, which a case's `saved`
+        /// text cannot state.
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_reports_preserve_governed_logical_rows_and_integer_columns() {

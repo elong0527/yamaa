@@ -1,0 +1,215 @@
+{
+  "about": "Scalar operations, moved from the scalar_language module of scalar_language.rs at a47519f5d, whose tests saved output.csv and compared its bytes, or compared what a check and a refused build report. greatest and least skip missing operands, keep integers beyond 2^53 exact and keep dates as dates; a row template's str_template and greatest derive as a column derivation does; a Boolean literal in a row derivation converts to no column type, so it fails validation before any record is read (VALUE-24) and every save of that result fails, publishing nothing; an invalid regular expression in a str_extract over a CSV text column, or a group beyond its pattern's, is reported by the check and the refused build alike before the source is captured (TEXT-6, TEXT-10), whether or not the column is typed str; and a str_extract over a non-text source fails first as incompatible_input_type (TEXT-1). Each specification is its test's spec(derivation, type) template: the scalar document, with its RESULT column edited. The tests ran in a copy of adam-adae-text-cleanup whose spec.yaml and input.csv they replaced; their specifications read input.csv alone, so a case stages those two files, and no input.csv where its test removed it. A partial issue check keeps its compares. No engine output supplied these values.",
+  "documents": {
+    "scalar": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float, D: date}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}}\n",
+    "row_literal": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: false\n"
+  },
+  "cases": [
+    {
+      "case": "extremes_skip_missing_and_keep_wide_integers_and_temporal_values_greatest_of_wide_integers",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar"}, "input.csv": "ID,I,F,D\na,9007199254740993,9007199254740992,2025-01-01\nb,,,2025-01-01\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "output.csv": "ID,RESULT\na,9007199254740993\nb,\n"
+      }
+    },
+    {
+      "case": "extremes_skip_missing_and_keep_wide_integers_and_temporal_values_least_of_wide_integers",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {least: {sources: [SRC.I, SRC.F]}}"}]}, "input.csv": "ID,I,F,D\na,-9007199254740993,-9007199254740992,2025-01-01\nb,,,2025-01-01\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "output.csv": "ID,RESULT\na,-9007199254740993\nb,\n"
+      }
+    },
+    {
+      "case": "extremes_skip_missing_and_keep_wide_integers_and_temporal_values_greatest_of_dates",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: date, derivation: {greatest: {sources: [SRC.D, SRC.D]}}"}]}, "input.csv": "ID,I,F,D\na,1,1,2025-01-01\nb,1,1,2025-01-02\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "output.csv": "ID,RESULT\na,2025-01-01\nb,2025-01-02\n"
+      }
+    },
+    {
+      "case": "row_scalar_derivations_share_the_same_raw_contract",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_template: '[{SRC.TEXT}]'}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n", "input.csv": "ID,I,F,TEXT\na,3,2,abc\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "output.csv": "ID,RESULT,MAXIMUM\na,[abc],3\n"
+      }
+    },
+    {
+      "case": "row_boolean_is_refused_at_validation_and_refuses_every_save_false",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "row_literal"}, "input.csv": "ID,TEXT\na,abc\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "conversion_failed", "rule": "VALUE-24", "spec_paths": ["columns.RESULT"], "context": {"from": "bool", "to": "str"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "row_boolean_is_refused_at_validation_and_refuses_every_save_true",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "row_literal", "edits": [{"from": "RESULT: false", "to": "RESULT: true"}]}, "input.csv": "ID,TEXT\na,abc\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "conversion_failed", "rule": "VALUE-24", "spec_paths": ["columns.RESULT"], "context": {"from": "bool", "to": "str"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_an_unbalanced_group",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_an_unbalanced_group_of_a_typed_text_column",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}"}, {"from": "I: int, F: float, D: date", "to": "I: int, F: float, D: date, TEXT: str"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_a_reversed_range",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: '[z-a]'}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_a_reversed_range_of_a_typed_text_column",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: '[z-a]'}}"}, {"from": "I: int, F: float, D: date", "to": "I: int, F: float, D: date, TEXT: str"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_an_empty_class",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: '[]a(]'}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_an_empty_class_of_a_typed_text_column",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: '[]a(]'}}"}, {"from": "I: int, F: float, D: date", "to": "I: int, F: float, D: date, TEXT: str"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_a_group_beyond_the_pattern",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: '(a)', group: 2}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "regex_group_out_of_range", "rule": "TEXT-10", "spec_paths": ["columns.RESULT.derivation.str_extract.group"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_a_group_beyond_the_pattern_of_a_typed_text_column",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.TEXT, pattern: '(a)', group: 2}}"}, {"from": "I: int, F: float, D: date", "to": "I: int, F: float, D: date, TEXT: str"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "regex_group_out_of_range", "rule": "TEXT-10", "spec_paths": ["columns.RESULT.derivation.str_extract.group"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_a_case_result_s_pattern",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: \"'x'\"}]}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.case[0].then.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "csv_text_regex_declarations_are_reported_without_source_capture_for_a_case_result_s_pattern_of_a_typed_text_column",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: \"'x'\"}]}"}, {"from": "I: int, F: float, D: date", "to": "I: int, F: float, D: date, TEXT: str"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.RESULT.derivation.case[0].then.str_extract.pattern"]}
+      ]
+    },
+    {
+      "case": "nontext_csv_source_type_precedes_regex_declaration_findings",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {str_extract: {source: SRC.I, pattern: 'a)|(b'}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [
+        {"condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.RESULT.derivation.str_extract.source"]}
+      ]
+    }
+  ]
+}

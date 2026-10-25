@@ -1354,9 +1354,7 @@ dependencies = [
 name = "yamaa-boundary"
 version = "1.0.0-rc.1"
 dependencies = [
- "libc",
  "serde_json",
- "windows-sys",
 ]
 
 [[package]]
@@ -1381,36 +1379,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "yamaa-engine"
-version = "1.0.0-rc.1"
-dependencies = [
- "arrow-array",
- "serde_json",
- "yamaa",
- "yamaa-boundary",
-]
-
-[[package]]
 name = "yamaa-python"
 version = "1.0.0-rc.1"
 dependencies = [
- "arrow-array",
- "arrow-schema",
  "pyo3",
  "pyo3-build-config",
+ "yamaa",
  "yamaa-boundary",
- "yamaa-engine",
 ]
 
 [[package]]
 name = "yamaa-r"
 version = "1.0.0-rc.1"
 dependencies = [
- "arrow-array",
- "arrow-schema",
  "extendr-api",
+ "yamaa",
  "yamaa-boundary",
- "yamaa-engine",
 ]
 
 [[package]]

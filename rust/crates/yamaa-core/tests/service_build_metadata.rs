@@ -1,5 +1,7 @@
 //! Service contracts: build ports, Define-XML service, domain entry and
-//! specification ODM.
+//! specification ODM. The Define service's resource and publication refusals
+//! are cases of `fixtures/diagnostics/submission.json`; each test here proves
+//! a seam the replay cannot reach, which its first comment names (#3798).
 mod service {
     mod build_ports {
         //! End-to-end shared request effects with the production metadata, activation
@@ -301,6 +303,8 @@ mod service {
                 environment: Some("project.yaml"),
             }
         }
+        /// Seam: scripted build ports and the event log of what each was asked, which
+        /// no reader scripts.
         #[test]
         fn complete_request_failures_execute_nothing_and_admission_precedes_study_capture() {
             for scenario in [
@@ -338,6 +342,8 @@ mod service {
                 }
             }
         }
+        /// Seam: scripted build ports and the event log of what each was asked, which
+        /// no reader scripts.
         #[test]
         fn check_has_no_runtime_effects_and_a_successful_build_executes_its_rows() {
             let mut ports = Application::new(Scenario::Success);
@@ -360,6 +366,8 @@ mod service {
         use yamaa_core::define;
         use yamaa_core::diagnostic::ConditionCode;
 
+        /// Seam: the clock callback and how many times it is read.
+        ///
         /// Without `created`, the clock is read once, and its reading is one
         /// whole-second civil time or a refusal (DEFINE-3).
         #[test]
@@ -405,6 +413,8 @@ mod service {
             }
         }
 
+        /// Seam: a clock callback that must not be read.
+        ///
         /// An explicit creation time is admitted, or refused, without reading
         /// the clock.
         #[test]
@@ -426,6 +436,8 @@ mod service {
             );
         }
 
+        /// Seam: the `utc_time` kernel's value for each clock reading.
+        ///
         /// The time a composition records for one clock reading, which a
         /// submission takes once for all its sections (D129).
         #[test]
@@ -438,200 +450,6 @@ mod service {
                 (u64::MAX, None),
             ] {
                 assert_eq!(define::utc_time(seconds).as_deref(), expected, "{seconds}");
-            }
-        }
-
-        #[test]
-        fn resource_observations_keep_original_normative_and_implementation_wire_owners() {
-            use define::ResourceObservation as R;
-            use yamaa_core::json::Value as C;
-
-            for (path, observation, code, rule) in [
-                (
-                    "datasets.DM.artifact",
-                    R::Missing,
-                    ConditionCode::ProducerContractMismatch,
-                    "INPUT-11",
-                ),
-                (
-                    "sdtm.define",
-                    R::Missing,
-                    ConditionCode::ResourceMissing,
-                    "FILE-7",
-                ),
-                (
-                    "datasets.DM.artifact",
-                    R::NotRegularFile,
-                    ConditionCode::ResourceNotRegularFile,
-                    "FILE-7",
-                ),
-            ] {
-                let finding = define::resource_diagnostic(path, "declared.csv", observation);
-                assert_eq!(finding.code, code);
-                assert_eq!(finding.definition().phase, "validation");
-                assert_eq!(finding.definition().rule, Some(rule));
-                assert_eq!(finding.spec_paths, [path]);
-                // A missing published artifact also names its dataset.
-                let mut expected: yamaa_core::diagnostic::Context =
-                    [("path".into(), C::String("declared.csv".into()))].into();
-                if code == ConditionCode::ProducerContractMismatch {
-                    expected.insert("dataset".into(), C::String("DM".into()));
-                }
-                assert_eq!(finding.context, expected);
-                assert_eq!(finding.source_span, None);
-                assert_eq!(finding.operand_route, None);
-            }
-            for (observation, expected) in [
-                (R::Unreadable, "resource_unreadable"),
-                (R::InvalidRoot, "resource_root"),
-                (R::InvalidBase, "resource_base"),
-                (R::InvalidPath, "resource_path"),
-                (R::OutsideRoots, "resource_outside_roots"),
-                (R::Symlink, "resource_link"),
-            ] {
-                let finding =
-                    define::resource_diagnostic("sdtm.specs[0]", "declared.yaml", observation);
-                assert_eq!(finding.code, ConditionCode::ApplicationRejected);
-                assert_eq!(finding.definition().phase, "engine");
-                assert_eq!(finding.definition().rule, None);
-                assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
-                assert_eq!(
-                    finding.context,
-                    [
-                        ("path".into(), C::String("declared.yaml".into())),
-                        ("step".into(), C::String("define".into())),
-                        ("code".into(), C::String(expected.into())),
-                    ]
-                    .into()
-                );
-            }
-        }
-        #[test]
-        fn changed_resource_uses_the_authored_define_field_and_ingest_cause() {
-            use yamaa_core::diagnostic::ConditionCode;
-            use yamaa_core::json::Value as C;
-            let finding = define::resource_diagnostic(
-                "datasets.DM.artifact",
-                "../declared.csv",
-                define::ResourceObservation::Changed,
-            );
-            assert_eq!(finding.code, ConditionCode::ResourceContentChanged);
-            assert_eq!(finding.definition().phase, "ingest");
-            assert_eq!(
-                finding.definition().condition,
-                "resource_path_content_changed"
-            );
-            assert_eq!(finding.definition().rule, Some("FILE-10"));
-            assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
-            assert_eq!(
-                finding.context,
-                [("path".into(), C::String("../declared.csv".into()))].into()
-            );
-        }
-        #[test]
-        fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_text() {
-            use define::PublicationFailure as P;
-            use yamaa_core::application_issue::Fault;
-            use yamaa_core::json::Value as C;
-
-            for (stage, code, phase, rule) in [
-                (
-                    P::TargetAdmission(Fault::InvalidTarget),
-                    ConditionCode::ApplicationRejected,
-                    "engine",
-                    None,
-                ),
-                (
-                    P::TargetAdmission(Fault::TargetChanged),
-                    ConditionCode::ApplicationRejected,
-                    "engine",
-                    None,
-                ),
-                (
-                    P::TargetAdmission(Fault::PublicationFailed),
-                    ConditionCode::ApplicationRejected,
-                    "engine",
-                    None,
-                ),
-                (
-                    P::Publication,
-                    ConditionCode::OutputPublicationFailed,
-                    "output",
-                    Some("OUTPUT-8"),
-                ),
-            ] {
-                let finding = define::publication_diagnostic(
-                    usize::MAX,
-                    "dm.json",
-                    stage,
-                    "opaque original cause".into(),
-                );
-                assert_eq!(finding.code, code);
-                assert_eq!(finding.definition().phase, phase);
-                assert_eq!(finding.definition().rule, rule);
-                assert_eq!(finding.spec_paths, ["define"]);
-                let mut expected: yamaa_core::diagnostic::Context = [
-                    ("artifact".into(), C::from(usize::MAX)),
-                    ("cause".into(), C::String("opaque original cause".into())),
-                ]
-                .into();
-                if let P::TargetAdmission(fault) = stage {
-                    expected.insert("code".into(), C::String(fault.as_str().into()));
-                    expected.insert(
-                        "step".into(),
-                        C::String("publication_target_admission".into()),
-                    );
-                } else {
-                    // A failed publication names the file as written.
-                    expected.insert("path".into(), C::String("dm.json".into()));
-                }
-                assert_eq!(finding.context, expected);
-                assert_eq!(finding.source_span, None);
-                assert_eq!(finding.operand_route, None);
-            }
-        }
-
-        #[test]
-        fn fixed_physical_refusals_keep_the_exact_size_and_authored_define_field() {
-            for (resource, limit) in [
-                ("spec_bytes", 8_388_608usize),
-                ("source_bytes", 10_737_418_240usize),
-            ] {
-                let finding = define::resource_diagnostic(
-                    "sdtm.specs[0]",
-                    "declared.yaml",
-                    define::ResourceObservation::Limit(yamaa_core::limits::LimitExceeded {
-                        resource,
-                        limit,
-                        actual: Some(limit + 1),
-                    }),
-                );
-                assert_eq!(finding.code, ConditionCode::ApplicationRejected);
-                assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
-                assert_eq!(
-                    finding.context,
-                    yamaa_core::json::Value::Object(
-                        [
-                            (
-                                "path".into(),
-                                yamaa_core::json::Value::from("declared.yaml")
-                            ),
-                            ("step".into(), yamaa_core::json::Value::from("define")),
-                            (
-                                "code".into(),
-                                yamaa_core::json::Value::from("resource_limit")
-                            ),
-                            ("resource".into(), yamaa_core::json::Value::from(resource)),
-                            ("limit".into(), yamaa_core::json::Value::from(limit)),
-                            ("actual".into(), yamaa_core::json::Value::from(limit + 1)),
-                        ]
-                        .into_iter()
-                        .collect(),
-                    )
-                    .as_object()
-                    .unwrap()
-                    .clone()
-                );
             }
         }
     }
@@ -720,6 +538,7 @@ mod service {
             }
         }
 
+        /// Seam: the route-stage observer and the order of what it is told.
         #[test]
         fn observed_request_brackets_actual_metadata_before_every_route_and_keeps_original_failure()
         {
@@ -808,6 +627,7 @@ mod service {
                 }
             }
         }
+        /// Seam: scripted ports and the route each entry point takes through them.
         #[test]
         fn both_entry_points_take_one_route_with_or_without_an_environment() {
             for environment in [false, true] {
@@ -836,6 +656,8 @@ mod service {
                 assert_eq!(port.events, expected);
             }
         }
+        /// Seam: port doubles' original failure payloads and the later steps each
+        /// failure stops.
         #[test]
         fn every_failure_retains_its_original_payload_and_stops_later_authority() {
             for stage in [
@@ -1061,6 +883,8 @@ mod service {
             )
         }
 
+        /// Seam: a scripted resource port and decoder, and the original decoder
+        /// failure the findings keep.
         #[test]
         fn required_value_findings_keep_csv_coordinates_and_later_original_decoder_failure() {
             let prepared = prepared();
@@ -1110,6 +934,8 @@ mod service {
             assert_eq!(port.reads, 2);
         }
 
+        /// Seam: a port double whose identifier access fails, and the findings and
+        /// captures it suppresses.
         #[test]
         fn original_identifier_access_failure_suppresses_partial_findings_and_later_captures() {
             let prepared = prepared();
