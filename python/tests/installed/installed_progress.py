@@ -35,7 +35,10 @@ class Progress(unittest.TestCase):
     def events(self, path):
         """The truth's events, `{path}` standing for the path the test gave."""
         return [
-            {key: (path if value == "{path}" else value) for key, value in event.items()}
+            {
+                key: (path if value == "{path}" else value)
+                for key, value in event.items()
+            }
             for event in TRUTH["events"]
         ]
 

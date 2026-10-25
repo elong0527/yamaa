@@ -15,7 +15,6 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
 source(file.path(host_fixture_root, "reader.R"), local = TRUE)
 source(file.path(host_fixture_root, "assert.R"), local = TRUE)
-source(file.path(host_fixture_root, "context.R"), local = TRUE)
 truth <- read_host_fixture(host_fixture_root, "progress")
 
 # A new directory holding the study.
@@ -71,7 +70,8 @@ failed <- spec$run(progress = function(event) {
 })
 expect_identical(calls, 1L, "a failing callback is called once, then no more")
 expect_identical(list(failed$status, failed$output), list("failed", NULL), "a run whose callback failed")
-expect_issue_rows(failed$issues, truth$failed_run_issues, "a run whose callback failed")
+expect_identical(issue_columns_of(failed$issues), issue_truth(truth$failed_run_issues, root),
+  "a run whose callback failed: its issues")
 refused <- tryCatch({ failed$save(); NULL }, yamaa_error = function(condition) condition)
 stopifnot("the save of a run whose callback failed is refused" = !is.null(refused))
 expect_identical(refused$paths, character(), "the refused save wrote no path")

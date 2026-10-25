@@ -648,7 +648,10 @@ class ValidationTests(unittest.TestCase):
                 "returns _Check, not Run",
                 lambda d: member(d, "Spec", "run").update(
                     calls="spec_check",
-                    args={"parent": "optional_path = None", "progress": "progress = None"},
+                    args={
+                        "parent": "optional_path = None",
+                        "progress": "progress = None",
+                    },
                     keyword_only=[],
                 ),
             ),
