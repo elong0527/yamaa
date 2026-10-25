@@ -170,7 +170,7 @@ Token counts in every text file: `schema_version` 485 in 484 benchmark files,
    `negative-property-clear`, whose path becomes `clear[0]`.
 6. **Interpolated and builder-built Rust documents.**
 7. **Fixtures that pair a spec with its expected diagnostics** (the JSON and
-   TSV fixtures under `rust/crates/yamaa-adapters/tests/fixtures`, and
+   TSV fixtures under `rust/crates/yamaa-application/tests/fixtures`, and
    `rust/tests/host-fixtures/cases.json`) change both halves together.
 8. **Code that reads or writes the surface:** `tools/benchmark_docs/mapping_doc.py`
    renders `literal`, `compute` and `no_match`;

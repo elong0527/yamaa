@@ -154,7 +154,7 @@ class CompletePublicTruth(unittest.TestCase):
 
     def test_malformed_authored_report_cannot_disappear_from_discovery(self):
         checkout = self.directory / "malformed-truth"
-        directory = checkout / "rust/crates/yamaa-adapters/tests/fixtures/specs"
+        directory = checkout / "rust/crates/yamaa-application/tests/fixtures/specs"
         directory.mkdir(parents=True)
         cohort.write(directory / "partial.json", [{"condition": "unknown_field"}])
         cohort.write(

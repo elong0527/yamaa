@@ -415,11 +415,13 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
-        /// Already data: the authored reports of `fixtures/csv_profile_diagnostics.json`.
+        /// Already data: the authored reports of the adapters'
+        /// `fixtures/csv_profile_diagnostics.json`, whose codec projections
+        /// their own suite compares.
         #[test]
         fn core_csv_profile_matches_independent_complete_failed_reports() {
             independent_failed_reports(
-                include_str!("fixtures/csv_profile_diagnostics.json"),
+                include_str!("../../yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json"),
                 "csv",
                 (13, 13),
                 b"",
@@ -448,11 +450,13 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
-        /// Already data: the authored reports of `fixtures/source_typing.json`.
+        /// Already data: the authored reports of the adapters'
+        /// `fixtures/source_typing.json`, whose codec projections their own
+        /// suite compares.
         #[test]
         fn core_source_typing_matches_independent_complete_failed_reports() {
             independent_failed_reports(
-                include_str!("fixtures/source_typing.json"),
+                include_str!("../../yamaa-adapters/tests/fixtures/source_typing.json"),
                 "typing",
                 (4, 4),
                 b"",

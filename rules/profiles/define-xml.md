@@ -79,7 +79,7 @@ requirement unmet under `Submission` fails, reporting the requirement and the
 position.
 
 Fails: `missing_required_field`, `sas_name_too_long`, `transport_label_invalid`, `transport_text_invalid`.
-Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_codelist_without_its_nci_code_is_refused_under_submission`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_item_without_its_nci_code_is_refused_under_submission`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_is_refused_under_submission`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_refused_under_submission`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_cites_the_form_without_a_page_under_other`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_admitted_under_other`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_codelist_without_its_nci_code_is_refused_under_submission`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_item_without_its_nci_code_is_refused_under_submission`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_is_refused_under_submission`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_refused_under_submission`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_cites_the_form_without_a_page_under_other`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_admitted_under_other`.
 
 Nothing in this profile is relaxed by `Other`; that context only omits the
 requirements a regulator imposes. Under `Submission`:
@@ -190,7 +190,7 @@ column in its `output.columns` must declare both `label` and
 `column.submission`, fails.
 
 Fails: `submission_metadata_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_output_column_without_submission_metadata_is_refused`, `rust/crates/yamaa-adapters/tests/submission_service.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`, `rust/crates/yamaa/tests/language_header.rs::missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_output_column_without_submission_metadata_is_refused`, `rust/crates/yamaa-application/tests/submission_service.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`, `rust/crates/yamaa/tests/language_header.rs::missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission`.
 
 A document reports on the whole artifact, so a column with nothing to report is
 a gap in the document, not an omitted row. A specification without
@@ -221,7 +221,7 @@ checks that the selected standard is an implementation guide of the model the
 specification declares ([SUB-3](submission.md#sub-3)).
 
 Fails: `unknown_standard`, `unknown_codelist`, `unknown_document`.
-Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-unknown-standard`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_dataset_selecting_a_guide_its_section_lacks_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_origin_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::an_unknown_per_value_codelist_fails_at_its_row_path`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_per_value_codelist_of_another_type_fails_at_its_row_path`.
+Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-unknown-standard`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_dataset_selecting_a_guide_its_section_lacks_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_origin_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_unknown_per_value_codelist_fails_at_its_row_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_codelist_of_another_type_fails_at_its_row_path`.
 
 A `submission.standard`, `codelist` or document reference naming no
 declaration fails with `unknown_standard`, `unknown_codelist` or
@@ -326,7 +326,7 @@ declares the ODM 1.3 namespace as the default, `def` for
 `http://www.cdisc.org/ns/def/v2.1` and `xlink` for
 `http://www.w3.org/1999/xlink`, and no other namespace.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-application/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
 
 ```text
 <?xml version="1.0" encoding="UTF-8"?>
@@ -408,7 +408,7 @@ one `def:leaf` whose `ID` is its generated identifier, whose `xlink:href` is
 the document's literal `link`, and whose `def:title` is its `title`. A
 document's kind decides where else it is listed.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
 
 - a document of kind `annotated_crf` is also listed in `def:AnnotatedCRF`;
 - one of kind `supplemental` is also listed in `def:SupplementalDoc`; and
@@ -450,7 +450,7 @@ table below lists. `Purpose` is derived from the model alone, not declared:
 `submission.domain`, defaulting to the specification's `domain`, and is omitted
 for `ADaM`.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::the_ae_metadata_only_document_has_its_fixed_time_and_independent_structure`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::the_vs_metadata_only_document_has_its_fixed_time_and_independent_structure`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::the_ae_metadata_only_document_has_its_fixed_time_and_independent_structure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::the_vs_metadata_only_document_has_its_fixed_time_and_independent_structure`.
 
 | Attribute or child | Source |
 |---|---|
@@ -486,7 +486,7 @@ is the path's final component. The href must not begin with a parent
 traversal. A dataset with no data and no transport file has no leaf.
 
 Fails: `artifact_outside_document`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::an_artifact_outside_the_documents_directory_is_refused_without_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_artifact_outside_the_define_directory_is_refused`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_artifact_outside_the_documents_directory_is_refused_without_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_artifact_outside_the_define_directory_is_refused`.
 
 A document that pointed outside its own directory would describe a file that is
 not in the package it belongs to. Without a transport, an artifact path that
@@ -560,7 +560,7 @@ and, when [Submission metadata](submission.md) admits one, `Source`. A
 `def:DocumentRef` carries `leafID`, the referenced document's generated leaf
 identifier.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `schema-column-origins`, `rust/crates/yamaa/tests/language_header.rs::a_column_declares_several_origins`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `schema-column-origins`, `rust/crates/yamaa/tests/language_header.rs::a_column_declares_several_origins`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 | Attribute or child | Source |
 |---|---|
@@ -707,7 +707,7 @@ and `U+000A` must not appear in an attribute value. A `U+000D`, a `U+0009` or
 an attribute-value `U+000A` in generated text fails.
 
 Fails: `untransportable_text`.
-Evidence: `rust/tests/host-fixtures/cases.json::column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_tab_in_generated_text_is_untransportable_at_the_field_that_holds_it`.
+Evidence: `rust/tests/host-fixtures/cases.json::column-label`, `rust/crates/yamaa-application/tests/file_resources.rs::xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_tab_in_generated_text_is_untransportable_at_the_field_that_holds_it`.
 
 The failure reports `untransportable_text` with the declaration that carries
 the character.
@@ -775,7 +775,7 @@ a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
 the column's metadata merged with the entry's. The column's own `ItemDef`
 carries the `def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 The mapping to Define-XML is fixed:
 
@@ -827,7 +827,7 @@ every missing field at once, each at its project path such as `study`,
 and does not report them.
 
 Fails: `missing_required_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::define_reports_the_missing_study_guide_and_target_before_reading_specifications`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::define_reports_a_missing_target_before_reading_specifications`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_reports_the_missing_study_guide_and_target_before_reading_specifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_reports_a_missing_target_before_reading_specifications`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`.
 
 A project can therefore list its specifications and run them before its
 submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty

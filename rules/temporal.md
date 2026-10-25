@@ -69,7 +69,7 @@ interval or duration fails as [TIME-13](#time-13) states, and other text fails
 as invalid date text.
 
 Fails: `incompatible_input_type`, `invalid_date_text`, `interval_or_duration_text`.
-Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-adapters/tests/execution_date_text_reads.rs`.
+Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-application/tests/execution_date_text_reads.rs`.
 
 `2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A known date
 before an unknown time gives that date, so `2025-03-04T-:30` gives
@@ -213,7 +213,7 @@ carries, at most `day` with `type: date`; for a value of the declared type,
 its collected precision.
 
 Fails: `incompatible_input_type`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-application/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
 
 ```text
 collected := Y [ "-" M [ "-" D [ "T" h [ ":" m [ ":" s ] ] ] ] ]
@@ -264,7 +264,7 @@ no declared form reads fails with `invalid_date_text` unless `invalid`
 declares a literal substitute.
 
 Fails: `incompatible_input_type`, `invalid_field_type`, `invalid_date_text`.
-Evidence: `adam-adcm-free-text-start-date`, `negative-date-text-no-form`, `negative-date-text-both-slash-forms`, `rust/crates/yamaa-adapters/tests/fixtures/date_text_forms.json`, `rust/crates/yamaa-core/src/date_forms.rs::each_form_reads_its_own_shape_into_collected_date_text`, `rust/crates/yamaa-core/src/date_forms.rs::only_the_two_slash_orders_share_a_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_at_least_one_form`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_each_form_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_one_slash_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_text_fails_on_text_in_no_declared_form`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_text_refuses_a_source_that_is_not_text`.
+Evidence: `adam-adcm-free-text-start-date`, `negative-date-text-no-form`, `negative-date-text-both-slash-forms`, `rust/crates/yamaa-application/tests/fixtures/date_text_forms.json`, `rust/crates/yamaa-core/src/date_forms.rs::each_form_reads_its_own_shape_into_collected_date_text`, `rust/crates/yamaa-core/src/date_forms.rs::only_the_two_slash_orders_share_a_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_at_least_one_form`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_each_form_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_one_slash_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_text_fails_on_text_in_no_declared_form`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_text_refuses_a_source_that_is_not_text`.
 
 | Form | Shape | Example | Result |
 |---|---|---|---|
@@ -325,7 +325,7 @@ text stops before the first missing part, so a missing day gives `YYYY-MM`
 and a missing year gives missing. Nothing is counted.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `invalid_date_text`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-adapters/tests/execution_date_text_reads.rs`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-application/tests/execution_date_text_reads.rs`.
 
 The parts are read in order from `year`, and reading stops at the first
 missing part: the parts after it are not read, and the result is the

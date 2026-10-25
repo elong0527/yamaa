@@ -606,14 +606,14 @@ mod scalar {
     mod text_case {
         use yamaa_core::text_case::{transform, Case, Delimiters};
 
-        /// Seam: already data, the adapters' shared `text_case_reference.json` rows,
+        /// Seam: already data, the application's shared `text_case_reference.json` rows,
         /// whose results are text values.
-        /// The proper-case rows of the adapters' shared truth (TEXT-5), which
+        /// The proper-case rows of the application's shared truth (TEXT-5), which
         /// both crates read, so each proves the same authored rows.
         #[test]
         fn proper_raises_the_first_scalar_and_each_scalar_after_a_delimiter() {
             let reference = crate::support::diagnostic::json::read(
-                include_str!("../../yamaa-adapters/tests/fixtures/text_case_reference.json"),
+                include_str!("../../yamaa-application/tests/fixtures/text_case_reference.json"),
                 "text_case_reference.json",
             );
             let rows = reference.field("proper").items();

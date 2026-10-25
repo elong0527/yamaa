@@ -18,7 +18,7 @@ infers its declared column and runs after that column's derivation and
 conversion. Dataset verifications run after all column work, output-key
 validation, and column verifications finish.
 
-Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_not_missing_when_waits_for_the_later_column_it_reads`.
+Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-application/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_not_missing_when_waits_for_the_later_column_it_reads`.
 
 A column's `verifications` and the dataset's `verifications` are each a list
 of checks, and a single check is written as a one-item list. A check written
@@ -67,7 +67,7 @@ identifies the check and the report's `ID` stays missing rather than copying
 the path.
 
 Fails: `invalid_declaration`, `duplicate_identifier`.
-Evidence: `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`.
+Evidence: `schema-row-count-fractions`, `rust/crates/yamaa-application/tests/fixtures/static_verification_checks.json`.
 
 A duplicate declared `id` within one dataset verification list, one column's
 verification list, or one intermediate's verification list fails. The same ID
@@ -85,7 +85,7 @@ an incompatible column type fails, and so does an unknown column in `unique`,
 `all_or_none`, `assert`, `not_missing.when` or `row_count.group_by`.
 
 Fails: `invalid_declaration`, `unknown_field`.
-Evidence: `negative-not-missing-share-range`, `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`, `rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json`.
+Evidence: `negative-not-missing-share-range`, `rust/crates/yamaa-application/tests/fixtures/static_verification_checks.json`, `rust/crates/yamaa-application/tests/fixtures/completed_lookup_assertions.json`.
 
 ## Column verifications
 
@@ -102,7 +102,7 @@ column is never missing under [OUTPUT-3](output.md#output-3), so a
 `not_missing` on a key column restates the keys and fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-not-missing-age`, `schema-not-missing-share`, `negative-not-missing-share`, `negative-not-missing-when`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_not_missing_check_on_a_key_is_redundant`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
+Evidence: `negative-not-missing-age`, `schema-not-missing-share`, `negative-not-missing-share`, `negative-not-missing-when`, `rust/crates/yamaa-application/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_on_a_key_is_redundant`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
 
 `when` is a [Formulas](formulas.md) predicate over one constructed output row
 that selects rows as the `when` of `assert` does ([CHECK-12](#check-12)), not
@@ -156,7 +156,7 @@ under its type's equality, including [Values](values.md) for
 strings.
 
 Fails: `allowed_values_failed`.
-Evidence: `negative-invalid-sex`, `rust/crates/yamaa-adapters/tests/fixtures/original_column_values.json`.
+Evidence: `negative-invalid-sex`, `rust/crates/yamaa-application/tests/fixtures/original_column_values.json`.
 
 <a id="check-7"></a>
 
@@ -180,7 +180,7 @@ as is a property of [Values](values.md)'s rendering rather
 than of the value.
 
 Fails: `length_failed`, `invalid_declaration`.
-Evidence: `negative-usubjid-length`, `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`.
+Evidence: `negative-usubjid-length`, `rust/crates/yamaa-application/tests/fixtures/static_verification_checks.json`.
 
 The scalar count rather than bytes or UTF-16 units is also the unit
 [Schema language](reference/schema-language.md) uses for `min_length`, so a
@@ -198,7 +198,7 @@ less than one fails.
 that reads it, and whether a match must span the whole value.
 
 Fails: `matches_failed`.
-Evidence: `negative-sex-code`, `rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.json`.
+Evidence: `negative-sex-code`, `rust/crates/yamaa-application/tests/fixtures/original_column_matches.json`.
 
 ## Dataset verifications
 
@@ -213,7 +213,7 @@ restates [OUTPUT-3](output.md#output-3), which already requires those values
 to be present and unique, and fails validation.
 
 Fails: `unique_failed`, `redundant_declaration`.
-Evidence: `negative-unique-duplicate`, `negative-unique-repeats-keys`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_unique_check_over_the_keys_is_redundant`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_unique_check_over_more_than_the_keys_is_its_own_claim`.
+Evidence: `negative-unique-duplicate`, `negative-unique-repeats-keys`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_unique_check_over_the_keys_is_redundant`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_unique_check_over_more_than_the_keys_is_its_own_claim`.
 
 Write an unnamed check as `unique: [SITEID, SUBJID]`. The mapping form
 `unique: {columns: [SITEID, SUBJID], id: site-subject}` also admits an
@@ -235,7 +235,7 @@ either every listed value must be missing or every listed value must be
 non-missing.
 
 Fails: `all_or_none_failed`, `invalid_declaration`.
-Evidence: `negative-paired-dates`, `negative-sdtm-lb-unit-conversion`, `rust/crates/yamaa-adapters/tests/fixtures/original_all_or_none.json`.
+Evidence: `negative-paired-dates`, `negative-sdtm-lb-unit-conversion`, `rust/crates/yamaa-application/tests/fixtures/original_all_or_none.json`.
 
 An `all_or_none` with fewer than two distinct columns fails.
 
@@ -250,7 +250,7 @@ when `when` is `TRUE`, `require` must be `TRUE`, and when `when` is `FALSE` or
 `UNKNOWN`, the row passes and the rule does not apply.
 
 Fails: `assert_failed`.
-Evidence: `negative-adeg-rrr`, `negative-strata-mismatch`, `rust/crates/yamaa-adapters/tests/fixtures/original_assertions.json`.
+Evidence: `negative-adeg-rrr`, `negative-strata-mismatch`, `rust/crates/yamaa-application/tests/fixtures/original_assertions.json`.
 
 With `when` declared, `when` and `require` are both evaluated for every output
 row. This verification covers row-wise rules that lack a more specific
@@ -398,7 +398,7 @@ writes the report file for a failed run too; the report is diagnostic output,
 never an accepted artifact.
 
 Fails: `missing_report`.
-Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_warning_verification_needs_a_report_file`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::an_intermediate_warning_needs_a_report_file`.
+Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_warning_verification_needs_a_report_file`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-application/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::an_intermediate_warning_needs_a_report_file`.
 
 A specification declaring a `warning` without `output.report` fails validation
 with `missing_report`, a `warning` on an intermediate's `unique`
@@ -440,7 +440,7 @@ registration order, zero counts included; one `column` row per output column in
 evaluated check in execution order. An intermediate's `error` checks have no
 row, and a check a stopped run never reached has none.
 
-Evidence: `schema-verification-log`, `schema-row-count-fractions`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::intermediate_warning_checks_lead_the_check_rows_in_declaration_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
+Evidence: `schema-verification-log`, `schema-row-count-fractions`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::intermediate_warning_checks_lead_the_check_rows_in_declaration_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 `SPEC_PATH` names each row's stable specification item and is unique within
 the report:
@@ -485,7 +485,7 @@ those [Values](values.md) types. A kind leaves missing each column the table
 gives it no value for. The report carries no version and no timestamp: the
 same specification and inputs give the same report bytes.
 
-Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `schema-not-missing-share`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
+Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `schema-not-missing-share`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-application/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 | Column | Type | Value |
 |---|---|---|

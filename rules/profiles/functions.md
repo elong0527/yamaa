@@ -24,7 +24,7 @@ implementation for that host fails before any input is read. A specification
 cannot select, replace or override the project or its function files.
 
 Fails: `function_implementation_missing`, `project_binding_missing`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_function_without_a_callable_for_the_host_language_fails_each_call_before_data_is_read`, `rust/crates/yamaa-core/tests/project_execution.rs::an_engine_without_a_host_language_compiles_a_call_and_misses_no_implementation`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_function_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_lock`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_function_without_a_callable_for_the_host_language_fails_each_call_before_data_is_read`, `rust/crates/yamaa-core/tests/project_execution.rs::an_engine_without_a_host_language_compiles_a_call_and_misses_no_implementation`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-application/tests/file_workflow.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_function_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_lock`.
 
 No function file is discovered, and none is created by omission. A function
 file that names no implementation for the host is admitted, since another host
@@ -50,7 +50,7 @@ files declare, fails, and static checking returns every independently
 inferable finding before activation.
 
 Fails: `function_file_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::an_unclassified_read_failure_refuses_the_preparation_opaquely`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_function_file_value_its_type_cannot_read_fails_as_its_file_keeping_its_text`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/workflow.json::each_file_a_project_names_that_does_not_exist_fails_at_the_field_naming_it`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`.
+Evidence: `schema-functions`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::an_unclassified_read_failure_refuses_the_preparation_opaquely`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_function_file_value_its_type_cannot_read_fails_as_its_file_keeping_its_text`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/workflow.json::each_file_a_project_names_that_does_not_exist_fails_at_the_field_naming_it`, `rust/crates/yamaa-application/tests/file_workflow.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`.
 
 A function file declares `yamaa`, `type`, its own `name`, and the definition
 of [FUNC-4](#func-4). The project's `functions` checks the header of each
@@ -94,7 +94,7 @@ verifies the installed version of yamaa and of every called function package
 against the captured lock.
 
 Fails: `runtime_artifact_mismatch`, `function_file_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_functions.json::lock_findings_report_against_the_project_file_that_holds_the_lock`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::lock_findings_report_against_the_project_file_that_holds_the_lock`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
 
 Parallel bindings and per-function language choices are invalid:
 `implementations` names one callable per host language. A lock is optional,
@@ -232,7 +232,7 @@ callable once for one logical row, supplying no undeclared data or execution
 context.
 
 Fails: `function_call_failed`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_execution.rs::observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure`, `rust/crates/yamaa-adapters/tests/project_environment.rs::actual_engine_failures_project_without_a_second_callback_or_payload_consumption`, `negative-function-host-error`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_execution.rs::observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure`, `rust/crates/yamaa-application/tests/project_environment.rs::actual_engine_failures_project_without_a_second_callback_or_payload_consumption`, `negative-function-host-error`.
 
 No argument-name mapping or computed name is permitted. Normal installed module
 or namespace resolution runs only after the lock gate of [FUNC-3](#func-3)
@@ -287,7 +287,7 @@ logical function, qualified callable, authored source and path, and the
 original host context when code ran. Original host error and interrupt objects
 remain retained independently of human-readable issue formatting.
 
-Evidence: `rust/crates/yamaa-adapters/tests/project_environment.rs::every_runtime_failure_keeps_versionless_identity_and_authored_provenance`, `rust/crates/yamaa-adapters/tests/project_environment.rs::opaque_payload_is_borrowed_unchanged_and_complete_ordinary_facts_remain_exact`, `rust/crates/yamaa-adapters/tests/file_project.rs::project_report_uses_held_external_function_origins_after_metadata_files_change`.
+Evidence: `rust/crates/yamaa-application/tests/project_environment.rs::every_runtime_failure_keeps_versionless_identity_and_authored_provenance`, `rust/crates/yamaa-application/tests/project_environment.rs::opaque_payload_is_borrowed_unchanged_and_complete_ordinary_facts_remain_exact`, `rust/crates/yamaa-application/tests/file_project.rs::project_report_uses_held_external_function_origins_after_metadata_files_change`.
 
 ## Activation conformance
 
@@ -304,7 +304,7 @@ Boolean parameter are covered. A nullable contract covers `nullable-output`,
 and a float-returning contract `numeric-comparison`.
 
 Fails: `function_file_invalid`.
-Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_function_file_value_its_type_cannot_read_fails_as_its_file_keeping_its_text`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
+Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_function_file_value_its_type_cannot_read_fails_as_its_file_keeping_its_text`, `rust/crates/yamaa-application/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
 
 Tests do not repeat a logical name or contract version. `covers` is a
 non-empty list of unique obligations demonstrated by that case:
@@ -341,7 +341,7 @@ performs no lock verification or code execution. A failed activation vector or
 numeric comparison fails.
 
 Fails: `function_conformance_failed`.
-Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::owned_environment_repeats_selected_activation_before_cached_study_capture`, `rust/crates/yamaa-core/tests/project_execution.rs::lock_binding_case_and_original_interrupt_failures_never_enter_study_ports`, `rust/crates/yamaa-adapters/tests/project_diagnostics.rs::real_activation_mismatches_keep_every_case_in_selected_order_without_retry`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
+Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::owned_environment_repeats_selected_activation_before_cached_study_capture`, `rust/crates/yamaa-core/tests/project_execution.rs::lock_binding_case_and_original_interrupt_failures_never_enter_study_ports`, `rust/crates/yamaa-application/tests/project_diagnostics.rs::real_activation_mismatches_keep_every_case_in_selected_order_without_retry`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
 
 A failed case is reported in the function file that defines it, at its
 `tests[i]`, naming that file as `source`, the project file as `entry` and the

@@ -1,4 +1,4 @@
-"""The adapters' copies of core's test support modules stay equal to core's."""
+"""The copied test support modules stay equal to their owners' modules."""
 
 import tempfile
 import unittest
@@ -12,30 +12,34 @@ class CopiedSupportModules(unittest.TestCase):
         directory = tempfile.TemporaryDirectory(prefix="yamaa-test-support-")
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
-        for name in support.SHARED:
-            for tree in (support.OWNER, support.COPY):
-                path = self.root / tree / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(f"// {name}\n", encoding="utf-8")
+        for owner, copy, names in support.COPIES:
+            for name in names:
+                for tree in (owner, copy):
+                    path = self.root / tree / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(f"// {name}\n", encoding="utf-8")
 
     def test_equal_copies_pass(self):
         self.assertEqual(support.check(self.root), [])
 
     def test_a_changed_copy_names_both_files(self):
-        (self.root / support.COPY / "roots.rs").write_text("// drifted\n")
+        (self.root / support.APPLICATION / "parquet_files.rs").write_text(
+            "// drifted\n"
+        )
         self.assertEqual(
             support.check(self.root),
             [
-                f"{support.COPY / 'roots.rs'} differs from "
-                f"{support.OWNER / 'roots.rs'}; make the same change to both"
+                f"{support.APPLICATION / 'parquet_files.rs'} differs from "
+                f"{support.ADAPTERS / 'parquet_files.rs'}; make the same change "
+                "to both"
             ],
         )
 
-    def test_a_missing_module_is_reported(self):
-        (self.root / support.OWNER / "document.rs").unlink()
+    def test_a_missing_module_is_reported_for_each_copy(self):
+        (self.root / support.CORE / "document.rs").unlink()
         self.assertEqual(
             support.check(self.root),
-            [f"{support.OWNER / 'document.rs'} is missing"],
+            [f"{support.CORE / 'document.rs'} is missing"] * 2,
         )
 
     def test_the_checkout_keeps_its_copies_equal(self):

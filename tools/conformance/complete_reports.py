@@ -23,7 +23,7 @@ def read(path):
 def public_cases(checkout=ROOT):
     """Discover complete authored reports; partial diagnostic fixtures are arrays."""
     names = []
-    directory = checkout / "rust/crates/yamaa-adapters/tests/fixtures/specs"
+    directory = checkout / "rust/crates/yamaa-application/tests/fixtures/specs"
     for path in sorted(directory.glob("*.json")):
         raw = read(path)
         if isinstance(raw, list):
@@ -42,7 +42,7 @@ def public_cases(checkout=ROOT):
 COHORT = public_cases()
 
 TRUTH_PATHS = {
-    name: f"rust/crates/yamaa-adapters/tests/fixtures/specs/{name}.json"
+    name: f"rust/crates/yamaa-application/tests/fixtures/specs/{name}.json"
     for name in COHORT
 }
 PROTOCOL = "installed-complete-reports/1"

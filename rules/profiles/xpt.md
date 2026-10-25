@@ -23,7 +23,7 @@ dataset's leaf names the file under [DEFINE-16](define-xml.md#define-16), and
 the files publish before the document under
 [JSON-14](dataset-json.md#json-14).
 
-Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_section_keeps_to_its_own_surface_spellings`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::every_define_benchmark_matches_its_independent_truth_in_both_hosts`.
+Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_section_keeps_to_its_own_surface_spellings`, `rust/crates/yamaa-application/tests/submission_transport.rs::every_define_benchmark_matches_its_independent_truth_in_both_hosts`.
 
 Read as [JSON-5](dataset-json.md#json-5) reads them, the rows carry no display
 precision: a composed specification declares no `output.decimals`, whose
@@ -48,7 +48,7 @@ observations. The NAMESTRs and the observations each run across record
 boundaries, and each run is padded with blanks to a whole record. Integers are
 big-endian. The same inputs and creation time produce the same bytes.
 
-Evidence: `sdtm-dm-xpt`, `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`.
+Evidence: `sdtm-dm-xpt`, `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-application/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`.
 
 Each header record is `HEADER RECORD*******`, the record kind in eight
 blank-padded bytes, `HEADER RECORD!!!!!!!`, the counts below and two blanks:
@@ -95,7 +95,7 @@ name and label, its display format under [XPT-9](#xpt-9), zero justification,
 a blank informat with zero width and decimals, its byte position in the
 observation and zero filler. No informat is ever written.
 
-Evidence: `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`.
+Evidence: `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-application/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`.
 
 | Bytes | Field | Value |
 |---|---|---|

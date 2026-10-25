@@ -20,7 +20,7 @@ unreachable:
     only a layer on a network share that the entry is not on raises it
     (LAYER-10, FILE-4); only Windows hosts have shares, which no portable case
     can stage, so the adapters' resolver tests reach it
-    (rust/crates/yamaa-adapters/tests/host_resources.rs)
+    (rust/crates/yamaa-application/tests/host_resources.rs)
   publication_failed: >-
     only a host file system failure while a save stages or replaces a file
     raises it (OUTPUT-8): a target the walk cannot reach fails with FILE-7's

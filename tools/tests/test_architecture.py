@@ -15,7 +15,8 @@ from tools.validation import check_architecture as architecture
 MEMBERS = {
     "yamaa-core": (),
     "yamaa-adapters": ("yamaa-core",),
-    "yamaa": ("yamaa-adapters", "yamaa-core"),
+    "yamaa-application": ("yamaa-adapters", "yamaa-core"),
+    "yamaa": ("yamaa-application", "yamaa-adapters", "yamaa-core"),
     "yamaa-boundary": (),
     "yamaa-python": ("yamaa", "yamaa-boundary"),
     "yamaa-r": ("yamaa", "yamaa-boundary"),
@@ -90,10 +91,23 @@ class ArchitectureTests(unittest.TestCase):
                 "adapters depend on core alone",
             ),
             (
+                "yamaa-adapters",
+                "\n[dev-dependencies]\n"
+                'yamaa-application = { path = "../yamaa-application" }\n',
+                "[dev-dependencies] yamaa-adapters depends on yamaa-application, "
+                "but the adapters depend on core alone",
+            ),
+            (
+                "yamaa-application",
+                '\n[dev-dependencies]\nyamaa = { path = "../yamaa" }\n',
+                "[dev-dependencies] yamaa-application depends on yamaa, but the "
+                "application layer depends on the adapters and core alone",
+            ),
+            (
                 "yamaa",
                 '\n[dev-dependencies]\nyamaa-cli = { path = "../yamaa-cli" }\n',
                 "[dev-dependencies] yamaa depends on yamaa-cli, but the facade "
-                "depends on the adapters and core alone",
+                "depends on the application, the adapters and core alone",
             ),
             (
                 "yamaa-boundary",

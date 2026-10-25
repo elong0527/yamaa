@@ -95,7 +95,7 @@ row holds. When the row templates do not all share one driver, a field of one
 of their drivers, or of the input a driver intermediate reads, fails.
 
 Fails: `unknown_field`.
-Evidence: `negative-window-other-driver`, `sdtm-fa-reactogenicity-diary`, `rust/crates/yamaa-adapters/tests/execution_column_window_drivers.rs`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_reads_no_field_of_a_driver_one_row_template_lacks`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_may_read_the_driver_every_row_template_shares`.
+Evidence: `negative-window-other-driver`, `sdtm-fa-reactogenicity-diary`, `rust/crates/yamaa-application/tests/execution_column_window_drivers.rs`, `rust/crates/yamaa-application/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_reads_no_field_of_a_driver_one_row_template_lacks`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_may_read_the_driver_every_row_template_shares`.
 
 A column-level window is evaluated once over every constructed row, whichever
 row template built it; [SPEC-6](specification.md#spec-6) lets no row template
@@ -152,7 +152,7 @@ does a window that reads a neighboring row with a missing value. In row
 construction, a `window.filter` that is not a Boolean predicate over
 constructed output columns fails.
 
-Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
+Evidence: `schema-window-functions`, `rust/crates/yamaa-application/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
 
 <a id="window-5"></a>
 
@@ -166,7 +166,7 @@ with that `date` ascending, and its later terms break ties
 ([WINDOW-9](#window-9)).
 
 Fails: `window_order_by_required`, `value_not_permitted`.
-Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`.
+Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv`.
 
 A `baseline_flag` order whose first term is not its `date` ascending fails
 validation as `value_not_permitted` at that term, its context naming the
@@ -187,7 +187,7 @@ as equal. With `method: competition`, the default, tied rows take the lowest
 position they occupy and the next distinct value takes its own position; with
 `dense`, the next distinct value takes the following number.
 
-Evidence: `schema-window-functions`, `adam-adae-severity-rank`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::numbering_and_rank_keep_exact_order_null_placement_and_ties_within_partitions`.
+Evidence: `schema-window-functions`, `adam-adae-severity-rank`, `rust/crates/yamaa-application/tests/execution_window_semantics.rs::numbering_and_rank_keep_exact_order_null_placement_and_ties_within_partitions`.
 
 The tie-break settles positions, not equality. `row_number`, `row_value`,
 `locf` and right-side selection read the positions themselves, so a tie
@@ -272,7 +272,7 @@ are ordered by `window.order_by`, each term with its own direction and missing
 placement. Eligible rows tied for last on every term fail.
 
 Fails: `ambiguous_baseline`, `incompatible_input_type`.
-Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
+Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-application/tests/execution_window_semantics.rs::baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied`, `rust/crates/yamaa-application/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
 
 `date` and `reference` are both `date` columns or both `datetime` columns;
 any other pairing fails validation as `incompatible_input_type` at the
@@ -320,7 +320,7 @@ earlier rows do not matter.
 return the selected value with its type and, for a temporal value, its
 collected precision. `row_value` requires an integer `offset`.
 
-Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/fixtures/source_selection.json`.
+Evidence: `schema-window-functions`, `rust/crates/yamaa-application/tests/fixtures/source_selection.json`.
 
 Scalar selection follows [EXPR-6](expressions.md#expr-6), and temporal
 operation results follow [TIME-1](temporal.md#time-1).

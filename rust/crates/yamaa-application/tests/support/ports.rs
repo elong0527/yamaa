@@ -1,4 +1,4 @@
-//! Scripted doubles for the ports the adapters' suites drive, one per port:
+//! Scripted doubles for the ports the application's suites drive, one per port:
 //! a test scripts what each answers and reads back what the engine asked.
 //! A test that needs an answer these cannot script keeps its own double.
 use std::{collections::BTreeMap, convert::Infallible, sync::Arc};

@@ -1,8 +1,8 @@
 //! The case form both crates' replays read (#3691, #3798), and what a case
-//! states beside its issues. `yamaa-core` and `yamaa-adapters` hold this file
-//! byte for byte at `tests/support/diagnostic/form.rs`, since neither crate's
-//! tests import the other's (#2158), and `tools.validation.check_test_support`
-//! fails while the two differ.
+//! states beside its issues. `yamaa-core` and `yamaa-application` hold this
+//! file byte for byte at `tests/support/diagnostic/form.rs`, since neither
+//! crate's tests import the other's (#2158), and
+//! `tools.validation.check_test_support` fails while the two differ.
 //!
 //! A fixture file holds `about`, its `documents` and its `cases`. A case
 //! names the behaviour it proves (`case`), the operation that reaches it
@@ -55,7 +55,7 @@
 //!   JSON text, a string's with its quotes. `select` names at least one
 //!   path, and a selected node's text is never matched by a substring of it.
 //!
-//! The adapters' `input` stages a study directory: its `files`, each its
+//! The application's `input` stages a study directory: its `files`, each its
 //! text, a document of the fixture's `documents` (`base`) or an authored
 //! file named by its path from the repository root (`file`), as `saved`
 //! names one, the last two with `edits`; the files of the benchmark
@@ -63,7 +63,7 @@
 //! `README.md` and `benchmark.yaml`, which the input's `edits` map to their
 //! edits; and empty `directories`. An edit replaces text that occurs exactly
 //! once, and a file of `files` is never one the benchmark stages. The
-//! adapters' `define` composes a project's submission section and saves it,
+//! application's `define` composes a project's submission section and saves it,
 //! as `save` builds and saves, so each reports the issues of its save too.
 //!
 //! A cell is `null` when the value is missing, its text for `str`, its
