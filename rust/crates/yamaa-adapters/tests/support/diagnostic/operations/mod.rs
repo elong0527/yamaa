@@ -40,6 +40,7 @@ mod define;
 mod file_route;
 mod host_functions;
 mod odm;
+mod preparation;
 mod project_scope;
 
 /// What one operation reported, with the study directory its files were
@@ -55,11 +56,12 @@ pub struct Reported {
 type Reader = fn(&str, &Value) -> Option<Reported>;
 
 /// Each module's readers, by the operations it names, and its files.
-const MODULES: [(Reader, &[File]); 5] = [
+const MODULES: [(Reader, &[File]); 6] = [
     (define::run, define::FILES),
     (file_route::run, file_route::FILES),
     (host_functions::run, host_functions::FILES),
     (odm::run, odm::FILES),
+    (preparation::run, preparation::FILES),
     (project_scope::run, project_scope::FILES),
 ];
 

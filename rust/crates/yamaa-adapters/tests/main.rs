@@ -22,7 +22,6 @@ mod declaration_contract_vectors;
 mod declaration_language_header;
 mod declaration_layer_composition;
 mod declaration_migration_hints;
-mod declaration_one_spelling;
 mod declaration_project_files;
 mod declaration_schema_capture;
 mod declaration_v1_lowering;

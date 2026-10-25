@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
 //! Retired 0.4 spellings are refused before study data, with actionable hints.
+//! The retired temporal verbs are cases of
+//! `fixtures/diagnostics/one_spelling.json`.
 use yamaa_adapters::{
     json,
     report_storage::diagnostic_value,
@@ -29,6 +31,10 @@ fn diagnostics(text: &str) -> Vec<Value> {
     }
 }
 
+/// Seam: parts of a hint whose whole text no authored literal holds, the
+/// same hint from the layer admission API (`validate_layer`), and findings
+/// found among others by their field. No replay case states a part of a
+/// context value or calls that API.
 #[test]
 fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
     let raw = format!("{HEADER}parents: [organization.yaml, compound.yaml]\n");
@@ -71,35 +77,4 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
         })
     };
     assert!(asks_for_domain(&diagnostics(HEADER)));
-}
-
-#[test]
-fn retired_temporal_verbs_name_the_operation_and_declared_type() {
-    for (old, new, kind) in [
-        ("date_diff", "diff", "date"),
-        ("datetime_diff", "diff", "datetime"),
-        ("date_shift", "shift", "date"),
-        ("datetime_shift", "shift", "datetime"),
-        ("date_impute", "impute", "date"),
-        ("datetime_impute", "impute", "datetime"),
-        ("date_precision", "precision", "date"),
-        ("datetime_precision", "precision", "datetime"),
-    ] {
-        // The retired payload is not interpreted, nor is missing.csv opened.
-        let raw = format!(
-            "{HEADER}domain: TEST\nkeys: [ID]\ninput: {{SRC: missing.csv}}\noutput: {{path: out.csv, columns: [ID]}}\ncolumns:\n  - name: ID\n    type: str\n    derivation: {{{old}: {{source: SRC.VALUE}}}}\n"
-        );
-        let findings = diagnostics(&raw);
-        assert_eq!(findings.len(), 1, "{old}: {findings:?}");
-        assert_eq!(findings[0]["condition"], "unknown_operation");
-        assert_eq!(
-            findings[0]["spec_paths"],
-            json!([format!("columns.ID.derivation.{old}")])
-        );
-        assert_eq!(findings[0]["context"]["operation"], old);
-        assert_eq!(
-            findings[0]["context"]["hint"],
-            format!("write {new} with type: {kind}")
-        );
-    }
 }

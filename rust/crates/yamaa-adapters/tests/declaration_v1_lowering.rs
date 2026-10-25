@@ -1,25 +1,25 @@
 #![cfg(feature = "yaml")]
-//! The 1.0 front end for specifications (#3030 P1-5). These cases hold the
-//! forms the corpus lacks: text that holds one literal, the refusal of a
-//! function argument that is no leaf (FUNC-6), the stored `model`, keys and
-//! ODM profile, the position of a node a child layer wrote (P-ISSUE-1), the
-//! absence answer of D67, several origins, a dataset's standard, a
-//! value-level comparator, and a month rule without a day rule (TIME-10).
+//! The 1.0 front end for specifications (#3030 P1-5): the tree it lowers,
+//! for the forms the corpus lacks. Text that holds one literal, a function
+//! argument's leaf, the stored `model`, keys and ODM profile, an
+//! intermediate's own key, the position of a node a child layer wrote
+//! (P-ISSUE-1), the absence answer of D67, a baseline order, a check's bare
+//! keyword, several origins, a dataset's standard and a value-level
+//! comparator. The refusals these forms have, and the impute rules the front
+//! end admits (TIME-10), are cases of `fixtures/diagnostics/one_spelling.json`.
 
 use crate::support::Edit as _;
 use std::fs;
 use std::path::Path;
 use yamaa_adapters::document::{self, Closures, PreparedSpecification, SpecificationError};
-use yamaa_adapters::specification_source::{Error, Source};
+use yamaa_adapters::specification_source::Source;
 use yamaa_core::ast::{Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, Profile, Spec};
 use yamaa_core::cdisc_vocabulary::ModelKind;
-use yamaa_core::diagnostic::ConditionCode;
 use yamaa_core::expression::Context;
 use yamaa_core::inheritance::Source as GraphSource;
 use yamaa_core::language::{FileType, LANGUAGE_VERSION};
 use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
 use yamaa_core::resource::ResourceFailure;
-use yamaa_core::schema::SchemaContext as C;
 
 /// A study directory of written files, removed when dropped.
 struct Study(crate::support::Scratch);
@@ -139,6 +139,8 @@ fn derived(spec: &Spec, name: &str) -> ExprId {
     column.derivation.as_ref().unwrap().expr
 }
 
+/// Seam: the lowered tree, each node's kind and cited path, which no
+/// operation of the replay reports.
 #[test]
 fn text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula() {
     let spec = lowered(&spec(&[
@@ -173,6 +175,9 @@ fn text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula() {
     assert_eq!(path("FORGOT"), "columns.FORGOT.derivation.source");
 }
 
+/// Seam: the lowered call's arguments, each one leaf. The refusal of an
+/// operator, a call or a truth value written as text is
+/// `one_spelling.json`'s `a_function_argument_holding_*` cases.
 #[test]
 fn a_function_argument_is_one_leaf_and_any_other_text_fails() {
     let call = |weight: &str| {
@@ -199,35 +204,10 @@ fn a_function_argument_is_one_leaf_and_any_other_text_fails() {
             ("none", ExprKind::Literal(Literal::Missing)),
         ]
     );
-    // An operator, a call or a truth value written as text is no leaf.
-    for weight in ["\"SRC.WEIGHT * 2\"", "\"ABS(SRC.WEIGHT)\"", "\"TRUE\""] {
-        let study = Study::new(&[("spec.yaml", &call(weight))]);
-        let Err(SpecificationError::Entry(Error::Findings(captured))) =
-            prepare(&study, "spec.yaml")
-        else {
-            panic!("{weight}: refused");
-        };
-        let [finding] = captured.findings() else {
-            panic!("{weight}: one finding");
-        };
-        let definition = finding.code.definition();
-        assert_eq!(finding.code, ConditionCode::FunctionArgumentLeaf);
-        assert_eq!(
-            (definition.phase, definition.condition, definition.rule),
-            ("validation", "invalid_function_argument", Some("FUNC-6"))
-        );
-        assert_eq!(finding.path, "columns.BMI.derivation.function.args.weight");
-        assert_eq!(
-            finding.context,
-            [
-                ("function", C::Text("bmi".into())),
-                ("argument", C::Text("weight".into())),
-                ("cause", C::Text("expression".into())),
-            ]
-        );
-    }
 }
 
+/// Seam: the stored `model`, each input's declared key and profile, and the
+/// key an aggregate and an intermediate match on, in the lowered tree.
 #[test]
 fn model_keys_and_profiles_lower_as_declared() {
     let spec = lowered(
@@ -266,58 +246,24 @@ fn model_keys_and_profiles_lower_as_declared() {
     assert_eq!(spec.cite(columns[0].meta), "intermediates.NAMES.key[0]");
 }
 
+/// Seam: the lowered tree of an intermediate that drives a row template,
+/// which declares no key of its own.
+///
 /// An intermediate states its own `key` unless it drives a row template
 /// (LOOKUP-3, ROW-2): one without `key` is refused before any input is read,
 /// at its `key`, as the schema records a missing required field (D23, D63),
-/// even when nothing reads it: pruning keeps it for its refusal (D219).
+/// even when nothing reads it: pruning keeps it for its refusal (D219). Those
+/// refusals are `one_spelling.json`'s
+/// `an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key` and
+/// `an_intermediate_nothing_reads_without_key_is_refused_at_its_key`.
 #[test]
 fn an_intermediate_without_key_is_refused_unless_it_drives_rows() {
-    let declaring = |derivation: &str| {
-        spec(&[&format!(
-            "{{name: TERM, type: str, derivation: {derivation}}}"
-        )])
-        .edit(
-            "base: SRC\n",
-            "base: SRC\nintermediates:\n  - {id: NAMES, dataset: EX, filter: \"EX.N > 0\"}\n",
-        )
-    };
-    // TERM reads the intermediate as a lookup, or reads only the base.
-    for derivation in ["NAMES.TERM", "SRC.TERM"] {
-        let study = Study::new(&[("spec.yaml", &declaring(derivation))]);
-        let Err(SpecificationError::Entry(Error::Findings(captured))) =
-            prepare(&study, "spec.yaml")
-        else {
-            panic!("{derivation}: refused");
-        };
-        let [finding] = captured.findings() else {
-            panic!("{derivation}: one finding");
-        };
-        let definition = finding.code.definition();
-        assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.rule,
-                finding.path.as_str(),
-                finding.context.as_slice(),
-            ),
-            (
-                "validation",
-                "missing_required_field",
-                Some("LOOKUP-3"),
-                "intermediates.NAMES.key",
-                [
-                    ("field", C::Text("key".into())),
-                    ("class", C::Text("intermediate_class".into())),
-                ]
-                .as_slice(),
-            ),
-            "{derivation}"
-        );
-    }
+    let declaring = spec(&["{name: TERM, type: str, derivation: NAMES.TERM}"]).edit(
+        "base: SRC\n",
+        "base: SRC\nintermediates:\n  - {id: NAMES, dataset: EX, filter: \"EX.N > 0\"}\n",
+    );
     // A row template's driver declares none.
-    let text = declaring("NAMES.TERM");
-    let driver = text
+    let driver = declaring
         .edit(
             "  - {name: TERM, type: str, derivation: NAMES.TERM}\n",
             "  - {name: TERM, type: str}\n",
@@ -332,6 +278,8 @@ fn an_intermediate_without_key_is_refused_unless_it_drives_rows() {
     assert_eq!(spec.intermediates[0].key, None);
 }
 
+/// Seam: each lowered node's position, its file and line, which no issue row
+/// of an admitted specification carries.
 #[test]
 fn each_node_is_located_in_the_layer_whose_value_took_effect() {
     let study = Study::new(&[
@@ -361,6 +309,11 @@ fn each_node_is_located_in_the_layer_whose_value_took_effect() {
     assert_eq!((code.file.0, code.line), (1, 8));
 }
 
+/// Seam: the lowered window's order terms and their cited paths. The refusal
+/// of any other first term, at that term, naming the refused value, is
+/// `one_spelling.json`'s
+/// `a_baseline_order_starting_with_another_variable_is_refused_at_that_term`
+/// and `a_baseline_order_starting_with_the_date_descending_is_refused_at_that_term`.
 #[test]
 fn a_declared_baseline_order_starts_with_the_date_ascending() {
     let baseline = |order: &str| {
@@ -391,42 +344,11 @@ fn a_declared_baseline_order_starts_with_the_date_ascending() {
             "columns.ABLFL.derivation.baseline_flag.window.order_by[1]",
         ]
     );
-    // Any other first term fails, at that term, naming the refused value:
-    // a variable other than the date, or the date's descending direction.
-    for (order, variable, direction, value) in [
-        ("[ATM, ADT]", "ATM", "asc", "ATM"),
-        ("[{variable: ADT, direction: desc}]", "ADT", "desc", "desc"),
-    ] {
-        let study = Study::new(&[("spec.yaml", &baseline(order))]);
-        let Err(SpecificationError::Entry(Error::Findings(captured))) =
-            prepare(&study, "spec.yaml")
-        else {
-            panic!("{order}: refused");
-        };
-        let [finding] = captured.findings() else {
-            panic!("{order}: one finding");
-        };
-        let definition = finding.code.definition();
-        assert_eq!(
-            (definition.phase, definition.condition, definition.rule),
-            ("validation", "value_not_permitted", Some("WINDOW-5"))
-        );
-        assert_eq!(
-            finding.path,
-            "columns.ABLFL.derivation.baseline_flag.window.order_by[0]"
-        );
-        assert_eq!(
-            finding.context,
-            [
-                ("variable", C::Text(variable.into())),
-                ("direction", C::Text(direction.into())),
-                ("date", C::Text("ADT".into())),
-                ("value", C::Text(value.into())),
-            ]
-        );
-    }
 }
 
+/// Seam: the lowered check of a bare keyword and its cited path. The long
+/// form's refusal is `one_spelling.json`'s
+/// `a_check_that_declares_no_field_written_as_a_mapping_restates_its_bare_keyword`.
 #[test]
 fn a_check_that_declares_no_field_is_written_as_its_bare_keyword() {
     // `- not_missing` lowers as `- not_missing: {}` did, at the keyword's
@@ -446,31 +368,10 @@ fn a_check_that_declares_no_field_is_written_as_its_bare_keyword() {
         tree.cite(column.checks[0].meta),
         "columns.V.verifications[0].not_missing"
     );
-    let study = Study::new(&[(
-        "spec.yaml",
-        &spec(&["{name: V, type: int, derivation: SRC.V, verifications: [{not_missing: {}}]}"]),
-    )]);
-    let Err(SpecificationError::Traversal(yamaa_core::inheritance::Error::Layer {
-        error: yamaa_core::schema::NormalizationError::Invalid(found),
-        ..
-    })) = prepare(&study, "spec.yaml")
-    else {
-        panic!("the long form is refused");
-    };
-    let [finding] = found.as_slice() else {
-        panic!("one finding: {found:?}");
-    };
-    assert_eq!(finding.code, ConditionCode::SchemaRedundantLongForm);
-    assert_eq!(finding.path, "columns.V.verifications[0]");
-    assert_eq!(
-        finding.context,
-        [
-            ("field", C::Text("not_missing".into())),
-            ("shorthand", C::Text("not_missing".into()))
-        ]
-    );
 }
 
+/// Seam: the lowered submission metadata, each origin, standard and
+/// value-level clause with its cited path.
 #[test]
 fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_follow() {
     let mut text = spec(&[
@@ -553,34 +454,4 @@ fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_fol
             ),
         ]
     );
-}
-
-#[test]
-fn a_month_rule_without_a_day_rule_fails_at_the_impute() {
-    let study = Study::new(&[(
-        "spec.yaml",
-        &spec(&[
-            "{name: ADT, type: date, derivation: {impute: {type: date, source: SRC.DTC, month: 6}}}",
-        ]),
-    )]);
-    let Err(SpecificationError::Entry(Error::Findings(captured))) = prepare(&study, "spec.yaml")
-    else {
-        panic!("refused");
-    };
-    let [finding] = captured.findings() else {
-        panic!("one finding");
-    };
-    let definition = finding.code.definition();
-    assert_eq!(
-        (definition.phase, definition.condition, definition.rule),
-        ("validation", "missing_required_field", Some("TIME-10"))
-    );
-    assert_eq!(finding.path, "columns.ADT.derivation.impute");
-    assert_eq!(finding.context, [("field", C::Text("day".into()))]);
-    // With a day rule, or with neither rule, the impute is admitted.
-    for rules in ["month: 6, day: 15", "day: first", ""] {
-        lowered(&spec(&[&format!(
-            "{{name: ADT, type: date, derivation: {{impute: {{type: date, source: SRC.DTC, {rules}}}}}}}"
-        )]));
-    }
 }
