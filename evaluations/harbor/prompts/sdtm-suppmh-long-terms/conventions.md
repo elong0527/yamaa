@@ -5,10 +5,6 @@ of its reported term.
 The output dataset should contain the following columns in this order:
 STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL
 
-The reported term MHTERM is split into pieces of at most 200 characters,
-each ending after the last whole word that fits, so no word is broken
-across two pieces.
-
 - RDOMAIN is "MH" and IDVAR is "MHSEQ".
 - IDVARVAL is written as text.
 - QNAM is "MHTERM1" with QLABEL "Reported Term for the Medical History 1",
