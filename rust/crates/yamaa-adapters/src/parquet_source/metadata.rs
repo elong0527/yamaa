@@ -2,7 +2,6 @@
 use super::compact::Error;
 use crate::storage_api::LaterTypes;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use parquet::file::metadata::KeyValue;
 
 /// A file's embedded Arrow schema, in Arrow 55's types.
 #[derive(Debug, PartialEq)]
@@ -12,21 +11,20 @@ pub(super) struct Hint {
     pub schema: arrow_schema::Schema,
     /// Where `schema` holds a later type, and which; empty for most files.
     pub later: LaterTypes,
+    /// Whether the message verifies within the FlatBuffers verifier's
+    /// default depth, as the Arrow schema conversion verified it again: a
+    /// file whose hint nests deeper reads to no Arrow schema
+    /// (`conversion`).
+    pub shallow: bool,
 }
 
-impl Hint {
-    /// The schema to give the native conversion in place of the file's
-    /// embedded one, when that names a later type (`storage_api::arrow_schema`).
-    pub fn held(&self) -> Option<&arrow_schema::Schema> {
-        (!self.later.is_empty()).then_some(&self.schema)
-    }
-}
-
-pub(super) fn admit(metadata: Option<&Vec<KeyValue>>) -> Result<Option<Hint>, Error> {
+/// The embedded Arrow schema of the key-value metadata `metadata`, if it
+/// has one.
+pub(super) fn admit(metadata: &[(String, Option<String>)]) -> Result<Option<Hint>, Error> {
     // The general reader uses the last non-null value for each metadata key.
-    let value = metadata.into_iter().flatten().rev().find_map(|item| {
-        if item.key == "ARROW:schema" {
-            item.value.as_deref()
+    let value = metadata.iter().rev().find_map(|(key, value)| {
+        if key == "ARROW:schema" {
+            value.as_deref()
         } else {
             None
         }
@@ -47,16 +45,30 @@ pub(super) fn admit(metadata: Option<&Vec<KeyValue>>) -> Result<Option<Hint>, Er
         max_depth: yamaa_core::limits::Limits::SEMANTIC_DEPTH,
         ..Default::default()
     };
+    let shallow = arrow_ipc::root_as_message(message).is_ok();
     let message =
         arrow_ipc::root_as_message_with_opts(&options, message).map_err(|_| Error::Malformed)?;
     let schema = message.header_as_schema().ok_or(Error::Malformed)?;
     let (schema, later) = crate::storage_api::ipc_schema(schema).map_err(|_| Error::Malformed)?;
-    Ok(Some(Hint { schema, later }))
+    Ok(Some(Hint {
+        schema,
+        later,
+        shallow,
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parquet::file::metadata::KeyValue;
+
+    /// Key-value metadata as the footer holds it.
+    fn pairs(metadata: &[KeyValue]) -> Vec<(String, Option<String>)> {
+        metadata
+            .iter()
+            .map(|item| (item.key.clone(), item.value.clone()))
+            .collect()
+    }
 
     // FlatBuffers permits many vector entries to share one table and string.
     // Verification must account for each traversal, not only the stored bytes.
@@ -98,18 +110,18 @@ mod tests {
 
     #[test]
     fn shared_tables_and_strings_retain_flatbuffer_verifier_limits() {
-        assert!(admit(Some(&shared_metadata(4, 8))).unwrap().is_some());
+        assert!(admit(&pairs(&shared_metadata(4, 8))).unwrap().is_some());
         let defaults = flatbuffers::VerifierOptions::default();
         // A four-MiB vector exceeds the default table-visit limit without a
         // deep tree or a correspondingly large collection of stored tables.
         assert_eq!(
-            admit(Some(&shared_metadata(defaults.max_tables, 8))),
+            admit(&pairs(&shared_metadata(defaults.max_tables, 8))),
             Err(Error::Malformed)
         );
         // The same stored string can also multiply apparent traversal bytes.
         let text_bytes = 1024 * 1024;
         assert_eq!(
-            admit(Some(&shared_metadata(
+            admit(&pairs(&shared_metadata(
                 defaults.max_apparent_size / text_bytes + 1,
                 text_bytes,
             ))),
@@ -174,22 +186,22 @@ mod tests {
             key: "ARROW:schema".into(),
             value: Some(BASE64_STANDARD.encode(bytes)),
         }];
-        assert_eq!(admit(Some(&metadata)), Err(Error::Malformed));
+        assert_eq!(admit(&pairs(&metadata)), Err(Error::Malformed));
     }
 
     #[test]
     fn invalid_schema_hints_and_encoding_are_not_ignored() {
-        admit(None).unwrap();
+        admit(&[]).unwrap();
         let data = vec![KeyValue {
             key: "ARROW:schema".into(),
             value: Some("!".into()),
         }];
-        assert_eq!(admit(Some(&data)), Err(Error::Malformed));
+        assert_eq!(admit(&pairs(&data)), Err(Error::Malformed));
         let data = vec![KeyValue {
             key: "ARROW:schema".into(),
             value: Some("AAAA".into()),
         }];
-        assert_eq!(admit(Some(&data)), Err(Error::Malformed));
+        assert_eq!(admit(&pairs(&data)), Err(Error::Malformed));
     }
 
     /// The type of one field of an authored IPC schema; a child is named
@@ -401,7 +413,7 @@ mod tests {
             ),
             ("L", Ipc::List(Box::new(Ipc::Decimal(32)))),
         ];
-        let held = admit(Some(&hint(&fields, little))).unwrap().unwrap();
+        let held = admit(&pairs(&hint(&fields, little))).unwrap().unwrap();
         let item = || Arc::new(Field::new("item", DataType::Decimal128(9, 2), true));
         let list = Field::new("c0", DataType::List(item()), true);
         let schema = Schema::new(vec![
@@ -425,12 +437,10 @@ mod tests {
                 (vec![3, 0], decimal(32)),
             ]
         );
-        assert_eq!(held.held(), Some(&schema));
-        // An ordinary hint is given to the native conversion as the file holds it.
-        let ordinary = admit(Some(&hint(&[("V", Ipc::Int64)], little)));
+        // An ordinary hint holds no later type.
+        let ordinary = admit(&pairs(&hint(&[("V", Ipc::Int64)], little)));
         let ordinary = ordinary.unwrap().unwrap();
         assert!(ordinary.later.is_empty());
-        assert_eq!(ordinary.held(), None);
         for (name, fields, endianness) in [
             (
                 "union",
@@ -450,7 +460,7 @@ mod tests {
             // A decimal width that no Arrow release has.
             ("16-bit", [("D", Ipc::Decimal(16))], little),
         ] {
-            let refused = admit(Some(&hint(&fields, endianness)));
+            let refused = admit(&pairs(&hint(&fields, endianness)));
             assert_eq!(refused, Err(Error::Malformed), "{name}");
         }
     }
