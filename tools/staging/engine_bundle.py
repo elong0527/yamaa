@@ -269,6 +269,13 @@ def member_manifest(path: Path):
     return manifest
 
 
+def source_bytes(path: Path, workspace=WORKSPACE):
+    """A source's bundled bytes, leaving member dev-dependencies out."""
+    if path.name == MANIFEST and path.parent.parent == workspace / "crates":
+        return member_manifest(path).encode("utf-8")
+    return path.read_bytes()
+
+
 def workspace_manifest(host, workspace=WORKSPACE):
     """A host's workspace manifest: the canonical one, with the members that
     the bundle carries, and in the R bundle without the wheels' profile.
@@ -432,10 +439,7 @@ def stage_workspace(host, destination: Path, workspace=WORKSPACE):
     for relative, path in sources(host, workspace):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        if path.name == MANIFEST and path.parent.parent == workspace / "crates":
-            target.write_bytes(member_manifest(path).encode("utf-8"))
-        else:
-            shutil.copyfile(path, target)
+        target.write_bytes(source_bytes(path, workspace))
     trimmed = trim_lock(destination, canonical)
     return verify_lock(trimmed, canonical, members(host))
 
