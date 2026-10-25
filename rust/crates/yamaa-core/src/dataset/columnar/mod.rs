@@ -509,6 +509,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
         });
+        observer(ExecutionEvent::Divided(super::Division::Whole));
         observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
         self.execute_admitted(records, templates, observer)
     }

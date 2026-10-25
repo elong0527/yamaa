@@ -40,6 +40,18 @@ pub enum ExecutionEvent {
         phase: ExecutionPhase,
         refusal: crate::application_observer::Refusal,
     },
+    /// How the run divides its driver input, once admission has passed
+    /// (#3794).
+    Divided(Division),
+}
+
+/// How a run divided its driver input (#3794): whole, or into `count`
+/// partitions, key-bounded over the leading `keys` declared keys or, with no
+/// keys, consecutive.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Division {
+    Whole,
+    Partitions { keys: usize, count: usize },
 }
 
 /// How a run divides its driver input. Without `leading_keys` (#3697), into
@@ -93,8 +105,8 @@ pub enum Resource {
 /// The rows are held a column at a time in the executor's typed buffers
 /// (#3870): every present value of a column in one closed type, text in one
 /// arena, so the dataset takes about what its values do. A clone shares
-/// them, so the views of one output, its host view, its encoders and its
-/// observations, read one copy.
+/// them, so one output's encoders and observations, and the build of its
+/// host view, read one copy.
 #[derive(Clone)]
 pub struct Dataset {
     inner: std::sync::Arc<Columns>,

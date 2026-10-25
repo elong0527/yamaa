@@ -9,6 +9,7 @@
 mod support;
 
 mod caller_paths;
+mod client_partitions;
 mod cancellation;
 mod conditions;
 mod copy_entry;

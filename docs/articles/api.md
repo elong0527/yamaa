@@ -924,7 +924,11 @@ newline-delimited form) or ODM XML files (`.xml`). A SAS input declares its
 Dataset-JSON input takes each field's type from its column's `dataType`, so
 `types` only narrows one, as in `{path: input/vs.ndjson, types: {VISITNUM: int}}`. Outputs are
 CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
-`submission()`.
+`submission()`. Every run divides its input into partitions of whole subjects,
+so a CSV or Parquet input that is a specification's only input may hold more
+than 10,000,000 records when the windows and aggregates group by the first two
+keys, such as `STUDYID` and `USUBJID`
+([Resource limits](../release.md#resource-limits)).
 
 A relative path resolves from the YAML file that writes it, so
 `../edc/odm.xml` in `sdtm/dm.yaml` is the study's `edc/odm.xml`. A path you

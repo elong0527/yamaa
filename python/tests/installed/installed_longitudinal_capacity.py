@@ -1,8 +1,8 @@
 """Installed public capacity acceptance for the approved longitudinal profile.
 
-The profile's size, its value rule and its source and output formats are the
-`longitudinal-capacity` family of the shared host truth, which the R
-`longitudinal_capacity` suite reads too.
+The profile's size, its value rule, its source and output formats and how a
+run of it divides its input are the `longitudinal-capacity` family of the
+shared host truth, which the R `longitudinal_capacity` suite reads too.
 """
 
 import json
@@ -101,6 +101,12 @@ class LongitudinalCapacity(unittest.TestCase):
                 self.assertEqual(yamaa.spec(entry).check().issues.num_rows, 0)
                 built = yamaa.spec(entry).run()
                 self.assertEqual(built.issues.to_pylist(), [])
+                # How the run divided its input, which its measurements name
+                # (#3794): the hosts' default partitions.
+                observed = json.loads(built._native.observations(True))
+                self.assertEqual(
+                    observed["measurements"]["partitions"], TRUTH["partitions"]
+                )
                 self.assertEqual(built.output.to_polars().shape, (ROWS, len(NAMES)))
                 for row in (0, 10_006, 10_007, ROWS - 1):
                     self.assertEqual(

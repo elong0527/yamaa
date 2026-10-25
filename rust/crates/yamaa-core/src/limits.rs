@@ -19,6 +19,17 @@ impl Limits {
     pub const OUTPUT_BYTES: usize = 10 * 1024 * 1024 * 1024;
     pub const TABLE_ROWS: usize = 10_000_000;
     pub const TABLE_CELLS: usize = 640_000_000;
+    /// The driver records of one partition of the partitions every host
+    /// runs with by default (#3794, D264): the most whole row groups of the
+    /// Parquet writer, 1,024 rows each, whose partition of [`Self::COLUMNS`]
+    /// columns stays within [`Self::TABLE_CELLS`], 610 of them. Each binding
+    /// and the command line spell it where they construct their engine.
+    pub const PARTITION_ROWS: usize = 624_640;
+    /// The leading declared keys no partition of the default partitions
+    /// splits a group of (#3794): two, so that each partition of an ADaM or
+    /// SDTM specification, which declares STUDYID and USUBJID first, holds
+    /// whole subjects.
+    pub const PARTITION_KEYS: usize = 2;
     /// The compiled size, in bytes, of one regular expression's program.
     pub const REGEX_SIZE: usize = 10 * 1024 * 1024;
     pub const FINDINGS: usize = 10_000;
