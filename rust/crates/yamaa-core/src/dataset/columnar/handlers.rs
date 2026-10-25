@@ -124,6 +124,11 @@ impl Handlers {
         self.dynamic = mark.dynamic;
     }
 
+    /// Whether the counts are those `mark` holds.
+    pub(super) fn holds(&self, mark: &HandlerMark) -> bool {
+        self.counts == mark.counts && self.dynamic == mark.dynamic
+    }
+
     /// The report: every table site in table order, then any site the table lacks.
     pub(super) fn snapshot(&self, plan: &ResolvedPlan) -> Vec<HandlerCount> {
         plan.handlers()
@@ -136,5 +141,27 @@ impl Handlers {
             })
             .chain(self.dynamic.iter().cloned())
             .collect()
+    }
+}
+
+impl HandlerMark {
+    /// Add the firings `other` counts, one partition's run's to another's
+    /// (#3830): each table site's count, then each site the table lacks, in
+    /// the order the runs first fired it. Counts of firings stay far below
+    /// the integer's range, which no input of the row limit reaches.
+    pub(super) fn add(&mut self, other: &HandlerMark) {
+        for (count, added) in self.counts.iter_mut().zip(&other.counts) {
+            *count = count.saturating_add(*added);
+        }
+        for entry in &other.dynamic {
+            match self
+                .dynamic
+                .iter_mut()
+                .find(|held| held.spec_path == entry.spec_path && held.handler == entry.handler)
+            {
+                Some(held) => held.count = held.count.saturating_add(entry.count),
+                None => self.dynamic.push(entry.clone()),
+            }
+        }
     }
 }
