@@ -564,8 +564,7 @@ its result, and that a refused conversion or a cancelled run or save leaves no
 handle. They reuse the existing Arrow pointer, release, early-release,
 failed-conversion and repeated-import/export controls of
 [#2646](https://github.com/elong0527/yamaa/pull/2646), which gain the census,
-and the interrupt-identity controls of both hosts. The engine's C ABI has
-its Rust lifetime tests in `rust/crates/yamaa-engine/tests/`. Diagnostic
+and the interrupt-identity controls of both hosts. Diagnostic
 full-registry and cross-host payload parity remain owned by
 [#2677](https://github.com/elong0527/yamaa/issues/2677). No test may derive
 benchmark expected values from the implementation.
