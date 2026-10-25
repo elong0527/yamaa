@@ -1,9 +1,11 @@
 {
-  "about": "The date verbs to_epoch_day (TIME-3), diff (TIME-4) and study_day (TIME-6) over driver fields, column defaults and row templates. A driver's declared date types reach a verb's operands, whether the verb is a column's derivation, a case result or a row template's, and a missing operand gives a missing value: study day 1 is the reference date and there is no day 0, and the epoch day counts from 1970-01-01. A row template's verb reads by its bare name a column whose default is a driver field or a date literal, with the column's declared type, and a row template reads a column whose default is a verb. An operand the inputs give as text is refused before any row is read (TIME-1), and a missing input file is reported instead (FILE-7); either run holds no output, so its report has no column row (CHECK-23). Moved from the declarative_temporal module of scalar_declarative_rounding.rs: the first six cases from a test that checked, built and saved each specification and compared the saved bytes, and the rest from the reference table its other test replayed, which held each specification, its inputs, its findings compared at phase, condition, rule, spec paths and context, its handler counts, which are the report's handler rows (SPEC_PATH, NAME, COUNT), and its saved bytes.",
+  "about": "The date verbs to_epoch_day (TIME-3), diff (TIME-4) and study_day (TIME-6) over driver fields, column defaults and row templates. A driver's declared date types reach a verb's operands, whether the verb is a column's derivation, a case result or a row template's, and a missing operand gives a missing value: study day 1 is the reference date and there is no day 0, and the epoch day counts from 1970-01-01. A row template's verb reads by its bare name a column whose default is a driver field or a date literal, with the column's declared type, and a row template reads a column whose default is a verb. An operand the inputs give as text is refused before any row is read (TIME-1), and a missing input file is reported instead (FILE-7); either run holds no output, so its report has no column row (CHECK-23). Moved from the declarative_temporal module of scalar_declarative_rounding.rs: the first six cases from a test that checked, built and saved each specification and compared the saved bytes, and the rest from the reference table its other test replayed, which held each specification, its inputs, its findings compared at phase, condition, rule, spec paths and context, its handler counts, which are the report's handler rows (SPEC_PATH, NAME, COUNT), and its saved bytes. Collected date text at run time (TIME-19): dtc reads its parts in order and stops at the first missing one, so a part after it is never read, its lookup cannot fail the run and its absence answer is not counted, while a part the text reaches is read, counted and refused as before. In the document dtc, the column DTC assembles RAW's year and month with the day DAY.D, read through a keyed intermediate answering absence with missing by default; DAYS declares that answer as its absent handler and LK.D is an implicit join, each answering with missing under absent. In raw, subject 2 has a year and no month. The last five cases moved from execution_date_text_reads.rs: each run's handler sites are registered before any row and reported in registration order (CHECK-23), one column after another, in the order these specifications both declare and output their columns, and those tests compared each handler row's SPEC_PATH and COUNT and the saved output, which the output table states, having saved only to read them back; a refusal's test compared its condition, rule and some or all of its context, and that it was the run's only issue.",
   "documents": {
     "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, D: date, R: date}}\noutput: {path: result.csv, columns: [ID, SD, EPOCH]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SD\n    type: int\n    derivation: {study_day: {source: SRC.D, reference: SRC.R}}\n  - name: EPOCH\n    type: int\n    derivation: {to_epoch_day: {source: SRC.D}}\n",
     "input": "ID,D,R\n1,2023-12-31,2024-01-01\n2,2024-01-01,2024-01-01\n3,2024-01-02,2024-01-01\n4,,2024-01-01\n5,2024-01-01,\n",
-    "src": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    "src": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n",
+    "dtc": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [ID]\ninput:\n  RAW: {path: raw.csv, types: {ID: int}}\n  LK: {path: lk.csv, key: [ID], types: {ID: int}}\nbase: RAW\nintermediates:\n  - {id: DAY, dataset: LK, key: {ID: ID}}\n  - {id: DAYS, dataset: LK, key: {ID: ID}, absent: null}\noutput:\n  path: out.csv\n  report: report.csv\n  columns: [ID, DTC]\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - name: DTC\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: DAY.D}\n",
+    "raw": "ID,Y,M\n1,2025,03\n2,2025,\n3,2025,04\n"
   },
   "cases": [
     {
@@ -307,6 +309,110 @@
         "handler": [["SPEC_PATH", "NAME", "COUNT"]]
       },
       "saved": {"result.csv": "ID,D1,D2,EP,NEXT\na,1970-01-01,1970-01-01,0,1\nb,2000-01-01,1970-01-01,-10957,-10956\n"}
+    },
+    {
+      "case": "a_day_after_a_missing_month_is_never_looked_up",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dtc"},
+          "raw.csv": {"base": "raw"},
+          "lk.csv": "ID,D\n1,15\n2,10\n2,11\n3,20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [["ID", "DTC"], [1, "2025-03-15"], [2, "2025"], [3, "2025-04-20"]],
+      "report": {
+        "handler": [["SPEC_PATH", "COUNT"], ["columns.DTC.derivation.dtc.day.absent", 0]]
+      }
+    },
+    {
+      "case": "an_absence_answer_after_a_missing_month_is_not_counted",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dtc", "edits": [
+            {"from": "  columns: [ID, DTC]", "to": "  columns: [ID, DFLT, DECL, JOIN]"},
+            {"from": "  - name: DTC\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: DAY.D}\n", "to": "  - name: DFLT\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: DAY.D}\n  - name: DECL\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: DAYS.D}\n  - name: JOIN\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: LK.D}\n"}
+          ]},
+          "raw.csv": {"base": "raw"},
+          "lk.csv": "ID,D\n1,15\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "DFLT", "DECL", "JOIN"],
+        [1, "2025-03-15", "2025-03-15", "2025-03-15"],
+        [2, "2025", "2025", "2025"],
+        [3, "2025-04", "2025-04", "2025-04"]
+      ],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "COUNT"],
+          ["columns.DFLT.derivation.dtc.day.absent", 1],
+          ["columns.DECL.derivation.dtc.day.absent", 1],
+          ["columns.JOIN.derivation.dtc.day.absent", 1]
+        ]
+      }
+    },
+    {
+      "case": "no_absence_is_reached_when_only_the_row_without_a_month_lacks_a_day_record",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dtc", "edits": [
+            {"from": "  columns: [ID, DTC]", "to": "  columns: [ID, DFLT, JOIN]"},
+            {"from": "  - name: DTC\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: DAY.D}\n", "to": "  - name: DFLT\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: DAY.D}\n  - name: JOIN\n    type: str\n    derivation:\n      dtc: {year: RAW.Y, month: RAW.M, day: LK.D}\n"}
+          ]},
+          "raw.csv": {"base": "raw"},
+          "lk.csv": "ID,D\n1,15\n3,20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "DFLT", "JOIN"],
+        [1, "2025-03-15", "2025-03-15"],
+        [2, "2025", "2025"],
+        [3, "2025-04-20", "2025-04-20"]
+      ],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "COUNT"],
+          ["columns.DFLT.derivation.dtc.day.absent", 0],
+          ["columns.JOIN.derivation.dtc.day.absent", 0]
+        ]
+      }
+    },
+    {
+      "case": "a_reached_day_with_two_lookup_records_fails_the_run",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dtc"},
+          "raw.csv": "ID,Y,M\n1,2025,03\n2,2025,05\n",
+          "lk.csv": "ID,D\n1,15\n2,10\n2,11\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "context.keys"],
+      "issues": [{"condition": "multiple_matches", "rule": "LOOKUP-10", "context": {"keys": [{"ID": 2}]}}]
+    },
+    {
+      "case": "a_reached_day_that_is_not_two_digits_is_refused_with_its_part_and_row",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dtc", "edits": [{"from": "day: DAY.D}", "to": "day: LK.D}"}]},
+          "raw.csv": {"base": "raw"},
+          "lk.csv": "ID,D\n1,15\n2,5\n3,5\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "context"],
+      "issues": [{"condition": "invalid_date_text", "rule": "TIME-19", "context": {"operation": "dtc", "part": "day", "source": "LK.D", "value": "5", "keys": [{"ID": 3}]}}]
     }
   ]
 }
