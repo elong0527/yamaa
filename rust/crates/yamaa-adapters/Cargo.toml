@@ -14,7 +14,7 @@ default = ["yaml", "parquet", "readstat", "odm", "arrow"]
 yaml = ["dep:yamaa-saphyr-parser", "dep:num-bigint"]
 # Source and artifact codecs share one edge, including native Zstd compression.
 # The reader reads the Arrow schema a file embeds, so it needs Arrow too.
-parquet = ["arrow", "dep:parquet", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
+parquet = ["arrow", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["dep:cc"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
@@ -38,8 +38,8 @@ yamaa-saphyr-parser = { version = "=0.2.1", path = "../../vendor/saphyr-parser",
 # YAML integer scalars, with yamaa-core's num-bigint release.
 num-bigint = { version = "0.4.8", default-features = false, optional = true }
 
-# Arrow and Parquet 55.2.0 are the newest releases that build with Rust 1.82;
-# 56 needs 1.84 and 57 needs 1.85. The engine's own tables are columnar
+# Arrow 55.2.0 is the newest release that builds with Rust 1.82; 56 needs
+# 1.84 and 57 needs 1.85. The engine's own tables are columnar
 # (column_table.rs); Arrow is their form at the hosts' edge (the arrow
 # feature), and arrow-ipc and flatbuffers read the Arrow schema that a Parquet
 # file embeds (the parquet feature).
@@ -48,17 +48,16 @@ arrow-schema = { version = "=55.2.0", default-features = false, optional = true 
 arrow-buffer = { version = "=55.2.0", default-features = false, optional = true }
 arrow-ipc = { version = "=55.2.0", default-features = false, optional = true }
 flatbuffers = { version = "=25.12.19", default-features = false, optional = true }
-# Parquet 55 has one `flate2` feature, and it selects flate2's zlib-rs
-# backend, which flate2 prefers to the rust_backend (miniz_oxide) named below.
-parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"], optional = true }
 # Direct page admission bounds decompression before the general source reader.
 # These storage dependencies stay at the adapter boundary. base64, lz4_flex and
 # zstd stay in the 0.22, 0.11 and 0.13 series that Parquet 55.2.0 requires, so
-# the engine builds one copy of each (#3696).
+# the differential harness's oracle builds one copy of each with the engine
+# (#3696). flate2 decompresses with its zlib-rs backend, as it did while
+# Parquet 55, which selects it, was in the engine's build (#3878).
 bytes = { version = "1.12.1", optional = true }
 base64 = { version = "0.22.1", optional = true }
 brotli = { version = "8.0.4", default-features = false, features = ["std"], optional = true }
-flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"], optional = true }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend", "zlib-rs"], optional = true }
 lz4_flex = { version = "0.11.6", optional = true }
 zstd = { version = "0.13.3", default-features = false, optional = true }
 snap = { version = "1.1.2", optional = true }
@@ -74,6 +73,12 @@ rustix = { version = "1.1.5", features = ["fs", "process"] }
 # User-mode, handle-relative Windows filesystem transport only.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_Security_Authorization", "Win32_Globalization"] }
+
+[dev-dependencies]
+# The differential harness's oracle, parquet 55.2.0, and the writer of the
+# test inputs that pyarrow once wrote: only test builds compile it, and no
+# package builds or vendors it (#3878).
+parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"] }
 
 [build-dependencies]
 # Builds the reviewed read-only SAS input backend when readstat is enabled.

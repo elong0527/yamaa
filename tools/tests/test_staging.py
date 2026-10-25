@@ -38,11 +38,12 @@ class StagingTests(unittest.TestCase):
                 self.assertFalse((destination / "src" / name).exists(), name)
                 self.assertTrue((destination / "src" / f"{name}.in").is_file(), name)
             # src/rust is the R engine bundle: its sources from the checkout,
-            # its workspace manifest and a verified trimmed lock, beside the
-            # compressed crates and their Cargo configuration.
+            # its manifests without test-only dependencies and a verified
+            # trimmed lock, beside the compressed crates and their Cargo
+            # configuration.
             embedded = destination / "src/rust"
             expected = {
-                relative: source.read_bytes()
+                relative: engine_bundle.source_bytes(source)
                 for relative, source in engine_bundle.sources("r")
             }
             expected["Cargo.toml"] = engine_bundle.workspace_manifest("r").encode()

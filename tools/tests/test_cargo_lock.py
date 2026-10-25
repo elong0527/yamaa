@@ -257,6 +257,34 @@ class BundleArchiveTests(unittest.TestCase):
                 )
                 self.assertEqual(entries[profile], b"[levels]\n")
 
+    def test_member_manifests_may_omit_only_their_dev_dependencies(self):
+        # The archive validator's byte comparison must admit the staging
+        # rewrite while still refusing any change to a production dependency.
+        relative = "crates/yamaa-adapters/Cargo.toml"
+        package = b'[package]\nname = "yamaa-adapters"\n'
+        dependencies = b'\n[dependencies]\nparser = "1"\n'
+        dev = b'\n[dev-dependencies]\nparquet = "55"\n'
+        build = b'\n[build-dependencies]\ncc = "1"\n'
+        original = package + dependencies + dev + build
+        staged = package + dependencies + build
+        (self.workspace / relative).write_bytes(original)
+        for host in ("python", "r"):
+            name = guard.LAYOUTS[host].workspace + relative
+            entries = self.entries(host)
+            with self.subTest(host=host, case="bundled bytes"):
+                self.assertEqual(entries[name], staged)
+                self.assertEqual(self.check(dict(entries, **{name: staged}))[0], host)
+            for label, payload in (
+                ("dev-dependencies retained", original),
+                ("production dependency changed", staged.replace(b'"1"', b'"2"', 1)),
+                ("build-dependencies removed", package + dependencies),
+            ):
+                with self.subTest(host=host, case=label):
+                    with self.assertRaisesRegex(
+                        ValueError, f"{name} differs from the checkout"
+                    ):
+                        self.check(dict(entries, **{name: payload}))
+
     def test_only_a_manifest_alone_may_have_an_empty_unrecorded_library(self):
         # tools/staging/vendor_crates.py reduces a crate that no supported
         # target compiles to its manifest, with an empty src/lib.rs, which its

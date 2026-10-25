@@ -267,6 +267,29 @@ class SourceTests(unittest.TestCase):
                     # The Python bundle keeps the profiles as they are written.
                     bundle.workspace_manifest("python", workspace)
 
+    def test_member_manifests_leave_out_their_dev_dependencies_as_one_block(self):
+        # A bundle holds no tests, so none vendors a test-only crate such as
+        # the parquet crate, the adapters' differential oracle (#3878).
+        package = '[package]\nname = "member"\n'
+        dev = '\n[dev-dependencies]\n# Only the tests.\nparquet = "55"\n'
+        lints = "\n[lints]\nworkspace = true\n"
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "member" / "Cargo.toml"
+            manifest.parent.mkdir()
+            for text, staged in (
+                (package + dev + lints, package + lints),
+                (package + lints, package + lints),
+            ):
+                manifest.write_text(text)
+                with self.subTest(text=text):
+                    self.assertEqual(bundle.member_manifest(manifest), staged)
+            # A blank line inside the table would leave its last entry behind.
+            manifest.write_text(
+                package + dev.replace("\nparquet", "\n\nparquet") + lints
+            )
+            with self.assertRaisesRegex(ValueError, "one block that a blank line ends"):
+                bundle.member_manifest(manifest)
+
     def test_member_sources_carry_readstat_and_refuse_links(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -486,6 +509,12 @@ class StagingTests(unittest.TestCase):
                     names = {name for name, _, _ in kept}
                     self.assertIn(kept_crate, names)
                     self.assertNotIn(dropped_crate, names)
+                    # The adapters' test-only oracle stays out of every bundle.
+                    self.assertNotIn("parquet", names)
+                    for manifest in (destination / "crates").glob("*/Cargo.toml"):
+                        self.assertNotIn(
+                            "dev-dependencies", tomllib.loads(manifest.read_text())
+                        )
                     self.assertEqual(
                         bundle.verify_lock(
                             (destination / "Cargo.lock").read_text(),

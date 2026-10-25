@@ -140,7 +140,7 @@ WIDTH = 78
 # crate offers a choice, the first offered license whose text the crate ships
 # is relied on. A crate usable only under another license stops generation
 # until its license has been reviewed and added here. Zlib is zlib-rs's only
-# license: Parquet 55 selects that flate2 backend.
+# license: the adapters select that flate2 backend, as Parquet 55 did (#3878).
 ACCEPTED = (
     "MIT",
     "Apache-2.0",

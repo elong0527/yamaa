@@ -334,7 +334,7 @@ def bundle_files(host, workspace=WORKSPACE):
     by its path in the source archive."""
     layout = LAYOUTS[host]
     files = {
-        layout.workspace + relative: source.read_bytes()
+        layout.workspace + relative: engine_bundle.source_bytes(source, workspace)
         for relative, source in engine_bundle.sources(host, workspace)
     }
     files[layout.workspace + "Cargo.toml"] = engine_bundle.workspace_manifest(

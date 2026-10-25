@@ -16,7 +16,7 @@ directory, the files of the benchmarks that benchmarks/selftest.yaml names,
 which its build embeds (#3030 D108), and the adapters crate the schema files
 that it embeds in its `schema` directory, the copies of yaml/ that
 tools/packaging/generate_shipped_schema.py writes, so a build from the bundle
-reads nothing outside it. It holds no tests,
+reads nothing outside it. It holds no tests or member dev-dependencies, no
 examples, other benchmark fixtures or public-api.txt, and no Rust toolchain
 file anywhere, the vendored crates included. The command line has no source
 archive: its bundle, with the yamaa-cli crate in place of the boundary and a
@@ -65,6 +65,8 @@ EMBEDDED = {"schema": (".yaml", ".json"), "profile": (".toml",)}
 BOUNDARY = "yamaa-boundary"
 BINDINGS = {"python": "yamaa-python", "r": "yamaa-r", "cli": "yamaa-cli"}
 MANIFEST, LOCK = "Cargo.toml", "Cargo.lock"
+# The table of a member's test-only dependencies, which no bundle holds.
+DEV_DEPENDENCIES = "[dev-dependencies]"
 # Cargo reads its configuration from the directory it runs in and its parents.
 # pip builds a Python source archive from its root, so the archive carries this
 # file there, beside the vendored crates in vendor/; offline stops any Cargo
@@ -218,7 +220,7 @@ def sources(host, workspace=WORKSPACE):
             yield relative.as_posix(), path
 
 
-def without_table(lines, header):
+def without_table(lines, header, label="rust/Cargo.toml: the R bundle"):
     """A manifest's lines without one table: its header line, the comment lines
     directly above it, its lines up to the next blank line, and that blank line.
 
@@ -227,7 +229,7 @@ def without_table(lines, header):
     found = [index for index, line in enumerate(lines) if line.strip() == header]
     if len(found) != 1:
         raise ValueError(
-            f"rust/Cargo.toml: the R bundle leaves out the {header} table, which "
+            f"{label} leaves out the {header} table, which "
             f"must appear once, as a line {header}"
         )
     start = end = found[0]
@@ -237,6 +239,41 @@ def without_table(lines, header):
     while end < len(lines) and lines[end].strip():
         end += 1
     return lines[:start] + lines[end + 1 :]
+
+
+def member_manifest(path: Path):
+    """A member's manifest without its dev-dependencies, which only its tests
+    build, and a bundle holds no tests: the parquet crate, the adapters'
+    differential oracle, is one, so no bundle vendors it (#3878).
+
+    The table goes with the comment lines directly above it and every line up
+    to the blank line that ends it (without_table), and the result must parse
+    as the member's manifest without that table.
+    """
+    text = path.read_text(encoding="utf-8")
+    expected = tomllib.loads(text)
+    if expected.pop("dev-dependencies", None) is None:
+        return text
+    label = f"{path.parent.name}/{MANIFEST}: a bundle"
+    lines = without_table(text.splitlines(keepends=True), DEV_DEPENDENCIES, label)
+    manifest = "".join(lines)
+    try:
+        rewritten = tomllib.loads(manifest)
+    except tomllib.TOMLDecodeError:
+        rewritten = None
+    if rewritten != expected:
+        raise ValueError(
+            f"{path.parent.name}/{MANIFEST}: write the {DEV_DEPENDENCIES} table "
+            "as one block that a blank line ends"
+        )
+    return manifest
+
+
+def source_bytes(path: Path, workspace=WORKSPACE):
+    """A source's bundled bytes, leaving member dev-dependencies out."""
+    if path.name == MANIFEST and path.parent.parent == workspace / "crates":
+        return member_manifest(path).encode("utf-8")
+    return path.read_bytes()
 
 
 def workspace_manifest(host, workspace=WORKSPACE):
@@ -402,7 +439,7 @@ def stage_workspace(host, destination: Path, workspace=WORKSPACE):
     for relative, path in sources(host, workspace):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, target)
+        target.write_bytes(source_bytes(path, workspace))
     trimmed = trim_lock(destination, canonical)
     return verify_lock(trimmed, canonical, members(host))
 
