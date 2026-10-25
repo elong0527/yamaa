@@ -16,11 +16,6 @@
 //! or made longer or not UTF-8, a boolean flipped, a struct emptied and a
 //! list element dropped. So is each page header, where the change keeps its
 //! length, and each page's bytes, one byte at a time.
-//!
-//! One difference is known, and no input holds it: parquet 55 was shown page
-//! headers rewritten where it could not skip a field they held, and the
-//! reader refused a file whose rewritten pages shared bytes. The native
-//! reader reads the held pages, so it reads such a file.
 use super::columns::Column;
 use super::footer::{self, Chunk, Footer, Kind, Leaf, Node, Repetition, RowGroup, Schema};
 use super::format::{Codec, Converted, Encoding, Logical, Physical, TimeUnit};
@@ -837,9 +832,9 @@ fn upstream_columns(
 
 /// Copy the held file for parquet 55's page reader, presenting each page
 /// header as the footer is presented to its metadata decoder. The
-/// presentation keeps each header's length, so it is written in place. Once
-/// a header is presented, no two pages may share a byte, or the page reader
-/// could read bytes that admission never saw.
+/// presentation keeps each header's length, so it is written in place. The
+/// reader has already refused a presented file whose pages share a byte
+/// (`reader::refuse_shared_presented_pages`).
 fn presented_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Bytes, Error> {
     let mut file: Option<Vec<u8>> = None;
     for page in &frame.pages {
@@ -851,19 +846,7 @@ fn presented_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::
     for opaque in &frame.opaque {
         file.get_or_insert_with(|| bytes.to_vec())[opaque.clone()].fill(0);
     }
-    let Some(file) = file else {
-        return Ok(bytes::Bytes::copy_from_slice(bytes));
-    };
-    let mut extents: Vec<_> = frame
-        .pages
-        .iter()
-        .map(|page| (page.header.start, page.body.end))
-        .collect();
-    extents.sort_unstable();
-    if extents.windows(2).any(|pair| pair[1].0 < pair[0].1) {
-        return Err(Error::Malformed);
-    }
-    Ok(bytes::Bytes::from(file))
+    Ok(file.map_or_else(|| bytes::Bytes::copy_from_slice(bytes), bytes::Bytes::from))
 }
 
 /// The columns' signatures as the reader spelled them from parquet 55's
@@ -1038,4 +1021,33 @@ fn difference<T: std::fmt::Debug>(upstream: &T, native: &T) -> String {
         context(&upstream),
         context(&native)
     )
+}
+
+/// The expectation the harness holds beside agreement: the host fixtures'
+/// invalid Parquet files, for which `parquet-containment` states one
+/// `source_parquet_invalid` row, are refused as malformed by both decoders.
+/// The INT96 statistic is refused with the footer; the page that two row
+/// groups name, whose header parquet 55 was shown otherwise, where the read
+/// compares the pages (`reader::refuse_shared_presented_pages`).
+#[test]
+fn both_decoders_refuse_the_invalid_host_fixture_files() {
+    let truth =
+        crate::json_wire::decode(include_str!("../../../../tests/host-fixtures/cases.json"))
+            .unwrap();
+    for name in [
+        "long_int96_statistic_parquet",
+        "shared_presented_page_parquet",
+    ] {
+        let hex = truth["families"]["parquet-containment"][name]["hex"]
+            .as_str()
+            .unwrap();
+        let bytes = unhex(hex);
+        for (decoders, label) in [(NATIVE, "native"), (UPSTREAM, "parquet 55")] {
+            assert_eq!(
+                reader::whole(&bytes, false, decoders).map(|_| ()),
+                Err(Error::Malformed),
+                "{name}, {label}"
+            );
+        }
+    }
 }

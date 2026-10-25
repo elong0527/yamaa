@@ -481,8 +481,8 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
 /// reads. This independently
 /// authored correction copies the struct only when needed, changes no values
 /// that decoder reads from a well-typed struct, and never turns invalid
-/// booleans into bytes.
-#[cfg(test)]
+/// booleans into bytes. The native reader asks only whether a page header
+/// would be presented otherwise (`reader::refuse_shared_presented_pages`).
 pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
     let mut reader = Reader::new(bytes);
     reader.native_metadata = Some(Cow::Borrowed(bytes));

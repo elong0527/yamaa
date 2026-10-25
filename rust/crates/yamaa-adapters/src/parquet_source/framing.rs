@@ -79,8 +79,9 @@ pub(super) struct Framing<'a> {
     pub annotated: Vec<usize>,
     pub pages: Vec<Page>,
     /// Where page headers hold a skipped binary whose bytes are not UTF-8,
-    /// in the held file: shown to parquet 55's decoder as zero bytes.
-    #[cfg(test)]
+    /// in the held file: shown to parquet 55's decoder as zero bytes. A file
+    /// that holds one is presented, so no two of its pages may share a byte
+    /// (`reader::refuse_shared_presented_pages`).
     pub opaque: Vec<std::ops::Range<usize>>,
     /// The row groups of each partition, in order (#3792): every row group
     /// for a whole read, and one empty partition for a file without any.
@@ -237,7 +238,6 @@ pub(super) fn admit_partitioned(
         footer: footer.presentation,
         annotated,
         pages: Vec::new(),
-        #[cfg(test)]
         opaque: Vec::new(),
         partitions: Vec::new(),
     };
@@ -283,10 +283,9 @@ pub(super) fn admit_partitioned(
                 let (header, used) = compact::parse(&bytes[offset..end])?;
                 // A page header holds no list that `wire::Lists` reports, and
                 // nothing that the presentation splices.
-                let _shown = wire::check(header, Shape::PageHeader)?.presentation;
-                #[cfg(test)]
+                let shown = wire::check(header, Shape::PageHeader)?.presentation;
                 result.opaque.extend(
-                    _shown
+                    shown
                         .opaque
                         .into_iter()
                         .map(|range| offset + range.start..offset + range.end),
