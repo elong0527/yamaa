@@ -168,9 +168,9 @@ fn help_prints_every_command_and_wins_over_other_arguments() {
          yamaa --version [--format text|json]\n       yamaa --help\n"
     ));
     for synopsis in [
-        "  check PATH [--spec NAME | --parent PATH]\n",
-        "  run PATH [--spec NAME | --section SECTION]\n",
-        "  submission PATH [--section SECTION] [--created TIME]\n",
+        "  check PATH [--spec NAME | --parent PATH] [--verbose]\n",
+        "  run PATH [--spec NAME | --section SECTION] [--verbose]\n",
+        "  submission PATH [--section SECTION] [--created TIME] [--verbose]\n",
         "  resolve PATH [--spec NAME]\n",
         "  read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] \
          [--max-expanded-bytes N] [--max-xml-depth N]\n",
