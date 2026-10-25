@@ -19,6 +19,7 @@ on:
       - 'rust/crates/yamaa-adapters/src/column_table.rs'
       - 'rust/crates/yamaa-adapters/src/columns.rs'
       - 'rust/crates/yamaa-adapters/src/csv_source.rs'
+      - 'rust/crates/yamaa-adapters/src/dataset_json_source.rs'
       - 'rust/crates/yamaa-adapters/src/decoder.rs'
       - 'rust/crates/yamaa-adapters/src/epoch.rs'
       - 'rust/crates/yamaa-adapters/src/odm_xml/**'

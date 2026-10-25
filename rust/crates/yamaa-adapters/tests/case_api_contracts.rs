@@ -4,7 +4,9 @@
 //! return values. Inputs and first-issue expectations remain
 //! owned by the migrated fixtures. Authored route contracts also retain the
 //! original domain/preparation distinction, output and save results, staged
-//! file preservation and completed bytes across repeated saves.
+//! file preservation and completed bytes across repeated saves, and the
+//! calls a scripted host-functions port received, in order
+//! (`fixtures/function_call_contracts.json`).
 use crate::support::diagnostic::{form, operations, replay};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -275,7 +277,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        363,
+        395,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -440,8 +442,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (241, 13, 4, 105));
-    assert_eq!((accepted_saves, refused_saves, no_save), (154, 46, 163));
+    assert_eq!((domains, preparation, either, checks), (267, 19, 4, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (154, 46, 195));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter
@@ -585,4 +587,50 @@ fn migrated_written_paths_keep_output_and_publication_contracts() {
         "every written-path API case remains present"
     );
     assert_eq!(seen.len(), 9);
+}
+
+/// Seam: the calls a scripted host-functions port received, and where the
+/// run started reading its study input, which no issue row, table or saved
+/// file states (`operations::calls`).
+#[test]
+fn host_function_cases_keep_the_calls_their_port_received() {
+    let authored =
+        yamaa_adapters::json_wire::decode(include_str!("fixtures/function_call_contracts.json"))
+            .unwrap();
+    replay::closed(&authored, &["about", "cases"]);
+    let contracts = replay::object(replay::field(&authored, "cases"));
+    let mut seen = BTreeSet::new();
+    for case in replay::cases() {
+        let host = case
+            .operations
+            .iter()
+            .any(|operation| operation.starts_with("host_"));
+        let Some(expected) = contracts.get(&case.label) else {
+            assert!(
+                !host,
+                "{}: a scripted host's case states its calls",
+                case.label
+            );
+            continue;
+        };
+        assert!(seen.insert(case.label.clone()));
+        let expected = replay::items(expected)
+            .iter()
+            .map(|entry| replay::text(entry).to_owned())
+            .collect::<Vec<_>>();
+        for operation in &case.operations {
+            assert_eq!(
+                operations::calls(operation, &case.input),
+                expected,
+                "{} ({operation}): the calls its port received",
+                case.label
+            );
+        }
+    }
+    assert_eq!(
+        seen,
+        contracts.keys().cloned().collect(),
+        "every case with authored calls remains present"
+    );
+    assert_eq!(seen.len(), 32);
 }
