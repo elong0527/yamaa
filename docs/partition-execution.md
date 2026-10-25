@@ -3,7 +3,8 @@
 This is the execution inventory and whole-table equivalence contract for
 [#2683](https://github.com/elong0527/yamaa/issues/2683), and the partitioned
 executor and the streamed runs built on it (#3697), with their end states, its
-key-bounded partitions (#3763), and its confinement gate (#3830).
+key-bounded partitions (#3763), and its run holding one decoded partition at a
+time, with its confinement gate (#3830).
 None of them changes language behavior; existing language requirements remain
 authoritative.
 
@@ -204,17 +205,28 @@ These are implementation seams for subsequent work, not new callable APIs.
 ## The partitioned executor
 
 `ResolvedPlan::execute_partitioned` runs a plan over the partitions of its
-driver input, consecutive physical subsets of one snapshot in order, and the
-facade's `EngineOptions::with_partitions` divides each build's driver input
-into partitions of a given number of records (#3697), or into key-bounded
+driver input, consecutive physical subsets of one snapshot in order, which a
+`PartitionSource` decodes one at a time, and `ResolvedPlan::execute_divided`
+runs it over the partitions of an input it holds whole. The facade's
+`EngineOptions::with_partitions` divides each build's driver input into
+partitions of a given number of records (#3697), or into key-bounded
 partitions ([below](#key-bounded-partitions), #3763). It is an engine mode
 with no host surface.
 
-- **One input.** The run reads the partitions as one table, so every record
-  keeps its coordinate in the whole input, and reads, failures and row
-  identities name it as the whole-table run does. Admission checks every
-  partition's schema, and each partition within the row and cell limits on
-  its own, before any record is read; every other source is admitted whole.
+- **One partition at a time.** The run decodes a partition, runs it through
+  every derivation step as a whole-table run over its own records (its row
+  templates or its key grain, then its column phase), keeps its candidate
+  rows, and drops it before decoding the next (#3830). The output keys, the
+  dataset checks and the final order run once, after the last partition,
+  over every partition's candidates in the whole-table run's order: each
+  template's rows, partition after partition. Every record keeps its
+  coordinate in the whole input and every row its position in the whole
+  output: a failure's positions, its partition's own, are moved past the
+  records and rows of the partitions before it, so reads, failures and row
+  identities name them as the whole-table run does. Admission checks the
+  input's schema, and each partition within the row and cell limits on its
+  own, before any record is read; every other source is admitted whole. A
+  partition decoded with another schema fails the run.
 - **Reading by partition.** A run whose specification reads one input, CSV
   or Parquet, and whose plan is safe under its partitions reads that input
   by partition (#3792). A scan decodes every partition once, in order, and
@@ -225,34 +237,48 @@ with no host surface.
   decodes one run after another. Every finding is the whole read's, at the
   same record, row and field: the whole read runs each check over every
   partition before the next check, so the scan reports the finding whose
-  check, then column, then partition comes first. Key-bounded partitions
-  are cut as the scan reads the records
-  ([below](#key-bounded-partitions)); consecutive ones are the scan's own.
+  check, then column, then partition comes first. Partitions cut between
+  runs, key-bounded ones ([below](#key-bounded-partitions)) and consecutive
+  ones under the confinement gate, are cut as the scan reads the records;
+  other consecutive ones are the scan's own.
   Each partition is admitted on its own, then decoded again from the held
-  bytes, and its generated ordinal counts records in the whole input. The
-  run holds the partitions it decoded for its execution. The observations'
+  bytes when the run reaches it, and dropped before the next is decoded; its
+  generated ordinal counts records in the whole input. The run still holds
+  the input's bytes, and its whole output (#3870). The observations'
   copy of the input holds no record: it is decoded again, a partition at a
   time, whenever the observations are serialized. Every other run reads
   each input whole and admits it whole, a run with a lookup, join or named
   relation's source included, so a plan with a step that needs the whole
   table, run with the fallback or not, refuses an input beyond the limits as
   an unpartitioned run does.
-- **Units, one partition at a time.** The schedule's units run in their
-  order. A unit whose steps are all `Safe` or `CombineStep`, and whose rows
-  come from the driver input, runs over each partition's rows in turn, each
-  as a unit of its own: in batch, replayed row by row after a failure. A
-  column step runs its bindings one after another, as the whole-table run
-  does (#2829), each over one partition's rows after another. So the first
-  failure is the whole-table run's: the earliest failing step and binding,
-  then the earliest row in base-record order. Rows of a template driven by a
-  secondary input or a named intermediate belong to no partition.
+- **The whole-table first failure.** Every partition's run passes the same
+  numbered marks in the same order, whatever its records hold
+  (`columnar/partitions.rs`): one for each part of a step whose failures the
+  whole-table run orders apart, such as a template's driver and row stage,
+  the preparation and the evaluation of each of its windows, its post-window
+  filter, and each column binding over each template's rows, in batch and
+  replayed row by row after a failure, as the whole-table run does (#2829).
+  The whole-table run finishes each part over every record before the next,
+  so its first failure is at the earliest mark any partition fails at, in the
+  earliest such partition: the earliest failing step and binding, then the
+  earliest row in base-record order. Once a partition fails, every later
+  partition runs only the marks before it. Rows of a template that does not
+  read the driver input, driven by a secondary input or by a named
+  intermediate over one, belong to no partition: the first partition's run
+  builds them, and every later run passes their marks without building any.
 - **Combine state.** Only the state this inventory marks combinable crosses
-  partitions: the candidate rows the output is built from; the handler counts
-  (`columnar/handlers.rs`), added up partition after partition; the key
-  groups of group templates and the key grain (`columnar/group.rs`,
-  `table_grouping::Key`), formed per partition and merged; and the check
-  records (`columnar/checks.rs`), which each check builds at its checkpoint
-  over every partition's candidates in candidate order.
+  partitions: the candidate rows the output is built from, appended
+  partition after partition; the handler counts (`columnar/handlers.rs`),
+  which each partition's run records at the marks where they change, so the
+  run adds up the counts the whole-table run holds when it fails, the
+  earlier partitions' through the failing mark and the later ones' before
+  it; the template rows, added up; and the check records
+  (`columnar/checks.rs`), which each check builds once, after the last
+  partition, over every partition's candidates in candidate order, up to the
+  first failure. The key groups of group templates and the key grain
+  (`columnar/group.rs`, `table_grouping::Key`) never cross: each partition
+  forms its own, and the confinement gate (below) keeps each group in one
+  partition.
 - **Global steps.** `ResolvedPlan::whole_table_step` names the first step
   the schedule marks `Global` whose evaluation reads a window, an aggregate,
   a named or joined relation, `SELF` rows or a project function, or the
@@ -295,9 +321,10 @@ with no host surface.
   does not hold every partition key; and under consecutive partitions, the
   first such read that leaves no field shared with every earlier one, as two
   templates grouped by `USUBJID` and by `SITEID` share none.
-- **Cancellation.** The token is polled at every checkpoint of the schedule,
-  between the partitions of each divided unit, and before each batch of
-  project-function calls. A cancelled run keeps nothing any partition built.
+- **Cancellation.** The token is polled at admission, at every derivation
+  checkpoint of each partition's run, at every checkpoint after the last
+  partition, and before each batch of project-function calls. A cancelled
+  run keeps nothing any partition built.
 
 ### Key-bounded partitions
 
@@ -358,14 +385,12 @@ keys make each partition a run of whole subjects.
   Every other step that needs the whole table stays `Global`: a named or
   joined relation, `SELF` rows, a project function, and a window or
   aggregate whose grouping omits a partition key.
-- **Running a divided window or aggregate.** A divided unit runs one
-  partition's rows at a time, as under consecutive partitions. A window step
-  prepares its window once over its whole scope, as the whole-table run
-  does, so a failure while preparing it comes before any row is evaluated,
-  then evaluates each partition's rows as a unit of its own; an aggregate
-  reads its records as the whole-table run reads them. Only key-bounded
-  partitions divide a template's window stage: consecutive partitions keep
-  it one unit, as #3697 built it.
+- **Running a divided window or aggregate.** Each partition's run prepares
+  such a window over its own rows, then evaluates them; an aggregate reads
+  its partition's records. A failure while preparing a window still comes
+  before any row is evaluated, in any partition, as in the whole-table run:
+  the preparation and the evaluation pass marks of their own
+  ([the whole-table first failure](#the-partitioned-executor)).
 
 A window grouped by `[USUBJID, PARAMCD]` in a specification keyed `[STUDYID,
 USUBJID, ...]` omits the first partition key, so it is refused under two keys
@@ -482,7 +507,11 @@ which runs every single-specification benchmark over one-record partitions
 and over key-bounded partitions of one key group each against its expected
 files, reads each as a stream of one-record batches, and lists the ADaM
 benchmarks key-bounded partitions must admit, and `end_states.rs`, one test
-per cell of the end states. The partitioned publication's are the facade's
+per cell of the end states. That a run holds one decoded partition at a time is
+proved by `partitioned_execution.rs`'s partition source, which counts the
+partitions it has decoded and not yet dropped, and by the facade's
+`partitioned_memory.rs`, which measures a run's peak with a counting allocator
+over ten partitions and over one. The partitioned publication's are the facade's
 `partitioned_publication.rs` and `partitioned_reading.rs`, the adapters'
 `table_parquet_bytes.rs` and `table_arrow_table.rs` for the encoders, and
 `file_application.rs`'s save that fails or is cancelled between two

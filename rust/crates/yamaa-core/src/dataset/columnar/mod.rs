@@ -43,6 +43,7 @@ mod keygrain;
 mod odm;
 mod pairs;
 mod partitions;
+pub use partitions::PartitionSource;
 mod predicates;
 mod relations;
 mod scalar;
@@ -239,29 +240,65 @@ struct Run<'p, 'a, E> {
     /// Whether the probe has answered true: a run stays cancelled, even when
     /// a probe of a lookup swallowed the poll's failure.
     pub stopped: std::cell::Cell<bool>,
-    /// The partitions of a partitioned run's driver input (#3697).
-    pub partitions: Option<partitions::Partitions>,
     /// The most rows one partition of the output holds, once admission has
-    /// passed, for a partitioned run that divides every step (D264); none
-    /// while the output is admitted whole.
+    /// passed, for a partitioned run (D264); none while the output is
+    /// admitted whole.
     pub output_partition: Option<std::num::NonZeroUsize>,
+    /// Where one partition's run of a partitioned run has reached (#3830);
+    /// none in a whole-table run.
+    pub marks: Option<partitions::Marks>,
 }
 
 /// What a batch unit restores before it replays in row mode.
 struct Checkpoint {
     handlers: HandlerMark,
     relations: relations::Mark,
+    /// The marks a partition's run had entered, and its handler snapshots.
+    marks: Option<(usize, usize)>,
 }
 
 impl<'p, 'a, E> Run<'p, 'a, E> {
+    /// A run of `plan` over its admitted inputs, with nothing counted yet.
+    fn new(
+        plan: &'p ResolvedPlan,
+        (primary, secondary): (
+            &'a dyn TableAccess<Error = E>,
+            &'a [&'a dyn TableAccess<Error = E>],
+        ),
+        functions: &'a mut dyn FunctionPort<Error = E>,
+        cancelled: &'a dyn Fn() -> bool,
+    ) -> Self {
+        Self {
+            plan,
+            primary,
+            secondary,
+            functions,
+            handlers: Handlers::new(plan),
+            relations: relations::State::new(plan, RegionId::DATASET),
+            windows: windows::Runs::default(),
+            calls: false,
+            ports: index::Ports::default(),
+            cancelled,
+            stopped: std::cell::Cell::new(false),
+            output_partition: None,
+            marks: None,
+        }
+    }
+
     fn checkpoint(&self) -> Checkpoint {
         Checkpoint {
             handlers: self.handlers.mark(),
             relations: self.relations.mark(),
+            marks: self.marks.as_ref().map(partitions::Marks::position),
         }
     }
 
+    /// Undo a failed batch unit, its marks included, so that its replay
+    /// enters them again under the same numbers.
     fn rollback(&mut self, checkpoint: Checkpoint) {
+        if let (Some(marks), Some(position)) = (self.marks.as_mut(), checkpoint.marks) {
+            marks.restore(position);
+        }
         self.undo(checkpoint);
         self.windows = windows::Runs::default();
     }
@@ -331,6 +368,17 @@ impl<T: TableAccess + ?Sized> TableAccess for Borrowed<'_, T> {
     }
 }
 
+/// What one attempt found, before its events close: its result, and the
+/// evidence it keeps unless it was cancelled.
+struct Found<E> {
+    result: Result<Execution, Fail<E>>,
+    handler_counts: Vec<crate::numeric_lifecycle::HandlerCount>,
+    records: Vec<CheckRecord>,
+    templates: Vec<TemplateRows>,
+    /// Whether the probe answered true, so the attempt keeps nothing.
+    cancelled: bool,
+}
+
 impl ResolvedPlan {
     /// Execute the admitted sources and the explicit function port once,
     /// retaining handler and verification evidence on success and failure.
@@ -352,19 +400,28 @@ impl ResolvedPlan {
         cancelled: &dyn Fn() -> bool,
     ) -> ExecutionAttempt<T::Error> {
         let primary = Borrowed(table);
-        self.attempt(&primary, None, secondary, functions, observer, cancelled)
+        self.observed(observer, |observer| {
+            let mut run = Run::new(self, (&primary, secondary), functions, cancelled);
+            let mut records = Vec::new();
+            let mut templates = Vec::new();
+            let result = run.execute_inner(&mut records, &mut templates, observer);
+            Found {
+                result,
+                handler_counts: run.handlers.snapshot(self),
+                records,
+                templates,
+                cancelled: run.stopped.get(),
+            }
+        })
     }
 
-    /// One attempt over the driver input `primary`, whole or divided into
-    /// `partitions` (#3697).
-    fn attempt<E>(
+    /// One attempt, `attempt`, observed: its phases entered and left, its
+    /// limit refusal reported, and a cancelled attempt keeping nothing it
+    /// built.
+    fn observed<E>(
         &self,
-        primary: &dyn TableAccess<Error = E>,
-        partitions: Option<partitions::Partitions>,
-        secondary: &[&dyn TableAccess<Error = E>],
-        functions: &mut dyn FunctionPort<Error = E>,
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
-        cancelled: &dyn Fn() -> bool,
+        attempt: impl FnOnce(&mut dyn FnMut(ExecutionEvent)) -> Found<E>,
     ) -> ExecutionAttempt<E> {
         let mut ignore = |_| {};
         let observer = observer.unwrap_or(&mut ignore);
@@ -378,27 +435,11 @@ impl ResolvedPlan {
             observer(event);
         };
         observer(ExecutionEvent::Phase(ExecutionPhase::Admission));
-        let mut run = Run {
-            plan: self,
-            primary,
-            secondary,
-            functions,
-            handlers: Handlers::new(self),
-            relations: relations::State::new(self, RegionId::DATASET),
-            windows: windows::Runs::default(),
-            calls: false,
-            ports: index::Ports::default(),
-            cancelled,
-            stopped: std::cell::Cell::new(false),
-            partitions,
-            output_partition: None,
-        };
-        let mut records = Vec::new();
-        let mut templates = Vec::new();
-        let mut result = run.execute_inner(&mut records, &mut templates, &mut observer);
+        let found = attempt(&mut observer);
+        let mut result = found.result;
         // A poll whose failure a lookup's probe swallowed still cancels the
         // run, and a cancelled run keeps nothing it built.
-        let cancelled = run.stopped.get()
+        let cancelled = found.cancelled
             || matches!(&result, Err(error) if matches!(**error, ExecutionError::Cancelled));
         if cancelled {
             result = Err(Box::new(ExecutionError::Cancelled));
@@ -446,9 +487,9 @@ impl ResolvedPlan {
         } else {
             ExecutionAttempt {
                 result,
-                handler_counts: run.handlers.snapshot(self),
-                retained_verifications: records,
-                template_rows: templates,
+                handler_counts: found.handler_counts,
+                retained_verifications: found.records,
+                template_rows: found.templates,
             }
         };
         observer(ExecutionEvent::Phase(ExecutionPhase::Finished));
@@ -463,6 +504,22 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         templates: &mut Vec<TemplateRows>,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Execution, Fail<E>> {
+        self.admit(None)?;
+        observer(ExecutionEvent::Exit {
+            phase: ExecutionPhase::Admission,
+            outcome: crate::application_observer::Outcome::Succeeded,
+        });
+        observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
+        self.execute_admitted(records, templates, observer)
+    }
+
+    /// Admit the run before any record is read: its function bindings, the
+    /// schemas and number of its inputs, their geometry within the row and
+    /// cell limits, and the output's columns. `driver` holds the records of
+    /// each partition of the driver input, which a partitioned run admits
+    /// each on its own (#3792), or none for the whole input; every other
+    /// source is admitted whole.
+    fn admit(&mut self, driver: Option<&[usize]>) -> Result<(), Fail<E>> {
         self.poll(super::resolved::Step::Admit)?;
         functions::admit(self.plan, &*self.functions)?;
         let plan = self.plan;
@@ -473,10 +530,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .saturating_sub(1)
             .saturating_sub(plan.pair_ports());
         if self.primary.schema() != &plan.sources()[sources[0].index()].schema
-            || self
-                .partitions
-                .as_ref()
-                .is_some_and(|partitions| partitions.mismatched)
             || self.secondary.len() != expected
             || self
                 .secondary
@@ -494,13 +547,16 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 required: count,
             }));
         }
-        // A partitioned run admits each partition of its driver input on its
-        // own (#3792); every other source, and an undivided driver, whole.
         let width = self.primary.schema().columns().len();
-        let primary = self
-            .driver_admissions()
-            .into_iter()
-            .map(|rows| (0, rows, width));
+        let whole;
+        let driver = match driver {
+            Some(driver) => driver,
+            None => {
+                whole = [self.primary.row_count()];
+                &whole
+            }
+        };
+        let primary = driver.iter().map(|&rows| (0, rows, width));
         let secondary = self.secondary.iter().enumerate().map(|(index, source)| {
             (
                 index + 1,
@@ -523,40 +579,15 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 }));
             }
         }
-        self.check_capacity(RegionId::DATASET, 0, 0)?;
-        // A partitioned run divides only what the inventory lets it divide
-        // under its partitions; a step that needs the whole table refuses it
-        // before any record is read, unless the run falls back to the whole
-        // table (#3697, #3763).
-        if let Some(partitions) = self
-            .partitions
-            .as_ref()
-            .filter(|partitions| !partitions.fallback)
-        {
-            if let Some(step) = plan.whole_table_step(partitions.keys) {
-                return Err(Box::new(ExecutionError::PartitionGlobal {
-                    path: plan.step_path(step).into_owned(),
-                }));
-            }
-        }
-        // Admitted: a key-bounded run cuts its input now (#3763), and a run
-        // that divides every step admits its output a partition at a time
-        // from here on (D264), unless it admits its output whole, as a run
-        // over a SAS or ODM driver input does.
-        self.cut_by_keys();
-        self.output_partition = self
-            .partitions
-            .as_ref()
-            .filter(|partitions| {
-                !partitions.whole_output && plan.whole_table_step(partitions.keys).is_none()
-            })
-            .map(partitions::Partitions::largest);
-        observer(ExecutionEvent::Exit {
-            phase: ExecutionPhase::Admission,
-            outcome: crate::application_observer::Outcome::Succeeded,
-        });
-        observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
-        self.execute_admitted(records, templates, observer)
+        self.check_capacity(RegionId::DATASET, 0, 0)
+    }
+
+    /// The secondary inputs, as the tables a read addresses.
+    fn inputs(&self) -> Vec<Table<'a, E>> {
+        self.secondary
+            .iter()
+            .map(|&table| Table::Source(table))
+            .collect()
     }
 
     fn execute_admitted(
@@ -565,15 +596,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         templates: &mut Vec<TemplateRows>,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Execution, Fail<E>> {
-        let plan = self.plan;
-        let region = RegionId::DATASET;
-        let width = plan.region(region).output.columns().len();
+        let width = self.plan.region(RegionId::DATASET).output.columns().len();
         let mut frame = Frame::new(width);
-        let inputs: Vec<Table<'a, E>> = self
-            .secondary
-            .iter()
-            .map(|&table| Table::Source(table))
-            .collect();
+        let inputs = self.inputs();
         self.poll(super::resolved::Step::VerifyIntermediates { self_rows: false })?;
         // Every pair relation is materialized before any intermediate is
         // verified and any row is built, and is read through its port, after
@@ -586,39 +611,81 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             start: 0,
             rows: records.rows(),
         }));
-        self.verify_intermediates(&frame, &secondary, false, records)?;
+        self.derive(&mut frame, &secondary, records, templates)?;
+        self.finish(&frame, &secondary, records, observer)
+    }
+
+    /// Build every candidate of the dataset: verify the intermediates over
+    /// the inputs, build the rows of each template or of the key grain, then
+    /// complete the column phase.
+    fn derive<'s>(
+        &mut self,
+        frame: &mut Frame,
+        secondary: &[Table<'s, E>],
+        records: &mut Vec<CheckRecord>,
+        templates: &mut Vec<TemplateRows>,
+    ) -> Result<(), Fail<E>>
+    where
+        'a: 's,
+    {
+        let plan = self.plan;
+        let region = RegionId::DATASET;
+        // A partitioned run verifies the intermediates over its other inputs
+        // once, in its first partition's run (#3830).
+        if self.marks.as_ref().is_none_or(|marks| marks.first) {
+            self.verify_intermediates(frame, secondary, false, records)?;
+        }
         let template_ids: Vec<TemplateId> = plan.region_templates(region).collect();
         let keyed = template_ids.first().is_some_and(|&template| {
             plan.template(template).driver.grain == super::resolved::Grain::Keys
         });
         if keyed {
-            keygrain::construct(self, &mut frame, &secondary)?;
+            keygrain::construct(self, frame, secondary)?;
             templates.push(TemplateRows {
                 emitted: frame.rows(),
                 read: self.primary.row_count(),
             });
+            self.completed_template();
         } else {
             let mut next_identity = 0usize;
             for (index, &template) in template_ids.iter().enumerate() {
                 self.process_template(
                     (index, template),
-                    &mut frame,
-                    &secondary,
+                    frame,
+                    secondary,
                     &mut next_identity,
                     templates,
                     records,
                 )?;
             }
         }
-        self.complete_columns(&mut frame, &secondary, records)?;
-        checks::verify_output(self, &frame, &secondary, records, observer)?;
+        self.complete_columns(frame, secondary, records)
+    }
+
+    /// Check the completed candidates, their output keys and the dataset
+    /// checks, then order them into the dataset.
+    fn finish<'s>(
+        &mut self,
+        frame: &Frame,
+        secondary: &[Table<'s, E>],
+        records: &mut Vec<CheckRecord>,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> Result<Execution, Fail<E>>
+    where
+        'a: 's,
+    {
+        let plan = self.plan;
+        // A selector hidden by an empty input or a lazy branch must still report
+        // its known filter-type refusal before a successful result can publish.
+        relations::check_unobserved_filter_types(plan)?;
+        checks::verify_output(self, frame, secondary, records, observer)?;
         self.poll(super::resolved::Step::Order)?;
-        let order = checks::output_order(self.plan, &frame);
+        let order = checks::output_order(plan, frame);
         let mut rows = Vec::new();
         reserved(rows.try_reserve_exact(order.len()))?;
         rows.extend(order.iter().map(|&row| frame.row_values(row)));
         Ok(Execution {
-            dataset: Dataset::from_rows(plan.region(region).output.clone(), rows),
+            dataset: Dataset::from_rows(plan.region(RegionId::DATASET).output.clone(), rows),
             verifications: std::mem::take(records),
             partition_rows: self.output_partition,
         })
@@ -727,6 +794,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// bindings, apply its filter, complete its window stage and post-window
     /// filter, then publish its SELF rows and verify the SELF intermediates,
     /// a warning's record joining `records`.
+    ///
+    /// A partition's run (#3830) marks each part of the template whose
+    /// failures the whole-table run orders apart: its driver step, its row
+    /// stage, each window binding's preparation and evaluation, its
+    /// post-window filter and its SELF verification.
     fn process_template<'s>(
         &mut self,
         (index, template): (usize, TemplateId),
@@ -740,10 +812,14 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         'a: 's,
     {
         let plan = self.plan;
+        if !self.builds(template) {
+            return self.pass_template(template, templates);
+        }
         let node = plan.template(template);
         let region = node.region;
         let first = frame.rows();
         // The driver is the template's first step.
+        self.mark(partitions::Coordinates::Frame)?;
         self.poll(super::resolved::Step::Driver(template))?;
         let driver = relations::driver(self, template, frame, secondary)?;
         let table = match &driver.materialized {
@@ -751,19 +827,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             None => self.source_table(region, node.driver.source, secondary),
         };
         let read = driver.eligible.as_ref().map_or(table.row_count(), Vec::len);
-        // A partitioned run divides the row stage of a template that reads
-        // the driver input when none of its steps needs the whole table
-        // (#3697).
-        let divided = self.reads_partitions(template)
-            && self.divides(|step| match step {
-                super::resolved::Step::Row(binding) => {
-                    plan.binding(binding).templates.contains(&template)
-                }
-                super::resolved::Step::Filter(owner) | super::resolved::Step::Driver(owner) => {
-                    owner == template
-                }
-                _ => false,
-            });
         let groups: Vec<Vec<usize>> = match &node.driver.grain {
             super::resolved::Grain::Records => {
                 let rows = driver.eligible.as_ref().map_or(table.row_count(), Vec::len);
@@ -777,7 +840,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 let fields: Vec<usize> = fields.iter().map(|&field| field as usize).collect();
                 match &driver.eligible {
                     Some(eligible) => relations::driver_groups(table, eligible, &fields)?,
-                    None if divided => self.partition_groups(table, &fields)?,
                     None => crate::table_grouping::partition(&table, &fields)
                         .map_err(|error| Box::new(ExecutionError::Grouping(error)))?,
                 }
@@ -806,68 +868,53 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .filter
             .filter(|filter| filter.placement == super::resolved::FilterPlacement::Prewindow);
         let callbacks = self.row_stage_callbacks(template);
-        // The candidates of one partition after another, each a unit of its
-        // own; undivided, all of them are one unit.
-        let runs = self.partition_runs(divided, groups.len(), |group| {
-            groups[group].first().copied()
-        });
-        for (number, range) in runs.into_iter().enumerate() {
-            self.next_partition(number)?;
-            let start = frame.rows();
-            let unit_groups = &groups[range.clone()];
-            let unit_identities = &identities[range];
-            let unit = |run: &mut Self, frame: &mut Frame, row_mode: bool| -> Result<(), Fail<E>> {
-                let cx_template = index as u32;
-                if row_mode {
-                    for (members, &identity) in unit_groups.iter().zip(unit_identities) {
-                        let row = frame.push(cx_template, Identity::Candidate(identity), members);
-                        for &binding in &prewindow {
-                            run.complete_binding(
-                                frame,
-                                binding,
-                                (table, secondary),
-                                first,
-                                &[row],
-                                None,
-                            )?;
-                        }
-                        if let Some(filter) = filter {
-                            let cx = run.template_cx(frame, region, table, secondary, first);
-                            let truth = run.filter_truth(&cx, filter.expr, &[row])?;
-                            if truth[0] != crate::expression::Truth::True {
-                                frame.truncate(row);
-                            }
-                        }
-                    }
-                } else {
-                    for (members, &identity) in unit_groups.iter().zip(unit_identities) {
-                        frame.push(cx_template, Identity::Candidate(identity), members);
-                    }
-                    let rows: Vec<usize> = (start..frame.rows()).collect();
+        // The candidates, one unit.
+        self.mark(partitions::Coordinates::Frame)?;
+        let start = frame.rows();
+        let unit = |run: &mut Self, frame: &mut Frame, row_mode: bool| -> Result<(), Fail<E>> {
+            let cx_template = index as u32;
+            if row_mode {
+                for (members, &identity) in groups.iter().zip(&identities) {
+                    let row = frame.push(cx_template, Identity::Candidate(identity), members);
                     for &binding in &prewindow {
                         run.complete_binding(
                             frame,
                             binding,
                             (table, secondary),
                             first,
-                            &rows,
+                            &[row],
                             None,
                         )?;
                     }
                     if let Some(filter) = filter {
                         let cx = run.template_cx(frame, region, table, secondary, first);
-                        let truths = run.filter_truth(&cx, filter.expr, &rows)?;
-                        let keep: Vec<bool> = truths
-                            .iter()
-                            .map(|truth| *truth == crate::expression::Truth::True)
-                            .collect();
-                        frame.retain_from(start, &keep);
+                        let truth = run.filter_truth(&cx, filter.expr, &[row])?;
+                        if truth[0] != crate::expression::Truth::True {
+                            frame.truncate(row);
+                        }
                     }
                 }
-                Ok(())
-            };
-            self.run_unit(frame, Footprint::Rows(start), callbacks, unit)?;
-        }
+            } else {
+                for (members, &identity) in groups.iter().zip(&identities) {
+                    frame.push(cx_template, Identity::Candidate(identity), members);
+                }
+                let rows: Vec<usize> = (start..frame.rows()).collect();
+                for &binding in &prewindow {
+                    run.complete_binding(frame, binding, (table, secondary), first, &rows, None)?;
+                }
+                if let Some(filter) = filter {
+                    let cx = run.template_cx(frame, region, table, secondary, first);
+                    let truths = run.filter_truth(&cx, filter.expr, &rows)?;
+                    let keep: Vec<bool> = truths
+                        .iter()
+                        .map(|truth| *truth == crate::expression::Truth::True)
+                        .collect();
+                    frame.retain_from(start, &keep);
+                }
+            }
+            Ok(())
+        };
+        self.run_unit(frame, Footprint::Rows(start), callbacks, unit)?;
         // The window stage, one binding at a time over the template's rows.
         let windowed: Vec<BindingId> = plan
             .row_bindings(template)
@@ -880,61 +927,48 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             let column = self.local_column(region, plan.binding(binding).column);
             let output = first..frame.rows();
             let columns = [column];
-            // Under key-bounded partitions a window that groups by every
-            // partition key reads only rows of its own partition (#3763): its
-            // run is prepared once over the template's rows, then each
-            // partition's rows are evaluated as a unit of their own.
-            // Consecutive partitions keep the window stage one unit (#3697).
-            let keyed = self
-                .partitions
-                .as_ref()
-                .is_some_and(|partitions| partitions.keys > 0);
-            let divided =
-                keyed && self.reads_partitions(template) && self.divides(|other| other == step);
-            let runs = self.row_runs(divided, frame, &rows);
-            for (number, range) in runs.into_iter().enumerate() {
-                self.next_partition(number)?;
-                let unit_rows = &rows[range];
-                let footprint = Footprint::Cells {
-                    columns: &columns,
-                    rows: unit_rows,
-                };
-                self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
-                    if number == 0 {
-                        run.windows = windows::Runs::default();
-                        let mut cx = run.template_cx(frame, region, table, secondary, first);
-                        cx.output = output.clone();
-                        windows::prepare(run, &cx, plan.binding(binding).expr)?;
-                    }
-                    if row_mode {
-                        for &row in unit_rows {
-                            run.complete_binding(
-                                frame,
-                                binding,
-                                (table, secondary),
-                                first,
-                                &[row],
-                                Some(output.clone()),
-                            )?;
-                        }
-                        Ok(())
-                    } else {
+            let footprint = Footprint::Cells {
+                columns: &columns,
+                rows: &rows,
+            };
+            self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
+                // The whole-table run prepares the window over every
+                // partition's rows before it evaluates any (#3830).
+                run.mark(partitions::Coordinates::Window(index))?;
+                run.windows = windows::Runs::default();
+                let mut cx = run.template_cx(frame, region, table, secondary, first);
+                cx.output = output.clone();
+                windows::prepare(run, &cx, plan.binding(binding).expr)?;
+                run.mark(partitions::Coordinates::Frame)?;
+                if row_mode {
+                    for &row in &rows {
                         run.complete_binding(
                             frame,
                             binding,
                             (table, secondary),
                             first,
-                            unit_rows,
+                            &[row],
                             Some(output.clone()),
-                        )
+                        )?;
                     }
-                })?;
-            }
+                    Ok(())
+                } else {
+                    run.complete_binding(
+                        frame,
+                        binding,
+                        (table, secondary),
+                        first,
+                        &rows,
+                        Some(output.clone()),
+                    )
+                }
+            })?;
         }
         if let Some(filter) = node
             .filter
             .filter(|filter| filter.placement == super::resolved::FilterPlacement::Postwindow)
         {
+            self.mark(partitions::Coordinates::Frame)?;
             let callbacks =
                 self.step_callbacks(region, super::resolved::Step::PostwindowFilter(template));
             let mut keep = Vec::new();
@@ -966,6 +1000,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             emitted: frame.rows() - first,
             read,
         });
+        self.completed_template();
+        self.mark(partitions::Coordinates::Frame)?;
         self.relations.publish_self(plan);
         self.poll(super::resolved::Step::VerifyIntermediates { self_rows: true })?;
         self.verify_intermediates(frame, secondary, true, records)?;
@@ -1117,6 +1153,12 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
 
     /// Complete the column phase in the compiler's order, checking each
     /// available declared prefix of column checks in order.
+    ///
+    /// A partition's run (#3830) completes each binding over one template's
+    /// rows after another, each a unit of its own, as the whole-table run's
+    /// failures order them: by column, binding and template, then partition
+    /// and row. It marks where the column checks would run instead of running
+    /// them, and the run checks every partition's candidates there once.
     fn complete_columns<'s>(
         &mut self,
         frame: &mut Frame,
@@ -1130,24 +1172,14 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         let region = RegionId::DATASET;
         self.relations.begin_columns(plan);
         let columns: Vec<ColumnId> = plan.region_columns(region).collect();
-        let width = columns.len();
-        let mut completed = vec![true; width];
-        for template in plan.region_templates(region) {
-            let mut present = vec![false; width];
-            for binding in plan.row_bindings(template) {
-                let local = plan.binding(binding).column.index() - columns[0].index();
-                present[local] = true;
-            }
-            for (column, done) in completed.iter_mut().enumerate() {
-                *done &= present[column];
-            }
-        }
+        let mut completed = row_completed(plan);
         let mut next = 0;
-        checks::check_columns(self, frame, &completed, &mut next, records)?;
+        self.check_columns(frame, (&completed, None), &mut next, records)?;
         let order = plan.column_order(region).to_vec();
         for column in order {
             let local = column.index() - columns[0].index();
             let step = super::resolved::Step::Column(column);
+            self.mark(partitions::Coordinates::Frame)?;
             self.poll(step)?;
             let callbacks = self.step_callbacks(region, step);
             let rows: Vec<usize> = (0..frame.rows())
@@ -1165,46 +1197,48 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                         .iter()
                         .copied()
                         .filter(|&row| {
-                            let template = templates[frame.template(row).unwrap_or(0)];
-                            serves.contains(&template)
+                            serves.contains(&templates[frame.template(row).unwrap_or(0)])
                         })
                         .collect();
                     (binding, served)
                 })
                 .collect();
             let columns = [local];
-            if self.divides(|candidate| candidate == step) {
-                // A partitioned run completes a partition-safe column as the
-                // whole-table run does, one binding after another (#2829),
-                // and each binding over one partition's rows after another,
-                // each a unit of its own (#3697).
+            if self.marks.is_some() {
                 self.windows = windows::Runs::default();
                 let mut prepared = None;
                 for (binding, served) in &bindings {
                     let expr = plan.binding(*binding).expr;
                     let mut prepare = prepared != Some(expr);
                     prepared = Some(expr);
-                    let runs = self.row_runs(true, frame, served);
-                    for (number, range) in runs.into_iter().enumerate() {
-                        self.next_partition(number)?;
-                        let unit_rows = &served[range];
-                        // The binding's first unit prepares its expression.
+                    let mut serves = plan.binding(*binding).templates.clone();
+                    serves.sort_unstable();
+                    for template in serves {
+                        let unit_rows: Vec<usize> = served
+                            .iter()
+                            .copied()
+                            .filter(|&row| templates[frame.template(row).unwrap_or(0)] == template)
+                            .collect();
+                        // The binding's first unit prepares its expression,
+                        // over every candidate, as its own mark.
                         let first_unit = std::mem::replace(&mut prepare, false);
                         let footprint = Footprint::Cells {
                             columns: &columns,
-                            rows: unit_rows,
+                            rows: &unit_rows,
                         };
                         self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
+                            if first_unit {
+                                run.mark(partitions::Coordinates::Frame)?;
+                                run.complete_column(frame, *binding, secondary, &[], true)?;
+                            }
+                            run.mark(partitions::Coordinates::Frame)?;
                             if row_mode {
-                                run.complete_column(frame, *binding, secondary, &[], first_unit)?;
-                                for &row in unit_rows {
+                                for &row in &unit_rows {
                                     run.complete_column(frame, *binding, secondary, &[row], false)?;
                                 }
                                 Ok(())
                             } else {
-                                run.complete_column(
-                                    frame, *binding, secondary, unit_rows, first_unit,
-                                )
+                                run.complete_column(frame, *binding, secondary, &unit_rows, false)
                             }
                         })?;
                     }
@@ -1237,12 +1271,29 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 })?;
             }
             completed[local] = true;
-            checks::check_columns(self, frame, &completed, &mut next, records)?;
+            self.check_columns(frame, (&completed, Some(local)), &mut next, records)?;
         }
-        // A selector hidden by an empty input or a lazy branch must still report
-        // its known filter-type refusal before a successful result can publish.
-        relations::check_unobserved_filter_types(plan)?;
         Ok(())
+    }
+
+    /// Check the available declared prefix of column checks
+    /// (`checks::check_columns`), `completed` the columns complete and the
+    /// column just completed, if any. A partition's run records where it
+    /// would check instead (#3830).
+    fn check_columns(
+        &mut self,
+        frame: &Frame,
+        (completed, column): (&[bool], Option<usize>),
+        next: &mut usize,
+        records: &mut Vec<CheckRecord>,
+    ) -> Result<(), Fail<E>> {
+        match self.marks.as_mut() {
+            Some(marks) => {
+                marks.check(column);
+                Ok(())
+            }
+            None => checks::check_columns(self, frame, completed, next, records),
+        }
     }
 
     /// One column-phase binding over `rows`, through its driver's port: a
@@ -1315,4 +1366,23 @@ enum Footprint<'r> {
         columns: &'r [usize],
         rows: &'r [usize],
     },
+}
+
+/// The output columns every template completes in its row stage, by their
+/// place in the region: the columns the column phase finds complete.
+fn row_completed(plan: &ResolvedPlan) -> Vec<bool> {
+    let region = RegionId::DATASET;
+    let columns: Vec<ColumnId> = plan.region_columns(region).collect();
+    let mut completed = vec![true; columns.len()];
+    for template in plan.region_templates(region) {
+        let mut present = vec![false; columns.len()];
+        for binding in plan.row_bindings(template) {
+            let local = plan.binding(binding).column.index() - columns[0].index();
+            present[local] = true;
+        }
+        for (column, done) in completed.iter_mut().enumerate() {
+            *done &= present[column];
+        }
+    }
+    completed
 }
