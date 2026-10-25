@@ -45,7 +45,7 @@ builders must check the unchanged final release tarball.
 
 ## Size and timing
 
-The measured source archive is 9,411,757 bytes (9.41 MB), including
+The measured source archive is 9,412,481 bytes (9.41 MB), including
 7,514,532 bytes (7.51 MB) in `src/rust/vendor.tar.xz`, below the Repository
 Policy's 10 MB guideline. The installed package on the local Ubuntu/R 4.6.1
 check is 21.9 MB, including 21.5 MB in `libs`; platform/toolchain-specific
