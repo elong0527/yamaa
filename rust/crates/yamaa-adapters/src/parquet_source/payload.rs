@@ -1,8 +1,10 @@
 //! Physical payload validation after footer framing and actual decompression.
 //! These checks do not replace the general reader's full format validation.
 use super::{
+    closed_profile,
     compact::Error,
     delta,
+    format::Encoding,
     framing::{Page, Payload},
     rle,
 };
@@ -12,8 +14,8 @@ fn levels(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<&[
     if maximum == 0 {
         return Ok(bytes);
     }
-    let length = match encoding {
-        3 => {
+    let length = match closed_profile::levels(encoding) {
+        Some(Encoding::Rle) => {
             let raw = bytes.get(..4).ok_or(Error::Malformed)?;
             let size = i32::from_le_bytes(raw.try_into().unwrap());
             usize::try_from(size)
@@ -21,7 +23,7 @@ fn levels(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<&[
                 .checked_add(4)
                 .ok_or(Error::Malformed)?
         }
-        4 => {
+        Some(Encoding::BitPacked) => {
             let width = 16 - (maximum as u16).leading_zeros() as usize;
             values
                 .checked_mul(width)
@@ -56,9 +58,9 @@ fn level_runs(
         }
         visit(value, count)
     };
-    match encoding {
-        3 => rle::hybrid(bytes, width, values, &mut checked),
-        4 => rle::packed(bytes, width, values, &mut checked),
+    match closed_profile::levels(encoding) {
+        Some(Encoding::Rle) => rle::hybrid(bytes, width, values, &mut checked),
+        Some(Encoding::BitPacked) => rle::packed(bytes, width, values, &mut checked),
         _ => Err(Error::Malformed),
     }
 }
@@ -281,28 +283,36 @@ impl Validation {
             return Ok(());
         };
         if matches!(page.payload, Payload::Dictionary { .. }) {
-            if self.dictionary.is_some() || !matches!(encoding, 0 | 2) {
+            let page =
+                closed_profile::encoding(encoding).is_some_and(closed_profile::dictionary_page);
+            if self.dictionary.is_some() || !page {
                 return Err(Error::Malformed);
             }
             plain(body, count, column)?;
             self.dictionary = Some(count);
             return Ok(());
         }
+        let encoding = closed_profile::encoding(encoding);
+        if encoding.is_some_and(closed_profile::dictionary_data) {
+            let entries = self.dictionary.ok_or(Error::Malformed)?;
+            let (&width, indices) = body.split_first().ok_or(Error::Malformed)?;
+            return rle::hybrid(indices, u32::from(width), count, |index, _| {
+                if index as usize >= entries {
+                    Err(Error::Malformed)
+                } else {
+                    Ok(())
+                }
+            });
+        }
         match encoding {
-            2 | 8 => {
-                let entries = self.dictionary.ok_or(Error::Malformed)?;
-                let (&width, indices) = body.split_first().ok_or(Error::Malformed)?;
-                rle::hybrid(indices, u32::from(width), count, |index, _| {
-                    if index as usize >= entries {
-                        Err(Error::Malformed)
-                    } else {
-                        Ok(())
-                    }
-                })
-            }
-            0 => plain(body, count, column),
-            5..=7 => delta_values(page, decoded, column),
-            _ => Ok(()), // The physical reader checks the remaining encodings/types.
+            Some(Encoding::Plain) => plain(body, count, column),
+            Some(
+                Encoding::DeltaBinaryPacked
+                | Encoding::DeltaLengthByteArray
+                | Encoding::DeltaByteArray,
+            ) => delta_values(page, decoded, column),
+            // The physical reader checks the remaining encodings and types.
+            _ => Ok(()),
         }
     }
 }

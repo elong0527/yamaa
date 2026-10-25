@@ -1,4 +1,6 @@
-//! Closed source type admission over portable storage metadata, without a codec.
+//! The closed Parquet profile's source findings and their order, over the
+//! fields a codec read; the codec reads each field's column type from the
+//! profile's data file.
 use crate::{
     diagnostic::{ParquetFinding, SourceFinding},
     table::{Column, TableSchema},
@@ -6,72 +8,12 @@ use crate::{
 };
 use std::collections::BTreeSet;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Physical {
-    ByteArray,
-    Int32,
-    Int64,
-    Double,
-    Other,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Unit {
-    Second,
-    Millisecond,
-    Microsecond,
-    Nanosecond,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Logical {
-    None,
-    String,
-    Date,
-    Timestamp {
-        unit: Unit,
-        utc: bool,
-    },
-    /// The `Int(bitWidth, isSigned)` annotation.
-    Integer {
-        bits: u8,
-        signed: bool,
-    },
-    Other,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Converted {
-    None,
-    Utf8,
-    Date,
-    /// `INT_8` through `INT_64`, signed, and `UINT_8` through `UINT_64`.
-    Integer {
-        bits: u8,
-        signed: bool,
-    },
-    Other,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Representation {
-    Text,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    Float64,
-    Date32,
-    Timestamp { unit: Unit, timezone: bool },
-    Other,
-}
-
-/// Physical metadata and retained diagnostic spelling supplied by a codec.
+/// One field of a Parquet file, as its codec read it: the column type the
+/// closed profile's column rows give it, if any, and the stored type a
+/// refused field's finding spells.
 pub struct Field {
     pub name: String,
-    pub leaves: usize,
-    pub path: String,
-    pub repetition: i16,
-    pub physical: Physical,
-    pub logical: Logical,
-    pub converted: Converted,
-    pub representation: Representation,
+    pub kind: Option<ColumnType>,
     pub stored_type: String,
 }
 
@@ -116,48 +58,6 @@ impl Error {
     }
 }
 
-/// Legacy annotations and logical annotations admit the same closed pairs.
-/// Values never infer schema, dictionary, timestamp or nested-field admission.
-pub fn column_type(
-    physical: Physical,
-    logical: Logical,
-    converted: Converted,
-    representation: Representation,
-) -> Option<ColumnType> {
-    let string =
-        logical == Logical::String || (logical == Logical::None && converted == Converted::Utf8);
-    let date =
-        logical == Logical::Date || (logical == Logical::None && converted == Converted::Date);
-    let none = logical == Logical::None && converted == Converted::None;
-    let timestamp = logical
-        == Logical::Timestamp {
-            unit: Unit::Microsecond,
-            utc: false,
-        };
-    // A signed integer annotation of `bits`; an unsigned one never matches.
-    let signed = |bits| {
-        logical == Logical::Integer { bits, signed: true }
-            || (logical == Logical::None && converted == Converted::Integer { bits, signed: true })
-    };
-    match (physical, representation) {
-        (Physical::ByteArray, Representation::Text) if string => Some(ColumnType::Str),
-        (Physical::Int64, Representation::Int64) if none || signed(64) => Some(ColumnType::Int),
-        (Physical::Int32, Representation::Int32) if none || signed(32) => Some(ColumnType::Int),
-        (Physical::Int32, Representation::Int16) if signed(16) => Some(ColumnType::Int),
-        (Physical::Int32, Representation::Int8) if signed(8) => Some(ColumnType::Int),
-        (Physical::Double, Representation::Float64) if none => Some(ColumnType::Float),
-        (Physical::Int32, Representation::Date32) if date => Some(ColumnType::Date),
-        (
-            Physical::Int64,
-            Representation::Timestamp {
-                unit: Unit::Microsecond,
-                timezone: false,
-            },
-        ) if timestamp => Some(ColumnType::DateTime),
-        _ => None,
-    }
-}
-
 /// Empty schema/alignment precede field findings; names precede types per field.
 /// A nested root's failure belongs to that root, never an earlier/later leaf.
 pub fn columns<I>(fields: I, roots: usize) -> Result<TableSchema, Error>
@@ -178,20 +78,10 @@ where
         if !names.insert(field.name.clone()) {
             return Err(Error::DuplicateName { field: field.name });
         }
-        let kind = (field.leaves == 1 && field.repetition == 0 && field.path == field.name)
-            .then(|| {
-                column_type(
-                    field.physical,
-                    field.logical,
-                    field.converted,
-                    field.representation,
-                )
-            })
-            .flatten()
-            .ok_or_else(|| Error::Unsupported {
-                field: field.name.clone(),
-                stored_type: field.stored_type,
-            })?;
+        let kind = field.kind.ok_or_else(|| Error::Unsupported {
+            field: field.name.clone(),
+            stored_type: field.stored_type,
+        })?;
         columns.push(Column {
             name: field.name,
             kind,
