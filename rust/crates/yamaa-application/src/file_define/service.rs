@@ -8,7 +8,7 @@ use super::{Failure, Reads};
 use crate::{
     column_table::ColumnTable,
     project_source::OwnedEnvironment,
-    publication::{AnchoredTarget, Publisher},
+    publisher::{AnchoredTarget, Publisher},
     specification_source::PreparedDocument,
 };
 use std::sync::Arc;
@@ -223,7 +223,7 @@ fn render_transport<T: TableAccess>(
 /// The records `source` decodes from `bytes` under its profile, as a run
 /// counts an input's records (CHECK-24); `None` when the bytes do not decode.
 fn count_records(source: &SourceDeclaration, bytes: &[u8]) -> Option<usize> {
-    crate::specification_run::decode_source(
+    crate::source_decoding::decode_source(
         source,
         bytes,
         yamaa_core::specification::SourceInterpretation::Ordinary,

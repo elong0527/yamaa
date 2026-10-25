@@ -20,7 +20,7 @@
 
 use std::collections::BTreeMap;
 
-pub(crate) use yamaa_adapters::issue_location::Locator;
+pub(crate) use yamaa_application::issue_location::Locator;
 
 use crate::conditions::ConditionCode;
 use crate::table::Table;

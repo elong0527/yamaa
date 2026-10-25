@@ -1,6 +1,5 @@
 //! Report metadata owns immutable encoded table rows. Sharing a report never
 //! copies its cell objects or re-enters a source/host port.
-use crate::specification_report::Error;
 use serde::{
     ser::{SerializeMap, SerializeSeq},
     Serialize, Serializer,
@@ -14,6 +13,24 @@ use std::{
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::{Map, Value};
 use yamaa_core::table::{TableAccess, ValueRef};
+
+/// Why a report could not be built from what an attempt observed.
+#[derive(Debug)]
+pub enum Error {
+    UnsupportedOutcome,
+    CapabilityUnavailable { feature: &'static str },
+    InvalidObservation,
+    ResourceLimit(crate::resource_diagnostics::Refusal),
+}
+impl From<crate::source_diagnostics::SourceProjectionError> for Error {
+    fn from(error: crate::source_diagnostics::SourceProjectionError) -> Self {
+        match error {
+            crate::source_diagnostics::SourceProjectionError::InvalidContext => {
+                Self::InvalidObservation
+            }
+        }
+    }
+}
 
 struct WireCell<'a>(ValueRef<'a>);
 impl Serialize for WireCell<'_> {
@@ -68,7 +85,7 @@ impl Serialize for WireCell<'_> {
 /// `partitions` of these sizes, each admitted within the fixed limits on its
 /// own: the whole table for a table held whole, and the partitions of an
 /// input read by partition (#3792).
-pub(crate) fn encode_partitions<T: TableAccess>(
+pub fn encode_partitions<T: TableAccess>(
     table: &T,
     partitions: &[usize],
 ) -> Result<Arc<RawValue>, Error> {
@@ -95,14 +112,14 @@ fn admit(rows: usize, columns: usize) -> Result<(), Error> {
 /// Report rows written a table after another, in order: the rows of an
 /// input read by partition are written a partition at a time (#3830).
 #[derive(Default)]
-pub(crate) struct RowWriter {
+pub struct RowWriter {
     bytes: Vec<u8>,
     rows: usize,
 }
 
 impl RowWriter {
     /// Write every record of `table`, after the records written before.
-    pub(crate) fn table<T: TableAccess>(&mut self, table: &T) -> Result<(), Error> {
+    pub fn table<T: TableAccess>(&mut self, table: &T) -> Result<(), Error> {
         use std::io::Write;
         let bytes = &mut self.bytes;
         for row in 0..table.row_count() {
@@ -130,7 +147,7 @@ impl RowWriter {
     }
 
     /// The rows written, as one array.
-    pub(crate) fn finish(mut self) -> Result<Arc<RawValue>, Error> {
+    pub fn finish(mut self) -> Result<Arc<RawValue>, Error> {
         self.bytes
             .extend_from_slice(if self.rows == 0 { b"[]" } else { b"]" });
         let string = String::from_utf8(self.bytes).map_err(|_| Error::InvalidObservation)?;
@@ -143,7 +160,7 @@ impl RowWriter {
 /// by partition, encoded from its held bytes whenever the report is
 /// serialized, so the run keeps no copy of its records (#3830).
 #[derive(Clone)]
-pub(crate) enum Rows {
+pub enum Rows {
     Encoded(Arc<RawValue>),
     Deferred(Arc<dyn Fn() -> Result<Arc<RawValue>, Error> + Send + Sync>),
 }
@@ -167,9 +184,9 @@ impl fmt::Debug for Rows {
     }
 }
 
-pub(crate) struct StoredTable {
-    pub(crate) metadata: Value,
-    pub(crate) rows: Rows,
+pub struct StoredTable {
+    pub metadata: Value,
+    pub rows: Rows,
 }
 
 /// The report's form of one diagnostic: phase, condition, rule,
@@ -250,7 +267,7 @@ impl PartialEq for StoredReport {
     }
 }
 impl StoredReport {
-    pub(crate) fn with_tables(mut metadata: Value, tables: Vec<StoredTable>) -> Self {
+    pub fn with_tables(mut metadata: Value, tables: Vec<StoredTable>) -> Self {
         let mut rows = Vec::with_capacity(tables.len());
         metadata["tables"] = Value::Array(
             tables
@@ -268,18 +285,18 @@ impl StoredReport {
         }
     }
     /// The diagnostics the report records, in authored order.
-    pub(crate) fn diagnostics(&self) -> &[Diagnostic] {
+    pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
     /// Record `diagnostics` and render them into the report's diagnostics
     /// and its node's.
-    pub(crate) fn set_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+    pub fn set_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
         let rendered = Value::Array(diagnostics.iter().map(diagnostic_value).collect());
         self.metadata["diagnostics"] = rendered;
         self.metadata["nodes"][0]["diagnostics"] = self.metadata["diagnostics"].clone();
         self.diagnostics = diagnostics;
     }
-    pub(crate) fn push_table(&mut self, table: StoredTable) -> Result<(), Error> {
+    pub fn push_table(&mut self, table: StoredTable) -> Result<(), Error> {
         self.metadata["tables"]
             .as_array_mut()
             .ok_or(Error::InvalidObservation)?
@@ -287,7 +304,7 @@ impl StoredReport {
         self.rows.push(table.rows);
         Ok(())
     }
-    pub(crate) fn without_artifacts_cloned(&self) -> Result<Self, Error> {
+    pub fn without_artifacts_cloned(&self) -> Result<Self, Error> {
         let mut metadata = Value::Object(
             self.metadata
                 .as_object()

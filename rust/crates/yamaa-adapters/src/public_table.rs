@@ -644,7 +644,7 @@ fn projected<T: TableAccess>(table: &T, projection: &[usize]) -> Result<TableSch
 /// Admission shared by whole-table and deferred output, before any batch
 /// is handed to a host: the table whole, or each of its partitions of at most
 /// `partition` rows for an output held in partitions (D264).
-pub(crate) fn check_table<T: TableAccess<Error = Infallible>>(
+pub fn check_table<T: TableAccess<Error = Infallible>>(
     table: &T,
     projection: &[usize],
     partition: Option<NonZeroUsize>,

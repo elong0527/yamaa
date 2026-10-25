@@ -1,5 +1,5 @@
 //! Typed resource policies retain their applied bounds and authored owners.
-use crate::{csv_source::TextTableError, specification_run::Error};
+use crate::{csv_source::TextTableError, source_decoding::Error};
 use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{dataset::Resource, specification::SourceDeclaration};
@@ -39,7 +39,7 @@ impl Refusal {
         vec![self.diagnostic(step, fault)]
     }
 }
-pub(crate) fn resource_name(resource: Resource) -> &'static str {
+pub fn resource_name(resource: Resource) -> &'static str {
     match resource {
         Resource::SourceRows => "rows",
         Resource::SourceCells => "cells",
@@ -132,7 +132,7 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
     ))
 }
 /// A mixed ingestion collection retains authored order and the original barrier.
-pub(crate) fn source_findings(
+pub fn source_findings(
     error: &Error,
     source: &SourceDeclaration,
 ) -> Result<Option<Vec<Diagnostic>>, crate::source_diagnostics::SourceProjectionError> {
@@ -154,7 +154,7 @@ pub(crate) fn source_findings(
 /// The findings of several sources' failures, as [`source_findings`] reports
 /// one failure that lists them: every finding when all are language findings,
 /// otherwise each source's own findings or bound, in order.
-pub(crate) fn sources_findings(
+pub fn sources_findings(
     failures: &[(&SourceDeclaration, &Error)],
 ) -> Result<Option<Vec<Diagnostic>>, crate::source_diagnostics::SourceProjectionError> {
     if let Some(findings) = crate::source_diagnostics::findings_of(failures)? {
@@ -169,7 +169,7 @@ pub(crate) fn sources_findings(
     }
     Ok(Some(findings))
 }
-pub(crate) fn run_limit<E>(
+pub fn run_limit<E>(
     error: &yamaa_core::specification_run::RunError<E>,
     sources: &[SourceDeclaration],
 ) -> Option<Refusal> {
@@ -185,7 +185,7 @@ pub(crate) fn run_limit<E>(
 }
 
 /// The refusal of one execution bound, naming its source when it has one.
-pub(crate) fn outcome(
+pub fn outcome(
     bound: &crate::dataset_result::Limit,
     sources: &[SourceDeclaration],
     driver_index: usize,

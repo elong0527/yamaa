@@ -66,7 +66,7 @@ pub struct Publisher {
     name: String,
     declared: String,
 }
-pub(crate) struct AnchoredTarget {
+pub struct AnchoredTarget {
     root: Directory,
     remainder: Vec<String>,
     target: String,

@@ -116,7 +116,7 @@ impl Engine {
     /// assert_eq!(FileType::Codelists.as_str(), "codelists");
     /// ```
     pub fn file_type(&self, path: &str) -> Result<FileType, Failure> {
-        yamaa_adapters::file_application::file_type_located(
+        yamaa_application::file_application::file_type_located(
             path,
             crate::internal::resolver_bridge(self.shared()),
         )

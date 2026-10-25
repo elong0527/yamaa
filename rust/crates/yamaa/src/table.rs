@@ -187,7 +187,7 @@ impl Engine {
     /// }
     /// ```
     pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure> {
-        yamaa_adapters::table_artifact::save(
+        yamaa_application::table_artifact::save(
             table.public(),
             out,
             crate::internal::resolver_bridge(self.shared()),

@@ -3,7 +3,7 @@
 //! formula or read a table.
 use crate::{
     csv_source::{self, TextTableError},
-    specification_run::Error,
+    source_decoding::Error,
 };
 use yamaa_core::application_issue::{self as issue, Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
@@ -62,7 +62,7 @@ pub(crate) fn bound(
     Rejection::Limit(finding)
 }
 
-pub(crate) fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Diagnostic>> {
+pub fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Diagnostic>> {
     let BindError::Invalid(findings) = error else {
         return None;
     };
@@ -193,7 +193,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
 }
 
 /// The same compiler failure facts are used by plain and environment routes.
-pub(crate) fn preparation(error: &PrepareError) -> Rejection {
+pub fn preparation(error: &PrepareError) -> Rejection {
     if let PrepareError::Limit(limit) = error {
         return Rejection::Fault(issue::resource_rejected(
             Step::Prepare,
@@ -317,7 +317,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> Rejection 
     )
 }
 
-pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
+pub fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
     use yamaa_core::value::ColumnType::*;
     match kind {
         Str => "str",
@@ -333,9 +333,9 @@ pub use inherited::failure_ref as inheritance_failure_ref;
 
 mod captured_schema;
 
-pub(crate) use captured_schema::Error as CapturedProjectionError;
+pub use captured_schema::Error as CapturedProjectionError;
 /// Resolve findings against the exact held schema and input arena.
-pub(crate) fn captured_findings(
+pub fn captured_findings(
     captured: &crate::specification_source::CapturedFindings,
     source_context: &[(&str, &str)],
 ) -> Result<Vec<Diagnostic>, CapturedProjectionError> {

@@ -251,7 +251,7 @@ impl FileSpecification {
         &self,
         run: &RunScope,
         field: &str,
-    ) -> Result<crate::publication::AnchoredTarget, crate::file_application::Failure> {
+    ) -> Result<crate::publisher::AnchoredTarget, crate::file_application::Failure> {
         use crate::file_application::{resource_failure, unresolved_target};
         use yamaa_core::application_issue::Step;
         let origin = self
@@ -951,5 +951,76 @@ mod dispatch_policy_tests {
         // The entry writes the `parent`.
         assert_content_change(&diagnostic, "parent", "../parent/base.yaml", Some(&entry));
         assert_eq!(resources.capture_reads(), 2);
+    }
+}
+
+#[cfg(all(test, feature = "yaml"))]
+mod default_resolver_tests {
+    use crate::file_resolver::FileResolver;
+    use crate::file_resources::Resources;
+    use crate::host_resources::{Failure, Kind, Operation, Reply, Request, Resolver};
+    use std::sync::{Arc, Mutex};
+
+    /// The local file resolver, with every request it serves recorded.
+    struct Recording {
+        files: Arc<FileResolver>,
+        requests: Mutex<Vec<(Operation, Kind, String)>>,
+    }
+    impl Resolver for Recording {
+        fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+            self.requests.lock().unwrap().push((
+                request.operation,
+                request.kind,
+                request.written.to_owned(),
+            ));
+            self.files.request(request)
+        }
+    }
+
+    #[test]
+    fn a_build_on_local_files_reads_every_file_through_the_file_resolver() {
+        let directory =
+            std::env::temp_dir().join(format!("yamaa-default-resolver-{}", std::process::id()));
+        std::fs::create_dir_all(directory.join("input")).unwrap();
+        std::fs::write(
+            directory.join("spec.yaml"),
+            "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+        )
+        .unwrap();
+        std::fs::write(directory.join("input/src.csv"), "ID\n1\n2\n").unwrap();
+        let (files, base) = FileResolver::for_entry(directory.to_str().unwrap()).unwrap();
+        let files = Arc::new(files);
+        let recording = Arc::new(Recording {
+            files: Arc::clone(&files),
+            requests: Mutex::new(Vec::new()),
+        });
+        let resources = Resources::with_file_resolver(
+            Arc::clone(&recording) as Arc<dyn crate::host_resources::Resolver>,
+            base,
+            files,
+        );
+        let prepared =
+            crate::file_preparation::FileSpecification::prepare(resources, "spec.yaml").unwrap();
+        let mut run = prepared.run_scope(None);
+        let attempt = prepared.build(
+            &mut run,
+            &mut yamaa_core::host_functions::Empty::<std::convert::Infallible>::new(),
+            yamaa_core::application_observer::Scope::default(),
+        );
+        std::fs::remove_dir_all(&directory).unwrap();
+        assert!(attempt.dataset.result.is_ok());
+        assert_eq!(run.capture_reads(), 2);
+        let requests = recording.requests.lock().unwrap().clone();
+        let captured = |kind, written: &str| {
+            requests
+                .iter()
+                .any(|request| *request == (Operation::Capture, kind, written.to_owned()))
+        };
+        assert!(captured(Kind::Metadata, "spec.yaml"), "{requests:?}");
+        assert!(captured(Kind::Input, "input/src.csv"), "{requests:?}");
+        assert!(requests.iter().all(|(operation, _, written)| {
+            matches!(operation, Operation::Inspect | Operation::Capture)
+                && ["spec.yaml", "input/src.csv"].contains(&written.as_str())
+        }));
     }
 }

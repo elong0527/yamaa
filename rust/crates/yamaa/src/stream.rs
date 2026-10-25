@@ -71,7 +71,7 @@ use std::thread::ThreadId;
 use arrow_array::ffi_stream::FFI_ArrowArrayStream;
 use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::{ArrowError, Schema, SchemaRef};
-use yamaa_adapters::application_measurements::Measurements;
+use yamaa_application::application_measurements::Measurements;
 
 use crate::api::{Run, Status};
 use crate::cancel::CancellationToken;

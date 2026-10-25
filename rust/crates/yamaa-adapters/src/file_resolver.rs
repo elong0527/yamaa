@@ -104,7 +104,7 @@ impl FileResolver {
     /// parent and is walked from its filesystem root and refused as a link.
     /// A parent that cannot be selected adds no root: reading the project
     /// file then reports its own failure.
-    pub(crate) fn select_caller_parent(&self, path: &str) {
+    pub fn select_caller_parent(&self, path: &str) {
         if !self.local_paths {
             return;
         }
@@ -138,7 +138,7 @@ impl FileResolver {
     }
     /// Publication holds the declaration location, including absent targets.
     /// Retain its physical descriptor; the parent chain is checked at save.
-    pub(crate) fn publication_target(
+    pub fn publication_target(
         &self,
         declaring: &str,
         written: &str,
@@ -194,7 +194,7 @@ impl FileResolver {
     /// [`Self::open_named`] checks it; the publisher refuses, when it opens
     /// the target, a name that is anything but absent or a regular file
     /// (OUTPUT-8, FILE-8).
-    pub(crate) fn publication_target_named(
+    pub fn publication_target_named(
         &self,
         base: &str,
         name: &str,
@@ -768,7 +768,7 @@ fn directory_segments(path: &Path) -> Option<Segments> {
 }
 /// Convert an absolute caller-owned native path to the resource spelling. YAML
 /// paths still enter `anchors` unchanged and keep their strict separator rules.
-pub(crate) fn caller_path(path: &Path) -> Result<String, Error> {
+pub fn caller_path(path: &Path) -> Result<String, Error> {
     #[cfg(unix)]
     let text = path.to_str().ok_or(Error::InvalidPath)?.to_owned();
     #[cfg(windows)]

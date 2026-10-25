@@ -3,7 +3,7 @@ use crate::json;
 use crate::specification_source::CapturedFindings;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::{Number, Value};
-pub(crate) use yamaa_core::schema::SchemaDiagnosticError as Error;
+pub use yamaa_core::schema::SchemaDiagnosticError as Error;
 use yamaa_core::schema::{
     admit_schema_diagnostics, Document, SchemaDiagnostic, SchemaDiagnosticValue as V,
     SchemaStructure,

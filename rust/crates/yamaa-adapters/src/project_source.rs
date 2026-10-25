@@ -125,7 +125,7 @@ impl PreparedEnvironment {
     }
 }
 impl OwnedEnvironment {
-    pub(crate) fn without_environment(host: Option<Language>) -> Self {
+    pub fn without_environment(host: Option<Language>) -> Self {
         Self {
             project: None,
             origins: SourceOrigins::default(),
@@ -138,25 +138,25 @@ impl OwnedEnvironment {
             inventory_captured: false,
         }
     }
-    pub(crate) fn inventory_captured(&self) -> bool {
+    pub fn inventory_captured(&self) -> bool {
         self.inventory_captured
     }
     /// The project file path as preparation was given it.
-    pub(crate) fn written(&self) -> Option<&str> {
+    pub fn written(&self) -> Option<&str> {
         self.written.as_deref()
     }
     /// The specifications the project lists, captured for the submission
     /// inventory in listing order.
-    pub(crate) fn inventory_documents(&self) -> &[crate::specification_source::PreparedDocument] {
+    pub fn inventory_documents(&self) -> &[crate::specification_source::PreparedDocument] {
         &self.inventory_documents
     }
     /// Keep the project file path preparation was given, so a later refusal
     /// can name the file as written.
-    pub(crate) fn with_written(mut self, written: &str) -> Self {
+    pub fn with_written(mut self, written: &str) -> Self {
         self.written = Some(written.into());
         self
     }
-    pub(crate) fn attach_inventory(
+    pub fn attach_inventory(
         &mut self,
         captured: yamaa_core::submission_inventory::Captured<
             crate::specification_source::PreparedDocument,
@@ -272,7 +272,7 @@ pub fn prepare<P: yamaa_core::resolver::Resolver>(
 }
 
 /// Mechanical ownership transfer from the same engine environment preparation.
-pub(crate) fn adapt_preparation<E>(
+pub fn adapt_preparation<E>(
     result: application::PreparationResult<E, CapturedDocument, Error>,
 ) -> Result<PreparedEnvironment, Failure<E>> {
     match result {

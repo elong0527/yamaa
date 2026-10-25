@@ -333,7 +333,7 @@ impl Reads {
         // A project file that cannot be read is the caller's own path, named
         // as given (FILE-7, FILE-8, FILE-11).
         let unreadable = |error: &file_resources::Error| {
-            Failure::Diagnostic(vec![crate::file_application::caller_read_failure(
+            Failure::Diagnostic(vec![crate::file_resources::caller_read_failure(
                 written, error,
             )])
         };
@@ -537,7 +537,7 @@ impl Reads {
         path: &str,
         declaring: &str,
         written: &str,
-    ) -> Result<crate::publication::AnchoredTarget, Failure> {
+    ) -> Result<crate::publisher::AnchoredTarget, Failure> {
         self.resources()
             .publication_target_from(declaring, written)
             .map_err(|error| resource(path, written, error))
@@ -548,7 +548,7 @@ fn same_location(left: &Path, right: &Path) -> bool {
     {
         left.to_str()
             .zip(right.to_str())
-            .is_some_and(|(left, right)| crate::windows_file::equal_name(left, right))
+            .is_some_and(|(left, right)| crate::file_resources::same_location(left, right))
     }
     #[cfg(unix)]
     {

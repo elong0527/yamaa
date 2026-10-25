@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use yamaa_adapters::application_measurements::Measurements;
+use yamaa_application::application_measurements::Measurements;
 
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;

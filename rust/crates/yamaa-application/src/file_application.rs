@@ -92,35 +92,7 @@ fn resource_diagnostic(step: Step, error: &crate::file_resources::Error) -> Diag
             Vec::new(),
         );
     }
-    yamaa_core::application_issue::rejected(step, resource_fault(error))
-}
-/// The closed code of the opaque refusal a resource failure reports. A bound
-/// reports its facts beside the code (`resource_limit`).
-pub(crate) fn resource_fault(error: &crate::file_resources::Error) -> Fault {
-    use crate::file_resources::Error as E;
-    match error {
-        E::Host(_) => Fault::HostResourceFailure,
-        E::Missing => Fault::ResourceMissing,
-        E::Unreadable => Fault::ResourceUnreadable,
-        E::NotRegularFile => Fault::ResourceNotRegular,
-        E::InvalidRoot => Fault::ResourceRoot,
-        E::InvalidBase => Fault::ResourceBase,
-        E::InvalidPath => Fault::ResourcePath,
-        E::WrittenForm(_) => Fault::ResourcePath,
-        E::OutsideRoots => Fault::ResourceOutsideRoots,
-        E::Symlink => Fault::ResourceLink,
-        E::Changed => Fault::ResourceChanged,
-        E::Limit(_) => Fault::ResourceLimit,
-    }
-}
-/// The refusal of a file a caller names that cannot be read: a classified
-/// failure is its file rule's condition naming the path as given (FILE-7,
-/// FILE-8, FILE-11), and any other stays an opaque resource refusal.
-pub(crate) fn caller_read_failure(path: &str, error: &crate::file_resources::Error) -> Diagnostic {
-    match crate::file_resources::resource_failure(error) {
-        Some(failure) => failure.caller_diagnostic(path),
-        None => yamaa_core::application_issue::rejected(Step::Prepare, resource_fault(error)),
-    }
+    yamaa_core::application_issue::rejected(step, crate::file_resources::resource_fault(error))
 }
 /// The closed code a refused publication reports, selected from its typed cause.
 pub(crate) fn publication_fault(error: &crate::file_publication::Error) -> Fault {
@@ -209,7 +181,7 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
 
 pub struct Domain {
     result: BuildResult,
-    targets: Option<Vec<crate::publication::AnchoredTarget>>,
+    targets: Option<Vec<crate::publisher::AnchoredTarget>>,
     publication_issues: Failure,
     published: Option<StoredReport>,
     publication_attempt: PublicationAttempt,
@@ -281,7 +253,7 @@ impl Domain {
     }
     fn from_build(
         result: BuildResult,
-        mut target: impl FnMut(&str) -> Result<crate::publication::AnchoredTarget, Failure>,
+        mut target: impl FnMut(&str) -> Result<crate::publisher::AnchoredTarget, Failure>,
     ) -> Self {
         let fields = [
             ("report", result.report_file()),
@@ -533,7 +505,7 @@ impl Domain {
     pub(crate) fn save_with(
         &mut self,
         report_only: bool,
-        between: impl FnMut(usize, usize) -> Result<(), crate::publication::Interruption>,
+        between: impl FnMut(usize, usize) -> Result<(), crate::publisher::Interruption>,
         before: impl FnMut(usize) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, FailedBuild> {
         let failed = !self.result.accepted();
@@ -807,7 +779,7 @@ pub fn file_type_located(
 ) -> Result<yamaa_core::language::FileType, (Failure, crate::issue_location::Locator)> {
     let unreadable = |error| {
         (
-            vec![caller_read_failure(written, &error)],
+            vec![crate::file_resources::caller_read_failure(written, &error)],
             crate::issue_location::Locator::none(),
         )
     };
@@ -1472,7 +1444,7 @@ mod tests {
     /// saves whole.
     #[test]
     fn a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing() {
-        use crate::publication::Interruption;
+        use crate::publisher::Interruption;
         for (label, cancelled, fault) in [
             ("an I/O failure", false, Fault::PublicationFailed),
             ("a cancellation", true, Fault::PublicationCancelled),
