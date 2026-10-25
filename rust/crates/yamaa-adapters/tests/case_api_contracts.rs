@@ -402,7 +402,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        633,
+        641,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -602,8 +602,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (413, 54, 56, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (260, 79, 294));
+    assert_eq!((domains, preparation, either, checks), (421, 54, 56, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (268, 79, 294));
     assert_eq!(published_reports, 2, "every published report is authored");
 }
 

@@ -1,0 +1,333 @@
+{
+  "about": "Window reads of a qualified field, which check refuses from the declarations exactly as build does (WINDOW-11, NAME-3, NAME-4). A column-level window spans the rows of every row template and reads a qualified field at the record that built each row. When the row templates do not all share one driver, a read of a field of one of their drivers, or of the input a named intermediate driver reads, names no record of the other templates' rows: each operand of every window operation (rank, row_number's group and order terms and filter, row_value, locf, each baseline_flag operand), a named window where it is used and a window in a case result is refused as unknown_field, naming the field, each driver once in construction order and the window operation; grouping either template refuses it the same way, and the rows a named intermediate builds are its own, not those of the input it reads. Over row templates that share the driver the window builds: ties keep row-template order, then record order. A grouped template over the shared driver still reads only its group keys (NAME-4), and a read of a dataset whose records build none of the rows is refused in any window (NAME-3): the operands first, then each name of the filter once, in sorted order. A row template's own window reads its driver's records, and without row templates the base driver builds every row. spec is a window over subjects rows built from DM and events rows built from AE, ordered by DM.AGE; base is one without row templates. S1 is 40, S2 30 and S3 50; S1 has three adverse events, two of them serious, and S2 one serious event; LB builds no row. negative-window-other-driver pins a refusal's first issue, sdtm-fa-reactogenicity-diary a window over templates that share the driver; no benchmark pins the rest. Moved from execution_column_window_drivers.rs at 144fc5559, whose tests compared every issue of check and build through the five fields of study::issue_row, and for each build that saved, a clean check, a clean build and the saved out.csv.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID, SRC, SEQ]\noutput: {path: out.csv, columns: [USUBJID, SRC, SEQ, ORD]}\ninput:\n  DM: {path: dm.csv, key: [USUBJID], types: {AGE: int, RFSTDTC: date}}\n  AE: {path: ae.csv, types: {AESEQ: int, AESTDTC: date}}\n  LB: {path: lb.csv, types: {LBSEQ: int}}\nrows:\n  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: SRC, type: str}\n  - {name: SEQ, type: int}\n  - {name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}\n",
+    "base": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID]\nbase: DM\noutput: {path: out.csv, columns: [USUBJID, ORD]}\ninput:\n  DM: {path: dm.csv, types: {AGE: int}}\n  LB: {path: lb.csv, types: {LBSEQ: int}}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}\n",
+    "dm": "USUBJID,AGE,RFSTDTC\nS1,40,2024-01-05\nS2,30,2024-01-07\nS3,50,2024-01-09\n",
+    "ae": "USUBJID,AESEQ,AESER,AESTDTC\nS1,1,Y,2024-01-03\nS1,2,N,2024-01-08\nS2,1,Y,2024-01-06\nS1,3,Y,2024-01-10\n",
+    "lb": "USUBJID,LBSEQ\nS1,1\n"
+  },
+  "cases": [
+    {
+      "case": "a_column_window_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_column_window_reading_the_later_template_s_driver_is_refused_the_same_way",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "order_by: [DM.AGE]", "to": "order_by: [AE.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "AE.AESEQ", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "each_driver_a_refused_column_window_names_is_named_once_in_construction_order",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: again, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [AE.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "AE.AESEQ", "drivers": ["AE", "DM"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_rank_order_term_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {rank: {window: {order_by: [DM.AGE]}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.rank.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "rank"}}]
+    },
+    {
+      "case": "a_window_group_term_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {row_number: {window: {group_by: [DM.AGE], order_by: [SEQ]}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.group_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_row_value_source_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {row_value: {source: DM.AGE, offset: -1, window: {order_by: [SEQ]}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_value.source"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_value"}}]
+    },
+    {
+      "case": "a_locf_source_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {locf: {source: DM.AGE, window: {order_by: [SEQ]}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.locf.source"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "locf"}}]
+    },
+    {
+      "case": "each_baseline_flag_operand_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: str, derivation: {baseline_flag: {date: DM.RFSTDTC, reference: DM.RFSTDTC, source: DM.AGE, window: {order_by: [DM.RFSTDTC, DM.AGE]}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.baseline_flag.date"], "context": {"identifier": "DM.RFSTDTC", "drivers": ["DM", "AE"], "operation": "baseline_flag"}}, {"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.baseline_flag.reference"], "context": {"identifier": "DM.RFSTDTC", "drivers": ["DM", "AE"], "operation": "baseline_flag"}}, {"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.baseline_flag.source"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "baseline_flag"}}, {"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.baseline_flag.window.order_by[1]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "baseline_flag"}}]
+    },
+    {
+      "case": "a_window_filter_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [SEQ], filter: 'DM.AGE > 35'}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.filter"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "each_window_term_reading_a_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {row_number: {window: {group_by: [DM.USUBJID], order_by: [DM.AGE, SEQ]}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.group_by[0]"], "context": {"identifier": "DM.USUBJID", "drivers": ["DM", "AE"], "operation": "row_number"}}, {"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_named_window_reading_a_driver_another_template_lacks_is_refused_where_it_is_used",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "windows:\n  BYAGE: {order_by: [DM.AGE]}\nrows:\n"}, {"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {row_number: {window: BYAGE}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_window_in_a_case_result_only_events_rows_select_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {case: [{when: \"SRC = 'AE'\", then: {row_number: {window: {order_by: [DM.AGE]}}}}, {otherwise: 0}]}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.case[0].then.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "grouping_the_events_template_refuses_the_column_window_s_read_the_same_way",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: events, dataset: AE, group_by: [AE.USUBJID], derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: 1}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "grouping_the_subjects_template_refuses_the_column_window_s_read_the_same_way",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n", "to": "  - {id: subjects, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_column_window_reading_the_input_driver_beside_a_named_intermediate_driver_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "SER"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_column_window_reading_the_input_driver_beside_a_grouped_named_intermediate_driver_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: 1}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "SER"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_column_window_reading_a_named_intermediate_driver_another_template_lacks_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [SER.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "SER.AESEQ", "drivers": ["SER", "DM"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_column_window_reading_the_input_a_named_intermediate_driver_reads_is_refused_for_the_other_rows",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [AE.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "AE.AESEQ", "drivers": ["SER", "DM"], "operation": "row_number"}}]
+    },
+    {
+      "case": "rows_built_from_a_named_intermediate_are_not_rows_of_the_input_it_reads",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [AE.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "AE.AESEQ", "drivers": ["AE", "SER"], "operation": "row_number"}}]
+    },
+    {
+      "case": "two_named_intermediates_over_one_input_are_two_drivers_of_a_column_window",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\n  - {id: NONSER, dataset: AE, filter: \"AE.AESER = 'N'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: other, dataset: NONSER, derivations: {USUBJID: NONSER.USUBJID, SRC: \"'NONSER'\", SEQ: NONSER.AESEQ}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [AE.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "AE.AESEQ", "drivers": ["SER", "NONSER"], "operation": "row_number"}}]
+    },
+    {
+      "case": "a_column_window_whose_templates_share_the_driver_keeps_template_order_then_record_order_for_ties_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: again, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM2'\", SEQ: 0}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_column_window_whose_templates_share_the_driver_keeps_template_order_then_record_order_for_ties",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: again, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM2'\", SEQ: 0}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,ORD\nS1,DM,0,3\nS2,DM,0,1\nS3,DM,0,5\nS1,DM2,0,4\nS2,DM2,0,2\nS3,DM2,0,6\n"}
+    },
+    {
+      "case": "a_grouped_template_whose_groups_hold_the_field_reads_it_in_a_column_window_over_the_shared_driver_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID, DM.AGE], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_grouped_template_whose_groups_hold_the_field_reads_it_in_a_column_window_over_the_shared_driver",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID, DM.AGE], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,ORD\nS1,DM,0,3\nS2,DM,0,1\nS3,DM,0,5\nS1,DMG,1,4\nS2,DMG,1,2\nS3,DMG,1,6\n"}
+    },
+    {
+      "case": "two_templates_over_one_named_intermediate_share_its_driver_in_a_column_window_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: again, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER2'\", SEQ: SER.AESEQ}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [{variable: SER.AESEQ, direction: desc}]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "two_templates_over_one_named_intermediate_share_its_driver_in_a_column_window",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: again, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER2'\", SEQ: SER.AESEQ}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [{variable: SER.AESEQ, direction: desc}]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,ORD\nS1,SER,1,3\nS2,SER,1,4\nS1,SER,3,1\nS1,SER2,1,5\nS2,SER2,1,6\nS1,SER2,3,2\n"}
+    },
+    {
+      "case": "a_grouped_template_over_the_shared_driver_refuses_a_column_window_field_outside_its_groups",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "ungrouped_driver_field", "rule": "NAME-4", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "dataset": "DM"}}]
+    },
+    {
+      "case": "a_grouped_template_over_the_shared_driver_refuses_a_field_outside_its_groups_in_a_case_result_s_window",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n"}, {"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {case: [{when: \"SRC = 'DM'\", then: {row_number: {window: {order_by: [DM.AGE]}}}}, {otherwise: 0}]}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "ungrouped_driver_field", "rule": "NAME-4", "spec_paths": ["columns.ORD.derivation.case[0].then.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "dataset": "DM"}}]
+    },
+    {
+      "case": "a_template_grouping_a_named_intermediate_driver_refuses_a_column_window_field_outside_its_groups",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: grouped, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: \"'SERG'\", SEQ: 1}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [SER.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "ungrouped_driver_field", "rule": "NAME-4", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "SER.AESEQ", "dataset": "SER"}}]
+    },
+    {
+      "case": "the_group_key_of_a_grouped_template_over_the_shared_driver_orders_a_column_window_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [DM.USUBJID]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "the_group_key_of_a_grouped_template_over_the_shared_driver_orders_a_column_window",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [DM.USUBJID]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,ORD\nS1,DM,0,1\nS2,DM,0,3\nS3,DM,0,5\nS1,DMG,1,2\nS2,DMG,1,4\nS3,DMG,1,6\n"}
+    },
+    {
+      "case": "a_column_every_row_completes_in_its_own_scope_orders_every_row_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {name: SEQ, type: int}\n", "to": "  - {name: SEQ, type: int}\n  - {name: AGE, type: int, derivation: DM.AGE}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [AGE, SRC, SEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_column_every_row_completes_in_its_own_scope_orders_every_row",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {name: SEQ, type: int}\n", "to": "  - {name: SEQ, type: int}\n  - {name: AGE, type: int, derivation: DM.AGE}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [AGE, SRC, SEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,ORD\nS1,DM,0,6\nS2,DM,0,2\nS3,DM,0,7\nS1,AE,1,3\nS1,AE,2,4\nS2,AE,1,1\nS1,AE,3,5\n"}
+    },
+    {
+      "case": "a_column_window_reading_an_input_no_row_is_built_from_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "order_by: [DM.AGE]", "to": "order_by: [LB.LBSEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "LB.LBSEQ"}}]
+    },
+    {
+      "case": "a_column_window_over_one_driver_reading_an_input_no_row_is_built_from_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": ""}, {"from": "order_by: [DM.AGE]", "to": "order_by: [LB.LBSEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "LB.LBSEQ"}}]
+    },
+    {
+      "case": "a_column_window_reading_a_dataset_nothing_declares_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "order_by: [DM.AGE]", "to": "order_by: [ZZ.ZZSEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "ZZ.ZZSEQ"}}]
+    },
+    {
+      "case": "a_column_window_over_a_shared_named_intermediate_driver_refuses_the_input_it_reads",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "rows:\n", "to": "intermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n"}, {"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n  - {id: again, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER2'\", SEQ: SER.AESEQ}}\n"}, {"from": "order_by: [DM.AGE]", "to": "order_by: [AE.AESEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "AE.AESEQ"}}]
+    },
+    {
+      "case": "a_column_window_s_operands_are_refused_first_then_each_name_of_its_filter_once_in_sorted_order",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [LB.LBSEQ], filter: 'ZZ.FLAG = 1 AND LB.LBSEQ > 0 AND ZZ.FLAG < 3'}}}}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "LB.LBSEQ"}}, {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.filter"], "context": {"identifier": "LB.LBSEQ"}}, {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.filter"], "context": {"identifier": "ZZ.FLAG"}}]
+    },
+    {
+      "case": "a_column_window_over_one_driver_reads_its_own_field_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": ""}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_column_window_over_one_driver_reads_its_own_field",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": ""}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,ORD\nS1,DM,0,2\nS2,DM,0,1\nS3,DM,0,3\n"}
+    },
+    {
+      "case": "a_row_template_s_window_refuses_another_template_s_driver",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0, ORD: {row_number: {window: {order_by: [AE.AESEQ]}}}}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ, ORD: 0}}\n"}, {"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: 0}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.subjects.derivations.ORD.row_number.window.order_by[0]"], "context": {"identifier": "AE.AESEQ"}}]
+    },
+    {
+      "case": "a_row_template_s_window_refuses_an_input_no_row_is_built_from",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0, ORD: {row_number: {window: {order_by: [LB.LBSEQ]}}}}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ, ORD: 0}}\n"}, {"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: 0}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.subjects.derivations.ORD.row_number.window.order_by[0]"], "context": {"identifier": "LB.LBSEQ"}}]
+    },
+    {
+      "case": "a_row_template_s_window_reads_its_own_driver_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0, ORD: {row_number: {window: {order_by: [DM.AGE]}}}}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ, ORD: 0}}\n"}, {"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: 0}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_template_s_window_reads_its_own_driver",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n", "to": "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0, ORD: {row_number: {window: {order_by: [DM.AGE]}}}}}\n  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ, ORD: 0}}\n"}, {"from": "{name: ORD, type: int, derivation: {row_number: {window: {order_by: [DM.AGE]}}}}", "to": "{name: ORD, type: int, derivation: 0}"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SRC,SEQ,ORD\nS1,DM,0,2\nS2,DM,0,1\nS3,DM,0,3\nS1,AE,1,0\nS1,AE,2,0\nS2,AE,1,0\nS1,AE,3,0\n"}
+    },
+    {
+      "case": "a_window_without_row_templates_refuses_an_input_no_row_is_built_from",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "base", "edits": [{"from": "order_by: [DM.AGE]", "to": "order_by: [LB.LBSEQ]"}]}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ORD.derivation.row_number.window.order_by[0]"], "context": {"identifier": "LB.LBSEQ"}}]
+    },
+    {
+      "case": "a_window_without_row_templates_reads_the_base_driver_by_check",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "base"}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_window_without_row_templates_reads_the_base_driver",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "base"}, "dm.csv": {"base": "dm"}, "ae.csv": {"base": "ae"}, "lb.csv": {"base": "lb"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,ORD\nS1,2\nS2,1\nS3,3\n"}
+    }
+  ]
+}

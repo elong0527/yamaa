@@ -82,6 +82,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("typed_csv_sources.json"),
     fixture!("value_semantics.json"),
     fixture!("verification.json"),
+    fixture!("window_drivers.json"),
     fixture!("windows.json"),
     fixture!("workflow.json"),
 ];
