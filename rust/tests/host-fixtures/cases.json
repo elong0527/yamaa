@@ -7997,7 +7997,29 @@
           "output": "parquet"
         }
       ],
-      "saves_after_change": 2
+      "saves_after_change": 2,
+      "partitions": {
+        "count": 1,
+        "keys": 1,
+        "rows": 624640,
+        "strategy": "key_bounded"
+      }
+    },
+    "partitioned-default": {
+      "records": 10000001,
+      "subject_records": 10,
+      "header": "STUDYID,USUBJID,SEQ",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, RN]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: SRC.STUDYID}\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: RN, type: int, derivation: {row_number: {window: {group_by: [STUDYID, USUBJID], order_by: [SEQ]}}}}\n",
+      "saved_lines": 10000002,
+      "first_lines": [
+        "STUDYID,USUBJID,SEQ,RN",
+        "S1,00000000,1,1",
+        "S1,00000000,2,2"
+      ],
+      "last_lines": [
+        "S1,00999999,10,10",
+        "S1,01000000,1,1"
+      ]
     },
     "column-ceilings": {
       "admitted": 1024,

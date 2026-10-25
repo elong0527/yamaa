@@ -59,11 +59,30 @@ pub struct Refusal {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Event {
-    Phase { phase: Phase },
-    FunctionCall { stage: CallStage },
-    Exit { phase: Phase, outcome: Outcome },
-    FunctionReturn { stage: CallStage, outcome: Outcome },
-    Refusal { phase: Phase, refusal: Refusal },
+    Phase {
+        phase: Phase,
+    },
+    FunctionCall {
+        stage: CallStage,
+    },
+    Exit {
+        phase: Phase,
+        outcome: Outcome,
+    },
+    FunctionReturn {
+        stage: CallStage,
+        outcome: Outcome,
+    },
+    Refusal {
+        phase: Phase,
+        refusal: Refusal,
+    },
+    /// How a run divided its driver input, with the most records its
+    /// partitions hold when it ran divided (#3794).
+    Divided {
+        division: crate::dataset::Division,
+        rows: Option<std::num::NonZeroUsize>,
+    },
 }
 
 /// Observers have no failure result and must not mutate source/callback state,
@@ -137,6 +156,17 @@ impl<'a> Scope<'a> {
     }
     pub fn refusal(self, phase: Phase, refusal: Refusal) {
         self.observer.observe(Event::Refusal { phase, refusal });
+    }
+    /// Report how a run divided its driver input (#3794), under the
+    /// scope's partitions.
+    pub fn divided(self, division: crate::dataset::Division) {
+        let rows = match division {
+            crate::dataset::Division::Whole => None,
+            crate::dataset::Division::Partitions { .. } => {
+                self.partitioning.map(|partitioning| partitioning.rows)
+            }
+        };
+        self.observer.observe(Event::Divided { division, rows });
     }
     pub(crate) fn activation<P: HostFunctions>(self, port: &mut P) -> Activation<'_, 'a, P> {
         Activation { port, scope: self }

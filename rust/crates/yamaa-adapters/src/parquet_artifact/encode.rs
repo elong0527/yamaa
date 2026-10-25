@@ -624,3 +624,27 @@ pub(super) fn render_partitions<T: TableAccess>(
     }
     Ok((file.bytes, ends))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every host's default partition (#3794) holds whole row groups, so the
+    /// row groups a partitioned write ends are the whole-table write's, and
+    /// it is the most of them whose partition of the widest table the cell
+    /// limit admits.
+    #[test]
+    fn the_default_partition_is_the_most_whole_row_groups_the_cell_limit_admits() {
+        let rows = Limits::PARTITION_ROWS;
+        assert_eq!(
+            (
+                rows % ROW_GROUP_ROWS,
+                Limits::table(rows, Limits::COLUMNS),
+                Limits::table(rows + ROW_GROUP_ROWS, Limits::COLUMNS)
+                    .map_err(|error| error.resource),
+            ),
+            (0, Ok(()), Err("table_cells")),
+            "the default partition of {rows} rows"
+        );
+    }
+}

@@ -514,7 +514,7 @@ mod tests {
         assert_eq!(diagnostic.spec_paths, ["intermediates[0].between.value"]);
         assert_eq!(
             diagnostic.context,
-            BTreeMap::from([
+            crate::json::Map::from([
                 (
                     "identifier".into(),
                     JsonValue::String("OTHER.REFDAY".into())

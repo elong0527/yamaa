@@ -788,6 +788,15 @@ and consecutive partitions end only between runs of the fields those reads
 share. `Partitions::with_whole_table_fallback` runs a step that would refuse
 over the whole input instead.
 
+The facade's default is no partitions: an embedder that sets none runs every
+build whole. The clients choose (#3794, D264): the Python and R bindings, in
+their `api_entry.rs` `engine`, and the command line, in its `commands.rs`
+`engine`, run every build over `Partitions::by_keys(2, 624_640)` with the
+whole-table fallback, the two leading keys and the partition size core keeps
+as `Limits::PARTITION_KEYS` and `Limits::PARTITION_ROWS`. Each spells the two
+values, since it depends on the facade alone, and the facade's
+`client_partitions.rs` checks them against core's.
+
 ### Terminology: key groups vs. data partitions
 
 On `main` today, the word "partition" in `table_grouping::partition`

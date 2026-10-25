@@ -1,5 +1,5 @@
 {
-  "about": "The scopes a run reads within (CHECK-13, ROW-2, ROW-4, ROW-8, OUTPUT-3, LOOKUP-8, WINDOW-3, WINDOW-7). A row count's when binds the groups it counts without changing its fraction's denominator; a named intermediate drives rows from its filtered records in stored order and groups them in first-occurrence order, and its column projection hides the fields it leaves out from a derivation and from a group key; a filtered source keeps its selected record's missing value in every arrival order; reordered key names keep their typed values and dependencies, and a missing key is refused apart from text that spells the missing marker, in either record order; and a row lag reads its partition's previous row, keeps construction order when ordered by its partition key, lags within its own template, reads completed lags and scalars, and two windows of one case column keep their own orderings. Moved from execution_retired_odm_context.rs, its scoped_windows_checks module. The report's check row is the line the row-count test found in the saved report, at the columns from NAME on. Each row-window test compared one output column; its case states the whole output, whose GRP, SEQ and VAL copy each input record's G, S and X in the row order the test's own column gives, and whose PREV, in the chained cases, is the lag the first case states for the same window. A test that saved is a save case with the bytes it compared, one whose save failed states that it saved nothing, a test that compared some fields of the issues names them in compares, and one that found its issue among others is among. Every other value is its test's. From the same module at 8323a87e4, its four benchmark-copy tests, which stage a benchmark since #3875: negative-count-unnamed's grouped row count without an id fails with the two groups it retains and their counts, the one issue of the build, at the row its expected/error.yaml states; schema-source-ordinal numbers its records as stored, so two records swapped swap their numbers, and rows ordered by an ordinal the output leaves out keep that order; an ordinal window keeps each record's input position in a second template that reads the same input; and a grouped template reduces the ordinal before it numbers its groups, under another specification over the benchmark's own input, staged from its path. Each edit is its test's: the two records it wrote over the input's, the column and output name it removed, and the template it appended.",
+  "about": "The scopes a run reads within (CHECK-13, COLUMN-7, ROW-2, ROW-4, ROW-8, OUTPUT-3, LOOKUP-8, WINDOW-3, WINDOW-7). A row count's when binds the groups it counts without changing its fraction's denominator; a named intermediate drives rows from its filtered records in stored order and groups them in first-occurrence order, and its column projection hides the fields it leaves out from a derivation and from a group key; a filtered source keeps its selected record's missing value in every arrival order; reordered key names keep their typed values and dependencies, and a missing key is refused apart from text that spells the missing marker, in either record order; and a row lag reads its partition's previous row, keeps construction order when ordered by its partition key, lags within its own template, reads completed lags and scalars, and two windows of one case column keep their own orderings. Moved from execution_retired_odm_context.rs, its scoped_windows_checks module. The report's check row is the line the row-count test found in the saved report, at the columns from NAME on. Each row-window test compared one output column; its case states the whole output, whose GRP, SEQ and VAL copy each input record's G, S and X in the row order the test's own column gives, and whose PREV, in the chained cases, is the lag the first case states for the same window. A test that saved is a save case with the bytes it compared, one whose save failed states that it saved nothing, a test that compared some fields of the issues names them in compares, and one that found its issue among others is among. Also moved, from execution_no_rows_record_reads.rs: without row templates a key derived by a window gives each record its own row, so a flag, a case, a first_available and an odm read take that one record, and an odm record reads no item of another item group occurrence; a key reads a named intermediate for its record; a key that reads an aggregate, an odm item or a non-key column fails before any data is read, at its derivation. Each test's run is a save case, which states the saved out.csv or the issues and that nothing was saved, a refusal its test also checked is a check and a build reporting the same complete rows, and each compares the five fields support::study::issue_row compared; the key that reads another item group's item is the first issue its test read (prefix). Their specifications are the tests' format! templates, as documents with edits. Every other value is its test's. From the same module at 8323a87e4, its four benchmark-copy tests, which stage a benchmark since #3875: negative-count-unnamed's grouped row count without an id fails with the two groups it retains and their counts, the one issue of the build, at the row its expected/error.yaml states; schema-source-ordinal numbers its records as stored, so two records swapped swap their numbers, and rows ordered by an ordinal the output leaves out keep that order; an ordinal window keeps each record's input position in a second template that reads the same input; and a grouped template reduces the ordinal before it numbers its groups, under another specification over the benchmark's own input, staged from its path. Each edit is its test's: the two records it wrote over the input's, the column and output name it removed, and the template it appended.",
   "documents": {
     "named_driver": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, V: int}}}\nintermediates:\n  - {id: DRV, dataset: SRC, filter: \"SRC.K = 'Y'\"}\ncolumns:\n  - {name: I, type: int}\n  - {name: G, type: str}\n  - {name: V, type: int}\nrows:\n  - id: selected\n    dataset: DRV\n    derivations:\n      I: DRV.I\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: DRV.V\noutput: {path: out.csv, columns: [I, G, V]}\n",
     "driver_records": "I,G,V,K\n1,B,10,Y\n2,A,20,N\n3,A,30,Y\n4,B,40,Y\n5,C,50,N\n",
@@ -7,7 +7,16 @@
     "missing_targets": "yamaa: \"1.0\"\ntype: spec\ndomain: EXAMPLE\nkeys: [GROUP_ID]\ninput:\n  SOURCE: input.csv\noutput:\n  path: example.csv\n  columns: [GROUP_ID, TARGET_VALUE]\n  order_by: [GROUP_ID]\ncolumns:\n  - name: GROUP_ID\n    type: str\n    label: Group Identifier\n    derivation: SOURCE.GroupID\n  - name: TARGET_VALUE\n    type: str\n    label: Target Value\n    derivation:\n      source:\n        filter: \"SOURCE.RecordKind = 'TARGET'\"\n        variable: SOURCE.Value\n",
     "key_identity": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput: {SRC: {path: input.csv, types: {X: str, Y: str}}}\nkeys: [B, A]\noutput: {path: out.csv, columns: [A, B]}\ncolumns:\n  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
     "visits": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\ninput: {SRC: {path: input.csv, types: {G: str, X: float, S: int}}}\nkeys: [GRP, SEQ]\noutput: {path: out.csv, columns: [GRP, SEQ, VAL, PREV]}\ncolumns:\n  - {name: GRP, type: str}\n  - {name: SEQ, type: int}\n  - {name: VAL, type: float}\n  - {name: PREV, type: float}\nrows:\n  - id: visits\n    derivations:\n      GRP: SRC.G\n      SEQ: SRC.S\n      VAL: SRC.X\n      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
-    "visit_records": "G,X,S\na,1,1\na,2,2\na,3,3\nb,10,1\nb,20,2\n"
+    "visit_records": "G,X,S\na,1,1\na,2,2\na,3,3\nb,10,1\nb,20,2\n",
+    "window_value": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - name: VALUE\n    type: str\n    derivation: {flag: 'SRC.VAL > 3'}\n",
+    "key_records": "ID,VAL,X\n1,3,a\n1,5,\n2,4,c\n",
+    "key_donors": "ID,ARM,N\n1,A,10\n2,B,20\n",
+    "odm_items": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS1,MDV.1,001,V1,1,FO.VS,1,IG.VS,1,IT.VS.SYSBP,120\nS1,MDV.1,001,V1,1,FO.VS,1,IG.VS,2,IT.VS.SYSBP,130\nS1,MDV.1,002,V1,1,FO.VS,1,IG.VS,1,IT.VS.SYSBP,125\nS1,MDV.1,001,V1,1,FO.DM,1,IG.DM,1,IT.DM.SEX,F\nS1,MDV.1,002,V1,1,FO.DM,1,IG.DM,1,IT.DM.SEX,M\n",
+    "odm_window": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [USUBJID, SEQ]\ninput: {ODM: odm.csv}\noutput: {path: out.csv, columns: [USUBJID, SEQ, SEX]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: ODM.SubjectKey}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [USUBJID], order_by: [ODM.ItemGroupRepeatKey]}\n  - {name: SEX, type: str, derivation: {odm: ODM.IT.DM.SEX}}\n",
+    "intermediate_key": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, GROUP]\nbase: SRC\ninput:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  DONOR: {path: donor.csv, types: {ID: int, N: int}}\nintermediates:\n  - id: SUBJ\n    dataset: DONOR\n    key: [ID]\noutput: {path: out.csv, columns: [ID, GROUP]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: GROUP\n    type: str\n    derivation: {flag: {condition: \"SUBJ.ARM = 'A'\", true_value: Y, false_value: N, missing: N}}\n",
+    "aggregate_key": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, TOP]\ninput: {SRC: {path: source.csv, key: [ID], types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, TOP]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: TOP, type: int, derivation: {aggregate: 'MAX(SRC.VAL)'}}\n",
+    "odm_key": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [USUBJID, SEX]\ninput: {ODM: odm.csv}\noutput: {path: out.csv, columns: [USUBJID, SEX]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: ODM.SubjectKey}\n  - {name: SEX, type: str, derivation: {odm: ODM.IT.DM.SEX}}\n",
+    "non_key": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: VALUE, type: int, derivation: SRC.VAL}\n  - {name: ID, type: int, derivation: VALUE + 1}\n"
   },
   "cases": [
     {
@@ -399,6 +408,250 @@
       },
       "issues": [],
       "saved": {"records.csv": "GROUP_ID,SOURCE_ORDINAL,ROW_SEQUENCE\nG1,2,2\nG2,1,1\n"}
+    },
+    {
+      "case": "a_window_key_row_s_flag_reads_its_own_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "window_value"}, "source.csv": {"base": "key_records"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,VALUE\n1,1,\n1,2,Y\n2,1,Y\n"}
+    },
+    {
+      "case": "a_window_key_row_s_flag_condition_reads_its_own_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_value", "edits": [
+            {"from": "    derivation: {flag: 'SRC.VAL > 3'}\n", "to": "    derivation: {flag: {condition: 'SRC.X IS NULL', true_value: none, false_value: some, missing: none}}\n"}
+          ]},
+          "source.csv": {"base": "key_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,VALUE\n1,1,some\n1,2,none\n2,1,some\n"}
+    },
+    {
+      "case": "a_window_key_row_s_case_flag_reads_its_own_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_value", "edits": [
+            {"from": "    derivation: {flag: 'SRC.VAL > 3'}\n", "to": "    derivation: {case: [{when: 'ID = 1', then: {flag: 'SRC.VAL > 3'}}, {otherwise: \"'other'\"}]}\n"}
+          ]},
+          "source.csv": {"base": "key_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,VALUE\n1,1,\n1,2,Y\n2,1,other\n"}
+    },
+    {
+      "case": "a_window_key_row_s_filtered_first_available_reads_its_own_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_value", "edits": [
+            {"from": "    derivation: {flag: 'SRC.VAL > 3'}\n", "to": "    derivation: {first_available: {sources: [SRC.X, {variable: SRC.X, filter: 'SRC.VAL > 3'}]}}\n"}
+          ]},
+          "source.csv": {"base": "key_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,VALUE\n1,1,a\n1,2,\n2,1,c\n"}
+    },
+    {
+      "case": "a_window_key_row_s_case_first_available_reads_its_own_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_value", "edits": [
+            {"from": "    derivation: {flag: 'SRC.VAL > 3'}\n", "to": "    derivation: {case: [{when: 'ID = 2', then: {first_available: {sources: [SRC.X]}}}, {otherwise: \"'other'\"}]}\n"}
+          ]},
+          "source.csv": {"base": "key_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,VALUE\n1,1,other\n1,2,other\n2,1,c\n"}
+    },
+    {
+      "case": "a_window_key_odm_record_reads_no_item_of_another_item_group_occurrence",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_window"}, "odm.csv": {"base": "odm_items"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SEQ,SEX\n001,1,\n001,3,\n002,1,\n001,2,F\n002,2,M\n"}
+    },
+    {
+      "case": "a_window_key_odm_record_s_key_item_of_another_item_group_occurrence_is_missing",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_window", "edits": [
+            {"from": "keys: [USUBJID, SEQ]", "to": "keys: [USUBJID, SEQ, SEX]"}
+          ]},
+          "odm.csv": {"base": "odm_items"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "prefix": true,
+      "issues": [
+        {"condition": "missing_key"}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_key_flag_reads_a_named_intermediate_for_its_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "intermediate_key"}, "source.csv": {"base": "key_records"}, "donor.csv": {"base": "key_donors"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,GROUP\n1,Y\n2,N\n"}
+    },
+    {
+      "case": "a_key_formula_reads_a_named_intermediate_for_its_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "intermediate_key", "edits": [
+            {"from": "    type: str\n    derivation: {flag: {condition: \"SUBJ.ARM = 'A'\", true_value: Y, false_value: N, missing: N}}\n", "to": "    type: int\n    derivation: 'SUBJ.N + 1'\n"}
+          ]},
+          "source.csv": {"base": "key_records"},
+          "donor.csv": {"base": "key_donors"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,GROUP\n1,11\n2,21\n"}
+    },
+    {
+      "case": "a_key_case_reads_a_named_intermediate_for_its_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "intermediate_key", "edits": [
+            {"from": "    type: str\n    derivation: {flag: {condition: \"SUBJ.ARM = 'A'\", true_value: Y, false_value: N, missing: N}}\n", "to": "    type: str\n    derivation: {case: [{when: \"SUBJ.ARM = 'A'\", then: \"'Y'\"}, {otherwise: \"'N'\"}]}\n"}
+          ]},
+          "source.csv": {"base": "key_records"},
+          "donor.csv": {"base": "key_donors"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,GROUP\n1,Y\n2,N\n"}
+    },
+    {
+      "case": "a_key_that_reads_an_aggregate_fails_before_data",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "aggregate_key"}, "source.csv": {"base": "key_records"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.TOP.derivation.aggregate"], "context": {"column": "TOP", "operation": "aggregate"}}
+      ]
+    },
+    {
+      "case": "a_key_that_reads_an_odm_item_fails_before_data",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "odm_key"}, "odm.csv": {"base": "odm_items"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.SEX.derivation.odm"], "context": {"column": "SEX", "operation": "odm"}}
+      ]
+    },
+    {
+      "case": "a_key_that_reads_an_odm_item_in_a_case_fails_before_data",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_key", "edits": [
+            {"from": "derivation: {odm: ODM.IT.DM.SEX}}", "to": "derivation: {case: [{when: \"USUBJID = '001'\", then: {odm: ODM.IT.DM.SEX}}, {otherwise: \"'U'\"}]}}"}
+          ]},
+          "odm.csv": {"base": "odm_items"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.SEX.derivation.case[0].then.odm"], "context": {"column": "SEX", "operation": "odm"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "an_ordinary_column_case_reads_its_subject_s_odm_item",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_key", "edits": [
+            {"from": "derivation: {odm: ODM.IT.DM.SEX}}", "to": "derivation: {case: [{when: \"USUBJID = '001'\", then: {odm: ODM.IT.DM.SEX}}, {otherwise: \"'U'\"}]}}"},
+            {"from": "keys: [USUBJID, SEX]", "to": "keys: [USUBJID]"}
+          ]},
+          "odm.csv": {"base": "odm_items"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SEX\n001,F\n002,U\n"}
+    },
+    {
+      "case": "with_a_window_key_an_aggregate_key_is_computed_for_its_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_key", "edits": [
+            {"from": "keys: [ID, TOP]", "to": "keys: [ID, SEQ, TOP]"},
+            {"from": "columns: [ID, TOP]", "to": "columns: [ID, SEQ, TOP]"},
+            {"from": "  - {name: TOP,", "to": "  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - {name: TOP,"}
+          ]},
+          "source.csv": {"base": "key_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,TOP\n1,1,5\n1,2,5\n2,1,4\n"}
+    },
+    {
+      "case": "a_key_formula_that_reads_a_non_key_column_fails_at_its_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "non_key"}, "source.csv": {"base": "key_records"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.ID.derivation"], "context": {"column": "ID", "dependency": "VALUE"}}
+      ]
+    },
+    {
+      "case": "a_key_value_that_reads_a_non_key_column_fails_at_its_derivation",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "non_key", "edits": [
+            {"from": "derivation: VALUE + 1}", "to": "derivation: {value: VALUE + 1, unconvertible: 0}}"}
+          ]},
+          "source.csv": {"base": "key_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.ID.derivation"], "context": {"column": "ID", "dependency": "VALUE"}}
+      ]
+    },
+    {
+      "case": "a_key_name_that_reads_a_non_key_column_fails_at_its_derivation",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "non_key", "edits": [
+            {"from": "derivation: VALUE + 1}", "to": "derivation: VALUE}"}
+          ]},
+          "source.csv": {"base": "key_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.ID.derivation"], "context": {"column": "ID", "dependency": "VALUE"}}
+      ]
     }
   ]
 }

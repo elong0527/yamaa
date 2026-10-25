@@ -157,7 +157,7 @@ an aggregate or an `odm` read, unless a key derived by a window makes each
 base record its own row.
 
 Fails: `key_dependency`.
-Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
+Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/row_scopes.json`.
 
 A key reads its base record's fields, the keys declared before it, and a
 named intermediate's selection for that record, through any operation that
