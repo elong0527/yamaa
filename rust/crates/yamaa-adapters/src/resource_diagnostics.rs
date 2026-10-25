@@ -85,6 +85,11 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
             resource,
             limit,
             actual,
+        })
+        | Error::DatasetJsonSource(crate::dataset_json_source::Error::Limit {
+            resource,
+            limit,
+            actual,
         }) => (*resource, *limit, *actual),
         Error::Source(TextTableError::Csv(crate::csv_source::Error::Limit {
             resource,
@@ -104,6 +109,13 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
             },
         ))
         | Error::ParquetSource(crate::parquet_source::Error::Table(
+            crate::column_table::TableError::Limit {
+                resource,
+                limit,
+                required,
+            },
+        ))
+        | Error::DatasetJsonSource(crate::dataset_json_source::Error::Table(
             crate::column_table::TableError::Limit {
                 resource,
                 limit,

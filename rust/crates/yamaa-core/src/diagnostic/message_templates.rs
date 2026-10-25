@@ -143,6 +143,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("sas_name_too_long", "{name} does not match the SAS name pattern {pattern}"),
     ("source_byte_order_mark", "{path} must start with exactly one byte order mark when its input declares one, and none otherwise"),
     ("source_carriage_return", "record {record} of {path} holds a carriage return"),
+    ("source_dataset_json_invalid", "{path} is not a Dataset-JSON file the engine can read ({cause})"),
     ("source_encoding_required", "input {dataset} must declare its encoding"),
     ("source_field_name_duplicate", "{path} names field {field} more than once"),
     ("source_field_name_empty", "field {field} of {path} has an empty name"),
