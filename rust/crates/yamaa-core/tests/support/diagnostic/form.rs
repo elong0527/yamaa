@@ -517,21 +517,17 @@ fn written(saved: &Value, label: &str) -> BTreeMap<String, Expected> {
         .iter()
         .map(|(name, bytes)| {
             relative(name, label);
-            let one = |member: &str| match bytes {
-                Value::Object(members) if members.len() == 1 => members.get(member),
-                _ => None,
-            };
             let expected = match bytes {
                 Value::Null => Expected::Removed,
                 Value::String(text) => Expected::Bytes(text.clone().into_bytes()),
-                _ if one("file").is_some() => {
-                    let path = one("file").and_then(Value::as_str).unwrap_or_else(|| {
+                Value::Object(members) if members.len() == 1 && members.contains_key("file") => {
+                    let path = members["file"].as_str().unwrap_or_else(|| {
                         panic!("{label}: {name} names its expected file by its path: {bytes:?}")
                     });
                     Expected::Bytes(authored(path, &format!("{label}: {name}")))
                 }
-                _ if one("select").is_some() => {
-                    Expected::Select(selections(name, &one("select").unwrap(), label))
+                Value::Object(members) if members.len() == 1 && members.contains_key("select") => {
+                    Expected::Select(selections(name, &members["select"], label))
                 }
                 other => panic!(
                     "{label}: {name} is its text, {{\"file\": path}}, {{\"select\": paths}} \
