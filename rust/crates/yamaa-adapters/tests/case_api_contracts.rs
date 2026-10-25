@@ -348,6 +348,54 @@ fn saved_bytes(
     }
 }
 
+/// Read the published CSV, comparing the same authored report rows as the
+/// replay. CSV writes missing cells empty; other scalar cells retain their
+/// text. This checks the saved artifact independently of the in-memory report.
+fn saved_report_rows(bytes: &[u8], expected: &BTreeMap<String, Vec<Value>>, label: &str) {
+    let report = yamaa_adapters::csv_source::parse(bytes).expect("a saved report is CSV");
+    let kind_at = report.names.iter().position(|name| name == "KIND").unwrap();
+    for (kind, rows) in expected {
+        let columns = rows[0]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|name| {
+                report
+                    .names
+                    .iter()
+                    .position(|column| column == replay::text(name))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let actual = report
+            .records
+            .iter()
+            .filter(|row| row[kind_at].as_deref() == Some(kind.as_str()))
+            .map(|row| {
+                columns
+                    .iter()
+                    .map(|&at| row[at].clone().unwrap_or_default())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let stated = rows[1..]
+            .iter()
+            .map(|row| {
+                row.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|cell| match cell {
+                        Value::Null => String::new(),
+                        Value::String(text) => text.clone(),
+                        other => yamaa_adapters::json_wire::encode(other),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, stated, "{label}: the saved report's {kind} rows");
+    }
+}
+
 #[test]
 fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let routes = api_routes();
@@ -521,6 +569,11 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                                     "{}: a refused save publishes {report} alone, not {:?}",
                                     case.label,
                                     published.keys().collect::<Vec<_>>()
+                                );
+                                saved_report_rows(
+                                    published[report].as_ref().unwrap(),
+                                    case.stated.report.as_ref().unwrap(),
+                                    &case.label,
                                 );
                             }
                             None => assert_eq!(
