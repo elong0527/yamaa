@@ -70,10 +70,13 @@ fn stage(scratch: &Scratch, records: usize) -> (String, usize) {
     )
 }
 
+/// Each poll's count: the bytes held then, and the most held since the poll
+/// before.
+type Polls = Arc<Mutex<Vec<(isize, isize)>>>;
+
 /// An engine over key-bounded partitions of at most `rows` records, and a
-/// token whose every poll ends a count: the bytes held then, and the most
-/// held since the poll before.
-fn polled(rows: usize) -> (Engine, CancellationToken, Arc<Mutex<Vec<(isize, isize)>>>) {
+/// token whose every poll ends a count.
+fn polled(rows: usize) -> (Engine, CancellationToken, Polls) {
     let partitions = Partitions::by_keys(
         NonZeroUsize::new(2).unwrap(),
         NonZeroUsize::new(rows).unwrap(),
