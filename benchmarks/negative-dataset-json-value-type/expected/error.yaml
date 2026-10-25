@@ -1,0 +1,11 @@
+phase: ingest
+condition: field_parse_failed
+spec_paths:
+  - input.DM.path
+rule: DSJSON-3
+context:
+  dataset: DM
+  field: AGE
+  type: int
+  value: '67.5'
+  record: 2

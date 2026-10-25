@@ -1,6 +1,6 @@
 //! Binding a specification's codelists to the project's catalogue (CT-1,
 //! CT-8, CT-9).
-use super::{column_type, text, value};
+use super::{column_type, external, text, value};
 use crate::support::{
     diagnostic::json::Json,
     roots::{Codelist, CodelistType, Item, Source},
@@ -20,10 +20,12 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
 
 /// The bindings of `bindings` against a catalogue of one codelist source
 /// that lists `codelists`, `{codelists, bindings}`: each codelist is `{id,
-/// name, data_type, extensible, items}`, its items the values it lists, and
-/// each binding `{column, name, kind, path, codelist, allowed_values}`, the
-/// column's position, name and type, the authored path of its binding, the
-/// codelist it names and the paths of its `allowed_values` verifications.
+/// name, data_type, extensible, items, external}`, its items the values it
+/// lists, or, in their place, the `external` dictionary it names (as a
+/// codelist file writes one), and each binding `{column, name, kind, path,
+/// codelist, allowed_values}`, the column's position, name and type, the
+/// authored path of its binding, the codelist it names and the paths of its
+/// `allowed_values` verifications.
 fn codelist_binding(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["codelists", "bindings"]);
     let codelists = input
@@ -31,7 +33,8 @@ fn codelist_binding(input: &Json) -> Vec<Diagnostic> {
         .items()
         .iter()
         .map(|codelist| {
-            let codelist = codelist.closed(&["id", "name", "data_type", "extensible", "items"]);
+            let codelist =
+                codelist.closed(&["id", "name", "data_type", "extensible", "items", "external"]);
             Codelist {
                 id: text(codelist, "id").into(),
                 name: text(codelist, "name").into(),
@@ -44,9 +47,8 @@ fn codelist_binding(input: &Json) -> Vec<Diagnostic> {
                 extensible: codelist.field("extensible").boolean(),
                 alias: None,
                 format_name: None,
-                items: Some(
-                    codelist
-                        .field("items")
+                items: codelist.get("items").map(|items| {
+                    items
                         .items()
                         .iter()
                         .map(|item| Item {
@@ -56,9 +58,9 @@ fn codelist_binding(input: &Json) -> Vec<Diagnostic> {
                             alias: None,
                             extended: false,
                         })
-                        .collect(),
-                ),
-                external: None,
+                        .collect()
+                }),
+                external: codelist.get("external").map(external),
             }
         })
         .collect();
