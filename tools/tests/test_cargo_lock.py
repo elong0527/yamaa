@@ -87,30 +87,16 @@ class BundleArchiveTests(unittest.TestCase):
         ("yamaa-core", "0.5.0", False, []),
         ("parser", "1.0.0", True, []),
     ]
-    # The boundary crates, which both bindings depend on: the boundary and
-    # the engine they link.
-    BOUNDARY = [
-        ("yamaa-boundary", "0.5.0", False, []),
-        ("yamaa-engine", "0.5.0", False, ["yamaa", "yamaa-boundary"]),
-    ]
+    # The boundary crate, which both bindings depend on.
+    BOUNDARY = [("yamaa-boundary", "0.5.0", False, [])]
     BINDINGS = {
         "python": [
-            (
-                "yamaa-python",
-                "0.5.0",
-                False,
-                ["pyo3", "yamaa-boundary", "yamaa-engine"],
-            ),
+            ("yamaa-python", "0.5.0", False, ["pyo3", "yamaa", "yamaa-boundary"]),
             ("pyo3", "0.27.2", True, []),
         ],
         "r": [
             ("extendr", "0.9.0", True, []),
-            (
-                "yamaa-r",
-                "0.5.0",
-                False,
-                ["extendr", "yamaa-boundary", "yamaa-engine"],
-            ),
+            ("yamaa-r", "0.5.0", False, ["extendr", "yamaa", "yamaa-boundary"]),
         ],
     }
     # Each host's vendored crates, by directory, with their files.
@@ -135,7 +121,6 @@ class BundleArchiveTests(unittest.TestCase):
             "yamaa-adapters",
             "yamaa",
             "yamaa-boundary",
-            "yamaa-engine",
             "yamaa-python",
             "yamaa-r",
         )

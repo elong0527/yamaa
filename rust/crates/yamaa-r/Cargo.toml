@@ -19,16 +19,10 @@ doctest = false
 bench = false
 
 [dependencies]
-# The client through which the binding reaches the engine: the handshake,
-# the gate and every call (rust/interface/README.md).
+# The facade, whose public items the binding calls (rust/interface/README.md).
+yamaa = { path = "../yamaa" }
+# The interface handshake, the gate and the handle census.
 yamaa-boundary = { path = "../yamaa-boundary" }
-# The engine, linked into the library: its negotiation entry hands the client
-# the function table.
-yamaa-engine = { path = "../yamaa-engine" }
-# Reads the engine's Arrow C streams into plain R vectors; the engine already
-# links this release, through Parquet too.
-arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
-arrow-schema = { version = "=55.2.0", default-features = false }
 extendr-api = "0.9.0"
 
 [lints]

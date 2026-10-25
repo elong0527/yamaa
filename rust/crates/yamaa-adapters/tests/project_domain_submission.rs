@@ -496,6 +496,7 @@ mod project {
             let study = Study::new();
             let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,5\n2,URINE,7\n");
             assert!(run.save().is_err());
+            assert!(study.0.join("report.csv").is_file());
             assert!(!study.0.join("output.csv").exists());
         }
         /// Seam: the violated check rows of a run's report, and single check

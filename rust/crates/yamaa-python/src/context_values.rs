@@ -1,40 +1,48 @@
-//! Convert the engine's nested values to Python objects.
+//! Convert the facade's nested values to Python objects.
 //!
 //! Integer tokens become `int` (unbounded, so a token wider than 64 bits
 //! keeps its exact value), other number tokens `float`, objects `dict` and
 //! arrays `list`.
 use pyo3::{
+    exceptions::PyRuntimeError,
     prelude::*,
     types::{PyDict, PyFloat, PyInt, PyList},
     IntoPyObjectExt,
 };
-use yamaa_boundary::client::Node;
+use yamaa::ContextValue;
 
 /// Build the owned Python value tree: integer tokens become `int` (unbounded,
 /// so a token wider than 64 bits parses its exact spelling), other number
 /// tokens `float`, objects `dict` and arrays `list`.
-pub(crate) fn context_value<'py>(py: Python<'py>, value: &Node) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn context_value<'py>(
+    py: Python<'py>,
+    value: &ContextValue,
+) -> PyResult<Bound<'py, PyAny>> {
     match value {
-        Node::Null => Ok(py.None().into_bound(py)),
-        Node::Bool(value) => value.into_bound_py_any(py),
-        Node::Int(value) => value.into_bound_py_any(py),
-        Node::Number(token) => wide_number(py, token),
-        Node::Float(value) => value.into_bound_py_any(py),
-        Node::Text(value) => value.into_bound_py_any(py),
-        Node::List(values) => {
+        ContextValue::Null => Ok(py.None().into_bound(py)),
+        ContextValue::Bool(value) => value.into_bound_py_any(py),
+        ContextValue::Int(value) => value.into_bound_py_any(py),
+        ContextValue::Wide(token) => wide_number(py, token),
+        ContextValue::Float(value) => value.into_bound_py_any(py),
+        ContextValue::Text(value) => value.into_bound_py_any(py),
+        ContextValue::List(values) => {
             let list = PyList::empty(py);
             for value in values {
                 list.append(context_value(py, value)?)?;
             }
             Ok(list.into_any())
         }
-        Node::Map(values) => {
+        ContextValue::Map(values) => {
             let dict = PyDict::new(py);
             for (key, value) in values {
                 dict.set_item(key, context_value(py, value)?)?;
             }
             Ok(dict.into_any())
         }
+        // The facade's value is non-exhaustive; no other kind exists.
+        _ => Err(PyRuntimeError::new_err(
+            "the resolved value holds a kind no node has",
+        )),
     }
 }
 

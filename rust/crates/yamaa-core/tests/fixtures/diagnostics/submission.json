@@ -63,6 +63,48 @@
       "terminology": [],
       "installed": "1.0",
       "created": "2026-09-30T00:00:00"
+    },
+    "lb_value_level": {
+      "project": {
+        "yamaa": "1.0",
+        "type": "project",
+        "study": {"id": "VLSTUDY", "name": "Value metadata study", "description": "Independent structure witness", "protocol_name": "VLPROTOCOL"},
+        "sdtm": {
+          "standards": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}],
+          "specs": ["spec.yaml"],
+          "define": "define.xml",
+          "source_system_version": "1.0"
+        }
+      },
+      "specs": [
+        {
+          "yamaa": "1.0",
+          "type": "spec",
+          "model": "SDTM",
+          "domain": "LB",
+          "submission": {"label": "Laboratory tests", "class": "FINDINGS", "structure": "One record per test", "repeating": true},
+          "columns": [
+            {"name": "LBTESTCD", "type": "str", "label": "Test code", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "LBSPEC", "type": "str", "label": "Specimen type", "derivation": {"value": "'SERUM'"}, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "LBNAM", "type": "str", "label": "Laboratory name", "derivation": {"value": "'CENTRAL'"}},
+            {"name": "LBSEQ", "type": "int", "label": "Sequence number", "derivation": {"value": 1}, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "LBORRESU", "type": "str", "label": "Original units", "derivation": {"value": "'mg/dL'"}, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}], "value_level": [
+              {"id": "GLUC", "where": {"LBTESTCD": ["GLUC"]}, "origins": [{"type": "Assigned", "source": "Vendor"}], "method": "Units assigned from the supplied test metadata"},
+              {"id": "CREAT", "where": {"LBTESTCD": ["CREAT"]}, "origins": [{"type": "Assigned", "source": "Sponsor"}], "method": "Units assigned from the supplied test metadata"}
+            ]}}
+          ],
+          "output": {"path": "lb.csv", "columns": ["LBTESTCD", "LBSPEC", "LBSEQ", "LBORRESU"]},
+          "rows": [
+            {"id": "glucose", "derivations": {"LBTESTCD": {"value": "'GLUC'"}}},
+            {"id": "creatinine", "derivations": {"LBTESTCD": {"value": "'CREAT'"}}},
+            {"id": "albumin", "derivations": {"LBTESTCD": {"value": "'ALB'"}}}
+          ]
+        }
+      ],
+      "others": [],
+      "terminology": [],
+      "installed": "0.3.0",
+      "created": "2026-09-11T00:00:00"
     }
   },
   "cases": [
@@ -590,8 +632,8 @@
         "base": "value_level",
         "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "X", "where": {"BOGUS": ["X"]}}]}]
       },
-      "compares": ["phase", "condition", "rule", "spec_paths"],
-      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.X.where.BOGUS"]}]
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.detail"],
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.X.where.BOGUS"], "context": {"detail": "undeclared"}}]
     },
     {
       "case": "two_value_level_entries_with_one_id_are_refused",
@@ -999,6 +1041,282 @@
         ]
       },
       "issues": [{"phase": "validation", "condition": "unknown_standard", "rule": "DEFINE-8", "spec_paths": ["sdtm.specs[0].submission.standard"], "context": {"section": "sdtm", "standards": ["SDTMIG", "SDTMIG-MD"], "value": "SDTMIG-AP"}}]
+    },
+    {
+      "case": "a_value_level_entry_whose_clause_holds_another_s_rows_overlaps_it",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "1"], "to": {"id": "GLUCSER", "where": {"LBTESTCD": ["GLUC"], "LBSPEC": ["SERUM"]}, "origins": [{"type": "Assigned", "source": "Vendor"}], "method": "Units assigned from the supplied test metadata"}}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "value_level_overlap", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUCSER.where"]}]
+    },
+    {
+      "case": "a_value_level_where_column_listing_no_values_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBTESTCD": []}}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.detail"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBTESTCD"], "context": {"detail": "no_values"}}]
+    },
+    {
+      "case": "a_value_level_entry_selecting_on_a_column_that_is_not_output_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBNAM": ["GLUC"]}}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.detail"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBNAM"], "context": {"detail": "not_output"}}]
+    },
+    {
+      "case": "a_value_level_entry_selecting_on_a_column_that_is_not_text_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBSEQ": ["1"]}}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.detail"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBSEQ"], "context": {"detail": "not_str"}}]
+    },
+    {
+      "case": "a_value_level_entry_selecting_on_its_own_column_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBORRESU": ["mg/dL"]}}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.detail"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBORRESU"], "context": {"detail": "self"}}]
+    },
+    {
+      "case": "a_value_level_origin_from_the_investigator_is_not_admitted",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "1", "origins", "0", "source"], "to": "Investigator"}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "origin_source_not_admitted", "rule": "SUB-15", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.CREAT.origins[0]"]}]
+    },
+    {
+      "case": "value_level_clauses_over_columns_neither_of_which_holds_the_other_compose",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "0"], "to": {"id": "GLUCSER", "where": {"LBTESTCD": ["GLUC"], "LBSPEC": ["SERUM"]}, "origins": [{"type": "Assigned", "source": "Vendor"}], "method": "Units assigned from the supplied test metadata"}}]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_derived_value_level_entry_is_refuted_by_the_literal_of_the_row_template_it_selects",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [{"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "origins", "0", "type"], "to": "Derived"}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "refuted_value_origin", "rule": "SUB-13", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC"]}]
+    },
+    {
+      "case": "a_normalized_handler_literal_still_decides_the_rows_an_entry_selects",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [
+          {"set": ["specs", "0", "rows", "0", "derivations", "LBTESTCD"], "to": {"value": "'GLUC'", "unconvertible": null}},
+          {"set": ["specs", "0", "rows", "1", "derivations", "LBTESTCD"], "to": {"value": "'CREAT'", "unconvertible": null}},
+          {"set": ["specs", "0", "rows", "2", "derivations", "LBTESTCD"], "to": {"value": "'ALB'", "unconvertible": null}}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_where_value_the_where_column_s_codelist_admits_composes",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LBTESTCD"},
+          {"set": ["terminology"], "to": [{"codelists": [{"id": "LBTESTCD", "name": "Laboratory test codes", "items": [{"value": "GLUC"}, {"value": "CREAT"}, {"value": "ALB"}]}, {"id": "URINE", "name": "Urine test codes", "items": [{"value": "UGLUC"}]}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "where_values_outside_the_where_columns_codelists_fail_composition",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LBTESTCD"},
+          {"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBTESTCD": ["GLUC", "GLUCOSE"]}},
+          {"set": ["terminology"], "to": [{"codelists": [{"id": "LBTESTCD", "name": "Laboratory test codes", "items": [{"value": "GLUC"}, {"value": "CREAT"}, {"value": "ALB"}]}, {"id": "URINE", "name": "Urine test codes", "items": [{"value": "UGLUC"}]}]}]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBTESTCD"], "context": {"column": "LBORRESU", "detail": "not_in_codelist", "entry": "GLUC", "reason": "not_in_codelist", "values": ["GLUCOSE"], "where_column": "LBTESTCD"}}]
+    },
+    {
+      "case": "an_external_dictionary_admits_every_where_value",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LBTESTCD"},
+          {"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBTESTCD": ["GLUC", "GLUCOSE"]}},
+          {"set": ["terminology"], "to": [{"codelists": [{"id": "LBTESTCD", "name": "Laboratory test codes", "external": {"dictionary": "LOINC", "version": "2.77"}}, {"id": "URINE", "name": "Urine test codes", "items": [{"value": "UGLUC"}]}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "the_codelist_an_entry_of_the_where_column_binds_admits_its_values_beside_the_column_s_own",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LBTESTCD"},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "URINE", "where": {"LBSPEC": ["URINE"]}, "codelist": "URINE"}]},
+          {"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBTESTCD": ["GLUC", "UGLUC"]}},
+          {"set": ["terminology"], "to": [{"codelists": [{"id": "LBTESTCD", "name": "Laboratory test codes", "items": [{"value": "GLUC"}, {"value": "CREAT"}, {"value": "ALB"}]}, {"id": "URINE", "name": "Urine test codes", "items": [{"value": "UGLUC"}]}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "where_values_neither_codelist_admits_are_refused_in_the_order_the_clause_lists_them",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LBTESTCD"},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "URINE", "where": {"LBSPEC": ["URINE"]}, "codelist": "URINE"}]},
+          {"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBTESTCD": ["GLUCOSE", "GLUC", "UGLUC", "UCREAT"]}},
+          {"set": ["terminology"], "to": [{"codelists": [{"id": "LBTESTCD", "name": "Laboratory test codes", "items": [{"value": "GLUC"}, {"value": "CREAT"}, {"value": "ALB"}]}, {"id": "URINE", "name": "Urine test codes", "items": [{"value": "UGLUC"}]}]}]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBTESTCD"], "context": {"column": "LBORRESU", "detail": "not_in_codelist", "entry": "GLUC", "reason": "not_in_codelist", "values": ["GLUCOSE", "UCREAT"], "where_column": "LBTESTCD"}}]
+    },
+    {
+      "case": "a_where_column_without_a_codelist_of_its_own_admits_every_value",
+      "operation": "compose",
+      "input": {
+        "base": "lb_value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "URINE", "where": {"LBSPEC": ["URINE"]}, "codelist": "URINE"}]},
+          {"set": ["specs", "0", "columns", "4", "submission", "value_level", "0", "where"], "to": {"LBTESTCD": ["GLUC", "GLUCOSE"]}},
+          {"set": ["terminology"], "to": [{"codelists": [{"id": "LBTESTCD", "name": "Laboratory test codes", "items": [{"value": "GLUC"}, {"value": "CREAT"}, {"value": "ALB"}]}, {"id": "URINE", "name": "Urine test codes", "items": [{"value": "UGLUC"}]}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_missing_published_artifact_is_a_producer_contract_mismatch_naming_its_dataset",
+      "operation": "define_resource",
+      "input": {"path": "datasets.DM.artifact", "written": "declared.csv", "observation": "missing"},
+      "issues": [{"phase": "validation", "condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["datasets.DM.artifact"], "context": {"dataset": "DM", "path": "declared.csv"}}]
+    },
+    {
+      "case": "a_missing_define_target_is_a_missing_resource",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.define", "written": "declared.csv", "observation": "missing"},
+      "issues": [{"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["sdtm.define"], "context": {"path": "declared.csv"}}]
+    },
+    {
+      "case": "a_published_artifact_that_is_not_a_regular_file_is_refused",
+      "operation": "define_resource",
+      "input": {"path": "datasets.DM.artifact", "written": "declared.csv", "observation": "not_regular_file"},
+      "issues": [{"phase": "validation", "condition": "resource_path_not_regular_file", "rule": "FILE-7", "spec_paths": ["datasets.DM.artifact"], "context": {"path": "declared.csv"}}]
+    },
+    {
+      "case": "a_define_resource_that_cannot_be_read_is_an_engine_refusal_of_the_define_step",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": "unreadable"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"code": "resource_unreadable", "path": "declared.yaml", "step": "define"}}]
+    },
+    {
+      "case": "a_define_resource_under_an_invalid_root_is_an_engine_refusal_of_the_define_step",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": "invalid_root"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"code": "resource_root", "path": "declared.yaml", "step": "define"}}]
+    },
+    {
+      "case": "a_define_resource_under_an_invalid_base_is_an_engine_refusal_of_the_define_step",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": "invalid_base"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"code": "resource_base", "path": "declared.yaml", "step": "define"}}]
+    },
+    {
+      "case": "a_define_resource_at_an_invalid_path_is_an_engine_refusal_of_the_define_step",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": "invalid_path"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"code": "resource_path", "path": "declared.yaml", "step": "define"}}]
+    },
+    {
+      "case": "a_define_resource_outside_the_roots_is_an_engine_refusal_of_the_define_step",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": "outside_roots"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"code": "resource_outside_roots", "path": "declared.yaml", "step": "define"}}]
+    },
+    {
+      "case": "a_define_resource_through_a_symbolic_link_is_an_engine_refusal_of_the_define_step",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": "symlink"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"code": "resource_link", "path": "declared.yaml", "step": "define"}}]
+    },
+    {
+      "case": "changed_resource_uses_the_authored_define_field_and_ingest_cause",
+      "operation": "define_resource",
+      "input": {"path": "datasets.DM.artifact", "written": "../declared.csv", "observation": "changed"},
+      "issues": [{"phase": "ingest", "condition": "resource_path_content_changed", "rule": "FILE-10", "spec_paths": ["datasets.DM.artifact"], "context": {"path": "../declared.csv"}}]
+    },
+    {
+      "case": "a_define_specification_over_its_byte_limit_is_refused_with_the_exact_size",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": {"limit": {"resource": "spec_bytes", "limit": 8388608, "actual": 8388609}}},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"actual": 8388609, "code": "resource_limit", "limit": 8388608, "path": "declared.yaml", "resource": "spec_bytes", "step": "define"}}]
+    },
+    {
+      "case": "a_define_source_over_its_byte_limit_is_refused_with_the_exact_size",
+      "operation": "define_resource",
+      "input": {"path": "sdtm.specs[0]", "written": "declared.yaml", "observation": {"limit": {"resource": "source_bytes", "limit": 10737418240, "actual": 10737418241}}},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["sdtm.specs[0]"], "context": {"actual": 10737418241, "code": "resource_limit", "limit": 10737418240, "path": "declared.yaml", "resource": "source_bytes", "step": "define"}}]
+    },
+    {
+      "case": "a_define_target_refused_as_invalid_keeps_the_full_width_artifact_index_and_cause",
+      "operation": "define_publication",
+      "input": {"artifact": 18446744073709551615, "written": "dm.json", "stage": {"target_admission": "invalid_target"}, "cause": "opaque original cause"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["define"], "context": {"artifact": 18446744073709551615, "cause": "opaque original cause", "code": "invalid_target", "step": "publication_target_admission"}}]
+    },
+    {
+      "case": "a_define_target_that_changed_keeps_the_full_width_artifact_index_and_cause",
+      "operation": "define_publication",
+      "input": {"artifact": 18446744073709551615, "written": "dm.json", "stage": {"target_admission": "target_changed"}, "cause": "opaque original cause"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["define"], "context": {"artifact": 18446744073709551615, "cause": "opaque original cause", "code": "target_changed", "step": "publication_target_admission"}}]
+    },
+    {
+      "case": "a_define_target_admission_that_failed_to_publish_keeps_the_full_width_artifact_index_and_cause",
+      "operation": "define_publication",
+      "input": {"artifact": 18446744073709551615, "written": "dm.json", "stage": {"target_admission": "publication_failed"}, "cause": "opaque original cause"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["define"], "context": {"artifact": 18446744073709551615, "cause": "opaque original cause", "code": "publication_failed", "step": "publication_target_admission"}}]
+    },
+    {
+      "case": "publication_stage_projection_preserves_full_width_artifact_index_and_cause_text",
+      "operation": "define_publication",
+      "input": {"artifact": 18446744073709551615, "written": "dm.json", "stage": "publication", "cause": "opaque original cause"},
+      "issues": [{"phase": "output", "condition": "publication_failed", "rule": "OUTPUT-8", "spec_paths": ["define"], "context": {"artifact": 18446744073709551615, "cause": "opaque original cause", "path": "dm.json"}}]
     }
   ]
 }

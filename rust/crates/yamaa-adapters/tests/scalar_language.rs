@@ -2,7 +2,9 @@
 //! Scalar contracts: scalar language, secondary scalar operands and run report.
 mod scalar {
     mod scalar_language {
-        use crate::support::Edit as _;
+        // Every scalar operation a run saves, refuses or checks is a case of
+        // `fixtures/diagnostics/scalar_operations.json`. The test left here
+        // reads benchmark truth.
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -27,19 +29,6 @@ mod scalar {
                 }
                 copy(&source, &path);
                 Self(path)
-            }
-            fn run(&self) -> file_application::Domain {
-                let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = crate::support::study::identity("test", &specification);
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &specification,
-                        environment: None,
-                    },
-                    identity,
-                )
-                .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -74,12 +63,6 @@ mod scalar {
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
-        fn bespoke(source: &str, input: &[u8]) -> Fixture {
-            let fixture = Fixture::new("adam-adae-text-cleanup");
-            fs::write(fixture.0.join("spec.yaml"), source).unwrap();
-            fs::write(fixture.0.join("input.csv"), input).unwrap();
-            fixture
-        }
         fn attempt(
             fixture: &Fixture,
         ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
@@ -93,6 +76,9 @@ mod scalar {
                 crate::support::study::identity("test", &specification),
             )
         }
+        /// Already data: four benchmarks' own `expected/error.yaml`, whose
+        /// context each issue holds as a subset, the mixed ones run with no
+        /// input directory.
         #[test]
         fn unchanged_scalar_benchmarks_and_negative_truth() {
             for name in [
@@ -131,168 +117,11 @@ mod scalar {
                 assert_eq!(actual, vec![expected], "{name}");
             }
         }
-        fn spec(derivation: &str, result_type: &str) -> String {
-            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{I: int, F: float, D: date}}}}}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: RESULT, type: {result_type}, derivation: {derivation}}}\n")
-        }
-        #[test]
-        fn extremes_skip_missing_and_keep_wide_integers_and_temporal_values() {
-            for (operation, result_type, input, expected) in [
-                (
-                    "{greatest: {sources: [SRC.I, SRC.F]}}",
-                    "str",
-                    "ID,I,F,D\na,9007199254740993,9007199254740992,2025-01-01\nb,,,2025-01-01\n",
-                    "ID,RESULT\na,9007199254740993\nb,\n",
-                ),
-                (
-                    "{least: {sources: [SRC.I, SRC.F]}}",
-                    "str",
-                    "ID,I,F,D\na,-9007199254740993,-9007199254740992,2025-01-01\nb,,,2025-01-01\n",
-                    "ID,RESULT\na,-9007199254740993\nb,\n",
-                ),
-                (
-                    "{greatest: {sources: [SRC.D, SRC.D]}}",
-                    "date",
-                    "ID,I,F,D\na,1,1,2025-01-01\nb,1,1,2025-01-02\n",
-                    "ID,RESULT\na,2025-01-01\nb,2025-01-02\n",
-                ),
-            ] {
-                let fixture = bespoke(&spec(operation, result_type), input.as_bytes());
-                let mut result = fixture.run();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read(fixture.0.join("output.csv")).unwrap(),
-                    expected.as_bytes()
-                );
-            }
-        }
-        #[test]
-        fn row_scalar_derivations_share_the_same_raw_contract() {
-            let source="yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_template: '[{SRC.TEXT}]'}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
-            let fixture = bespoke(source, b"ID,I,F,TEXT\na,3,2,abc\n");
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT,MAXIMUM\na,[abc],3\n"
-            );
-        }
-
-        /// A Boolean converts to no column type, so a row derivation that can
-        /// only return one fails before any record is read (VALUE-24).
-        #[test]
-        fn row_boolean_is_refused_at_validation_and_refuses_every_save() {
-            for literal in ["false", "true"] {
-                let source = format!(
-            "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {literal}\n"
-        );
-                let fixture = bespoke(&source, b"ID,TEXT\na,abc\n");
-                let mut result = fixture.run();
-                let issues = result.issues();
-                assert_eq!(issues.len(), 1);
-                let issue = issue_json(&issues[0]);
-                assert_eq!(issue["phase"], "validation");
-                assert_eq!(issue["condition"], "conversion_failed");
-                assert_eq!(issue["rule"], "VALUE-24");
-                assert_eq!(
-                    issue["spec_paths"],
-                    yamaa_adapters::json!(["columns.RESULT"])
-                );
-                assert_eq!(
-                    issue["context"],
-                    yamaa_adapters::json!({"from": "bool", "to": "str"})
-                );
-                assert!(result.output().is_none());
-                for _ in 0..2 {
-                    assert!(result.save().is_err());
-                    assert_eq!(
-                        result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                        vec![issue.clone()]
-                    );
-                    assert!(!fixture.0.join("output.csv").exists());
-                }
-            }
-        }
-
-        #[test]
-        fn csv_text_regex_declarations_are_reported_without_source_capture() {
-            for (expression, suffix, condition, rule) in [
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}",
-            "str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: '[z-a]'}}",
-            "str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: '[]a(]'}}",
-            "str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-        (
-            "{str_extract: {source: SRC.TEXT, pattern: '(a)', group: 2}}",
-            "str_extract.group",
-            "regex_group_out_of_range",
-            "TEXT-10",
-        ),
-        (
-            "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: \"'x'\"}]}",
-            "case[0].then.str_extract.pattern",
-            "invalid_regex",
-            "TEXT-6",
-        ),
-    ] {
-        for typed in [false, true] {
-            let source = spec(expression, "str");
-            let source = if typed {
-                source.edit("I: int, F: float, D: date", "I: int, F: float, D: date, TEXT: str")
-            } else {
-                source
-            };
-            let fixture = bespoke(&source, b"ID,I,F,D,TEXT\na,1,1,2025-01-01,ab\n");
-            fs::remove_file(fixture.0.join("input.csv")).unwrap();
-            let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let identity = crate::support::study::identity("regex-preflight", &path);
-            let checked = file_application::check(yamaa_core::project_function::Language::Python,
-                Request { specification: &path, environment: None },
-                identity,
-            );
-            assert_eq!(checked.len(), 1, "{expression}: {checked:?}");
-            assert_eq!(checked[0].condition(), condition);
-            assert_eq!(checked[0].rule(), Some(rule));
-            assert_eq!(checked[0].spec_paths, [format!("columns.RESULT.derivation.{suffix}")]);
-            assert_eq!(attempt(&fixture).err().unwrap(), checked);
-            assert!(!fixture.0.join("output.csv").exists());
-        }
-    }
-        }
-
-        #[test]
-        fn nontext_csv_source_type_precedes_regex_declaration_findings() {
-            let fixture = bespoke(
-                &spec("{str_extract: {source: SRC.I, pattern: 'a)|(b'}}", "str"),
-                b"ID,I,F,D\na,1,1,2025-01-01\n",
-            );
-            fs::remove_file(fixture.0.join("input.csv")).unwrap();
-            let issues = attempt(&fixture).err().unwrap();
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "incompatible_input_type");
-            assert_eq!(issues[0].rule(), Some("TEXT-1"));
-            assert_eq!(
-                issues[0].spec_paths,
-                ["columns.RESULT.derivation.str_extract.source"]
-            );
-        }
     }
     mod secondary_scalar_operands {
         //! Implicit joins bind completed keys, preserve laziness and keep source scopes.
+        //! Every case these tests do not keep is in
+        //! `fixtures/diagnostics/secondary_operands.json`.
         use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
@@ -324,62 +153,8 @@ mod scalar {
                 fs::read(self.0.join("result.csv")).unwrap()
             }
         }
-        #[test]
-        fn row_filters_join_other_inputs_after_keys_and_preserve_eager_predicate_failures() {
-            for (driver, filter, expected) in [
-                ("SRC", "ID = 3 OR B.N = 40", "ID,VALUE\n2,0\n3,0\n"),
-                ("B", "SRC.N >= 20", "ID,VALUE\n2,0\n3,0\n"),
-            ] {
-                let fixture = Fixture::new();
-                fs::write(fixture.0.join("a.csv"), "ID,N\n1,10\n2,20\n3,30\n").unwrap();
-                fs::write(fixture.0.join("b.csv"), "ID,N\n2,40\n1,50\n3,60\n").unwrap();
-                fs::write(fixture.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {{path: a.csv, key: [ID], types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{ID: int, N: int}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: {driver}.ID}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: selected\n    dataset: {driver}\n    filter: '{filter}'\n    derivations:\n      VALUE: 0\noutput: {{path: result.csv, columns: [ID, VALUE]}}\n")).unwrap();
-                assert_eq!(fixture.saved(), expected.as_bytes());
-            }
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("a.csv"), "ID\n3\n").unwrap();
-            fs::write(fixture.0.join("b.csv"), "ID,N\n3,60\n3,70\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: a.csv, types: {ID: int}}\n  B: {path: b.csv, key: [ID], types: {ID: int, N: int}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\nrows:\n  - id: selected\n    dataset: SRC\n    filter: 'ID = 3 OR B.N = 40'\noutput: {path: result.csv, columns: [ID]}\n").unwrap();
-            let mut result = fixture.run().unwrap();
-            assert!(result.output().is_none());
-            assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition(), "multiple_matches");
-            assert_eq!(result.issues()[0].rule(), Some("LOOKUP-10"));
-            assert_eq!(result.issues()[0].spec_paths, ["rows.selected.filter"]);
-            let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
-            assert_eq!(context["match_count"], 2);
-            assert!(result.save().is_err());
-            assert!(!fixture.0.join("result.csv").exists());
-        }
-        #[test]
-        fn nested_row_text_and_date_operands_match_completed_keys_and_skip_unselected_donors() {
-            let fixture = Fixture::new();
-            fs::write(
-                fixture.0.join("a.csv"),
-                b"ID,D,USE\na,2020-01-03,Y\nb,2020-01-04,N\nc,2020-01-05,Y\n",
-            )
-            .unwrap();
-            fs::write(
-                fixture.0.join("b.csv"),
-                b"ID,D,TEXT\nb,2020-01-01,poison1\nb,2020-01-01,poison2\na,2020-01-01,Lower\n",
-            )
-            .unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, types: {D: date}}, B: {path: b.csv, key: [ID], types: {D: date}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, DAYS]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: TEXT, type: str}\n  - {name: DAYS, type: int}\nrows:\n  - id: records\n    dataset: A\n    derivations:\n      TEXT: {case: [{when: \"A.USE = 'Y'\", then: {str_case: {source: B.TEXT, to: upper}}}, {otherwise: \"'SKIP'\"}]}\n      DAYS: {case: [{when: \"A.USE = 'Y'\", then: {diff: {type: date, start: B.D, end: A.D, unit: day}}}, {otherwise: 0}]}\n").unwrap();
-            assert_eq!(fixture.saved(), b"ID,TEXT,DAYS\na,LOWER,2\nb,SKIP,0\nc,,\n");
-            let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(
-                fixture.0.join("spec.yaml"),
-                original.edit(
-                    "{str_case: {source: B.TEXT, to: upper}}",
-                    "{first_available: {sources: [B.TEXT], missing: NONE}}",
-                ),
-            )
-            .unwrap();
-            assert_eq!(
-                fixture.saved(),
-                b"ID,TEXT,DAYS\na,Lower,2\nb,SKIP,0\nc,NONE,\n"
-            );
-        }
+        /// Already data: three benchmarks' own `expected/` CSV bytes, each
+        /// reproduced from a copy of its benchmark.
         #[test]
         fn original_secondary_source_fixtures_preserve_frozen_csv_bytes() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
@@ -417,22 +192,9 @@ mod scalar {
                 );
             }
         }
-        #[test]
-        fn foreign_driver_scalar_operands_join_primary_records_and_column_predicates_share_keys() {
-            let fixture = Fixture::new();
-            fs::write(
-                fixture.0.join("a.csv"),
-                b"ID,TEXT,USE\na,lower,Y\nb,mixed,N\n",
-            )
-            .unwrap();
-            fs::write(fixture.0.join("b.csv"), b"ID,N\nb,2\na,1\nc,3\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper}}\n").unwrap();
-            assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,MIXED,\na,LOWER,Y\nc,,\n");
-            let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),original.edit("TEXT: {str_case: {source: A.TEXT, to: upper}}",
-        "TEXT: {source: {variable: A.TEXT, filter: \"A.USE = 'Y'\", order_by: [A.ID], keep: first}}" )).unwrap();
-            assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,,\na,lower,Y\nc,,\n");
-        }
+        /// Seam: every issue of the refusal is a validation issue, among
+        /// issues no test authored; a case states rows found among the
+        /// issues (`among`), not a property of every issue.
         #[test]
         fn forbidden_foreign_numeric_identifier_is_classified_before_donor_evaluation() {
             let fixture = Fixture::new();
@@ -492,6 +254,10 @@ mod scalar {
             }
         }
 
+        /// Seam: three handler counts found among the run's whole ledger
+        /// (`observations()["handler_counts"]`), whose other entries no test
+        /// authored, while a case states a report kind's rows whole.
+        ///
         /// B holds no record with SEQ 99, so ABSENT's filtered read finds no
         /// record for a or c, and its `absent` answers both (NAME-3, D67).
         #[test]
@@ -599,60 +365,6 @@ rows:
             let case = "TEXT:\n        case:\n          - when: \"A.USE = 'Y'\"\n            then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}\n          - otherwise: \"'SKIP'\"";
             fs::write(fixture.0.join("spec.yaml"), original.replace(case, "TEXT: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}" )).unwrap();
             assert_eq!(fixture.saved(),b"ID,TEXT,FIRST,MAP,ABSENT\na,late,late,20,EDGE\nb,hidden2,SKIP,0,SKIP\nc,,fallback,0,EDGE\n");
-        }
-
-        #[test]
-        fn global_columns_join_captured_ports_after_mixed_driver_rows_and_windows() {
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("a.csv"), b"ID,TEXT\na,primary\n").unwrap();
-            fs::write(
-                fixture.0.join("b.csv"),
-                b"ID,EXTRA,TEXT\nb,ignored,beta\nc,ignored,gamma\n",
-            )
-            .unwrap();
-            fs::write(
-                fixture.0.join("spec.yaml"),
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-base: A
-input: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, key: [ID]}}
-output: {path: result.csv, columns: [ID, RN, PRIMARY, SECONDARY]}
-columns:
-  - {name: ID, type: str}
-  - {name: ORD, type: int}
-  - {name: RN, type: int, derivation: {row_number: {window: {order_by: [ORD, ID]}}}}
-  - name: PRIMARY
-    type: str
-    derivation:
-      case:
-        - when: 'RN > 0'
-          then: A.TEXT
-        - otherwise: "'SKIP'"
-  - name: SECONDARY
-    type: str
-    derivation:
-      case:
-        - when: 'RN > 0'
-          then: B.TEXT
-        - otherwise: "'SKIP'"
-rows:
-  - {id: alpha, dataset: A, derivations: {ID: A.ID, ORD: 1}}
-  - {id: beta, dataset: B, derivations: {ID: B.ID, ORD: 2}}
-"#,
-            )
-            .unwrap();
-            assert_eq!(
-                fixture.saved(),
-                b"ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
-            );
-            let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),body.edit("then: A.TEXT","then: {source: {variable: A.TEXT, filter: \"A.ID = 'a'\", order_by: [A.ID], keep: first}}" )).unwrap();
-            assert_eq!(
-                fixture.saved(),
-                b"ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
-            );
         }
     }
     mod run_report {
