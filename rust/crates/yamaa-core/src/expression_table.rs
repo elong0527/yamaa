@@ -765,8 +765,9 @@ pub enum ScalarOp {
     },
     /// `str_substr`.
     StrSubstr {
-        start: String,
+        start: Option<String>,
         length: Option<String>,
+        piece: Option<String>,
     },
     /// `str_length`.
     StrLength,
@@ -902,8 +903,9 @@ impl ScalarOp {
                 width: written.int("width")??,
             },
             Verb::StrSubstr => Self::StrSubstr {
-                start: written.int("start")??,
+                start: written.int("start")?,
                 length: written.int("length")?,
+                piece: written.int("piece")?,
             },
             Verb::StrLength => Self::StrLength,
             Verb::StrExtract => Self::StrExtract {

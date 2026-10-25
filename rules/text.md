@@ -1,6 +1,6 @@
 # Text
 
-The text verbs pad, take a piece by position, count scalars, change case,
+The text verbs pad, take a piece by position or between words, count scalars, change case,
 interpolate templates, and extract and replace by pattern. They operate on the
 string values of [VALUE-11](values.md#value-11) and preserve every scalar they
 do not change, and `str_decimal` writes a number as text with fixed decimals.
@@ -75,6 +75,9 @@ missing. SDTM's 200-character pieces of a long value are written one
     str_substr: {source: CO_RAW.COMMENT, start: 201, length: 200}
 ```
 
+Declared with `piece` instead of `start`, `str_substr` takes the pieces of a
+text broken between words under [TEXT-16](#text-16).
+
 `invalid_field_type` reports the field below one at its path, such as
 `columns.COVAL1.derivation.str_substr.start`, with `expected` naming a positive
 integer; when both fields are below one, `start` is reported. A source of
@@ -82,6 +85,66 @@ another type fails under [TEXT-1](#text-1). `missing` answers a missing source
 and is counted under `missing`, declared or by default
 ([COLUMN-10](columns.md#column-10)); a `start` past the end gives missing
 uncounted, as the verb's own result.
+
+<a id="text-16"></a>
+
+### TEXT-16. str_substr with piece breaks a text between words into pieces of at most length scalars and takes one
+
+`str_substr` may declare a positive integer `piece` instead of `start`, and
+then requires `length`. It breaks a present string source into pieces and
+returns piece number `piece`, counted from 1, or missing past the last piece.
+A text of at most `length` scalars is its one piece. Otherwise the next piece
+ends at the last word end among its first `length` scalars, and the
+whitespace after that word end is dropped; with no word end there, the piece
+is exactly `length` scalars.
+
+Fails: `invalid_field_type`, `missing_required_field`, `unknown_field`.
+Evidence: `rust/tests/host-fixtures/cases.json::pieces_break_between_words_and_cut_a_word_longer_than_length`, `rust/tests/host-fixtures/cases.json::a_start_beside_a_piece_is_refused_before_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_requires_a_start_without_a_piece`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_requires_a_length_beside_a_piece`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_reports_only_the_piece_when_piece_and_length_are_both_below_one`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::a_piece_breaks_between_words_and_cuts_a_word_longer_than_length`.
+
+A word end is a scalar that is not whitespace followed by one that is; the
+`length`-th scalar is a word end when the scalar after it is whitespace, so a
+piece fills all `length` scalars when a word ends exactly there. Whitespace is
+the `\s` set of [TEXT-8](#text-8), so `U+00A0` breaks a text and a hyphen
+does not. Scalars are counted as [TEXT-13](#text-13) counts them. The pieces
+are read from the start of the text, each from where the one before it and
+its dropped whitespace end, and the whitespace after a word end is dropped up
+to the next scalar that is not whitespace, so whitespace that ends a text
+longer than `length` is no piece. Every other scalar is kept in order, so a piece is never the empty string,
+the empty string gives missing at every `piece`, and leading whitespace and
+whitespace inside a piece stay as written. A word longer than `length` is cut
+after `length` scalars and continues in the next piece. A `piece` larger than
+any integer an implementation holds stays valid and gives missing.
+
+SDTM's 200-character pieces split between words are written one
+`str_substr` per piece. The first continuation, such as `MHTERM1`, is the
+second piece:
+
+```yaml
+- name: MHTERM1
+  type: str
+  derivation:
+    str_substr: {source: MH_RAW.MHTERM, length: 200, piece: 2}
+```
+
+A text of 213 scalars that is the word `papilledema` 17 times, then
+`worsening`, each separated by one space, has its last word end within 200
+scalars at scalar 191, so its first piece is 191 scalars, the space at 192 is
+dropped, and its second piece is `papilledema worsening`. A text longer than
+`length` has a second piece unless only whitespace follows its first, so a row
+template that writes a continuation row filters as [TEXT-14](#text-14)
+describes, or on the piece bound to a column that is not published.
+
+A `start` declared beside `piece` fails as `unknown_field` at that `start`.
+A declaration with neither `start` nor `piece` fails as
+`missing_required_field` at `start`, and one with `piece` and no `length` at
+`length`. Each names the field as `field`, the unknown `start` also as
+`identifier`, and `str_substr` as `class`, as
+[SCHEMA-13](reference/schema-language.md#schema-13) names a class field. A
+`piece` below one fails as `invalid_field_type` at
+`piece`, with `expected` naming a positive integer, reported before a
+`length` below one. `missing` answers a missing source as under
+[TEXT-13](#text-13), and a `piece` past the last piece gives missing
+uncounted.
 
 <a id="text-14"></a>
 

@@ -351,9 +351,14 @@ EXPECTED = {
     "new.spec.expressions.str_substr": [
         Keyword("expressions", "str_substr", "[]"),
         Field("expressions.str_substr", "source", "variable", True, kind="name"),
-        Field("expressions.str_substr", "start", "int", True, kind="value"),
+        Field("expressions.str_substr", "start", "int", kind="value"),
         Field("expressions.str_substr", "length", "int", kind="value"),
         Field("expressions.str_substr", "missing", "substitute_value", kind="value"),
+    ],
+    # #3959: the pieces of a text broken between words, declared instead of
+    # start (TEXT-16).
+    "new.spec.expressions.str_substr.piece": [
+        Field("expressions.str_substr", "piece", "int", kind="value")
     ],
     "new.spec.expressions.str_length": [
         Keyword("expressions", "str_length", "[]"),

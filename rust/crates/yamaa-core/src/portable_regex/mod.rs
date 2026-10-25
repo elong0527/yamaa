@@ -15,6 +15,31 @@ mod parser;
 
 use crate::limits::Limits;
 
+/// ECMA-262 WhiteSpace and LineTerminator, without U+0085 (TEXT-8), as
+/// inclusive scalar ranges: the one declaration of `\s`, which lowering
+/// spells as a class and `str_substr` breaks a text at (TEXT-16).
+const SPACE: [(u32, u32); 11] = [
+    (0x9, 0xD),
+    (0x20, 0x20),
+    (0xA0, 0xA0),
+    (0x1680, 0x1680),
+    (0x2000, 0x200A),
+    (0x2028, 0x2028),
+    (0x2029, 0x2029),
+    (0x202F, 0x202F),
+    (0x205F, 0x205F),
+    (0x3000, 0x3000),
+    (0xFEFF, 0xFEFF),
+];
+
+/// Whether `scalar` is whitespace, a member of `\s` (TEXT-8).
+pub fn is_space(scalar: char) -> bool {
+    let scalar = u32::from(scalar);
+    SPACE
+        .iter()
+        .any(|&(low, high)| (low..=high).contains(&scalar))
+}
+
 /// The fixed boundary a compilation refusal names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {

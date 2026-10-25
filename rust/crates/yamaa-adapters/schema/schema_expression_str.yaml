@@ -17,11 +17,13 @@ expressions:
             description: String variable whose scalars are taken (TEXT-13).
         - start:
             type: int
-            required: true
-            description: Position of the first scalar taken, counted from 1 (TEXT-13).
+            description: Position of the first scalar taken, counted from 1; required unless piece is declared, and refused beside it (TEXT-13, TEXT-16).
         - length:
             type: int
-            description: Most scalars taken; without it, they run to the end of the source (TEXT-13).
+            description: Most scalars taken; without it, they run to the end of the source; required beside piece (TEXT-13, TEXT-16).
+        - piece:
+            type: int
+            description: Which piece, counted from 1, of the text broken between words into pieces of at most length scalars; declared instead of start (TEXT-16).
         - missing:
             type: substitute_value
             description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).
