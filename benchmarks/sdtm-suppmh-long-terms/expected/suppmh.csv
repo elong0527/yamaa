@@ -1,0 +1,5 @@
+STUDYID,RDOMAIN,USUBJID,IDVAR,IDVARVAL,QNAM,QLABEL,QVAL,QORIG,QEVAL
+YAMAA-01,MH,YAMAA-01-101,MHSEQ,2,MHTERM1,Reported Term for the Medical History 1,rest in a dark room,Collected,
+YAMAA-01,MH,YAMAA-01-102,MHSEQ,1,MHTERM1,Reported Term for the Medical History 1,glycated haemoglobin rose above target on two consecutive annual reviews; complicated by mild background retinopathy found on the first retinal screening and by peripheral sensory neuropathy affecting,Collected,
+YAMAA-01,MH,YAMAA-01-102,MHSEQ,1,MHTERM2,Reported Term for the Medical History 2,"both feet, with no history of foot ulceration or hospital admission for hypoglycaemia",Collected,
+YAMAA-01,MH,YAMAA-01-103,MHSEQ,1,MHTERM1,Reported Term for the Medical History 1,physio,Collected,

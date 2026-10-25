@@ -99,7 +99,7 @@ whitespace after that word end is dropped; with no word end there, the piece
 is exactly `length` scalars.
 
 Fails: `invalid_field_type`, `missing_required_field`, `unknown_field`.
-Evidence: `rust/tests/host-fixtures/cases.json::pieces_break_between_words_and_cut_a_word_longer_than_length`, `rust/tests/host-fixtures/cases.json::a_start_beside_a_piece_is_refused_before_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_requires_a_start_without_a_piece`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_requires_a_length_beside_a_piece`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_reports_only_the_piece_when_piece_and_length_are_both_below_one`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::a_piece_breaks_between_words_and_cuts_a_word_longer_than_length`.
+Evidence: `sdtm-suppmh-long-terms`, `rust/tests/host-fixtures/cases.json::pieces_break_between_words_and_cut_a_word_longer_than_length`, `rust/tests/host-fixtures/cases.json::a_start_beside_a_piece_is_refused_before_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_requires_a_start_without_a_piece`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_requires_a_length_beside_a_piece`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_substr_reports_only_the_piece_when_piece_and_length_are_both_below_one`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::a_piece_breaks_between_words_and_cuts_a_word_longer_than_length`.
 
 A word end is a scalar that is not whitespace followed by one that is; the
 `length`-th scalar is a word end when the scalar after it is whitespace, so a
