@@ -117,6 +117,18 @@
       "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "member", "member": "records"}}]
     },
     {
+      "case": "repeated_file_members_are_refused_in_the_profile_member_order",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "one_column_spec"}, "input/vs.json": "{\"records\":1,\"records\":1,\"datasetJSONVersion\":\"1.1\",\"datasetJSONVersion\":\"1.1\",\"datasetJSONCreationDateTime\":\"2026-10-24T09:00:00\",\"itemGroupOID\":\"IG.VS\",\"name\":\"VS\",\"label\":\"Vital Signs\",\"columns\":[{\"itemOID\":\"IT.VS.USUBJID\",\"name\":\"USUBJID\",\"label\":\"Subject\",\"dataType\":\"string\"}],\"rows\":[[\"S-01\"]]}"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "member", "member": "datasetJSONVersion"}}]
+    },
+    {
+      "case": "repeated_column_members_are_refused_in_the_profile_member_order",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "one_column_spec"}, "input/vs.json": "{\"datasetJSONVersion\":\"1.1\",\"datasetJSONCreationDateTime\":\"2026-10-24T09:00:00\",\"itemGroupOID\":\"IG.VS\",\"records\":1,\"name\":\"VS\",\"label\":\"Vital Signs\",\"columns\":[{\"dataType\":\"string\",\"dataType\":\"string\",\"itemOID\":\"IT.VS.USUBJID\",\"name\":\"USUBJID\",\"name\":\"USUBJID\",\"label\":\"Subject\"}],\"rows\":[[\"S-01\"]]}"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "member", "member": "name", "field": 1}}]
+    },
+    {
       "case": "a_column_without_its_data_type_names_the_member_and_the_column_position",
       "operation": "build",
       "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"label\": \"Visit Number\", \"dataType\": \"integer\"", "to": "\"label\": \"Visit Number\""}]}}, "specification": "spec.yaml"},
