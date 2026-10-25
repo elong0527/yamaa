@@ -2,8 +2,8 @@
 
 This is the execution inventory and whole-table equivalence contract for
 [#2683](https://github.com/elong0527/yamaa/issues/2683), and the partitioned
-executor and the streamed runs built on it (#3697), with their end states, and
-its key-bounded partitions (#3763).
+executor and the streamed runs built on it (#3697), with their end states, its
+key-bounded partitions (#3763), and its confinement gate (#3830).
 None of them changes language behavior; existing language requirements remain
 authoritative.
 
@@ -273,6 +273,28 @@ with no host surface.
   either strict partition mode, even when both sides read one physical input.
   The input is read and admitted whole; partitioning cannot bypass its row or
   cell limit before the join materializes it.
+- **The confinement gate.** A run that holds one partition at a time
+  (#3830) reads together only records one partition holds, so the records a
+  grouped row template, the key grain or an ODM read of the driver input
+  reads together must sit in one partition. Consecutive partitions then end
+  only between runs of equal values of the driver fields every such read
+  shares (`ResolvedPlan::cut_fields`): a grouped template's group fields,
+  the fields the key grain's keys copy, and the fields that scope an ODM
+  read. Each holds as many whole runs as fit in `rows` records, a longer run
+  alone, and an input not grouped by those fields runs as one partition, as
+  under [key-bounded partitions](#key-bounded-partitions); a plan with no
+  such read divides every `rows` records. These steps need the whole table
+  (`ResolvedPlan::whole_table_step`), so without the fallback they refuse
+  the run as `partition_global`, and with it they run over the whole input:
+  the driver of a template driven by a named intermediate over the driver
+  input, and the verification of such an intermediate's `unique` checks,
+  both at the intermediate's path, since their records span every
+  partition; under key-bounded partitions, a grouped template, the key grain
+  or an ODM read whose fields omit a partition field, at its `group_by`, its
+  `keys` or its column's derivation, or any of them when the driver input
+  does not hold every partition key; and under consecutive partitions, the
+  first such read that leaves no field shared with every earlier one, as two
+  templates grouped by `USUBJID` and by `SITEID` share none.
 - **Cancellation.** The token is polled at every checkpoint of the schedule,
   between the partitions of each divided unit, and before each batch of
   project-function calls. A cancelled run keeps nothing any partition built.
@@ -312,7 +334,10 @@ keys make each partition a run of whole subjects.
   whose driver input does not hold every partition key. The cut never
   selects non-contiguous records, because the first failure and the handler
   counts must follow base-record order; one partition keeps that order and
-  lets a later reader decode the input by record range.
+  lets a later reader decode the input by record range. A grouped
+  template, the key grain or an ODM read that the partitions cannot keep
+  whole refuses the run instead (the confinement gate of
+  [the partitioned executor](#the-partitioned-executor)).
 - **The classes.** Each step of the schedule carries its class under
   key-bounded partitions beside its class under consecutive ones
   (`StepInfo::keyed`): how many leading keys every window and aggregate it
@@ -462,7 +487,9 @@ per cell of the end states. The partitioned publication's are the facade's
 `table_parquet_bytes.rs` and `table_arrow_table.rs` for the encoders, and
 `file_application.rs`'s save that fails or is cancelled between two
 partitions. The schedule's classes under key-bounded
-partitions are stated case by case in `dataset/resolved/tests.rs`. The streamed run's
+partitions, and its confinement gate, are stated case by case in
+`dataset/resolved/tests.rs`, and the facade's `partitioned_confinement.rs` runs
+the gate's refusals, their fallbacks and the plans it admits. The streamed run's
 are the facade's `streaming.rs`, the adapters' `table_public_batches.rs`, whose
 counting source proves that a consumer that stops pulling stops production,
 and the installed `streaming` suites of both hosts.

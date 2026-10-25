@@ -24,6 +24,7 @@ mod lint_inheritance;
 mod memory;
 mod memory_route;
 mod odm_input;
+mod partitioned_confinement;
 mod partitioned_corpus;
 mod partitioned_publication;
 mod partitioned_reading;
