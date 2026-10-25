@@ -57,6 +57,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("run_report.json"),
     fixture!("scalar_operations.json"),
     fixture!("secondary_operands.json"),
+    fixture!("specification_runs.json"),
     fixture!("submission.json"),
     fixture!("temporal.json"),
     fixture!("temporal_imputation.json"),
