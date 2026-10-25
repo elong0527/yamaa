@@ -162,16 +162,17 @@ class StagingTests(unittest.TestCase):
             tests = destination / "tests"
             self.assertEqual(
                 {path.name for path in tests.iterdir() if path.is_file()},
-                {
-                    path.name
-                    for path in (staging.REPOSITORY / "R/yamaa/tests").glob("*.R")
-                },
+                {"smoke.R"},
             )
             self.assertEqual(
                 {path.name for path in tests.iterdir() if path.is_dir()},
-                {*staging.TEST_INPUTS, "host-fixtures"},
+                {"project-base"},
             )
-            for source in staging.PROJECTS.rglob("*"):
+            self.assertEqual(
+                {path.name for path in (tests / "project-base").iterdir()},
+                {"base-round"},
+            )
+            for source in (staging.PROJECTS / "base-round").rglob("*"):
                 if source.is_file():
                     relative = source.relative_to(staging.PROJECTS)
                     self.assertEqual(
@@ -184,12 +185,6 @@ class StagingTests(unittest.TestCase):
                 if path.is_file():
                     name = Path("yamaa", path.relative_to(destination)).as_posix()
                     self.assertLessEqual(len(name.encode()), 100, name)
-            grammar = tests / "grammar-original/grammar"
-            for source in (staging.REPOSITORY / "yaml/grammar").glob("*.yaml"):
-                self.assertEqual(
-                    (grammar / source.name).read_bytes(), source.read_bytes()
-                )
-            self.assertTrue((destination / "tests/public_grammar.R").is_file())
             # The package builds offline from the crates.io crates of the
             # trimmed lock, and carries the script that bundled them and
             # their authors' names.
@@ -269,6 +264,23 @@ class StagingTests(unittest.TestCase):
             self.assertNotIn("extendr-macros", names)
             self.assertNotIn("r-efi", names)
             self.assertNotIn(" OR ", authors)
+            # Full regression suites and inputs still stage for CI against
+            # the installed artifact, independently of the small CRAN suite.
+            tests = Path(directory) / "native"
+            with contextlib.redirect_stdout(io.StringIO()):
+                installed.stage("r", tests)
+            self.assertEqual(
+                {path.name for path in tests.glob("*.R")},
+                {
+                    path.name
+                    for path in (staging.REPOSITORY / "R/yamaa/tests").glob("*.R")
+                },
+            )
+            grammar = tests / "grammar-original/grammar"
+            for source in (staging.REPOSITORY / "yaml/grammar").glob("*.yaml"):
+                self.assertEqual(
+                    (grammar / source.name).read_bytes(), source.read_bytes()
+                )
             original = tests / "specification-original"
             for module in (original / "schema").glob("*.yaml"):
                 self.assertEqual(
@@ -337,7 +349,6 @@ class StagingTests(unittest.TestCase):
                         if staging.matches(relative, pattern.removeprefix("!")):
                             left_out = not pattern.startswith("!")
                     self.assertFalse(left_out, relative)
-            self.assertFalse((tests / "host_fixtures.py").exists())
             self.assertFalse((tests / "define-fixtures/schemas").exists())
             self.assertEqual(
                 [path.relative_to(tests) for path in tests.rglob("uv.lock")],
@@ -369,23 +380,15 @@ class StagingTests(unittest.TestCase):
                     (fixtures / name).read_bytes(),
                 )
             self.assertFalse((tests / "host-fixtures/sas/README.md").exists())
-            # Native qualification stages the same inputs beside the installed
-            # suites that R CMD check reads from the package's tests directory.
-            native = Path(directory) / "native"
-            with contextlib.redirect_stdout(io.StringIO()):
-                installed.stage("r", native)
-
-            def files(root):
-                return {
-                    path.relative_to(root).as_posix(): path.read_bytes()
-                    for path in root.rglob("*")
-                    if path.is_file()
-                }
-
-            for name in (*staging.TEST_INPUTS, "host-fixtures"):
-                self.assertEqual(files(native / name), files(tests / name), name)
             for suite in (staging.REPOSITORY / "R/yamaa/tests").glob("*.R"):
-                self.assertEqual((native / suite.name).read_bytes(), suite.read_bytes())
+                self.assertEqual((tests / suite.name).read_bytes(), suite.read_bytes())
+            # The smoke study is the same authored input wherever it runs.
+            for source in (destination / "tests/project-base/base-round").rglob("*"):
+                if source.is_file():
+                    relative = source.relative_to(destination / "tests")
+                    self.assertEqual(
+                        (tests / relative).read_bytes(), source.read_bytes()
+                    )
             # The package passes the check that its built archive gets.
             built = Path(directory) / "yamaa_0.5.0.tar.gz"
             with tarfile.open(built, "w:gz", compresslevel=1) as output:

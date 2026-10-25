@@ -44,6 +44,9 @@ class HostChecks(unittest.TestCase):
             return_value=(self.archive, self.environment),
         )
         self.r_check = replace(host_checks.r_tests, "check_install", return_value=None)
+        self.r_suites = replace(
+            host_checks.r_tests, "run_installed_suites", return_value=None
+        )
         self.r_equivalence = replace(
             host_checks.equivalence, "r_conformance", return_value=0
         )
@@ -69,6 +72,7 @@ class HostChecks(unittest.TestCase):
         self.r_check.assert_called_once_with(
             self.archive, self.environment, self.work / "check"
         )
+        self.r_suites.assert_called_once_with(self.work / "suites", self.environment)
         self.r_equivalence.assert_called_once_with(
             self.work / "equivalence",
             self.environment,
@@ -84,6 +88,7 @@ class HostChecks(unittest.TestCase):
         self.plan.assert_not_called()
         self.python_tests.assert_called_once()
         self.r_check.assert_called_once()
+        self.r_suites.assert_called_once()
         self.python_equivalence.assert_not_called()
         self.r_equivalence.assert_not_called()
 
@@ -106,6 +111,20 @@ class HostChecks(unittest.TestCase):
                 host_checks.run("r", self.work, "uv", True),
                 ["R configure tests", "R package check", "R equivalence"],
             )
+        self.r_equivalence.assert_called_once()
+
+    def test_full_r_suite_failure_fails_ci_and_still_runs_the_cran_check_and_benchmarks(
+        self,
+    ):
+        self.r_suites.side_effect = RuntimeError("an installed regression failed")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(
+                host_checks.run("r", self.work, "uv", True),
+                ["R installed suites"],
+            )
+        self.r_check.assert_called_once_with(
+            self.archive, self.environment, self.work / "check"
+        )
         self.r_equivalence.assert_called_once()
 
     def test_a_host_failure_exits_the_command_with_failure(self):

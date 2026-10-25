@@ -18,8 +18,9 @@ HELP = """yamaa repository commands (run from the repository root)
   test-rust         cargo test --locked --workspace without the two host bindings,
                     which have no Rust tests. Needs no R.
   test-python       Package/tools tests and standalone public-host suites outside checkout.
-  test-r            Clippy over the R binding, then build/install a standalone R archive
-                    and run R CMD check --as-cran; only the notes that
+  test-r            Clippy over the R binding, then build/install a standalone R archive,
+                    run every installed R suite and R CMD check --as-cran on its
+                    small smoke suite; only the notes that
                     R/yamaa/cran-comments.md explains may remain.
                     Needs R 4.6.1, Rust with Clippy, make and the package's Suggests
                     installed; with checkbashisms and aspell it also checks configure

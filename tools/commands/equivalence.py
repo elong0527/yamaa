@@ -10,13 +10,15 @@ installs both outside it, and runs on those installs:
   a repeat pass runs each entry's spec object a second time and requires it
   to reuse the plan its first run compiled, as its private observations
   record, with the same issues, tables and saved bytes (#2821);
-- the installed Python suites and `R CMD check`, which carry the cross-host
-  diagnostic parity truth and the host-fixture families.
+- the full installed Python and R suites, which carry the cross-host
+  diagnostic parity truth and the host-fixture families, and `R CMD check`
+  of the small smoke suite that the source package ships.
 
 Building fresh means the gate never judges a stale development extension.
 `--hosts python` runs the Python half alone: its build, its conformance and
-the installed suites; `--hosts r` the R half: its build, its conformance and
-`R CMD check`. Together the halves are the whole gate, which runs by default.
+the installed suites; `--hosts r` the R half: its build, its conformance,
+its full installed suites and `R CMD check`. Together the halves are the
+whole gate, which runs by default.
 CI runs each half in its corresponding host lane, sharing the fresh install
 and installed suites with the ordinary host tests.
 """
@@ -215,6 +217,7 @@ def main(argv=None):
             run_installed_suites(python, work / "python-suites")
         if "r" in hosts:
             archive, environment = r_tests.install(work / "r-install")
+            r_tests.run_installed_suites(work / "r-suites", environment)
             if r_conformance(work / "r", environment, plan, revision):
                 raise SystemExit("R public benchmark conformance failed")
             check(archive, work / "r-check", environment)

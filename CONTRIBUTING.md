@@ -993,12 +993,21 @@ also `aspell`, so the check covers the configure scripts and the spelling of
 `DESCRIPTION` as CRAN's does; elsewhere R warns that it lacks
 `checkbashisms`, and that one warning passes.
 
-The R tests use the package's suggested packages, `arrow` and `jsonlite`,
-only where they are installed, as "Writing R Extensions" asks: a part that
-needs a missing one is skipped with a message. Native qualification's
+The R source archive carries a small base-R smoke suite and its project
+study. It runs the embedded format selftest, public specification/project
+calls, R callbacks and saved-byte checks without suggested packages. The full
+R suites and fixtures remain in the repository: `make test-r` and the R
+pull-request lane stage every cataloged suite outside the checkout and run
+it against the fresh source installation before the separate CRAN check.
+Native qualification continues to run the full installed suites against its
+source and binary artifacts.
+
+The full R suites use the package's suggested packages, `arrow` and
+`jsonlite`, only where they are installed, as "Writing R Extensions" asks:
+a part that needs a missing one is skipped with a message. Native qualification's
 `native-cran (ubuntu-24.04, R devel, no Suggests)` job installs neither, as
 CRAN's noSuggests check does. It sets `_R_CHECK_DEPENDS_ONLY_=true`, so the
-tests see only the Depends and Imports, and `_R_CHECK_FORCE_SUGGESTS_=false`,
+smoke checks see only the Depends and Imports, and `_R_CHECK_FORCE_SUGGESTS_=false`,
 so R reports the missing packages instead of stopping. Every other check
 installs them, and R stops there when one is missing. Repeat the job from the
 repository root, with libraries that hold neither package:
