@@ -97,6 +97,9 @@ installed directly, for example with `remotes::install_github()`. From a
 repository checkout, `make test-r` builds and checks a fresh source package;
 see the [contributor guide](../../CONTRIBUTING.md).
 
+For a small self-contained example, open `vignette("yamaa-cran", package =
+"yamaa")`. The full documentation remains on the site.
+
 ## What the source package contains
 
 `tools/staging/stage_r_package.py` assembles the standalone package before
@@ -108,8 +111,9 @@ see the [contributor guide](../../CONTRIBUTING.md).
 | `src/` | C entry point, build rules, and in `rust/` the engine, boundary and R binding crates with their workspace manifest and trimmed Cargo lock, the locked crates.io crates in `rust/vendor.tar.xz` with their source replacement, the vendored YAML parser and ReadStat C sources | Compiled into `libs/yamaa.so` or `libs/yamaa.dll`; sources are not ordinarily installed |
 | `inst/` | License notices, the component inventory `COMPONENTS.tsv` and `AUTHORS` | Yes; copied to the package root |
 | `tests/` | A base-R smoke script and its small project study; it runs the embedded format selftest and checks public R calls, callbacks and saved bytes | Used by `R CMD check`; not ordinarily installed |
+| `vignettes/` | A minimal R Markdown introduction linking the full documentation | R builds its HTML and source into `inst/doc/` for installation |
 | `configure`, `configure.win`, `cleanup`, `cleanup.win` | Run `tools/configure.R` to find and check Cargo and rustc, write `src/Makevars` from `src/Makevars.in` (or the Windows pair) and add the Rust standard library that rustc links to `inst/COMPONENTS.tsv`; remove what it writes | No |
-| `tools/` | `configure.R`, and `vendor_crates.py`, the script that wrote `src/rust/vendor.tar.xz` | No |
+| `tools/` | `configure.R`, and `vendor_crates.py` with its `vendor_exclusions.toml` policy, which wrote `src/rust/vendor.tar.xz` | No |
 
 The full regression suites and their inputs stay in the repository. `make
 test-r`, pull-request CI and native qualification run them separately against
@@ -131,11 +135,19 @@ files that some crates publish, and zstd's text of the license that it offers
 beside BSD-3-Clause, which yamaa relies on. `inst/AUTHORS` names every bundled
 crate's authors and license.
 
+The version-specific vendoring policy also omits audited upstream tests,
+benchmarks, standalone examples and CI files. It keeps licenses, production
+inputs and examples that Rust embeds while compiling, including winnow's.
+New dependency versions keep their development files until reviewed.
+
 The R runtime imports `utils`, which ships with R. `arrow` and `jsonlite` are
 suggested packages: the regression scripts read their JSON truth with
 `jsonlite` and inspect saved files with both. As "Writing R Extensions" asks,
 the scripts use them only where they are installed, and skip, with a
 message, the parts that need a missing one.
+`knitr` and `rmarkdown`, with Pandoc, build the introductory vignette; they
+are not runtime requirements. Source-package builders need them before
+running `R CMD build`.
 `yamaabenchmarks` is not required to build, install, use or check the R
 package. Its packaged project tests use base R callables such as
 `base::identity`, `base::signif` and `base::ifelse`.

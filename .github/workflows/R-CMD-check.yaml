@@ -137,7 +137,7 @@ jobs:
 
       - name: Build R source package
         working-directory: r-cmd-check
-        run: R CMD build --no-build-vignettes --no-manual yamaa
+        run: R CMD build --no-manual yamaa
 
       - name: Preserve R source package
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -194,11 +194,17 @@ jobs:
       - name: Install the shared grammar fixture codec and PyYAML
         run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
 
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: R/yamaa
+
       - name: Stage and build the source package
         working-directory: ${{ runner.temp }}
         run: |
           python -m tools.staging.stage_r_package "${RUNNER_TEMP}/offline-stage/yamaa"
-          R CMD build --no-build-vignettes --no-manual offline-stage/yamaa
+          R CMD build --no-manual offline-stage/yamaa
           ls -l yamaa_*.tar.gz
 
       - name: Preserve the source package

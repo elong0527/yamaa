@@ -75,6 +75,8 @@ runs:
       with:
         r-version: '4.6.1'
         use-public-rspm: true
+    - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      if: inputs.r == 'check'
     - name: Install R package test dependencies
       if: inputs.r == 'check'
       shell: bash

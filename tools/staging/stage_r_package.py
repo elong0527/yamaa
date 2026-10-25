@@ -37,6 +37,7 @@ REPOSITORY = ROOT
 VENDOR_ARCHIVE = "src/rust/vendor.tar.xz"
 VENDOR_CONFIG = "src/rust/vendor-config.toml"
 VENDOR_SCRIPT = "tools/vendor_crates.py"
+VENDOR_POLICY = "tools/vendor_exclusions.toml"
 AUTHORS = "inst/AUTHORS"
 # Only these suites ship in the source archive. Discovery still includes
 # every R/yamaa/tests/*.R in installed-package qualification.
@@ -45,7 +46,8 @@ AUTHORS_PREAMBLE = (
     "The yamaa R source package bundles the Rust crates below. The crates.io "
     f"crates that src/rust/Cargo.lock selects are in {VENDOR_ARCHIVE}, as "
     "`cargo vendor` writes them, apart from the files that an entry names as "
-    "left out: Rust toolchain files, the license texts of alternatives to the "
+    "left out: audited development files, Rust toolchain files, the license "
+    "texts of alternatives to the "
     "license that yamaa relies on, and, of a crate that no supported target "
     "compiles, every file but its manifest, which Cargo reads to resolve the "
     "lock (with an empty src/lib.rs where Cargo needs one to read the "
@@ -167,6 +169,7 @@ def bundle_rust(destination: Path):
     script = destination / VENDOR_SCRIPT
     script.parent.mkdir(exist_ok=True)
     shutil.copyfile(vendor_crates.__file__, script)
+    shutil.copyfile(vendor_crates.POLICY, destination / VENDOR_POLICY)
     return crates
 
 

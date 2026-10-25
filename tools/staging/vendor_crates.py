@@ -10,19 +10,22 @@ installation and admits no binary executable code in a source package.
 
 runs `cargo vendor --locked --versioned-dirs` in the workspace. A crate that a
 build for one of the targets compiles (compiled) keeps its files, apart from
-every Rust toolchain file and the license texts in ALTERNATIVE_LICENSES, and
-must hold no binary. Any other crate keeps only its manifest, which Cargo reads
-to resolve the lock, with an empty src/lib.rs where Cargo needs one to read it
-(stub). The script checks that Cargo still resolves the lock offline from what
+every Rust toolchain file, the license texts in ALTERNATIVE_LICENSES and the
+development directories audited in vendor_exclusions.toml, and must hold no
+binary. Production inputs and license files stay. Any other crate keeps only
+its manifest, which Cargo reads to resolve the lock, with an empty src/lib.rs
+where Cargo needs one to read it (stub). The script checks that Cargo still
+resolves the lock offline from what
 remains, and writes the crates as a reproducible xz-compressed tar whose one
 top-level directory is `vendor/`. A build unpacks the archive beside a Cargo
 home whose config.toml holds CONFIG, so Cargo reads every crate from it and
 never from the network.
 
 The script uses only the Python standard library, so the R source package
-carries it unchanged as tools/vendor_crates.py, the script that wrote its
-src/rust/vendor.tar.xz. Cargo's `.cargo-checksum.json` files are the packaging
-tool's own records, like the checksums in Cargo.lock: the archive keeps them
+carries it unchanged as tools/vendor_crates.py beside vendor_exclusions.toml,
+the script and policy that wrote its src/rust/vendor.tar.xz. Cargo's
+`.cargo-checksum.json` files are the packaging tool's own records, like the
+checksums in Cargo.lock: the archive keeps them
 as Cargo wrote them, except that the entries of the left-out files are
 dropped. The script computes no digest of its own.
 """
@@ -50,6 +53,9 @@ CHECKSUMS = ".cargo-checksum.json"
 MANIFEST = "Cargo.toml"
 # The library root that Cargo looks for when a manifest names no library path.
 LIBRARY = "src/lib.rs"
+POLICY = Path(__file__).with_name("vendor_exclusions.toml")
+# The policy cannot select sources, manifests or arbitrary glob patterns.
+DEVELOPMENT_ROOTS = {"tests", "benches", "examples", ".github"}
 # A fixed time, owner and mode make the archive's bytes depend only on the
 # crates, on any operating system.
 MTIME = 946684800  # 2000-01-01T00:00:00Z
@@ -240,6 +246,74 @@ def toolchain_files(crate):
     ]
 
 
+def load_development_policy(path=POLICY):
+    """Read the version-specific allowlist of audited development directories.
+
+    Unknown crate versions keep their development files. Limiting entries to four
+    top-level directory names prevents a typo from selecting production code.
+    """
+    policy = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    if set(policy) != {"development_directories"} or not isinstance(
+        policy["development_directories"], dict
+    ):
+        raise ValueError(f"{path}: expected a development_directories table")
+    entries = policy["development_directories"]
+    for crate, directories in entries.items():
+        if (
+            not isinstance(directories, list)
+            or not directories
+            or any(
+                not isinstance(name, str) or name not in DEVELOPMENT_ROOTS
+                for name in directories
+            )
+            or len(set(directories)) != len(directories)
+        ):
+            raise ValueError(
+                f"{path}: {crate} must name unique development directories"
+            )
+    return entries
+
+
+def development_files(crate, policy):
+    """List only audited development files, preserving production and legal inputs.
+
+    Readme/license paths, the build script and explicit library/binary paths
+    in the manifest remain even if they sit in a development directory. The
+    allowlist keeps crates' embedded documentation inputs too: directory
+    names alone do not prove that their contents are unused by a build.
+    """
+    directories = policy.get(crate.name, ())
+    if not directories:
+        return []
+    declared = manifest(crate)
+    package = declared["package"]
+    protected = {
+        Path(value).as_posix()
+        for name in ("readme", "license-file", "build")
+        if isinstance(value := package.get(name), str)
+    }
+    for target in (declared.get("lib", {}), *declared.get("bin", [])):
+        if isinstance(target.get("path"), str):
+            protected.add(Path(target["path"]).as_posix())
+    found = []
+    for directory in directories:
+        root = crate / directory
+        if not root.is_dir():
+            raise ValueError(f"{crate.name}: audited directory {directory} is missing")
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(crate).as_posix()
+            legal = (
+                path.name.lstrip(".")
+                .upper()
+                .startswith(("LICENSE", "LICENCE", "COPYING", "COPYRIGHT", "NOTICE"))
+            )
+            if relative not in protected and not legal:
+                found.append(relative)
+    return sorted(found)
+
+
 def leave_out(crate, paths, label):
     """Remove files from a crate, with their entries in its checksum record,
     and the directories that the removal empties.
@@ -304,6 +378,7 @@ def vendor(workspace, directory, targets):
     left-out paths, whether the crate is kept whole) for each crate, in name
     order.
     """
+    policy = load_development_policy()
     directory = Path(directory)
     if directory.exists():
         raise FileExistsError(f"{directory} already exists")
@@ -328,7 +403,11 @@ def vendor(workspace, directory, targets):
         whole = (name, version) in selected
         if whole:
             left_out = sorted(
-                toolchain_files(crate) + alternative_licenses(crate, name, crate.name)
+                set(
+                    toolchain_files(crate)
+                    + alternative_licenses(crate, name, crate.name)
+                    + development_files(crate, policy)
+                )
             )
             leave_out(crate, left_out, crate.name)
             binaries(crate, crate.name)

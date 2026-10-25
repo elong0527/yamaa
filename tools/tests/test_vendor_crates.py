@@ -150,6 +150,81 @@ class AlternativeLicenseTests(unittest.TestCase):
                 vendor_crates.alternative_licenses(root, "zstd-sys", root.name)
 
 
+class DevelopmentFilesTests(unittest.TestCase):
+    def test_only_audited_versioned_development_files_leave_the_crate_and_record(self):
+        files = {
+            "Cargo.toml": (
+                b'[package]\nname="plain"\nversion="1.0.0"\n'
+                b'readme="examples/README.md"\nlicense-file="tests/LEGAL.txt"\n'
+                b'build="examples/build.rs"\n[lib]\npath="examples/lib.rs"\n'
+                b'[[bin]]\nname="tool"\npath="examples/tool.rs"\n'
+            ),
+            "src/lib.rs": b"// production\n",
+            "LICENSE-MIT": b"Copyright\n",
+            "examples/README.md": b"embedded documentation\n",
+            "examples/build.rs": b"fn main() {}\n",
+            "examples/lib.rs": b"// production library\n",
+            "examples/tool.rs": b"fn main() {}\n",
+            "tests/LEGAL.txt": b"the declared license\n",
+            "tests/NOTICE": b"retained notice\n",
+            "tests/LICENSE-MIT": b"retained license\n",
+            ".github/workflows/check.yml": b"# development\n",
+            "benches/bench.rs": b"// benchmark\n",
+            "examples/demo.rs": b"// standalone example\n",
+            "tests/case.rs": b"// unit test\n",
+        }
+        policy = {"plain-1.0.0": [".github", "benches", "examples", "tests"]}
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "plain", "1.0.0", files)
+            left_out = vendor_crates.development_files(root, policy)
+            self.assertEqual(
+                left_out,
+                [
+                    ".github/workflows/check.yml",
+                    "benches/bench.rs",
+                    "examples/demo.rs",
+                    "tests/case.rs",
+                ],
+            )
+            vendor_crates.leave_out(root, left_out, root.name)
+            remaining = files_of(root)
+            record = json.loads(remaining.pop(".cargo-checksum.json"))
+            self.assertEqual(
+                remaining,
+                {name: data for name, data in files.items() if name not in left_out},
+            )
+            self.assertEqual(record["files"], {name: "recorded" for name in remaining})
+            self.assertEqual(record["package"], "p")
+            # An upgraded version has not been audited and keeps everything.
+            other = crate(Path(scratch), "plain", "1.0.1", {"tests/case.rs": b"//\n"})
+            self.assertEqual(vendor_crates.development_files(other, policy), [])
+            self.assertTrue((other / "tests/case.rs").is_file())
+
+    def test_policy_cannot_select_production_sources_or_globs(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            path = Path(scratch) / "policy.toml"
+            for directories in (
+                ["src"],
+                ["../tests"],
+                ["tests/**"],
+                ["tests", "tests"],
+                [],
+            ):
+                path.write_text(
+                    '[development_directories]\n"plain-1.0.0" = '
+                    + json.dumps(directories)
+                )
+                with (
+                    self.subTest(directories=directories),
+                    self.assertRaisesRegex(ValueError, "development directories"),
+                ):
+                    vendor_crates.load_development_policy(path)
+            path.write_text('[development_directories]\n"plain-1.0.0" = ["tests"]')
+            self.assertEqual(
+                vendor_crates.load_development_policy(path), {"plain-1.0.0": ["tests"]}
+            )
+
+
 def files_of(root):
     """The files below a directory, with their bytes, by relative path."""
     return {
@@ -424,6 +499,36 @@ class VendorTests(unittest.TestCase):
                 )
         return crates, remaining
 
+    def test_development_and_toolchain_omissions_are_combined_without_duplicates(self):
+        def populate(directory):
+            crate(directory, "zstd-sys", "2.1.2", {"zstd/COPYING": b""})
+            crate(
+                directory,
+                "plain",
+                "1.0.0",
+                {
+                    "src/lib.rs": b"// production\n",
+                    "tests/rust-toolchain": b"nightly\n",
+                    "tests/case.rs": b"// test\n",
+                },
+            )
+
+        with mock.patch.object(
+            vendor_crates,
+            "load_development_policy",
+            return_value={"plain-1.0.0": ["tests"]},
+        ):
+            crates, remaining = self.vendor(
+                populate, [("plain", "1.0.0"), ("zstd-sys", "2.1.2")]
+            )
+        self.assertIn(
+            ("plain", "1.0.0", ["tests/case.rs", "tests/rust-toolchain"], True), crates
+        )
+        self.assertFalse(
+            any(name.startswith("plain-1.0.0/tests/") for name in remaining)
+        )
+        self.assertEqual(remaining["plain-1.0.0/src/lib.rs"], b"// production\n")
+
     def test_crates_that_no_target_compiles_keep_only_their_manifests(self):
         wasm = b'[package]\nname = "wasm"\nversion = "0.1.0"\n'
 
@@ -502,7 +607,8 @@ class VendorTests(unittest.TestCase):
         self.assertIn(("tool", "1.0.0", ["bin/tool"], False), crates)
 
     def test_the_script_runs_without_the_repository(self):
-        # The R source package carries this file alone as tools/vendor_crates.py.
+        # The R source package carries the script beside its policy, without
+        # Python package dependencies or a checkout.
         source = Path(vendor_crates.__file__)
         tree = ast.parse(source.read_text(encoding="utf-8"))
         imported = {
@@ -519,11 +625,24 @@ class VendorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as scratch:
             copy = Path(scratch) / "vendor_crates.py"
             copy.write_bytes(source.read_bytes())
+            (Path(scratch) / vendor_crates.POLICY.name).write_bytes(
+                vendor_crates.POLICY.read_bytes()
+            )
             result = subprocess.run(
                 [sys.executable, "-I", str(copy), "--help"],
                 cwd=scratch,
                 capture_output=True,
                 text=True,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-c",
+                    "import runpy; assert runpy.run_path('vendor_crates.py')['load_development_policy']()",
+                ],
+                cwd=scratch,
                 check=True,
             )
         self.assertIn("workspace", result.stdout)

@@ -1002,6 +1002,18 @@ it against the fresh source installation before the separate CRAN check.
 Native qualification continues to run the full installed suites against its
 source and binary artifacts.
 
+Source-package builds also render the minimal introduction under
+`R/yamaa/vignettes/`, with `knitr`, `rmarkdown` and Pandoc installed. Its
+short example is self-contained and is not evaluated during rendering.
+When editing it, run the example against the installed package as well as
+building the vignette. The source tarball includes the rendered HTML.
+
+`tools/staging/vendor_exclusions.toml` is the version-specific allowlist of
+upstream development directories omitted from source bundles. Audit a new
+entry for build-script and `include!`/`include_str!`/`include_bytes!` inputs,
+keep every needed license and production file, and prove offline production
+builds with the pruned bundle. Unknown versions keep their development files.
+
 The full R suites use the package's suggested packages, `arrow` and
 `jsonlite`, only where they are installed, as "Writing R Extensions" asks:
 a part that needs a missing one is skipped with a message. Native qualification's
