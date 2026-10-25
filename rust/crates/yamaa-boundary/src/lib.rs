@@ -6,11 +6,11 @@
 //! contract. The generated Python or R layer of a host package sends one
 //! request through its binding's handshake export before any other native
 //! call. The binding converts the host's request into a [`Value`], and its
-//! [`client::Gate`] sends it to the engine, which answers with an
-//! [`Outcome`]: the accepted record, or the five-field refusal envelope. The
-//! first acceptance opens the gate; every other native call of the binding
-//! passes it first and is refused until then. A later call of the handshake
-//! answers its request and changes nothing.
+//! [`Gate`] answers with an [`Outcome`]: the accepted record, or the
+//! five-field refusal envelope. The first acceptance opens the gate; every
+//! other native call of the binding passes it first and is refused until
+//! then. A later call of the handshake answers its request and changes
+//! nothing.
 //!
 //! Only the boundary version is negotiated, by exact equality: no ranges and
 //! no retry with a lower version. The check order stays the same in every
@@ -36,10 +36,10 @@
 //! meaning.
 //!
 //! [`abi`] holds the engine's C ABI, which `rust/crates/yamaa-engine`
-//! implements, and [`client`] the safe client through which both bindings
-//! reach it.
+//! implements, and [`client`] its safe client. Both are unused by the
+//! bindings, which call the facade directly, and leave in #3877's next steps.
 use std::fmt;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub mod abi;
 pub mod client;
@@ -252,8 +252,8 @@ impl EngineFacts {
 }
 
 /// Answer `request` for `engine` in the check order of the module
-/// documentation, as the engine answers it. Negotiation has no side
-/// effect; [`client::Gate::negotiate`] also opens a binding's gate.
+/// documentation. Negotiation has no side effect; [`Gate::negotiate`] also
+/// opens a binding's gate.
 pub fn negotiate(request: &Value, engine: &EngineFacts) -> Outcome {
     let refuse = |requested_version, reason, missing_features| {
         Outcome::Refused(Refusal {
@@ -353,6 +353,42 @@ fn is_identifier(text: &str) -> bool {
     let mut bytes = text.bytes();
     bytes.next().is_some_and(|first| first.is_ascii_lowercase())
         && bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+}
+
+/// A binding's gate: closed until a negotiation is accepted, then open for
+/// the life of the process; nothing closes it again. A binding keeps one in
+/// a `static`, so a replaced native module starts closed.
+#[derive(Debug, Default)]
+pub struct Gate {
+    open: AtomicBool,
+}
+
+impl Gate {
+    /// A closed gate.
+    pub const fn new() -> Self {
+        Self {
+            open: AtomicBool::new(false),
+        }
+    }
+
+    /// Answer `request` for `engine`; an acceptance opens the gate, and a
+    /// refusal leaves it as it was.
+    pub fn negotiate(&self, request: &Value, engine: &EngineFacts) -> Outcome {
+        let outcome = negotiate(request, engine);
+        if matches!(outcome, Outcome::Accepted(_)) {
+            self.open.store(true, Ordering::Release);
+        }
+        outcome
+    }
+
+    /// Let a native call through once a negotiation was accepted.
+    pub fn pass(&self) -> Result<(), Closed> {
+        if self.open.load(Ordering::Acquire) {
+            Ok(())
+        } else {
+            Err(Closed)
+        }
+    }
 }
 
 /// The refusal of a native call before the interface handshake succeeded,
