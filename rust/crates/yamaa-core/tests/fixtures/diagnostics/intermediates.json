@@ -63,6 +63,25 @@
       ],
       "output": {"path": "out.csv", "columns": ["ID"]},
       "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}]
+    },
+    "row_context": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "src.csv", "key": ["ID"]}, "DONOR": {"path": "donor.csv"}},
+      "keys": ["ID"],
+      "intermediates": [{"id": "P", "dataset": "DONOR", "key": {"K": "KEY"}, "absent": null}],
+      "columns": [
+        {"name": "ID", "type": "str", "derivation": {"value": "SRC.ID"}},
+        {"name": "KEY", "type": "str", "derivation": {"value": "SRC.K"}},
+        {"name": "ROWV", "type": "str"},
+        {"name": "COLV", "type": "str", "derivation": {"value": "P.V"}}
+      ],
+      "rows": [
+        {"id": "first", "derivations": {"ROWV": {"value": "P.V"}}, "dataset": "SRC"},
+        {"id": "second", "derivations": {"ROWV": {"value": "P.V"}}, "dataset": "SRC"}
+      ],
+      "output": {"path": "out.csv", "columns": ["ID", "KEY", "ROWV", "COLV"]}
     }
   },
   "cases": [
@@ -445,6 +464,51 @@
         "duplicate_count": 1
       },
       "issues": [{"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique"], "context": {"intermediate": "P", "dataset": "D", "columns": ["ID"], "duplicate_count": 1}}]
+    },
+    {
+      "case": "an_unknown_driver_of_a_row_template_beside_an_intermediate_is_unavailable_by_its_name",
+      "operation": "prepare",
+      "input": {"base": "row_context", "edits": [{"set": ["rows", "1", "dataset"], "to": "ABSENT"}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-1", "spec_paths": ["rows.second.dataset"], "context": {"row": "second", "dataset": "ABSENT"}}]
+    },
+    {
+      "case": "an_omitted_driver_of_a_row_template_beside_an_intermediate_is_unavailable_as_missing",
+      "operation": "prepare",
+      "input": {"base": "row_context", "edits": [{"remove": ["rows", "1", "dataset"]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-1", "spec_paths": ["rows.second.dataset"], "context": {"row": "second", "dataset": null}}]
+    },
+    {
+      "case": "a_template_a_foreign_input_drives_needs_the_raw_key_its_column_defaults_read",
+      "operation": "bind",
+      "input": {
+        "base": "row_context",
+        "edits": [{"set": ["rows", "1", "dataset"], "to": "DONOR"}],
+        "sources": {"SRC": [["ID", "str"], ["K", "str"]], "DONOR": [["K", "str"], ["V", "str"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ID.derivation.source"], "context": {"identifier": "DONOR.ID"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.KEY.derivation.source"], "context": {"identifier": "DONOR.ID"}}
+      ]
+    },
+    {
+      "case": "unknown_named_field_retains_full_lookup_cause_at_authored_read_boundary",
+      "operation": "bind",
+      "input": {
+        "base": "row_context",
+        "edits": [
+          {"set": ["rows", "0", "derivations", "ROWV"], "to": {"value": "P.ABSENT"}},
+          {"set": ["rows", "1", "derivations", "ROWV"], "to": {"value": "P.ABSENT"}}
+        ],
+        "sources": {"SRC": [["ID", "str"], ["K", "str"]], "DONOR": [["K", "str"], ["V", "str"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["rows.first.derivations.ROWV.source"], "context": {"identifier": "P.ABSENT"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["rows.second.derivations.ROWV.source"], "context": {"identifier": "P.ABSENT"}}
+      ]
     }
   ]
 }

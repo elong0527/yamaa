@@ -11,13 +11,13 @@ point the hosts use, and that entry point applies the fixed `Limits` itself.
 | `xport` | A SAS transport file | As `sas7bdat`, after the transport member admission. |
 | `csv` | A CSV file | The shared source decode: undeclared, as ODM, with a declared byte-order mark, and with every field declared each typed column type. The mark followed by the input must read as the input alone, unless the input starts with a mark. Read by partition, the record scan then one range of records at a time, each must give the whole read's table or finding. |
 | `specification` | A YAML specification | Preparation and compilation as a host check runs them. The engine admits the shipped schema closure once per process. |
-| `dataset_json` | A published CSV artifact | The Dataset-JSON writer over the artifact, admitted as a submission build reads it, in both representations. The output must parse as JSON holding every cell: one object, or a header line and one row per line. |
+| `dataset_json` | A published CSV artifact | The Dataset-JSON writer over the artifact, admitted as a submission build reads it, in both representations. The output must parse as JSON holding every cell: one object, or a header line and one row per line. Each file must then read back through the shared source decode, as a `.json` or `.ndjson` input, as the table it was written from. |
 | `odm_xml` | An ODM XML file, or a plain or gzip TAR archive holding one | The ODM XML reader that `read_odm` calls in both hosts, with its default options; then the shared source decode of a specification's `.xml` input, which reads the bytes as XML alone, as an ordinary and an ODM input. |
 
 The shared source decode is the one both host routes call for held input bytes
-(`decoder::Decoder`). The engine writes Dataset-JSON but reads
-none, so the `dataset_json` target fuzzes the path where untrusted bytes reach
-that writer. The ODM XML reader takes a path, so the `odm_xml` target writes
+(`decoder::Decoder`). Untrusted bytes reach the Dataset-JSON writer as a
+published artifact, so the `dataset_json` target fuzzes that path, and the
+Dataset-JSON source profiles' reader over the files it writes. The ODM XML reader takes a path, so the `odm_xml` target writes
 each input to one scratch file in the system's temporary directory first.
 
 A run fails on a crash, a sanitizer report, a panic, a timeout or a memory

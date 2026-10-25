@@ -354,15 +354,19 @@ impl<'d> Lower<'d> {
             let Some(name) = self.text(key) else { continue };
             let meta = self.meta(list, Segment::Key(name.into()), Some(source));
             let path = self.required_text(meta, source, "path");
-            // `.xml` selects the ODM profile (INPUT-1, P-ODMIN-1).
+            // `.xml` selects the ODM profile (INPUT-1, P-ODMIN-1), and `.json`
+            // and `.ndjson` the Dataset-JSON profiles (DSJSON-1).
             let profile =
                 crate::specification::SourceProfile::from_path(&path.text).map(|profile| {
+                    use crate::specification::SourceProfile as Source;
                     match profile {
-                        crate::specification::SourceProfile::Csv => Profile::Csv,
-                        crate::specification::SourceProfile::Parquet => Profile::Parquet,
-                        crate::specification::SourceProfile::Xport => Profile::Xport,
-                        crate::specification::SourceProfile::Sas7bdat => Profile::Sas7bdat,
-                        crate::specification::SourceProfile::OdmXml => Profile::OdmXml,
+                        Source::Csv => Profile::Csv,
+                        Source::Parquet => Profile::Parquet,
+                        Source::Xport => Profile::Xport,
+                        Source::Sas7bdat => Profile::Sas7bdat,
+                        Source::OdmXml => Profile::OdmXml,
+                        Source::DatasetJson => Profile::DatasetJson,
+                        Source::DatasetNdjson => Profile::DatasetNdjson,
                     }
                 });
             let mut types = Vec::new();
