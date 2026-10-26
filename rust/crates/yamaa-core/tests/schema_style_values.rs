@@ -1,8 +1,9 @@
 //! Public typed-value controls for document layout edits.
 //!
 //! The seam is `Document::same_style_value` over documents built node by
-//! node, including 2,048-field mappings and scalar key kinds no YAML text
-//! spells apart, a predicate no run reports.
+//! node, including 2,048-field mappings and typed scalar key comparisons.
+//! Benchmark and host-fixture readers run specifications; they do not call
+//! this predicate directly or report its boolean result.
 use yamaa_core::schema::{Document, DocumentNode as N};
 
 fn push(nodes: &mut Vec<N>, node: N) -> usize {
