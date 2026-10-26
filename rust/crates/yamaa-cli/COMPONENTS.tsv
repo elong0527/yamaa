@@ -114,11 +114,11 @@ windows-strings	0.5.1	MIT	crates.io	not compiled: transitive dependency of windo
 windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters), and console Ctrl+C handling in the command line
 winnow	1.0.4	MIT	crates.io	transitive dependency of toml and toml_parser: parser combinators
 wit-bindgen	0.46.0	MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
-yamaa	0.6.1	MIT	rust/crates/yamaa	the Rust facade over yamaa-core, yamaa-adapters and yamaa-application, which the host bindings and the command line depend on
-yamaa-adapters	0.6.1	MIT	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
-yamaa-application	0.6.1	MIT	rust/crates/yamaa-application	the engine's application layer: the use cases that prepare, bind, execute, report and save over yamaa-core and yamaa-adapters
-yamaa-cli	0.6.1	MIT	rust/crates/yamaa-cli	the command line: the yamaa executable of the command-line archives
-yamaa-core	0.6.1	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
+yamaa	0.6.2	MIT	rust/crates/yamaa	the Rust facade over yamaa-core, yamaa-adapters and yamaa-application, which the host bindings and the command line depend on
+yamaa-adapters	0.6.2	MIT	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
+yamaa-application	0.6.2	MIT	rust/crates/yamaa-application	the engine's application layer: the use cases that prepare, bind, execute, report and save over yamaa-core and yamaa-adapters
+yamaa-cli	0.6.2	MIT	rust/crates/yamaa-cli	the command line: the yamaa executable of the command-line archives
+yamaa-core	0.6.2	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
 yamaa-saphyr-parser	0.2.1	MIT	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor
 zerocopy	0.8.63	MIT	crates.io	transitive dependency of ahash and half: checked byte-level conversions
 zerocopy-derive	0.8.63	MIT	crates.io	procedural macro: zerocopy's derives, which half enables

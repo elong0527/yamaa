@@ -1,13 +1,18 @@
 ## Resubmission
 
-This is a new submission, resubmitted. In the incoming pretest of 0.6.0, the
-package failed to install on Windows: `src/Makevars.win` gave Cargo R's `CC`
-as the linker, which ends in a space there, so Cargo found no linker `gcc `
-for the build scripts. In 0.6.1:
+This is a new submission, resubmitted a second time. The incoming pretests of
+0.6.0 and 0.6.1 both failed to install the package on Windows:
 
-- `src/Makevars.win` gives Cargo the first word of `CC` as the linker.
-- Our Windows checks now build with a Rust toolchain for the GNU host,
-  `x86_64-pc-windows-gnu`, as CRAN's Windows machines do.
+- 0.6.0: `src/Makevars.win` gave Cargo R's `CC` as the linker, which ends in
+  a space there, so Cargo found no linker `gcc ` for the build scripts. 0.6.1
+  gives Cargo the first word of `CC`, and our Windows checks now build with a
+  Rust toolchain for the GNU host, `x86_64-pc-windows-gnu`, as CRAN's Windows
+  machines do.
+- 0.6.1: the Rust 1.86 to 1.95 standard library for that target carries an
+  empty `*.rcgu.dwo` member in each archive, and the Rust static library
+  bundles them. `src/Makevars.win` removes the static library's export
+  directives with objcopy, which refuses a member without sections. In 0.6.2
+  it deletes those empty members first.
 
 ## Test environments
 

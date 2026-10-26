@@ -948,7 +948,7 @@ information line.
 
 ```text
 yamaa selftest: succeeded, 5 of 5 cases passed
-engine 0.6.1, language 1.0, python 3.12.4, linux-x86_64
+engine 0.6.2, language 1.0, python 3.12.4, linux-x86_64
 ```
 
 ## Engine information
