@@ -14,12 +14,12 @@
 [[IgnoredVulns]]
 id = "GHSA-2f9f-gq7v-9h6m"
 ignoreUntil = 2027-01-31
-reason = "thrift 0.17.0 (CVE-2026-43868, fixed in 0.23.0) arrives only through parquet 55.2.0, which the engine pins exactly as the newest release that builds with Rust 1.82 (#3111), and which requires thrift 0.17. Parquet 55 decodes a footer with the Thrift-generated readers over its own slice-bounded compact protocol, and a page header with thrift's compact protocol. Admission walks every footer and page header before Parquet decodes it, and bounds what thrift 0.23.0 adds limits for: each binary, list, set and map length by the bytes that hold it, field ids to i16, and nesting to 128 levels (thrift's own skip stops at 64). It also refuses a mistyped or repeated known field. RustSec has no entry for this advisory, so rust/deny.toml does not list it."
+reason = "thrift 0.17.0 (CVE-2026-43868, fixed in 0.23.0) arrives only through parquet 55.2.0, which requires thrift 0.17 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which decodes only the Parquet bytes those tests write or save (#3878). No package, host binding, facade or command-line build compiles parquet or thrift (#3954), so cargo tree --workspace --all-features --target all -e normal,build -i thrift lists nothing. RustSec has no entry for this advisory, so rust/deny.toml does not list it."
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0436"
 ignoreUntil = 2027-04-30
-reason = "paste is unmaintained, not vulnerable, and a procedural macro that runs only at compile time. It arrives through extendr-api 0.9.0, the latest release, and through parquet 55.2.0, which the engine pins exactly as the newest release that builds with Rust 1.82."
+reason = "paste is unmaintained, not vulnerable, and a procedural macro that runs only at compile time. It arrives through extendr-api 0.9.0, the latest release, which the R binding builds, and through parquet 55.2.0, which only the adapters' and the application's tests compile, as their differential oracle (#3954)."
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0176"
