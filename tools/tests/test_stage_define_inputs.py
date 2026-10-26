@@ -36,6 +36,7 @@ class DefineStage(unittest.TestCase):
                 "define_2_0_historical.xml",
                 "define_2_0_historical_no_artifact.xml",
                 "define_2_0_historical_values.xml",
+                "define_2_0_historical_shared_output.xml",
                 "define_2_0_send.xml",
             ):
                 legacy_schema.assertValid(

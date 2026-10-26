@@ -1789,6 +1789,11 @@ fn compose_datasets(
         }
         reserved_metadata(doc, doc.root(), None, &path, findings);
         let reads = Reads::of_spec(input.tree);
+        let historical = input
+            .tree
+            .submission
+            .as_ref()
+            .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Historical);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
             findings.push(
@@ -1796,7 +1801,7 @@ fn compose_datasets(
                     .with("identifier", id.as_str()),
             );
         }
-        if !sources.insert(input.source) || !artifacts.insert(input.artifact) {
+        if !sources.insert(input.source) || (!historical && !artifacts.insert(input.artifact)) {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionDuplicateDataset,
                 &path,
@@ -1825,7 +1830,6 @@ fn compose_datasets(
             );
             continue;
         };
-        let historical = dataset.mode.value == spec::SubmissionMode::Historical;
         historical::dataset(section, dataset, &path, findings);
         let Some(columns) = declarations.columns() else {
             findings.push(

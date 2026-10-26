@@ -447,7 +447,8 @@ impl Application {
         // are read, never represented, when a composed specification needs them.
         let mut others = Vec::new();
         if self.specifications.iter().any(|document| {
-            composition::reads_other_sections(Reads::specification(document).document)
+            let view = Reads::specification(document);
+            !view.historical() && composition::reads_other_sections(view.document)
         }) {
             for other in declarations
                 .sections

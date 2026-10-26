@@ -132,7 +132,7 @@ Each `specs` entry names one specification resolved with its parent layers.
 That specification's `domain` supplies the dataset ID and name; the ID is
 unique within the document and supplies every generated identifier for that
 dataset. The entry order is the document's dataset order. Two entries must not
-name the same specification, and two entries must not resolve to the same
+name the same specification, and two validated entries must not resolve to the same
 artifact path.
 
 Fails: `duplicate_dataset_entry`.
@@ -144,7 +144,7 @@ the recommended order of a submission's datasets is a property of the standard
 a study follows rather than of this language, and a study that follows one
 writes its entries in it. A document that described one artifact twice would
 carry two definitions a reader cannot reconcile; two entries naming the same
-specification or resolving to the same artifact path fail with
+specification, or two validated entries resolving to the same artifact path, fail with
 `duplicate_dataset_entry`.
 
 <a id="define-6"></a>
@@ -899,6 +899,9 @@ positions never inherit.
 The current executable output need not share the document's directory, and
 historical composition does not read its run report, artifact or inputs.
 Publication still protects declared inputs and outputs from being overwritten.
+Historical declarations do not request unrelated section specifications for
+inventory or predecessor assertions. Distinct historical datasets may share
+an executable output path; each keeps its own literal metadata and artifact link.
 Value-level where clauses retain structural and output-column name checks,
 but executable types, terminology membership and overlapping row selections
 do not constrain a historical declaration.
