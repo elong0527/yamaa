@@ -7,4 +7,4 @@
 # manifests, locks and benchmark R environments to carry them, and the tag
 # links of python/README.md to name the tag: the commit that changes this file
 # re-pins those links too.
-version = "0.6.1"
+version = "0.6.2"

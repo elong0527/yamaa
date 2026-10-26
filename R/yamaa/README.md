@@ -69,7 +69,7 @@ release:
 install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
-Once CRAN accepts 0.6.1, `install.packages("yamaa")` installs it from there
+Once CRAN accepts 0.6.2, `install.packages("yamaa")` installs it from there
 too.
 
 Installing the source package compiles the Rust engine, so it needs R 4.2.0
