@@ -1,5 +1,9 @@
 #![cfg(feature = "yaml")]
 //! Project contracts: the decoder port's implementation.
+//!
+//! The seam is the adapters' `Decoder` called directly: its typed source
+//! errors, the exact cells it keeps, and its cached sources across two builds
+//! through scripted activation and source ports, none of which a run reports.
 mod project {
     mod decoder {
         use crate::support::project_call_compiler as support;

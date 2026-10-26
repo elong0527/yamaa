@@ -1,4 +1,8 @@
 //! Capability controls also run when no document or storage reader is selected.
+//!
+//! The seam is the adapters built with a subset of their features, which the
+//! benchmark reader and the host fixtures never run: they build every reader.
+//! This file is its own binary, which `tools/ci/format_features.py` runs.
 #[allow(dead_code)]
 #[path = "support/scratch.rs"]
 mod scratch;

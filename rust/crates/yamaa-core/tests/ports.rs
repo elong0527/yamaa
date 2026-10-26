@@ -1,4 +1,8 @@
 //! Strict private port controls for effects, payload identity and owned snapshots.
+//!
+//! The seam is the scripted doubles of `tests/support/ports.rs` themselves:
+//! their effect log, the payload identity they move and the snapshots they
+//! own, which the other families rely on and no fixture reader runs.
 use crate::support;
 use support::ports::*;
 use yamaa_core::project_preparation as metadata;

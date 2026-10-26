@@ -1,4 +1,8 @@
 //! Stable, exact partitioning of a table snapshot by its bound columns.
+//!
+//! The seam is `table_grouping::partition` over table doubles that record
+//! each cell read or claim impossible geometry: the groups it returns, the
+//! reads it makes and its typed `GroupingError`, which no run reports.
 use crate::support;
 use support::dataset::{schema, table};
 use yamaa_core::{

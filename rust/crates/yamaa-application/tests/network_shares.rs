@@ -8,6 +8,10 @@
 //! share sets `YAMAA_SKIP_NETWORK_SHARES=1` to skip them with a message, and no
 //! CI lane sets it. The path classification these walks rely on is tested on
 //! every host in `file_resolver.rs`.
+//!
+//! The seam is a study spelled through `\\localhost\C$`, read through
+//! `file_configuration::resources` and `Project::read`, and a junction that
+//! `mklink` makes in the test: a case's study is a local directory.
 #![cfg(all(windows, feature = "yaml"))]
 
 use std::{

@@ -15,6 +15,10 @@
 //! tree's, which debug builds enforce
 //! (`yamaa-core/src/specification/lowering_audit.rs`); the Rust tests that
 //! prepare a specification run the same comparison.
+//!
+//! The seam is the lowered `Spec` that `shipped_schema::prepare` returns: its
+//! sites, expression arena, spans and rendered paths, which no run reports,
+//! walked over the whole benchmark corpus once.
 
 use std::{collections::BTreeSet, fs, path::Path};
 use yamaa_adapters::{

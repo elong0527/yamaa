@@ -3,6 +3,11 @@
 //! Expected values in this file are authored literals, never derived from
 //! the implementation under test. Scalar equivalence is proved against the
 //! independent scalar entry point `invoke_project`.
+//!
+//! The seam is the host-functions port, scripted by counting batch doubles:
+//! the registry's state, the batches and arguments each call receives, the
+//! calls it makes and chunk cancellation, which neither the benchmark reader
+//! nor the host fixtures reach, since they cannot script a host.
 use crate::support::roots::{Case, Definition, Parameter as DefParam};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};

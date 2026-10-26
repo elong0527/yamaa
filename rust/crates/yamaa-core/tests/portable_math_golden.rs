@@ -1,5 +1,10 @@
 //! Portable math: the authored PortableLibmV1 table, evaluated through the
 //! expression compiler to its exact bits and domain failures.
+//!
+//! The seam is the compiled expression's `evaluate_number`: its result's
+//! exact bits, its typed arithmetic failure and span, and the operands its
+//! resolver is asked for, which no replay case or benchmark observes. The
+//! test is the only reader of `fixtures/portable_math.tsv`.
 use std::convert::Infallible;
 use yamaa_core::expression::{compile, Condition, Context, ErrorKind, Resolver as NumericResolver};
 use yamaa_core::numeric::{ArithmeticErrorKind, Number};

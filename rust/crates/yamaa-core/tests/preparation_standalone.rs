@@ -1,4 +1,8 @@
 //! Preparation contracts: schema admission and source profile inspection.
+//!
+//! The seam is `SchemaStructure::admit`'s descriptors, origins and ordered
+//! `BundleIssue`s, and `source_profile_inspection::refine` with a scripted
+//! inspection callback, neither of which a replay case or benchmark reaches.
 mod preparation {
     mod schema_admission {
         //! A decoded closure's semantic admission (`SchemaStructure::admit`):

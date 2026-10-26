@@ -1,4 +1,8 @@
 //! The inspection reader works independently of optional physical readers.
+//!
+//! The seam is `ResolvedArtifact`'s JSON wire, read and written by
+//! `from_json` and `to_json`, and `specification_value` over core `Document`
+//! arenas built by code: no case operation returns a resolved artifact.
 use crate::support::Edit as _;
 use yamaa_application::resolved_artifact::model::specification_value;
 use yamaa_application::resolved_artifact::ResolvedArtifact;

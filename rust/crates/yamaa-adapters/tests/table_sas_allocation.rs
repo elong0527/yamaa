@@ -1,4 +1,8 @@
 //! Table contracts: SAS allocation.
+//!
+//! The seam is `sas_source::parse` over SAS7BDAT bytes built by code, read
+//! again by a child process under a bounded address space, which neither the
+//! benchmark reader nor the host fixtures reach.
 mod table {
     #[cfg(feature = "readstat")]
     mod sas_allocation {

@@ -26,6 +26,10 @@
 //! the replacement, as `fixtures/README.md` describes. No test writes a
 //! fixture. The writer that `created_by` names is an authored literal here,
 //! so a replaced fixture cannot change it.
+//!
+//! The seam is the encoder's saved bytes, compared whole and read back by
+//! the parquet crate, which the benchmark reader and the host fixtures never
+//! see: they compare Parquet by what it reads back as.
 use base64::{prelude::BASE64_STANDARD, Engine};
 use bytes::Bytes;
 use parquet::file::{reader::FileReader, serialized_reader::SerializedFileReader};

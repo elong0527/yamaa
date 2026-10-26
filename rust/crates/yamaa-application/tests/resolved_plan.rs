@@ -2,6 +2,10 @@
 //! The resolved plan graph (#2840) of authored benchmark specifications, on
 //! the rows and the no-rows binding routes, and the bind rejection that a
 //! failed resolution check produces.
+//!
+//! The seam is the `ResolvedPlan` that binding returns, its regions, stages,
+//! steps and grains, which no run reports, and the reply `failure` gives a
+//! resolution error built in the test, which no specification reaches.
 use crate::support;
 use std::path::{Path, PathBuf};
 use support::specification_run::{compile, prepare, try_prepare};

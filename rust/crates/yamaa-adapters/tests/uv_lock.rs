@@ -2,6 +2,10 @@
 //! comparison moved from the Python host into the engine (#3030 D11); each
 //! case keeps one of the host's former `verify_versions` cases, and the
 //! observation trace keeps the order in which the host is asked.
+//!
+//! The seam is `verify_uv` against a scripted `PythonInstallation`, whose
+//! trace and integer limit the test sets, which neither the benchmark reader
+//! nor the host fixtures reach: a real host answers from its own interpreter.
 use std::collections::BTreeMap;
 use yamaa_adapters::project_lock::{
     verify_uv, Finding, Installed, PythonInstallation, Reason, UvFailure, VERSION_DIGITS,

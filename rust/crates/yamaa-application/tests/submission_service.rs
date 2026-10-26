@@ -2,6 +2,10 @@
 //! The Define service: what one section's composition reads, refuses,
 //! renders and admits before any save, observed through a caller's resolver
 //! that records every request (DEFINE-3, DEFINE-28, PROJECT-14).
+//!
+//! The seam is that resolver's log of operations, written paths and held
+//! references, and the `PublicationState` before any save; a `define` case
+//! states only the issues and the files saved.
 mod service {
     use std::sync::{Arc, Mutex};
     use yamaa_adapters::{

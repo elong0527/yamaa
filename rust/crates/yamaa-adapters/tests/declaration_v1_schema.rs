@@ -7,6 +7,10 @@
 //! with valid defaults, and every converted example of the 1.0 interface RFC
 //! passes the document decoder: its header selects its closure, and it is
 //! admitted at the version it declares, a specification layer by layer.
+//!
+//! The seam is the shipped schema model and the document decoder over the
+//! repository's own files, the closures' defaults and the RFC examples, which
+//! no fixture case names as its input.
 mod declaration {
     mod v1_schema {
         use std::collections::BTreeSet;
