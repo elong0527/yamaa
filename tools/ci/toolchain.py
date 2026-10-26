@@ -3,9 +3,11 @@
 Without options, the channel that rust/rust-toolchain.toml pins; with
 --minimum, the workspace rust-version, the oldest Rust that builds the
 engine; with --channel, another rustup channel, such as beta, the next
-stable release. With --install, rustup installs the selected toolchain with
-the components that repository checks use. In CI, the selection is written
-to GITHUB_ENV as RUSTUP_TOOLCHAIN for the steps that follow.
+stable release. With --host, that release built for another host that the
+machine runs, such as the GNU host on Windows that CRAN's checks build with.
+With --install, rustup installs the selected toolchain with the components
+that repository checks use. In CI, the selection is written to GITHUB_ENV as
+RUSTUP_TOOLCHAIN for the steps that follow.
 """
 
 import argparse
@@ -81,6 +83,12 @@ def main(argv=None):
         help="use this rustup channel, such as beta, instead of the pinned one",
     )
     parser.add_argument(
+        "--host",
+        metavar="TRIPLE",
+        help="use the toolchain built for this host, such as "
+        "x86_64-pc-windows-gnu, instead of rustup's default host",
+    )
+    parser.add_argument(
         "--notices",
         action="store_true",
         help="with --install, also add the components that the third-party "
@@ -94,6 +102,8 @@ def main(argv=None):
         toolchain["channel"] = minimum()
     elif arguments.channel:
         toolchain["channel"] = arguments.channel
+    if arguments.host:
+        toolchain["channel"] = f"{toolchain['channel']}-{arguments.host}"
     if arguments.install:
         subprocess.run(install_command(toolchain, arguments.notices), check=True)
     if github_environment := os.environ.get("GITHUB_ENV"):

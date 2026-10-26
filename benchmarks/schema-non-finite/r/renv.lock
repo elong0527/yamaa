@@ -5,7 +5,7 @@
   "Packages": {
     "yamaa": {
       "Package": "yamaa",
-      "Version": "0.6.0"
+      "Version": "0.6.1"
     },
     "yamaabenchmarks": {
       "Package": "yamaabenchmarks",

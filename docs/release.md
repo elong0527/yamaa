@@ -212,12 +212,16 @@ release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each but the valgrind job runs `R CMD check --as-cran`
 through `tools/commands/check_r.py`, which fails on any NOTE, WARNING or
 ERROR that `R/yamaa/cran-comments.md` does not explain and on a tarball above
-the 15 MB that it requests. The build reads the vendored crates behind a
+CRAN's 10 MB limit. The build reads the vendored crates behind a
 proxy that refuses connections and runs two Cargo jobs.
 
 - With R-devel, R-release and R 4.2.0, on Linux, macOS and Windows, Cargo and
   rustc are the workspace's `rust-version`, 1.82: the two-year-old toolchain
-  that CRAN's guidance asks a package to be tested with.
+  that CRAN's guidance asks a package to be tested with. On Windows it is
+  built for the GNU host, `x86_64-pc-windows-gnu`, as on CRAN's Windows
+  machines, so Cargo links the build scripts and procedural macros with the
+  linker that `Makevars.win` gives it. The other Windows lanes add the GNU
+  target to the MSVC host's toolchain, which links them with MSVC's linker.
 - With R-devel on Linux and none of the package's suggested packages
   installed, as CRAN's noSuggests check runs: `_R_CHECK_DEPENDS_ONLY_=true`
   gives the tests only the Depends and Imports, and with
@@ -261,6 +265,15 @@ proxy that refuses connections and runs two Cargo jobs.
   turns `--extra-arch` off and reports every example slower than five
   seconds, as each is under valgrind. It fails where memcheck counted an
   error, a leak that `--leak-check=full` reports included, or did not run.
+  `tools/commands/memcheck.supp` hides the "possibly lost" blocks of three
+  roots that live as long as the process, which memcheck reaches only through
+  a pointer into a block's middle: extendr's ownership map, the R thread's
+  handle as the cancellation token first asks for it, and the lazy caches of
+  the shipped schemas' regexes as a descriptor's constraint check first
+  searches with them. Before the check, `tools/commands/memcheck_control.c`
+  must show that a definite leak at a listed root, a listed function reached
+  from another caller, and a possibly lost block at any other root still
+  count.
   Under memcheck the tests run many times slower, so the job may take up to
   four hours.
 
@@ -741,7 +754,9 @@ Re-running failed jobs or all jobs keeps a run eligible: earlier attempts'
 artifacts stay on the run, and the workflow takes only the copy that its
 uploading job created during the execution the run's final attempt lists.
 
-The release body of a final release X.Y.Z is its committed notes,
+A release is titled `yamaa vX.Y.Z`, or `yamaa vX.Y.Z-rc.N` for release
+candidate N, in the Cargo spelling of its version. The release body of a
+final release X.Y.Z is its committed notes,
 `docs/releases/X.Y.Z.md`, then a "Qualified native artifacts" section that
 links the native run attempt and lists the selected artifacts. A release
 candidate is created as a GitHub pre-release. Its body first says that it is

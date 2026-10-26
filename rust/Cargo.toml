@@ -8,7 +8,7 @@ default-members = ["crates/yamaa-core", "crates/yamaa-adapters", "crates/yamaa-a
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0"
+version = "0.6.1"
 authors = [
     "Yilong Zhang <elong0527@gmail.com>",
     "Ming-Chun Chen",

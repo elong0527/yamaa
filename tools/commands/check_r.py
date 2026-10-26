@@ -18,10 +18,13 @@ builders installed. Other checks continue to validate and rebuild vignettes.
 With --valgrind it runs CRAN's valgrind check instead, as R-hub's valgrind
 image does: only the checks that run the package (--extra-arch), its
 installation, examples and tests, with the examples and each test under
-valgrind's memcheck (--use-valgrind) and the options of VALGRIND_OPTS. It
-leaves out --as-cran, which turns --extra-arch off and reports every example
-slower than five seconds, as each is under valgrind. The output of the
-examples and of each test must hold memcheck's summary, with no error.
+valgrind's memcheck (--use-valgrind) and the options of VALGRIND_OPTS, to
+which it adds the suppressions of MEMCHECK_SUPPRESSIONS. Before the check,
+memcheck must count MEMCHECK_CONTROL's losses as that file states, so the
+suppressions hide only what they list. It leaves out --as-cran, which turns
+--extra-arch off and reports every example slower than five seconds, as each
+is under valgrind. The output of the examples and of each test must hold
+memcheck's summary, with no error.
 
     python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> [--manual] [--ignore-vignettes]
     python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> --valgrind
@@ -46,10 +49,11 @@ from tools.paths import ROOT
 # two lists equal. To accept a new note, explain it there and add it here in
 # the same change. A WARNING or ERROR is never accepted.
 EXPECTED_NOTES = {
-    # A first submission, and a tarball above CRAN's 10 MB guideline because
-    # it bundles the crates that the build compiles (src/rust/vendor.tar.xz),
-    # as CRAN's guidance for Rust asks. "New submission" needs CRAN's package
-    # index, which a check without remote access does not read.
+    # A first submission, and the tarball's size, which R 4.2 reports above
+    # 5 MB: it bundles the crates that the build compiles
+    # (src/rust/vendor.tar.xz), as CRAN's guidance for Rust asks. "New
+    # submission" needs CRAN's package index, which a check without remote
+    # access does not read.
     "CRAN incoming feasibility": (
         r"Maintainer: .+",
         r"New submission",
@@ -68,11 +72,10 @@ EXPECTED_NOTES = {
         r"libs +\d+\.\d+Mb",
     ),
 }
-# CRAN's Repository Policy: tarballs "should if possible not exceed 10MB", and
-# "a modestly increased limit can be requested at submission" for bundled
-# third-party sources. cran-comments.md requests this limit (a test keeps the
-# two equal), and a larger tarball fails the check.
-TARBALL_LIMIT = 15_000_000
+# CRAN's Repository Policy: tarballs "should if possible not exceed 10MB".
+# cran-comments.md requests no larger limit (a test keeps it so), and a larger
+# tarball fails the check.
+TARBALL_LIMIT = 10_000_000
 TARBALL_SIZE = re.compile(r"Size of tarball: (\d+) bytes")
 # On Unix, --as-cran runs the checkbashisms script over configure and cleanup,
 # and warns instead when it is not installed, as on macOS runners and most
@@ -131,6 +134,21 @@ SANITIZER_OUTPUTS = ("00install.out", "*-Ex.Rout", "tests/*.Rout", "tests/*.Rout
 # which is absent where valgrind did not run, and count no error.
 MEMCHECK_SUMMARY = re.compile(r"^==\d+== ERROR SUMMARY: (\d+) errors", re.M)
 MEMCHECK_OUTPUTS = ("*-Ex.Rout", "tests/*.Rout", "tests/*.Rout.fail")
+# The possibly lost blocks of the roots whose state lives as long as the
+# process, which memcheck reaches only through a pointer into a block's
+# middle, so it reports them at every exit though nothing is lost. Each entry
+# names one root and the possibly lost kind alone.
+MEMCHECK_SUPPRESSIONS = Path(__file__).with_name("memcheck.supp")
+# A program that loses a possibly lost block at each listed root through its
+# listed caller, a definite one at a listed root, possibly lost ones in the
+# listed functions through other callers, and one elsewhere: memcheck must
+# suppress the first three and count the other four, as
+# MEMCHECK_CONTROL_SUMMARY states.
+MEMCHECK_CONTROL = Path(__file__).with_name("memcheck_control.c")
+MEMCHECK_CONTROL_SUMMARY = re.compile(
+    r"^==\d+== ERROR SUMMARY: 4 errors from 4 contexts \(suppressed: 3 from 3\)$",
+    re.M,
+)
 COUNTED = ("ERROR", "WARNING", "NOTE")
 STATUSES = (*COUNTED, "INFO", "OK", "SKIPPED", "NONE")
 HEADER = re.compile(r"^\* checking (?P<check>.+?) \.\.\.(?P<rest>.*)$")
@@ -238,8 +256,8 @@ def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True, manual=False):
 
 def tarball_problem(size):
     return (
-        f"the tarball is {size} bytes, above the {TARBALL_LIMIT} that "
-        "cran-comments.md requests"
+        f"the tarball is {size} bytes, above the {TARBALL_LIMIT} of CRAN's "
+        "Repository Policy"
     )
 
 
@@ -363,6 +381,34 @@ def memcheck_summaries(work):
     }
 
 
+def memcheck_control(work, environment):
+    """Compile MEMCHECK_CONTROL in `work` and run it under valgrind with
+    `environment`'s VALGRIND_OPTS; fail, printing memcheck's report, unless
+    memcheck suppressed only the listed roots' possibly lost blocks reached
+    through their listed callers, and counted every other loss."""
+    program = work / "memcheck-control"
+    subprocess.run(
+        ["cc", "-O0", "-g", "-o", str(program), str(MEMCHECK_CONTROL)],
+        cwd=work,
+        env=environment,
+        check=True,
+    )
+    completed = subprocess.run(
+        ["valgrind", str(program)],
+        cwd=work,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if not MEMCHECK_CONTROL_SUMMARY.search(completed.stderr):
+        print(completed.stderr, end="")
+        raise RuntimeError(
+            "memcheck did not count the control's losses as memcheck_control.c "
+            "states, so its suppressions or options would hide another leak"
+        )
+
+
 def check(
     archive,
     work,
@@ -384,6 +430,19 @@ def check(
     )
     (work / "source-revision.txt").write_text(revision, encoding="utf-8")
     environment = check_environment(environment)
+    if valgrind:
+        # valgrind reads VALGRIND_OPTS itself, in R's processes as in the
+        # control's.
+        environment["VALGRIND_OPTS"] = " ".join(
+            filter(
+                None,
+                (
+                    environment.get("VALGRIND_OPTS"),
+                    f"--suppressions={MEMCHECK_SUPPRESSIONS}",
+                ),
+            )
+        )
+        memcheck_control(work, environment)
     # Every test file runs, so one failing file does not hide the others.
     # Without `manual`, R leaves out the PDF and HTML manuals. With
     # `valgrind`, R runs only the installation, the examples and the tests.

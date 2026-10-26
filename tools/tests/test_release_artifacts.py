@@ -1121,7 +1121,7 @@ class PublicationBoundary(unittest.TestCase):
             arguments = publish()
             self.assertEqual(arguments[:3], ["release", "create", TAG])
             self.assertEqual(
-                arguments[arguments.index("--title") + 1], f"yamaa {IDENTITY.cargo}"
+                arguments[arguments.index("--title") + 1], f"yamaa v{IDENTITY.cargo}"
             )
             self.assertEqual(
                 "--prerelease" in arguments, IDENTITY.candidate is not None
@@ -1138,9 +1138,9 @@ class PublicationBoundary(unittest.TestCase):
     def test_a_candidate_is_published_as_a_pre_release_and_a_final_release_is_not(
         self,
     ):
-        for identity, prerelease in [
-            (Identity("1.0.0", 2), True),
-            (Identity("1.0.0"), False),
+        for identity, title, prerelease in [
+            (Identity("1.0.0", 2), "yamaa v1.0.0-rc.2", True),
+            (Identity("1.0.0"), "yamaa v1.0.0", False),
         ]:
             with (
                 self.subTest(identity=str(identity)),
@@ -1149,9 +1149,7 @@ class PublicationBoundary(unittest.TestCase):
                 _, artifacts, publish = self.publication(Path(directory), identity)
                 arguments = publish()
                 self.assertEqual(arguments[:3], ["release", "create", identity.tag])
-                self.assertEqual(
-                    arguments[arguments.index("--title") + 1], f"yamaa {identity.cargo}"
-                )
+                self.assertEqual(arguments[arguments.index("--title") + 1], title)
                 self.assertEqual("--prerelease" in arguments, prerelease)
                 # Every declared asset is uploaded, in declaration order.
                 self.assertEqual(

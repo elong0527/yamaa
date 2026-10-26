@@ -2,7 +2,9 @@
 
 import contextlib
 import io
+import os
 import re
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,7 +24,7 @@ Maintainer: 'Yilong Zhang <elong0527@gmail.com>'
 
 New submission
 
-Size of tarball: 14539245 bytes
+Size of tarball: 9413320 bytes
 * checking package namespace information ... OK
 """
 SIZE = """\
@@ -246,11 +248,11 @@ class FindingsTests(unittest.TestCase):
 
 
 class TarballTests(unittest.TestCase):
-    def test_a_tarball_above_the_requested_limit_fails(self):
+    def test_a_tarball_above_cran_s_limit_fails(self):
         limit = check_r.TARBALL_LIMIT
         for size, allowed in ((limit, True), (limit + 1, False)):
             with self.subTest(size=size):
-                text = log(HEAD.replace("14539245", str(size)), status="1 NOTE")
+                text = log(HEAD.replace("9413320", str(size)), status="1 NOTE")
                 self.assertEqual(check_r.unexpected(text) == [], allowed)
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "yamaa_0.5.0.tar.gz"
@@ -259,12 +261,11 @@ class TarballTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "above the"):
                 check_r.check(archive, Path(directory) / "check")
 
-    def test_cran_comments_requests_the_limit(self):
+    def test_cran_comments_requests_no_larger_limit(self):
+        # The check holds the tarball to CRAN's own limit, so the submission
+        # comments must not ask CRAN for a larger one.
         comments = (ROOT / "R/yamaa/cran-comments.md").read_text(encoding="utf-8")
-        self.assertIn(
-            f"we request a limit of {check_r.TARBALL_LIMIT // 1_000_000} MB",
-            " ".join(comments.split()),
-        )
+        self.assertNotIn("request a limit", " ".join(comments.split()))
 
 
 class CranCommentsTests(unittest.TestCase):
@@ -359,16 +360,29 @@ class FakeCheckTests(unittest.TestCase):
         check_log=None,
         ignore_vignettes=False,
         valgrind=False,
+        environment=None,
+        control=None,
     ):
         """Run check() against a fake R CMD check that writes `outputs`, by
         path below yamaa.Rcheck, and `check_log` or a log with the explained
-        note as its 00check.log, and exits with `returncode`."""
+        note as its 00check.log, and exits with `returncode`. The check's
+        environment starts from `environment`, and the one that R CMD check
+        received is kept as self.environment. The memcheck control's commands
+        are kept in self.control, its valgrind printing `control` or
+        MEMCHECK_CONTROL_COUNTED."""
         commands = []
+        self.control = []
         # Each check needs a work directory of its own.
         work = Path(tempfile.mkdtemp(dir=self.root)) / "check"
 
-        def fake_run(command, cwd, env, check):
+        def fake_run(command, cwd, env, check, **options):
+            if command[0] in ("cc", "valgrind"):
+                self.control.append((command[0], env))
+                return check_r.subprocess.CompletedProcess(
+                    command, 0, "", control or MEMCHECK_CONTROL_COUNTED
+                )
             commands.append((command, check))
+            self.environment = env
             directory = Path(cwd) / "yamaa.Rcheck"
             (directory / "tests").mkdir(parents=True)
             for name, text in outputs.items():
@@ -380,7 +394,9 @@ class FakeCheckTests(unittest.TestCase):
 
         printed = io.StringIO()
         with (
-            mock.patch.object(check_r, "check_environment", return_value={}),
+            mock.patch.object(
+                check_r, "check_environment", return_value=dict(environment or {})
+            ),
             mock.patch.object(check_r, "has_checkbashisms", return_value=True),
             mock.patch.object(
                 check_r.subprocess, "check_output", return_value="revision\n"
@@ -466,7 +482,7 @@ class FailingTestsTests(FakeCheckTests):
             "NOTE: checking CRAN incoming feasibility\n"
             "    Maintainer: 'Yilong Zhang <elong0527@gmail.com>'\n"
             "    New submission\n"
-            "    Size of tarball: 14539245 bytes\n"
+            "    Size of tarball: 9413320 bytes\n"
         )
         for label, check_log, printed, failure in (
             (
@@ -596,6 +612,13 @@ MEMCHECK_ERROR = """\
 ==4242==  Address 0x10e3c5a0 is 0 bytes after a block of size 16 alloc'd
 ==4242== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
 """
+# What memcheck prints for memcheck_control.c with the suppressions: the
+# listed roots' possibly lost blocks through their listed callers suppressed,
+# and its definite loss, the other callers' blocks and the unrelated root's
+# block counted.
+MEMCHECK_CONTROL_COUNTED = (
+    "==4243== ERROR SUMMARY: 4 errors from 4 contexts (suppressed: 3 from 3)\n"
+)
 RUNTIME_LOG = """\
 * using log directory '/tmp/check/yamaa.Rcheck'
 * using options '--extra-arch --use-valgrind --no-stop-on-test-error'
@@ -626,6 +649,82 @@ class ValgrindTests(FakeCheckTests):
             str(self.archive.resolve()),
         ]
         self.assertEqual((commands, failure), ([(command, False)], None))
+
+    def test_valgrind_reads_the_suppressions_after_the_image_s_options(self):
+        # The seam is the environment that R CMD check and the memcheck
+        # control pass to valgrind, which reads VALGRIND_OPTS itself.
+        image = "--track-origins=yes --leak-check=full"
+        suppressions = f"--suppressions={check_r.MEMCHECK_SUPPRESSIONS}"
+        for label, valgrind, environment, expected, control in (
+            (
+                "the image's options",
+                True,
+                {"VALGRIND_OPTS": image},
+                {"VALGRIND_OPTS": f"{image} {suppressions}"},
+                ["cc", "valgrind"],
+            ),
+            (
+                "no options",
+                True,
+                {},
+                {"VALGRIND_OPTS": suppressions},
+                ["cc", "valgrind"],
+            ),
+            (
+                "a check without valgrind",
+                False,
+                {"VALGRIND_OPTS": image},
+                {"VALGRIND_OPTS": image},
+                [],
+            ),
+        ):
+            with self.subTest(case=label):
+                self.run_check(
+                    0,
+                    {"tests/lint.Rout": MEMCHECK_CLEAN},
+                    check_log=RUNTIME_LOG if valgrind else None,
+                    valgrind=valgrind,
+                    environment=environment,
+                )
+                self.assertEqual(
+                    (self.environment, self.control),
+                    (expected, [(name, expected) for name in control]),
+                    label,
+                )
+
+    def test_the_check_runs_only_after_memcheck_counts_the_control_as_stated(self):
+        uncounted = (
+            "==4243== ERROR SUMMARY: 7 errors from 7 contexts (suppressed: 0 from 0)\n"
+        )
+        for label, control, commands, printed, failure in (
+            ("counted as stated", MEMCHECK_CONTROL_COUNTED, 1, "", None),
+            (
+                "nothing suppressed",
+                uncounted,
+                0,
+                uncounted,
+                "memcheck did not count the control's losses as "
+                "memcheck_control.c states, so its suppressions or options would "
+                "hide another leak",
+            ),
+        ):
+            with self.subTest(case=label):
+                ran, output, error = self.run_check(
+                    0,
+                    {"tests/lint.Rout": MEMCHECK_CLEAN},
+                    check_log=RUNTIME_LOG,
+                    valgrind=True,
+                    control=control,
+                )
+                self.assertEqual(
+                    (
+                        len(ran),
+                        output.split("R CMD check")[0],
+                        None if error is None else str(error),
+                    ),
+                    (commands, printed, failure),
+                    label,
+                )
 
     def test_each_output_must_hold_a_memcheck_summary_with_no_error(self):
         examples = f"> library(yamaa)\n{MEMCHECK_CLEAN}"
@@ -668,6 +767,59 @@ class ValgrindTests(FakeCheckTests):
                     (output, None if error is None else str(error)),
                     (printed, failure),
                 )
+
+
+@unittest.skipUnless(
+    shutil.which("valgrind") and shutil.which("cc"),
+    "the control runs under valgrind, compiled with cc",
+)
+class MemcheckControlTests(unittest.TestCase):
+    """memcheck_control.c, under a real valgrind, passes only with the
+    suppressions, their callers included, and the leak kinds that memcheck
+    counts by default."""
+
+    def test_the_control_fails_unless_only_the_listed_root_is_suppressed(self):
+        image = "--track-origins=yes --leak-check=full"
+        suppressions = f"--suppressions={check_r.MEMCHECK_SUPPRESSIONS}"
+        # The same entries without the callers they name.
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        unanchored = Path(directory.name) / "unanchored.supp"
+        unanchored.write_text(
+            re.sub(
+                r"\n   \.\.\.\n   fun:\*yamaa_[^\n]*",
+                "",
+                check_r.MEMCHECK_SUPPRESSIONS.read_text(encoding="utf-8"),
+            ),
+            encoding="utf-8",
+        )
+        for label, options, passes in (
+            (
+                "the image's options and the suppressions",
+                f"{image} {suppressions}",
+                True,
+            ),
+            ("no suppressions", image, False),
+            (
+                "the listed functions from any caller",
+                f"{image} --suppressions={unanchored}",
+                False,
+            ),
+            (
+                "possibly lost blocks not counted",
+                f"{image} {suppressions} --errors-for-leak-kinds=definite",
+                False,
+            ),
+        ):
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as work:
+                environment = dict(os.environ, VALGRIND_OPTS=options)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    try:
+                        check_r.memcheck_control(Path(work), environment)
+                        passed = True
+                    except RuntimeError:
+                        passed = False
+                self.assertEqual(passed, passes, label)
 
 
 if __name__ == "__main__":

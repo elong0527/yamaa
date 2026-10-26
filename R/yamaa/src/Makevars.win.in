@@ -26,6 +26,13 @@ ISOLATION_CONFIG = @ISOLATION_CONFIG@
 CARGO_HOME_DIR = $(CARGO_TARGET_DIR)/cargo-home
 RUST_LIB = $(CARGO_TARGET_DIR)/$(RUST_TARGET)/release/libyamaa_r.a
 OBJCOPY ?= $(BINPREF)objcopy
+# Cargo links nothing of the static library. It links the build scripts and
+# procedural macros, which it builds for the host, with this linker only when
+# the host is x86_64-pc-windows-gnu, as on CRAN's Windows machines. Cargo runs
+# the linker as one program, so it gets the first word of R's CC: the CC of
+# R's Makeconf ends in a space, and no program is called "gcc ". The cc crate
+# splits CC_x86_64_pc_windows_gnu into words, so that keeps the whole command.
+RUST_LINKER = $(firstword $(CC))
 PKG_LIBS = "$(RUST_LIB)" -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
 
 all: $(SHLIB) rust_clean
@@ -53,7 +60,7 @@ $(RUST_LIB): FORCE
 	touch "$(CARGO_TARGET_DIR)/libgcc_mock/libgcc_eh.a"
 	"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" --vanilla -e 'untar("rust/vendor.tar.xz", exdir = "$(UNTAR_DIR)", tar = "internal")'
 	cp rust/vendor-config.toml "$(CARGO_HOME_DIR)/config.toml"
-	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 $(ISOLATION_ENV) CARGO_HOME="$(CARGO_HOME_DIR)" LIBRARY_PATH="$(LIBRARY_PATH);$(CARGO_TARGET_DIR)/libgcc_mock" CC_x86_64_pc_windows_gnu="$(CC)" AR_x86_64_pc_windows_gnu="$(AR)" CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER="$(CC)" RUSTFLAGS="$(RUSTFLAGS) --print=native-static-libs" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" "$(CARGO)" build --locked --offline -j 2 --release --target $(RUST_TARGET) --manifest-path rust/Cargo.toml -p yamaa-r $(ISOLATION_CONFIG)
+	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 $(ISOLATION_ENV) CARGO_HOME="$(CARGO_HOME_DIR)" LIBRARY_PATH="$(LIBRARY_PATH);$(CARGO_TARGET_DIR)/libgcc_mock" CC_x86_64_pc_windows_gnu="$(CC)" AR_x86_64_pc_windows_gnu="$(AR)" CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER="$(RUST_LINKER)" RUSTFLAGS="$(RUSTFLAGS) --print=native-static-libs" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" "$(CARGO)" build --locked --offline -j 2 --release --target $(RUST_TARGET) --manifest-path rust/Cargo.toml -p yamaa-r $(ISOLATION_CONFIG)
 
 .PHONY: clean rust_clean rust_exports FORCE
 FORCE:
