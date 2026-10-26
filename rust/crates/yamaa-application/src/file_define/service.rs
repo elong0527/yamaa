@@ -22,6 +22,7 @@ use yamaa_core::{
     resource::WrittenPath,
     schema::{Document, DocumentNode},
     specification::SourceDeclaration,
+    specification_submission_document::SubmissionMode,
     submission_composition::{self as composition, Dataset, Finding, Study},
     submission_staleness::{self as staleness, Reason},
     submission_transport,
@@ -47,6 +48,14 @@ pub(super) struct SpecificationView<'a> {
     /// Every declared input dataset and the written origin of its path; a
     /// transport file never replaces one (JSON-2).
     pub inputs: Vec<(&'a str, WrittenPath<'a>)>,
+}
+impl SpecificationView<'_> {
+    fn historical(&self) -> bool {
+        self.tree
+            .submission
+            .as_ref()
+            .is_some_and(|metadata| metadata.mode == SubmissionMode::Historical)
+    }
 }
 fn published_source_failure(
     finding: Option<yamaa_core::diagnostic::SourceFinding<'_>>,
@@ -407,6 +416,9 @@ impl Application {
                     (Some(file), Some(target_written))
                 }
                 Some(_) => (None, None),
+                // Historical links come only from the received declaration,
+                // never from the current executable output (DEFINE-30).
+                None if view.historical() => (None, None),
                 None => {
                     let href = reads
                         .package_reference(&artifact, &define_location)
@@ -608,6 +620,9 @@ impl Application {
             .enumerate()
         {
             let view = Reads::specification(document);
+            if view.historical() {
+                continue;
+            }
             let Some(report) = view.report else {
                 continue;
             };

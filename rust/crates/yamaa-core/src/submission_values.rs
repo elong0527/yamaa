@@ -6,6 +6,7 @@
 use crate::ast::{self, CodelistType, Comparator, ExprId, ExprKind, Literal};
 use crate::project_terminology::Catalogue;
 use crate::schema::{Document, DocumentNode as N};
+use crate::specification_submission_document::SubmissionMode;
 use crate::value::Value;
 use std::collections::BTreeSet;
 
@@ -217,10 +218,12 @@ pub(crate) fn admitted<'c, 'n>(
 /// The static checks of SUB-12 over one column's entries: identifiers unique
 /// within the column, where clauses over declared `str` output columns other
 /// than the column itself with nonempty distinct values their codelists
-/// admit, and no two entries whose where clauses can select one row.
+/// admit, and no two entries whose where clauses can select one row. Historical
+/// composition keeps structural/name checks without asserting current rows.
 pub(crate) fn admit<'a, 'b, 'c>(
     entries: impl IntoIterator<Item = (&'a str, &'b Clause<'a>)>,
     column: &str,
+    mode: SubmissionMode,
     declared: impl Fn(&str) -> Option<Declared<'c>>,
 ) -> Vec<Finding<'a>>
 where
@@ -254,9 +257,13 @@ where
                 match declared(name) {
                     None => Some(WhereFault::Undeclared),
                     Some(Declared { output: false, .. }) => Some(WhereFault::NotOutput),
-                    Some(Declared { text: false, .. }) => Some(WhereFault::NotText),
+                    Some(Declared { text: false, .. }) if mode == SubmissionMode::Validated => {
+                        Some(WhereFault::NotText)
+                    }
                     Some(declared) => {
-                        codelist = declared.codelist;
+                        if mode == SubmissionMode::Validated {
+                            codelist = declared.codelist;
+                        }
                         None
                     }
                 }
@@ -292,8 +299,10 @@ where
         if findings.len() != before {
             continue;
         }
-        if let Some(&(other, _)) = valid.iter().find(|(_, other)| overlap(other, clause)) {
-            findings.push(Finding::Overlap { id, other });
+        if mode == SubmissionMode::Validated {
+            if let Some(&(other, _)) = valid.iter().find(|(_, other)| overlap(other, clause)) {
+                findings.push(Finding::Overlap { id, other });
+            }
         }
         valid.push((id, clause));
     }
@@ -536,6 +545,7 @@ mod tests {
             admit(
                 entries.iter().map(|(id, clause)| (*id, clause)),
                 "AVAL",
+                SubmissionMode::Validated,
                 declared
             ),
             [
@@ -640,6 +650,7 @@ mod tests {
             admit(
                 entries.iter().map(|entry| (entry.id, &entry.clause)),
                 "AVAL",
+                SubmissionMode::Validated,
                 declared
             ),
             [

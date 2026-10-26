@@ -34,6 +34,8 @@ class DefineStage(unittest.TestCase):
             for name in (
                 "define_2_0.xml",
                 "define_2_0_historical.xml",
+                "define_2_0_historical_no_artifact.xml",
+                "define_2_0_historical_values.xml",
                 "define_2_0_send.xml",
             ):
                 legacy_schema.assertValid(

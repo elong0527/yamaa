@@ -479,7 +479,7 @@ A declared `Purpose` could only agree with or contradict the derivation.
 
 ### DEFINE-16. A dataset's leaf names its transport file or its artifact, relative to the document and inside its directory
 
-The dataset's `def:leaf` names the file the package carries for that dataset:
+A validated dataset's `def:leaf` names the file the package carries for it:
 its transport file beside the document when the selected section declares
 `transport` ([JSON-1](dataset-json.md#json-1)), and otherwise the artifact its
 specification produces. `xlink:href` is that path relative to the directory
@@ -490,6 +490,10 @@ traversal. A dataset with no data and no transport file has no leaf.
 Fails: `artifact_outside_document`.
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_artifact_outside_the_documents_directory_is_refused_without_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_artifact_outside_the_define_directory_is_refused`.
 
+Historical export instead uses only its literal `submission.artifact` link,
+or no leaf when omitted ([DEFINE-30](#define-30)); its executable output does
+not determine the link.
+
 A document that pointed outside its own directory would describe a file that is
 not in the package it belongs to. Without a transport, an artifact path that
 cannot be expressed relative to the document's directory without a parent
@@ -499,7 +503,7 @@ specification writes it as `artifact`, and the document's path as the project
 writes it as `define`. A transport file is the document's sibling, so its href
 is its file name wherever the artifact is published.
 
-The leaf names a file this language produced: the artifact
+In validated mode, the leaf names a file this language produced: the artifact
 [Output](../output.md) publishes, the Dataset-JSON file
 [Dataset-JSON](dataset-json.md) writes or the SAS Transport file
 [SAS Transport](xpt.md) writes. A document that named any other container would
@@ -881,7 +885,7 @@ admits closed metadata, resolves every codelist and document reference, and
 requires a schema-valid document. It makes no data-conformance assertion.
 
 Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`.
 
 The historical export requires explicit column `data_type`, `mandatory` and
 labels. Lengths, formats, origins, methods and codelists remain as declared.
@@ -891,6 +895,13 @@ filename supplies the leaf title. Omission writes no historical artifact
 leaf. Both fields are refused on validated metadata. Historical value-level
 entries inherit the column metadata as ordinary entries do, except key
 positions never inherit.
+
+The current executable output need not share the document's directory, and
+historical composition does not read its run report, artifact or inputs.
+Publication still protects declared inputs and outputs from being overwritten.
+Value-level where clauses retain structural and output-column name checks,
+but executable types, terminology membership and overlapping row selections
+do not constrain a historical declaration.
 
 Historical codelists, mandatory flags, lengths, origins and value-level
 metadata do not bind execution. They describe received declarations, not the
