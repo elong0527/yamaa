@@ -31,9 +31,9 @@ native-dist builds what the qualifying lanes install, native-share runs the
 conformance corpus with a wheel that native-qualify qualifies, on a Windows
 network share, native-cran with R-devel checks the R source package with an R
 that is not released yet, and its variants without the suggested packages,
-with the PDF and HTML manuals, and in R-hub's containers, gcc16, gcc-asan and
-clang-asan with their sanitizers, and valgrind, repeat that check in more of
-CRAN's configurations. A
+with the PDF and HTML manuals, with the Rust of CRAN's Windows check, and in
+R-hub's containers, gcc16, gcc-asan and clang-asan with their sanitizers, and
+valgrind, repeat that check in more of CRAN's configurations. A
 kind of lane that native.py adds fails this check until it is classified here.
 
 An R source package cell may state a floor, `R 4.2 or later`, as the package's
@@ -78,7 +78,15 @@ QUALIFYING = frozenset(
     }
 )
 DIAGNOSTIC = frozenset(
-    {"rust", "build", "share", "cran_container", "cran_no_suggests", "cran_manual"}
+    {
+        "rust",
+        "build",
+        "share",
+        "cran_container",
+        "cran_no_suggests",
+        "cran_manual",
+        "cran_rust",
+    }
 )
 
 

@@ -222,6 +222,11 @@ proxy that refuses connections and runs two Cargo jobs.
   machines, so Cargo links the build scripts and procedural macros with the
   linker that `Makevars.win` gives it. The other Windows lanes add the GNU
   target to the MSVC host's toolchain, which links them with MSVC's linker.
+- With R-devel on Windows and Rust 1.92.0 for the GNU host, the Rust of
+  CRAN's Windows check, in place of the minimum. A Rust release can break the
+  build where neither the minimum nor the pinned Rust does: 1.86 to 1.95 ship
+  that host's standard library with empty split-DWARF members, which objcopy
+  refused in the static library (#4012).
 - With R-devel on Linux and none of the package's suggested packages
   installed, as CRAN's noSuggests check runs: `_R_CHECK_DEPENDS_ONLY_=true`
   gives the tests only the Depends and Imports, and with
