@@ -137,7 +137,8 @@ verifications:
       require: "ASTDTM <= TEENDDTM"
   - assert:
       id: finished-treatment-has-a-window-end
-      when: "TRTSDTM IS NOT NULL AND EOTSTT <> 'ONGOING'"
+      when: >-
+        TRTSDTM IS NOT NULL AND (EOTSTT IS NULL OR EOTSTT <> 'ONGOING')
       require: "TEENDDTM IS NOT NULL"
   - assert:
       id: missing-onset-is-treatment-emergent
