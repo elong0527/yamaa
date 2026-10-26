@@ -13,7 +13,8 @@ def publish(root, destination, tag, repository):
     """Create the GitHub release of `tag` from the files the selector chose.
 
     The files must be exactly the declared release assets of the release the
-    tree prepares. A release candidate is created as a pre-release.
+    tree prepares. The release is titled `yamaa v<Cargo version>`, and a
+    release candidate is created as a pre-release.
     """
     revision = (destination / "source-revision.txt").read_text().strip()
     subprocess.run(
@@ -54,7 +55,7 @@ def publish(root, destination, tag, repository):
             repository,
             "--verify-tag",
             "--title",
-            f"yamaa {identity.cargo}",
+            f"yamaa v{identity.cargo}",
             "--notes-file",
             str(destination / "release-notes.md"),
             *(["--prerelease"] if identity.candidate is not None else []),
