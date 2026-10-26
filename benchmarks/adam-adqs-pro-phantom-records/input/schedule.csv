@@ -1,0 +1,10 @@
+STUDYID,VISITNUM,VISIT,VISITDY,PARCAT2,PARAMCD,PARAM
+YAMAA-01,1,CYCLE 1 DAY 1,1,ITEM,FAT01,Fatigue severity
+YAMAA-01,1,CYCLE 1 DAY 1,1,ITEM,FAT02,Fatigue interference with daily activities
+YAMAA-01,1,CYCLE 1 DAY 1,1,TOTAL SCORE,FATTOT,Fatigue total score
+YAMAA-01,2,CYCLE 2 DAY 1,22,ITEM,FAT01,Fatigue severity
+YAMAA-01,2,CYCLE 2 DAY 1,22,ITEM,FAT02,Fatigue interference with daily activities
+YAMAA-01,2,CYCLE 2 DAY 1,22,TOTAL SCORE,FATTOT,Fatigue total score
+YAMAA-01,3,CYCLE 3 DAY 1,43,ITEM,FAT01,Fatigue severity
+YAMAA-01,3,CYCLE 3 DAY 1,43,ITEM,FAT02,Fatigue interference with daily activities
+YAMAA-01,3,CYCLE 3 DAY 1,43,TOTAL SCORE,FATTOT,Fatigue total score

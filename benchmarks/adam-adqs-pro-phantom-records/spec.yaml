@@ -1,0 +1,289 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADQS
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  ADSL:
+    path: input/adsl.csv
+    types: {RANDDT: date, EOTDT: date, DTHDT: date}
+  SCHED:
+    path: input/schedule.csv
+    types: {VISITNUM: int, VISITDY: int}
+  QS:
+    path: input/qs.csv
+    types: {QSSEQ: int, QSSTRESN: float, VISITNUM: int}
+
+# The record frame is every randomized subject at every planned assessment:
+# the subjects paired with the planned schedule, which holds one record per
+# planned timepoint and parameter of the measure. Both sides carry the study,
+# so each subject pairs with each planned record, and one row template builds
+# the whole frame whether or not anything was collected.
+
+output:
+  path: adqs.csv
+  columns: [STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, AVISIT, AVISITN, AVAL,
+            DTYPE, QSSTAT, QSREASND, AREASND, PROEX1FL, PROEX2FL, PROSCMFL]
+  order_by: [USUBJID, AVISITN, PARAMCD]
+
+intermediates:
+  # Each subject with the days of the end of treatment and of death, counted
+  # from randomization as day 1, the same count the schedule's planned days
+  # use.
+  - id: SUBJ
+    dataset: ADSL
+    derivations:
+      EOTDY:
+        type: int
+        derivation:
+          study_day: {source: ADSL.EOTDT, reference: ADSL.RANDDT}
+      DTHDY:
+        type: int
+        derivation:
+          study_day: {source: ADSL.DTHDT, reference: ADSL.RANDDT}
+
+  # Every subject paired with every planned record of the study.
+  - id: PLANNED
+    dataset: SUBJ
+    inner_join: SCHED
+    key: [STUDYID]
+    derivations:
+      STUDYID: SUBJ.STUDYID
+      USUBJID: SUBJ.USUBJID
+      SAFFL: SUBJ.SAFFL
+      DCTREAS: SUBJ.DCTREAS
+      EOTDY: SUBJ.EOTDY
+      DTHDY: SUBJ.DTHDY
+      VISITNUM: SCHED.VISITNUM
+      VISIT: SCHED.VISIT
+      VISITDY: SCHED.VISITDY
+      PARCAT2: SCHED.PARCAT2
+      PARAMCD: SCHED.PARAMCD
+      PARAM: SCHED.PARAM
+
+  # The collected item record for the subject, visit and parameter a row
+  # builds. A score parameter never has one: QS holds items only.
+  - id: ITEMREC
+    dataset: QS
+    key:
+      STUDYID: STUDYID
+      USUBJID: USUBJID
+      VISITNUM: AVISITN
+      QSTESTCD: PARAMCD
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARCAT2
+    type: str
+    label: Parameter Category 2
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+
+  # Clinical benefit expects the measure from every randomized subject until
+  # death; safety and tolerability only from a treated subject until the end
+  # of treatment or death. A timepoint planned on the day of the event is
+  # still expected.
+  - name: PROEX1FL
+    type: str
+    label: Clinical Benefit PRO Expected Flag
+    verifications:
+      - allowed_values:
+          values: ["Y"]
+
+  - name: PROEX2FL
+    type: str
+    label: Safety/Tolerability PRO Expected Flag
+    verifications:
+      - allowed_values:
+          values: ["Y"]
+
+  # The reason a record added for a missed assessment gives: never treated,
+  # or the reason treatment ended at a timepoint planned after it. It is not
+  # in the output.
+  - name: PHANREAS
+    type: str
+    label: Reason for a Missed Assessment
+
+  # The collected item record, empty on a score record and on an item that
+  # was not collected. None of these but QSSTAT and QSREASND is in the
+  # output.
+  - name: ITEMSEQ
+    type: int
+    label: Item Sequence Number
+    derivation: ITEMREC.QSSEQ
+
+  - name: ITEMRESN
+    type: float
+    label: Numeric Item Response
+    derivation: ITEMREC.QSSTRESN
+
+  - name: QSSTAT
+    type: str
+    label: Completion Status
+    derivation: ITEMREC.QSSTAT
+
+  - name: QSREASND
+    type: str
+    label: Reason Not Performed
+    derivation: ITEMREC.QSREASND
+
+  # Per subject and timepoint: the sum and count of the answered items, how
+  # many items were collected, and the reason the items carry. The score
+  # record's empty item fields add nothing to any of them.
+  - name: ITEMSUM
+    type: float
+    label: Sum of Item Responses
+    derivation:
+      aggregate:
+        expr: "SUM(ITEMRESN)"
+        group_by: [STUDYID, USUBJID, AVISITN]
+
+  - name: ITEMANS
+    type: int
+    label: Number of Answered Items
+    derivation:
+      aggregate:
+        expr: "COUNT(ITEMRESN)"
+        group_by: [STUDYID, USUBJID, AVISITN]
+
+  - name: ITEMCOL
+    type: int
+    label: Number of Collected Items
+    derivation:
+      aggregate:
+        expr: "COUNT(ITEMSEQ)"
+        group_by: [STUDYID, USUBJID, AVISITN]
+
+  - name: ITEMREAS
+    type: str
+    label: Reason the Items Were Not Done
+    derivation:
+      aggregate:
+        expr: "MAX(QSREASND)"
+        group_by: [STUDYID, USUBJID, AVISITN]
+
+  # An item keeps its response; the total score is the sum of both items,
+  # and has no value unless both were answered.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      case:
+        - when: "PARCAT2 = 'ITEM'"
+          then: ITEMRESN
+        - when: "ITEMANS = 2"
+          then: ITEMSUM
+    verifications:
+      - range:
+          min: 0
+          max: 8
+
+  # An item QS does not hold, and a score at a timepoint where no item was
+  # collected, are added for the missed assessment.
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+    derivation:
+      case:
+        - when: "PARCAT2 = 'ITEM' AND ITEMSEQ IS NULL"
+          then: "'PHANTOM'"
+        - when: "PARCAT2 <> 'ITEM' AND ITEMCOL = 0"
+          then: "'PHANTOM'"
+    verifications:
+      - allowed_values:
+          values: [PHANTOM]
+
+  # Only a record without a value gives a reason: an added record gives the
+  # missed assessment's, a collected item its own, and a score the one its
+  # items carry, or NOT CALCULABLE when they carry none.
+  - name: AREASND
+    type: str
+    label: Analysis Reason Not Performed
+    derivation:
+      case:
+        - when: "AVAL IS NOT NULL"
+          then: null
+        - when: "DTYPE = 'PHANTOM'"
+          then: PHANREAS
+        - when: "PARCAT2 = 'ITEM'"
+          then: QSREASND
+        - when: "ITEMREAS IS NOT NULL"
+          then: ITEMREAS
+        - otherwise: "'NOT CALCULABLE'"
+
+  - name: PROSCMFL
+    type: str
+    label: PRO Score Completed Flag
+    derivation:
+      case:
+        - when: "AVAL IS NOT NULL"
+          then: "'Y'"
+
+rows:
+  # One row per subject, planned timepoint and parameter, collected or not.
+  - id: planned
+    dataset: PLANNED
+    derivations:
+      STUDYID: PLANNED.STUDYID
+      USUBJID: PLANNED.USUBJID
+      PARCAT2: PLANNED.PARCAT2
+      PARAMCD: PLANNED.PARAMCD
+      PARAM: PLANNED.PARAM
+      AVISIT: PLANNED.VISIT
+      AVISITN: PLANNED.VISITNUM
+      PROEX1FL:
+        case:
+          - when: "PLANNED.VISITDY > PLANNED.DTHDY"
+            then: null
+          - otherwise: "'Y'"
+      PROEX2FL:
+        case:
+          - when: >-
+              PLANNED.SAFFL = 'Y'
+              AND (PLANNED.EOTDY IS NULL OR PLANNED.VISITDY <= PLANNED.EOTDY)
+              AND (PLANNED.DTHDY IS NULL OR PLANNED.VISITDY <= PLANNED.DTHDY)
+            then: "'Y'"
+      PHANREAS:
+        case:
+          - when: "PLANNED.SAFFL = 'N'"
+            then: "'NOT TREATED'"
+          - when: "PLANNED.VISITDY > PLANNED.EOTDY"
+            then: PLANNED.DCTREAS
+
+verifications:
+  # A record added for a missed assessment holds nothing collected.
+  - assert:
+      id: added-record-holds-nothing-collected
+      when: "DTYPE = 'PHANTOM'"
+      require: "AVAL IS NULL AND QSSTAT IS NULL AND QSREASND IS NULL"
+  # A reason is given only where the value is missing.
+  - assert:
+      id: reason-only-without-a-value
+      when: "AREASND IS NOT NULL"
+      require: "AVAL IS NULL"
+  # Safety and tolerability expect no record that clinical benefit does not.
+  - assert:
+      id: safety-expectation-within-clinical-benefit
+      when: "PROEX2FL = 'Y'"
+      require: "PROEX1FL = 'Y'"
