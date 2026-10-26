@@ -897,6 +897,75 @@ jobs:
             ${{ runner.temp }}/cran-check/yamaa.Rcheck/tests/*.Rout*
           if-no-files-found: ignore
 
+  cran-rust:
+    name: native-cran (${{ matrix.os }}, R ${{ matrix.r }}, Rust ${{ matrix.rust }})
+    needs: r-dist
+    runs-on: ${{ matrix.os }}
+    # The Windows R-devel lane above with the Rust that CRAN's Windows check
+    # builds with, for the GNU host, in place of the minimum. A Rust release
+    # can break the build where neither the minimum nor the pinned Rust does:
+    # 1.86 to 1.95 ship that host's standard library with empty split-DWARF
+    # members, which objcopy refused in the static library (#4012).
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025]
+        r: [devel]
+        rust: ['1.92.0']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: python -m pip install --no-deps -e .
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: ${{ matrix.r }}
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: R/yamaa
+      # Activation writes RUSTUP_TOOLCHAIN for the later steps. The GNU host's
+      # toolchain has the GNU target.
+      - name: Install CRAN's Rust
+        run: python -m tools.ci.toolchain --channel ${{ matrix.rust }} --host x86_64-pc-windows-gnu --install
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}/published
+      # Environment names are case-insensitive on Windows; libcurl reads only
+      # the lowercase http_proxy.
+      - name: Check the R source package as CRAN does
+        env:
+          R_LIBS: ${{ env.R_LIBS_USER }}
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          python -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
+            --work-dir "${RUNNER_TEMP}/cran-check"
+      - name: Confirm that the build used CRAN's Rust
+        run: |
+          grep -F "using rustc ${{ matrix.rust }} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+          grep -F "using cargo ${{ matrix.rust }} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+          rustc -vV | tr -d '\r' | grep -Fx "host: x86_64-pc-windows-gnu"
+      - name: Preserve the CRAN check
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-cran-${{ matrix.os }}-${{ matrix.r }}-rust-${{ matrix.rust }}
+          path: |
+            ${{ runner.temp }}/cran-check/yamaa.Rcheck/00check.log
+            ${{ runner.temp }}/cran-check/yamaa.Rcheck/00install.out
+            ${{ runner.temp }}/cran-check/yamaa.Rcheck/tests/*.Rout*
+          if-no-files-found: ignore
+
   cran-no-suggests:
     name: native-cran (${{ matrix.os }}, R ${{ matrix.r }}, no Suggests)
     needs: r-dist
