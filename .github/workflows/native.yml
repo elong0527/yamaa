@@ -811,7 +811,10 @@ jobs:
     # tarball above the limit it requests. Cargo and rustc are the workspace's
     # rust-version, the two-year-old toolchain that CRAN's guidance asks a
     # package to be tested with; the build reads the vendored crates, runs two
-    # jobs, and sits behind a proxy that refuses connections.
+    # jobs, and sits behind a proxy that refuses connections. On Windows the
+    # toolchain is built for the GNU host, x86_64-pc-windows-gnu, as on CRAN's
+    # Windows machines, so Cargo links the build scripts and procedural macros
+    # with the linker that Makevars.win gives it (#4005).
     timeout-minutes: ${{ matrix.os == 'windows-2025' && 90 || 75 }}
     strategy:
       fail-fast: false
@@ -846,12 +849,14 @@ jobs:
           else
             HOMEBREW_NO_AUTO_UPDATE=1 brew install checkbashisms
           fi
-      # Activation writes RUSTUP_TOOLCHAIN for the later steps.
+      # Activation writes RUSTUP_TOOLCHAIN for the later steps. The GNU host's
+      # toolchain has the GNU target.
       - name: Install the minimum Rust
         run: |
-          python -m tools.ci.toolchain --minimum --install
           if [ "${{ runner.os }}" = Windows ]; then
-            rustup target add x86_64-pc-windows-gnu --toolchain "$(python -c 'from tools.ci.toolchain import minimum; print(minimum())')"
+            python -m tools.ci.toolchain --minimum --host x86_64-pc-windows-gnu --install
+          else
+            python -m tools.ci.toolchain --minimum --install
           fi
       - name: Download the published R source archive
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -872,10 +877,15 @@ jobs:
           Rscript --vanilla -e 'v <- Sys.getenv("R_CHECK_VERSION"); if (grepl("^[0-9]", v)) stopifnot(identical(as.character(getRversion()), v))'
           python -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
             --work-dir "${RUNNER_TEMP}/cran-check"
+      # On Windows RUSTUP_TOOLCHAIN names the host too, which the build used.
       - name: Confirm that the build used the minimum Rust
         run: |
-          grep -F "using rustc ${RUSTUP_TOOLCHAIN} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
-          grep -F "using cargo ${RUSTUP_TOOLCHAIN} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+          version=$(python -c 'from tools.ci.toolchain import minimum; print(minimum())')
+          grep -F "using rustc ${version} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+          grep -F "using cargo ${version} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustc -vV | tr -d '\r' | grep -Fx "host: x86_64-pc-windows-gnu"
+          fi
       - name: Preserve the CRAN check
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

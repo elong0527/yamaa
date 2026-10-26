@@ -733,6 +733,25 @@ class ConfigureTests(unittest.TestCase):
                     [f"{variable}={compiler}"],
                 )
 
+    def test_the_windows_linker_is_the_program_of_the_c_compiler_of_r(self):
+        # Cargo runs its linker setting as one program, and on a GNU host, as
+        # on CRAN's Windows machines, links the build scripts with it. R's
+        # Makeconf there ends CC in a space, and Cargo found no linker
+        # "gcc " (#4005). Flags in CC stay with the cc crate.
+        makevars = self.configured(True)
+        for compiler in ("gcc ", "gcc", "gcc -std=gnu2x"):
+            with self.subTest(compiler=compiler):
+                command = self.cargo_command(makevars, f"CC={compiler}")
+                self.assertEqual(
+                    [
+                        word
+                        for word in command
+                        if word.startswith("CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=")
+                    ],
+                    ["CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=gcc"],
+                    compiler,
+                )
+
     def test_no_inherited_build_directory_or_rustc_wrapper_reaches_cargo(self):
         # CRAN's policy admits no writing outside the build tree and the
         # temporary directory. So unless YAMAA_R_CARGO_TARGET_DIR is set, a
