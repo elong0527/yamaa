@@ -1,0 +1,154 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int, AESTDTC: date}}
+  ADSL:
+    path: input/adsl.csv
+    types: {TR01SDT: date, TR01EDT: date, TR02SDT: date, TR02EDT: date,
+            TR03SDT: date, TR03EDT: date}
+    key: [STUDYID, USUBJID]
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESER, ASTDT, TREM01FL, TREM02FL,
+            TREM03FL, TRTEMFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AESER
+    type: str
+    label: Serious Event
+    derivation: AE.AESER
+    verifications:
+      - allowed_values:
+          values: [Y, N]
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: AE.AESTDTC
+
+  # Phase 1 runs up to the next phase the subject entered: surgery, or the
+  # first adjuvant dose for a subject who had no surgery. Phase 2's next
+  # phase can only be adjuvant, so it reads TR03SDT directly.
+  - name: NEXT01DT
+    type: date
+    label: Start Date of the Phase After Phase 1
+    derivation:
+      first_available: {sources: [ADSL.TR02SDT, ADSL.TR03SDT]}
+
+  # The last date of the last phase the subject entered.
+  - name: LASTEDT
+    type: date
+    label: End Date of the Last Phase Entered
+    derivation:
+      case:
+        - when: "ADSL.TR03SDT IS NOT NULL"
+          then: ADSL.TR03EDT
+        - when: "ADSL.TR02SDT IS NOT NULL"
+          then: ADSL.TR02EDT
+        - otherwise: ADSL.TR01EDT
+
+  # The last phase ends 30 days after its last date for a non-serious event
+  # and 90 days after it for a serious one, both days included.
+  - name: TEENDDT
+    type: date
+    label: End of the Last Phase's Treatment-Emergent Window
+    derivation:
+      case:
+        - when: "AESER = 'Y'"
+          then:
+            shift: {type: date, source: LASTEDT, days: 90}
+        - when: "AESER = 'N'"
+          then:
+            shift: {type: date, source: LASTEDT, days: 30}
+
+  # Each phase starts on its own first date and stops before the next phase
+  # the subject entered starts. With no next phase, the window closes at
+  # TEENDDT, or stays open while treatment is ongoing. The IS NOT NULL tests
+  # keep an untreated subject and an absent next phase FALSE, not UNKNOWN.
+  - name: TREM01FL
+    type: str
+    label: Treatment Emergent Flag for Period 01
+    derivation:
+      flag: >-
+        ADSL.TR01SDT IS NOT NULL AND ASTDT >= ADSL.TR01SDT
+        AND ((NEXT01DT IS NOT NULL AND ASTDT < NEXT01DT)
+             OR (NEXT01DT IS NULL
+                 AND (ADSL.EOTSTT = 'ONGOING' OR ASTDT <= TEENDDT)))
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+  - name: TREM02FL
+    type: str
+    label: Treatment Emergent Flag for Period 02
+    derivation:
+      flag: >-
+        ADSL.TR02SDT IS NOT NULL AND ASTDT >= ADSL.TR02SDT
+        AND ((ADSL.TR03SDT IS NOT NULL AND ASTDT < ADSL.TR03SDT)
+             OR (ADSL.TR03SDT IS NULL
+                 AND (ADSL.EOTSTT = 'ONGOING' OR ASTDT <= TEENDDT)))
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+  - name: TREM03FL
+    type: str
+    label: Treatment Emergent Flag for Period 03
+    derivation:
+      flag: >-
+        ADSL.TR03SDT IS NOT NULL AND ASTDT >= ADSL.TR03SDT
+        AND (ADSL.EOTSTT = 'ONGOING' OR ASTDT <= TEENDDT)
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+  - name: TRTEMFL
+    type: str
+    label: Treatment Emergent Analysis Flag
+    derivation:
+      flag: >-
+        TREM01FL IS NOT NULL OR TREM02FL IS NOT NULL
+        OR TREM03FL IS NOT NULL
+    verifications:
+      - allowed_values:
+          values: [Y]
+
+verifications:
+  - row_count:
+      min: 13
+      max: 13
+  # Each phase stops where the next one starts, so the windows never
+  # overlap and an event is treatment-emergent in one phase at most.
+  - assert:
+      id: phase-one-event-is-in-no-later-phase
+      when: "TREM01FL = 'Y'"
+      require: "TREM02FL IS NULL AND TREM03FL IS NULL"
+  - assert:
+      id: phase-two-event-is-not-in-phase-three
+      when: "TREM02FL = 'Y'"
+      require: "TREM03FL IS NULL"
