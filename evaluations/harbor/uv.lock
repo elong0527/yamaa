@@ -2793,7 +2793,7 @@ wheels = [
 
 [[package]]
 name = "yamaa"
-version = "0.6.0"
+version = "0.6.1"
 source = { directory = "../../python" }
 
 [package.optional-dependencies]
