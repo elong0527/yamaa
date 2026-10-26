@@ -19,12 +19,16 @@ qs <- read_csv(
 # Each physical functioning item response, on its zero to four scale.
 items <- qs |>
   filter(QSTESTCD %in% c("PF01", "PF02", "PF03", "PF04")) |>
-  mutate(PARAMCD = QSTESTCD, PARAM = QSTEST, AVAL = QSSTRESN) |>
-  select(STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL)
+  mutate(
+    PARAMCD = QSTESTCD, PARAM = QSTEST, AVAL = QSSTRESN, AREASND = QSREASND
+  ) |>
+  select(STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL, AREASND)
 
 # One score record per visit with a PF01 item record: the mean of the
 # answered items on a zero to one hundred scale, with no value when fewer
-# than three of the four items were answered.
+# than three of the four items were answered. A score without a value takes
+# the items' reason when none was answered, and reads NOT CALCULABLE
+# otherwise.
 visits <- items |>
   filter(PARAMCD %in% "PF01") |>
   distinct(STUDYID, USUBJID, VISIT)
@@ -34,6 +38,8 @@ stats <- items |>
   summarise(
     n_answered = sum(!is.na(AVAL)),
     mean_answered = mean(AVAL, na.rm = TRUE),
+    n_reasons = n_distinct(AREASND, na.rm = TRUE),
+    reason = first(na.omit(AREASND)),
     .groups = "drop"
   ) |>
   mutate(
@@ -41,6 +47,11 @@ stats <- items |>
       n_answered < 3 | is.nan(mean_answered),
       NA_real_,
       mean_answered * 25
+    ),
+    reason = case_when(
+      n_answered >= 3 ~ NA_character_,
+      n_answered == 0 & n_reasons == 1 ~ reason,
+      .default = "NOT CALCULABLE"
     )
   )
 
@@ -49,9 +60,10 @@ scores <- visits |>
   mutate(
     PARAMCD = "PFSCORE",
     PARAM = "Physical Functioning Subscale Score",
-    AVAL = mean_answered
+    AVAL = mean_answered,
+    AREASND = reason
   ) |>
-  select(STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL)
+  select(STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL, AREASND)
 
 adqs <- bind_rows(items, scores) |>
   arrange(STUDYID, USUBJID, VISIT, PARAMCD)

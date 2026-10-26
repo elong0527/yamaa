@@ -39,27 +39,48 @@ def main():
     out = []
     for (studyid, usubjid, visit), recs in groups.items():
         answered = []
+        reasons = set()
         for r in recs:
             raw = (r["QSSTRESN"] or "").strip()
             aval = float(raw) if raw != "" else None
             if aval is not None:
                 answered.append(aval)
+            reason = (r["QSREASND"] or "").strip()
+            if reason:
+                reasons.add(reason)
             out.append(
-                [studyid, usubjid, visit, r["QSTESTCD"], r["QSTEST"], fmt(aval)]
+                [studyid, usubjid, visit, r["QSTESTCD"], r["QSTEST"], fmt(aval), reason]
             )
-        # Every visit with a PF01 item record also has a score record.
+        # Every visit with a PF01 item record also has a score record. A score
+        # without a value takes the items' reason when none was answered, and
+        # reads NOT CALCULABLE otherwise.
         if any(r["QSTESTCD"] == "PF01" for r in recs):
             if len(answered) >= 3:
                 score = sum(answered) / len(answered) * 25
+                areasnd = ""
+            elif not answered and len(reasons) == 1:
+                score = None
+                areasnd = next(iter(reasons))
             else:
                 score = None
+                areasnd = "NOT CALCULABLE"
             out.append(
-                [studyid, usubjid, visit, SCORE_PARAMCD, SCORE_PARAM, fmt(score)]
+                [
+                    studyid,
+                    usubjid,
+                    visit,
+                    SCORE_PARAMCD,
+                    SCORE_PARAM,
+                    fmt(score),
+                    areasnd,
+                ]
             )
 
     with open(OUTPUT_ADQS, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["STUDYID", "USUBJID", "VISIT", "PARAMCD", "PARAM", "AVAL"])
+        writer.writerow(
+            ["STUDYID", "USUBJID", "VISIT", "PARAMCD", "PARAM", "AVAL", "AREASND"]
+        )
         writer.writerows(out)
 
 
