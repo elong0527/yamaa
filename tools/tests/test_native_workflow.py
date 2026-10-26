@@ -763,6 +763,12 @@ class NativeWorkflowContract(unittest.TestCase):
             for platform in self.coverage["cran_manual"]["os"]
             for version in self.coverage["cran_manual"]["r"]
         ]
+        jobs += [
+            f"native-cran ({platform}, R {version}, Rust {rust})"
+            for platform in self.coverage["cran_rust"]["os"]
+            for version in self.coverage["cran_rust"]["r"]
+            for rust in self.coverage["cran_rust"]["rust"]
+        ]
         self.assertEqual(set(self.coverage["cran"]["r"]), {"devel", "release", "4.2.0"})
         for job in jobs:
             with self.subTest(job=job):
@@ -1366,6 +1372,41 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertLess(
                     names.index("Install the package's Suggests"),
                     names.index("Check the R source package as CRAN does"),
+                )
+
+    def test_the_rust_lane_builds_with_cran_s_rust_for_the_gnu_host(self):
+        # CRAN's Windows check builds with a Rust for the GNU host that is
+        # neither the minimum nor the pinned one, and a release in between can
+        # break the build (#4012). The lane installs the declared release for
+        # that host, and the installation log and rustc confirm both.
+        self.assertEqual(
+            self.coverage["cran_rust"],
+            {"os": ["windows-2025"], "r": ["devel"], "rust": ["1.92.0"]},
+        )
+        for platform, version, rust in itertools.product(
+            *self.coverage["cran_rust"].values()
+        ):
+            job = self.jobs[f"native-cran ({platform}, R {version}, Rust {rust})"]
+            steps = {
+                step.get("name"): expand(step.get("run", ""), job["context"])
+                for step in job["definitions"]
+            }
+            with self.subTest(rust=rust):
+                self.assertEqual(
+                    steps["Install CRAN's Rust"],
+                    f"python -m tools.ci.toolchain --channel {rust} "
+                    "--host x86_64-pc-windows-gnu --install",
+                )
+                self.assertEqual(
+                    steps["Confirm that the build used CRAN's Rust"].splitlines(),
+                    [
+                        f'grep -F "using {tool} {rust} " '
+                        '"${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"'
+                        for tool in ("rustc", "cargo")
+                    ]
+                    + [
+                        "rustc -vV | tr -d '\\r' | grep -Fx \"host: x86_64-pc-windows-gnu\""
+                    ],
                 )
 
     def test_the_sanitizer_lane_builds_with_the_minimum_rust_from_its_installer(self):

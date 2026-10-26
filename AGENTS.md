@@ -150,10 +150,10 @@ homes and their readers, and how to measure the ceilings.
   closing keyword only for an issue the pull request completes, and name
   every other issue without one.
 - Branch from and target `main`; `release/1.0.0` is cut only to qualify
-  release candidates. The planning issue is #3673 for 0.6.0, the 1.0
-  interface released for users to test (D289), and #3950 for 1.0.0, which
-  follows their feedback; #3030, closed, holds the design and the decisions
-  D1 to D230, which stay the record and keep their citations.
+  release candidates. The planning issue is #3960 for 1.0.0, which
+  follows the feedback on 0.6.0. The closed planning issues stay the
+  record and keep their citations: #3030 holds the design and the
+  decisions D1 to D230, and #3673 holds D231 to D291.
 - **Open ready for review**, not as a draft, once it builds and its nearest
   tests pass (D148). The one exception is a pull request that cannot merge
   until another one merges: it stays a draft, with `[hold: after #N]` at
@@ -215,13 +215,14 @@ merge steps and the review gate.
 
 ## Decisions
 
-The owner's decisions are D-numbers: D1 to D230 on #3030, and D231 onward
-on the planning issue #3673, which continues the sequence. Three kinds of
-choice reach it; everything else is recorded where the work is.
+The owner's decisions are D-numbers: D1 to D230 on #3030, D231 to D291 on
+#3673, and D292 onward on the planning issue #3960, which continues the
+sequence. Three kinds of choice reach it; everything else is recorded where
+the work is.
 
 - **Ask the owner** before building a new user-facing concept, reversing a
   D-decision, or changing a golden file no D-decision covers.
-- **Record on #3673, as the next D-number**, a routine decision that
+- **Record on #3960, as the next D-number**, a routine decision that
   changes what a user sees: a condition, context key, spelling, saved byte,
   printed text or host surface settled under the owner's standing
   instruction. One short paragraph: what, why, and the pull request. A
@@ -229,7 +230,7 @@ choice reach it; everything else is recorded where the work is.
   session numbers it.
 - **Record in the pull request body** everything else: how an internal
   behaviour was built, which option an issue's question took, what a
-  refactor left out. The pull request is the record; a comment on #3673 is
+  refactor left out. The pull request is the record; a comment on #3960 is
   not needed and the log stays readable. The 1.0 session folds a decision
   into the log only when a later issue cites it.
 
