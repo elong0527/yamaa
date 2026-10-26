@@ -1059,6 +1059,257 @@
         }},
         "define.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\" xmlns:def=\"http://www.cdisc.org/ns/def/v2.1\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" ODMVersion=\"1.3.2\" FileType=\"Snapshot\" FileOID=\"CATH.adam.Define-XML_2.1\" CreationDateTime=\"2026-09-11T00:00:00\" SourceSystem=\"yamaa\" SourceSystemVersion=\"1.0\" def:Context=\"Submission\">\n  <Study OID=\"STDY.CATH\">\n    <GlobalVariables>\n      <StudyName>CATH</StudyName>\n      <StudyDescription>Example study submitting subject-level analysis data in SAS transport</StudyDescription>\n      <ProtocolName>CATH-01</ProtocolName>\n    </GlobalVariables>\n    <MetaDataVersion OID=\"MDV.CATH.adam\" Name=\"CATH adam metadata\" def:DefineVersion=\"2.1.11\">\n      <def:Standards>\n        <def:Standard OID=\"STD.ADaMIG\" Name=\"ADaMIG\" Type=\"IG\" Version=\"1.3\" Status=\"Final\"/>\n      </def:Standards>\n      <ItemGroupDef OID=\"IG.ADSL\" Name=\"ADSL\" Purpose=\"Analysis\" SASDatasetName=\"ADSL\" Repeating=\"No\" IsReferenceData=\"No\" def:Structure=\"One record per subject\" def:ArchiveLocationID=\"LF.ADSL\" def:StandardOID=\"STD.ADaMIG\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Subject-Level Analysis Dataset</TranslatedText>\n        </Description>\n        <ItemRef ItemOID=\"IT.ADSL.STUDYID\" OrderNumber=\"1\" Mandatory=\"Yes\" KeySequence=\"1\"/>\n        <ItemRef ItemOID=\"IT.ADSL.USUBJID\" OrderNumber=\"2\" Mandatory=\"Yes\" KeySequence=\"2\"/>\n        <ItemRef ItemOID=\"IT.ADSL.TRT01A\" OrderNumber=\"3\" Mandatory=\"Yes\"/>\n        <ItemRef ItemOID=\"IT.ADSL.AGE\" OrderNumber=\"4\" Mandatory=\"Yes\"/>\n        <ItemRef ItemOID=\"IT.ADSL.HEIGHTBL\" OrderNumber=\"5\" Mandatory=\"No\"/>\n        <ItemRef ItemOID=\"IT.ADSL.TRTSDT\" OrderNumber=\"6\" Mandatory=\"No\" MethodOID=\"MT.ADSL.TRTSDT\"/>\n        <ItemRef ItemOID=\"IT.ADSL.TRTSDTM\" OrderNumber=\"7\" Mandatory=\"No\"/>\n        <def:Class Name=\"SUBJECT LEVEL ANALYSIS DATASET\"/>\n        <def:leaf ID=\"LF.ADSL\" xlink:href=\"adsl.json\">\n          <def:title>adsl.json</def:title>\n        </def:leaf>\n      </ItemGroupDef>\n      <ItemDef OID=\"IT.ADSL.STUDYID\" Name=\"STUDYID\" DataType=\"text\" Length=\"4\" SASFieldName=\"STUDYID\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Study Identifier</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.STUDYID</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.USUBJID\" Name=\"USUBJID\" DataType=\"text\" Length=\"16\" SASFieldName=\"USUBJID\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Unique Subject Identifier</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.USUBJID</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.TRT01A\" Name=\"TRT01A\" DataType=\"text\" Length=\"11\" SASFieldName=\"TRT01A\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Actual Treatment for Period 01</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.TRT01A</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.AGE\" Name=\"AGE\" DataType=\"integer\" Length=\"3\" SASFieldName=\"AGE\" def:DisplayFormat=\"3.\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Age</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.AGE</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.HEIGHTBL\" Name=\"HEIGHTBL\" DataType=\"float\" Length=\"5\" SignificantDigits=\"1\" SASFieldName=\"HEIGHTBL\" def:DisplayFormat=\"5.1\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Baseline Height (cm)</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.HEIGHTBL</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.TRTSDT\" Name=\"TRTSDT\" DataType=\"integer\" Length=\"8\" SASFieldName=\"TRTSDT\" def:DisplayFormat=\"DATE9.\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Date of First Exposure to Treatment</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Derived\" Source=\"Sponsor\"/>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.TRTSDTM\" Name=\"TRTSDTM\" DataType=\"integer\" Length=\"8\" SASFieldName=\"TRTSDTM\" def:DisplayFormat=\"DATETIME20.\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Datetime of First Exposure to Treatment</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.TRTSDTC</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <MethodDef OID=\"MT.ADSL.TRTSDT\" Name=\"ADSL.TRTSDT\" Type=\"Computation\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Date part of TRTSDTM.</TranslatedText>\n        </Description>\n      </MethodDef>\n    </MetaDataVersion>\n  </Study>\n</ODM>\n"
       }
+    },
+    {
+      "case": "a_define_2_0_document_preserves_its_declared_metadata",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0.xml"
+        }
+      }
+    },
+    {
+      "case": "a_historical_define_2_0_keeps_declarations_independent_of_execution",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical.xml"
+        }
+      }
+    },
+    {
+      "case": "historical_metadata_refuses_submission_context",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Submission\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].submission"
+          ],
+          "context": {
+            "detail": "schema_violation: historical metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires historical mode",
+            "value": "historical"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "historical_metadata_refuses_transport",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  transport: xpt\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].submission"
+          ],
+          "context": {
+            "detail": "schema_violation: historical metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires historical mode",
+            "value": "historical"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "historical_metadata_refuses_define_2_1",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.1.11'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].submission"
+          ],
+          "context": {
+            "detail": "schema_violation: historical metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires historical mode",
+            "value": "historical"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "define_2_0_refuses_draft_guide",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Draft}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "standards[0].status"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "2.0 cannot record a draft or provisional guide status"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "historical_metadata_never_changes_executable_values",
+      "operation": "build",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
+          "raw.csv": "VALUE\n1.5\n"
+        },
+        "specification": "d0.yaml",
+        "project": "project.yaml"
+      },
+      "issues": [],
+      "output": [
+        [
+          "VALUE"
+        ],
+        [
+          1.5
+        ]
+      ]
+    },
+    {
+      "case": "historical_metadata_keeps_explicit_verifications",
+      "operation": "build",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    verifications: [{range: {max: 1}}]\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
+          "raw.csv": "VALUE\n1.5\n"
+        },
+        "specification": "d0.yaml",
+        "project": "project.yaml"
+      },
+      "issues": [
+        {
+          "phase": "verification",
+          "condition": "range_failed",
+          "rule": "CHECK-7",
+          "spec_paths": [
+            "columns.VALUE.verifications[0].range"
+          ],
+          "context": {
+            "column": "VALUE",
+            "failure_count": 1,
+            "keys": [
+              {
+                "VALUE": 1.5
+              }
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    },
+    {
+      "case": "the_default_2_1_does_not_add_key_sequences_to_value_level_item_refs",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}], value_level: [{id: X, where: {CODE: [X]}, mandatory: true}]}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_1_key_value.xml"
+        }
+      }
     }
   ]
 }

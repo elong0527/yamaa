@@ -250,7 +250,9 @@ fn item_definition(
     path: &str,
     label_path: &str,
     language: &str,
+    version: ast::project::DefineVersion,
 ) -> Element {
+    let modern = version == ast::project::DefineVersion::V2_1;
     let name = &column.declaration().name.value;
     let meta = column
         .declaration()
@@ -293,8 +295,18 @@ fn item_definition(
     for origin in column.origins() {
         let declared = origin.declaration();
         let mut node = Element::new("def:Origin", &item.path)
-            .attr("Type", declared.kind.value.name())
-            .optional("Source", origin.source().map(|v| v.name()));
+            .attr(
+                "Type",
+                if !modern && declared.kind.value.name() == "Collected" {
+                    "CRF"
+                } else {
+                    declared.kind.value.name()
+                },
+            )
+            .optional(
+                "Source",
+                origin.source().filter(|_| modern).map(|v| v.name()),
+            );
         if let Some(description) = &declared.description {
             node.translated("Description", &description.value, language);
         }
@@ -341,6 +353,13 @@ fn push_value_lists(metadata: &mut Element, study: &Study) {
                     .attr("ItemOID", format!("IT.{identity}"))
                     .attr("OrderNumber", index + 1)
                     .attr("Mandatory", yes(value.column().mandatory()))
+                    .optional(
+                        "KeySequence",
+                        value
+                            .column()
+                            .key_sequence()
+                            .filter(|_| meta.key_sequence.is_some()),
+                    )
                     .optional("Role", meta.role.as_ref().map(|v| &v.value))
                     .optional(
                         "MethodOID",
@@ -403,6 +422,7 @@ fn push_where_clauses(metadata: &mut Element, study: &Study) {
 /// Append one item-group definition per dataset, in dataset order.
 fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
     let section = study.section();
+    let modern = section.define_version == ast::project::DefineVersion::V2_1;
     for dataset in study.datasets() {
         let id = dataset.id();
         let sub = dataset.metadata();
@@ -429,13 +449,17 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
             .attr("Repeating", yes(sub.repeating.value))
             .attr("IsReferenceData", yes(sub.reference_data.value))
             .attr("def:Structure", &sub.structure.value)
+            .optional("def:Class", (!modern).then_some(sub.class.value.name()))
             // A dataset with no data and no transport file has no leaf.
             .optional(
                 "def:ArchiveLocationID",
                 dataset.href().map(|_| format!("LF.{id}")),
             )
             // The guide the dataset selects, or the section's first (DEFINE-6).
-            .attr("def:StandardOID", format!("STD.{}", dataset.standard()))
+            .optional(
+                "def:StandardOID",
+                modern.then(|| format!("STD.{}", dataset.standard())),
+            )
             .optional(
                 "def:CommentOID",
                 sub.comment.as_ref().map(|_| format!("COM.{id}")),
@@ -468,7 +492,9 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                 Element::new("def:SubClass", &group.path).attr("Name", subclass.value.name()),
             );
         }
-        group.push(class);
+        if modern {
+            group.push(class);
+        }
         if let Some(href) = dataset.href() {
             group.leaf(id, href, href.rsplit('/').next().unwrap_or(href), None);
         }
@@ -478,6 +504,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
 
 /// Append one code-list definition per bound codelist, in catalogue order.
 fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
+    let modern = study.section().define_version == ast::project::DefineVersion::V2_1;
     for list in study.codelists() {
         let c = &list.declaration;
         let mut code = Element::new("CodeList", &format!("codelists.{}", c.id.name))
@@ -486,11 +513,14 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
             .attr("DataType", c.data_type.name())
             .optional(
                 "def:StandardOID",
-                list.standard.as_ref().map(|id| format!("STD.{id}")),
+                list.standard
+                    .as_ref()
+                    .filter(|_| modern)
+                    .map(|id| format!("STD.{id}")),
             )
             .optional(
                 "def:IsNonStandard",
-                (list.standard.is_none() && c.items.is_some()).then_some("Yes"),
+                (modern && list.standard.is_none() && c.items.is_some()).then_some("Yes"),
             )
             .optional("SASFormatName", c.format_name.as_ref().map(|t| &t.text));
         for item in c.items.as_deref().unwrap_or(&[]) {
@@ -542,10 +572,11 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
 pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     validate_profile(study)?;
     let section = study.section();
+    let modern = section.define_version == ast::project::DefineVersion::V2_1;
     let language = &section.xml_lang.text;
     let mut odm = Element::new("ODM", "study")
         .attr("xmlns", "http://www.cdisc.org/ns/odm/v1.3")
-        .attr("xmlns:def", "http://www.cdisc.org/ns/def/v2.1")
+        .attr("xmlns:def", section.define_version.namespace())
         .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
         .attr("ODMVersion", "1.3.2")
         .attr("FileType", "Snapshot")
@@ -554,7 +585,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .optional("Originator", section.originator.as_ref().map(|v| &v.text))
         .attr("SourceSystem", "yamaa")
         .attr("SourceSystemVersion", study.source_version())
-        .attr("def:Context", section.context.name());
+        .optional("def:Context", modern.then_some(section.context.name()));
     let declared = study.study();
     let mut root = Element::new("Study", "study").attr("OID", format!("STDY.{}", declared.id.name));
     let mut globals = Element::new("GlobalVariables", "study");
@@ -572,7 +603,19 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .attr("OID", format!("MDV.{}", study.metadata_id()))
         .attr("Name", study.metadata_name())
         .optional("Description", study.metadata_description())
-        .attr("def:DefineVersion", "2.1.11");
+        .attr("def:DefineVersion", section.define_version.name());
+    if !modern {
+        let guide = &section.standards[0];
+        let name = match guide.name.text.as_str() {
+            "ADaMIG" => "ADaM-IG",
+            "SDTMIG" => "SDTM-IG",
+            "SENDIG" => "SEND-IG",
+            name => name,
+        };
+        metadata = metadata
+            .attr("def:StandardName", name)
+            .attr("def:StandardVersion", &guide.version.text);
+    }
     let mut standards = Element::new("def:Standards", "standards");
     for standard in study.standards() {
         standards.push(
@@ -585,7 +628,9 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 .attr("Status", standard.status),
         );
     }
-    metadata.push(standards);
+    if modern {
+        metadata.push(standards);
+    }
     for (kind, name) in [
         (ast::DocumentKind::AnnotatedCrf, "def:AnnotatedCRF"),
         (ast::DocumentKind::Supplemental, "def:SupplementalDoc"),
@@ -618,6 +663,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                     column.declaration().name.value
                 ),
                 language,
+                section.define_version,
             );
             if !column.values().is_empty() {
                 item.push(
@@ -739,6 +785,9 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     Ok(out.into_bytes())
 }
 fn validate_profile(study: &Study) -> Result<(), Finding> {
+    if study.section().define_version == ast::project::DefineVersion::V2_0 {
+        validate_legacy_profile(study)?;
+    }
     let created = study.created();
     if created.len() != 19 || created.parse::<yamaa_core::temporal::DateTime>().is_err() {
         return Err(xml_invalid("created", "CreationDateTime", text(created)));
@@ -789,6 +838,53 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                     "SASFormatName facet",
                     text(format),
                 ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Refuse facts the older document cannot carry instead of silently
+/// discarding them while changing a namespace (DEFINE-29).
+fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
+    let invalid =
+        |path: &str, detail: &str| xml_invalid(path, "Define-XML 2.0 representation", text(detail));
+    if study.section().standards.len() != 1 || study.standards().len() != 1 {
+        return Err(invalid(
+            "standards",
+            "2.0 requires one implementation guide and cannot record terminology releases",
+        ));
+    }
+    if study.section().standards[0].status.name() != "Final" {
+        return Err(invalid(
+            "standards[0].status",
+            "2.0 cannot record a draft or provisional guide status",
+        ));
+    }
+    for dataset in study.datasets() {
+        let sub = dataset.metadata();
+        let at = format!("datasets.{}.submission", dataset.id());
+        if sub.subclass.is_some() || sub.has_no_data.value {
+            return Err(invalid(&at, "2.0 has no SubClass or HasNoData declaration"));
+        }
+        for (column, identity) in variants(dataset) {
+            for origin in column.origins() {
+                let declared = origin.declaration();
+                let implicit_source = match declared.kind.value.name() {
+                    "Collected" => Some("Investigator"),
+                    "Derived" | "Assigned" | "Other" => Some("Sponsor"),
+                    _ => None,
+                };
+                if declared.kind.value.name() == "Not Available"
+                    || origin
+                        .source()
+                        .is_some_and(|source| Some(source.name()) != implicit_source)
+                {
+                    return Err(invalid(
+                        &format!("datasets.{identity}.submission.origins"),
+                        "2.0 cannot represent this origin type or source",
+                    ));
+                }
             }
         }
     }

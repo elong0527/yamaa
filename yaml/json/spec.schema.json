@@ -3073,6 +3073,12 @@
     "fragment.submission_column_class": {
       "type": "object",
       "properties": {
+        "key_sequence": {
+          "type": "integer",
+          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
         "core": {
           "$ref": "#/$defs/core_designation",
           "description": "Standard core designation, declared and derived by model (SUB-10).",
@@ -3308,6 +3314,12 @@
           "description": "Description of the value-level definition; the column's label when omitted (DEFINE-27).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "key_sequence": {
+          "type": "integer",
+          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
         },
         "core": {
           "$ref": "#/$defs/core_designation",
@@ -5335,6 +5347,11 @@
       "minLength": 1,
       "description": "Regular expression applied to a string value under text operations."
     },
+    "relative_href": {
+      "type": "string",
+      "pattern": "^(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)(?:/(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)?)*$",
+      "description": "Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated."
+    },
     "root_class": {
       "type": "object",
       "properties": {
@@ -5677,6 +5694,12 @@
     "submission_column_class": {
       "type": "object",
       "properties": {
+        "key_sequence": {
+          "type": "integer",
+          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
         "core": {
           "$ref": "#/$defs/core_designation",
           "description": "Standard core designation, declared and derived by model (SUB-10).",
@@ -5804,6 +5827,22 @@
     "submission_dataset_class": {
       "type": "object",
       "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "validated",
+            "historical"
+          ],
+          "description": "Validated metadata constrains derivation; historical metadata reproduces declarations without asserting their truth about the derived data (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "artifact": {
+          "$ref": "#/$defs/relative_href",
+          "description": "Literal historical package link; permitted only in historical metadata exports without transport (DEFINE-30).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "relative_href"
+        },
         "has_no_data": {
           "type": "boolean",
           "default": false,
@@ -5997,6 +6036,12 @@
           "description": "Description of the value-level definition; the column's label when omitted (DEFINE-27).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "key_sequence": {
+          "type": "integer",
+          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
         },
         "core": {
           "$ref": "#/$defs/core_designation",

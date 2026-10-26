@@ -26,6 +26,18 @@ class DefineStage(unittest.TestCase):
                         original.read_bytes(),
                     )
             parser = etree.XMLParser(no_network=True, resolve_entities=False)
+            legacy_schema = etree.XMLSchema(
+                etree.parse(str(schemas / "define/2.0/define2-0-0.xsd"), parser)
+            )
+            # These independently authored documents are also the application
+            # fixture reader's exact-byte expectations for the native writer.
+            for name in ("define_2_0.xml", "define_2_0_historical.xml"):
+                legacy_schema.assertValid(
+                    etree.parse(
+                        str(ROOT / "rust/crates/yamaa-adapters/tests/fixtures" / name),
+                        parser,
+                    )
+                )
             xml_schema = etree.XMLSchema(
                 etree.parse(str(schemas / "define/2.1/define2-1-0.xsd"), parser)
             )

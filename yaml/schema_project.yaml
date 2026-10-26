@@ -104,12 +104,6 @@ define_id:
     kind: identifier
     description: Identifier a generated OID is built from.
 
-relative_href:
-    type: str
-    pattern: '^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$'
-    kind: path
-    description: Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated.
-
 language_tag:
     type: str
     pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$'
@@ -128,6 +122,11 @@ submission_section_class:
         type: path
         required: false
         description: Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).
+    - define_version:
+        type: str
+        required: false
+        values: ["2.0.0", "2.1.11"]
+        description: Define-XML release to generate; omission retains 2.1.11, and 2.0.0 refuses metadata its version cannot represent (DEFINE-29).
     - documents:
         type: "list[document_class]"
         required: false

@@ -135,6 +135,28 @@ def vocabulary(name):
 
 # The reviewed 1.0 reading of every entry the converter transforms.
 EXPECTED = {
+    "new.project.define_version": [
+        Field(
+            "submission_section_class",
+            "define_version",
+            "str",
+            values=("2.0.0", "2.1.11"),
+        )
+    ],
+    "new.spec.submission.mode": [
+        Field(
+            "submission_dataset_class",
+            "mode",
+            "str",
+            values=("validated", "historical"),
+        )
+    ],
+    "new.spec.submission.artifact": [
+        Field("submission_dataset_class", "artifact", "relative_href", kind="path")
+    ],
+    "new.spec.submission.key_sequence": [
+        Field("submission_metadata_fields", "key_sequence", "int")
+    ],
     # D4: the header replaces schema_version in every file type.
     "spec.root_class.schema_version": [Absent("root_class", "schema_version")],
     "project.project_class.schema_version": [Absent("project_class", "schema_version")],

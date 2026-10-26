@@ -38,6 +38,7 @@ pub enum FieldName {
     Status,
     Specs,
     Define,
+    DefineVersion,
     Documents,
     Transport,
     Context,
@@ -67,6 +68,7 @@ impl FieldName {
             Self::Status => "status",
             Self::Specs => "specs",
             Self::Define => "define",
+            Self::DefineVersion => "define_version",
             Self::Documents => "documents",
             Self::Transport => "transport",
             Self::Context => "context",
@@ -206,6 +208,7 @@ const SECTION: &[FieldName] = &[
     FieldName::Specs,
     FieldName::Standards,
     FieldName::Define,
+    FieldName::DefineVersion,
     FieldName::Documents,
     FieldName::Transport,
     FieldName::Context,
@@ -640,6 +643,12 @@ impl<'d> Parser<'d, '_, '_> {
             }
         }
         let define = self.optional_text(at, FieldName::Define, path, TextRule::NonEmpty);
+        let define_version = self.choice(
+            self.get(node, FieldName::DefineVersion),
+            path.field(FieldName::DefineVersion),
+            crate::ast::project::DefineVersion::VALUES,
+            Some(crate::ast::project::DefineVersion::default()),
+        );
         let docs_origin = self.get(node, FieldName::Documents);
         let docs_path = path.field(FieldName::Documents);
         let doc_nodes = self.sequence(docs_origin, docs_path, true).unwrap_or(&[]);
@@ -701,6 +710,7 @@ impl<'d> Parser<'d, '_, '_> {
             specs,
             standards,
             define,
+            define_version: define_version?,
             documents,
             transport,
             context: context?,

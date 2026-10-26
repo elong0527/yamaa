@@ -887,6 +887,12 @@ impl<'d> Lower<'d> {
     fn dataset_submission(&mut self, node: usize, parent: Meta) -> DatasetSubmission {
         let meta = self.field_meta(parent, "submission", node);
         DatasetSubmission {
+            mode: if self.text_of(node, "mode") == Some("historical") {
+                crate::specification_submission_document::SubmissionMode::Historical
+            } else {
+                crate::specification_submission_document::SubmissionMode::Validated
+            },
+            artifact: self.text_field(meta, node, "artifact"),
             label: self.required_text(meta, node, "label"),
             class: self.required_text(meta, node, "class"),
             subclass: self.text_field(meta, node, "subclass"),
@@ -1029,6 +1035,7 @@ impl<'d> Lower<'d> {
             }
         });
         SubmissionMetadata {
+            key_sequence: self.bound(meta, node, "key_sequence"),
             core: self.text_field(meta, node, "core"),
             mandatory: self
                 .field(node, "mandatory")

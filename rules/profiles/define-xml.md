@@ -3,8 +3,10 @@
 This file is a profile: it is optional, and it applies only to a build that
 selects an `sdtm`, `adam` or `send` submission section of a project file.
 Such a build composes the section, the study and the submission metadata of the
-specifications the section lists into one deterministic Define-XML 2.1
-document. A domain build never generates a Define-XML document.
+specifications the section lists into one deterministic Define-XML document.
+The default release is 2.1.11; an explicit `define_version: "2.0.0"` selects
+the earlier representation ([DEFINE-29](#define-29)). A domain build never
+generates a Define-XML document.
 
 ## The study document
 
@@ -56,7 +58,7 @@ Two generations with the same captured inputs and `created` produce the same
 bytes. An explicit `created` is a whole-second civil datetime; omission selects
 the current UTC time during preparation, and Save retains that time. An omitted
 `file_oid` is `study.id`, the selected lower-case section key and
-`Define-XML_2.1`, joined by dots. An omitted metadata-version ID is
+`Define-XML_2.1` (or `Define-XML_2.0` for 2.0.0), joined by dots. An omitted metadata-version ID is
 `study.id.section`, and an omitted name is `study.name section metadata`.
 
 Fails: `value_not_permitted`.
@@ -714,9 +716,9 @@ the character.
 
 <a id="define-25"></a>
 
-### DEFINE-25. A complete document, valid against the Define-XML 2.1 schema, is published atomically or not at all
+### DEFINE-25. A complete document, valid against the selected Define-XML schema, is published atomically or not at all
 
-The generated document must be valid against the Define-XML 2.1 schema; a
+The generated document must be valid against the selected Define-XML schema; a
 document that is not fails, reporting the schema violation, and the run
 publishes nothing. Publication follows the procedure of
 [OUTPUT-8](../output.md#output-8) exactly: the complete
@@ -836,3 +838,61 @@ submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty
 omitted one does. A project submission refuses a selected section that the project does not declare
 before any Define-XML generation, with `unknown_section`
 ([PROJECT-14](project.md#project-14)).
+
+<a id="define-29"></a>
+
+### DEFINE-29. A section selects its Define-XML release explicitly, retaining 2.1.11 when omitted
+
+A section's `define_version` selects `2.0.0` or `2.1.11`; omission retains
+2.1.11 and its existing bytes. A 2.0 document uses only facts that version
+can represent and requires one Final implementation guide. Declarations
+requiring 2.1 constructs fail before publication.
+
+Fails: `value_not_permitted`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`.
+
+For 2.0 these mappings replace the version-specific fields of the 2.1 tables
+above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
+`StandardName` and `StandardVersion` on `MetaDataVersion`, and a dataset
+`Class` attribute. ADaMIG, SDTMIG and SENDIG are written as ADaM-IG, SDTM-IG
+and SEND-IG. It omits 2.1-only standards, standard references, codelist
+non-standard flags, context and origin sources. Collected is written as CRF.
+
+Multiple guides, terminology releases, a subclass, HasNoData and Not Available
+have no faithful representation and are refused. An explicit origin source
+is representable only when it is the older type's implicit source:
+Investigator for Collected, Sponsor for Derived, Assigned or Other. This
+version choice does not change derivations, ordinary metadata validation or
+the transport encoders.
+
+<a id="define-30"></a>
+
+### DEFINE-30. Historical metadata is a literal record and makes no assertion about current derivations or data
+
+A dataset's explicit `submission.mode: historical` reproduces received
+metadata in Define-XML 2.0 under `context: Other` without transport; omission
+retains validated mode. Historical declarations add no execution constraints;
+executable types, keys and explicit verifications remain active. Composition
+admits closed metadata, resolves every codelist and document reference, and
+requires a schema-valid document. It makes no data-conformance assertion.
+
+Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`.
+
+The historical export requires explicit column `data_type`, `mandatory` and
+labels. Lengths, formats, origins, methods and codelists remain as declared.
+`key_sequence` declares a historical ItemRef key position independently of
+executable `keys`. `artifact` declares a literal relative package link; its
+filename supplies the leaf title. Omission writes no historical artifact
+leaf. Both fields are refused on validated metadata. Historical value-level
+entries inherit the column metadata as ordinary entries do, except key
+positions never inherit.
+
+Historical codelists, mandatory flags, lengths, origins and value-level
+metadata do not bind execution. They describe received declarations, not the
+current derived artifacts. Column types, executable keys, explicit
+verifications and all other ordinary checks still apply. Output and
+where-clause names remain checked during composition. An independent
+metadata comparison and data audit assess those separate claims. No
+reference XML is read or passed through by this profile, and no transport
+is published or certified.

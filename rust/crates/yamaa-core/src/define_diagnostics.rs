@@ -92,7 +92,7 @@ pub fn xml_whitespace(path: &str, character: char) -> Finding {
     )
     .with("whitespace", whitespace)
 }
-/// DEFINE-25: the generated document at `path` would break the Define-XML 2.1
+/// DEFINE-25: the generated document at `path` would break the selected Define-XML
 /// schema `facet` names, such as a forbidden character or an unresolved
 /// generated reference; `value` is the value that breaks it.
 pub fn xml_invalid(path: &str, facet: &str, value: JsonValue) -> Finding {
