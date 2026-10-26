@@ -750,7 +750,9 @@ Re-running failed jobs or all jobs keeps a run eligible: earlier attempts'
 artifacts stay on the run, and the workflow takes only the copy that its
 uploading job created during the execution the run's final attempt lists.
 
-The release body of a final release X.Y.Z is its committed notes,
+A release is titled `yamaa vX.Y.Z`, or `yamaa vX.Y.Z-rc.N` for release
+candidate N, in the Cargo spelling of its version. The release body of a
+final release X.Y.Z is its committed notes,
 `docs/releases/X.Y.Z.md`, then a "Qualified native artifacts" section that
 links the native run attempt and lists the selected artifacts. A release
 candidate is created as a GitHub pre-release. Its body first says that it is
