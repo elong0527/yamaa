@@ -1,6 +1,13 @@
-## Submission
+## Resubmission
 
-This is a new submission.
+This is a new submission, resubmitted. In the incoming pretest of 0.6.0, the
+package failed to install on Windows: `src/Makevars.win` gave Cargo R's `CC`
+as the linker, which ends in a space there, so Cargo found no linker `gcc `
+for the build scripts. In 0.6.1:
+
+- `src/Makevars.win` gives Cargo the first word of `CC` as the linker.
+- Our Windows checks now build with a Rust toolchain for the GNU host,
+  `x86_64-pc-windows-gnu`, as CRAN's Windows machines do.
 
 ## Test environments
 

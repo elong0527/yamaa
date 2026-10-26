@@ -1,17 +1,17 @@
-# yamaa for Python <img src="https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.6.0/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
+# yamaa for Python <img src="https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.6.1/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
 [![Regular build](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&event=schedule&label=regular%20build)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/yamaa-v0.6.0/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/yamaa-v0.6.1/LICENSE)
 
 Python package for yamaa, a domain-specific language for clinical trial data
 standardization.
 
 Runs yamaa specifications that transform ODM XML data into SDTM and ADaM
 datasets, and generates define.xml, with the same Rust engine as the
-[R package](https://github.com/elong0527/yamaa/tree/yamaa-v0.6.0/R/yamaa):
+[R package](https://github.com/elong0527/yamaa/tree/yamaa-v0.6.1/R/yamaa):
 
 ```python
 import yamaa
