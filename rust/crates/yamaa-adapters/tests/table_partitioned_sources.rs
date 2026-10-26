@@ -611,6 +611,7 @@ mod table {
         #[test]
         fn each_records_ordinal_is_its_position_in_the_whole_source() {
             let csv = declaration(SourceProfile::Csv, &[], Some("POSITION"));
+            #[cfg_attr(not(feature = "parquet"), allow(unused_mut))]
             let mut inputs = vec![(csv, b"ID\nv\nw\nx\ny\nz\n".to_vec(), vec![2, 2, 1])];
             #[cfg(feature = "parquet")]
             {

@@ -11,7 +11,9 @@
 
 use std::sync::LazyLock;
 
-use yamaa::{Condition, DataType, Field, CONDITION_COLUMNS};
+use yamaa::{Condition, CONDITION_COLUMNS};
+#[cfg(feature = "arrow")]
+use yamaa::{DataType, Field};
 use yamaa_core::json::Value;
 
 /// The shared truth's `conditions` family, read once for every test here.
@@ -154,6 +156,7 @@ fn the_rules_are_distinct_card_ids_in_card_order() {
     }
 }
 
+#[cfg(feature = "arrow")]
 #[test]
 fn the_table_has_the_catalogue_columns_and_one_row_per_condition() {
     let catalogue = yamaa::conditions();

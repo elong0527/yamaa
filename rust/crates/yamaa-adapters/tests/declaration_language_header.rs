@@ -41,10 +41,10 @@ mod declaration {
         /// A complete 1.0 function file.
         const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: bmi\ndescription: Body mass index.\nparams: [{name: weight, type: float}]\nreturns: float\nimplementations: {python: project.bmi}\ntests: [{id: normal, covers: [normal], args: {weight: 1.0}, result: 1.0}]\n";
 
-        struct Study(crate::support::Scratch);
+        struct Study(crate::support::scratch::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = crate::support::Scratch::canonical("language-header");
+                let path = crate::support::scratch::Scratch::canonical("language-header");
                 Self(path)
             }
             fn write(&self, name: &str, text: &str) {

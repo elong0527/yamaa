@@ -38,6 +38,19 @@ arrow-schema = { version = "=55.2.0", default-features = false, optional = true 
 [lints]
 workspace = true
 
+# The examples take their input as Arrow tables; the probe's specification is
+# a document, so it needs document admission too. Each names its path, as the
+# tests do, so a source package that leaves examples/ out still loads.
+[[example]]
+name = "memory"
+path = "examples/memory.rs"
+required-features = ["arrow"]
+
+[[example]]
+name = "executor_probe"
+path = "examples/executor_probe.rs"
+required-features = ["yaml", "arrow"]
+
 # The integration tests are one binary: tests/main.rs declares each family
 # file under tests/ as a module and checks that none is left out (#3556).
 [[test]]

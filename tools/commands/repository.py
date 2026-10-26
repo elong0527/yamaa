@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import sys
+import tomllib
 
 from tools.ci import fuzz
 from tools.paths import ROOT, WORKSPACE
@@ -58,6 +59,21 @@ DOCS_CHECKS = (
 
 def run(*arguments, cwd=ROOT):
     subprocess.run(arguments, cwd=cwd, check=True)
+
+
+def featured_members():
+    """The workspace members with default features, but the R binding, in
+    manifest order: the crates whose feature-less build differs (#3966)."""
+    workspace = tomllib.loads((WORKSPACE / "Cargo.toml").read_text(encoding="utf-8"))
+    names = []
+    for member in workspace["workspace"]["members"]:
+        manifest = tomllib.loads(
+            (WORKSPACE / member / "Cargo.toml").read_text(encoding="utf-8")
+        )
+        name = manifest["package"]["name"]
+        if manifest.get("features", {}).get("default") and name != "yamaa-r":
+            names.append(name)
+    return names
 
 
 def main(argv=None):
@@ -122,6 +138,21 @@ def main(argv=None):
             "yamaa-r",
             "--all-targets",
             "--all-features",
+            "--",
+            "-D",
+            "warnings",
+            cwd=WORKSPACE,
+        )
+        # The same crates without their default features, so test code that a
+        # disabled feature leaves unused fails here too (#3966). No member
+        # enables another's features, so one build checks each feature-less.
+        run(
+            "cargo",
+            "clippy",
+            "--locked",
+            *(argument for name in featured_members() for argument in ("-p", name)),
+            "--all-targets",
+            "--no-default-features",
             "--",
             "-D",
             "warnings",
