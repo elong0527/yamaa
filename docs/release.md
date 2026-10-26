@@ -627,10 +627,14 @@ Before pushing the release tag, confirm on the final commit:
    that release re-reviews PyO3 0.27.2's RUSTSEC-2026-0176 and
    RUSTSEC-2026-0177, checking that the Python binding still iterates lists
    and tuples only with `next` and never calls `PyCFunction::new_closure`,
-   and thrift 0.17.0's GHSA-2f9f-gq7v-9h6m, checking that admission still
-   walks and bounds every footer and page header before Parquet decodes
-   them. After 2027-04-30, it re-reviews paste's RUSTSEC-2024-0436, checking
-   that paste is still only a compile-time dependency.
+   and thrift 0.17.0's GHSA-2f9f-gq7v-9h6m, checking that parquet 55.2.0,
+   which brings thrift, is still only the differential oracle of the
+   adapters' and the application's tests, so that from `rust/`,
+   `cargo tree --workspace --all-features -e normal,build -i thrift` lists
+   nothing. After 2027-04-30, it re-reviews paste's RUSTSEC-2024-0436,
+   checking that paste is still only a compile-time dependency. When the
+   oracle leaves `rust/Cargo.lock`, the thrift ignore goes with it, and the
+   paste ignore names extendr-api alone.
 5. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
    was compared with its upstream releases and security advisories since the
    previous release, and each fix that applies is taken or has an issue.
