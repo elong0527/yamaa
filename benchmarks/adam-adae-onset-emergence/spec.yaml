@@ -7,14 +7,14 @@ input:
   AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
   ADSL:
     path: input/adsl.csv
-    types: {TRTSDTM: datetime, TRTENDTM: datetime, TEENDDTM: datetime}
+    types: {TRTSDTM: datetime, TRTEDTM: datetime}
     key: [STUDYID, USUBJID]
 base: AE
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TEENDDTM,
-            TRTEMFL, AOCCFL]
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESER, ASTDTM, TRTSDTM, TRTEDTM,
+            EOTSTT, TEENDDTM, TRTEMFL, AOCCFL]
 
 columns:
   - name: STUDYID
@@ -37,6 +37,11 @@ columns:
     label: Reported Term for the Adverse Event
     derivation: AE.AETERM
 
+  - name: AESER
+    type: str
+    label: Serious Event
+    derivation: AE.AESER
+
   - name: ASTDTM
     type: datetime
     label: Analysis Start Date/Time
@@ -47,18 +52,38 @@ columns:
     label: Datetime of First Exposure to Treatment
     derivation: ADSL.TRTSDTM
 
-  # The study's treatment-emergent window ends 30 days after last exposure.
-  # The spec language has no date arithmetic, so the window end is
-  # precomputed in the ADSL fixture (TEENDDTM = TRTENDTM + 30 days).
+  - name: TRTEDTM
+    type: datetime
+    label: Datetime of Last Exposure to Treatment
+    derivation: ADSL.TRTEDTM
+
+  - name: EOTSTT
+    type: str
+    label: End of Treatment Status
+    derivation: ADSL.EOTSTT
+
+  # The study's treatment-emergent window ends 30 days after last exposure
+  # for an event recorded as non-serious and 90 days after for any other:
+  # a serious event, or one whose seriousness was not recorded. While
+  # treatment is ongoing the window has no end yet.
   - name: TEENDDTM
     type: datetime
     label: End of Treatment-Emergent Window
-    derivation: ADSL.TEENDDTM
+    derivation:
+      case:
+        - when: "EOTSTT = 'ONGOING'"
+          then: null
+        - when: "AESER = 'N'"
+          then:
+            shift: {type: datetime, source: TRTEDTM, amount: 30, unit: day}
+        - otherwise:
+            shift: {type: datetime, source: TRTEDTM, amount: 90, unit: day}
 
-  # The window rule: onset inside [first exposure, window end] is
-  # treatment-emergent. A missing onset cannot be ruled pre-treatment,
-  # so the conservative convention flags it Y; an untreated subject
-  # (no first exposure at all) can never be treatment-emergent.
+  # The window rule: onset at or after first exposure and, unless treatment
+  # is ongoing, at or before the window end is treatment-emergent. A missing
+  # onset cannot be ruled pre-treatment, so the conservative convention
+  # flags it Y; an untreated subject (no first exposure at all) can never be
+  # treatment-emergent.
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
@@ -68,7 +93,9 @@ columns:
           then: null
         - when: "ASTDTM IS NULL"
           then: "'Y'"
-        - when: "ASTDTM >= TRTSDTM AND ASTDTM <= TEENDDTM"
+        - when: >-
+            ASTDTM >= TRTSDTM
+            AND (EOTSTT = 'ONGOING' OR ASTDTM <= TEENDDTM)
           then: "'Y'"
         - otherwise: null
     verifications:
@@ -98,16 +125,20 @@ columns:
 
 verifications:
   - row_count:
-      min: 10
-      max: 10
+      min: 15
+      max: 15
   - assert:
       id: treatment-emergent-onset-is-not-before-first-dose
       when: "TRTEMFL = 'Y' AND ASTDTM IS NOT NULL"
       require: "ASTDTM >= TRTSDTM"
   - assert:
       id: treatment-emergent-onset-is-within-window
-      when: "TRTEMFL = 'Y' AND ASTDTM IS NOT NULL"
+      when: "TRTEMFL = 'Y' AND ASTDTM IS NOT NULL AND TEENDDTM IS NOT NULL"
       require: "ASTDTM <= TEENDDTM"
+  - assert:
+      id: finished-treatment-has-a-window-end
+      when: "TRTSDTM IS NOT NULL AND EOTSTT <> 'ONGOING'"
+      require: "TEENDDTM IS NOT NULL"
   - assert:
       id: missing-onset-is-treatment-emergent
       when: "ASTDTM IS NULL AND TRTSDTM IS NOT NULL"

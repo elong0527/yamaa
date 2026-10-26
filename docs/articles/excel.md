@@ -544,8 +544,10 @@ Excel:
 | Variable | Origin | Comment |
 |---|---|---|
 | TRTSDTM | Predecessor: ADSL.TRTSDTM | merge by STUDYID USUBJID |
-| TEENDDTM | Predecessor: ADSL.TEENDDTM | window end: last exposure + 30 days, precomputed in ADSL |
-| TRTEMFL | Derived | Y if onset is in [TRTSDTM, TEENDDTM]; Y if onset is missing and the subject was treated; else blank |
+| TRTEDTM | Predecessor: ADSL.TRTEDTM | merge by STUDYID USUBJID |
+| EOTSTT | Predecessor: ADSL.EOTSTT | merge by STUDYID USUBJID |
+| TEENDDTM | Derived | window end: TRTEDTM + 30 days if AESER = N, else + 90 days; blank while treatment is ongoing |
+| TRTEMFL | Derived | Y if onset is on or after TRTSDTM and, unless treatment is ongoing, on or before TEENDDTM; Y if onset is missing and the subject was treated; else blank |
 
 ```yaml
 yamaa: "1.0"
@@ -557,13 +559,14 @@ input:
   AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
   ADSL:
     path: input/adsl.csv
-    types: {TRTSDTM: datetime, TEENDDTM: datetime}
+    types: {TRTSDTM: datetime, TRTEDTM: datetime}
     key: [STUDYID, USUBJID]      # <- "merge by STUDYID USUBJID", once
 base: AE
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, ASTDTM, TRTSDTM, TEENDDTM, TRTEMFL]
+  columns: [STUDYID, USUBJID, AESEQ, AESER, ASTDTM, TRTSDTM, TRTEDTM, EOTSTT,
+            TEENDDTM, TRTEMFL]
 
 columns:
   - name: STUDYID
@@ -581,6 +584,11 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  - name: AESER
+    type: str
+    label: Serious Event
+    derivation: AE.AESER
+
   - name: ASTDTM
     type: datetime
     label: Analysis Start Date/Time
@@ -591,10 +599,28 @@ columns:
     label: Datetime of First Exposure to Treatment
     derivation: ADSL.TRTSDTM         # <- joins on the input's key
 
+  - name: TRTEDTM
+    type: datetime
+    label: Datetime of Last Exposure to Treatment
+    derivation: ADSL.TRTEDTM
+
+  - name: EOTSTT
+    type: str
+    label: End of Treatment Status
+    derivation: ADSL.EOTSTT
+
   - name: TEENDDTM
     type: datetime
     label: End of Treatment-Emergent Window
-    derivation: ADSL.TEENDDTM
+    derivation:
+      case:
+        - when: "EOTSTT = 'ONGOING'"
+          then: null
+        - when: "AESER = 'N'"
+          then:
+            shift: {type: datetime, source: TRTEDTM, amount: 30, unit: day}
+        - otherwise:
+            shift: {type: datetime, source: TRTEDTM, amount: 90, unit: day}
 
   - name: TRTEMFL
     type: str
@@ -605,7 +631,9 @@ columns:
           then: null
         - when: "ASTDTM IS NULL"
           then: "'Y'"
-        - when: "ASTDTM >= TRTSDTM AND ASTDTM <= TEENDDTM"
+        - when: >-
+            ASTDTM >= TRTSDTM
+            AND (EOTSTT = 'ONGOING' OR ASTDTM <= TEENDDTM)
           then: "'Y'"
         - otherwise: null
     verifications:
@@ -624,15 +652,20 @@ What changed:
   it requires a `source` binding or a named intermediate with explicit
   `order_by` and `keep`.
 - When the input is linked to the spec that produces it (`schema: adsl.yaml`
-  beside its `path`), the two Predecessor columns become one copy entry,
-  `copy: {dataset: ADSL, columns: [TRTSDTM, TEENDDTM]}`. Each copied column
-  takes its type, label and Predecessor origin from the producer, so none of
-  it is written twice. This benchmark reads an ADSL fixture that no spec
-  produces, so it reads the columns one by one.
+  beside its `path`), the three Predecessor columns become one copy entry,
+  `copy: {dataset: ADSL, columns: [TRTSDTM, TRTEDTM, EOTSTT]}`. Each copied
+  column takes its type, label and Predecessor origin from the producer, so
+  none of it is written twice. This benchmark reads an ADSL fixture that no
+  spec produces, so it reads the columns one by one.
+- "TRTEDTM + 30 days" becomes a `shift` of `TRTEDTM` by an elapsed amount
+  in days, where a day is 24 hours. A missing `TRTEDTM` gives a missing
+  window end, as for an untreated subject. The 30 and the 90 are written
+  once, in the one column a protocol with other windows changes.
 - The flag is a `case`, not a bare `flag` predicate, because the Excel
-  comment's rule has two edges a single comparison gets wrong. The window
-  has an end (`TEENDDTM`): an onset after it is not treatment-emergent. And
-  a comparison with a missing moment is unknown, never true -- so a bare
+  comment's rule has edges a single comparison gets wrong. The window has
+  an end (`TEENDDTM`): an onset after it is not treatment-emergent, unless
+  treatment is still ongoing and the window has no end yet. And a
+  comparison with a missing moment is unknown, never true -- so a bare
   `flag: "ASTDTM >= TRTSDTM"` would leave a missing onset blank, where this
   study's convention flags it `Y` for a treated subject (a missing onset
   cannot be ruled pre-treatment) and blank only for an untreated one. The
