@@ -217,7 +217,11 @@ proxy that refuses connections and runs two Cargo jobs.
 
 - With R-devel, R-release and R 4.2.0, on Linux, macOS and Windows, Cargo and
   rustc are the workspace's `rust-version`, 1.82: the two-year-old toolchain
-  that CRAN's guidance asks a package to be tested with.
+  that CRAN's guidance asks a package to be tested with. On Windows it is
+  built for the GNU host, `x86_64-pc-windows-gnu`, as on CRAN's Windows
+  machines, so Cargo links the build scripts and procedural macros with the
+  linker that `Makevars.win` gives it. The other Windows lanes add the GNU
+  target to the MSVC host's toolchain, which links them with MSVC's linker.
 - With R-devel on Linux and none of the package's suggested packages
   installed, as CRAN's noSuggests check runs: `_R_CHECK_DEPENDS_ONLY_=true`
   gives the tests only the Depends and Imports, and with

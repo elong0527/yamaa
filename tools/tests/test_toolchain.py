@@ -254,6 +254,10 @@ class ToolchainSelectionTest(unittest.TestCase):
             ((), declared["channel"]),
             (("--minimum",), toolchain.minimum()),
             (("--channel", "beta"), "beta"),
+            (
+                ("--minimum", "--host", "x86_64-pc-windows-gnu"),
+                f"{toolchain.minimum()}-x86_64-pc-windows-gnu",
+            ),
         ):
             with self.subTest(arguments=arguments):
                 activated, commands = activate("--install", *arguments)
