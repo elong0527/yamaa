@@ -191,7 +191,7 @@ def test_a_crashing_held_out_reference_is_a_harness_error(tmp_path):
         )
 
 
-def test_partial_contact_dates_survive_subject_removal(tmp_path):
+def test_partial_source_and_death_dates_survive_subject_removal(tmp_path):
     result = _held_out_case(tmp_path, "reference", "reference", "adam-adsl-alive-date")
     assert result["passed"] and result["held_out"]["checked"], result
 
