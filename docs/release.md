@@ -635,8 +635,8 @@ Before pushing the release tag, confirm on the final commit:
    and thrift 0.17.0's GHSA-2f9f-gq7v-9h6m, checking that parquet 55.2.0,
    which brings thrift, is still only the differential oracle of the
    adapters' and the application's tests, so that from `rust/`,
-   `cargo tree --workspace --all-features -e normal,build -i thrift` lists
-   nothing. After 2027-04-30, it re-reviews paste's RUSTSEC-2024-0436,
+   `cargo tree --workspace --all-features --target all -e normal,build -i thrift`
+   lists nothing on every target. After 2027-04-30, it re-reviews paste's RUSTSEC-2024-0436,
    checking that paste is still only a compile-time dependency. When the
    oracle leaves `rust/Cargo.lock`, the thrift ignore goes with it, and the
    paste ignore names extendr-api alone.
