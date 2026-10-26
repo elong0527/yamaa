@@ -40,3 +40,9 @@ identifier:
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     kind: identifier
     description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a document or a function (SPEC-2).
+
+relative_href:
+    type: str
+    pattern: '^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$'
+    kind: path
+    description: Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated.

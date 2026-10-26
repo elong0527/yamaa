@@ -529,6 +529,8 @@ pub struct Output {
 /// values are admitted by the schema (P-VOC-1).
 #[derive(Clone, Debug, PartialEq)]
 pub struct DatasetSubmission {
+    pub mode: crate::specification_submission_document::SubmissionMode,
+    pub artifact: Option<Text>,
     pub label: Text,
     pub class: Text,
     pub subclass: Option<Text>,
@@ -553,6 +555,7 @@ pub struct ColumnSubmission {
 /// The metadata a column and each of its value-level entries share.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SubmissionMetadata {
+    pub key_sequence: Option<Constant>,
     pub core: Option<Text>,
     pub mandatory: Option<bool>,
     pub role: Option<Text>,

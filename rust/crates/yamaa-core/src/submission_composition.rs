@@ -12,6 +12,7 @@ use crate::{
     submission_values as values,
 };
 use std::collections::BTreeSet;
+mod historical;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finding {
@@ -695,6 +696,7 @@ struct ColumnSite<'c> {
 
 /// Admit the complete inherited column metadata for a base or per-value item.
 struct ColumnAdmission<'a> {
+    historical: bool,
     doc: &'a Document,
     /// The specification's tree, whose derivations SUB-19 and SUB-20 read.
     tree: &'a ast::Spec,
@@ -730,6 +732,9 @@ impl ColumnAdmission<'_> {
         findings: &mut Vec<Finding>,
         bound: &mut BTreeSet<String>,
     ) -> Option<Column> {
+        if self.historical {
+            return historical::column(self, column, column_path, findings, bound);
+        }
         let Self {
             section,
             known,
@@ -744,6 +749,13 @@ impl ColumnAdmission<'_> {
             );
             return None;
         };
+        if metadata.key_sequence.is_some() {
+            findings.push(crate::define_diagnostics::xml_invalid(
+                column_path,
+                "historical key_sequence requires mode historical",
+                crate::json::Value::String(name.clone()),
+            ));
+        }
         if metadata.origins.is_empty() {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionOriginMissing, column_path, name)
@@ -1362,7 +1374,12 @@ fn compose_values(
         }
         let entries = values::entries(doc, base.node);
         let written = entries.iter().map(|entry| (entry.id, &entry.clause));
-        let static_findings = values::admit(written, name, |where_column| {
+        let mode = if admission.historical {
+            spec::SubmissionMode::Historical
+        } else {
+            spec::SubmissionMode::Validated
+        };
+        let static_findings = values::admit(written, name, mode, |where_column| {
             let declared = columns.iter().find(|c| c.name.value == where_column)?;
             Some(values::Declared {
                 output: output_columns.iter().any(|c| c == where_column),
@@ -1474,7 +1491,8 @@ fn compose_values(
                 effective.label = Some(label.clone());
             }
             let first_finding = findings.len();
-            if admission.keys.contains(name)
+            if !admission.historical
+                && admission.keys.contains(name)
                 && entry.metadata.mandatory.as_ref().is_some_and(|m| !m.value)
             {
                 findings.push(
@@ -1771,6 +1789,11 @@ fn compose_datasets(
         }
         reserved_metadata(doc, doc.root(), None, &path, findings);
         let reads = Reads::of_spec(input.tree);
+        let historical = input
+            .tree
+            .submission
+            .as_ref()
+            .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Historical);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
             findings.push(
@@ -1778,7 +1801,7 @@ fn compose_datasets(
                     .with("identifier", id.as_str()),
             );
         }
-        if !sources.insert(input.source) || !artifacts.insert(input.artifact) {
+        if !sources.insert(input.source) || (!historical && !artifacts.insert(input.artifact)) {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionDuplicateDataset,
                 &path,
@@ -1807,6 +1830,7 @@ fn compose_datasets(
             );
             continue;
         };
+        historical::dataset(section, dataset, &path, findings);
         let Some(columns) = declarations.columns() else {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionMetadataMissing, &path, "columns")
@@ -1861,6 +1885,7 @@ fn compose_datasets(
             }
         }
         let admission = ColumnAdmission {
+            historical,
             doc,
             tree: input.tree,
             dataset: &id,
@@ -1893,7 +1918,9 @@ fn compose_datasets(
                 }
             };
             let column_path = format!("{path}.columns.{name}.submission");
-            key_column_mandatory(column, admission.keys, &path, findings);
+            if !historical {
+                key_column_mandatory(column, admission.keys, &path, findings);
+            }
             // Every origin the column and its entries declare.
             let origins: Vec<_> = column
                 .submission
@@ -1907,7 +1934,9 @@ fn compose_datasets(
                     )
                 })
                 .collect();
-            predecessor_labels(study, column, &origins, &path, findings);
+            if !historical {
+                predecessor_labels(study, column, &origins, &path, findings);
+            }
             // The column's origin answers for every construction whose rows an
             // entry declaring its own origin does not all select (SUB-19).
             let derivations = tree_column(input.tree, name).map_or_else(Vec::new, |column| {
@@ -1941,7 +1970,11 @@ fn compose_datasets(
             metadata: dataset.clone(),
             columns: selected,
             artifact: input.artifact.into(),
-            href: input.href.map(String::from),
+            href: if historical {
+                dataset.artifact.as_ref().map(|link| link.value.clone())
+            } else {
+                input.href.map(String::from)
+            },
         });
     }
     datasets
@@ -2448,7 +2481,14 @@ pub fn compose(
         study: study.clone(),
         section: section.clone(),
         file_oid: section.file_oid.as_ref().map_or_else(
-            || format!("{}.{}.Define-XML_2.1", study.id.name, family),
+            || {
+                format!(
+                    "{}.{}.Define-XML_{}",
+                    study.id.name,
+                    family,
+                    section.define_version.family()
+                )
+            },
             |f| f.text.clone(),
         ),
         metadata_id,
@@ -2488,6 +2528,7 @@ mod tests {
             specs: Vec::new(),
             standards: Vec::new(),
             define: None,
+            define_version: ast::project::DefineVersion::default(),
             documents: Vec::new(),
             transport: None,
             context: DefineContext::Submission,

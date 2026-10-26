@@ -9,6 +9,7 @@ use crate::{
     dataset::{Check, Verification, WhereClause, WhereTerm},
     diagnostic::{ConditionCode as C, Diagnostic},
     project_terminology::Catalogue,
+    specification_submission_document::SubmissionMode,
     submission_values::{self as values, Declared, Finding},
 };
 use std::collections::BTreeSet;
@@ -167,7 +168,7 @@ pub(super) fn admit(
             .iter()
             .zip(&clauses)
             .map(|(entry, clause)| (entry.id.name.as_str(), clause));
-        let findings = values::admit(written, name, |where_column| {
+        let findings = values::admit(written, name, SubmissionMode::Validated, |where_column| {
             let index = output
                 .columns()
                 .iter()

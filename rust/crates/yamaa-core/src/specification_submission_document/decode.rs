@@ -12,6 +12,7 @@ const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
 /// A column's governed fields, where a 1.0 specification writes its origin
 /// as `origins` (P-ORIGIN-1).
 const SUBMISSION: &[F] = &[
+    F::KeySequence,
     F::Core,
     F::Mandatory,
     F::Role,
@@ -29,6 +30,7 @@ const SUBMISSION: &[F] = &[
 ];
 /// An entry's fields, with a 1.0 entry's `origins` (P-ORIGIN-1).
 const ENTRY: &[F] = &[
+    F::KeySequence,
     F::Id,
     F::Where,
     F::Label,
@@ -48,6 +50,7 @@ const ENTRY: &[F] = &[
 ];
 /// The metadata fields an entry shares with its column.
 const ENTRY_METADATA: &[F] = &[
+    F::KeySequence,
     F::Core,
     F::Mandatory,
     F::Role,
@@ -382,6 +385,18 @@ impl<'a> Parser<'a> {
             false,
             Some(ScalarSubmissionRule::DatasetSubclass),
         )?;
+        let Some(mode) = self.choice(
+            self.get(node, F::Mode),
+            path.field(F::Mode),
+            SubmissionMode::VALUES,
+            Some(SubmissionMode::Validated),
+            false,
+            None,
+        )?
+        else {
+            return Ok(None);
+        };
+        let artifact = self.text_field(node, F::Artifact, path, TextRule::NonEmpty, false)?;
         let structure = self.text_field(node, F::Structure, path, TextRule::NonEmpty, true)?;
         let repeating = self.boolean(
             self.get(node, F::Repeating),
@@ -409,6 +424,8 @@ impl<'a> Parser<'a> {
             .map(
                 |(((((has_no_data, label), class), structure), repeating), reference_data)| {
                     Dataset {
+                        mode: mode.clone(),
+                        artifact: artifact.clone(),
                         origin,
                         fields: self.fields(node, DATASET),
                         has_no_data,
@@ -640,6 +657,7 @@ impl<'a> Parser<'a> {
         let method = self.method(self.get(node, F::Method), path.field(F::Method))?;
         let comment = self.comment(self.get(node, F::Comment), path.field(F::Comment))?;
         Ok(ColumnSubmission {
+            key_sequence: self.text_field(node, F::KeySequence, path, TextRule::Integer, false)?,
             origin,
             fields: self.fields(node, allowed),
             core,

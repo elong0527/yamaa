@@ -522,6 +522,16 @@
           "x-yamaa-kind": "path",
           "x-yamaa-type": "path"
         },
+        "define_version": {
+          "type": "string",
+          "enum": [
+            "2.0.0",
+            "2.1.11"
+          ],
+          "description": "Define-XML release to generate; omission retains 2.1.11, and 2.0.0 refuses metadata its version cannot represent (DEFINE-29).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "documents": {
           "type": "array",
           "items": {

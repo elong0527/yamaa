@@ -343,8 +343,8 @@ refused before any Define-XML document is composed.
 
 ### PROJECT-15. A project submission composes a specification that declares a run report only with the artifact and inputs that report records
 
-When a project submission composes a section that lists a specification
-declaring `output.report`, it reads that report before any transport file.
+When a project submission composes a section listing a specification with
+validated metadata and `output.report`, it reads that report before any transport file.
 The report's `run` row must record a successful run that wrote the
 specification's `output.path` and as many rows as the artifact holds; the
 artifact must hold rows exactly when `submission.has_no_data` is not declared;
@@ -353,6 +353,9 @@ count the input has now. Any mismatch fails with `stale_artifact`.
 
 Fails: `stale_artifact`.
 Evidence: `negative-stale-artifact`, `rust/crates/yamaa-core/src/submission_staleness.rs::each_mismatch_names_its_reason_and_the_facts_it_compared`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_saved_report_reads_back_its_run_and_its_inputs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_matching_report_composes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_specification_without_a_report_is_not_compared`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stale_ones`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_report_that_records_another_artifact_than_the_section_composes_is_stale`.
+
+The explicit historical metadata export in [DEFINE-30](define-xml.md#define-30)
+makes no claim about current data and does not read these files.
 
 The comparison uses declared identities only, the facts the report records
 under [CHECK-24](../verification.md#check-24), and no timestamp or digest: the

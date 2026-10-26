@@ -1,5 +1,9 @@
 # Submission metadata
 
+This contract describes validated metadata. The explicit historical export
+mode is governed by [DEFINE-30](define-xml.md#define-30); its received
+declarations do not constrain data execution.
+
 This file is a profile: it is optional, and it applies to a specification that
 declares `submission` metadata and to the project file section that
 composes such specifications into a [Define-XML](define-xml.md) document and

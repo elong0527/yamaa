@@ -770,12 +770,23 @@ impl PreparedSpecification {
     /// producer `contracts`, before any source is read: every refusal the
     /// declarations decide, then what binding reads.
     fn from_tree(
-        tree: ast::Spec,
+        mut tree: ast::Spec,
         contracts: Vec<(String, crate::producer_contract::Contract)>,
         functions: Option<&[crate::project_function::Function]>,
         catalogue: Option<&crate::project_terminology::Catalogue>,
         inventory: Option<&crate::submission_inventory::Inventory>,
     ) -> Result<Self, PrepareError> {
+        // Historical declarations describe a received metadata record. They
+        // never add constraints to data execution; explicit verifications,
+        // types, executable keys and all derivations keep their ordinary checks.
+        if tree.submission.as_ref().is_some_and(|metadata| {
+            metadata.mode == crate::specification_submission_document::SubmissionMode::Historical
+        }) {
+            tree.submission = None;
+            for column in &mut tree.columns {
+                column.submission = None;
+            }
+        }
         let spec = &tree;
         // A 1.x specification prepared without a project file, which is when
         // `prepare_tree_linked` gives none of a project's functions, codelists

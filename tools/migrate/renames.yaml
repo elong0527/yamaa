@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 658
-  changes: 89
+  entries: 662
+  changes: 93
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 43
+    new, decided: 47
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7176,6 +7176,50 @@ entries:
   ref: P-STD-1
   reason: Define-XML 2.1 and its schema admit Draft, Provisional and Final; today's list lacks Provisional.
     Additive.
+  field_kind: value
+  convert: {action: none}
+- id: new.project.define_version
+  file_type: project
+  path: <section>.define_version
+  today: null
+  kind: new
+  proposed: define_version
+  decision: decided (D-next, explicit Pilot 3/5 reproduction request, issue 4028)
+  ref: DEFINE-30
+  reason: Explicit opt-in to Define-XML 2.0 or faithful historical declarations; ordinary 2.1 generation and derivation checks keep their defaults.
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.submission.mode
+  file_type: spec
+  path: submission.mode
+  today: null
+  kind: new
+  proposed: mode
+  decision: decided (D-next, explicit Pilot 3/5 reproduction request, issue 4028)
+  ref: DEFINE-30
+  reason: Explicit opt-in to Define-XML 2.0 or faithful historical declarations; ordinary 2.1 generation and derivation checks keep their defaults.
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.submission.artifact
+  file_type: spec
+  path: submission.artifact
+  today: null
+  kind: new
+  proposed: artifact
+  decision: decided (D-next, explicit Pilot 3/5 reproduction request, issue 4028)
+  ref: DEFINE-30
+  reason: Explicit opt-in to Define-XML 2.0 or faithful historical declarations; ordinary 2.1 generation and derivation checks keep their defaults.
+  field_kind: path
+  convert: {action: none}
+- id: new.spec.submission.key_sequence
+  file_type: spec
+  path: columns[].submission.key_sequence
+  today: null
+  kind: new
+  proposed: key_sequence
+  decision: decided (D-next, explicit Pilot 3/5 reproduction request, issue 4028)
+  ref: DEFINE-30
+  reason: Explicit opt-in to Define-XML 2.0 or faithful historical declarations; ordinary 2.1 generation and derivation checks keep their defaults.
   field_kind: value
   convert: {action: none}
 - id: new.project.transport=dataset_ndjson

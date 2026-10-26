@@ -26,12 +26,16 @@ vocabulary!(FieldName {
     InventoryVocabulary => "inventory_vocabulary", Origin => "origin", Method => "method", Source => "source",
     Description => "description", Documents => "documents", Expression => "expression", Text => "text",
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
-    ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard"
+    ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
+    Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence"
 });
+vocabulary!(SubmissionMode { Validated => "validated", Historical => "historical" });
 /// Governed fields share one vocabulary in declaration and execution admission.
 /// These are the dataset fields a specification declares, `standard` among
 /// them (P-STD-1), which its root `metadata` map must not carry (SUB-2).
 pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
+    FieldName::Mode,
+    FieldName::Artifact,
     FieldName::HasNoData,
     FieldName::Label,
     FieldName::Class,
@@ -44,6 +48,7 @@ pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Comment,
 ];
 pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
+    FieldName::KeySequence,
     FieldName::Core,
     FieldName::Mandatory,
     FieldName::Role,
@@ -61,6 +66,7 @@ pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
 /// The fields of one value-level entry: its identity, its where clause, its
 /// description and every column metadata field except `value_level`.
 pub const VALUE_ENTRY_FIELDS: &[FieldName] = &[
+    FieldName::KeySequence,
     FieldName::Id,
     FieldName::Where,
     FieldName::Label,
@@ -294,6 +300,8 @@ impl Finding {
 /// Every class keeps its original normalized mapping order as occurrence facts.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dataset {
+    pub mode: Field<SubmissionMode>,
+    pub artifact: Option<Field<String>>,
     pub origin: Origin,
     pub fields: Vec<Origin>,
     pub has_no_data: Field<bool>,
@@ -320,6 +328,7 @@ pub struct Column {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnSubmission {
+    pub key_sequence: Option<Field<String>>,
     pub origin: Origin,
     pub fields: Vec<Origin>,
     pub core: Option<Field<Core>>,

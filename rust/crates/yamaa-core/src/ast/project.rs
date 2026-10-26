@@ -253,8 +253,37 @@ pub struct Study {
     pub meta: Meta,
 }
 
-/// One submission section (PROJECT-3): its specifications and the metadata
-/// composing them into one Define-XML document.
+/// The selected Define-XML release; omission retains the 2.1 maintenance release.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DefineVersion {
+    V2_0,
+    #[default]
+    V2_1,
+}
+impl DefineVersion {
+    pub const VALUES: &'static [(&'static str, Self)] =
+        &[("2.0.0", Self::V2_0), ("2.1.11", Self::V2_1)];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::V2_0 => "2.0.0",
+            Self::V2_1 => "2.1.11",
+        }
+    }
+    pub fn namespace(self) -> &'static str {
+        match self {
+            Self::V2_0 => "http://www.cdisc.org/ns/def/v2.0",
+            Self::V2_1 => "http://www.cdisc.org/ns/def/v2.1",
+        }
+    }
+    pub fn family(self) -> &'static str {
+        match self {
+            Self::V2_0 => "2.0",
+            Self::V2_1 => "2.1",
+        }
+    }
+}
+
+/// One selected submission and its publication declarations.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Section {
     pub family: Submission,
@@ -265,6 +294,7 @@ pub struct Section {
     pub standards: Vec<ImplementationGuide>,
     /// The Define-XML target, relative to the project file (DEFINE-2).
     pub define: Option<Text>,
+    pub define_version: DefineVersion,
     /// Supporting documents (DEFINE-13).
     pub documents: Vec<SupportingDocument>,
     /// The transport file written for each composed dataset (JSON-1,

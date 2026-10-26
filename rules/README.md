@@ -97,6 +97,10 @@ declared, never inferred. Enforced by
 [SUB-19](profiles/submission.md#sub-19) and
 [INPUT-11](inputs.md#input-11).
 
+Historical exports ([DEFINE-30](profiles/define-xml.md#define-30)) are records
+of received declarations rather than assertions about current derived
+artifacts. They never publish transport files or claim submission context.
+
 ## Rule files
 
 Language rules live in `rules/*.md`, format and file-handling rules in

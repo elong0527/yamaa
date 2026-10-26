@@ -3,8 +3,10 @@
 This file is a profile: it is optional, and it applies only to a build that
 selects an `sdtm`, `adam` or `send` submission section of a project file.
 Such a build composes the section, the study and the submission metadata of the
-specifications the section lists into one deterministic Define-XML 2.1
-document. A domain build never generates a Define-XML document.
+specifications the section lists into one deterministic Define-XML document.
+The default release is 2.1.11; an explicit `define_version: "2.0.0"` selects
+the earlier representation ([DEFINE-29](#define-29)). A domain build never
+generates a Define-XML document.
 
 ## The study document
 
@@ -56,7 +58,7 @@ Two generations with the same captured inputs and `created` produce the same
 bytes. An explicit `created` is a whole-second civil datetime; omission selects
 the current UTC time during preparation, and Save retains that time. An omitted
 `file_oid` is `study.id`, the selected lower-case section key and
-`Define-XML_2.1`, joined by dots. An omitted metadata-version ID is
+`Define-XML_2.1` (or `Define-XML_2.0` for 2.0.0), joined by dots. An omitted metadata-version ID is
 `study.id.section`, and an omitted name is `study.name section metadata`.
 
 Fails: `value_not_permitted`.
@@ -130,7 +132,7 @@ Each `specs` entry names one specification resolved with its parent layers.
 That specification's `domain` supplies the dataset ID and name; the ID is
 unique within the document and supplies every generated identifier for that
 dataset. The entry order is the document's dataset order. Two entries must not
-name the same specification, and two entries must not resolve to the same
+name the same specification, and two validated entries must not resolve to the same
 artifact path.
 
 Fails: `duplicate_dataset_entry`.
@@ -142,7 +144,7 @@ the recommended order of a submission's datasets is a property of the standard
 a study follows rather than of this language, and a study that follows one
 writes its entries in it. A document that described one artifact twice would
 carry two definitions a reader cannot reconcile; two entries naming the same
-specification or resolving to the same artifact path fail with
+specification, or two validated entries resolving to the same artifact path, fail with
 `duplicate_dataset_entry`.
 
 <a id="define-6"></a>
@@ -477,7 +479,7 @@ A declared `Purpose` could only agree with or contradict the derivation.
 
 ### DEFINE-16. A dataset's leaf names its transport file or its artifact, relative to the document and inside its directory
 
-The dataset's `def:leaf` names the file the package carries for that dataset:
+A validated dataset's `def:leaf` names the file the package carries for it:
 its transport file beside the document when the selected section declares
 `transport` ([JSON-1](dataset-json.md#json-1)), and otherwise the artifact its
 specification produces. `xlink:href` is that path relative to the directory
@@ -488,6 +490,10 @@ traversal. A dataset with no data and no transport file has no leaf.
 Fails: `artifact_outside_document`.
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_artifact_outside_the_documents_directory_is_refused_without_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_artifact_outside_the_define_directory_is_refused`.
 
+Historical export instead uses only its literal `submission.artifact` link,
+or no leaf when omitted ([DEFINE-30](#define-30)); its executable output does
+not determine the link.
+
 A document that pointed outside its own directory would describe a file that is
 not in the package it belongs to. Without a transport, an artifact path that
 cannot be expressed relative to the document's directory without a parent
@@ -497,7 +503,7 @@ specification writes it as `artifact`, and the document's path as the project
 writes it as `define`. A transport file is the document's sibling, so its href
 is its file name wherever the artifact is published.
 
-The leaf names a file this language produced: the artifact
+In validated mode, the leaf names a file this language produced: the artifact
 [Output](../output.md) publishes, the Dataset-JSON file
 [Dataset-JSON](dataset-json.md) writes or the SAS Transport file
 [SAS Transport](xpt.md) writes. A document that named any other container would
@@ -714,9 +720,9 @@ the character.
 
 <a id="define-25"></a>
 
-### DEFINE-25. A complete document, valid against the Define-XML 2.1 schema, is published atomically or not at all
+### DEFINE-25. A complete document, valid against the selected Define-XML schema, is published atomically or not at all
 
-The generated document must be valid against the Define-XML 2.1 schema; a
+The generated document must be valid against the selected Define-XML schema; a
 document that is not fails, reporting the schema violation, and the run
 publishes nothing. Publication follows the procedure of
 [OUTPUT-8](../output.md#output-8) exactly: the complete
@@ -836,3 +842,75 @@ submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty
 omitted one does. A project submission refuses a selected section that the project does not declare
 before any Define-XML generation, with `unknown_section`
 ([PROJECT-14](project.md#project-14)).
+
+<a id="define-29"></a>
+
+### DEFINE-29. A section selects its Define-XML release explicitly, retaining 2.1.11 when omitted
+
+A section's `define_version` selects `2.0.0` or `2.1.11`; omission retains
+2.1.11 and its existing bytes. A 2.0 document uses only facts that version
+can represent and requires one Final implementation guide. Declarations
+requiring 2.1 constructs fail before publication.
+
+Fails: `value_not_permitted`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`.
+
+For 2.0 these mappings replace the version-specific fields of the 2.1 tables
+above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
+`StandardName` and `StandardVersion` on `MetaDataVersion`, and a dataset
+`Class` attribute. ADaMIG, SDTMIG and SENDIG are written as ADaM-IG, SDTM-IG
+and SEND-IG. It omits 2.1-only standards, standard references, codelist
+non-standard flags, context and origin sources. Under SDTM and ADaM,
+Collected is written as CRF; Derived, Assigned, Protocol and Predecessor retain their
+names, and Other and Not Available are refused. Under SEND the admitted
+types are Collected, Derived, Other and Not Available, written as COLLECTED,
+DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused.
+
+Multiple guides, terminology releases, a subclass and HasNoData have no
+faithful representation and are refused. An explicit origin source
+is representable only when it is the older type's implicit source:
+Investigator for Collected, Sponsor for Derived, Assigned, Protocol or Other. This
+version choice does not change derivations, ordinary metadata validation or
+the transport encoders.
+
+<a id="define-30"></a>
+
+### DEFINE-30. Historical metadata is a literal record and makes no assertion about current derivations or data
+
+A dataset's explicit `submission.mode: historical` reproduces received
+metadata in Define-XML 2.0 under `context: Other` without transport; omission
+retains validated mode. Historical declarations add no execution constraints;
+executable types, keys and explicit verifications remain active. Composition
+admits closed metadata, resolves every codelist and document reference, and
+requires a schema-valid document. It makes no data-conformance assertion.
+
+Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`.
+
+The historical export requires explicit column `data_type`, `mandatory` and
+labels. Lengths, formats, origins, methods and codelists remain as declared.
+`key_sequence` declares a historical ItemRef key position independently of
+executable `keys`. `artifact` declares a literal relative package link; its
+filename supplies the leaf title. Omission writes no historical artifact
+leaf. Both fields are refused on validated metadata. Historical value-level
+entries inherit the column metadata as ordinary entries do, except key
+positions never inherit.
+
+The current executable output need not share the document's directory, and
+historical composition does not read its run report, artifact or inputs.
+Publication still protects declared inputs and outputs from being overwritten.
+Historical declarations do not request unrelated section specifications for
+inventory or predecessor assertions. Distinct historical datasets may share
+an executable output path; each keeps its own literal metadata and artifact link.
+Value-level where clauses retain structural and output-column name checks,
+but executable types, terminology membership and overlapping row selections
+do not constrain a historical declaration.
+
+Historical codelists, mandatory flags, lengths, origins and value-level
+metadata do not bind execution. They describe received declarations, not the
+current derived artifacts. Column types, executable keys, explicit
+verifications and all other ordinary checks still apply. Output and
+where-clause names remain checked during composition. An independent
+metadata comparison and data audit assess those separate claims. No
+reference XML is read or passed through by this profile, and no transport
+is published or certified.

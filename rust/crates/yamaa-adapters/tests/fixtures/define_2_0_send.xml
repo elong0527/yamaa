@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.0" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="S01.send.Define-XML_2.0" CreationDateTime="2026-09-30T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0">
+  <Study OID="STDY.S01">
+    <GlobalVariables>
+      <StudyName>Independent study</StudyName>
+      <StudyDescription>Submission detector witness</StudyDescription>
+      <ProtocolName>P01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.S01.send" Name="Independent study send metadata" def:DefineVersion="2.0.0" def:StandardName="SEND-IG" def:StandardVersion="3.1">
+      <ItemGroupDef OID="IG.D0" Name="D0" Domain="D0" Purpose="Tabulation" SASDatasetName="D0" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:Class="SPECIAL PURPOSE" def:ArchiveLocationID="LF.D0">
+        <Description>
+          <TranslatedText xml:lang="en">Independent dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.D0.COLL" OrderNumber="1" Mandatory="No" KeySequence="1"/>
+        <ItemRef ItemOID="IT.D0.DER" OrderNumber="2" Mandatory="No"/>
+        <ItemRef ItemOID="IT.D0.OTHER" OrderNumber="3" Mandatory="No"/>
+        <ItemRef ItemOID="IT.D0.NA" OrderNumber="4" Mandatory="No"/>
+        <def:leaf ID="LF.D0" xlink:href="d0.csv">
+          <def:title>d0.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.D0.COLL" Name="COLL" DataType="text" Length="8" SASFieldName="COLL">
+        <Description>
+          <TranslatedText xml:lang="en">COLL</TranslatedText>
+        </Description>
+        <def:Origin Type="COLLECTED">
+          <Description>
+            <TranslatedText xml:lang="en">Original Collected</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.D0.DER" Name="DER" DataType="text" Length="8" SASFieldName="DER">
+        <Description>
+          <TranslatedText xml:lang="en">DER</TranslatedText>
+        </Description>
+        <def:Origin Type="DERIVED">
+          <Description>
+            <TranslatedText xml:lang="en">Original Derived</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.D0.OTHER" Name="OTHER" DataType="text" Length="8" SASFieldName="OTHER">
+        <Description>
+          <TranslatedText xml:lang="en">OTHER</TranslatedText>
+        </Description>
+        <def:Origin Type="OTHER">
+          <Description>
+            <TranslatedText xml:lang="en">Original Other</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.D0.NA" Name="NA" DataType="text" Length="8" SASFieldName="NA">
+        <Description>
+          <TranslatedText xml:lang="en">NA</TranslatedText>
+        </Description>
+        <def:Origin Type="NOT AVAILABLE">
+          <Description>
+            <TranslatedText xml:lang="en">Original Not Available</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>
