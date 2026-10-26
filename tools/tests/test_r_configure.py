@@ -29,6 +29,7 @@ from tools.staging import vendor_crates
 PACKAGE = ROOT / "R/yamaa"
 RSCRIPT = shutil.which("Rscript")
 MAKE = shutil.which("make")
+AR = shutil.which("ar")
 SYSTEM_PATH = "/usr/bin:/bin"
 SH = shutil.which("sh", path=SYSTEM_PATH)
 # The component inventory that the source package carries and R installs.
@@ -929,9 +930,16 @@ class BuildRulesTests(unittest.TestCase):
                 self.assertTrue(os.access(PACKAGE / name, os.X_OK))
 
 
-@unittest.skipIf(MAKE is None or SH is None, "POSIX make and sh are not installed")
+@unittest.skipIf(
+    MAKE is None or SH is None or AR is None, "POSIX make, sh and ar are not installed"
+)
 class RustExportsTests(unittest.TestCase):
     """The Windows DLL link prepares the archive outside R's nested build path."""
+
+    # A Rust 1.86 to 1.95 standard library member for x86_64-pc-windows-gnu:
+    # an empty split-DWARF object, which the static library bundles (#4012).
+    CODE = "yamaa_r-0.yamaa_r.0-cgu.0.rcgu.o"
+    DWO = "std-0.std.0-cgu.0.rcgu.dwo"
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -941,9 +949,10 @@ class RustExportsTests(unittest.TestCase):
         self.temporary.mkdir()
         self.archive = self.root / ("nested-" * 20) / ("install-" * 10) / "libyamaa_r.a"
         self.archive.parent.mkdir(parents=True)
-        self.archive.write_bytes(b"original archive")
+        self.write_archive([self.CODE, self.DWO])
         self.dll = self.root / "yamaa.dll"
         self.record = self.root / "objcopy-directory.txt"
+        self.members = self.root / "objcopy-members.txt"
         self.objcopy = self.root / "objcopy"
         # GNU objcopy extracts archive members beside its input. Model the
         # Windows limit with the long member name that a Rust archive can hold.
@@ -951,13 +960,19 @@ class RustExportsTests(unittest.TestCase):
         self.assertGreater(len(str(self.archive.parent / "sta00000" / member)), 260)
         self.objcopy.write_text(
             f"#!{sys.executable}\n"
-            "import os, sys\nfrom pathlib import Path\n"
+            "import os, subprocess, sys\nfrom pathlib import Path\n"
             "assert sys.argv[1] == '--remove-section=.drectve'\n"
             "archive = Path(sys.argv[2])\n"
             f"Path({str(self.record)!r}).write_text(str(archive.parent))\n"
             f"if len(str(archive.parent / 'sta00000' / {member!r})) >= 260:\n"
             "    raise SystemExit('archive member path exceeds MAX_PATH')\n"
-            "assert archive.read_bytes() == b'original archive'\n"
+            # GNU objcopy refuses an archive member without sections.
+            f"members = subprocess.run([{AR!r}, 't', str(archive)], check=True,\n"
+            "    capture_output=True, text=True).stdout.split()\n"
+            f"Path({str(self.members)!r}).write_text(' '.join(members))\n"
+            "for name in members:\n"
+            "    if name.endswith('.dwo'):\n"
+            "        raise SystemExit(f'the input file {archive}({name}) has no sections')\n"
             "archive.write_bytes(b'without directives')\n"
             "if os.environ.get('OBJCOPY_FAIL') == '1':\n"
             "    raise SystemExit('simulated objcopy failure')\n",
@@ -970,6 +985,15 @@ class RustExportsTests(unittest.TestCase):
             '\ttest "$$(cat "$(RUST_LIB)")" = "without directives" && touch "$@"\n',
             encoding="utf-8",
         )
+
+    def write_archive(self, names):
+        self.archive.unlink(missing_ok=True)
+        members = self.root / "members"
+        members.mkdir(exist_ok=True)
+        for name in names:
+            (members / name).write_bytes(b"code" if name == self.CODE else b"")
+        subprocess.run([AR, "rc", str(self.archive), *names], cwd=members, check=True)
+        self.original = self.archive.read_bytes()
 
     def link(self, failure=False):
         if MAKE is None:
@@ -984,6 +1008,7 @@ class RustExportsTests(unittest.TestCase):
                 f"RUST_LIB={self.archive}",
                 f"SHLIB={self.dll}",
                 f"OBJCOPY={self.objcopy}",
+                f"AR={AR}",
                 str(self.dll),
             ],
             cwd=self.root,
@@ -1001,11 +1026,26 @@ class RustExportsTests(unittest.TestCase):
         self.assertEqual(Path(self.record.read_text()).parent, self.temporary)
         self.assertEqual(list(self.temporary.iterdir()), [])
 
+    def test_objcopy_reads_the_archive_without_its_empty_split_dwarf_members(self):
+        cases = (
+            ("Rust 1.86 to 1.95", [self.CODE, self.DWO]),
+            ("Rust 1.82 to 1.85 and 1.96 onward", [self.CODE]),
+        )
+        for label, names in cases:
+            with self.subTest(case=label):
+                self.write_archive(names)
+                result = self.link()
+                self.assertEqual(result.returncode, 0, f"{label}: {result.stderr}")
+                self.assertEqual(self.members.read_text(), self.CODE, label)
+                self.assertEqual(
+                    self.archive.read_bytes(), b"without directives", label
+                )
+
     def test_a_failed_archive_edit_leaves_the_original_and_links_nothing(self):
         result = self.link(failure=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("simulated objcopy failure", result.stderr)
-        self.assertEqual(self.archive.read_bytes(), b"original archive")
+        self.assertEqual(self.archive.read_bytes(), self.original)
         self.assertFalse(self.dll.exists())
         self.assertEqual(list(self.temporary.iterdir()), [])
 
