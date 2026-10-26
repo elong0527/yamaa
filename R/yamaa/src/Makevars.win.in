@@ -44,11 +44,17 @@ $(SHLIB): $(RUST_LIB) rust_exports
 # links, retaining the archive's code, data, symbols and debug information.
 # objcopy extracts members beside its input; use the temporary directory to
 # keep their paths below Windows' limit in R's deeply nested build directory.
+# Rust 1.86 to 1.95 ship the GNU standard library with an empty split-DWARF
+# member, *.rcgu.dwo, in each rlib, and the static library bundles them.
+# objcopy refuses a member without sections, so delete them first; they hold
+# nothing, and an archive without them is left as it is.
 rust_exports: $(RUST_LIB)
 	set -eu; \
 	exports_dir=$$(mktemp -d); \
 	trap 'rm -rf "$$exports_dir"' EXIT HUP INT TERM; \
 	cp "$(RUST_LIB)" "$$exports_dir/libyamaa_r.a"; \
+	dwo=$$($(AR) t "$$exports_dir/libyamaa_r.a" | sed -n '/\.dwo$$/p'); \
+	if [ -n "$$dwo" ]; then $(AR) d "$$exports_dir/libyamaa_r.a" $$dwo; fi; \
 	$(OBJCOPY) --remove-section=.drectve "$$exports_dir/libyamaa_r.a"; \
 	cp "$$exports_dir/libyamaa_r.a" "$(RUST_LIB)"
 
