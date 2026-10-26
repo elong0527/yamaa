@@ -104,6 +104,36 @@ class HostBindings(unittest.TestCase):
             ],
         )
 
+    def test_the_lint_checks_each_crate_with_default_features_without_them(self):
+        # Seam: the commands the lint runs, which only a mocked run observes.
+        # The crates are the members whose manifests name default features,
+        # but the R binding, which the lint leaves to make test-r (#3966).
+        [featureless] = [
+            command
+            for command in repository_commands("lint")
+            if "--no-default-features" in command
+        ]
+        self.assertEqual(
+            featureless,
+            (
+                "cargo",
+                "clippy",
+                "--locked",
+                "-p",
+                "yamaa-adapters",
+                "-p",
+                "yamaa-application",
+                "-p",
+                "yamaa",
+                "--all-targets",
+                "--no-default-features",
+                "--",
+                "-D",
+                "warnings",
+            ),
+            "feature-less Clippy",
+        )
+
     def test_only_jobs_that_check_the_r_host_install_r(self):
         workflow = support.workflow("ci.yml")
         installs = {

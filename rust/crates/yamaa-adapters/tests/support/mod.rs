@@ -52,8 +52,6 @@ pub fn findings(
     }
 }
 
-pub use scratch::Scratch;
-
 /// Replace exactly one occurrence, so an edit can never silently miss.
 #[track_caller]
 pub fn edit(document: &str, original: &str, replacement: &str) -> String {

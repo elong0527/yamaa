@@ -1741,6 +1741,7 @@ mod table {
         //! Seam, for every test here: codec errors built in memory, nested or
         //! wide error trees, the identity of borrowed values and the order of
         //! opaque barriers, which a case reaches only through a whole run.
+        #[cfg(feature = "parquet")]
         use yamaa_adapters::json;
         use yamaa_adapters::{
             csv_source::{self, TextTableError},

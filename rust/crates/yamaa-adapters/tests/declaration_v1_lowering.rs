@@ -22,10 +22,10 @@ use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
 use yamaa_core::resource::ResourceFailure;
 
 /// A study directory of written files, removed when dropped.
-struct Study(crate::support::Scratch);
+struct Study(crate::support::scratch::Scratch);
 impl Study {
     fn new(files: &[(&str, &str)]) -> Self {
-        let path = crate::support::Scratch::new("v1-lowering");
+        let path = crate::support::scratch::Scratch::new("v1-lowering");
         let study = Self(path.resolved(std::fs::canonicalize));
         for (name, text) in files {
             fs::write(study.0.join(name), text).unwrap();

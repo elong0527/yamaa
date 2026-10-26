@@ -21,7 +21,7 @@
 #![deny(unsafe_code)]
 
 // The adapters' modules, at the paths the modules below name them by.
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 pub(crate) use yamaa_adapters::canonical_path;
 pub(crate) use yamaa_adapters::{
     callback, column_table, csv_artifact, csv_source, dataset_result, decoder, document,

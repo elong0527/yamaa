@@ -10,9 +10,11 @@ HELP = """yamaa repository commands (run from the repository root)
                     no R. Before a push, run it only for a change to generated files,
                     rule cards, schemas, docs generators or Python.
   check             Run lint, repository checks and the three language suites locally.
-  check-lint        Ruff, cargo fmt, Clippy over the workspace except the R binding
-                    and over the fuzz targets. Needs Clippy and rustfmt added to the
-                    pinned Rust toolchain, and a C++ compiler for libFuzzer.
+  check-lint        Ruff, cargo fmt, Clippy over the workspace except the R binding,
+                    with all features and, for the crates that have them, with no
+                    default features, and over the fuzz targets. Needs Clippy and
+                    rustfmt added to the pinned Rust toolchain, and a C++ compiler
+                    for libFuzzer.
   check-repository  Repository/rule/notice validation and a strict generated docs build.
                     The notice check needs rust-src added to the pinned Rust toolchain.
   test-rust         cargo test --locked --workspace without the two host bindings,

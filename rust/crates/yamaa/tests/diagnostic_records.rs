@@ -6,6 +6,7 @@
 //! registry diagnostics -- codes, requirements, ordered spec paths and
 //! structured context -- through `SpecRequest::check` and `SpecRequest::run`
 //! on an in-memory specification, where such literals are allowed.
+#![cfg(feature = "arrow")]
 
 use std::sync::Arc;
 

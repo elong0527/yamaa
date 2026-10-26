@@ -10,7 +10,7 @@
 use crate::support;
 
 use support::odm_files::{cell, column, gzip, ordinals, Header, Tar};
-use support::{edit, Scratch};
+use support::{edit, scratch::Scratch};
 use yamaa_adapters::{
     column_table::ColumnTable,
     odm_xml::{self, Error},
