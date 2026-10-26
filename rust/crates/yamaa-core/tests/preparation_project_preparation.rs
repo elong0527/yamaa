@@ -1,4 +1,9 @@
 //! Preparation contracts: project preparation.
+//!
+//! The seam is `project_preparation::prepare` over the scripted metadata
+//! capture port and decoder of `support::ports`: the order of its captures
+//! and decodes, the original opaque payloads and allocations it keeps, and
+//! the prepared origins, which no replay case or benchmark reports.
 mod preparation {
     mod project_preparation {
         //! Independent application truth over native captures and normalized document fixtures.

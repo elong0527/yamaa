@@ -7,6 +7,10 @@
 //! earlier run captured. Expected artifacts are written here from the authored
 //! inputs: the output declares exactly the input's columns, so each study's
 //! saved CSV is its input text.
+//!
+//! The seam is one `FileSpecification` run through several `RunScope`s, each
+//! with its own `MemoryResolver`, and the sources a scope retains: a case makes
+//! one call on one study and holds no prepared value between runs.
 use std::sync::Arc;
 
 use crate::support::ports::NoFunctions;

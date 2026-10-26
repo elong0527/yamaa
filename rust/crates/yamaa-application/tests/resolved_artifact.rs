@@ -1,4 +1,8 @@
 //! Independent resolution controls over original entry preparation and schema links.
+//!
+//! The seam is the `ResolvedArtifact` that `resolved_artifact::resolve`
+//! returns, its locations, origins and resource roles compared with direct
+//! preparation, and its wire validation: no case operation returns it.
 #![cfg(feature = "yaml")]
 use crate::support::Edit as _;
 use std::fs;

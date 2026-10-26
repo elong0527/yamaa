@@ -1,5 +1,9 @@
 #![cfg(feature = "arrow")]
 //! Independently authored C Data/Stream values and ownership controls.
+//!
+//! The seam is the Arrow bridge itself: C streams built in the test, with
+//! counted drops, misaligned buffers and failing callbacks, imported and
+//! exported through `arrow_bridge`, which no fixture reader produces.
 use arrow_array::{
     new_empty_array, Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray,
     RecordBatch, RecordBatchOptions, RecordBatchReader, StringArray, StringViewArray,

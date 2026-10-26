@@ -1,4 +1,8 @@
 //! Submission resource refusals retain typed facts before accessing held cells.
+//!
+//! The seam is `submission_transport::admit` over a `TableAccess` double
+//! that panics on any schema or cell access, so the order of admission is
+//! observed; no replay case or benchmark can supply such a table.
 use crate::support::submission::{one, project, specification};
 use yamaa_core::{
     diagnostic::ConditionCode,

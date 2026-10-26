@@ -1,4 +1,8 @@
 //! Table contracts: parquet source.
+//!
+//! The seam is `parquet_source::parse` over bytes written or authored field by
+//! field in the test, its typed `Error` and the Arrow layouts it admits, which
+//! neither the benchmark reader nor the host fixtures can write.
 mod table {
     #[cfg(feature = "parquet")]
     mod parquet_source {

@@ -1,5 +1,9 @@
 //! Table contracts: the CSV source profile's parser, and the findings its
 //! refusals report.
+//!
+//! The seam is `csv_source::parse`'s typed result, the parsed records and
+//! each `Error::Profile` cause with its record and field, which neither the
+//! benchmark reader nor the host fixtures reach: they see only diagnostics.
 mod table {
     mod csv_source {
         use yamaa_adapters::csv_source::{parse, CsvSource, Error, Field, ProfileCause};

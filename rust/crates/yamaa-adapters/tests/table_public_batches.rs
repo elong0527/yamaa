@@ -7,6 +7,10 @@
 //! built in batches of 65,536 records, a streamed batch holds at most the
 //! records asked for and never crosses one of those batches, and building a
 //! batch reads each of its cells once.
+//!
+//! The seam is `PublicBatches` over a table that counts its cell reads, and a
+//! consumer that stops pulling, which neither the benchmark reader nor the
+//! host fixtures reach.
 #![cfg(feature = "arrow")]
 
 use std::convert::Infallible;

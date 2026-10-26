@@ -1,5 +1,10 @@
 //! Preparation contracts: dictionary preparation, file preparation,
 //! inheritance and inheritance capture.
+//!
+//! The seam is the resolver and decoder ports, scripted per step: the order
+//! of their calls, the original opaque payloads and arenas they keep, and the
+//! layers `traverse_versioned` and `prepare_versioned` return, which neither
+//! the benchmark reader nor the host fixtures observe.
 mod preparation {
     mod dictionary_preparation {
         //! Independent logical arenas and opaque effects exercise capture ownership, over a 1.0

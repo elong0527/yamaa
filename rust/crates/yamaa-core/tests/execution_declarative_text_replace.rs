@@ -1,4 +1,8 @@
 //! `str_replace` execution contracts.
+//!
+//! The seam is `prepare`'s typed `PrepareError::Limit` and its
+//! `CompilerLimit`, which no run reports; the host-fixture case
+//! `pattern_beyond_the_compiled_size_limit` proves the public report.
 use crate::support;
 
 /// No benchmark compiles a pattern beyond the size limit. This proves the

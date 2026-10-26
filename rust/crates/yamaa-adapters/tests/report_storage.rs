@@ -1,4 +1,8 @@
 //! Report metadata admission and diagnostic replacement through the storage API.
+//!
+//! The seam is `StoredReport` itself: the test admits each case's metadata of
+//! `fixtures/report_metadata.json` and replaces the diagnostics directly,
+//! which no run of the benchmark reader or the host fixtures reaches.
 use yamaa_adapters::{json, json_wire, report_storage::StoredReport};
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic};
 use yamaa_core::json::{Map, Value};

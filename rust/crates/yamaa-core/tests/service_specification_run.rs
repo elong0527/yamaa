@@ -1,4 +1,9 @@
 //! Service contracts: specification run and submission inventory.
+//!
+//! The seam is `specification_run` over scripted resolver, decoder and table
+//! doubles: the order of inspections, captures and decodes, the original
+//! opaque payloads, cached snapshots and the panic fence, which neither the
+//! benchmark reader nor the host fixtures observe.
 mod service {
     mod specification_run {
         //! Fake native ports pin application order without a host runtime or codec.

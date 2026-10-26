@@ -1,4 +1,9 @@
 //! Execution contracts: source diagnostics.
+//!
+//! The seam is `specification_run` over a scripted resolver and decoder
+//! whose payloads are neither Clone, Debug nor Send: the trace of captures
+//! and decodes and the identity of the original payloads, which no replay
+//! case or benchmark observes.
 mod execution {
     mod source_diagnostics {
         //! Actual capture/decoder ordering with payloads that are neither Clone nor Debug nor Send.
