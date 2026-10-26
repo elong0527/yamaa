@@ -856,12 +856,16 @@ above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
 `StandardName` and `StandardVersion` on `MetaDataVersion`, and a dataset
 `Class` attribute. ADaMIG, SDTMIG and SENDIG are written as ADaM-IG, SDTM-IG
 and SEND-IG. It omits 2.1-only standards, standard references, codelist
-non-standard flags, context and origin sources. Collected is written as CRF.
+non-standard flags, context and origin sources. Under SDTM and ADaM,
+Collected is written as CRF; Derived, Assigned, Protocol and Predecessor retain their
+names, and Other and Not Available are refused. Under SEND the admitted
+types are Collected, Derived, Other and Not Available, written as COLLECTED,
+DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused.
 
-Multiple guides, terminology releases, a subclass, HasNoData and Not Available
-have no faithful representation and are refused. An explicit origin source
+Multiple guides, terminology releases, a subclass and HasNoData have no
+faithful representation and are refused. An explicit origin source
 is representable only when it is the older type's implicit source:
-Investigator for Collected, Sponsor for Derived, Assigned or Other. This
+Investigator for Collected, Sponsor for Derived, Assigned, Protocol or Other. This
 version choice does not change derivations, ordinary metadata validation or
 the transport encoders.
 

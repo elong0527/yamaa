@@ -31,7 +31,11 @@ class DefineStage(unittest.TestCase):
             )
             # These independently authored documents are also the application
             # fixture reader's exact-byte expectations for the native writer.
-            for name in ("define_2_0.xml", "define_2_0_historical.xml"):
+            for name in (
+                "define_2_0.xml",
+                "define_2_0_historical.xml",
+                "define_2_0_send.xml",
+            ):
                 legacy_schema.assertValid(
                     etree.parse(
                         str(ROOT / "rust/crates/yamaa-adapters/tests/fixtures" / name),

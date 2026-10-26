@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use yamaa_core::{
     application_issue::{Fault, Step},
     ast,
-    cdisc_vocabulary::{PublishingSet, StandardName},
+    cdisc_vocabulary::{OriginType, PublishingSet, StandardName},
     define_diagnostics::{xml_invalid, xml_whitespace},
     diagnostic::ConditionCode,
     limits::Limits,
@@ -251,6 +251,7 @@ fn item_definition(
     label_path: &str,
     language: &str,
     version: ast::project::DefineVersion,
+    family: Submission,
 ) -> Element {
     let modern = version == ast::project::DefineVersion::V2_1;
     let name = &column.declaration().name.value;
@@ -297,10 +298,10 @@ fn item_definition(
         let mut node = Element::new("def:Origin", &item.path)
             .attr(
                 "Type",
-                if !modern && declared.kind.value.name() == "Collected" {
-                    "CRF"
-                } else {
+                if modern {
                     declared.kind.value.name()
+                } else {
+                    legacy_origin(declared.kind.value, family).expect("validated legacy origin")
                 },
             )
             .optional(
@@ -664,6 +665,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 ),
                 language,
                 section.define_version,
+                section.family,
             );
             if !column.values().is_empty() {
                 item.push(
@@ -872,10 +874,10 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
                 let declared = origin.declaration();
                 let implicit_source = match declared.kind.value.name() {
                     "Collected" => Some("Investigator"),
-                    "Derived" | "Assigned" | "Other" => Some("Sponsor"),
+                    "Derived" | "Assigned" | "Other" | "Protocol" => Some("Sponsor"),
                     _ => None,
                 };
-                if declared.kind.value.name() == "Not Available"
+                if legacy_origin(declared.kind.value, study.section().family).is_none()
                     || origin
                         .source()
                         .is_some_and(|source| Some(source.name()) != implicit_source)
@@ -889,4 +891,27 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
         }
     }
     Ok(())
+}
+
+/// The 2.0 clinical vocabulary and the separate SEND vocabulary. The XSD
+/// leaves Type as text, so validation and rendering share this mapping.
+fn legacy_origin(kind: OriginType, family: Submission) -> Option<&'static str> {
+    if family == Submission::Send {
+        match kind {
+            OriginType::Collected => Some("COLLECTED"),
+            OriginType::Derived => Some("DERIVED"),
+            OriginType::Other => Some("OTHER"),
+            OriginType::NotAvailable => Some("NOT AVAILABLE"),
+            OriginType::Assigned | OriginType::Predecessor | OriginType::Protocol => None,
+        }
+    } else {
+        match kind {
+            OriginType::Collected => Some("CRF"),
+            OriginType::Derived => Some("Derived"),
+            OriginType::Assigned => Some("Assigned"),
+            OriginType::Predecessor => Some("Predecessor"),
+            OriginType::Protocol => Some("Protocol"),
+            OriginType::Other | OriginType::NotAvailable => None,
+        }
+    }
 }

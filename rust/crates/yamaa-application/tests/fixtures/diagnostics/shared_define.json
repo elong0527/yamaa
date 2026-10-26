@@ -1310,6 +1310,81 @@
           "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_1_key_value.xml"
         }
       }
+    },
+    {
+      "case": "define_2_0_refuses_other_origins_for_sdtm",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "codelists:\n- codelists:\n  - data_type: integer\n    id: Legacy\n    items:\n    - decode: One\n      value: 1\n    name: Legacy Values\nsdtm:\n  context: Other\n  define: define.xml\n  define_version: 2.0.0\n  source_system_version: '1.0'\n  specs:\n  - d0.yaml\n  standards:\n  - name: SDTMIG\n    status: Final\n    version: '3.4'\nstudy:\n  description: Submission detector witness\n  id: S01\n  name: Independent study\n  protocol_name: P01\ntype: project\nyamaa: '1.0'\n",
+          "d0.yaml": "base: RAW\ncolumns:\n- derivation: 1.5\n  label: Independent column\n  name: VALUE\n  submission:\n    codelist: Legacy\n    data_type: integer\n    key_sequence: 2\n    length: 8\n    mandatory: false\n    method:\n      description: Original documented transformation\n      name: Historical.VALUE\n    origins:\n    - description: Original known source\n      type: Other\n  type: float\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- VALUE\nmodel: SDTM\noutput:\n  columns:\n  - VALUE\n  path: d0.csv\nsubmission:\n  artifact: legacy.xpt\n  class: SPECIAL PURPOSE\n  label: Independent dataset\n  mode: historical\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "datasets.D0.VALUE.submission.origins"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "2.0 cannot represent this origin type or source"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "define_2_0_refuses_other_origins_for_adam",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "adam:\n  context: Other\n  define: define.xml\n  define_version: 2.0.0\n  source_system_version: '1.0'\n  specs:\n  - d0.yaml\n  standards:\n  - name: ADaMIG\n    status: Final\n    version: '1.1'\ncodelists:\n- codelists:\n  - data_type: integer\n    id: Legacy\n    items:\n    - decode: One\n      value: 1\n    name: Legacy Values\nstudy:\n  description: Submission detector witness\n  id: S01\n  name: Independent study\n  protocol_name: P01\ntype: project\nyamaa: '1.0'\n",
+          "d0.yaml": "base: RAW\ncolumns:\n- derivation: 1.5\n  label: Independent column\n  name: VALUE\n  submission:\n    codelist: Legacy\n    data_type: integer\n    key_sequence: 2\n    length: 8\n    mandatory: false\n    method:\n      description: Original documented transformation\n      name: Historical.VALUE\n    origins:\n    - description: Original known source\n      type: Other\n  type: float\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- VALUE\nmodel: ADaM\noutput:\n  columns:\n  - VALUE\n  path: d0.csv\nsubmission:\n  artifact: legacy.xpt\n  class: SUBJECT LEVEL ANALYSIS DATASET\n  label: Independent dataset\n  mode: historical\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "datasets.D0.VALUE.submission.origins"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "2.0 cannot represent this origin type or source"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "define_2_0_send_origins_use_the_separate_uppercase_vocabulary",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "send:\n  context: Other\n  define: define.xml\n  define_version: 2.0.0\n  source_system_version: '1.0'\n  specs:\n  - d0.yaml\n  standards:\n  - name: SENDIG\n    status: Final\n    version: '3.1'\nstudy:\n  description: Submission detector witness\n  id: S01\n  name: Independent study\n  protocol_name: P01\ntype: project\nyamaa: '1.0'\n",
+          "d0.yaml": "base: RAW\ncolumns:\n- derivation: '''X'''\n  label: COLL\n  name: COLL\n  submission:\n    data_type: text\n    key_sequence: 1\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Collected\n      type: Collected\n  type: str\n- derivation: '''X'''\n  label: DER\n  name: DER\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Derived\n      type: Derived\n  type: str\n- derivation: '''X'''\n  label: OTHER\n  name: OTHER\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Other\n      type: Other\n  type: str\n- derivation: '''X'''\n  label: NA\n  name: NA\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Not Available\n      type: Not Available\n  type: str\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- COLL\nmodel: SEND\noutput:\n  columns:\n  - COLL\n  - DER\n  - OTHER\n  - NA\n  path: d0.csv\nsubmission:\n  artifact: d0.csv\n  class: SPECIAL PURPOSE\n  label: Independent dataset\n  mode: historical\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
+        },
+        "project": "project.yaml",
+        "section": "send",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_send.xml"
+        }
+      }
     }
   ]
 }
