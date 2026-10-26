@@ -53,6 +53,14 @@ CRAN_NO_SUGGESTS_R_VERSIONS = ("devel",)
 # packages and fonts of R's Rd.sty, HTML Tidy and the minimum Rust.
 CRAN_MANUAL_PLATFORMS = ("ubuntu-24.04",)
 CRAN_MANUAL_R_VERSIONS = ("devel",)
+# The same check on Windows with the Rust that CRAN's Windows check builds
+# with, for the GNU host: R-devel, as CRAN's incoming checks run. A Rust
+# release can break the build where neither the minimum nor the pinned Rust
+# does: 1.86 to 1.95 ship that host's standard library with empty
+# split-DWARF members, which objcopy refused in the static library (#4012).
+CRAN_RUST_PLATFORMS = ("windows-2025",)
+CRAN_RUST_R_VERSIONS = ("devel",)
+CRAN_RUST_VERSIONS = ("1.92.0",)
 # The source archives of these hosts that a release publishes, built and
 # installed with the network disabled from their vendored crates (#3030 D55)
 # on every platform, then run on the conformance corpus: on Linux in a
@@ -158,6 +166,11 @@ def coverage():
         "cran_manual": {
             "os": list(CRAN_MANUAL_PLATFORMS),
             "r": list(CRAN_MANUAL_R_VERSIONS),
+        },
+        "cran_rust": {
+            "os": list(CRAN_RUST_PLATFORMS),
+            "r": list(CRAN_RUST_R_VERSIONS),
+            "rust": list(CRAN_RUST_VERSIONS),
         },
         "offline_source": {
             "os": list(OFFLINE_SOURCE_PLATFORMS),
