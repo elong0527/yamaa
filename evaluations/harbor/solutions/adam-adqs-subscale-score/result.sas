@@ -18,7 +18,4 @@ proc sql;
 quit;
 data result; set collected scores; run;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL, AREASND from result;
-quit;
-proc export data=final outfile="/app/output/adqs.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID VISIT PARAMCD PARAM AVAL AREASND) outfile="/app/output/adqs.csv" dbms=csv replace; run;

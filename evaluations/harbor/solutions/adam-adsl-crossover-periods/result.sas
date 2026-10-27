@@ -30,7 +30,4 @@ left join ends2 e on a.STUDYID=e.STUDYID and a.USUBJID=e.USUBJID
 left join firstex f on a.STUDYID=f.STUDYID and a.USUBJID=f.USUBJID and f.EPOCH='TREATMENT 1'
 left join firstex g on a.STUDYID=g.STUDYID and a.USUBJID=g.USUBJID and g.EPOCH='TREATMENT 2'; quit;
 data result; set joined; WASHDUR=.; if not missing(TR01EDT) and not missing(TR02SDT) then WASHDUR=max(0,input(TR02SDT,yymmdd10.)-input(TR01EDT,yymmdd10.)-1); run;
-proc sql;
-  create table final as select STUDYID, USUBJID, TR01SDT, TR01EDT, TR02SDT, TR02EDT, TRT01A, TRT02A, WASHDUR from result;
-quit;
-proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID TR01SDT TR01EDT TR02SDT TR02EDT TRT01A TRT02A WASHDUR) outfile="/app/output/adsl.csv" dbms=csv replace; run;

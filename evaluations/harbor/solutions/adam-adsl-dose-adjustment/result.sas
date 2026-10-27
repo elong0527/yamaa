@@ -35,7 +35,4 @@ proc sql;
   create table result as select a.*, case when b.adjusted=1 then 'Y' when b.records>0 then 'N' else '' end as DOSADJFL from adsl as a left join flags as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID;
 quit;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, DOSADJFL from result;
-quit;
-proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID DOSADJFL) outfile="/app/output/adsl.csv" dbms=csv replace; run;

@@ -18,7 +18,4 @@ data result;
   end;
 run;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, STDT, ENDT, DURW, DURM from result;
-quit;
-proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID STDT ENDT DURW DURM) outfile="/app/output/adsl.csv" dbms=csv replace; run;

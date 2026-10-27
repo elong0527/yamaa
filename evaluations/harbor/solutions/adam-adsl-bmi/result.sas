@@ -14,7 +14,4 @@ data result;
   BMI_FN=BMI;
 run;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI, BMI_FN from result;
-quit;
-proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID HEIGHTCM WEIGHTKG BMI BMI_FN) outfile="/app/output/adsl.csv" dbms=csv replace; run;

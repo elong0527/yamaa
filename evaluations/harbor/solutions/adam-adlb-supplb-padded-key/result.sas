@@ -20,7 +20,4 @@ proc sql;
   select a.*,b.QVAL,b.QVAL as QVAL_NAMED from lb_key as a left join supplb as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.PARENTKEY=b.IDVARVAL;
 quit;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, LBSEQ, QVAL, QVAL_NAMED from result;
-quit;
-proc export data=final outfile="/app/output/adlb.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID LBSEQ QVAL QVAL_NAMED) outfile="/app/output/adlb.csv" dbms=csv replace; run;

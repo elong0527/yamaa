@@ -17,7 +17,4 @@ run;
 proc sql;
 create table completed as select distinct STUDYID,USUBJID from ds where EPOCH='FOLLOW-UP' and DSDECOD='COMPLETED';
 create table result as select a.*,case when not missing(b.USUBJID) then 'Y' else 'N' end as COMPLFL from adsl_raw a left join completed b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID; quit;
-proc sql;
-  create table final as select STUDYID, USUBJID, TRTSDT, COMPLFL from result;
-quit;
-proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID TRTSDT COMPLFL) outfile="/app/output/adsl.csv" dbms=csv replace; run;

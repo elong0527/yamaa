@@ -13,7 +13,4 @@ data result;
   if not missing(AVAL) and not missing(ANRLO) and ANRLO ne 0 then R2ANRLO=round(AVAL/ANRLO,0.0001);
 run;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, PARAMCD, AVAL, ANRLO, R2ANRLO from result;
-quit;
-proc export data=final outfile="/app/output/adlb.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID PARAMCD AVAL ANRLO R2ANRLO) outfile="/app/output/adlb.csv" dbms=csv replace; run;

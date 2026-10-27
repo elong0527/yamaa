@@ -13,7 +13,4 @@ create table counts as select STUDYID,SITENUM,count(*) as ENRLPOP,sum(case when 
 create table arms as select STUDYID,SITENUM,min(ARM) as ARM from adsl where SAFFL='Y' group by STUDYID,SITENUM;
 create table result as select a.STUDYID,a.SITENUM as SITEID,b.ARM,a.SAFPOP,a.ENRLPOP from counts a left join arms b on a.STUDYID=b.STUDYID and a.SITENUM=b.SITENUM;
 quit;
-proc sql;
-  create table final as select STUDYID, SITEID, ARM, SAFPOP, ENRLPOP from result;
-quit;
-proc export data=final outfile="/app/output/clinsite.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID SITEID ARM SAFPOP ENRLPOP) outfile="/app/output/clinsite.csv" dbms=csv replace; run;

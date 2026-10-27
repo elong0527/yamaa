@@ -1,4 +1,4 @@
-Use only opensas v0.6.6 for this task.
+Use only opensas v0.7.1 for this task.
 
 - Write an opensas program to `/app/output/result.sas` that reads the input
   datasets from `/app/input` and writes every requested dataset.
