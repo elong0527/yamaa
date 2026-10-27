@@ -257,6 +257,18 @@
       "issues": []
     },
     {
+      "case": "a_text_column_without_a_length_passes_the_check_on_its_own",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "sdtm", "edits": [{"from": "{core: Perm, length: 3, origins:", "to": "{core: Perm, origins:"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_integer_column_without_a_length_is_refused_on_its_own",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "sdtm", "edits": [{"from": "{core: Req, length: 8, origins:", "to": "{core: Req, origins:"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "submission_length_missing", "rule": "SUB-7", "spec_paths": ["columns.ID.submission"], "context": {"column": "ID", "data_type": "integer", "field": "length"}}]
+    },
+    {
       "case": "an_adam_column_core_the_model_does_not_publish_is_refused",
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "adam", "edits": [{"from": "{core: Perm, mandatory: false, length: 3", "to": "{core: Exp, mandatory: false, length: 3"}]}}, "specification": "spec.yaml"},

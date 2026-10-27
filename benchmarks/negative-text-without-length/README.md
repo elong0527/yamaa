@@ -12,9 +12,11 @@
   code.
 
 **Note:** the country is submitted as text, and text is described with its
-longest length. Neither a declared length nor a checked limit states it, so
-the data definition would lack the length, and the run is rejected before
-any data is read; no artifact is accepted.
+longest length. Neither a declared length nor a checked limit states it, and
+the data definition requests no transport file that would measure it from the
+published values, so the data definition would lack the length. The run
+builds the dataset, and the data definition is refused; no document is
+written.
 
 ## How to fix
 
@@ -30,4 +32,6 @@ submission:
       source: Investigator
 ```
 
-A `max_length` check of 3 on the column would state the same length.
+A `max_length` check of 3 on the column would state the same length. A data
+definition that requests a transport file, such as `transport: dataset_json`,
+takes the longest published value instead.

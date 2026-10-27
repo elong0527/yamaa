@@ -254,10 +254,12 @@ fn admit_counts(
         return;
     }
     // SUB-7: a date or datetime never declares a length, whatever type it is
-    // submitted as.
+    // submitted as. A text column may omit it: whether a published length
+    // replaces it depends on the sections that list the specification, so
+    // composition checks it (SUB-23).
     let length_type =
         !["date", "datetime"].contains(&kind) && ["text", "integer", "float"].contains(&resolved);
-    if length_type && effective.length.is_none() && maxima.is_empty() {
+    if length_type && resolved != "text" && effective.length.is_none() && maxima.is_empty() {
         result.push(finding(
             C::SubmissionLengthMissing,
             path,

@@ -1188,17 +1188,21 @@ impl ColumnAdmission<'_> {
                     None
                 }
             });
-        let needs_length = matches!(
+        let takes_length = matches!(
             data_type,
             DataType::Text | DataType::Integer | DataType::Float
         );
+        // SUB-7: a text column without `length` takes the published length,
+        // which only a transport measures (SUB-24).
+        let needs_length =
+            takes_length && (data_type != DataType::Text || self.section.transport.is_none());
         if needs_length && length.is_none() {
             findings.push(length_finding(
                 ConditionCode::SubmissionLengthMissing,
                 "length",
             ));
         }
-        if !needs_length && metadata.length.is_some() {
+        if !takes_length && metadata.length.is_some() {
             findings.push(length_finding(
                 ConditionCode::SubmissionLengthNotApplicable,
                 "length",

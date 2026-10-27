@@ -306,6 +306,18 @@
       "issues": [{"phase": "validation", "condition": "submission_length_missing", "rule": "SUB-7"}]
     },
     {
+      "case": "a_text_column_without_a_length_composes_under_a_transport",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"remove": ["specs", "0", "columns", "0", "submission", "length"]},
+          {"set": ["project", "sdtm", "transport"], "to": "dataset_json"}
+        ]
+      },
+      "issues": []
+    },
+    {
       "case": "a_date_data_type_takes_no_length",
       "operation": "compose",
       "input": {

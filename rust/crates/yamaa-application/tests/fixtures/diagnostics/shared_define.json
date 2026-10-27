@@ -393,6 +393,25 @@
       }
     },
     {
+      "case": "a_text_column_without_a_length_publishes_its_longest_value",
+      "operation": "define",
+      "input": {
+        "files": {
+          "spec.yaml": {"file": "benchmarks/sdtm-dm-metadata/spec.yaml", "edits": [{"from": "role: Record Qualifier\n      length: 10\n", "to": "role: Record Qualifier\n"}]},
+          "project.yaml": {"file": "benchmarks/sdtm-dm-metadata/project.yaml"},
+          "dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.SITEID']/@Length": ["6"]}},
+        "dm.json": {"select": {"/columns/4/length": ["6"]}}
+      }
+    },
+    {
       "case": "a_collected_origin_without_its_form_is_refused_under_submission",
       "operation": "define",
       "input": {
