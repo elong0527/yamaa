@@ -34,7 +34,8 @@ struct Input {
 
 /// One specification a section lists, with the metadata project operations
 /// read from it. A listing that cannot be read keeps its location and the
-/// findings that explain it, and has no name.
+/// findings that explain it, and has no name; one whose specification cannot
+/// be prepared keeps the `domain` its own file writes as its name.
 #[derive(Clone, Debug)]
 pub struct Listed {
     section: Submission,
@@ -554,9 +555,15 @@ fn read_listing(
                 listed.failure = listing_failure(&listed.listing(), written, &error);
                 return (listed, None);
             }
-            // A specification that cannot be prepared otherwise has no name or
-            // links here; its own check or build reports why.
-            Err(_) => return (listed, None),
+            // A specification that cannot be prepared otherwise, such as one
+            // with a validation finding, keeps the name its own file writes,
+            // so selecting it reports that finding (PROJECT-6); it has no
+            // links here, and its own check or build reports why.
+            Err(_) => {
+                listed.identity = resources.resolve_from(project, written).ok();
+                listed.name = written_name(resources, project, written);
+                return (listed, None);
+            }
         };
     let locate = |resources: &Resources, origin: yamaa_core::resource::WrittenPath<'_>| {
         resources
@@ -606,6 +613,16 @@ fn read_listing(
         .written_output_field_origin("report")
         .and_then(|origin| locate(resources, origin));
     (listed, Some(document))
+}
+
+/// The `domain` the listed file itself writes, read without preparing it: the
+/// name of a listing whose specification cannot be prepared. A `domain` only
+/// a parent layer supplies is not read, so such a listing has no name.
+fn written_name(resources: &mut Resources, project: &str, written: &str) -> Option<String> {
+    let (bytes, _) = resources.capture_metadata_from(project, written).ok()?;
+    let model = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
+    let node = model.field(model.root(), "domain")?;
+    text(&model, node).map(str::to_owned)
 }
 
 /// One specification of a run scope, in run order.

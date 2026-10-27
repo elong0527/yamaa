@@ -123,6 +123,12 @@ Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_sp
 Every project operation reports that finding; a project run or submission then
 builds nothing, and selecting a specification by name fails.
 
+A listed specification that cannot be prepared, such as one with a validation
+finding, is named by the `domain` its own file writes, so it keeps its name
+and selecting it reports those findings ([PROJECT-6](#project-6)). A listing
+whose file cannot be read has no name, nor has one whose `domain` only a
+parent layer supplies when the specification cannot be prepared.
+
 <a id="project-6"></a>
 
 ### PROJECT-6. Selecting a project specification by name accepts only a name the project defines
@@ -135,7 +141,7 @@ resolved exactly as it is when the caller names its file together with the
 project file.
 
 Fails: `unknown_specification_name`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa/tests/project_operations.rs::a_project_run_refuses_a_name_it_did_not_build`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::an_unknown_specification_name_lists_the_available_names_sorted`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa/tests/project_operations.rs::a_listed_specification_with_a_validation_finding_keeps_its_name_and_selects`, `rust/crates/yamaa/tests/project_operations.rs::a_project_run_refuses_a_name_it_did_not_build`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::an_unknown_specification_name_lists_the_available_names_sorted`.
 
 Selecting one specification's run from a project run by name accepts only a
 name of that run. Any other name, one that another section lists included,
