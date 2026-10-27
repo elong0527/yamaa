@@ -135,7 +135,7 @@ submission_section_class:
         type: str
         required: false
         values: [dataset_json, dataset_ndjson, xpt]
-        description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON in its single-object form, dataset_ndjson for its newline-delimited form and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, JSON-4, XPT-1).
+        description: Transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON in its single-object form, dataset_ndjson for its newline-delimited form and xpt for SAS Transport; required under context Submission, and its omission under Other writes only the Define-XML document (DEFINE-4, JSON-1, JSON-4, XPT-1).
     - context:
         type: str
         default: Submission

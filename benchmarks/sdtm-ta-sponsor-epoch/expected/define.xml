@@ -24,8 +24,8 @@
         <ItemRef ItemOID="IT.TA.ELEMENT" OrderNumber="7" Mandatory="No" Role="Synonym Qualifier"/>
         <ItemRef ItemOID="IT.TA.EPOCH" OrderNumber="8" Mandatory="Yes" Role="Timing"/>
         <def:Class Name="TRIAL DESIGN"/>
-        <def:leaf ID="LF.TA" xlink:href="ta.csv">
-          <def:title>ta.csv</def:title>
+        <def:leaf ID="LF.TA" xlink:href="ta.json">
+          <def:title>ta.json</def:title>
         </def:leaf>
       </ItemGroupDef>
       <ItemDef OID="IT.TA.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
@@ -34,19 +34,19 @@
         </Description>
         <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.TA.STUDYID" Name="STUDYID" DataType="text" Length="12" SASFieldName="STUDYID">
+      <ItemDef OID="IT.TA.STUDYID" Name="STUDYID" DataType="text" Length="7" SASFieldName="STUDYID">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.TA.ARMCD" Name="ARMCD" DataType="text" Length="8" SASFieldName="ARMCD">
+      <ItemDef OID="IT.TA.ARMCD" Name="ARMCD" DataType="text" Length="3" SASFieldName="ARMCD">
         <Description>
           <TranslatedText xml:lang="en">Planned Arm Code</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.TA.ARM" Name="ARM" DataType="text" Length="40" SASFieldName="ARM">
+      <ItemDef OID="IT.TA.ARM" Name="ARM" DataType="text" Length="11" SASFieldName="ARM">
         <Description>
           <TranslatedText xml:lang="en">Description of Planned Arm</TranslatedText>
         </Description>
@@ -58,19 +58,19 @@
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.TA.ETCD" Name="ETCD" DataType="text" Length="8" SASFieldName="ETCD">
+      <ItemDef OID="IT.TA.ETCD" Name="ETCD" DataType="text" Length="4" SASFieldName="ETCD">
         <Description>
           <TranslatedText xml:lang="en">Element Code</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.TA.ELEMENT" Name="ELEMENT" DataType="text" Length="40" SASFieldName="ELEMENT">
+      <ItemDef OID="IT.TA.ELEMENT" Name="ELEMENT" DataType="text" Length="22" SASFieldName="ELEMENT">
         <Description>
           <TranslatedText xml:lang="en">Description of Element</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.TA.EPOCH" Name="EPOCH" DataType="text" Length="20" SASFieldName="EPOCH">
+      <ItemDef OID="IT.TA.EPOCH" Name="EPOCH" DataType="text" Length="9" SASFieldName="EPOCH">
         <Description>
           <TranslatedText xml:lang="en">Epoch</TranslatedText>
         </Description>

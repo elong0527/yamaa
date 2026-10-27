@@ -4648,7 +4648,12 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "project_mutations": [],
+          "project_mutations": [
+            [
+              "sdtm:\n",
+              "sdtm:\n  transport: dataset_json\n"
+            ]
+          ],
           "inherit_specification": false,
           "issues": [
             {
@@ -4676,6 +4681,10 @@
             [
               "title: Annotated Case Report Form",
               "title: \"bad\\ttitle\""
+            ],
+            [
+              "sdtm:\n",
+              "sdtm:\n  context: Other\n"
             ]
           ],
           "inherit_specification": false,
@@ -6771,7 +6780,7 @@
         {
           "name": "a_project_path_into_the_file_it_lists",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: CATH\n  name: CATH\n  description: A study\n  protocol_name: CATH-01\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs:\n    - spec.yaml\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: CATH\n  name: CATH\n  description: A study\n  protocol_name: CATH-01\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs:\n    - spec.yaml\n  define: define.xml\n  context: Other\n",
             "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\noutput: {path: adsl.csv, columns: [USUBJID]}\n"
           },
           "call": {
@@ -7224,7 +7233,7 @@
         {
           "name": "a_section_that_lists_two_specifications_of_one_artifact",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n    - dmv2.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n    - dmv2.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "dmv2.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DMV2\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "dm.csv": "DOMAIN,STUDYID,USUBJID\nDM,PAR01,PAR01-941\nDM,PAR01,PAR01-942\n"
@@ -7427,7 +7436,7 @@
         {
           "name": "a_key_that_is_not_an_output_column",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID, SUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: SUBJID, type: str, label: Subject Identifier for the Study, derivation: RAW.SUBJID}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "raw.csv": "STUDYID,USUBJID,SUBJID\nPAR01,PAR01-941,941\nPAR01,PAR01-942,942\n"
           },
@@ -7512,7 +7521,7 @@
         {
           "name": "a_key_that_no_column_declares",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID, SUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
           },
@@ -7597,7 +7606,7 @@
         {
           "name": "a_key_listed_twice",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
           },
@@ -7682,7 +7691,7 @@
         {
           "name": "an_empty_key_list",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: []\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
           },
@@ -7767,7 +7776,7 @@
         {
           "name": "an_output_column_that_no_column_declares",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID, RACE]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
           },
@@ -7852,7 +7861,7 @@
         {
           "name": "an_output_column_listed_twice",
           "files": {
-            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID, DOMAIN]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
             "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
           },

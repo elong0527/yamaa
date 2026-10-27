@@ -109,6 +109,7 @@
           "standards": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}],
           "specs": ["spec.yaml"],
           "define": "define.xml",
+          "context": "Other",
           "source_system_version": "1.0"
         }
       },
@@ -177,6 +178,7 @@
         "base": "study",
         "edits": [
           {"set": ["project", "sdtm", "context"], "to": "Submission"},
+          {"set": ["project", "sdtm", "transport"], "to": "dataset_json"},
           {"set": ["specs", "0", "domain"], "to": "LONGDOMAIN"}
         ]
       },
@@ -677,6 +679,7 @@
         "base": "study",
         "edits": [
           {"set": ["project", "sdtm", "context"], "to": "Submission"},
+          {"set": ["project", "sdtm", "transport"], "to": "dataset_json"},
           {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LIST"},
           {"set": ["terminology"], "to": [{"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-09-30"}, "codelists": [{"id": "LIST", "name": "Independent list", "extensible": true, "alias": "C99079", "items": [{"value": "SCREENING", "alias": "C48262"}, {"value": "X", "extended": true}]}]}]}
         ]
@@ -690,12 +693,19 @@
         "base": "study",
         "edits": [
           {"set": ["project", "sdtm", "context"], "to": "Submission"},
+          {"set": ["project", "sdtm", "transport"], "to": "dataset_json"},
           {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LIST"},
           {"set": ["terminology"], "to": [{"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-09-30"}, "codelists": [{"id": "LIST", "name": "Independent list", "extensible": true, "alias": "C99079", "items": [{"value": "SCREENING"}, {"value": "X", "extended": true}]}]}]}
         ]
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-4", "spec_paths": ["codelists.LIST"]}]
+    },
+    {
+      "case": "a_submission_section_without_a_transport_is_refused_at_its_transport",
+      "operation": "compose",
+      "input": {"base": "study", "edits": [{"set": ["project", "sdtm", "context"], "to": "Submission"}]},
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-4", "spec_paths": ["sdtm.transport"], "context": {"detail": "transport", "field": "transport"}}]
     },
     {
       "case": "a_value_level_entry_selecting_on_a_declared_column_composes",

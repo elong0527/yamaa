@@ -17,3 +17,4 @@ adam:
   # The data definition goes into a package folder, while the dataset stays
   # beside the project.
   define: package/define.xml
+  context: Other

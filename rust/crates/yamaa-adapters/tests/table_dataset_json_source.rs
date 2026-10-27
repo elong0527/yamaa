@@ -325,7 +325,7 @@ mod table {
                     read += 1;
                 }
             }
-            assert_eq!(read, 5, "the five Dataset-JSON goldens");
+            assert_eq!(read, 6, "the six Dataset-JSON goldens");
         }
 
         /// DSJSON-2: a `types` entry may restate the type a `dataType`

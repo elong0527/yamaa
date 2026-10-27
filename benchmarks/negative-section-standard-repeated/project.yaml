@@ -18,3 +18,4 @@ sdtm:
       version: "3.3"
       status: Final
   define: define.xml
+  context: Other

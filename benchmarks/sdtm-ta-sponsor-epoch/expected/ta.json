@@ -1,0 +1,31 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-11T00:00:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "STUDY02.sdtm.Define-XML_2.1.TA",
+  "sourceSystem": {"name": "yamaa", "version": "1.0"},
+  "studyOID": "STDY.STUDY02",
+  "metaDataVersionOID": "MDV.STUDY02.sdtm",
+  "metaDataRef": "define.xml",
+  "itemGroupOID": "IG.TA",
+  "records": 6,
+  "name": "TA",
+  "label": "Trial Arms",
+  "columns": [
+    {"itemOID": "IT.TA.DOMAIN", "name": "DOMAIN", "label": "Domain Abbreviation", "dataType": "string", "length": 2},
+    {"itemOID": "IT.TA.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 7, "keySequence": 1},
+    {"itemOID": "IT.TA.ARMCD", "name": "ARMCD", "label": "Planned Arm Code", "dataType": "string", "length": 3, "keySequence": 2},
+    {"itemOID": "IT.TA.ARM", "name": "ARM", "label": "Description of Planned Arm", "dataType": "string", "length": 11},
+    {"itemOID": "IT.TA.TAETORD", "name": "TAETORD", "label": "Planned Order of Element within Arm", "dataType": "integer", "length": 8, "keySequence": 3},
+    {"itemOID": "IT.TA.ETCD", "name": "ETCD", "label": "Element Code", "dataType": "string", "length": 4},
+    {"itemOID": "IT.TA.ELEMENT", "name": "ELEMENT", "label": "Description of Element", "dataType": "string", "length": 22},
+    {"itemOID": "IT.TA.EPOCH", "name": "EPOCH", "label": "Epoch", "dataType": "string", "length": 9}
+  ],
+  "rows": [
+    ["TA", "STUDY02", "PBO", "Placebo", 1, "SCRN", "Screening", "SCREENING"],
+    ["TA", "STUDY02", "PBO", "Placebo", 2, "PBO", "Placebo", "TREATMENT"],
+    ["TA", "STUDY02", "PBO", "Placebo", 3, "OLE", "Open-label active drug", "EXTENSION"],
+    ["TA", "STUDY02", "ACT", "Active drug", 1, "SCRN", "Screening", "SCREENING"],
+    ["TA", "STUDY02", "ACT", "Active drug", 2, "ACT", "Active drug", "TREATMENT"],
+    ["TA", "STUDY02", "ACT", "Active drug", 3, "OLE", "Open-label active drug", "EXTENSION"]
+  ]
+}

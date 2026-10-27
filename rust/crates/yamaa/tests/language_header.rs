@@ -257,7 +257,7 @@ fn define_study() -> Study {
     let study = Study::new();
     study.write(
         "project.yaml",
-        "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: S01, description: Example study, protocol_name: S01}\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs: [dm.yaml]\n  define: define.xml\n",
+        "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: S01, description: Example study, protocol_name: S01}\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs: [dm.yaml]\n  define: define.xml\n  context: Other\n",
     );
     study.write(
         "dm.yaml",
@@ -568,7 +568,7 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
     let study = Study::new();
     study.write(
         "project.yaml",
-        "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: S01, description: Example study, protocol_name: S01}\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs: [xx.yaml]\n  define: define.xml\n",
+        "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: S01, description: Example study, protocol_name: S01}\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs: [xx.yaml]\n  define: define.xml\n  context: Other\n",
     );
     let spec = |entries: &str| {
         format!(

@@ -36,6 +36,7 @@ sdtm:
   specs:
     - dm.yaml
   define: define.xml
+  context: Other
 "#;
 
     /// DM over one raw input, saving its artifact and its run report.

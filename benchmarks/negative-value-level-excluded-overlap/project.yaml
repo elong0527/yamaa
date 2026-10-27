@@ -1,23 +1,5 @@
-# Fixed creation time is supplied by the submission call in benchmark.yaml.
 yamaa: "1.0"
 type: project
-study:
-  id: LAB02
-  name: LAB02
-  description: Example study testing most samples at a central laboratory
-  protocol_name: LAB-02
-
 sdtm:
   specs:
     - spec.yaml
-  standards:
-    - name: SDTMIG
-      version: "3.4"
-      status: Final
-  define: define.xml
-  documents:
-    - id: acrf
-      kind: annotated_crf
-      link: acrf.pdf
-      title: Annotated Case Report Form
-  source_system_version: "1.0"

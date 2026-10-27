@@ -553,6 +553,8 @@ conditions! {
     XptLastRowBlank => ("output", "xpt_last_row_blank", Some("XPT-10")),
     SubmissionColumnNotOutput => ("validation", "submission_not_output_column", Some("SUB-1")),
     SubmissionCdiscAliasMissing => ("validation", "missing_required_field", Some("DEFINE-4")),
+    // A `Submission` section without the transport a regulator takes (#4050).
+    SubmissionTransportRequired => ("validation", "missing_required_field", Some("DEFINE-4")),
     SubmissionXmlWhitespace => ("validation", "untransportable_text", Some("DEFINE-24")),
     SubmissionXmlInvalid => ("validation", "value_not_permitted", Some("DEFINE-25")),
     SubmissionJsonInvalid => ("validation", "value_not_permitted", Some("JSON-4")),

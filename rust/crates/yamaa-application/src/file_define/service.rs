@@ -344,6 +344,11 @@ impl Application {
         let required = composition::Required::admit(declarations.study.as_ref(), declared)
             .map_err(Failure::Metadata)?;
         let section = required.section;
+        // A `Submission` section without a transport is refused before any
+        // target is located (DEFINE-4).
+        if let Some(finding) = composition::transport_required(section) {
+            return Err(Failure::Metadata(vec![finding]));
+        }
         let define = required.define;
         let identity = environment.source;
         let define_location =

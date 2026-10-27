@@ -1,8 +1,8 @@
 # Trial Arms with a Sponsor-Added Epoch
 
 **Goal:** build the Trial Arms dataset, one record per planned element of
-each arm, carrying `ARM`, `ETCD`, `ELEMENT` and `EPOCH`, and submit it with
-its data-definition document.
+each arm, carrying `ARM`, `ETCD`, `ELEMENT` and `EPOCH`, and submit it as a
+Dataset-JSON file with its data-definition document.
 
 **Input:** the protocol's planned design, one row per element of each arm in
 its planned order.
