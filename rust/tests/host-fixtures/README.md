@@ -168,11 +168,13 @@ error text. These rows too were written from the cards, the templates and
 P-ISSUE-1 before the engine ran.
 
 `read-odm` pairs the installed Python and R `read_odm` suites. Its documents
-are the reader suite's own `odm13.xml` and `odm20.xml`, staged from
+are the reader suite's own XML fixtures, staged from
 `rust/crates/yamaa-adapters/tests/fixtures/odm` as `host-fixtures/odm`; the
 expected cells were read from the documents by hand. `SourceOrdinal` is
 decimal text in the truth (an integer in Python, a double in R) and every
-other cell is text or null. Each refusal holds the one issue row that
+other cell is text or null. The ASCII fixture adds event/form repeats and a
+numeric reference to U+00E9 while preserving empty and explicitly null items;
+both hosts also select it from the TAR archive. Each refusal holds the one issue row that
 `yamaa.Error` or `yamaa_error` carries, and its error text is D39's prefix
 and that issue; `{source}` stands for the source path the test gave. Its
 `files` are sources that are neither document nor archive, which both

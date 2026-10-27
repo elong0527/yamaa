@@ -6,7 +6,8 @@
 //! as strict: one root element, valid characters, names, attribute syntax and
 //! references, line-end and attribute-value normalization, bound prefixes,
 //! unique attributes, valid namespace URIs, a well-formed XML declaration
-//! naming UTF-8, no DOCTYPE, and libxml2's default size and depth bounds.
+//! naming UTF-8 or strictly checked US-ASCII, no DOCTYPE, and libxml2's
+//! default size and depth bounds.
 use super::Fault;
 use quick_xml::events::{BytesPI, Event as Token};
 use std::{
@@ -254,10 +255,12 @@ impl<R: Read> Xml<R> {
                         "XML declaration allowed only at the start of the document",
                     ));
                 }
-                check_declaration(&declaration[3..]).map_err(|error| match error {
-                    Declaration::Malformed(reason) => malformed(position, reason),
-                    Declaration::Encoding(encoding) => Error::Encoding { encoding },
-                })?;
+                let encoding =
+                    check_declaration(&declaration[3..]).map_err(|error| match error {
+                        Declaration::Malformed(reason) => malformed(position, reason),
+                        Declaration::Encoding(encoding) => Error::Encoding { encoding },
+                    })?;
+                self.reader.get_mut().set_encoding(encoding)?;
                 return Ok(Event::Skip);
             }
             Token::DocType(doctype) => {
@@ -797,6 +800,13 @@ enum Declaration {
     Encoding(String),
 }
 
+/// Both encodings use the UTF-8 tokenizer; ASCII adds a source-byte bound.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Encoding {
+    Utf8,
+    Ascii,
+}
+
 fn trim_spaces(text: &str) -> &str {
     text.trim_start_matches([' ', '\t', '\n', '\r'])
 }
@@ -846,9 +856,10 @@ fn pseudo_attribute<'a>(
 }
 
 /// Validate the XML declaration after `xml`: version 1.x, then an optional
-/// encoding that must be UTF-8, then an optional standalone yes or no.
-fn check_declaration(content: &str) -> Result<(), Declaration> {
+/// UTF-8 or US-ASCII encoding, then an optional standalone yes or no.
+fn check_declaration(content: &str) -> Result<Encoding, Declaration> {
     let mut rest = content;
+    let mut admitted = Encoding::Utf8;
     let version = pseudo_attribute(&mut rest, "version", true)?.unwrap_or_default();
     let digits = version.strip_prefix("1.").unwrap_or_default();
     if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -867,7 +878,10 @@ fn check_declaration(content: &str) -> Result<(), Declaration> {
                 "XML declaration encoding name is invalid",
             ));
         }
-        if !encoding.eq_ignore_ascii_case("UTF-8") && !encoding.eq_ignore_ascii_case("UTF8") {
+        if encoding.eq_ignore_ascii_case("US-ASCII") {
+            admitted = Encoding::Ascii;
+        } else if !encoding.eq_ignore_ascii_case("UTF-8") && !encoding.eq_ignore_ascii_case("UTF8")
+        {
             return Err(Declaration::Encoding(encoding.into()));
         }
     }
@@ -883,7 +897,7 @@ fn check_declaration(content: &str) -> Result<(), Declaration> {
             "XML declaration contains unexpected content",
         ));
     }
-    Ok(())
+    Ok(admitted)
 }
 
 /// Processing instructions need a colon-free target other than `xml`. The
@@ -1051,6 +1065,7 @@ pub(super) struct CheckedXml<R> {
     pending: Option<Fault>,
     first: bool,
     bom: bool,
+    encoding: Encoding,
 }
 
 impl<R: Read> CheckedXml<R> {
@@ -1067,7 +1082,33 @@ impl<R: Read> CheckedXml<R> {
             pending: None,
             first: true,
             bom: false,
+            encoding: Encoding::Utf8,
         }
+    }
+
+    /// A declaration arrives after the first buffer was filled. Recheck its
+    /// unread bytes, deferring any fault until the parser reaches that byte.
+    fn set_encoding(&mut self, encoding: Encoding) -> Result<(), Error> {
+        self.encoding = encoding;
+        if encoding == Encoding::Ascii && self.bom {
+            return Err(Fault::Ascii {
+                position: 0,
+                value: UTF8_BOM[0],
+            }
+            .into_error());
+        }
+        // The first scan may already have held an XML character fault back.
+        // Include its first byte so ASCII admission can judge that byte too,
+        // with the same precedence as a later refill in the declared mode.
+        let end = self.end + usize::from(matches!(&self.pending, Some(Fault::Character { .. })));
+        if let Some((index, fault)) =
+            invalid_content(&self.buffer[self.start..end], self.offset, self.encoding)
+        {
+            self.end = self.start + index;
+            self.held = 0;
+            self.pending = Some(fault);
+        }
+        Ok(())
     }
 
     /// Bytes of the UTF-8 byte order mark the tokenizer skips unreported.
@@ -1120,11 +1161,9 @@ impl<R: Read> CheckedXml<R> {
                 incomplete_tail(&self.buffer[..filled])
             };
             let ready = filled - hold;
-            if let Some((index, value)) = invalid_character(&self.buffer[..ready]) {
-                let fault = Fault::Character {
-                    position: self.offset + index as u64,
-                    value,
-                };
+            if let Some((index, fault)) =
+                invalid_content(&self.buffer[..ready], self.offset, self.encoding)
+            {
                 self.end = index;
                 self.pending = Some(fault.clone());
                 return if index == 0 {
@@ -1181,21 +1220,44 @@ fn incomplete_tail(bytes: &[u8]) -> usize {
     }
 }
 
-/// The first byte offset and code of a character outside XML 1.0 `Char`.
+/// The first source fault: an ASCII encoding violation or a character outside
+/// XML 1.0 `Char`, in document order.
 /// Input is UTF-8, so C0 controls are single bytes and U+FFFE/U+FFFF have
 /// fixed three-byte forms.
-fn invalid_character(bytes: &[u8]) -> Option<(usize, u32)> {
+fn invalid_content(bytes: &[u8], offset: u64, encoding: Encoding) -> Option<(usize, Fault)> {
     let mut index = 0;
     while index < bytes.len() {
         let byte = bytes[index];
+        let position = offset + index as u64;
+        if encoding == Encoding::Ascii && !byte.is_ascii() {
+            return Some((
+                index,
+                Fault::Ascii {
+                    position,
+                    value: byte,
+                },
+            ));
+        }
         if byte < 0x20 && !matches!(byte, b'\t' | b'\n' | b'\r') {
-            return Some((index, byte.into()));
+            return Some((
+                index,
+                Fault::Character {
+                    position,
+                    value: byte.into(),
+                },
+            ));
         }
         if byte == 0xEF
             && bytes.get(index + 1) == Some(&0xBF)
             && matches!(bytes.get(index + 2), Some(0xBE | 0xBF))
         {
-            return Some((index, 0xFFFE + u32::from(bytes[index + 2] - 0xBE)));
+            return Some((
+                index,
+                Fault::Character {
+                    position,
+                    value: 0xFFFE + u32::from(bytes[index + 2] - 0xBE),
+                },
+            ));
         }
         index += 1;
     }
