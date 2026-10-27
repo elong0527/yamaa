@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="CATH.adam.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.CATH">
+    <GlobalVariables>
+      <StudyName>CATH</StudyName>
+      <StudyDescription>Laboratory Analysis Dataset</StudyDescription>
+      <ProtocolName>CATH-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CATH.adam" Name="CATH adam metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.ADaMIG" Name="ADaMIG" Type="IG" Version="1.1" Status="Final"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.ADLB" Name="ADLB" Purpose="Analysis" SASDatasetName="ADLB" Repeating="Yes" IsReferenceData="No" def:Structure="One record per subject per parameter per date" def:ArchiveLocationID="LF.ADLB" def:StandardOID="STD.ADaMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Laboratory Analysis Dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.ADLB.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADLB.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.ADLB.PARAMCD" OrderNumber="3" Mandatory="Yes" KeySequence="3"/>
+        <ItemRef ItemOID="IT.ADLB.PARAM" OrderNumber="4" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADLB.ADT" OrderNumber="5" Mandatory="Yes" KeySequence="4"/>
+        <ItemRef ItemOID="IT.ADLB.TRT01A" OrderNumber="6" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADLB.ADY" OrderNumber="7" Mandatory="Yes" MethodOID="MT.ADLB.ADY"/>
+        <ItemRef ItemOID="IT.ADLB.AVAL" OrderNumber="8" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADLB.AVALU" OrderNumber="9" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADLB.ABLFL" OrderNumber="10" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADLB.BASE" OrderNumber="11" Mandatory="No" MethodOID="MT.ADLB.BASE"/>
+        <ItemRef ItemOID="IT.ADLB.CHG" OrderNumber="12" Mandatory="No" MethodOID="MT.ADLB.CHG"/>
+        <def:Class Name="BASIC DATA STRUCTURE"/>
+        <def:leaf ID="LF.ADLB" xlink:href="adlb.xpt">
+          <def:title>adlb.xpt</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.ADLB.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">LB.STUDYID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.USUBJID" Name="USUBJID" DataType="text" Length="7" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">LB.USUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.PARAMCD" Name="PARAMCD" DataType="text" Length="3" SASFieldName="PARAMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Parameter Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">LB.LBTESTCD</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.PARAM" Name="PARAM" DataType="text" Length="24" SASFieldName="PARAM">
+        <Description>
+          <TranslatedText xml:lang="en">Parameter</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.ADT" Name="ADT" DataType="integer" Length="8" SASFieldName="ADT" def:DisplayFormat="DATE9.">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Date</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">LB.LBDTC</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.TRT01A" Name="TRT01A" DataType="text" Length="7" SASFieldName="TRT01A">
+        <Description>
+          <TranslatedText xml:lang="en">Actual Treatment for Period 01</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.TRT01A</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.ADY" Name="ADY" DataType="integer" Length="8" SASFieldName="ADY">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Relative Day</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.AVAL" Name="AVAL" DataType="float" Length="8" SignificantDigits="1" SASFieldName="AVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">LB.LBSTRESN</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.AVALU" Name="AVALU" DataType="text" Length="3" SASFieldName="AVALU">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Value Unit</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">LB.LBSTRESU</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.ABLFL" Name="ABLFL" DataType="text" Length="1" SASFieldName="ABLFL">
+        <Description>
+          <TranslatedText xml:lang="en">Baseline Record Flag</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">LB.LBBLFL</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.BASE" Name="BASE" DataType="float" Length="8" SignificantDigits="1" SASFieldName="BASE">
+        <Description>
+          <TranslatedText xml:lang="en">Baseline Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADLB.CHG" Name="CHG" DataType="float" Length="8" SignificantDigits="1" SASFieldName="CHG">
+        <Description>
+          <TranslatedText xml:lang="en">Change from Baseline</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <MethodDef OID="MT.ADLB.ADY" Name="ADLB.ADY" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Study day of ADT relative to TRTSDT, with no day zero.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.ADLB.BASE" Name="ADLB.BASE" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Repeat the flagged baseline value within subject and parameter.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.ADLB.CHG" Name="ADLB.CHG" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis value minus baseline; missing when no baseline exists.</TranslatedText>
+        </Description>
+      </MethodDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

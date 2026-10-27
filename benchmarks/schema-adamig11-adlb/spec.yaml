@@ -1,0 +1,205 @@
+yamaa: '1.0'
+type: spec
+model: ADaM
+domain: ADLB
+keys:
+- STUDYID
+- USUBJID
+- PARAMCD
+- ADT
+input:
+  LB:
+    path: input/lb.csv
+    types:
+      LBDTC: date
+      LBSTRESN: float
+  ADSL:
+    path: input/adsl.csv
+    types:
+      TRTSDT: date
+    key:
+    - STUDYID
+    - USUBJID
+base: LB
+
+output:
+  path: adlb.csv
+  columns:
+  - STUDYID
+  - USUBJID
+  - PARAMCD
+  - PARAM
+  - ADT
+  - TRT01A
+  - ADY
+  - AVAL
+  - AVALU
+  - ABLFL
+  - BASE
+  - CHG
+
+columns:
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: LB.STUDYID
+  submission:
+    core: Req
+    mandatory: true
+    length: 80
+    origins:
+    - type: Predecessor
+      description: LB.STUDYID
+
+- name: USUBJID
+  type: str
+  label: Unique Subject Identifier
+  derivation: LB.USUBJID
+  submission:
+    core: Req
+    mandatory: true
+    length: 80
+    origins:
+    - type: Predecessor
+      description: LB.USUBJID
+
+- name: PARAMCD
+  type: str
+  label: Parameter Code
+  derivation: LB.LBTESTCD
+  submission:
+    core: Req
+    mandatory: true
+    length: 80
+    origins:
+    - type: Predecessor
+      description: LB.LBTESTCD
+
+- name: PARAM
+  type: str
+  label: Parameter
+  derivation: '''Alanine Aminotransferase'''
+  submission:
+    core: Req
+    mandatory: true
+    length: 80
+    origins:
+    - type: Assigned
+
+- name: ADT
+  type: date
+  label: Analysis Date
+  derivation: LB.LBDTC
+  submission:
+    core: Cond
+    mandatory: true
+    origins:
+    - type: Predecessor
+      description: LB.LBDTC
+
+- name: TRT01A
+  type: str
+  label: Actual Treatment for Period 01
+  derivation: ADSL.TRT01A
+  submission:
+    core: Cond
+    mandatory: true
+    length: 80
+    origins:
+    - type: Predecessor
+      description: ADSL.TRT01A
+
+- name: TRTSDT
+  type: date
+  derivation: ADSL.TRTSDT
+
+- name: ADY
+  type: int
+  label: Analysis Relative Day
+  derivation:
+    study_day:
+      source: ADT
+      reference: TRTSDT
+  submission:
+    core: Perm
+    mandatory: true
+    length: 8
+    origins:
+    - type: Derived
+    method: Study day of ADT relative to TRTSDT, with no day zero.
+
+- name: AVAL
+  type: float
+  label: Analysis Value
+  derivation: LB.LBSTRESN
+  submission:
+    core: Cond
+    mandatory: true
+    length: 8
+    significant_digits: 1
+    origins:
+    - type: Predecessor
+      description: LB.LBSTRESN
+
+- name: AVALU
+  type: str
+  label: Analysis Value Unit
+  derivation: LB.LBSTRESU
+  submission:
+    core: Perm
+    mandatory: false
+    length: 80
+    origins:
+    - type: Predecessor
+      description: LB.LBSTRESU
+
+- name: ABLFL
+  type: str
+  label: Baseline Record Flag
+  derivation: LB.LBBLFL
+  submission:
+    core: Cond
+    mandatory: false
+    length: 80
+    origins:
+    - type: Predecessor
+      description: LB.LBBLFL
+
+- name: BASE
+  type: float
+  label: Baseline Value
+  derivation:
+    aggregate:
+      filter: ABLFL = 'Y'
+      group_by:
+      - STUDYID
+      - USUBJID
+      - PARAMCD
+      expr: ONLY(AVAL)
+  submission:
+    core: Cond
+    mandatory: false
+    length: 8
+    significant_digits: 1
+    origins:
+    - type: Derived
+    method: Repeat the flagged baseline value within subject and parameter.
+
+- name: CHG
+  type: float
+  label: Change from Baseline
+  derivation: AVAL - BASE
+  submission:
+    core: Cond
+    mandatory: false
+    length: 8
+    significant_digits: 1
+    origins:
+    - type: Derived
+    method: Analysis value minus baseline; missing when no baseline exists.
+
+submission:
+  label: Laboratory Analysis Dataset
+  class: BASIC DATA STRUCTURE
+  structure: One record per subject per parameter per date
+  repeating: true

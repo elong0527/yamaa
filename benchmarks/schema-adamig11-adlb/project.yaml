@@ -1,0 +1,18 @@
+yamaa: '1.0'
+type: project
+study:
+  id: CATH
+  name: CATH
+  description: Laboratory Analysis Dataset
+  protocol_name: CATH-01
+
+adam:
+  specs:
+  - spec.yaml
+  standards:
+  - name: ADaMIG
+    version: '1.1'
+    status: Final
+  define: define.xml
+  transport: xpt
+  source_system_version: '1.0'
