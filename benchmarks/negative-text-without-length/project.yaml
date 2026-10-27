@@ -1,0 +1,25 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: YAMAA-01
+  name: YAMAA-01
+  description: Example study submitting its demographics
+  protocol_name: YAMAA-01
+
+# The section requests no transport, so no published length stands in for
+# the one the specification omits.
+sdtm:
+  specs:
+    - spec.yaml
+  standards:
+    - name: SDTMIG
+      version: "3.4"
+      status: Final
+  define: define.xml
+  context: Other
+  documents:
+    - id: acrf
+      kind: annotated_crf
+      link: acrf.pdf
+      title: Annotated Case Report Form

@@ -1,7 +1,7 @@
 phase: validation
 condition: submission_length_missing
 spec_paths:
-  - columns.COUNTRY.submission
+  - sdtm.specs[0].columns.COUNTRY.submission
 rule: SUB-7
 context:
   column: COUNTRY

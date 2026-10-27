@@ -229,15 +229,28 @@ alone the model in `model` when only the model refuses the type.
 
 `length` is the maximum expected value length, as the submission standard
 defines the term: a property of the column declaration, not of the data one run
-produced, and a positive integer. It is required when `data_type` resolves to
-`text`, `integer` or `float`, unless [SUB-8](#sub-8) derives it, and must not
-be declared otherwise, nor ever on a `date` or `datetime` column.
-`significant_digits` counts digits after the decimal point, is a non-negative
-integer, and is required when `data_type` resolves to `float` and must not be
-declared otherwise.
+produced, and a positive integer. Unless [SUB-8](#sub-8) derives it, it is
+required for an `integer` or `float` data type, and for `text` unless every
+section listing the specification requests a transport; it is never declared
+otherwise, nor on a `date` or `datetime` column. `significant_digits`, a
+non-negative count of digits after the decimal point, is declared exactly for
+`float`.
 
 Fails: `submission_length_missing`, `submission_length_not_applicable`, `submission_length_invalid`.
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_text_column_without_a_length_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_entry_inheriting_its_columns_full_metadata_passes_the_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_length_below_any_integer_is_invalid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_length_of_zero_is_invalid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::per_value_significant_digits_below_any_integer_are_invalid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_date_data_type_refutes_the_inherited_length`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::per_value_significant_digits_are_inapplicable_to_text`.
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_text_column_without_a_length_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_text_column_without_a_length_composes_under_a_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_text_column_without_a_length_publishes_its_longest_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_text_column_without_a_length_passes_the_check_on_its_own`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_integer_column_without_a_length_is_refused_on_its_own`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_entry_inheriting_its_columns_full_metadata_passes_the_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_length_below_any_integer_is_invalid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_length_of_zero_is_invalid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::per_value_significant_digits_below_any_integer_are_invalid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_per_value_date_data_type_refutes_the_inherited_length`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::per_value_significant_digits_are_inapplicable_to_text`.
+
+A `text` column, or a value-level entry, may omit `length` when every
+submission section of the project file that lists its specification requests
+a `transport`: its length is then the published length
+[SUB-24](#sub-24) measures, and no keyword states it. A declared `length`
+keeps its meaning, the bound [SUB-8](#sub-8) enforces and the document's
+`Length` without a transport. Whether a section requests a transport is known
+only to the project file, so an omitted text `length` is checked when a
+document composes the specification ([SUB-23](#sub-23)): a section without a
+transport that lists it fails with `submission_length_missing` there, and a
+specification checked without its project file reports nothing. An `integer`
+or `float` column always declares `length`, and a `float` column
+`significant_digits`.
 
 The other submission types carry fixed-form values, so a length for such a type
 restates that form. A `date` or `datetime` column has the fixed length its
@@ -1016,6 +1029,8 @@ Checked when the specification is validated on its own:
 Checked when a document composes the specification:
 
 - the section's listing and the guide it binds ([SUB-3](#sub-3));
+- the `length` a `text` column or value-level entry omits ([SUB-7](#sub-7)),
+  which the section's transport supplies;
 - the annotated case report form references of [SUB-17](#sub-17), which name
   the section's documents and depend on its `context`, and the predecessor
   labels of [SUB-20](#sub-20), which read every section's specifications;
@@ -1053,8 +1068,10 @@ column or value-level definition carries a `Length`. A SUPP-- dataset is one
 whose name begins with `SUPP`: its lengths come from its own values alone and
 do not lengthen another dataset's column. A dataset declared to have no data
 contributes no value, and a missing value occupies no bytes. An `int` or
-`float` column keeps its declared `length`. Without a transport no artifact is
-read, and the declared `length` is the document's `Length`.
+`float` column keeps its declared `length`. A `text` column that omits
+`length` ([SUB-7](#sub-7)) has no bound, only its published length. Without a
+transport no artifact is read, and the declared `length` is the document's
+`Length`.
 
 <a id="sub-25"></a>
 
