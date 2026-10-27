@@ -408,7 +408,7 @@ mod xml_strictness {
                 )
                 .into_bytes(),
                 "source_odm_xml_unsupported",
-                "must be encoded as UTF-8, not ISO-8859-1",
+                "must be encoded as UTF-8 or US-ASCII, not ISO-8859-1",
             ),
             (
                 [&[0xFF, 0xFE][..], &utf16].concat(),
@@ -456,6 +456,59 @@ mod xml_strictness {
             "Value=\"\u{7f}\u{85}\"",
         ));
         assert_eq!(cell(&controls, "Value", 0).as_deref(), Some("\u{7f}\u{85}"));
+    }
+
+    /// Seam: bytes a case's text files cannot hold or place: a Latin-1 byte,
+    /// which is not UTF-8 text, a byte past the 64 KiB the byte source checks
+    /// at once, and the bytes of characters it refused before the
+    /// declaration was read. Each refusal's offset counts the 41 bytes of the
+    /// declaration and the 46 of `wrap`'s `ODM` start tag before its body.
+    #[test]
+    fn a_us_ascii_document_refuses_each_byte_outside_ascii() {
+        let declared = |body: &[u8]| {
+            let document = wrap("|");
+            let (before, after) = document.split_once('|').unwrap();
+            [
+                &br#"<?xml version="1.0" encoding="US-ASCII"?>"#[..],
+                before.as_bytes(),
+                body,
+                after.as_bytes(),
+            ]
+            .concat()
+        };
+        let non_ascii = |position, value: u8| odm_items::Error::Malformed {
+            position,
+            reason: format!("non-ASCII byte 0x{value:02X} in a US-ASCII document"),
+        };
+        let long = format!("<!--{}\u{e9}-->", "x".repeat(70_000));
+        for (label, body, expected) in [
+            (
+                "a Latin-1 byte",
+                &b"<!-- caf\xE9 -->"[..],
+                non_ascii(95, 0xE9),
+            ),
+            (
+                "a byte past the first 64 KiB",
+                long.as_bytes(),
+                non_ascii(70_091, 0xC3),
+            ),
+            (
+                "the bytes of U+FFFE",
+                "\u{fffe}".as_bytes(),
+                non_ascii(87, 0xEF),
+            ),
+            (
+                "a control character, which is ASCII",
+                b"\x01",
+                odm_items::Error::Malformed {
+                    position: 87,
+                    reason: "invalid XML character U+0001".into(),
+                },
+            ),
+        ] {
+            let read = read_bytes("ascii.xml", &declared(body), &Options::default());
+            assert_eq!(read.map(|table| table.rows()), Err(expected), "{label}");
+        }
     }
 
     /// Seam: generated tokens at and over the ten-megabyte and 50,000-byte
@@ -822,6 +875,31 @@ mod archives {
             .file("odm.xml", ODM_13.as_bytes())
             .unterminated();
         assert_eq!(read_tar(&global, &Options::default()).unwrap().rows(), 3);
+    }
+
+    /// Seam: TAR archives built in the test. A member is admitted as a plain
+    /// document is: one declared US-ASCII reads its character references,
+    /// and a byte outside ASCII is refused at its offset in the member.
+    #[test]
+    fn a_us_ascii_member_admits_only_ascii_bytes() {
+        let declared = edit(ODM_13, r#"encoding="UTF-8""#, r#"encoding="US-ASCII""#);
+        let referenced = edit(&declared, "2026-01-02\"/>", "caf&#233;\"/>");
+        let archive = Tar::new().file("odm.xml", referenced.as_bytes()).finish();
+        assert_eq!(
+            read_tar(&archive, &Options::default()).map(|table| column(&table, "Value")),
+            Ok(vec![Some("caf\u{e9}".into()), Some(String::new()), None]),
+            "a character reference in a US-ASCII member"
+        );
+        let accented = edit(&declared, "2026-01-02\"/>", "caf\u{e9}\"/>");
+        let archive = Tar::new().file("odm.xml", accented.as_bytes()).finish();
+        assert_eq!(
+            read_tar(&archive, &Options::default()).map(|table| table.rows()),
+            Err(odm_items::Error::Malformed {
+                position: accented.find("caf\u{e9}").unwrap() as u64 + 3,
+                reason: "non-ASCII byte 0xC3 in a US-ASCII document".into(),
+            }),
+            "a non-ASCII byte in a US-ASCII member"
+        );
     }
 
     /// Seam: TAR archives built in the test.

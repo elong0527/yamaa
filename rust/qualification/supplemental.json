@@ -82,6 +82,16 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm/odm13_us_ascii.xml",
+      "family": "odm",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-application/tests/fixtures/diagnostics/odm_reads_xml.json",
+        "python/tests/installed/installed_read_odm.py",
+        "R/yamaa/tests/read_odm.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-application/tests/fixtures/text_template_reference.json",
       "family": "text",
       "level": "component",

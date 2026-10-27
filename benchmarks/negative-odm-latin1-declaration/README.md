@@ -13,9 +13,9 @@ Latin-1 (ISO-8859-1) character encoding instead of UTF-8.
 
 The same bytes spell different accented letters in Latin-1 and in UTF-8, so
 a site or investigator name read in the wrong encoding comes out as a
-different name. Only UTF-8 is read, and the file states that it is not
-UTF-8, so the input is rejected while it is read, and no artifact is
-accepted.
+different name. Only UTF-8 is read, or plain ASCII that declares itself
+US-ASCII, and the file states that it is Latin-1, so the input is rejected
+while it is read, and no artifact is accepted.
 
 ## How to fix
 

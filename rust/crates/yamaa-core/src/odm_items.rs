@@ -176,7 +176,7 @@ pub enum Error {
     Malformed { position: u64, reason: String },
     #[error("DOCTYPE declarations are not supported")]
     Doctype,
-    #[error("ODM XML must be encoded as UTF-8, not {encoding}")]
+    #[error("ODM XML must be encoded as UTF-8 or US-ASCII, not {encoding}")]
     Encoding { encoding: String },
     #[error("{0}")]
     Document(Document),
@@ -678,7 +678,7 @@ mod tests {
                 Error::Encoding {
                     encoding: "UTF-16".into(),
                 },
-                "ODM XML must be encoded as UTF-8, not UTF-16",
+                "ODM XML must be encoded as UTF-8 or US-ASCII, not UTF-16",
             ),
             (Error::Document(Document::Root), "document root must be ODM"),
             (

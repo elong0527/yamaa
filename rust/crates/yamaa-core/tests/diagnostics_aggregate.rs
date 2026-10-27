@@ -506,7 +506,7 @@ mod diagnostics {
                             encoding: "UTF-16".into(),
                         },
                         "edc/odm.xml uses XML the reader does not support: ODM XML must be encoded as \
-                         UTF-8, not UTF-16",
+                         UTF-8 or US-ASCII, not UTF-16",
                     ),
                     (
                         Error::Document(Document::Namespace { namespace: None }),

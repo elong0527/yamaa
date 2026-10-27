@@ -55,9 +55,13 @@ The Windows implementations use retained handles in [windows_file.rs](../../src/
 
 `odm/odm13.xml` and `odm/odm20.xml` are the two documents of the retired Python
 ODM reader suite, kept byte for byte, so the cases ported into `odm_xml.rs`
-apply the same edits to the same text. The installed Python and R `read_odm`
-suites read the same two files, staged as `host-fixtures/odm`, against the
-`read-odm` family of `rust/tests/host-fixtures/cases.json`.
+apply the same edits to the same text. `odm/odm13_us_ascii.xml` was written by
+hand for the US-ASCII admission of ODM-1: an export that declares US-ASCII and
+writes each character outside ASCII as a character reference, with two repeats
+of one item group, an explicit null, a present empty value and an absent one.
+The installed Python and R `read_odm` suites read the three files, staged as
+`host-fixtures/odm`, against the `read-odm` family of
+`rust/tests/host-fixtures/cases.json`.
 TAR and gzip inputs are written at test time by `support/odm_files.rs`; no
 binary archive is committed. Expected values are the ones the Python suite
 asserted or ones read from the documents by hand; no Rust output generated them.

@@ -6,7 +6,8 @@
 //! as strict: one root element, valid characters, names, attribute syntax and
 //! references, line-end and attribute-value normalization, bound prefixes,
 //! unique attributes, valid namespace URIs, a well-formed XML declaration
-//! naming UTF-8, no DOCTYPE, and libxml2's default size and depth bounds.
+//! naming UTF-8, or US-ASCII over ASCII bytes only, no DOCTYPE, and
+//! libxml2's default size and depth bounds.
 use super::Fault;
 use quick_xml::events::{BytesPI, Event as Token};
 use std::{
@@ -254,10 +255,17 @@ impl<R: Read> Xml<R> {
                         "XML declaration allowed only at the start of the document",
                     ));
                 }
-                check_declaration(&declaration[3..]).map_err(|error| match error {
-                    Declaration::Malformed(reason) => malformed(position, reason),
-                    Declaration::Encoding(encoding) => Error::Encoding { encoding },
-                })?;
+                let encoding =
+                    check_declaration(&declaration[3..]).map_err(|error| match error {
+                        Declaration::Malformed(reason) => malformed(position, reason),
+                        Declaration::Encoding(encoding) => Error::Encoding { encoding },
+                    })?;
+                if encoding == Encoding::Ascii {
+                    self.reader
+                        .get_mut()
+                        .require_ascii()
+                        .map_err(Fault::into_error)?;
+                }
                 return Ok(Event::Skip);
             }
             Token::DocType(doctype) => {
@@ -797,6 +805,14 @@ enum Declaration {
     Encoding(String),
 }
 
+/// The encodings a declaration may name. A US-ASCII document is read as the
+/// UTF-8 it is a subset of, once every byte of it is ASCII.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Encoding {
+    Utf8,
+    Ascii,
+}
+
 fn trim_spaces(text: &str) -> &str {
     text.trim_start_matches([' ', '\t', '\n', '\r'])
 }
@@ -846,9 +862,12 @@ fn pseudo_attribute<'a>(
 }
 
 /// Validate the XML declaration after `xml`: version 1.x, then an optional
-/// encoding that must be UTF-8, then an optional standalone yes or no.
-fn check_declaration(content: &str) -> Result<(), Declaration> {
+/// encoding that must be UTF-8 or US-ASCII, compared ASCII case-insensitively,
+/// then an optional standalone yes or no. Gives the encoding it names, UTF-8
+/// when it names none.
+fn check_declaration(content: &str) -> Result<Encoding, Declaration> {
     let mut rest = content;
+    let mut named = Encoding::Utf8;
     let version = pseudo_attribute(&mut rest, "version", true)?.unwrap_or_default();
     let digits = version.strip_prefix("1.").unwrap_or_default();
     if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -867,7 +886,10 @@ fn check_declaration(content: &str) -> Result<(), Declaration> {
                 "XML declaration encoding name is invalid",
             ));
         }
-        if !encoding.eq_ignore_ascii_case("UTF-8") && !encoding.eq_ignore_ascii_case("UTF8") {
+        if encoding.eq_ignore_ascii_case("US-ASCII") {
+            named = Encoding::Ascii;
+        } else if !encoding.eq_ignore_ascii_case("UTF-8") && !encoding.eq_ignore_ascii_case("UTF8")
+        {
             return Err(Declaration::Encoding(encoding.into()));
         }
     }
@@ -883,7 +905,7 @@ fn check_declaration(content: &str) -> Result<(), Declaration> {
             "XML declaration contains unexpected content",
         ));
     }
-    Ok(())
+    Ok(named)
 }
 
 /// Processing instructions need a colon-free target other than `xml`. The
@@ -1036,9 +1058,9 @@ fn is_authority(authority: &[u8]) -> bool {
 }
 
 /// A byte stream that refuses characters outside XML 1.0, a UTF-16 or
-/// UTF-32 encoding and bytes beyond an optional limit. A refusal surfaces
-/// only when the parser reaches its position, keeping refusals in document
-/// order.
+/// UTF-32 encoding, bytes beyond an optional limit and, once the document is
+/// declared US-ASCII, bytes outside ASCII. A refusal surfaces only when the
+/// parser reaches its position, keeping refusals in document order.
 pub(super) struct CheckedXml<R> {
     inner: R,
     buffer: Box<[u8]>,
@@ -1051,6 +1073,7 @@ pub(super) struct CheckedXml<R> {
     pending: Option<Fault>,
     first: bool,
     bom: bool,
+    ascii: bool,
 }
 
 impl<R: Read> CheckedXml<R> {
@@ -1067,6 +1090,7 @@ impl<R: Read> CheckedXml<R> {
             pending: None,
             first: true,
             bom: false,
+            ascii: false,
         }
     }
 
@@ -1077,6 +1101,28 @@ impl<R: Read> CheckedXml<R> {
         } else {
             0
         }
+    }
+
+    /// Refuse every byte outside ASCII, as a document declared US-ASCII
+    /// must. The parser has read the declaration, which is ASCII, so the
+    /// bytes left to check are a byte order mark before it and the bytes it
+    /// has not read. Those already checked are checked again under the new
+    /// rule, up to and including the start of a refused character.
+    fn require_ascii(&mut self) -> Result<(), Fault> {
+        self.ascii = true;
+        if self.bom {
+            return Err(Fault::Byte {
+                position: 0,
+                value: UTF8_BOM[0],
+            });
+        }
+        let refused = usize::from(matches!(self.pending, Some(Fault::Character { .. })));
+        let unread = &self.buffer[self.start..self.end + refused];
+        if let Some((index, fault)) = first_fault(unread, self.offset, true) {
+            self.end = self.start + index;
+            self.pending = Some(fault);
+        }
+        Ok(())
     }
 
     fn refill(&mut self) -> io::Result<()> {
@@ -1120,11 +1166,9 @@ impl<R: Read> CheckedXml<R> {
                 incomplete_tail(&self.buffer[..filled])
             };
             let ready = filled - hold;
-            if let Some((index, value)) = invalid_character(&self.buffer[..ready]) {
-                let fault = Fault::Character {
-                    position: self.offset + index as u64,
-                    value,
-                };
+            if let Some((index, fault)) =
+                first_fault(&self.buffer[..ready], self.offset, self.ascii)
+            {
                 self.end = index;
                 self.pending = Some(fault.clone());
                 return if index == 0 {
@@ -1178,6 +1222,33 @@ fn incomplete_tail(bytes: &[u8]) -> usize {
         1
     } else {
         0
+    }
+}
+
+/// The first refusal in `bytes`, which begin at source offset `offset`: its
+/// index there and its fault. That is a character outside XML 1.0 `Char`,
+/// or, under `ascii`, a byte outside ASCII, which U+FFFE and U+FFFF begin
+/// with.
+fn first_fault(bytes: &[u8], offset: u64, ascii: bool) -> Option<(usize, Fault)> {
+    let byte = ascii
+        .then(|| bytes.iter().position(|byte| !byte.is_ascii()))
+        .flatten();
+    match (byte, invalid_character(bytes)) {
+        (Some(index), character) if character.is_none_or(|(other, _)| index <= other) => Some((
+            index,
+            Fault::Byte {
+                position: offset + index as u64,
+                value: bytes[index],
+            },
+        )),
+        (_, Some((index, value))) => Some((
+            index,
+            Fault::Character {
+                position: offset + index as u64,
+                value,
+            },
+        )),
+        (_, None) => None,
     }
 }
 

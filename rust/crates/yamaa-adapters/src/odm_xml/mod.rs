@@ -24,6 +24,7 @@
 //! - XML. The document is UTF-8 and well formed under XML 1.0 and Namespaces
 //!   1.0: one root, bound prefixes, valid characters and references, valid
 //!   namespace URIs, no DOCTYPE and so no entities beyond the predefined five.
+//!   A document declared US-ASCII holds only ASCII bytes.
 //!   Text nodes, attribute values, comments and processing instructions stay
 //!   below 10,000,000 bytes, names within 50,000 bytes and nesting within
 //!   `max_xml_depth` and 256 elements, the bounds libxml2 enforces by default.
@@ -157,7 +158,15 @@ pub fn read_input(bytes: &[u8]) -> Result<ColumnTable, Error> {
 enum Fault {
     Archive(&'static str),
     Limit(yamaa_core::odm_items::Limit),
-    Character { position: u64, value: u32 },
+    Character {
+        position: u64,
+        value: u32,
+    },
+    /// A byte outside ASCII in a document declared US-ASCII.
+    Byte {
+        position: u64,
+        value: u8,
+    },
     Encoding(&'static str),
 }
 
@@ -175,6 +184,10 @@ impl Fault {
             Self::Character { position, value } => Error::Malformed {
                 position,
                 reason: format!("invalid XML character U+{value:04X}"),
+            },
+            Self::Byte { position, value } => Error::Malformed {
+                position,
+                reason: format!("non-ASCII byte 0x{value:02X} in a US-ASCII document"),
             },
             Self::Encoding(encoding) => Error::Encoding {
                 encoding: encoding.into(),

@@ -143,7 +143,7 @@
       "case": "odm_xml_in_another_encoding_than_utf8_is_xml_the_reader_does_not_support",
       "operation": "odm_read",
       "input": {"refusal": {"encoding": {"encoding": "UTF-16"}}, "path": "edc/odm.xml"},
-      "issues": [{"phase": "ingest", "condition": "source_odm_xml_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "ODM XML must be encoded as UTF-8, not UTF-16"}}]
+      "issues": [{"phase": "ingest", "condition": "source_odm_xml_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "ODM XML must be encoded as UTF-8 or US-ASCII, not UTF-16"}}]
     },
     {
       "case": "an_odm_root_without_a_namespace_is_an_unsupported_document",
