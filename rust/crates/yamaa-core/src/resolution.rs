@@ -449,13 +449,13 @@ impl<'a> Live<'a> {
             }
         }
         for item in &spec.intermediates {
-            if !item.checks.is_empty()
-                || (spec.lacks_key(item) && item.pairs())
+            if item.checks.is_empty() && spec.lacks_key(item) && !item.pairs() {
+                self.refused.insert(item.id.name.clone());
+            } else if !item.checks.is_empty()
+                || spec.lacks_key(item)
                 || (rename_only(spec, item) && !item.dataset.name.is_empty())
             {
                 self.intermediates.insert(item.id.name.clone());
-            } else if spec.lacks_key(item) {
-                self.refused.insert(item.id.name.clone());
             }
         }
         if let Some(base) = &spec.rows.base {
