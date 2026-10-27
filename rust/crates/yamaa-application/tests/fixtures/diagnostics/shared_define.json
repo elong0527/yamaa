@@ -233,6 +233,24 @@
       }
     },
     {
+      "case": "a_submission_section_without_a_transport_is_refused_before_its_artifact_meets_the_define_target",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {
+          "spec.yaml": [{"from": "path: dm.csv", "to": "path: define.xml"}],
+          "project.yaml": [{"from": "  transport: dataset_json\n", "to": ""}]
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-4", "spec_paths": ["sdtm.transport"], "context": {"detail": "transport", "field": "transport"}}
+      ],
+      "saved": {}
+    },
+    {
       "case": "a_submission_section_without_a_transport_is_refused_before_its_artifact_is_located",
       "operation": "define",
       "input": {
@@ -1145,7 +1163,7 @@
       "operation": "define",
       "input": {
         "files": {
-          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Submission\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Submission\n  transport: dataset_json\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
           "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
@@ -1160,18 +1178,6 @@
         "context"
       ],
       "issues": [
-        {
-          "phase": "validation",
-          "condition": "missing_required_field",
-          "rule": "DEFINE-4",
-          "spec_paths": [
-            "sdtm.transport"
-          ],
-          "context": {
-            "detail": "transport",
-            "field": "transport"
-          }
-        },
         {
           "phase": "validation",
           "condition": "value_not_permitted",

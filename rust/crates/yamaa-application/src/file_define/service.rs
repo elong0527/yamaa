@@ -14,7 +14,6 @@ use crate::{
 use std::sync::Arc;
 use yamaa_core::{
     ast::{self, Transport},
-    cdisc_vocabulary::DefineContext,
     define::{self, ResourceObservation},
     diagnostic::ConditionCode,
     limits::Limits,
@@ -345,6 +344,11 @@ impl Application {
         let required = composition::Required::admit(declarations.study.as_ref(), declared)
             .map_err(Failure::Metadata)?;
         let section = required.section;
+        // A `Submission` section without a transport is refused before any
+        // target is located (DEFINE-4).
+        if let Some(finding) = composition::transport_required(section) {
+            return Err(Failure::Metadata(vec![finding]));
+        }
         let define = required.define;
         let identity = environment.source;
         let define_location =
@@ -420,9 +424,6 @@ impl Application {
                 // Historical links come only from the received declaration,
                 // never from the current executable output (DEFINE-30).
                 None if view.historical() => (None, None),
-                // Composition refuses a `Submission` section without a
-                // transport (DEFINE-4), so no artifact link is resolved for it.
-                None if section.context == DefineContext::Submission => (None, None),
                 None => {
                     let href = reads
                         .package_reference(&artifact, &define_location)
