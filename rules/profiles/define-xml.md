@@ -851,13 +851,19 @@ before any Define-XML generation, with `unknown_section`
 
 ### DEFINE-29. A section selects its Define-XML release explicitly, retaining 2.1.11 when omitted
 
-A section's `define_version` selects `2.0.0` or `2.1.11`; omission retains
-2.1.11 and its existing bytes. A 2.0 document uses only facts that version
+A section's `define_version` selects `2.0.0` or any published 2.1 release
+from `2.1.0` through `2.1.11`; omission retains 2.1.11 and its existing bytes.
+The document preserves the selected release in `def:DefineVersion`. All 2.1
+releases use the v2.1 namespace and the maintained 2.1 enumeration schema,
+as [CDISC recommends](https://www.cdisc.org/standards/data-exchange/define-xml/define-xml-v2-1)
+when it updates that schema's controlled terminology.
+Unpublished versions and incomplete version strings are refused.
+A 2.0 document uses only facts that version
 can represent and requires one Final implementation guide. Declarations
 requiring 2.1 constructs fail before publication.
 
 Fails: `value_not_permitted`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
 above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
