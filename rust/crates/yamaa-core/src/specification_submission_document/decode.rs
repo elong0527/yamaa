@@ -414,7 +414,16 @@ impl<'a> Parser<'a> {
         // A guide name such as `SDTMIG-MD` is no identifier; the section's
         // `standards` resolves it (DEFINE-8).
         let standard = self.text_field(node, F::Standard, path, TextRule::NonEmpty, false)?;
+        let non_standard = self.boolean(
+            self.get(node, F::NonStandard),
+            path.field(F::NonStandard),
+            Some(false),
+            false,
+        )?;
         let comment = self.comment(self.get(node, F::Comment), path.field(F::Comment))?;
+        let Some(non_standard) = non_standard else {
+            return Ok(None);
+        };
         Ok(has_no_data
             .zip(label)
             .zip(class)
@@ -437,6 +446,7 @@ impl<'a> Parser<'a> {
                         reference_data,
                         domain,
                         standard,
+                        non_standard,
                         comment,
                     }
                 },

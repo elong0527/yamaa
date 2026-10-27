@@ -155,12 +155,13 @@ The selected section's `standards` lists one or more implementation guides
 of type `IG` with distinct names, each belonging to the selected section's
 model. Each represented dataset is bound to the guide its specification's
 `submission.standard` names, or to the first when it names none
-([DEFINE-8](#define-8)). The `sdtm`, `adam` and `send` sections produce
-separate documents, and each document carries the controlled-terminology
-standards cited by its bound codelists' sources.
+([DEFINE-8](#define-8)); a dataset declaring `non_standard: true` is bound to
+none ([SUB-4](submission.md#sub-4)). The `sdtm`, `adam` and `send` sections
+produce separate documents, and each document carries the
+controlled-terminology standards cited by its bound codelists' sources.
 
 Fails: `standard_model_mismatch`, `duplicate_identifier`.
-Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-section-standard-model`, `negative-section-standard-repeated`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guides_by_their_place_in_standards`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_section_guide_of_another_model_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_section_guide_listed_twice_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
+Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-section-standard-model`, `negative-section-standard-repeated`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guides_by_their_place_in_standards`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_section_guide_of_another_model_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_section_guide_listed_twice_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_non_standard_dataset_is_marked_non_standard_and_names_no_guide`.
 
 Composition checks every entry of the list. A guide outside the section's
 model fails with `standard_model_mismatch` at `<section>.standards[<i>].name`,
@@ -172,10 +173,12 @@ the later entry's `name`, naming it in `identifier`. A section without
 The document lists every guide of the section in declaration order, whether
 or not a dataset binds it, before the terminology standards, and each
 `ItemGroupDef` names its dataset's bound guide in `def:StandardOID`
-([DEFINE-15](#define-15)). Names are unique within a section, so a guide's
-generated identifier stays `STD.<name>` ([DEFINE-9](#define-9)). A guide's
-`status`, `Draft`, `Provisional` or `Final`, is its `Status`
-([DEFINE-13](#define-13)).
+([DEFINE-15](#define-15)). A non-standard dataset's `ItemGroupDef` carries
+`def:IsNonStandard="Yes"` instead, so each carries exactly one of the two, as
+a codelist with items does ([DEFINE-20](#define-20)). Names are unique within
+a section, so a guide's generated identifier stays `STD.<name>`
+([DEFINE-9](#define-9)). A guide's `status`, `Draft`, `Provisional` or
+`Final`, is its `Status` ([DEFINE-13](#define-13)).
 
 [SUB-3](submission.md#sub-3) checks the bound guide against the model the
 specification declares, which a 1.0 section's listing makes the section's,
@@ -452,7 +455,7 @@ table below lists. `Purpose` is derived from the model alone, not declared:
 `submission.domain`, defaulting to the specification's `domain`, and is omitted
 for `ADaM`.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::the_ae_metadata_only_document_has_its_fixed_time_and_independent_structure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::the_vs_metadata_only_document_has_its_fixed_time_and_independent_structure`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::the_ae_metadata_only_document_has_its_fixed_time_and_independent_structure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::the_vs_metadata_only_document_has_its_fixed_time_and_independent_structure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_non_standard_dataset_is_marked_non_standard_and_names_no_guide`.
 
 | Attribute or child | Source |
 |---|---|
@@ -465,7 +468,8 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diag
 | `IsReferenceData` | `Yes` when `submission.reference_data`, else `No` |
 | `def:Structure` | `submission.structure` |
 | `def:ArchiveLocationID` | the dataset's generated leaf identifier, when it has a leaf |
-| `def:StandardOID` | the generated identifier of the guide [DEFINE-6](#define-6) binds the dataset to |
+| `def:StandardOID` | the generated identifier of the guide [DEFINE-6](#define-6) binds the dataset to; omitted for a non-standard dataset |
+| `def:IsNonStandard` | `Yes` when `submission.non_standard`, else omitted |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
 | `def:HasNoData` | `Yes` when `submission.has_no_data`, else omitted |
 | `Description` | `submission.label` |
@@ -759,8 +763,8 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
 - `arm:AnalysisResultDisplays`: an analysis-results metadata design
 - Split datasets and their `Alias` domain description: a specification that
   produces one dataset in several files
-- `def:IsNonStandard` on a dataset or column: a conformance-profile rule
-  defining non-standard
+- `def:IsNonStandard` on a column: the supplemental qualifier dataset a
+  non-standard variable belongs in under `Submission`
 - A comment on a standard, codelist, or metadata version: a shared comment
   identifier space
 
@@ -853,7 +857,7 @@ can represent and requires one Final implementation guide. Declarations
 requiring 2.1 constructs fail before publication.
 
 Fails: `value_not_permitted`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
 above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
@@ -866,12 +870,12 @@ names, and Other and Not Available are refused. Under SEND the admitted
 types are Collected, Derived, Other and Not Available, written as COLLECTED,
 DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused.
 
-Multiple guides, terminology releases, a subclass and HasNoData have no
-faithful representation and are refused. An explicit origin source
-is representable only when it is the older type's implicit source:
-Investigator for Collected, Sponsor for Derived, Assigned, Protocol or Other. This
-version choice does not change derivations, ordinary metadata validation or
-the transport encoders.
+Multiple guides, terminology releases, a subclass, HasNoData and a
+non-standard dataset have no faithful representation and are refused. An
+explicit origin source is representable only when it is the older type's
+implicit source: Investigator for Collected, Sponsor for Derived, Assigned,
+Protocol or Other. This version choice does not change derivations, ordinary
+metadata validation or the transport encoders.
 
 <a id="define-30"></a>
 

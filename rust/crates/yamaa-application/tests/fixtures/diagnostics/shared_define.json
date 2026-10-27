@@ -1312,6 +1312,53 @@
       }
     },
     {
+      "case": "a_non_standard_dataset_is_marked_non_standard_and_names_no_guide",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [ze.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  context: Other\n  source_system_version: '1.0'\n",
+          "ze.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: ZE\nkeys: [ZETERM]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: ze.csv, columns: [ZETERM]}\nsubmission: {label: Eye examinations, class: FINDINGS, structure: One record per examination, repeating: true, non_standard: true}\ncolumns:\n  - name: ZETERM\n    type: str\n    label: Examination name\n    derivation: \"'SLIT LAMP EXAM'\"\n    submission: {core: Exp, length: 14, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_1_non_standard.xml"
+        }
+      }
+    },
+    {
+      "case": "define_2_0_refuses_a_non_standard_dataset",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, non_standard: true}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "datasets.D0.submission.non_standard"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "2.0 has no IsNonStandard declaration"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "define_2_0_refuses_other_origins_for_sdtm",
       "operation": "define",
       "input": {

@@ -539,6 +539,8 @@ conditions! {
     SubmissionAnnotatedCrfMultiplicity => ("validation", "value_not_permitted", Some("DEFINE-14")),
     SubmissionDuplicateDataset => ("validation", "duplicate_dataset_entry", Some("DEFINE-5")),
     SubmissionReferenceRepeating => ("validation", "reference_data_repeating_conflict", Some("SUB-4")),
+    // A non-standard dataset that also selects a section guide (#4023).
+    SubmissionNonStandardBound => ("validation", "value_not_permitted", Some("SUB-4")),
     SubmissionNoDataComment => ("validation", "submission_metadata_missing", Some("DEFINE-17")),
     SubmissionTransportEmpty => ("output", "transport_dataset_empty", Some("JSON-3")),
     SubmissionLabelInvalid => ("validation", "transport_label_invalid", Some("XPT-5")),

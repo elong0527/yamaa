@@ -88,18 +88,18 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 662
-  changes: 93
+  entries: 663
+  changes: 94
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 47
+    new, decided: 48
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
     value, decided: 5
   conditions: 20
   paths: 13
-  reserved: 22
+  reserved: 21
 transforms:
   header: replace schema_version with yamaa (same version text, quoted) and type
   environment_to_function_files: 'merge each function''s python and r definitions into one type: function
@@ -7222,6 +7222,17 @@ entries:
   reason: Explicit opt-in to Define-XML 2.0 or faithful historical declarations; ordinary 2.1 generation and derivation checks keep their defaults.
   field_kind: value
   convert: {action: none}
+- id: new.spec.submission.non_standard
+  file_type: spec
+  path: submission.non_standard
+  today: null
+  kind: new
+  proposed: non_standard
+  decision: decided (D-next, owner request on issue 4023; the D58 reserved spelling)
+  ref: SUB-4
+  reason: A custom SDTM or SEND domain is marked def:IsNonStandard instead of claiming a guide in def:StandardOID; omission keeps every existing document.
+  field_kind: value
+  convert: {action: none}
 - id: new.project.transport=dataset_ndjson
   file_type: project
   path: <section>.transport
@@ -7903,11 +7914,6 @@ reserved:
   ref: P-SUPP-1
   decision: decided (D58)
   meaning: Overrides of the derivable SUPP-- name and IDVAR.
-- spelling: 'submission: {non_standard: true}'
-  where: a dataset
-  ref: P-SUPP-1
-  decision: decided (D58)
-  meaning: 'A custom domain or a non-ADaM analysis dataset: def:IsNonStandard, no def:StandardOID.'
 - spelling: 'submission: {split: {by: COLUMN, datasets: {NAME: [V, ...]}}}'
   where: a dataset
   ref: P-SUPP-1

@@ -159,8 +159,9 @@ pub struct ValueDefinition {
 pub struct Dataset {
     pub(crate) id: String,
     pub(crate) domain: String,
-    /// The name of the section guide that binds the dataset (DEFINE-6).
-    pub(crate) standard: String,
+    /// The name of the section guide that binds the dataset, none for a
+    /// non-standard dataset (DEFINE-6).
+    pub(crate) standard: Option<String>,
     pub(crate) metadata: spec::Dataset,
     pub(crate) columns: Vec<Column>,
     pub(crate) href: Option<String>,
@@ -263,9 +264,9 @@ impl Dataset {
     }
     /// The name of the implementation guide that binds the dataset: the
     /// section guide its `submission.standard` selects, or the section's
-    /// first (DEFINE-6, DEFINE-8).
-    pub fn standard(&self) -> &str {
-        &self.standard
+    /// first, and none when it declares `non_standard` (DEFINE-6, DEFINE-8).
+    pub fn standard(&self) -> Option<&str> {
+        self.standard.as_deref()
     }
     /// The dataset's composed submission metadata.
     pub fn metadata(&self) -> &spec::Dataset {
@@ -1838,13 +1839,17 @@ fn compose_datasets(
             );
             continue;
         };
-        let standard = bound_standard(
-            section.family,
-            guides,
-            dataset.standard.as_ref(),
-            &format!("{path}.submission.standard"),
-            findings,
-        );
+        // A non-standard dataset binds no guide (DEFINE-6); one that also
+        // selects a guide fails in `admit_dataset` instead (SUB-4).
+        let standard = (!dataset.non_standard.value).then(|| {
+            bound_standard(
+                section.family,
+                guides,
+                dataset.standard.as_ref(),
+                &format!("{path}.submission.standard"),
+                findings,
+            )
+        });
         admit_dataset(section, known, dataset, &path, &id, findings);
         let tabulation = dataset.class.value.tabulation();
         let output = doc.field(doc.root(), "output");
@@ -2067,6 +2072,21 @@ fn admit_dataset(
             .with("dataset", id),
         );
     }
+    if let Some(standard) = dataset
+        .standard
+        .as_ref()
+        .filter(|_| dataset.non_standard.value)
+    {
+        findings.push(
+            Finding::cause(
+                ConditionCode::SubmissionNonStandardBound,
+                &format!("{path}.submission.standard"),
+                id,
+            )
+            .with("value", standard.value.as_str())
+            .with("non_standard", true),
+        );
+    }
     let model = section_model(section.family).name();
     if let Some(domain) = dataset
         .domain
@@ -2080,6 +2100,17 @@ fn admit_dataset(
                 id,
             )
             .with("value", domain.value.as_str())
+            .with("model", model),
+        );
+    }
+    if dataset.non_standard.value && section.family == Submission::Adam {
+        findings.push(
+            Finding::cause(
+                ConditionCode::SubmissionAdamField,
+                &format!("{path}.submission.non_standard"),
+                id,
+            )
+            .with("value", true)
             .with("model", model),
         );
     }

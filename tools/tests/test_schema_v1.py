@@ -157,6 +157,9 @@ EXPECTED = {
     "new.spec.submission.key_sequence": [
         Field("submission_metadata_fields", "key_sequence", "int")
     ],
+    "new.spec.submission.non_standard": [
+        Field("submission_dataset_class", "non_standard", "bool", default=False)
+    ],
     # D4: the header replaces schema_version in every file type.
     "spec.root_class.schema_version": [Absent("root_class", "schema_version")],
     "project.project_class.schema_version": [Absent("project_class", "schema_version")],
@@ -1062,11 +1065,6 @@ RESERVED = {
         "spec",
         [("submission_dataset_class", "supplemental")],
         lambda d: d["submission"].update(supplemental={"dataset": "SUPPDM"}),
-    ),
-    ("submission: {non_standard: true}", "a dataset"): (
-        "spec",
-        [("submission_dataset_class", "non_standard")],
-        lambda d: d["submission"].update(non_standard=True),
     ),
     ("submission: {split: {by: COLUMN, datasets: {NAME: [V, ...]}}}", "a dataset"): (
         "spec",

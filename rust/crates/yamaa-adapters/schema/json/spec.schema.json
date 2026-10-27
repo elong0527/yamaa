@@ -5901,6 +5901,13 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "standard_reference"
         },
+        "non_standard": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether no implementation guide defines the dataset, as for a custom domain; such a dataset binds no standard and declares none (SUB-4, DEFINE-6).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "comment": {
           "$ref": "#/$defs/submission_comment",
           "description": "Sponsor comment carried with the dataset definition.",

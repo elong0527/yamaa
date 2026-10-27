@@ -387,6 +387,51 @@
       "issues": [{"phase": "validation", "condition": "submission_metadata_missing", "rule": "DEFINE-17"}]
     },
     {
+      "case": "a_non_standard_dataset_selecting_a_guide_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "submission", "standard"], "to": "SDTMIG"},
+          {"set": ["specs", "0", "submission", "non_standard"], "to": true}
+        ]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "SUB-4",
+          "spec_paths": ["sdtm.specs[0].submission.standard"],
+          "context": {"detail": "D0", "non_standard": true, "value": "SDTMIG"}
+        }
+      ]
+    },
+    {
+      "case": "an_adam_dataset_composed_non_standard_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"remove": ["project", "sdtm"]},
+          {"set": ["project", "adam"], "to": {"standards": [{"name": "ADaMIG", "version": "3.4", "status": "Final"}], "context": "Other", "define": "define.xml", "specs": ["d0.yaml"]}},
+          {"set": ["specs", "0", "model"], "to": "ADaM"},
+          {"set": ["specs", "0", "submission", "class"], "to": "SUBJECT LEVEL ANALYSIS DATASET"},
+          {"set": ["specs", "0", "columns", "0", "submission", "mandatory"], "to": false},
+          {"set": ["specs", "0", "submission", "non_standard"], "to": true}
+        ]
+      },
+      "among": true,
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "SUB-5",
+          "spec_paths": ["adam.specs[0].submission.non_standard"],
+          "context": {"detail": "D0", "model": "ADaM", "value": true}
+        }
+      ]
+    },
+    {
       "case": "a_label_beyond_forty_characters_cannot_travel_by_xpt",
       "operation": "compose",
       "input": {

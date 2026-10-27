@@ -905,6 +905,7 @@ impl<'d> Lower<'d> {
             // The section standard a 1.0 spec selects (P-STD-1); P1-13
             // checks it.
             standard: self.named(meta, node, "standard"),
+            non_standard: self.boolean(node, "non_standard", false),
             meta,
         }
     }
