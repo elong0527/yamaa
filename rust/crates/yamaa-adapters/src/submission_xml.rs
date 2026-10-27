@@ -456,10 +456,18 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                 "def:ArchiveLocationID",
                 dataset.href().map(|_| format!("LF.{id}")),
             )
-            // The guide the dataset selects, or the section's first (DEFINE-6).
+            // The guide the dataset selects, or the section's first; a
+            // non-standard dataset binds none and says so (DEFINE-6).
             .optional(
                 "def:StandardOID",
-                modern.then(|| format!("STD.{}", dataset.standard())),
+                dataset
+                    .standard()
+                    .filter(|_| modern)
+                    .map(|standard| format!("STD.{standard}")),
+            )
+            .optional(
+                "def:IsNonStandard",
+                (modern && sub.non_standard.value).then_some("Yes"),
             )
             .optional(
                 "def:CommentOID",
@@ -871,6 +879,12 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
         let at = format!("datasets.{}.submission", dataset.id());
         if sub.subclass.is_some() || sub.has_no_data.value {
             return Err(invalid(&at, "2.0 has no SubClass or HasNoData declaration"));
+        }
+        if sub.non_standard.value {
+            return Err(invalid(
+                &format!("{at}.non_standard"),
+                "2.0 has no IsNonStandard declaration",
+            ));
         }
         for (column, identity) in variants(dataset) {
             for origin in column.origins() {

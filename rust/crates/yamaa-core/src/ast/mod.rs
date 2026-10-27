@@ -542,6 +542,8 @@ pub struct DatasetSubmission {
     pub comment: Option<Comment>,
     /// The section standard the spec selects (P-STD-1); no 0.5 form.
     pub standard: Option<Named>,
+    /// No implementation guide defines the dataset (SUB-4, DEFINE-6).
+    pub non_standard: bool,
     pub meta: Meta,
 }
 

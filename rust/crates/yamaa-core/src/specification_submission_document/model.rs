@@ -27,7 +27,8 @@ vocabulary!(FieldName {
     Description => "description", Documents => "documents", Expression => "expression", Text => "text",
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
-    Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence"
+    Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence",
+    NonStandard => "non_standard"
 });
 vocabulary!(SubmissionMode { Validated => "validated", Historical => "historical" });
 /// Governed fields share one vocabulary in declaration and execution admission.
@@ -45,6 +46,7 @@ pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::ReferenceData,
     FieldName::Domain,
     FieldName::Standard,
+    FieldName::NonStandard,
     FieldName::Comment,
 ];
 pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
@@ -315,6 +317,9 @@ pub struct Dataset {
     /// The name of the section standard that binds the dataset; the
     /// section's first when omitted (P-STD-1, DEFINE-8). No 0.5 form.
     pub standard: Option<Field<String>>,
+    /// No implementation guide defines the dataset, so it binds none
+    /// (SUB-4, DEFINE-6).
+    pub non_standard: Field<bool>,
     pub comment: Option<Comment>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

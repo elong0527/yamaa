@@ -121,10 +121,11 @@ publishes, and `subclass` is declared only when the dataset's implementation
 guide defines one for it. `reference_data` defaults to false, and a dataset
 declaring `reference_data: true` must declare `repeating: false`.
 `has_no_data` defaults to false and records that the submitted dataset has no
-data.
+data. `non_standard` defaults to false; `true` records that no guide defines
+the dataset, such as a custom domain, and excludes `standard`.
 
-Fails: `reference_data_repeating_conflict`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::reference_data_that_repeats_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
+Fails: `reference_data_repeating_conflict`, `value_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::reference_data_that_repeats_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_non_standard_dataset_is_marked_non_standard_and_names_no_guide`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_non_standard_dataset_declares_no_standard`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_non_standard_dataset_selecting_a_guide_is_refused`.
 
 `label` states what the dataset is. It is the dataset's own description and is
 distinct from `domain`: `DM` is the domain and `Demographics` is the label.
@@ -141,6 +142,16 @@ domain execution or replace row-count checks. `standard` names the guide of
 the composing section that binds the dataset, and composition resolves it
 ([DEFINE-8](define-xml.md#define-8)).
 
+`non_standard` is declared, never inferred: no rule compares a dataset's
+domain with the domains a guide publishes, so a domain no guide defines
+composes as any other until its specification says so. Only an `SDTM` or
+`SEND` dataset declares it ([SUB-5](#sub-5)). A non-standard dataset
+binds no guide ([DEFINE-6](define-xml.md#define-6)), and a `standard` beside
+`non_standard: true` would name a guide the dataset does not follow. It fails
+validation at `submission.standard`, with the declared name in `value` and
+`non_standard` true; a document fails it at
+`<section>.specs[<n>].submission.standard`.
+
 <a id="sub-5"></a>
 
 ### SUB-5. A dataset's domain defaults to the specification's domain and is declared only for SDTM and SEND
@@ -153,14 +164,16 @@ not its parent domain. `domain` is declared only for a dataset whose model is
 fails validation, reporting the field.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_column_role_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_column_declares_no_role`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_dataset_declares_no_domain`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_column_role_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_column_declares_no_role`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_dataset_declares_no_domain`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_dataset_is_never_declared_non_standard`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_dataset_composed_non_standard_is_refused`.
 
 A domain declared for the `ADaM` model is an error rather than an unused
 value. A `role` declared for that model fails the same way under
-[SUB-9](#sub-9). A specification that declares `model: ADaM` fails at its
-`submission.domain` on its own ([SUB-23](#sub-23)), with the declared value
-in `value` and the model in `model`; a document fails it at
-`<section>.specs[<n>].submission.domain`.
+[SUB-9](#sub-9), and so does `non_standard: true`, at
+`submission.non_standard` with `true` in `value`: only a tabulation dataset
+is marked non-standard ([SUB-4](#sub-4)). A specification that declares
+`model: ADaM` fails at its `submission.domain` on its own
+([SUB-23](#sub-23)), with the declared value in `value` and the model in
+`model`; a document fails it at `<section>.specs[<n>].submission.domain`.
 
 ## Column metadata
 

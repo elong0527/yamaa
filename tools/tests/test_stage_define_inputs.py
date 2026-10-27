@@ -48,6 +48,17 @@ class DefineStage(unittest.TestCase):
             xml_schema = etree.XMLSchema(
                 etree.parse(str(schemas / "define/2.1/define2-1-0.xsd"), parser)
             )
+            # The non-standard dataset's document, authored the same way.
+            xml_schema.assertValid(
+                etree.parse(
+                    str(
+                        ROOT
+                        / "rust/crates/yamaa-adapters/tests/fixtures"
+                        / "define_2_1_non_standard.xml"
+                    ),
+                    parser,
+                )
+            )
             expected = destination / "sdtm-dm-metadata/expected"
             xml = etree.parse(str(expected / "define.xml"), parser)
             xml_schema.assertValid(xml)

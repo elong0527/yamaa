@@ -50,6 +50,10 @@ submission_dataset_class:
         type: standard_reference
         required: false
         description: Name of the composing section's standard that binds the dataset; the section's first standard when omitted (DEFINE-6, DEFINE-8).
+    - non_standard:
+        type: bool
+        default: false
+        description: Whether no implementation guide defines the dataset, as for a custom domain; such a dataset binds no standard and declares none (SUB-4, DEFINE-6).
     - comment:
         type: submission_comment
         required: false

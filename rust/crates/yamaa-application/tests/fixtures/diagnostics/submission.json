@@ -317,6 +317,18 @@
       "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-5", "spec_paths": ["submission.domain"], "context": {"value": "ADSL", "model": "ADaM"}}]
     },
     {
+      "case": "an_adam_dataset_is_never_declared_non_standard",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "adam", "edits": [{"from": "repeating: false}", "to": "repeating: false, non_standard: true}"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-5", "spec_paths": ["submission.non_standard"], "context": {"value": true, "model": "ADaM"}}]
+    },
+    {
+      "case": "a_non_standard_dataset_declares_no_standard",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "sdtm", "edits": [{"from": "repeating: false}", "to": "repeating: false, standard: SDTMIG, non_standard: true}"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-4", "spec_paths": ["submission.standard"], "context": {"value": "SDTMIG", "non_standard": true}}]
+    },
+    {
       "case": "an_sdtm_class_is_not_an_adam_class",
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "adam", "edits": [{"from": "class: SUBJECT LEVEL ANALYSIS DATASET", "to": "class: SPECIAL PURPOSE"}]}}, "specification": "spec.yaml"},

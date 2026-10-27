@@ -297,7 +297,8 @@ fn admit_counts(
 
 /// The dataset rules that read the model a specification declares, checked
 /// on the specification alone (SUB-23): the class belongs to the model
-/// (SUB-10), and an ADaM dataset declares no `domain` (SUB-5).
+/// (SUB-10), and an ADaM dataset declares no `domain` and is never
+/// `non_standard` (SUB-5).
 fn admit_dataset_model(
     spec: &ast::Spec,
     dataset: &ast::DatasetSubmission,
@@ -310,6 +311,13 @@ fn admit_dataset_model(
                 C::SubmissionAdamField,
                 &spec.cite(domain.meta),
                 &[("value", s(&domain.name)), ("model", s(model.name()))],
+            ));
+        }
+        if dataset.non_standard {
+            result.push(finding(
+                C::SubmissionAdamField,
+                &format!("{}.non_standard", spec.cite(dataset.meta)),
+                &[("value", V::Bool(true)), ("model", s(model.name()))],
             ));
         }
     }
@@ -741,6 +749,17 @@ pub(super) fn admit(
                     ("dataset", s(&spec.domain.name)),
                     ("reference_data", V::Bool(true)),
                     ("repeating", V::Bool(true)),
+                ],
+            ));
+        }
+        // A non-standard dataset binds no guide, so it selects none (SUB-4).
+        if let Some(standard) = dataset.standard.as_ref().filter(|_| dataset.non_standard) {
+            result.push(finding(
+                C::SubmissionNonStandardBound,
+                &spec.cite(standard.meta),
+                &[
+                    ("value", s(&standard.name)),
+                    ("non_standard", V::Bool(true)),
                 ],
             ));
         }
