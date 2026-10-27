@@ -282,7 +282,7 @@ pub fn scan(
     lex(text, 1, &mut records)?;
     let names = records.names()?;
     let mut starts = records.starts;
-    if records.count % rows.get() != 0 || records.count == 0 {
+    if records.count % rows != 0 || records.count == 0 {
         starts.push(text.len());
     }
     Ok(Partitions {
