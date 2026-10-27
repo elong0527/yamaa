@@ -76,7 +76,7 @@ fn study() -> Study {
     study
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Row {
     phase: String,
     condition: String,
@@ -334,6 +334,51 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     );
     assert!(submission.save(&CancellationToken::new()).is_err());
     assert!(!study.exists("out/dm.csv"));
+}
+
+/// A listed specification that fails validation keeps the `domain` its file
+/// writes as its name (PROJECT-5), and selecting it checks it exactly as
+/// naming its file with the project file does (PROJECT-6): here AE restates
+/// its input's path shorthand (`redundant_long_form`, SCHEMA-15).
+#[test]
+fn a_listed_specification_with_a_validation_finding_keeps_its_name_and_selects() {
+    let study = study();
+    let engine = engine();
+    let project = study.project();
+    study.write("sdtm/ae.yaml", AE.replace(", types: {AESEQ: int}}", "}"));
+    assert_eq!(
+        engine.project(&project).names().unwrap(),
+        ["DM", "AE", "ADSL"]
+    );
+    let selected = engine.project(&project).spec("AE").unwrap();
+    assert_eq!(selected.path(), study.path("sdtm/ae.yaml"));
+    let selected = rows(&selected.check().unwrap().issues());
+    let named = rows(
+        &engine
+            .spec(&study.path("sdtm/ae.yaml"))
+            .project(&project)
+            .check()
+            .unwrap()
+            .issues(),
+    );
+    assert_eq!(selected, named);
+    assert_eq!(
+        selected
+            .iter()
+            .map(|row| (
+                row.phase.as_str(),
+                row.condition.as_str(),
+                row.rule.as_deref(),
+                row.spec_paths.clone()
+            ))
+            .collect::<Vec<_>>(),
+        [(
+            "validation",
+            "redundant_long_form",
+            Some("SCHEMA-15"),
+            vec!["input.RAW".to_owned()]
+        )]
+    );
 }
 
 /// The caller's spelling of its project file keeps the authority of the
