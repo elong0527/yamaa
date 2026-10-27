@@ -175,8 +175,20 @@ class Goldens(unittest.TestCase):
                 frame = pandas.read_sas(
                     ROOT / "benchmarks" / benchmark / "expected" / file, format="xport"
                 )
-                self.assertEqual(list(frame.columns), [v.name for v in variables])
-                self.assertEqual(len(frame), len(rows))
+                expected = pandas.DataFrame(
+                    {
+                        variable.name: [
+                            (row[index] or "").encode("ascii")
+                            if variable.character
+                            else float(row[index])
+                            if row[index] is not None
+                            else float("nan")
+                            for row in rows
+                        ]
+                        for index, variable in enumerate(variables)
+                    }
+                )
+                pandas.testing.assert_frame_equal(frame, expected, obj=benchmark)
 
 
 class BenchmarkInput(unittest.TestCase):

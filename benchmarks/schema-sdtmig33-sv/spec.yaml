@@ -1,0 +1,154 @@
+yamaa: '1.0'
+type: spec
+model: SDTM
+domain: SV
+keys:
+- STUDYID
+- USUBJID
+- VISITNUM
+input:
+  VISITS:
+    path: input/visits.csv
+    types:
+      VISITNO: float
+      START: date
+      END: date
+
+output:
+  path: sv.csv
+  columns:
+  - DOMAIN
+  - STUDYID
+  - USUBJID
+  - VISITNUM
+  - VISIT
+  - SVSTDTC
+  - SVENDTC
+  - SVUPDES
+
+columns:
+- name: DOMAIN
+  type: str
+  label: Domain Abbreviation
+  derivation: '''SV'''
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: VISITS.STUDYID
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Protocol
+      source: Sponsor
+
+- name: USUBJID
+  type: str
+  label: Unique Subject Identifier
+  derivation: VISITS.USUBJID
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: VISITNUM
+  type: float
+  label: Visit Number
+  derivation: VISITS.VISITNO
+  submission:
+    core: Req
+    role: Topic
+    length: 8
+    significant_digits: 1
+    origins:
+    - type: Collected
+      source: Investigator
+      documents:
+      - document: acrf
+        pages:
+          type: PhysicalRef
+          refs: '1'
+
+- name: VISIT
+  type: str
+  label: Visit Name
+  derivation: VISITS.NAME
+  submission:
+    core: Perm
+    role: Timing
+    length: 80
+    origins:
+    - type: Collected
+      source: Investigator
+      documents:
+      - document: acrf
+        pages:
+          type: PhysicalRef
+          refs: '1'
+
+- name: SVSTDTC
+  type: date
+  label: Start Date/Time of Visit
+  derivation: VISITS.START
+  submission:
+    core: Exp
+    role: Timing
+    origins:
+    - type: Collected
+      source: Investigator
+      documents:
+      - document: acrf
+        pages:
+          type: PhysicalRef
+          refs: '1'
+
+- name: SVENDTC
+  type: date
+  label: End Date/Time of Visit
+  derivation: VISITS.END
+  submission:
+    core: Exp
+    role: Timing
+    origins:
+    - type: Collected
+      source: Investigator
+      documents:
+      - document: acrf
+        pages:
+          type: PhysicalRef
+          refs: '1'
+
+- name: SVUPDES
+  type: str
+  label: Description of Unplanned Visit
+  derivation: VISITS.REASON
+  submission:
+    core: Perm
+    role: Synonym Qualifier
+    length: 80
+    origins:
+    - type: Collected
+      source: Investigator
+      documents:
+      - document: acrf
+        pages:
+          type: PhysicalRef
+          refs: '1'
+
+submission:
+  label: Subject Visits
+  class: SPECIAL PURPOSE
+  structure: One record per subject per visit
+  repeating: true

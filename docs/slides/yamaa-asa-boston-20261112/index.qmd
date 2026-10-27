@@ -1,0 +1,473 @@
+---
+title: "Building AI first clinical data workflows with yamaa"
+subtitle: "ASA Boston short course | Course skeleton"
+author: "Yilong Zhang"
+date: "2026-11-12"
+embed-resources: true
+format:
+  revealjs:
+    theme: default
+    css: custom.css
+    mainfont: "system-ui, -apple-system, Segoe UI, sans-serif"
+    monofont: "ui-monospace, SFMono-Regular, Consolas, monospace"
+    width: 1280
+    height: 720
+    slide-level: 2
+    slide-number: true
+    smaller: true
+    scrollable: true
+    center: false
+    transition: fade
+    logo: ../../assets/logo.jpeg
+title-slide-attributes:
+  data-background-color: "#385898"
+---
+
+## What we will build
+
+- A clinical requirement made explicit in a yamaa specification.
+- An independent benchmark that challenges the derivation.
+- A study build with evidence a human reviewer can inspect.
+
+::: {.notes}
+The course uses two repositories throughout: yamaa and
+RConsortium/submissions-pilot7-synthetic-data. This is the initial slide
+skeleton. Finalize the lab instructions, screenshots, model setup, and
+timing after rehearsing the exercises.
+:::
+
+## Course route
+
+1. Understand the agent and its environment.
+2. Plan and build an AI first workflow.
+3. Create a benchmark.
+4. Test the whole study.
+5. Prepare for deployment and human review.
+
+::: {.notes}
+Working duration: three hours, including a break. Human and AI interaction
+is part of every stage. Confirm the audience, duration, and primary language
+before assigning final timings. The planning README has a provisional agenda.
+:::
+
+## Two repositories with complementary roles
+
+| Repository | What participants use |
+| --- | --- |
+| [yamaa](https://github.com/elong0527/yamaa) | Language, rules, engine, focused benchmarks, and agent evaluation. |
+| [Pilot 7](https://github.com/RConsortium/submissions-pilot7-synthetic-data) | Study data, derivation specifications, published references, review workspaces, and study checks. |
+
+::: {.notes}
+Source: each repository's README. Show where a small derivation contract
+lives in yamaa, then where a complete project lives in Pilot 7. Keep the
+code in its owning repository and link between them.
+:::
+
+## Choose the right study evidence
+
+| Pilot 7 material | Course use |
+| --- | --- |
+| CDISC Pilot 01 | Ten active ADaM specifications and published references. |
+| Submission Pilots 3 and 5 | Five active ADaM specifications each; additional reference comparisons. |
+| KN189 and KN564 | Synthetic ODM sources and workflow readiness; development is ongoing. |
+
+::: {.notes}
+Sources: .github/yamaa-studies.json, .github/synthetic-studies.json,
+docs/index.md, docs/verification.md, and docs/review.md in Pilot 7.
+These are catalog coverage counts, not a new validation result from this
+course. Use CDISC Pilot 01 as the proposed guided study. Synthetic dashboards
+inventory available stages; they do not establish passed derivations.
+Submission Pilot 6 is staged in the repository but is outside the current
+three-study yamaa publication catalog.
+:::
+
+## Start with an ambiguous request
+
+> Derive the adverse event analysis start date and treatment emergence flag.
+
+- What if only the year and month were collected?
+- What if the subject's first exposure date is missing?
+- Which study document decides the rule?
+
+::: {.notes}
+Opening discussion: ask participants to list the decisions before showing
+any implementation. Capture assumptions for comparison with the specification
+and tests later. Do not let a plausible model answer settle clinical intent.
+:::
+
+## Same variable, different study rules
+
+| Source | Partial start date rule |
+| --- | --- |
+| yamaa `adam-adae-partial-dates` benchmark | Supply the 15th, with an explicit treatment-date bound. |
+| CDISC Pilot 01 analysis guide | Supply the first of the month when the day is missing. |
+
+**A reusable pattern still needs the study's decision.**
+
+::: {.notes}
+Sources:
+https://github.com/elong0527/yamaa/blob/main/benchmarks/adam-adae-partial-dates/README.md
+and Pilot 7 cdiscpilot01/spec/review/questions.json, which retains the
+analysis-guide quotation and a review question for ADAE.ASTDT.
+The benchmark also specifies behavior for year-only, invalid, and missing
+dates. Its treatment-date bound can move the supplied day within the
+collected month. Do not transfer those rules to Pilot 01 without review.
+:::
+
+## What makes an agent
+
+- A goal, instructions, and task context.
+- A model with tools and permission to use them.
+- State across steps and a loop that acts on feedback.
+- Stopping conditions and a way to ask for human input.
+
+::: {.notes}
+Teaching definition: distinguish the model from the system that lets it
+inspect files, edit a specification, run a check, and decide what to do next.
+Use one recorded OpenCode session to identify each component.
+:::
+
+## The proposed course environment
+
+| Component | Responsibility |
+| --- | --- |
+| GitHub Codespaces | Prepared repository, dependencies, terminal, and exercise files. |
+| OpenCode | Agent instructions, repository tools, permissions, and action loop. |
+| Muse Spark and Muse | Requested course components; finalize provider setup and Muse's role. |
+| yamaa | Check and execute the agreed specification. |
+| Reviewer and independent checks | Establish whether the result meets the requirement. |
+
+::: {.notes}
+Setup checkpoint to complete: confirm Muse's exact product and role, the
+model IDs, credentials, class access, budgets, and supported OpenCode version.
+The earlier NJSUG deck records an OpenCode and Muse Spark run; it is historical
+evidence, not the course installation recipe. This PR does not implement a
+Codespaces environment or claim that model access has been tested.
+:::
+
+## Lab 1 Inspect the agent
+
+- Locate its instructions, context, tools, and working directory.
+- Follow one action from the request to the tool result.
+- Identify when it should ask, retry, or stop.
+
+**Checkpoint:** explain one agent decision using the visible session.
+
+::: {.notes}
+Prepare a short session that opens the relevant study source and proposes a
+plan. Include a missing clinical decision that needs human input. Supply a
+saved session as a fallback if model access is unavailable.
+:::
+
+## Plan the workflow around explicit decisions
+
+Requirement -> examples -> specification -> checks -> review -> release
+
+- People decide clinical intent and acceptance criteria.
+- Agents draft changes and investigate failures.
+- Every accepted change carries its reasoning and evidence.
+
+::: {.notes}
+Source for the four-stage framing: Pilot 7 docs/index.md, Plan, Develop,
+Evaluate, Deploy. Discuss which artifacts participants already maintain and
+how agent participation changes their handoffs. An agent can return to
+planning when a check reveals an unresolved requirement.
+:::
+
+## yamaa makes the contract executable
+
+> A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.
+
+- Schema: the vocabulary available to the author.
+- Rules: the meaning of each declaration.
+- Engine: execution of that specification.
+- Benchmarks: independently authored examples of expected behavior.
+
+::: {.notes}
+Sources: yamaa README.md and docs/articles/principles.md.
+Show the current language rather than copying the dated syntax in earlier
+talks. The R and Python packages use the shared Rust engine.
+:::
+
+## Read a study specification together
+
+- Open `cdiscpilot01/spec/yamaa/adae.yaml`.
+- Trace `ASTDT` to `AE.AESTDTC` and its imputation policy.
+- Trace treatment dates back through ADSL.
+- Compare the declaration with the retained analysis-guide quotation.
+
+::: {.notes}
+Source: Pilot 7 cdiscpilot01/spec/yamaa/adae.yaml and
+cdiscpilot01/spec/review/questions.json. The first file's current ASTDT
+derivation supplies month and day values of 1 when imputing a qualifying
+source. Review ASTDTF, ASTDY, and TRTEMFL separately; do not assume that one
+column's correctness establishes the correctness of the others.
+Add a focused source screenshot after selecting the course revision.
+:::
+
+## Lab 2 Draft and review a specification
+
+- State the input grain, output grain, and study rule.
+- Give the agent examples and the permitted scope of change.
+- Review its plan and proposed specification diff.
+- Check the specification and record unresolved questions.
+
+**Checkpoint:** an explicit rule and a reviewed change proposal.
+
+::: {.notes}
+Prepare an exercise copy with independently authored toy data. Keep published
+study references intact. Ask participants to name the missing-value and
+partial-date policies before asking the agent to implement them. The final
+primary language and executable lab commands remain to be selected.
+:::
+
+## A benchmark needs an independent answer
+
+- One clearly stated derivation and its scope.
+- Small inputs that distinguish plausible interpretations.
+- Expected outputs calculated independently.
+- A comparison policy and an expected failure case.
+
+::: {.notes}
+Sources: yamaa benchmarks/AGENTS.md and Pilot 7 docs/yaml-authoring.md.
+Walk through benchmark.yaml, README.md, spec.yaml, input/, and expected/.
+Expected data is authored truth; do not regenerate it from the implementation
+or edit it to make a failing result pass.
+:::
+
+## Cases that challenge partial-date imputation
+
+| Input situation | Decision the test must expose |
+| --- | --- |
+| Fully collected date | Preserve the collected date. |
+| Year and month only | Apply the specified study policy. |
+| Year only, invalid, or missing | State the expected result or diagnostic. |
+| Date near first exposure | Apply the explicitly agreed emergence rule. |
+
+::: {.notes}
+These are proposed exercise categories, not a new clinical policy. Have
+participants independently write the expected result for each selected toy
+record before executing the agent's proposed derivation. Add exact examples
+and expected values when the exercise contract is agreed.
+:::
+
+## Lab 3 Create a benchmark that catches a mistake
+
+- Author a small case from the agreed study rule.
+- Compare the candidate output with the expected result.
+- Add a changed-input case that challenges the first solution.
+
+**Checkpoint:** explain a failure that the original example missed.
+
+::: {.notes}
+Prepare a candidate that mistakenly reuses the 15th-day policy. A first-day
+expectation should expose it without depending on the agent's explanation.
+Use a separate toy fixture; the existing benchmark's different contract is
+intentional and must not be rewritten as a fix for this exercise.
+:::
+
+## Evaluate the workflow under controlled conditions
+
+- Hold the task, model settings, and resource budget fixed.
+- Compare incomplete and explicit requirements.
+- Record correctness, time, cost, and human interventions.
+- Keep held-out answers outside the evaluated agent's environment.
+
+::: {.notes}
+Source: yamaa evaluations/harbor/README.md. Explain development examples
+versus held-out evaluation. Harbor separates the agent and verifier and
+checks clean reruns and supported changed inputs. A normal Codespace does
+not provide that isolation merely because a prompt says not to open a file.
+Use a prepared evaluation excerpt; running the full Harbor infrastructure
+is beyond this skeleton's proposed participant lab.
+:::
+
+## A focused benchmark leaves study questions open
+
+- Do datasets use consistent subjects, keys, and treatment dates?
+- Do dependencies rebuild in the correct order?
+- Do types, labels, ordering, and missing values match expectations?
+- Does delivered metadata describe the delivered data?
+
+::: {.notes}
+Transition from the toy derivation to the prepared full study. Passing a
+focused benchmark does not prove study coverage. R and Python agreement
+checks host consistency; both hosts share the engine, so independent
+references still matter.
+:::
+
+## Follow the study dependencies
+
+SDTM AE + derived ADSL -> ADAE -> study comparison and review
+
+- The project lists the study specifications.
+- ADSL supplies subject-level treatment and demographic data.
+- A change can affect several downstream variables and datasets.
+
+::: {.notes}
+Sources: Pilot 7 cdiscpilot01/spec/yamaa/project.yaml and adae.yaml.
+This line highlights one dependency; it is not the complete study graph.
+Add a project graph and a before-and-after diff from a rehearsed exercise.
+Changing a rule on toy inputs is a proposed stress test, not a reason to
+modify the official source data or published expected results.
+:::
+
+## Whole study validation in Pilot 7
+
+From the Pilot 7 repository root, using its study-pinned environment:
+
+```bash
+python .github/scripts/validate_yamaa.py cdiscpilot01
+```
+
+- Check the project and build its active ADaM datasets.
+- Compare derived datasets with the official references.
+- Inspect the study report and separate metadata checks.
+
+::: {.notes}
+Sources: Pilot 7 .github/scripts/validate_yamaa.py and docs/verification.md.
+The script checks, runs, saves, and compares the project. It also invokes
+the study's Define-XML check after successful data comparisons. Stage the
+study's pinned requirements before this command; a current generic pip
+installation is not a substitute for the selected study environment.
+Add a fresh report excerpt after rehearsal. No study run is claimed by
+this slide skeleton.
+:::
+
+## Lab 4 Review integration evidence
+
+- Inspect a prepared baseline report for the complete study.
+- Follow one variable through source, specification, and output.
+- Review an upstream-change exercise and its downstream differences.
+- Classify failures before proposing a fix.
+
+**Checkpoint:** identify the affected outputs and evidence for the decision.
+
+::: {.notes}
+Use the Pilot 7 review workspace for subject selection, related columns,
+source specifications, and resolved-model inspection. Prepare a clean
+baseline and a deliberately changed exercise version. If a live rebuild
+exceeds the teaching budget, supply its full report and a smaller interactive
+case. Label the scope of each result explicitly.
+Source: Pilot 7 docs/review.md.
+:::
+
+## Four separate questions for a reviewer
+
+| Evidence | Question it answers |
+| --- | --- |
+| Execution | Did the specification build successfully? |
+| Reference comparison | Did the output match the published dataset under this comparator? |
+| Clinical review | Does the derivation express the documented study intent? |
+| Metadata and conformance checks | Does the package reproduce or satisfy the required metadata contract? |
+
+::: {.notes}
+Sources: Pilot 7 docs/verification.md, docs/review.md, and
+submission-pilot3/program/adam/DEFINE.md. Reference agreement can coexist
+with a documentation conflict. Historical metadata reproduction and data
+conformance are also separate results. Do not describe a passing comparator
+as regulatory validation or a complete submission package.
+:::
+
+## Synthetic studies extend the workflow
+
+ODM -> SDTM -> ADaM -> define.xml and downstream analyses
+
+- KN189 and KN564 provide synthetic ODM source material.
+- Inspect the source inventory and which stages are staged.
+- Use missing stages to plan future mappings and acceptance criteria.
+
+::: {.notes}
+Sources: Pilot 7 README.md, docs/index.md, docs/synthetic/index.md,
+and .github/synthetic-studies.json. The synthetic workspaces show readiness;
+they do not assert successful end-to-end derivation. Add an inventory
+screenshot with the selected revision and a participant planning prompt.
+:::
+
+## Deploy an approved workflow
+
+- Pin the engine, specification, templates, and dependencies.
+- Define input boundaries, output locations, and credentials.
+- Retain test results, run records, and the review decision.
+- Rehearse failure recovery and rollback.
+
+::: {.notes}
+Discuss model access and data boundaries during authoring separately from
+execution of an approved specification. Codespaces is the proposed teaching
+environment; it does not establish production readiness. Retain links to
+Pilot 7 LICENSING.md when selecting or distributing course data, since code
+licensing does not establish rights to every study artifact.
+:::
+
+## The agent and the production run have different jobs
+
+| During authoring | During a reviewed build |
+| --- | --- |
+| Draft and refine specifications. | Execute approved specifications. |
+| Investigate discrepancies. | Apply defined checks and retain results. |
+| Request clinical decisions. | Stop on failures that require investigation. |
+
+**An approved yamaa specification can execute without an authoring agent.**
+
+::: {.notes}
+Source: yamaa principles and API documentation. Ask which operations in the
+participant's environment require a model call and which can be deterministic.
+If they choose runtime agent participation, its authority and evaluation
+become additional design decisions.
+:::
+
+## Lab 5 Make the release decision
+
+- Inspect a proposed specification diff and its test evidence.
+- Identify unresolved clinical decisions or incomplete coverage.
+- Accept, request changes, or stop the release with a stated reason.
+
+**Checkpoint:** a review decision another person can follow.
+
+::: {.notes}
+Prepare a small review packet containing the requirement, source clause,
+diff, benchmark result, integration result, and an unresolved finding.
+Participants should distinguish an agent's assessment from a human resolution.
+The final exercise is a simulated decision, not a production deployment.
+:::
+
+## Human and AI interaction throughout the workflow
+
+- Make assumptions and uncertainty visible before implementation.
+- Review plans and meaningful diffs at useful checkpoints.
+- Request evidence proportional to the decision.
+- Record why a change was accepted, revised, or rejected.
+
+::: {.notes}
+Source: Pilot 7 docs/index.md responsibilities and docs/review.md.
+Discuss automation bias, review effort, and when repeated agent attempts
+should give way to a human decision. Revisit the assumptions captured in
+the opening partial-date exercise.
+:::
+
+## What participants take back
+
+- A workflow connecting requirements, specifications, and review.
+- A focused benchmark with an independently justified answer.
+- A way to inspect whole-study evidence and its coverage.
+- A release outline suited to their own environment.
+
+::: {.notes}
+Close with one adaptation participants would make in their own SDLC.
+Final lab artifacts and timing remain to be rehearsed. Keep a completed
+checkpoint and saved session available for each exercise.
+:::
+
+## Continue with the two repositories
+
+- [yamaa documentation and benchmarks](https://elong0527.github.io/yamaa/)
+- [Pilot 7 study workspaces](https://rconsortium.github.io/submissions-pilot7-synthetic-data/)
+- [Pilot 7 verification policy](https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/docs/verification.md)
+- [Pilot 7 writing and review guide](https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/docs/yaml-authoring.md)
+
+::: {.notes}
+Use repository sources as the maintained starting points for exercises.
+Avoid copying historical benchmark rates or dynamic dashboard counts into
+the course without selecting the population and recording current evidence.
+:::

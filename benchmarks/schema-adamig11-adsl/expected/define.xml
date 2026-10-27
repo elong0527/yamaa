@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="CATH.adam.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.CATH">
+    <GlobalVariables>
+      <StudyName>CATH</StudyName>
+      <StudyDescription>Example study submitting subject-level analysis data in SAS transport</StudyDescription>
+      <ProtocolName>CATH-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CATH.adam" Name="CATH adam metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.ADaMIG" Name="ADaMIG" Type="IG" Version="1.1" Status="Final"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.ADSL" Name="ADSL" Purpose="Analysis" SASDatasetName="ADSL" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:ArchiveLocationID="LF.ADSL" def:StandardOID="STD.ADaMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Subject-Level Analysis Dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.ADSL.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADSL.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.ADSL.TRT01A" OrderNumber="3" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.AGE" OrderNumber="4" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.HEIGHTBL" OrderNumber="5" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADSL.TRTSDT" OrderNumber="6" Mandatory="No" MethodOID="MT.ADSL.TRTSDT"/>
+        <ItemRef ItemOID="IT.ADSL.TRTSDTM" OrderNumber="7" Mandatory="No"/>
+        <def:Class Name="SUBJECT LEVEL ANALYSIS DATASET"/>
+        <def:leaf ID="LF.ADSL" xlink:href="adsl.xpt">
+          <def:title>adsl.xpt</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.ADSL.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.STUDYID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.USUBJID" Name="USUBJID" DataType="text" Length="16" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.USUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.TRT01A" Name="TRT01A" DataType="text" Length="11" SASFieldName="TRT01A">
+        <Description>
+          <TranslatedText xml:lang="en">Actual Treatment for Period 01</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.TRT01A</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.AGE" Name="AGE" DataType="integer" Length="3" SASFieldName="AGE" def:DisplayFormat="3.">
+        <Description>
+          <TranslatedText xml:lang="en">Age</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.AGE</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.HEIGHTBL" Name="HEIGHTBL" DataType="float" Length="5" SignificantDigits="1" SASFieldName="HEIGHTBL" def:DisplayFormat="5.1">
+        <Description>
+          <TranslatedText xml:lang="en">Baseline Height (cm)</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.HEIGHTBL</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.TRTSDT" Name="TRTSDT" DataType="integer" Length="8" SASFieldName="TRTSDT" def:DisplayFormat="DATE9.">
+        <Description>
+          <TranslatedText xml:lang="en">Date of First Exposure to Treatment</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.TRTSDTM" Name="TRTSDTM" DataType="integer" Length="8" SASFieldName="TRTSDTM" def:DisplayFormat="DATETIME20.">
+        <Description>
+          <TranslatedText xml:lang="en">Datetime of First Exposure to Treatment</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.TRTSDTC</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <MethodDef OID="MT.ADSL.TRTSDT" Name="ADSL.TRTSDT" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Date part of TRTSDTM.</TranslatedText>
+        </Description>
+      </MethodDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

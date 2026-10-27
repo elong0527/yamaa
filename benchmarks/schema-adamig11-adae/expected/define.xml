@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="CATH.adam.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.CATH">
+    <GlobalVariables>
+      <StudyName>CATH</StudyName>
+      <StudyDescription>Example study submitting adverse event onset times in SAS transport</StudyDescription>
+      <ProtocolName>CATH-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CATH.adam" Name="CATH adam metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.ADaMIG" Name="ADaMIG" Type="IG" Version="1.1" Status="Final"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.ADAE" Name="ADAE" Purpose="Analysis" SASDatasetName="ADAE" Repeating="Yes" IsReferenceData="No" def:Structure="One record per adverse event" def:ArchiveLocationID="LF.ADAE" def:StandardOID="STD.ADaMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Adverse Events Analysis Dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.ADAE.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADAE.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.ADAE.AESEQ" OrderNumber="3" Mandatory="Yes" KeySequence="3"/>
+        <ItemRef ItemOID="IT.ADAE.AETERM" OrderNumber="4" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADAE.ASTDTM" OrderNumber="5" Mandatory="No" MethodOID="MT.ADAE.ASTDTM"/>
+        <ItemRef ItemOID="IT.ADAE.ASTDT" OrderNumber="6" Mandatory="No" MethodOID="MT.ADAE.ASTDT"/>
+        <ItemRef ItemOID="IT.ADAE.ASTTM" OrderNumber="7" Mandatory="No" MethodOID="MT.ADAE.ASTTM"/>
+        <ItemRef ItemOID="IT.ADAE.ASTTMF" OrderNumber="8" Mandatory="No" MethodOID="MT.ADAE.ASTTMF"/>
+        <def:Class Name="OCCURRENCE DATA STRUCTURE"/>
+        <def:leaf ID="LF.ADAE" xlink:href="adae.xpt">
+          <def:title>adae.xpt</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.ADAE.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">AE.STUDYID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.USUBJID" Name="USUBJID" DataType="text" Length="16" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">AE.USUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.AESEQ" Name="AESEQ" DataType="integer" Length="8" SASFieldName="AESEQ">
+        <Description>
+          <TranslatedText xml:lang="en">Sequence Number</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">AE.AESEQ</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.AETERM" Name="AETERM" DataType="text" Length="9" SASFieldName="AETERM">
+        <Description>
+          <TranslatedText xml:lang="en">Reported Term for the Adverse Event</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">AE.AETERM</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.ASTDTM" Name="ASTDTM" DataType="integer" Length="8" SASFieldName="ASTDTM" def:DisplayFormat="DATETIME20.">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Start Date/Time</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.ASTDT" Name="ASTDT" DataType="integer" Length="8" SASFieldName="ASTDT" def:DisplayFormat="DATE9.">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Start Date</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.ASTTM" Name="ASTTM" DataType="integer" Length="8" SASFieldName="ASTTM" def:DisplayFormat="TIME8.">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Start Time</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.ASTTMF" Name="ASTTMF" DataType="text" Length="1" SASFieldName="ASTTMF">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Start Time Imputation Flag</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <MethodDef OID="MT.ADAE.ASTDTM" Name="ADAE.ASTDTM" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">AESTDTC completed with the earliest time its collected parts admit; missing when AESTDTC carries no complete date.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.ADAE.ASTDT" Name="ADAE.ASTDT" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Date part of ASTDTM.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.ADAE.ASTTM" Name="ADAE.ASTTM" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Time part of ASTDTM as seconds since midnight.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.ADAE.ASTTMF" Name="ADAE.ASTTMF" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">H when the start was collected without a time, M when it stops at the hour and S when it stops at the minute.</TranslatedText>
+        </Description>
+      </MethodDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

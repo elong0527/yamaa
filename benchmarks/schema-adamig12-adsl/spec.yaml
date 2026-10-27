@@ -1,0 +1,105 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW: input/adsl_raw.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01A, AGE, HEIGHTBL, TRTSDT, TRTSDTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 20
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 30
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.USUBJID
+
+  - name: TRT01A
+    type: str
+    label: Actual Treatment for Period 01
+    derivation: ADSL_RAW.TRT01A
+    submission:
+      core: Cond
+      mandatory: true
+      length: 20
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.TRT01A
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL_RAW.AGE
+    submission:
+      core: Req
+      mandatory: true
+      length: 3
+      display_format: "3."
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.AGE
+
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height (cm)
+    derivation: ADSL_RAW.HEIGHTBL
+    submission:
+      core: Perm
+      mandatory: false
+      length: 5
+      significant_digits: 1
+      display_format: "5.1"
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.HEIGHTBL
+
+  - name: TRTSDTM
+    type: datetime
+    label: Datetime of First Exposure to Treatment
+    derivation: ADSL_RAW.TRTSDTC
+    submission:
+      core: Perm
+      mandatory: false
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.TRTSDTC
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation:
+      to_date:
+        source: TRTSDTM
+    submission:
+      core: Cond
+      mandatory: false
+      origins:
+        - type: Derived
+      method: Date part of TRTSDTM.
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

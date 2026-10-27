@@ -1,0 +1,23 @@
+yamaa: '1.0'
+type: project
+study:
+  id: CATH
+  name: CATH
+  description: Morphology
+  protocol_name: CATH-01
+
+sdtm:
+  specs:
+  - spec.yaml
+  standards:
+  - name: SDTMIG
+    version: '3.3'
+    status: Final
+  define: define.xml
+  documents:
+  - id: acrf
+    kind: annotated_crf
+    link: acrf.pdf
+    title: Annotated Case Report Form
+  transport: xpt
+  source_system_version: '1.0'

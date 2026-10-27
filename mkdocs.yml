@@ -20,6 +20,7 @@ exclude_docs: |
   # as a page would conflict with it and fail --strict.
   slides/yamaa-pilot7-2026-09-25/README.md
   slides/yamaa-njsug-2026-10-09/README.md
+  slides/yamaa-asa-boston-20261112/README.md
 
 theme:
   name: material
@@ -110,6 +111,7 @@ nav:
       - Rule index: reference/rule-index.md
       - Schema fields: reference/schema-fields.md
       - Codelists and terminology: articles/terminology.md
+      - Supported standards: articles/supported-standards.md
   - Benchmark: benchmark/index.md
   - Engine:
       - Contributing: https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md

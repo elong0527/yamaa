@@ -1,0 +1,57 @@
+/* Course styles are local so the dated decks keep their own presentation. */
+:root {
+  --course-blue: #385898;
+  --course-ink: #17243b;
+  --course-muted: #526078;
+}
+
+.reveal {
+  color: var(--course-ink);
+}
+
+.reveal h1,
+.reveal h2 {
+  color: var(--course-blue);
+  text-transform: none;
+}
+
+.reveal h1 {
+  font-size: 1.8em;
+}
+
+.reveal h2 {
+  font-size: 1.4em;
+  margin-bottom: 0.7em;
+}
+
+.reveal .slides section li {
+  margin-bottom: 0.45em;
+}
+
+.reveal table {
+  font-size: 0.76em;
+  line-height: 1.4;
+  width: 100%;
+}
+
+.reveal table th,
+.reveal table td {
+  padding: 0.5em 0.65em;
+  vertical-align: top;
+}
+
+.reveal blockquote {
+  border-left: 0.18em solid var(--course-blue);
+  box-shadow: none;
+  color: var(--course-muted);
+  font-style: normal;
+  padding: 0.4em 0.8em;
+  width: 90%;
+}
+
+.reveal #title-slide h1,
+.reveal #title-slide .subtitle,
+.reveal #title-slide .quarto-title-author-name,
+.reveal #title-slide .date {
+  color: white;
+}

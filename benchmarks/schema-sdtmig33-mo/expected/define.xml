@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="CATH.sdtm.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.CATH">
+    <GlobalVariables>
+      <StudyName>CATH</StudyName>
+      <StudyDescription>Morphology</StudyDescription>
+      <ProtocolName>CATH-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CATH.sdtm" Name="CATH sdtm metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.SDTMIG" Name="SDTMIG" Type="IG" Version="3.3" Status="Final"/>
+      </def:Standards>
+      <def:AnnotatedCRF>
+        <def:DocumentRef leafID="LF.acrf"/>
+      </def:AnnotatedCRF>
+      <ItemGroupDef OID="IG.MO" Name="MO" Domain="MO" Purpose="Tabulation" SASDatasetName="MO" Repeating="Yes" IsReferenceData="No" def:Structure="One record per subject per test" def:ArchiveLocationID="LF.MO" def:StandardOID="STD.SDTMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Morphology</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.MO.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.MO.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.MO.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
+        <ItemRef ItemOID="IT.MO.MOSEQ" OrderNumber="4" Mandatory="Yes" KeySequence="3" Role="Identifier"/>
+        <ItemRef ItemOID="IT.MO.MOTESTCD" OrderNumber="5" Mandatory="Yes" Role="Topic"/>
+        <ItemRef ItemOID="IT.MO.MOTEST" OrderNumber="6" Mandatory="Yes" Role="Synonym Qualifier"/>
+        <ItemRef ItemOID="IT.MO.MOORRES" OrderNumber="7" Mandatory="No" Role="Result Qualifier"/>
+        <ItemRef ItemOID="IT.MO.MOSTRESC" OrderNumber="8" Mandatory="No" Role="Result Qualifier" MethodOID="MT.MO.MOSTRESC"/>
+        <ItemRef ItemOID="IT.MO.MODTC" OrderNumber="9" Mandatory="No" Role="Timing"/>
+        <def:Class Name="FINDINGS"/>
+        <def:leaf ID="LF.MO" xlink:href="mo.xpt">
+          <def:title>mo.xpt</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.MO.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.MO.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.MO.USUBJID" Name="USUBJID" DataType="text" Length="7" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.MO.MOSEQ" Name="MOSEQ" DataType="integer" Length="8" SASFieldName="MOSEQ">
+        <Description>
+          <TranslatedText xml:lang="en">Sequence Number</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.MO.MOTESTCD" Name="MOTESTCD" DataType="text" Length="8" SASFieldName="MOTESTCD">
+        <Description>
+          <TranslatedText xml:lang="en">Morphology Test Short Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.MO.MOTEST" Name="MOTEST" DataType="text" Length="9" SASFieldName="MOTEST">
+        <Description>
+          <TranslatedText xml:lang="en">Morphology Test Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.MO.MOORRES" Name="MOORRES" DataType="text" Length="8" SASFieldName="MOORRES">
+        <Description>
+          <TranslatedText xml:lang="en">Result or Finding in Original Units</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.MO.MOSTRESC" Name="MOSTRESC" DataType="text" Length="8" SASFieldName="MOSTRESC">
+        <Description>
+          <TranslatedText xml:lang="en">Character Result/Finding in Std Format</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.MO.MODTC" Name="MODTC" DataType="date" SASFieldName="MODTC">
+        <Description>
+          <TranslatedText xml:lang="en">Date/Time of Collection</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <MethodDef OID="MT.MO.MOSTRESC" Name="MO.MOSTRESC" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Standardize the collected cell type result.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <def:leaf ID="LF.acrf" xlink:href="acrf.pdf">
+        <def:title>Annotated Case Report Form</def:title>
+      </def:leaf>
+    </MetaDataVersion>
+  </Study>
+</ODM>
