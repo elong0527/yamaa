@@ -526,9 +526,20 @@
           "type": "string",
           "enum": [
             "2.0.0",
+            "2.1.0",
+            "2.1.1",
+            "2.1.2",
+            "2.1.3",
+            "2.1.4",
+            "2.1.5",
+            "2.1.6",
+            "2.1.7",
+            "2.1.8",
+            "2.1.9",
+            "2.1.10",
             "2.1.11"
           ],
-          "description": "Define-XML release to generate; omission retains 2.1.11, and 2.0.0 refuses metadata its version cannot represent (DEFINE-29).",
+          "description": "Define-XML release to generate; every published release from 2.0.0 through 2.1.11 is admitted, omission retains 2.1.11, and 2.0.0 refuses metadata its version cannot represent (DEFINE-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
