@@ -1116,16 +1116,71 @@
       "issues": [{"condition": "origin_contradicts_derivation", "spec_paths": ["columns.LBORNRLO.submission"], "context": {"origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
     },
     {
-      "case": "a_plain_lookup_is_no_predecessors_dataset",
+      "case": "a_plain_lookup_over_the_predecessors_dataset_copies_its_column",
       "operation": "check",
       "input": {
         "files": {
-          "spec.yaml": {"base": "reads", "edits": [{"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: RANGE.LOW}]}"}]}
+          "spec.yaml": {"base": "reads", "edits": [{"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: RANGES.LOW}]}"}]}
         },
         "specification": "spec.yaml"
       },
-      "compares": ["condition", "context.reason"],
-      "issues": [{"condition": "origin_contradicts_derivation", "context": {"reason": "predecessor_source"}}]
+      "issues": []
+    },
+    {
+      "case": "a_filtered_plain_lookup_copies_a_predecessor_its_description_selects",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "reads",
+            "edits": [
+              {"from": "key: {TESTCD: LBTESTCD}\n", "to": "key: {TESTCD: LBTESTCD}\n    filter: \"RANGES.SEX = 'F'\"\n"},
+              {"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: \"RANGES.LOW where SEX = 'F'\"}]}"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_plain_lookup_over_another_dataset_is_no_predecessor_copy",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "reads", "edits": [{"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: ODM.LOW}]}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.LBORNRLO.submission"], "context": {"column": "LBORNRLO", "origin_type": "Predecessor", "predecessor": "ODM.LOW", "reason": "predecessor_source"}}]
+    },
+    {
+      "case": "a_plain_lookup_answering_absence_with_a_value_is_no_predecessor_copy",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "reads",
+            "edits": [
+              {"from": "key: {TESTCD: LBTESTCD}\n", "to": "key: {TESTCD: LBTESTCD}\n    absent: NONE\n"},
+              {"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: RANGES.LOW}]}"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.LBORNRLO.submission"], "context": {"column": "LBORNRLO", "origin_type": "Predecessor", "predecessor": "RANGES.LOW", "reason": "predecessor_source"}}]
+    },
+    {
+      "case": "a_plain_lookup_without_the_descriptions_filter_is_refuted",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "reads", "edits": [{"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: \"RANGES.LOW where SEX = 'F'\"}]}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.LBORNRLO.submission"], "context": {"column": "LBORNRLO", "origin_type": "Predecessor", "predecessor": "RANGES.LOW", "reason": "predecessor_filter"}}]
     },
     {
       "case": "predecessor_columns_copying_the_columns_their_descriptions_name_pass_the_check",

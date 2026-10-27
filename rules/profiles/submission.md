@@ -856,7 +856,8 @@ field of the record the lookup selects: nothing was computed. Whether that
 stored value was collected, assigned, fixed by the protocol, computed upstream
 or copied from a predecessor dataset is a fact about the source and not about
 this specification; [SUB-20](#sub-20) checks the copy a `Predecessor` claims,
-which only a bare `source` of the predecessor's input dataset makes.
+which only a bare `source` of the predecessor's input dataset, or a read
+through a plain lookup of that dataset, makes.
 
 When the entries of a row-derived column disagree, no shared type is an error,
 not a silently admitted origin. A row template every row of which a value-level
@@ -873,28 +874,37 @@ the derivation that refutes it.
 
 A column with a `Predecessor` origin copies its values unchanged from the
 predecessor dataset and column the origin's `description` names, so its
-derivation must read that dataset and column as a bare reference, or as a
-structured `source` declaring a `filter` when the description writes a where
-clause; a `copy` entry declares such columns. When the column's name equals
+derivation must read that column of that dataset, directly or through a plain
+lookup of it, with a `filter` when the description writes a where clause; a
+`copy` entry declares such columns. When the column's name equals
 the predecessor column's name and a specification some submission section of
 the project file lists declares that column, their labels must be equal; a
 renamed column keeps its own label.
 
 Fails: `origin_contradicts_derivation`, `refuted_value_origin`, `predecessor_label_mismatch`.
-Evidence: `negative-mandatory-arm-missing`, `schema-copy-producer-columns`, `rust/crates/yamaa/tests/copy_entry.rs::each_copy_refusal_names_what_it_refuses`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::predecessor_columns_copying_the_columns_their_descriptions_name_pass_the_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_predecessor_copying_the_column_its_description_names_passes_the_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_predecessor_column_reading_another_column_is_refuted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_predecessor_column_without_its_descriptions_filter_is_refuted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_computed_predecessor_column_is_refuted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_only_pivot_and_a_plain_lookup_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_plain_lookup_is_no_predecessors_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_predecessor_column_keeps_its_predecessors_label`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_predecessor_column_labelled_otherwise_than_its_predecessor_is_refused`.
+Evidence: `negative-mandatory-arm-missing`, `schema-copy-producer-columns`, `rust/crates/yamaa/tests/copy_entry.rs::each_copy_refusal_names_what_it_refuses`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::predecessor_columns_copying_the_columns_their_descriptions_name_pass_the_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_predecessor_copying_the_column_its_description_names_passes_the_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_predecessor_column_reading_another_column_is_refuted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_predecessor_column_without_its_descriptions_filter_is_refuted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_computed_predecessor_column_is_refuted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_only_pivot_and_a_plain_lookup_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_plain_lookup_over_the_predecessors_dataset_copies_its_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_filtered_plain_lookup_copies_a_predecessor_its_description_selects`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_plain_lookup_over_another_dataset_is_no_predecessor_copy`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_plain_lookup_answering_absence_with_a_value_is_no_predecessor_copy`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_plain_lookup_without_the_descriptions_filter_is_refuted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_predecessor_column_keeps_its_predecessors_label`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_predecessor_column_labelled_otherwise_than_its_predecessor_is_refused`.
 
 The derivation reads the predecessor through the input dataset declared under
 the predecessor's name: a `description` of `DM.AGE` requires the bare reference
 `DM.AGE`, and `SUPPDM.QVAL where QNAM = 'RACEOTH'` requires a structured
-`source` of `SUPPDM.QVAL` that declares a `filter`. No rule compares the filter with the
-written condition. Any other derivation computes rather than copies, and the
-refutation of [SUB-19](#sub-19) already rejects a computed column that claims
-otherwise. An `ONLY` pivot and a read through a plain lookup are bare reads
-under [SUB-19](#sub-19), but neither is a `source` of the predecessor's input
-dataset. A bare `source` of another dataset or column, such a pivot or lookup
-read, or a `source` without the `filter` a written condition requires, fails
-with `origin_contradicts_derivation`, reporting the column, the predecessor and
-the reason. A value-level `Predecessor` entry is checked against the
+`source` of `SUPPDM.QVAL` that declares a `filter`. A plain lookup of the
+predecessor's input, a named intermediate over that declared input with no
+`derivations` ([SUB-19](#sub-19)), copies the column too: with
+`intermediates: [{id: SUBJ, dataset: ADSL, key: {USUBJID: AE.USUBJID}}]`, the
+read `SUBJ.AGE` copies `ADSL.AGE`, and a written condition then requires the
+lookup, or the structured `source` reading through it, to declare a `filter`.
+A pair relation reads two datasets and copies through neither, and a lookup
+whose `absent` answers with a value other than null writes a value no record
+stores. No rule
+compares the filter with the written condition. Any other derivation computes
+rather than copies, and the refutation of [SUB-19](#sub-19) already rejects a
+computed column that claims otherwise, as it does a read through a lookup that
+declares `derivations`. An `ONLY` pivot is a bare read under
+[SUB-19](#sub-19), but it is no `source` of the predecessor's input dataset. A
+bare `source` of another dataset or column, such a pivot, a read through a
+lookup of another dataset, or a read without the `filter` a written condition
+requires, fails with `origin_contradicts_derivation`, reporting the column,
+the predecessor and the reason. A value-level `Predecessor` entry is checked against the
 derivations that can produce the rows it selects and fails with
 `refuted_value_origin`, as [SUB-13](#sub-13) states.
 
