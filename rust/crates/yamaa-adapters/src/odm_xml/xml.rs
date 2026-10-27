@@ -211,6 +211,26 @@ impl<R: Read> Xml<R> {
         }
     }
 
+    /// A forbidden XML character can interrupt declaration tokenization. Its
+    /// readable prefix can already name ASCII, which judges the pending byte.
+    fn check_interrupted_declaration(&mut self, position: u64) -> Result<(), Error> {
+        if !self.first || !matches!(self.reader.get_ref().pending, Some(Fault::Character { .. })) {
+            return Ok(());
+        }
+        let Some(content) = self.buf.strip_prefix(b"<?xml") else {
+            return Ok(());
+        };
+        if matches!(declaration_encoding(content), Ok((Encoding::Ascii, _))) {
+            self.reader
+                .get_mut()
+                .set_encoding(Encoding::Ascii, &self.buf, position)?;
+            if let Some(fault) = &self.reader.get_ref().pending {
+                return Err(fault.clone().into_error());
+            }
+        }
+        Ok(())
+    }
+
     /// Read the next admitted event.
     pub(super) fn next(&mut self) -> Result<Event<'_>, Error> {
         // The tokenizer's offsets leave out the UTF-8 byte order mark that it
@@ -223,6 +243,7 @@ impl<R: Read> Xml<R> {
         let token = match read {
             Ok(token) => token,
             Err(error) => {
+                self.check_interrupted_declaration(position)?;
                 // quick-xml checks end-tag names and comment hyphens once it
                 // has read the markup's bytes. Decoding those bytes as UTF-8
                 // comes first (`utf8`), so an invalid byte in them is reported
@@ -258,11 +279,7 @@ impl<R: Read> Xml<R> {
                 // The tokenizer has consumed these bytes. Admit the encoding
                 // before checking the suffix, including a non-UTF-8 suffix
                 // after an otherwise readable encoding pseudo-attribute.
-                let content = match std::str::from_utf8(&declaration) {
-                    Ok(content) => content,
-                    Err(error) => utf8(&declaration[..error.valid_up_to()], position + 2)?,
-                };
-                let declared = declaration_encoding(&content[3..]);
+                let declared = declaration_encoding(&declaration[3..]);
                 if let Ok((encoding, _)) = &declared {
                     self.reader
                         .get_mut()
@@ -876,7 +893,14 @@ fn pseudo_attribute<'a>(
 
 /// Read version 1.x and the optional encoding after `xml`. The caller checks
 /// source bytes in that encoding before validating the remaining suffix.
-fn declaration_encoding(content: &str) -> Result<(Encoding, &str), Declaration> {
+fn declaration_encoding(content: &[u8]) -> Result<(Encoding, &str), Declaration> {
+    // Only a readable version and encoding prefix can select the byte mode.
+    // The caller reports a later UTF-8 error after checking that mode's bytes.
+    let content = match std::str::from_utf8(content) {
+        Ok(content) => content,
+        Err(error) => std::str::from_utf8(&content[..error.valid_up_to()])
+            .map_err(|_| Declaration::Malformed("invalid UTF-8 byte sequence"))?,
+    };
     let mut rest = content;
     let mut admitted = Encoding::Utf8;
     let version = pseudo_attribute(&mut rest, "version", true)?.unwrap_or_default();

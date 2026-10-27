@@ -351,23 +351,26 @@ mod xml_strictness {
     /// whether prefetched or split across the byte source's read buffers.
     #[test]
     fn ascii_violations_keep_their_position_across_read_buffers() {
-        let bad_bytes = [&[0xFF][..], &[0xC3, 0xA9][..], &[0xEF, 0xBF, 0xBE][..]];
-        for (label, head, tail, bad_bytes) in [
+        let bad_bytes = [
+            &[0xFF][..],
+            &[0xC3, 0xA9][..],
+            &[0xEF, 0xBF, 0xBE][..],
+            &[0xEF, 0xBF, 0xBF][..],
+        ];
+        for (label, head, tail) in [
             (
                 "comment",
                 &b"<?xml version=\"1.0\" encoding=\"US-ASCII\"?><ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"><!--"[..],
                 &b"--><ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/></ODM>"[..],
-                &bad_bytes[..],
             ),
             (
                 "declaration",
                 &b"<?xml version=\"1.0\" encoding=\"US-ASCII\" "[..],
                 &b"?><ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"><ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/></ODM>"[..],
-                &bad_bytes[..2],
             ),
         ] {
             for position in [head.len(), 65_535, 65_536, 65_537, 131_075] {
-                for bad in bad_bytes {
+                for bad in &bad_bytes {
                     let mut bytes = head.to_vec();
                     bytes.resize(position, b' ');
                     bytes.extend_from_slice(bad);

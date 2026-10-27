@@ -329,6 +329,121 @@
           }
         }
       ]
+    },
+    {
+      "case": "ascii_declaration_checks_withheld_fffe",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "<?xml version=\"1.0\" encoding=\"US-ASCII\" \ufffe?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 40,
+            "reason": "US-ASCII XML contains non-ASCII byte 0xEF"
+          }
+        }
+      ]
+    },
+    {
+      "case": "ascii_declaration_checks_withheld_ffff",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "<?xml version=\"1.0\" encoding=\"US-ASCII\" \uffff?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 40,
+            "reason": "US-ASCII XML contains non-ASCII byte 0xEF"
+          }
+        }
+      ]
+    },
+    {
+      "case": "ascii_declaration_reports_earlier_high_bytes_before_withheld_characters",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "<?xml version=\"1.0\" encoding=\"US-ASCII\" \u00e9\ufffe?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 40,
+            "reason": "US-ASCII XML contains non-ASCII byte 0xC3"
+          }
+        }
+      ]
+    },
+    {
+      "case": "ascii_bom_precedes_a_withheld_declaration_character",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "\ufeff<?xml version=\"1.0\" encoding=\"US-ASCII\" \ufffe?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 0,
+            "reason": "US-ASCII XML contains non-ASCII byte 0xEF"
+          }
+        }
+      ]
+    },
+    {
+      "case": "ascii_declaration_still_refuses_ascii_xml_controls",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "<?xml version=\"1.0\" encoding=\"US-ASCII\" \u0000?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 40,
+            "reason": "invalid XML character U+0000"
+          }
+        }
+      ]
     }
   ]
 }
