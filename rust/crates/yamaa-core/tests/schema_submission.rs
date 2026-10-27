@@ -1083,10 +1083,12 @@ mod schema {
                 .collect();
             let specs = a.node(N::Sequence(entries));
             let define = a.text("define.xml");
+            let context = a.text("Other");
             let section = a.map(vec![
                 ("standards", standards),
                 ("specs", specs),
                 ("define", define),
+                ("context", context),
             ]);
             fields.extend([("study", study), ("sdtm", section)]);
             let root = a.map(fields);
@@ -2372,11 +2374,13 @@ mod schema {
             let specs = a.node(N::Sequence(vec![filename]));
             let define = a.text("define.xml");
             let version = a.text("1.0");
+            let context = a.text("Other");
             let section = a.map(vec![
                 ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("source_system_version", version),
+                ("context", context),
             ]);
             let root = a.map(vec![
                 ("yamaa", yamaa),

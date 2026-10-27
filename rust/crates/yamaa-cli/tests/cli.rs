@@ -1556,6 +1556,7 @@ fn adam_section(project: &str) -> String {
         )
         .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
         .replace("  transport: dataset_json\n", "")
+        .replace("  context: Submission\n", "  context: Other\n")
         .replace("define: define.xml", "define: adam-define.xml")
 }
 

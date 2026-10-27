@@ -438,6 +438,7 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
             "  specs:",
             "    - spec.yaml",
             "  define: define.xml",
+            "  context: Other",
         ],
     );
     study.write(

@@ -1673,7 +1673,7 @@ fn adam_section(project: &str) -> String {
             "name: ADaMIG\n    version: '1.3'",
         )
         .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
-        .replace("  transport: dataset_json\n", "")
+        .replace("  transport: dataset_json\n", "  context: Other\n")
         .replace("define: define.xml", "define: adam-define.xml")
 }
 
@@ -1777,7 +1777,7 @@ fn two_sections_that_write_one_file_save_neither() {
             "name: ADaMIG\n    version: '1.3'",
         )
         .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
-        .replace("  transport: dataset_json\n", "");
+        .replace("  transport: dataset_json\n", "  context: Other\n");
     study.write("project.yaml", format!("{project}{adam}"));
     let mut submission = engine
         .project(&study.project())
@@ -1859,6 +1859,7 @@ sdtm:
   specs:
     - dm.yaml
   define: define.xml
+  context: Other
 adam:
   standards:
     - name: ADaMIG
@@ -1867,6 +1868,7 @@ adam:
   specs:
     - adsl.yaml
   define: adam-define.xml
+  context: Other
 "#;
 
 const GUARDED_DM: &str = r#"yamaa: "1.0"

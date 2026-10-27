@@ -34,4 +34,5 @@ sdtm:
     version: '3.4'
     status: Final
   define: define.xml
+  transport: dataset_json
   source_system_version: '1.0'

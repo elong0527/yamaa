@@ -19,4 +19,5 @@ sdtm:
       version: "1.1"
       status: Final
   define: define.xml
+  context: Other
   source_system_version: "1.0"

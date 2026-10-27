@@ -2361,6 +2361,18 @@ pub fn compose(
             .with("value", define.text.as_str()),
         );
     }
+    // DEFINE-4: a regulator takes a dataset only in a transport file, so a
+    // `Submission` document names one rather than the CSV or Parquet artifact.
+    if section.context == DefineContext::Submission && section.transport.is_none() {
+        findings.push(
+            cause(
+                ConditionCode::SubmissionTransportRequired,
+                "transport",
+                "transport",
+            )
+            .with("field", "transport"),
+        );
+    }
     let source_version = match source_version(section, installed) {
         Some(version) => version.into(),
         None => {

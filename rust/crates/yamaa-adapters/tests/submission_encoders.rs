@@ -383,11 +383,13 @@ mod submission_encoders {
             let specs = a.node(N::Sequence(vec![filename]));
             let define = a.text("define.xml");
             let version = a.text("1.0");
+            let context = a.text("Other");
             let section = a.map(vec![
                 ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("source_system_version", version),
+                ("context", context),
             ]);
             let root = a.map(vec![
                 ("yamaa", yamaa),

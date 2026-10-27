@@ -478,7 +478,7 @@ class PublicDefine(unittest.TestCase):
 
     def test_ae_vs_independent_fixed_time_schema_and_structure(self):
         expected = {
-            "sdtm-ae-coding": ("AE", TRUTH["ae_columns"], "Submission", "MEDDRA"),
+            "sdtm-ae-coding": ("AE", TRUTH["ae_columns"], "Other", "MEDDRA"),
             "sdtm-vs-epoch-from-subject-elements": (
                 "VS",
                 TRUTH["vs_columns"],
@@ -594,7 +594,11 @@ class PublicDefine(unittest.TestCase):
         )
         self.assertIn("INPUT-11", result.issues.to_polars()["rule"].to_list())
         self.refused(result)
+        # A document beside the published tables, not a submission (DEFINE-4).
         self.metadata_only(directory)
+        self.edit_project(
+            directory, lambda document: document["sdtm"].update(context="Other")
+        )
         result = self.call(directory)
         self.assertEqual(result.issues.num_rows, 0, result.issues)
         project = directory / "project.yaml"

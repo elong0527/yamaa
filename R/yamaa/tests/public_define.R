@@ -205,7 +205,7 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
 cat("PASS: independent LB value metadata, original-source rejection and selected-value codelist\n")
 
 for (case in list(
-  list(name = "sdtm-ae-coding", id = "AE", columns = fixture_strings(host_truth[["ae_columns"]]), context = "Submission", codelist = "MEDDRA"),
+  list(name = "sdtm-ae-coding", id = "AE", columns = fixture_strings(host_truth[["ae_columns"]]), context = "Other", codelist = "MEDDRA"),
   list(name = "sdtm-vs-epoch-from-subject-elements", id = "VS", columns = fixture_strings(host_truth[["vs_columns"]]), context = "Other", codelist = "EPOCH"))) {
   root <- fixture(case$name)
   result <- submission(root, created = "2026-09-30T00:00:00"); check_issues(result)
@@ -258,9 +258,11 @@ stopifnot("an unpublished dataset breaks its producer contract" = "producer_cont
   "under INPUT-11" = "INPUT-11" %in% result$issues$rule, "its save is refused" = refused(result),
   "no Dataset-JSON is written" = !file.exists(file.path(root, "dm.json")),
   "no Define-XML is written" = !file.exists(file.path(root, "define.xml")))
+# A document beside the published tables, not a submission (DEFINE-4).
 metadata_only(root)
-result <- submission(root); check_issues(result)
 project <- file.path(root, "project.yaml")
+edit_lines(project, function(lines) append(lines, "  context: Other", after = match("sdtm:", lines)))
+result <- submission(root); check_issues(result)
 edit_lines(project, function(lines) gsub("name: SDTMIG", "name: ADaMIG", lines, fixed = TRUE))
 result <- submission(root)
 stopifnot("ADaMIG in the SDTM section is a model mismatch" = "standard_model_mismatch" %in% result$issues$condition,

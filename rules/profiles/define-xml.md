@@ -81,11 +81,15 @@ requirement unmet under `Submission` fails, reporting the requirement and the
 position.
 
 Fails: `missing_required_field`, `sas_name_too_long`, `transport_label_invalid`, `transport_text_invalid`.
-Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_codelist_without_its_nci_code_is_refused_under_submission`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_item_without_its_nci_code_is_refused_under_submission`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_is_refused_under_submission`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_refused_under_submission`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_cites_the_form_without_a_page_under_other`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_admitted_under_other`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_submission_section_without_a_transport_is_refused_at_its_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_section_under_other_names_its_artifact_without_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_codelist_without_its_nci_code_is_refused_under_submission`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_item_without_its_nci_code_is_refused_under_submission`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_is_refused_under_submission`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_refused_under_submission`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_without_its_form_cites_the_form_without_a_page_under_other`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_admitted_under_other`.
 
 Nothing in this profile is relaxed by `Other`; that context only omits the
 requirements a regulator imposes. Under `Submission`:
 
+- the section declares a `transport` (`xpt`, `dataset_json` or
+  `dataset_ndjson`), since a regulator takes a dataset only in a transport
+  file, so the document never names a CSV or Parquet artifact
+  ([DEFINE-16](#define-16));
 - every dataset declares `submission.domain` or inherits one, for the `SDTM`
   and `SEND` models;
 - every dataset's `SASDatasetName` and every column's `SASFieldName` is
@@ -113,8 +117,12 @@ requirements a regulator imposes. Under `Submission`:
   represents its dictionary rather than CDISC controlled terminology, and has
   no items to identify.
 
-A codelist `alias`, or the `alias` of a published item, missing under
-`Submission` fails with `missing_required_field`; a sponsor's extension of an
+A section without `transport` under `Submission` fails with
+`missing_required_field` at its `transport` when its document is composed;
+running its specifications is unaffected, and `context: Other` composes the
+document beside the artifacts. A codelist `alias`, or the `alias` of a
+published item, missing under `Submission` fails with
+`missing_required_field`; a sponsor's extension of an
 extensible list, such as an added epoch, unit or test code, needs none. A
 collected origin without a page reference fails as
 [SUB-17](submission.md#sub-17) states. A name, label or text value outside

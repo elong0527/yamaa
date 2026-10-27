@@ -23,7 +23,7 @@ mod service {
 
     const CREATED: &str = "2026-10-11T00:00:00";
     const STUDY: &str = "study:\n  id: STUDY01\n  name: Study\n  description: Independent service fixture\n  protocol_name: Protocol\n";
-    const SDTM: &str = "sdtm:\n  standards:\n    - name: SDTMIG\n      version: \"3.4\"\n      status: Final\n  specs: []\n  define: define.xml\n";
+    const SDTM: &str = "sdtm:\n  standards:\n    - name: SDTMIG\n      version: \"3.4\"\n      status: Final\n  specs: []\n  define: define.xml\n  context: Other\n";
 
     /// One request a composition made: its operation, the path as written,
     /// and whether it held a reference (a freshness check or a held target).

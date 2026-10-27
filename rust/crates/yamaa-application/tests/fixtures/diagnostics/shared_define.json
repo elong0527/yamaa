@@ -4,7 +4,7 @@
     "study_lb": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origins: [{type: Assigned, source: Sponsor}]}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origins: [{type: Assigned, source: Sponsor}]}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n",
     "study_adlb": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origins: [{type: Predecessor, description: LB.USUBJID}]}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Predecessor, description: LB.LBTESTCD}]}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: \"'LB'\"\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origins: [{type: Assigned}]}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n",
     "cross_section_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [adlb.yaml]\n  define: define.xml\n  transport: dataset_json\n  source_system_version: '1.0'\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n",
-    "staleness_project": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: CATH\n  name: CATH\n  description: Example study submitting demographics\n  protocol_name: CATH-01\nsdtm:\n  standards:\n    - name: SDTMIG\n      version: \"3.4\"\n      status: Final\n  specs:\n    - dm.yaml\n  define: define.xml\n",
+    "staleness_project": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: CATH\n  name: CATH\n  description: Example study submitting demographics\n  protocol_name: CATH-01\nsdtm:\n  standards:\n    - name: SDTMIG\n      version: \"3.4\"\n      status: Final\n  specs:\n    - dm.yaml\n  define: define.xml\n  context: Other\n",
     "staleness_dm": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput:\n  RAW: raw.csv\noutput:\n  path: dm.csv\n  columns: [DOMAIN, STUDYID, USUBJID]\n  report: dm-report.csv\ncolumns:\n  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n    derivation: \"'DM'\"\n    submission:\n      core: Req\n      role: Identifier\n      length: 2\n      origins:\n        - type: Assigned\n          source: Sponsor\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: RAW.STUDYID\n    submission:\n      core: Req\n      role: Identifier\n      length: 4\n      origins:\n        - type: Protocol\n          source: Sponsor\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission:\n      core: Req\n      role: Identifier\n      length: 9\n      origins:\n        - type: Assigned\n          source: Sponsor\nsubmission:\n  label: Demographics\n  class: SPECIAL PURPOSE\n  structure: One record per subject\n  repeating: false\n",
     "staleness_raw": "STUDYID,USUBJID\nCATH,CATH-0001\nCATH,CATH-0002\n",
     "staleness_artifact": "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0001\nDM,CATH,CATH-0002\n"
@@ -331,6 +331,28 @@
       "saved": {}
     },
     {
+      "case": "a_section_under_other_names_its_artifact_without_a_transport",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {"project.yaml": [{"from": "  transport: dataset_json\n", "to": "  context: Other\n"}]},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/@def:Context": ["Other"],
+            "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.DM']/def:leaf": [
+              "<def:leaf ID=\"LF.DM\" xlink:href=\"dm.csv\">\n          <def:title>dm.csv</def:title>\n        </def:leaf>"
+            ]
+          }
+        }
+      }
+    },
+    {
       "case": "a_collected_origin_without_its_form_is_refused_under_submission",
       "operation": "define",
       "input": {
@@ -340,7 +362,6 @@
             {"from": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n", "to": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n"}
           ],
           "project.yaml": [
-            {"from": "  transport: dataset_json\n", "to": ""},
             {"from": "sdtm:\n", "to": "sdtm:\n  context: Submission\n"}
           ]
         },
@@ -364,7 +385,6 @@
             {"from": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n", "to": "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents: [acrf]\n"}
           ],
           "project.yaml": [
-            {"from": "  transport: dataset_json\n", "to": ""},
             {"from": "sdtm:\n", "to": "sdtm:\n  context: Submission\n"}
           ]
         },
@@ -389,7 +409,7 @@
           ],
           "project.yaml": [
             {"from": "  transport: dataset_json\n", "to": ""},
-            {"from": "sdtm:\n", "to": "sdtm:\n  context: Submission\n"}
+            {"from": "sdtm:\n", "to": "sdtm:\n  context: Other\n"}
           ]
         },
         "project": "project.yaml",
@@ -413,7 +433,7 @@
           ],
           "project.yaml": [
             {"from": "  transport: dataset_json\n", "to": ""},
-            {"from": "sdtm:\n", "to": "sdtm:\n  context: Submission\n"}
+            {"from": "sdtm:\n", "to": "sdtm:\n  context: Other\n"}
           ]
         },
         "project": "project.yaml",
@@ -438,7 +458,7 @@
           ],
           "project.yaml": [
             {"from": "  transport: dataset_json\n", "to": ""},
-            {"from": "sdtm:\n", "to": "send:\n  context: Submission\n"},
+            {"from": "sdtm:\n", "to": "send:\n  context: Other\n"},
             {"from": "  - name: SDTMIG\n", "to": "  - name: SENDIG\n"}
           ]
         },
@@ -464,7 +484,7 @@
           ],
           "project.yaml": [
             {"from": "  transport: dataset_json\n", "to": ""},
-            {"from": "sdtm:\n", "to": "send:\n  context: Submission\n"},
+            {"from": "sdtm:\n", "to": "send:\n  context: Other\n"},
             {"from": "  - name: SDTMIG\n", "to": "  - name: SENDIG\n"}
           ]
         },
@@ -650,7 +670,7 @@
         "files": {
           "spec.yaml": {"file": "benchmarks/sdtm-dm-metadata/spec.yaml"},
           "project.yaml": {"file": "benchmarks/sdtm-dm-metadata/project.yaml", "edits": [
-            {"from": "  transport: dataset_json\n", "to": ""},
+            {"from": "  transport: dataset_json\n", "to": "  context: Other\n"},
             {"from": "study:\n", "to": "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nstudy:\n"}
           ]}
         },
@@ -773,7 +793,7 @@
               },
               {
                 "from": "sdtm:\n",
-                "to": "send:\n  context: Submission\n"
+                "to": "send:\n  context: Other\n"
               },
               {
                 "from": "  - name: SDTMIG\n",
@@ -821,7 +841,7 @@
               },
               {
                 "from": "sdtm:\n",
-                "to": "send:\n  context: Submission\n"
+                "to": "send:\n  context: Other\n"
               },
               {
                 "from": "  - name: SDTMIG\n",
@@ -1118,6 +1138,18 @@
         "context"
       ],
       "issues": [
+        {
+          "phase": "validation",
+          "condition": "missing_required_field",
+          "rule": "DEFINE-4",
+          "spec_paths": [
+            "sdtm.transport"
+          ],
+          "context": {
+            "detail": "transport",
+            "field": "transport"
+          }
+        },
         {
           "phase": "validation",
           "condition": "value_not_permitted",
