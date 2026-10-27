@@ -8,6 +8,8 @@
 [![rustc](https://img.shields.io/badge/rustc-1.82%2B-orange?logo=rust)](https://www.rust-lang.org)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
+[![SDTMIG: 3.3+](https://img.shields.io/badge/SDTMIG-3.3%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported SDTMIG: 3.3; see the qualified version list and generation/export coverage")
+[![ADaMIG: 1.1+](https://img.shields.io/badge/ADaMIG-1.1%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported ADaMIG: 1.1; see the qualified version list and generation/export coverage")
 
 yamaa is a domain-specific language (DSL) for clinical trial data standardization.
 A yamaa specification transforms ODM XML data, extracted from an EDC system,
