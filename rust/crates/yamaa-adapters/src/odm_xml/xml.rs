@@ -248,19 +248,29 @@ impl<R: Read> Xml<R> {
         // this range, once the event no longer borrows it.
         let held = match token {
             Token::Decl(declaration) => {
-                let declaration = utf8(&declaration, position + 2)?;
                 if !first {
+                    utf8(&declaration, position + 2)?;
                     return Err(malformed(
                         position,
                         "XML declaration allowed only at the start of the document",
                     ));
                 }
-                let encoding =
-                    check_declaration(&declaration[3..]).map_err(|error| match error {
-                        Declaration::Malformed(reason) => malformed(position, reason),
-                        Declaration::Encoding(encoding) => Error::Encoding { encoding },
-                    })?;
-                self.reader.get_mut().set_encoding(encoding)?;
+                // The tokenizer has consumed these bytes. Admit the encoding
+                // before checking the suffix, including a non-UTF-8 suffix
+                // after an otherwise readable encoding pseudo-attribute.
+                let content = match std::str::from_utf8(&declaration) {
+                    Ok(content) => content,
+                    Err(error) => utf8(&declaration[..error.valid_up_to()], position + 2)?,
+                };
+                let declared = declaration_encoding(&content[3..]);
+                if let Ok((encoding, _)) = &declared {
+                    self.reader
+                        .get_mut()
+                        .set_encoding(*encoding, &declaration, position + 2)?;
+                }
+                utf8(&declaration, position + 2)?;
+                let (_, rest) = declared.map_err(|error| error.at(position))?;
+                check_declaration_end(rest).map_err(|error| error.at(position))?;
                 return Ok(Event::Skip);
             }
             Token::DocType(doctype) => {
@@ -800,6 +810,15 @@ enum Declaration {
     Encoding(String),
 }
 
+impl Declaration {
+    fn at(self, position: u64) -> Error {
+        match self {
+            Self::Malformed(reason) => malformed(position, reason),
+            Self::Encoding(encoding) => Error::Encoding { encoding },
+        }
+    }
+}
+
 /// Both encodings use the UTF-8 tokenizer; ASCII adds a source-byte bound.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Encoding {
@@ -855,9 +874,9 @@ fn pseudo_attribute<'a>(
     Ok(Some(&after[..end]))
 }
 
-/// Validate the XML declaration after `xml`: version 1.x, then an optional
-/// UTF-8 or US-ASCII encoding, then an optional standalone yes or no.
-fn check_declaration(content: &str) -> Result<Encoding, Declaration> {
+/// Read version 1.x and the optional encoding after `xml`. The caller checks
+/// source bytes in that encoding before validating the remaining suffix.
+fn declaration_encoding(content: &str) -> Result<(Encoding, &str), Declaration> {
     let mut rest = content;
     let mut admitted = Encoding::Utf8;
     let version = pseudo_attribute(&mut rest, "version", true)?.unwrap_or_default();
@@ -885,6 +904,11 @@ fn check_declaration(content: &str) -> Result<Encoding, Declaration> {
             return Err(Declaration::Encoding(encoding.into()));
         }
     }
+    Ok((admitted, rest))
+}
+
+/// The declaration ends with an optional standalone yes or no and whitespace.
+fn check_declaration_end(mut rest: &str) -> Result<(), Declaration> {
     if let Some(standalone) = pseudo_attribute(&mut rest, "standalone", false)? {
         if standalone != "yes" && standalone != "no" {
             return Err(Declaration::Malformed(
@@ -897,7 +921,7 @@ fn check_declaration(content: &str) -> Result<Encoding, Declaration> {
             "XML declaration contains unexpected content",
         ));
     }
-    Ok(admitted)
+    Ok(())
 }
 
 /// Processing instructions need a colon-free target other than `xml`. The
@@ -1086,9 +1110,14 @@ impl<R: Read> CheckedXml<R> {
         }
     }
 
-    /// A declaration arrives after the first buffer was filled. Recheck its
-    /// unread bytes, deferring any fault until the parser reaches that byte.
-    fn set_encoding(&mut self, encoding: Encoding) -> Result<(), Error> {
+    /// Check the consumed declaration, then recheck prefetched unread bytes,
+    /// deferring their faults until the parser reaches them.
+    fn set_encoding(
+        &mut self,
+        encoding: Encoding,
+        declaration: &[u8],
+        position: u64,
+    ) -> Result<(), Error> {
         self.encoding = encoding;
         if encoding == Encoding::Ascii && self.bom {
             return Err(Fault::Ascii {
@@ -1096,6 +1125,9 @@ impl<R: Read> CheckedXml<R> {
                 value: UTF8_BOM[0],
             }
             .into_error());
+        }
+        if let Some((_, fault)) = invalid_content(declaration, position, encoding) {
+            return Err(fault.into_error());
         }
         // The first scan may already have held an XML character fault back.
         // Include its first byte so ASCII admission can judge that byte too,

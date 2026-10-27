@@ -351,27 +351,40 @@ mod xml_strictness {
     /// whether prefetched or split across the byte source's read buffers.
     #[test]
     fn ascii_violations_keep_their_position_across_read_buffers() {
-        let head = b"<?xml version=\"1.0\" encoding=\"US-ASCII\"?><ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"><!--";
-        for position in [head.len(), 65_535, 65_536, 65_537, 131_075] {
-            for bad in [&[0xFF][..], &[0xEF, 0xBF, 0xBE][..]] {
-                let mut bytes = head.to_vec();
-                bytes.resize(position, b' ');
-                bytes.extend_from_slice(bad);
-                bytes.extend_from_slice(
-                    b"--><ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/></ODM>",
-                );
-                let actual = match read_bytes("ascii.xml", &bytes, &Options::default()) {
-                    Err(odm_items::Error::Malformed { position, reason }) => (position, reason),
-                    other => panic!("ASCII violation at {position}: {other:?}"),
-                };
-                assert_eq!(
-                    actual,
-                    (
-                        position as u64,
-                        format!("US-ASCII XML contains non-ASCII byte 0x{:02X}", bad[0])
-                    ),
-                    "ASCII violation at {position}"
-                );
+        let bad_bytes = [&[0xFF][..], &[0xC3, 0xA9][..], &[0xEF, 0xBF, 0xBE][..]];
+        for (label, head, tail, bad_bytes) in [
+            (
+                "comment",
+                &b"<?xml version=\"1.0\" encoding=\"US-ASCII\"?><ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"><!--"[..],
+                &b"--><ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/></ODM>"[..],
+                &bad_bytes[..],
+            ),
+            (
+                "declaration",
+                &b"<?xml version=\"1.0\" encoding=\"US-ASCII\" "[..],
+                &b"?><ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"><ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/></ODM>"[..],
+                &bad_bytes[..2],
+            ),
+        ] {
+            for position in [head.len(), 65_535, 65_536, 65_537, 131_075] {
+                for bad in bad_bytes {
+                    let mut bytes = head.to_vec();
+                    bytes.resize(position, b' ');
+                    bytes.extend_from_slice(bad);
+                    bytes.extend_from_slice(tail);
+                    let actual = match read_bytes("ascii.xml", &bytes, &Options::default()) {
+                        Err(odm_items::Error::Malformed { position, reason }) => (position, reason),
+                        other => panic!("ASCII violation in {label} at {position}: {other:?}"),
+                    };
+                    assert_eq!(
+                        actual,
+                        (
+                            position as u64,
+                            format!("US-ASCII XML contains non-ASCII byte 0x{:02X}", bad[0])
+                        ),
+                        "ASCII violation in {label} at {position}"
+                    );
+                }
             }
         }
     }

@@ -64,9 +64,10 @@ compared ASCII case-insensitively, only when every source byte is ASCII.
 Numeric character references may name non-ASCII characters: the restriction
 is on the source bytes, not the decoded values. A non-ASCII source byte,
 including a UTF-8 byte order mark, fails as `source_odm_xml_malformed`, with
-its zero-based byte position and reason. This check covers skipped content,
-comments and bytes beyond the first read buffer. `read_odm`, selected archive
-members and direct XML inputs use the same check; no transcoding occurs.
+its zero-based byte position and reason. This check covers the declaration
+itself, skipped content, comments and bytes beyond the first read buffer.
+`read_odm`, selected archive members and direct XML inputs use the same check;
+no transcoding occurs.
 
 **Snapshots.** The root's `FileType` reads when it is `Snapshot` or absent and
 fails as `source_odm_transactional` when it is `Transactional`. Every element

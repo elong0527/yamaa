@@ -260,6 +260,75 @@
           "condition": "source_odm_transactional"
         }
       ]
+    },
+    {
+      "case": "ascii_declaration_checks_its_consumed_bytes",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "<?xml version=\"1.0\" encoding=\"US-ASCII\"\u00e9?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 39,
+            "reason": "US-ASCII XML contains non-ASCII byte 0xC3"
+          }
+        }
+      ]
+    },
+    {
+      "case": "ascii_declaration_checks_its_standalone_value",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "<?xml version=\"1.0\" encoding=\"US-ASCII\" standalone=\"\u00e9\"?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 52,
+            "reason": "US-ASCII XML contains non-ASCII byte 0xC3"
+          }
+        }
+      ]
+    },
+    {
+      "case": "ascii_bom_precedes_non_ascii_declaration_content",
+      "operation": "read_odm",
+      "input": {
+        "files": {
+          "source.xml": "\ufeff<?xml version=\"1.0\" encoding=\"US-ASCII\"\u00e9?>"
+        },
+        "source": "source.xml"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_odm_xml_malformed",
+          "rule": "ODM-1",
+          "spec_paths": [],
+          "context": {
+            "path": "{study}/source.xml",
+            "position": 0,
+            "reason": "US-ASCII XML contains non-ASCII byte 0xEF"
+          }
+        }
+      ]
     }
   ]
 }
