@@ -2,8 +2,8 @@
 
 **Goal:** derive each adverse event's analysis start date and time
 (`ASTDTM`), its date (`ASTDT`), its time of day (`ASTTM`) and the time
-imputation flag (`ASTTMF`), and submit them in a Dataset-JSON file with
-the data-definition document.
+imputation flag (`ASTTMF`), and submit them in a SAS Transport version 5
+file with the data-definition document.
 
 **Input:** SDTM adverse event (AE) records with the collected start
 (`AESTDTC`) as ISO 8601 text, collected to the second, the minute, the
@@ -25,10 +25,11 @@ hour, the day or the month.
   `S` when it stops at the minute; blank when the time was collected to
   the second or there is no start.
 
-**Note:** in the Dataset-JSON file and the data-definition document
-`ASTTM` is an eight-byte integer shown with the SAS format `TIME8.`,
-beside `ASTDT` with `DATE9.` and `ASTDTM` with `DATETIME20.`. A time of
-zero flagged `H` is an imputed midnight rather than a collected one.
+**Note:** the SAS Transport file stores `ASTTM` as an eight-byte numeric
+value with the SAS format `TIME8.`, beside `ASTDT` with `DATE9.` and
+`ASTDTM` with `DATETIME20.`. The data-definition document records these
+formats. A time of zero flagged `H` is an imputed midnight rather than a
+collected one.
 
 The `project.yaml` guide declaration is ADaMIG 1.1; the data-definition
 document records it and points to the SAS Transport version 5 dataset.
