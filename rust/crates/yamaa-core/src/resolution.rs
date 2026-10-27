@@ -137,6 +137,11 @@ struct Live<'a> {
     columns: BTreeSet<String>,
     inputs: BTreeSet<String>,
     intermediates: BTreeSet<String>,
+    /// The intermediates nothing reads that survive only to reach their
+    /// refusal for a missing `key` (LOOKUP-3, D219): they read nothing, so
+    /// they keep no input live, and an input only they name is pruned
+    /// instead of failing on a field it lacks.
+    refused: BTreeSet<String>,
 }
 
 impl<'a> Live<'a> {
@@ -163,6 +168,7 @@ impl<'a> Live<'a> {
             columns: BTreeSet::new(),
             inputs: BTreeSet::new(),
             intermediates: BTreeSet::new(),
+            refused: BTreeSet::new(),
         }
     }
 
@@ -435,14 +441,17 @@ impl<'a> Live<'a> {
         // Every column and intermediate that carries its own verification. A
         // complete rename-only intermediate also reaches its refusal
         // (LOOKUP-4) when nothing reads it, and so does a 1.x intermediate
-        // that drives no row template and declares no `key` (LOOKUP-3, D219).
+        // that drives no row template and declares no `key` (LOOKUP-3, D219),
+        // which reads nothing until something reads it.
         for column in &spec.columns {
             if !column.checks.is_empty() {
                 self.columns.insert(column.name.name.clone());
             }
         }
         for item in &spec.intermediates {
-            if !item.checks.is_empty()
+            if item.checks.is_empty() && spec.lacks_key(item) && !item.pairs() {
+                self.refused.insert(item.id.name.clone());
+            } else if !item.checks.is_empty()
                 || spec.lacks_key(item)
                 || (rename_only(spec, item) && !item.dataset.name.is_empty())
             {
@@ -571,6 +580,12 @@ impl<'a> Live<'a> {
                 return Ok(());
             }
         }
+    }
+
+    /// Whether the intermediate `id` survives pruning: it is live, or it
+    /// survives only to reach its refusal.
+    fn survives(&self, id: &str) -> bool {
+        self.intermediates.contains(id) || self.refused.contains(id)
     }
 
     /// The live columns in declaration order.
@@ -804,7 +819,7 @@ impl<'a> Rebuild<'a> {
                 for &item in items {
                     if Some(node) == self.intermediates {
                         let id = input.field(item, "id").and_then(|id| self.text(id));
-                        if !id.is_some_and(|id| self.live.intermediates.contains(id)) {
+                        if !id.is_some_and(|id| self.live.survives(id)) {
                             continue;
                         }
                     }
@@ -823,6 +838,7 @@ impl<'a> Rebuild<'a> {
                             .intermediates
                             .is_some_and(|list| matches!(input.nodes()[list], N::Sequence(_)))
                         && self.live.intermediates.is_empty()
+                        && self.live.refused.is_empty()
                     {
                         continue;
                     }
