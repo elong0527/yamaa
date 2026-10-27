@@ -140,7 +140,7 @@ EXPECTED = {
             "submission_section_class",
             "define_version",
             "str",
-            values=("2.0.0", "2.1.11"),
+            values=("2.0.0", *(f"2.1.{patch}" for patch in range(12))),
         )
     ],
     "new.spec.submission.mode": [
@@ -848,6 +848,38 @@ def messages(validator_, document):
 
 
 class JsonSchemaTests(unittest.TestCase):
+    def test_define_versions_admit_every_published_release_since_2_0_0(self):
+        section = validator("project", "submission_section_class")
+        cases = [
+            *(
+                (version, True)
+                for version in ["2.0.0", *(f"2.1.{patch}" for patch in range(12))]
+            ),
+            *(
+                (version, False)
+                for version in [
+                    "1.0.0",
+                    "2.0",
+                    "2.0.1",
+                    "2.1",
+                    "2.1.01",
+                    "2.1.12",
+                    "2.2.0",
+                    "3.0.0",
+                    None,
+                    2.1,
+                ]
+            ),
+        ]
+        for version, admitted in cases:
+            with self.subTest(version=version):
+                self.assertEqual(
+                    section.is_valid(
+                        {"specs": ["spec.yaml"], "define_version": version}
+                    ),
+                    admitted,
+                )
+
     def test_committed_json_schemas_are_current_and_valid(self):
         self.assertEqual(
             sorted(path.name for path in generator.TARGET.iterdir()),

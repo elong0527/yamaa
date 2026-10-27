@@ -253,7 +253,7 @@ fn item_definition(
     version: ast::project::DefineVersion,
     family: Submission,
 ) -> Element {
-    let modern = version == ast::project::DefineVersion::V2_1;
+    let modern = matches!(version, ast::project::DefineVersion::V2_1(_));
     let name = &column.declaration().name.value;
     let meta = column
         .declaration()
@@ -423,7 +423,7 @@ fn push_where_clauses(metadata: &mut Element, study: &Study) {
 /// Append one item-group definition per dataset, in dataset order.
 fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
     let section = study.section();
-    let modern = section.define_version == ast::project::DefineVersion::V2_1;
+    let modern = matches!(section.define_version, ast::project::DefineVersion::V2_1(_));
     for dataset in study.datasets() {
         let id = dataset.id();
         let sub = dataset.metadata();
@@ -505,7 +505,10 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
 
 /// Append one code-list definition per bound codelist, in catalogue order.
 fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
-    let modern = study.section().define_version == ast::project::DefineVersion::V2_1;
+    let modern = matches!(
+        study.section().define_version,
+        ast::project::DefineVersion::V2_1(_)
+    );
     for list in study.codelists() {
         let c = &list.declaration;
         let mut code = Element::new("CodeList", &format!("codelists.{}", c.id.name))
@@ -573,7 +576,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
 pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     validate_profile(study)?;
     let section = study.section();
-    let modern = section.define_version == ast::project::DefineVersion::V2_1;
+    let modern = matches!(section.define_version, ast::project::DefineVersion::V2_1(_));
     let language = &section.xml_lang.text;
     let mut odm = Element::new("ODM", "study")
         .attr("xmlns", "http://www.cdisc.org/ns/odm/v1.3")

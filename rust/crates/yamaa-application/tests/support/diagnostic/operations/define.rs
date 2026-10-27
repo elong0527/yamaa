@@ -21,7 +21,10 @@ use crate::support::diagnostic::{
 use yamaa_application::file_define::Define;
 use yamaa_core::json::Value;
 
-pub(super) const FILES: &[File] = &[fixture!("shared_define.json")];
+pub(super) const FILES: &[File] = &[
+    fixture!("shared_define.json"),
+    fixture!("define_versions.json"),
+];
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     if operation != "define" {

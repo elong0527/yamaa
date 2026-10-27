@@ -254,31 +254,48 @@ pub struct Study {
 }
 
 /// The selected Define-XML release; omission retains the 2.1 maintenance release.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DefineVersion {
     V2_0,
-    #[default]
-    V2_1,
+    V2_1(&'static str),
+}
+impl Default for DefineVersion {
+    fn default() -> Self {
+        Self::V2_1("2.1.11")
+    }
 }
 impl DefineVersion {
-    pub const VALUES: &'static [(&'static str, Self)] =
-        &[("2.0.0", Self::V2_0), ("2.1.11", Self::V2_1)];
+    pub const VALUES: &'static [(&'static str, Self)] = &[
+        ("2.0.0", Self::V2_0),
+        ("2.1.0", Self::V2_1("2.1.0")),
+        ("2.1.1", Self::V2_1("2.1.1")),
+        ("2.1.2", Self::V2_1("2.1.2")),
+        ("2.1.3", Self::V2_1("2.1.3")),
+        ("2.1.4", Self::V2_1("2.1.4")),
+        ("2.1.5", Self::V2_1("2.1.5")),
+        ("2.1.6", Self::V2_1("2.1.6")),
+        ("2.1.7", Self::V2_1("2.1.7")),
+        ("2.1.8", Self::V2_1("2.1.8")),
+        ("2.1.9", Self::V2_1("2.1.9")),
+        ("2.1.10", Self::V2_1("2.1.10")),
+        ("2.1.11", Self::V2_1("2.1.11")),
+    ];
     pub fn name(self) -> &'static str {
         match self {
             Self::V2_0 => "2.0.0",
-            Self::V2_1 => "2.1.11",
+            Self::V2_1(release) => release,
         }
     }
     pub fn namespace(self) -> &'static str {
         match self {
             Self::V2_0 => "http://www.cdisc.org/ns/def/v2.0",
-            Self::V2_1 => "http://www.cdisc.org/ns/def/v2.1",
+            Self::V2_1(_) => "http://www.cdisc.org/ns/def/v2.1",
         }
     }
     pub fn family(self) -> &'static str {
         match self {
             Self::V2_0 => "2.0",
-            Self::V2_1 => "2.1",
+            Self::V2_1(_) => "2.1",
         }
     }
 }
