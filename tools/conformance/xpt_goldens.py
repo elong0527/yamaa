@@ -141,7 +141,7 @@ GOLDENS = [
 GOLDENS.extend(
     [
         (
-            "schema-sdtmig33-dm",
+            "sdtm-dm-sdtmig33",
             "dm.xpt",
             "DM",
             "Demographics",
@@ -149,7 +149,7 @@ GOLDENS.extend(
             DM_ROWS,
         ),
         (
-            "schema-adamig11-adsl",
+            "adam-adsl-adamig11",
             "adsl.xpt",
             "ADSL",
             "Subject-Level Analysis Dataset",
@@ -157,7 +157,7 @@ GOLDENS.extend(
             ADSL_ROWS,
         ),
         (
-            "schema-adamig12-adsl",
+            "adam-adsl-adamig12",
             "adsl.xpt",
             "ADSL",
             "Subject-Level Analysis Dataset",
@@ -165,7 +165,7 @@ GOLDENS.extend(
             ADSL_ROWS,
         ),
         (
-            "schema-sdtmig33-sv",
+            "sdtm-sv-sdtmig33",
             "sv.xpt",
             "SV",
             "Subject Visits",
@@ -261,7 +261,7 @@ GOLDENS.extend(
             ],
         ),
         (
-            "schema-sdtmig33-mo",
+            "sdtm-mo-sdtmig33",
             "mo.xpt",
             "MO",
             "Morphology",
@@ -356,7 +356,7 @@ GOLDENS.extend(
             ],
         ),
         (
-            "schema-adamig11-adlb",
+            "adam-adlb-adamig11",
             "adlb.xpt",
             "ADLB",
             "Laboratory Analysis Dataset",
@@ -492,7 +492,7 @@ GOLDENS.extend(
             ],
         ),
         (
-            "schema-adamig11-adae",
+            "adam-adae-adamig11",
             "adae.xpt",
             "ADAE",
             "Adverse Events Analysis Dataset",

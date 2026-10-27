@@ -1,0 +1,40 @@
+proc import datafile="/app/input/ae.csv" out=ae dbms=csv replace;
+  guessingrows=max;
+run;
+
+data adae;
+  length STUDYID $40 USUBJID $80 AESEQ 8 AETERM $200 ASTDTM $19 ASTDT $10 ASTTM 8 ASTTMF $1;
+  set ae;
+  ASTDTM = '';
+  ASTDT = '';
+  ASTTM = .;
+  ASTTMF = '';
+  _length = length(strip(AESTDTC));
+  if _length >= 10 then do;
+    _date = input(substr(AESTDTC,1,10),yymmdd10.);
+    if not missing(_date) then do;
+      _hour = 0;
+      _minute = 0;
+      _second = 0;
+      if _length = 10 then ASTTMF = 'H';
+      else if _length >= 13 then do;
+        _hour = input(substr(AESTDTC,12,2),2.);
+        if _length = 13 then ASTTMF = 'M';
+        else if _length >= 16 then do;
+          _minute = input(substr(AESTDTC,15,2),2.);
+          if _length = 16 then ASTTMF = 'S';
+          else if _length >= 19 then
+            _second = input(substr(AESTDTC,18,2),2.);
+        end;
+      end;
+      _datetime = dhms(_date,_hour,_minute,_second);
+      ASTDTM = put(_datetime,e8601dt19.);
+      ASTDT = put(datepart(_datetime),yymmdd10.);
+      ASTTM = timepart(_datetime);
+    end;
+  end;
+  keep STUDYID USUBJID AESEQ AETERM ASTDTM ASTDT ASTTM ASTTMF;
+run;
+
+proc export data=adae outfile="/app/output/adae.csv" dbms=csv replace;
+run;

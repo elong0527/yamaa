@@ -56,13 +56,13 @@ an independent reader. The generated XML is checked against CDISC's XSD.
 
 | Guide | Benchmark | What it exercises |
 | --- | --- | --- |
-| SDTMIG 3.3 | [Demographics](https://elong0527.github.io/yamaa/benchmark/schema-sdtmig33-dm.html) | Required and expected metadata, missing dates, numeric and text transport |
-| SDTMIG 3.3 | [Subject visits](https://elong0527.github.io/yamaa/benchmark/schema-sdtmig33-sv.html) | The 3.3 visit layout, fractional visit numbers, a visit spanning days and an unplanned visit |
-| SDTMIG 3.3 | [Morphology](https://elong0527.github.io/yamaa/benchmark/schema-sdtmig33-mo.html) | The MO domain retained in 3.3, collected and standardized findings, and timing roles |
-| ADaMIG 1.1 | [Subject-level analysis](https://elong0527.github.io/yamaa/benchmark/schema-adamig11-adsl.html) | Subject keys, treatment metadata, numeric dates and datetimes, and display formats |
-| ADaMIG 1.1 | [Laboratory analysis](https://elong0527.github.io/yamaa/benchmark/schema-adamig11-adlb.html) | BDS parameters, subject-level treatment joins, relative days, repeated baseline, change and absent baseline |
-| ADaMIG 1.1 | [Adverse-event analysis](https://elong0527.github.io/yamaa/benchmark/schema-adamig11-adae.html) | Occurrence data, partial onset times, imputation flags and numeric analysis date/time transport |
-| ADaMIG 1.2 | [Subject-level analysis](https://elong0527.github.io/yamaa/benchmark/schema-adamig12-adsl.html) | An explicit intermediate guide declaration with the same date/time transport contract |
+| SDTMIG 3.3 | [Demographics](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-sdtmig33.html) | Required and expected metadata, missing dates, numeric and text transport |
+| SDTMIG 3.3 | [Subject visits](https://elong0527.github.io/yamaa/benchmark/sdtm-sv-sdtmig33.html) | The 3.3 visit layout, fractional visit numbers, a visit spanning days and an unplanned visit |
+| SDTMIG 3.3 | [Morphology](https://elong0527.github.io/yamaa/benchmark/sdtm-mo-sdtmig33.html) | The MO domain retained in 3.3, collected and standardized findings, and timing roles |
+| ADaMIG 1.1 | [Subject-level analysis](https://elong0527.github.io/yamaa/benchmark/adam-adsl-adamig11.html) | Subject keys, treatment metadata, numeric dates and datetimes, and display formats |
+| ADaMIG 1.1 | [Laboratory analysis](https://elong0527.github.io/yamaa/benchmark/adam-adlb-adamig11.html) | BDS parameters, subject-level treatment joins, relative days, repeated baseline, change and absent baseline |
+| ADaMIG 1.1 | [Adverse-event analysis](https://elong0527.github.io/yamaa/benchmark/adam-adae-adamig11.html) | Occurrence data, partial onset times, imputation flags and numeric analysis date/time transport |
+| ADaMIG 1.2 | [Subject-level analysis](https://elong0527.github.io/yamaa/benchmark/adam-adsl-adamig12.html) | An explicit intermediate guide declaration with the same date/time transport contract |
 
 The existing submission benchmarks retain SDTMIG 3.4 and ADaMIG 1.3
 coverage. The new examples select the older content directly: MO remains a
