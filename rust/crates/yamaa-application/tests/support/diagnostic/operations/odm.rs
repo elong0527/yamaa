@@ -24,7 +24,7 @@ use crate::support::diagnostic::{
 use std::path::Path;
 use yamaa_core::{json::Value, odm_items::Options};
 
-pub(super) const FILES: &[File] = &[fixture!("odm_reads_xml.json")];
+pub(super) const FILES: &[File] = &[fixture!("odm_reads_xml.json"), fixture!("odm_ascii.json")];
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     if operation != "read_odm" {
