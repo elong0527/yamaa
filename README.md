@@ -6,6 +6,7 @@
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
 [![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
 [![rustc](https://img.shields.io/badge/rustc-1.82%2B-orange?logo=rust)](https://www.rust-lang.org)
+[![Define-XML 2.0.0+](https://img.shields.io/badge/Define--XML-2.0.0%2B-blue)](https://www.cdisc.org/standards/data-exchange/define-xml)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
