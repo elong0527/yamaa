@@ -10,7 +10,7 @@ use crate::{
     scalar_verb::Recode,
     schema::{Document, DocumentNode as N},
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The four derivation rows of SUB-19's table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,9 +65,20 @@ pub(crate) struct Reads {
     /// no `derivations`, so every field read through one is a stored value of
     /// the record it selects.
     plain: BTreeSet<String>,
+    /// The plain lookups that select records of one input dataset, by name; a
+    /// pair relation reads two (SUB-20).
+    selections: BTreeMap<String, Selection>,
     /// Every other named intermediate: one that declares `derivations` or
     /// reads `SELF`, the completed output rows.
     computing: BTreeSet<String>,
+}
+
+/// The input dataset a plain lookup selects a record of, and whether the
+/// lookup declares a `filter`.
+#[derive(Clone, Debug)]
+struct Selection {
+    dataset: String,
+    filtered: bool,
 }
 
 impl Reads {
@@ -79,10 +90,18 @@ impl Reads {
             .map(|input| input.name.name.clone())
             .collect();
         let mut plain = BTreeSet::new();
+        let mut selections = BTreeMap::new();
         let mut computing = BTreeSet::new();
         for item in &spec.intermediates {
             if inputs.contains(&item.dataset.name) && item.bindings.is_empty() {
                 plain.insert(item.id.name.clone());
+                if !item.pairs() {
+                    let selection = Selection {
+                        dataset: item.dataset.name.clone(),
+                        filtered: item.filter.is_some(),
+                    };
+                    selections.insert(item.id.name.clone(), selection);
+                }
             } else {
                 computing.insert(item.id.name.clone());
             }
@@ -90,6 +109,7 @@ impl Reads {
         Self {
             inputs,
             plain,
+            selections,
             computing,
         }
     }
@@ -298,8 +318,9 @@ impl CopyFailure {
 }
 
 /// Check that a bare `source` derivation reads the predecessor column through
-/// the input dataset declared under the predecessor's name and, when the
-/// description writes a where clause, declares a `filter`.
+/// the input dataset declared under the predecessor's name, directly or
+/// through a plain lookup of it, and, when the description writes a where
+/// clause, declares a `filter` on the `source` or the lookup.
 pub(crate) fn copies_expr(
     spec: &ast::Spec,
     expr: ExprId,
@@ -315,12 +336,20 @@ pub(crate) fn copies_expr(
         _ => None,
     }
     .and_then(|name| name.split_once('.'));
-    // A plain lookup is a bare read, but it reads no predecessor dataset.
-    if named != Some((predecessor.dataset, predecessor.column))
+    let Some((qualifier, column)) = named else {
+        return Err(CopyFailure::Source);
+    };
+    let lookup = reads
+        .selections
+        .get(qualifier)
+        .filter(|lookup| lookup.dataset == predecessor.dataset);
+    if column != predecessor.column
         || !reads.inputs.contains(predecessor.dataset)
+        || (qualifier != predecessor.dataset && lookup.is_none())
     {
         return Err(CopyFailure::Source);
     }
+    let filtered = filtered || lookup.is_some_and(|lookup| lookup.filtered);
     if predecessor.selected && !filtered {
         return Err(CopyFailure::Filter);
     }
