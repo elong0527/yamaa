@@ -1155,6 +1155,23 @@
       "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.LBORNRLO.submission"], "context": {"column": "LBORNRLO", "origin_type": "Predecessor", "predecessor": "ODM.LOW", "reason": "predecessor_source"}}]
     },
     {
+      "case": "a_plain_lookup_answering_absence_with_a_value_is_no_predecessor_copy",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "reads",
+            "edits": [
+              {"from": "key: {TESTCD: LBTESTCD}\n", "to": "key: {TESTCD: LBTESTCD}\n    absent: NONE\n"},
+              {"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: RANGES.LOW}]}"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.LBORNRLO.submission"], "context": {"column": "LBORNRLO", "origin_type": "Predecessor", "predecessor": "RANGES.LOW", "reason": "predecessor_source"}}]
+    },
+    {
       "case": "a_plain_lookup_without_the_descriptions_filter_is_refuted",
       "operation": "check",
       "input": {

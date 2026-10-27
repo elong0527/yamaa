@@ -65,8 +65,9 @@ pub(crate) struct Reads {
     /// no `derivations`, so every field read through one is a stored value of
     /// the record it selects.
     plain: BTreeSet<String>,
-    /// The plain lookups that select records of one input dataset, by name; a
-    /// pair relation reads two (SUB-20).
+    /// The plain lookups that select records of one input dataset and answer
+    /// a missing record with null, by name; a pair relation reads two
+    /// datasets (SUB-20).
     selections: BTreeMap<String, Selection>,
     /// Every other named intermediate: one that declares `derivations` or
     /// reads `SELF`, the completed output rows.
@@ -95,7 +96,13 @@ impl Reads {
         for item in &spec.intermediates {
             if inputs.contains(&item.dataset.name) && item.bindings.is_empty() {
                 plain.insert(item.id.name.clone());
-                if !item.pairs() {
+                // An absence answer other than null is a value no record
+                // stores, so such a lookup copies nothing either.
+                let stored = item
+                    .absent
+                    .as_ref()
+                    .is_none_or(|answer| answer.value == ast::Literal::Missing);
+                if !item.pairs() && stored {
                     let selection = Selection {
                         dataset: item.dataset.name.clone(),
                         filtered: item.filter.is_some(),
