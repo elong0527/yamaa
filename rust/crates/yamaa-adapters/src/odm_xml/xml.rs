@@ -6,7 +6,8 @@
 //! as strict: one root element, valid characters, names, attribute syntax and
 //! references, line-end and attribute-value normalization, bound prefixes,
 //! unique attributes, valid namespace URIs, a well-formed XML declaration
-//! naming UTF-8, no DOCTYPE, and libxml2's default size and depth bounds.
+//! naming UTF-8 or strictly checked US-ASCII, no DOCTYPE, and libxml2's
+//! default size and depth bounds.
 use super::Fault;
 use quick_xml::events::{BytesPI, Event as Token};
 use std::{
@@ -210,6 +211,26 @@ impl<R: Read> Xml<R> {
         }
     }
 
+    /// A forbidden XML character can interrupt declaration tokenization. Its
+    /// readable prefix can already name ASCII, which judges the pending byte.
+    fn check_interrupted_declaration(&mut self, position: u64) -> Result<(), Error> {
+        if !self.first || !matches!(self.reader.get_ref().pending, Some(Fault::Character { .. })) {
+            return Ok(());
+        }
+        let Some(content) = self.buf.strip_prefix(b"<?xml") else {
+            return Ok(());
+        };
+        if matches!(declaration_encoding(content), Ok((Encoding::Ascii, _))) {
+            self.reader
+                .get_mut()
+                .set_encoding(Encoding::Ascii, &self.buf, position)?;
+            if let Some(fault) = &self.reader.get_ref().pending {
+                return Err(fault.clone().into_error());
+            }
+        }
+        Ok(())
+    }
+
     /// Read the next admitted event.
     pub(super) fn next(&mut self) -> Result<Event<'_>, Error> {
         // The tokenizer's offsets leave out the UTF-8 byte order mark that it
@@ -222,6 +243,7 @@ impl<R: Read> Xml<R> {
         let token = match read {
             Ok(token) => token,
             Err(error) => {
+                self.check_interrupted_declaration(position)?;
                 // quick-xml checks end-tag names and comment hyphens once it
                 // has read the markup's bytes. Decoding those bytes as UTF-8
                 // comes first (`utf8`), so an invalid byte in them is reported
@@ -247,17 +269,25 @@ impl<R: Read> Xml<R> {
         // this range, once the event no longer borrows it.
         let held = match token {
             Token::Decl(declaration) => {
-                let declaration = utf8(&declaration, position + 2)?;
                 if !first {
+                    utf8(&declaration, position + 2)?;
                     return Err(malformed(
                         position,
                         "XML declaration allowed only at the start of the document",
                     ));
                 }
-                check_declaration(&declaration[3..]).map_err(|error| match error {
-                    Declaration::Malformed(reason) => malformed(position, reason),
-                    Declaration::Encoding(encoding) => Error::Encoding { encoding },
-                })?;
+                // The tokenizer has consumed these bytes. Admit the encoding
+                // before checking the suffix, including a non-UTF-8 suffix
+                // after an otherwise readable encoding pseudo-attribute.
+                let declared = declaration_encoding(&declaration[3..]);
+                if let Ok((encoding, _)) = &declared {
+                    self.reader
+                        .get_mut()
+                        .set_encoding(*encoding, &declaration, position + 2)?;
+                }
+                utf8(&declaration, position + 2)?;
+                let (_, rest) = declared.map_err(|error| error.at(position))?;
+                check_declaration_end(rest).map_err(|error| error.at(position))?;
                 return Ok(Event::Skip);
             }
             Token::DocType(doctype) => {
@@ -797,6 +827,22 @@ enum Declaration {
     Encoding(String),
 }
 
+impl Declaration {
+    fn at(self, position: u64) -> Error {
+        match self {
+            Self::Malformed(reason) => malformed(position, reason),
+            Self::Encoding(encoding) => Error::Encoding { encoding },
+        }
+    }
+}
+
+/// Both encodings use the UTF-8 tokenizer; ASCII adds a source-byte bound.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Encoding {
+    Utf8,
+    Ascii,
+}
+
 fn trim_spaces(text: &str) -> &str {
     text.trim_start_matches([' ', '\t', '\n', '\r'])
 }
@@ -845,10 +891,18 @@ fn pseudo_attribute<'a>(
     Ok(Some(&after[..end]))
 }
 
-/// Validate the XML declaration after `xml`: version 1.x, then an optional
-/// encoding that must be UTF-8, then an optional standalone yes or no.
-fn check_declaration(content: &str) -> Result<(), Declaration> {
+/// Read version 1.x and the optional encoding after `xml`. The caller checks
+/// source bytes in that encoding before validating the remaining suffix.
+fn declaration_encoding(content: &[u8]) -> Result<(Encoding, &str), Declaration> {
+    // Only a readable version and encoding prefix can select the byte mode.
+    // The caller reports a later UTF-8 error after checking that mode's bytes.
+    let content = match std::str::from_utf8(content) {
+        Ok(content) => content,
+        Err(error) => std::str::from_utf8(&content[..error.valid_up_to()])
+            .map_err(|_| Declaration::Malformed("invalid UTF-8 byte sequence"))?,
+    };
     let mut rest = content;
+    let mut admitted = Encoding::Utf8;
     let version = pseudo_attribute(&mut rest, "version", true)?.unwrap_or_default();
     let digits = version.strip_prefix("1.").unwrap_or_default();
     if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -867,10 +921,18 @@ fn check_declaration(content: &str) -> Result<(), Declaration> {
                 "XML declaration encoding name is invalid",
             ));
         }
-        if !encoding.eq_ignore_ascii_case("UTF-8") && !encoding.eq_ignore_ascii_case("UTF8") {
+        if encoding.eq_ignore_ascii_case("US-ASCII") {
+            admitted = Encoding::Ascii;
+        } else if !encoding.eq_ignore_ascii_case("UTF-8") && !encoding.eq_ignore_ascii_case("UTF8")
+        {
             return Err(Declaration::Encoding(encoding.into()));
         }
     }
+    Ok((admitted, rest))
+}
+
+/// The declaration ends with an optional standalone yes or no and whitespace.
+fn check_declaration_end(mut rest: &str) -> Result<(), Declaration> {
     if let Some(standalone) = pseudo_attribute(&mut rest, "standalone", false)? {
         if standalone != "yes" && standalone != "no" {
             return Err(Declaration::Malformed(
@@ -1051,6 +1113,7 @@ pub(super) struct CheckedXml<R> {
     pending: Option<Fault>,
     first: bool,
     bom: bool,
+    encoding: Encoding,
 }
 
 impl<R: Read> CheckedXml<R> {
@@ -1067,7 +1130,41 @@ impl<R: Read> CheckedXml<R> {
             pending: None,
             first: true,
             bom: false,
+            encoding: Encoding::Utf8,
         }
+    }
+
+    /// Check the consumed declaration, then recheck prefetched unread bytes,
+    /// deferring their faults until the parser reaches them.
+    fn set_encoding(
+        &mut self,
+        encoding: Encoding,
+        declaration: &[u8],
+        position: u64,
+    ) -> Result<(), Error> {
+        self.encoding = encoding;
+        if encoding == Encoding::Ascii && self.bom {
+            return Err(Fault::Ascii {
+                position: 0,
+                value: UTF8_BOM[0],
+            }
+            .into_error());
+        }
+        if let Some((_, fault)) = invalid_content(declaration, position, encoding) {
+            return Err(fault.into_error());
+        }
+        // The first scan may already have held an XML character fault back.
+        // Include its first byte so ASCII admission can judge that byte too,
+        // with the same precedence as a later refill in the declared mode.
+        let end = self.end + usize::from(matches!(&self.pending, Some(Fault::Character { .. })));
+        if let Some((index, fault)) =
+            invalid_content(&self.buffer[self.start..end], self.offset, self.encoding)
+        {
+            self.end = self.start + index;
+            self.held = 0;
+            self.pending = Some(fault);
+        }
+        Ok(())
     }
 
     /// Bytes of the UTF-8 byte order mark the tokenizer skips unreported.
@@ -1120,11 +1217,9 @@ impl<R: Read> CheckedXml<R> {
                 incomplete_tail(&self.buffer[..filled])
             };
             let ready = filled - hold;
-            if let Some((index, value)) = invalid_character(&self.buffer[..ready]) {
-                let fault = Fault::Character {
-                    position: self.offset + index as u64,
-                    value,
-                };
+            if let Some((index, fault)) =
+                invalid_content(&self.buffer[..ready], self.offset, self.encoding)
+            {
                 self.end = index;
                 self.pending = Some(fault.clone());
                 return if index == 0 {
@@ -1181,21 +1276,44 @@ fn incomplete_tail(bytes: &[u8]) -> usize {
     }
 }
 
-/// The first byte offset and code of a character outside XML 1.0 `Char`.
+/// The first source fault: an ASCII encoding violation or a character outside
+/// XML 1.0 `Char`, in document order.
 /// Input is UTF-8, so C0 controls are single bytes and U+FFFE/U+FFFF have
 /// fixed three-byte forms.
-fn invalid_character(bytes: &[u8]) -> Option<(usize, u32)> {
+fn invalid_content(bytes: &[u8], offset: u64, encoding: Encoding) -> Option<(usize, Fault)> {
     let mut index = 0;
     while index < bytes.len() {
         let byte = bytes[index];
+        let position = offset + index as u64;
+        if encoding == Encoding::Ascii && !byte.is_ascii() {
+            return Some((
+                index,
+                Fault::Ascii {
+                    position,
+                    value: byte,
+                },
+            ));
+        }
         if byte < 0x20 && !matches!(byte, b'\t' | b'\n' | b'\r') {
-            return Some((index, byte.into()));
+            return Some((
+                index,
+                Fault::Character {
+                    position,
+                    value: byte.into(),
+                },
+            ));
         }
         if byte == 0xEF
             && bytes.get(index + 1) == Some(&0xBF)
             && matches!(bytes.get(index + 2), Some(0xBE | 0xBF))
         {
-            return Some((index, 0xFFFE + u32::from(bytes[index + 2] - 0xBE)));
+            return Some((
+                index,
+                Fault::Character {
+                    position,
+                    value: 0xFFFE + u32::from(bytes[index + 2] - 0xBE),
+                },
+            ));
         }
         index += 1;
     }

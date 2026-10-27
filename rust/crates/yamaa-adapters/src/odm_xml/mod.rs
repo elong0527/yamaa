@@ -21,7 +21,8 @@
 //!   The selected member needs a relative path without `..`, must be a
 //!   regular (not sparse) file and must fit `max_expanded_bytes`. A gzip
 //!   archive may expand to at most `max_expanded_bytes` across all members.
-//! - XML. The document is UTF-8 and well formed under XML 1.0 and Namespaces
+//! - XML. The document is UTF-8, or declared US-ASCII with only ASCII source
+//!   bytes, and well formed under XML 1.0 and Namespaces
 //!   1.0: one root, bound prefixes, valid characters and references, valid
 //!   namespace URIs, no DOCTYPE and so no entities beyond the predefined five.
 //!   Text nodes, attribute values, comments and processing instructions stay
@@ -158,6 +159,7 @@ enum Fault {
     Archive(&'static str),
     Limit(yamaa_core::odm_items::Limit),
     Character { position: u64, value: u32 },
+    Ascii { position: u64, value: u8 },
     Encoding(&'static str),
 }
 
@@ -175,6 +177,10 @@ impl Fault {
             Self::Character { position, value } => Error::Malformed {
                 position,
                 reason: format!("invalid XML character U+{value:04X}"),
+            },
+            Self::Ascii { position, value } => Error::Malformed {
+                position,
+                reason: format!("US-ASCII XML contains non-ASCII byte 0x{value:02X}"),
             },
             Self::Encoding(encoding) => Error::Encoding {
                 encoding: encoding.into(),

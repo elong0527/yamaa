@@ -23,6 +23,7 @@ use yamaa_core::{
 
 const ODM_13: &str = include_str!("fixtures/odm/odm13.xml");
 const ODM_20: &str = include_str!("fixtures/odm/odm20.xml");
+const ODM_ASCII: &str = include_str!("fixtures/odm/odm-ascii.xml");
 
 fn read_with(path: &std::path::Path, options: &Options) -> Result<PublicTable, odm_items::Error> {
     match odm_xml::read(path, options) {
@@ -136,15 +137,24 @@ mod python_reader_suite {
     /// cannot hold.
     #[test]
     fn archive_with_one_xml_member_is_selected_automatically() {
-        let archive = gzip(
-            &Tar::new()
-                .file("study/odm.xml", ODM_20.as_bytes())
-                .file("study/index.html", b"<html/>")
-                .file("study/._odm.xml", b"apple-double")
-                .finish(),
-        );
-        let table = read_bytes("odm.tar.gz", &archive, &Options::default()).unwrap();
-        assert_eq!(column(&table, "ItemOID"), some(&["I.TEST", "I.RESULT"]));
+        for (label, document, expected) in [
+            ("utf8", ODM_20, &[Some("PD-L1"), Some("")][..]),
+            ("ascii", ODM_ASCII, &[Some("caf\u{e9}"), Some(""), None][..]),
+        ] {
+            let archive = gzip(
+                &Tar::new()
+                    .file("study/odm.xml", document.as_bytes())
+                    .file("study/index.html", b"<html/>")
+                    .file("study/._odm.xml", b"apple-double")
+                    .finish(),
+            );
+            let table = read_bytes("odm.tar.gz", &archive, &Options::default()).unwrap();
+            let expected = expected
+                .iter()
+                .map(|value| value.map(str::to_owned))
+                .collect::<Vec<_>>();
+            assert_eq!(column(&table, "Value"), expected, "{label}");
+        }
     }
 
     /// Seam: a gzip TAR archive built in the test, which a case's text files
@@ -334,6 +344,52 @@ mod xml_strictness {
         format!(
             r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">{body}<ClinicalData StudyOID="S" MetaDataVersionOID="M"/></ODM>"#
         )
+    }
+
+    /// Seam: generated buffer boundaries and non-UTF-8 bytes cannot be held
+    /// by the replay's text files. ODM-1 reports the first ASCII violation,
+    /// whether prefetched or split across the byte source's read buffers.
+    #[test]
+    fn ascii_violations_keep_their_position_across_read_buffers() {
+        let bad_bytes = [
+            &[0xFF][..],
+            &[0xC3, 0xA9][..],
+            &[0xEF, 0xBF, 0xBE][..],
+            &[0xEF, 0xBF, 0xBF][..],
+        ];
+        for (label, head, tail) in [
+            (
+                "comment",
+                &b"<?xml version=\"1.0\" encoding=\"US-ASCII\"?><ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"><!--"[..],
+                &b"--><ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/></ODM>"[..],
+            ),
+            (
+                "declaration",
+                &b"<?xml version=\"1.0\" encoding=\"US-ASCII\" "[..],
+                &b"?><ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"><ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/></ODM>"[..],
+            ),
+        ] {
+            for position in [head.len(), 65_535, 65_536, 65_537, 131_075] {
+                for bad in &bad_bytes {
+                    let mut bytes = head.to_vec();
+                    bytes.resize(position, b' ');
+                    bytes.extend_from_slice(bad);
+                    bytes.extend_from_slice(tail);
+                    let actual = match read_bytes("ascii.xml", &bytes, &Options::default()) {
+                        Err(odm_items::Error::Malformed { position, reason }) => (position, reason),
+                        other => panic!("ASCII violation in {label} at {position}: {other:?}"),
+                    };
+                    assert_eq!(
+                        actual,
+                        (
+                            position as u64,
+                            format!("US-ASCII XML contains non-ASCII byte 0x{:02X}", bad[0])
+                        ),
+                        "ASCII violation in {label} at {position}"
+                    );
+                }
+            }
+        }
     }
 
     /// Seam: messages the upstream XML tokenizer writes, which the repository
