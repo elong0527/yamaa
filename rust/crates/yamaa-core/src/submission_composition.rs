@@ -2299,6 +2299,21 @@ pub fn reads_other_sections(document: &Document) -> bool {
     crate::submission_inventory::requested(document) || origin::names_predecessor(document)
 }
 
+/// DEFINE-4: a regulator takes a dataset only in a transport file, so a
+/// `Submission` section declares one and its document never names the CSV or
+/// Parquet artifact. Publication preparation asks this before it locates any
+/// target, so the missing transport is the first finding.
+pub fn transport_required(section: &ast::Section) -> Option<Finding> {
+    (section.context == DefineContext::Submission && section.transport.is_none()).then(|| {
+        Finding::cause(
+            ConditionCode::SubmissionTransportRequired,
+            &format!("{}.transport", family_name(section.family)),
+            "transport",
+        )
+        .with("field", "transport")
+    })
+}
+
 /// Compose the selected section. `others` holds the specifications the study's
 /// other submission sections list: the dataset inventory (CT-11) and the
 /// predecessor columns (SUB-20) span every section, while only `inputs` are
@@ -2365,18 +2380,7 @@ pub fn compose(
             .with("value", define.text.as_str()),
         );
     }
-    // DEFINE-4: a regulator takes a dataset only in a transport file, so a
-    // `Submission` document names one rather than the CSV or Parquet artifact.
-    if section.context == DefineContext::Submission && section.transport.is_none() {
-        findings.push(
-            cause(
-                ConditionCode::SubmissionTransportRequired,
-                "transport",
-                "transport",
-            )
-            .with("field", "transport"),
-        );
-    }
+    findings.extend(transport_required(section));
     let source_version = match source_version(section, installed) {
         Some(version) => version.into(),
         None => {

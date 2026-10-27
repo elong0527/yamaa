@@ -6,7 +6,7 @@
     "base": "yamaa: \"1.0\"\ntype: spec\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
     "child": "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: output.csv, columns: [ID]}\n",
     "listing_project": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [dm.yaml, listed.yaml]\n",
-    "submission_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S, name: S, description: A study, protocol_name: S-01}\nsdtm:\n  specs: [listed.yaml]\n  standards: [{name: SDTMIG, version: \"3.4\", status: Final}]\n  define: define.xml\n"
+    "submission_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S, name: S, description: A study, protocol_name: S-01}\nsdtm:\n  specs: [listed.yaml]\n  standards: [{name: SDTMIG, version: \"3.4\", status: Final}]\n  define: define.xml\n  context: Other\n"
   },
   "cases": [
     {
