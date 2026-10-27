@@ -1,0 +1,157 @@
+yamaa: '1.0'
+type: spec
+model: SDTM
+domain: MO
+keys:
+- STUDYID
+- USUBJID
+- MOSEQ
+input:
+  MORPH:
+    path: input/morphology.csv
+    types:
+      SEQ: int
+      DATE: date
+
+output:
+  path: mo.csv
+  columns:
+  - DOMAIN
+  - STUDYID
+  - USUBJID
+  - MOSEQ
+  - MOTESTCD
+  - MOTEST
+  - MOORRES
+  - MOSTRESC
+  - MODTC
+
+columns:
+- name: DOMAIN
+  type: str
+  label: Domain Abbreviation
+  derivation: '''MO'''
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: MORPH.STUDYID
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Protocol
+      source: Sponsor
+
+- name: USUBJID
+  type: str
+  label: Unique Subject Identifier
+  derivation: MORPH.USUBJID
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: MOSEQ
+  type: int
+  label: Sequence Number
+  derivation: MORPH.SEQ
+  submission:
+    core: Req
+    role: Identifier
+    length: 8
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: MOTESTCD
+  type: str
+  label: Morphology Test Short Name
+  derivation: '''CELLTYPE'''
+  submission:
+    core: Req
+    role: Topic
+    length: 80
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: MOTEST
+  type: str
+  label: Morphology Test Name
+  derivation: '''Cell Type'''
+  submission:
+    core: Req
+    role: Synonym Qualifier
+    length: 80
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: MOORRES
+  type: str
+  label: Result or Finding in Original Units
+  derivation: MORPH.RESULT
+  submission:
+    core: Exp
+    role: Result Qualifier
+    length: 80
+    origins:
+    - type: Collected
+      source: Investigator
+      documents:
+      - document: acrf
+        pages:
+          type: PhysicalRef
+          refs: '1'
+
+- name: MOSTRESC
+  type: str
+  label: Character Result/Finding in Std Format
+  derivation:
+    mapping:
+      source: MORPH.RESULT
+      dict:
+        normal: NORMAL
+        abnormal: ABNORMAL
+  submission:
+    core: Exp
+    role: Result Qualifier
+    length: 80
+    origins:
+    - type: Derived
+      source: Sponsor
+    method: Standardize the collected cell type result.
+
+- name: MODTC
+  type: date
+  label: Date/Time of Collection
+  derivation: MORPH.DATE
+  submission:
+    core: Exp
+    role: Timing
+    origins:
+    - type: Collected
+      source: Investigator
+      documents:
+      - document: acrf
+        pages:
+          type: PhysicalRef
+          refs: '1'
+
+submission:
+  label: Morphology
+  class: FINDINGS
+  structure: One record per subject per test
+  repeating: true
