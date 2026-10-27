@@ -454,7 +454,7 @@ a pruned declaration is discarded with it. A failure is reported under the rule
 that owns it, naming the entry specification and the contributing file and
 field of each implicated value.
 
-Evidence: `rust/crates/yamaa-application/tests/declaration_layer_composition.rs::an_entry_that_omits_output_resolves_with_the_output_its_parent_contributes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::a_resolved_specification_no_layer_gives_output_misses_it_at_the_root`.
+Evidence: `rust/crates/yamaa-application/tests/declaration_layer_composition.rs::an_entry_that_omits_output_resolves_with_the_output_its_parent_contributes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_input_only_an_unread_lookup_reads_is_pruned_with_its_missing_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::a_resolved_specification_no_layer_gives_output_misses_it_at_the_root`.
 
 A declaration left out of `output.columns` remains as an internal column when a
 derivation or verification uses it. A resolved specification to which no layer

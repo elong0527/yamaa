@@ -771,7 +771,7 @@ collision fails. An intermediate read as a lookup without `key` fails as
 `missing_required_field`.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_is_refused_at_its_key_and_keeps_no_input_live`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -793,7 +793,10 @@ relation and declares no `key`, or a pair relation without one, fails as
 `missing_required_field` at its `key` before any input is read, even when
 nothing reads it, its context naming the field and its class as the schema's
 does; a row template's driver read as a lookup by the rows another template
-builds fails the same way. An intermediate never falls back to its input's
+builds fails the same way. An intermediate other than a pair relation that
+lacks its `key` and that nothing reads survives pruning only to reach this
+refusal: it reads nothing, so an input that only it names is pruned
+([LAYER-11](inheritance.md#layer-11)) and is not held to the fields it lacks. An intermediate never falls back to its input's
 `key`.
 
 ```yaml
