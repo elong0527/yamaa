@@ -14,6 +14,7 @@ use crate::{
 use std::sync::Arc;
 use yamaa_core::{
     ast::{self, Transport},
+    cdisc_vocabulary::DefineContext,
     define::{self, ResourceObservation},
     diagnostic::ConditionCode,
     limits::Limits,
@@ -419,6 +420,9 @@ impl Application {
                 // Historical links come only from the received declaration,
                 // never from the current executable output (DEFINE-30).
                 None if view.historical() => (None, None),
+                // Composition refuses a `Submission` section without a
+                // transport (DEFINE-4), so no artifact link is resolved for it.
+                None if section.context == DefineContext::Submission => (None, None),
                 None => {
                     let href = reads
                         .package_reference(&artifact, &define_location)
