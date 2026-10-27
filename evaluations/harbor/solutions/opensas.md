@@ -1,14 +1,14 @@
 # opensas reference solutions
 
 The `result.sas` programs prepare the prompted derivation benchmarks for
-execution with the existing [opensas v0.6.6 release](https://github.com/kirha-ai/opensas/releases/tag/v0.6.6).
+execution with the existing [opensas v0.7.1 release](https://github.com/kirha-ai/opensas/releases/tag/v0.7.1).
 Each program reads `/app/input` and writes the CSV files requested by its full
 prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
 The Harbor opensas track executes supported native CSV cases with the
-existing opensas v0.6.6 release. The image installs an unmodified release
+existing opensas v0.7.1 release. The image installs an unmodified release
 executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,
 are outside this collection.
@@ -87,12 +87,18 @@ benchmark with no Harbor prompt, and run reports are not graded.
 - **Character aggregates.** Period dates are aggregated from filtered tables.
   A character CASE expression inside MIN/MAX produced numeric conversion
   diagnostics and empty dates in the initial implementation.
+- **Export columns.** PROC EXPORT applies KEEP= and the other input
+  dataset options since v0.7.1 (kirha-ai/opensas#20), so a program exports
+  `data=result(keep=...)` directly. A final PROC SQL SELECT remains only
+  where it sets the requested column order, as it would under SAS 9.4.
 - **Numeric text.** Standardized vital-sign text is formatted explicitly.
   BEST32 exposed floating-point artifacts, and field width alone did not give
   the prompt's required significant-digit precision.
 
 Track the findings and future execution prerequisites in
-[issue #1875](https://github.com/elong0527/yamaa/issues/1875). No expected data
+[issue #1875](https://github.com/elong0527/yamaa/issues/1875); the runtime
+differences behind the remaining choices are reported upstream in
+[kirha-ai/opensas#14](https://github.com/kirha-ai/opensas/issues/14). No expected data
 or prompts were changed to accommodate runtime behavior.
 
 ## Licensing scope

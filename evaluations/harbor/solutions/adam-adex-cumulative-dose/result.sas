@@ -19,7 +19,4 @@ proc sql;
   create table result as select a.*,b.DOSECUM,b.NCYCLES,case when a.PLANDOSE*a.PLANCYC ne 0 then 100*b.DOSECUM/(a.PLANDOSE*a.PLANCYC) else . end as RDI from subject_treatment as a left join totals as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.EXTRT=b.EXTRT;
 quit;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, NCYCLES, RDI from result;
-quit;
-proc export data=final outfile="/app/output/adex.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID EXTRT EXDOSU DOSECUM NCYCLES RDI) outfile="/app/output/adex.csv" dbms=csv replace; run;

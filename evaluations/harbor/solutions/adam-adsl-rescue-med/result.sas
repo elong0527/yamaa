@@ -19,7 +19,4 @@ proc sort data=rescue; by STUDYID USUBJID nodate CMSTDTC CMSEQ; run;
 data firstcm; set rescue; by STUDYID USUBJID; if first.USUBJID; run;
 proc sql; create table result as select a.*,b.CMTRT as RESCTRT from dm as a left join firstcm as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID; quit;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, RESCTRT from result;
-quit;
-proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID RESCTRT) outfile="/app/output/adsl.csv" dbms=csv replace; run;

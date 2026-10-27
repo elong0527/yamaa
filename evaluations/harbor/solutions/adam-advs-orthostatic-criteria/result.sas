@@ -72,7 +72,4 @@ proc sql;
     select STUDYID, USUBJID, AVISIT, 'OTACHY' as PARAMCD, 'Orthostatic Tachycardia' as PARAM, . as AVAL, OTACHY as AVALC from flagged where not missing(OTACHY);
 quit;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL, AVALC from result;
-quit;
-proc export data=final outfile="/app/output/advs.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID AVISIT PARAMCD PARAM AVAL AVALC) outfile="/app/output/advs.csv" dbms=csv replace; run;

@@ -17,7 +17,4 @@ data result;
   AVAL=carried;
 run;
 
-proc sql;
-  create table final as select USUBJID, PARAMCD, AVISITN, AVAL from result;
-quit;
-proc export data=final outfile="/app/output/advs.csv" dbms=csv replace; run;
+proc export data=result(keep=USUBJID PARAMCD AVISITN AVAL) outfile="/app/output/advs.csv" dbms=csv replace; run;

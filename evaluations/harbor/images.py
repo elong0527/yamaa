@@ -79,7 +79,7 @@ def inventory_command(language: str, role: str) -> str:
             for p in ("node", "npm", "opencode")
         ]
     if language == "opensas":
-        checks += ['test "$(opensas --version)" = "opensas v0.6.6"']
+        checks += ['test "$(opensas --version)" = "opensas v0.7.1"']
     elif language == "python":
         checks += ["python3 -c 'import numpy, pandas, polars, pyarrow, lxml'"]
     else:

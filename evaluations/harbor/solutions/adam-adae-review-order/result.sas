@@ -13,7 +13,4 @@ proc sql;
   select STUDYID,USUBJID,AESEQ as ASEQ,AETERM,AESTDTC as ASTDT,AESEV as ASEV from ae;
 quit;
 
-proc sql;
-  create table final as select STUDYID, USUBJID, ASEQ, AETERM, ASTDT, ASEV from result;
-quit;
-proc export data=final outfile="/app/output/adae.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID ASEQ AETERM ASTDT ASEV) outfile="/app/output/adae.csv" dbms=csv replace; run;

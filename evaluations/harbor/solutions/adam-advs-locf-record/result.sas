@@ -21,7 +21,4 @@ quit;
 proc sort data=candidates; by USUBJID PARAMCD AVISITN descending observedvisit descending QSSEQ; run;
 data result; set candidates; by USUBJID PARAMCD AVISITN; if first.AVISITN; run;
 
-proc sql;
-  create table final as select USUBJID, PARAMCD, AVISITN, AVAL, ADT, QSSEQ from result;
-quit;
-proc export data=final outfile="/app/output/advs.csv" dbms=csv replace; run;
+proc export data=result(keep=USUBJID PARAMCD AVISITN AVAL ADT QSSEQ) outfile="/app/output/advs.csv" dbms=csv replace; run;
