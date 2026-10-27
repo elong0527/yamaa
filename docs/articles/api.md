@@ -756,6 +756,10 @@ wrote. It checks every target before it writes anything.
 
 ## Create define.xml and submission datasets
 
+Set `define_version` on a submission section to select `2.0.0` or any
+published 2.1 release from `2.1.0` through `2.1.11`. The generated document
+retains that exact version; omission selects `2.1.11`.
+
 `submission()` composes one define.xml for the selected section, or one for
 every section that names `define`. Each specification it covers declares the
 dataset's `submission` metadata, and each of its output columns a `label` and
