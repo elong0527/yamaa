@@ -569,7 +569,12 @@ adam:
   a project function, the package checks the installed versions of yamaa and
   of each called package against its lock, and the build fails with
   `runtime_artifact_mismatch` when one differs. Without a lock, the installed
-  callables run unchecked.
+  callables run unchecked. The lock pins yamaa too, since the engine is part
+  of what the functions were tested with, so after you upgrade yamaa every
+  build that calls a project function fails this way until its lock is made
+  again: regenerate each `environments.<host>.lock`, for example with
+  `uv lock --upgrade-package yamaa` or `renv::snapshot()`, and re-run each
+  function package's own tests.
 * `codelists`, not used here, lists the codelists files the specifications
   bind ([Codelists and terminology](terminology.md)).
 * `study`, and each section's `standards` and `define`, are the metadata
