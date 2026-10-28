@@ -132,17 +132,7 @@ fn bind_filter(
                 relation,
                 matches!(item.source, self_relations::Relation::SelfRows),
                 inputs,
-                // Current source-key cardinality is resolved before
-                // selecting donor records. Its failure must precede
-                // the filter's operand types.
-                !(pairs.iter().any(|key| key.value.is_expression())
-                    && pairs.iter().flat_map(|key| key.value.reads()).any(|read| {
-                        matches!(
-                            read,
-                            crate::dataset::MatchRead::Record { .. }
-                                | crate::dataset::MatchRead::SecondaryRecord { .. }
-                        )
-                    })),
+                relation_predicates::static_filter_types(pairs),
                 contextual,
                 findings,
             )?;

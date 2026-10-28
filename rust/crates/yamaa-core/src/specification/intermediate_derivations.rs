@@ -140,6 +140,7 @@ struct DonorPlan<'a> {
     source: &'a TableSchema,
     secondary: &'a [SecondarySource],
     output: &'a TableSchema,
+    record_types: &'a [ResultType],
 }
 
 fn resolve_field_kinds(
@@ -570,6 +571,7 @@ pub(super) fn bind(
         source: &source,
         secondary: &secondary,
         output: &output,
+        record_types: &record_types,
     };
     let (earlier, unavailable, mut catalog) = select_earlier(cx, lookup, plan, catalog, findings)?;
     let mut assignments = Vec::new();
@@ -827,6 +829,92 @@ fn chained_key(
     })
 }
 
+/// A predicate's contextual names now have donor types. Reuse initial
+/// binding's type judgement, preserving deferred key-cardinality precedence.
+fn rebase_filter(
+    filter: &crate::dataset::RelationPredicate,
+    current: Vec<CurrentField>,
+    donor_kinds: &[Option<ColumnType>],
+    record_types: &[ResultType],
+    static_types: bool,
+    findings: &mut Vec<BindFinding>,
+) -> Result<crate::dataset::RelationPredicate, BindError> {
+    let (predicate, deferred) = if filter
+        .current()
+        .iter()
+        .any(|field| field.read == CurrentRead::Contextual)
+    {
+        let kind = |name: &str| {
+            let binding = filter
+                .bindings()
+                .iter()
+                .find(|binding| binding.name == name)?;
+            match binding.read {
+                Read::Source(column) => donor_kinds.get(column).copied().flatten().map(Into::into),
+                Read::Column(slot) => match current.get(slot)?.read {
+                    CurrentRead::Output(column) | CurrentRead::Record { source: 0, column } => {
+                        record_types.get(column)?.single()
+                    }
+                    _ => None,
+                },
+                _ => None,
+            }
+        };
+        let (typed, deferred) =
+            relation_predicates::typed(filter.plan(), kind, static_types, findings);
+        (
+            crate::bound_expression::BoundPredicate::new(typed, filter.bindings().to_vec())
+                .map_err(BindError::InvalidPredicateBinding)?,
+            deferred,
+        )
+    } else {
+        (
+            filter.predicate().clone(),
+            filter.deferred_type_findings().to_vec(),
+        )
+    };
+    Ok(crate::dataset::RelationPredicate::new(predicate, current)
+        .map_err(BindError::InvalidPredicateBinding)?
+        .with_deferred_type_findings(deferred))
+}
+
+/// A deferred range gains the reading donor's known value type before it
+/// is admitted against its bounds, by the range's shared constructor.
+fn rebase_range(
+    range: &crate::dataset::RelationRange,
+    current: CurrentField,
+    record_types: &[ResultType],
+    intermediate: &str,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<crate::dataset::RelationRange>, BindError> {
+    let kind = if range.current().read == CurrentRead::Contextual {
+        match current.read {
+            CurrentRead::Output(column) => record_types.get(column).and_then(|kind| kind.single()),
+            _ => range.value_kind(),
+        }
+    } else {
+        range.value_kind()
+    };
+    match crate::dataset::RelationRange::new(
+        range.path().into(),
+        current,
+        kind,
+        range.lower().cloned(),
+        range.upper().cloned(),
+    ) {
+        Ok(range) => Ok(Some(range)),
+        Err(crate::dataset::RelationRangeError::Incomparable(types)) => {
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                types.diagnostic(range.path(), intermediate),
+            )));
+            Ok(None)
+        }
+        Err(_) => Err(BindError::InvalidPlan(
+            crate::dataset::PlanError::InvalidIntermediate,
+        )),
+    }
+}
+
 /// The lookups bound before this one, as its donor plan reads them: each
 /// one the derivations need keeps its slot, its reads rebased onto the
 /// donor plan's ports ([`rebase_keys`]); one they do not need keeps a
@@ -1027,6 +1115,12 @@ fn rebase(
             *slot = None;
             continue;
         }
+        let donor_kinds = donor_schema
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(column, _)| cx.inputs.source_kind(item, &original_secondary, column))
+            .collect::<Vec<_>>();
         let name = match &item.source {
             IntermediateSource::Input(index) => Some(original_secondary[*index].name.clone()),
             IntermediateSource::Primary { name, .. } => Some(name.clone()),
@@ -1054,31 +1148,27 @@ fn rebase(
             };
         }
         if let Some(filter) = &item.filter {
-            item.filter = Some(
-                crate::dataset::RelationPredicate::new(
-                    filter.predicate().clone(),
-                    filter
-                        .current()
-                        .iter()
-                        .map(&current_field)
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-                .map_err(BindError::InvalidPredicateBinding)?,
-            );
+            item.filter = Some(rebase_filter(
+                filter,
+                filter
+                    .current()
+                    .iter()
+                    .map(&current_field)
+                    .collect::<Result<Vec<_>, _>>()?,
+                &donor_kinds,
+                plan.record_types,
+                relation_predicates::static_filter_types(&item.keys),
+                findings,
+            )?);
         }
         if let Some(range) = &item.range {
-            item.range = Some(
-                crate::dataset::RelationRange::new(
-                    range.path().into(),
-                    current_field(range.current())?,
-                    range.value_kind(),
-                    range.lower().cloned(),
-                    range.upper().cloned(),
-                )
-                .map_err(|_| {
-                    BindError::InvalidPlan(crate::dataset::PlanError::InvalidIntermediate)
-                })?,
-            );
+            item.range = rebase_range(
+                range,
+                current_field(range.current())?,
+                plan.record_types,
+                &item.identifier,
+                findings,
+            )?;
         }
         if let Some(derived) = &mut item.derivations {
             derived.current = derived
@@ -1135,6 +1225,7 @@ fn rebase_keys(
         source,
         secondary,
         output,
+        ..
     } = plan;
     // The reference of a nearest selection reads the donor record as a
     // key's match value does (LOOKUP-26), after the keys.
