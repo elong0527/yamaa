@@ -378,6 +378,37 @@ such as a project section that does not exist, leaves them missing.
     yamaa.spec("sdtm/dm.yaml").check().issues
     ```
 
+`context` is canonical JSON text (RFC 8785): one object per issue, such as
+`{"actual":"int","expected":"str","source":"SRC.NUM"}`, whose keys depend on
+the condition. Parse it with `json.loads` in Python and `jsonlite::fromJSON`
+in R, and read it by key, since a release may add keys. jsonlite is in the R
+package's Suggests, so install it if you have not; it reads an integer beyond
+2^53 as the nearest double unless you pass `bigint_as_char = TRUE`.
+
+=== "R"
+
+    ```r
+    issues <- yamaa_spec("sdtm/dm.yaml")$check()$issues
+    contexts <- lapply(issues$context, jsonlite::fromJSON)  # a named list per issue
+    ```
+
+=== "Python"
+
+    ```python
+    import json
+
+    issues = yamaa.spec("sdtm/dm.yaml").check().issues
+    contexts = [json.loads(row["context"]) for row in issues.to_pylist()]  # a dict per issue
+    ```
+
+The column is text, not a nested value, so that a host needs no JSON library
+to give it to you (#3030 D28). A nested value would not reach you whole
+either: an R table refuses an integer beyond 2^53 ([Tables](#tables)), which
+a context may hold; and Arrow, through which a Python table converts to
+Polars, pandas or PyArrow, holds JSON only as text, so those libraries would
+receive text anyway. The command line's `--format json` gives the same facts
+as an object ([JSON documents](#json-documents)).
+
 A fragment, a specification that a layer lists under `include`, names no
 template of its own, so a check of the fragment alone fails at the first
 value its template would give. `check(parent = )` checks it as if the
@@ -1218,7 +1249,9 @@ same keys, except where the table names a refusal's.
 * `issues` holds every issue as an object with the twelve columns of
   `issues`: `severity`, `phase`, `condition`, `rule`, `spec_paths`, `file`,
   `line`, `column`, `message`, `context`, `source_span` and `operand_route`,
-  whose `context` is an object rather than JSON text.
+  whose `context` is an object rather than the JSON text that the Python and
+  R tables hold
+  ([Check a specification without data](#check-a-specification-without-data)).
 * `paths` lists the files written, as the text prints them.
 * `members` has one object for each specification of a project run, in run
   order, with its `name`, `status`, `rows`, `columns` and `issue_count`;
