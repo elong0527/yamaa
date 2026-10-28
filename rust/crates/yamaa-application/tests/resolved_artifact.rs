@@ -452,6 +452,8 @@ fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_si
             origin.declaring_source.clone(),
             origin.line,
             origin.column,
+            origin.end_line,
+            origin.end_column,
             origin.source_kind.clone(),
         )
     };
@@ -461,6 +463,8 @@ fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_si
             Some(study.path("child.yaml")),
             Some(4),
             Some(66),
+            Some(4),
+            Some(67),
             OriginKind::Authored
         )
     );
@@ -470,13 +474,16 @@ fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_si
             Some(study.path("base.yaml")),
             Some(6),
             Some(26),
+            Some(6),
+            Some(32),
             OriginKind::Authored
         )
     );
-    let (_, line, column, kind) = located(&format!("{prefix}/order_by/0/direction"));
+    let (_, line, column, end_line, end_column, kind) =
+        located(&format!("{prefix}/order_by/0/direction"));
     assert_eq!(
-        (line, column, kind),
-        (None, None, OriginKind::SchemaDefault)
+        (line, column, end_line, end_column, kind),
+        (None, None, None, None, OriginKind::SchemaDefault)
     );
     // An omitted placement has no schema default: missing sorts lowest, so its
     // position follows direction and the resolved term leaves it absent.

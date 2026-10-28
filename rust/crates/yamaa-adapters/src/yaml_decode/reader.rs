@@ -30,6 +30,7 @@ enum Value {
 struct Node {
     value: Value,
     start: SourcePosition,
+    end: SourcePosition,
     merge: bool,
 }
 
@@ -50,7 +51,7 @@ fn build(events: Vec<LocatedEvent>) -> Result<(Vec<Node>, usize), DecodeFailure>
     let mut nodes = Vec::new();
     let mut stack: Vec<Frame> = Vec::new();
     let mut root = None;
-    for LocatedEvent { event, start, .. } in events {
+    for LocatedEvent { event, start, end } in events {
         if matches!(
             event,
             SourceEvent::Scalar(..)
@@ -119,6 +120,7 @@ fn build(events: Vec<LocatedEvent>) -> Result<(Vec<Node>, usize), DecodeFailure>
         nodes.push(Node {
             value,
             start,
+            end,
             merge,
         });
         if let Some(parent) = stack.last_mut() {
@@ -136,6 +138,11 @@ fn build(events: Vec<LocatedEvent>) -> Result<(Vec<Node>, usize), DecodeFailure>
     nodes.push(Node {
         value: Value::Scalar(DocumentNode::Null),
         start: SourcePosition {
+            offset: 0,
+            line: 1,
+            column: 1,
+        },
+        end: SourcePosition {
             offset: 0,
             line: 1,
             column: 1,
@@ -316,8 +323,10 @@ pub fn decode_yaml(source: &[u8]) -> Result<DecodedYaml, DecodeFailure> {
     check_unicode(&nodes, root)?;
     let mut document_nodes = Vec::with_capacity(nodes.len());
     let mut locations = Vec::with_capacity(nodes.len());
+    let mut end_locations = Vec::with_capacity(nodes.len());
     for node in nodes {
         locations.push(node.start);
+        end_locations.push(node.end);
         document_nodes.push(match node.value {
             Value::Scalar(value) => value,
             Value::Sequence(items) => DocumentNode::Sequence(items),
@@ -338,6 +347,7 @@ pub fn decode_yaml(source: &[u8]) -> Result<DecodedYaml, DecodeFailure> {
     Ok(DecodedYaml {
         document,
         locations,
+        end_locations,
     })
 }
 
