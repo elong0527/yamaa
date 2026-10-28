@@ -433,9 +433,7 @@ mod table {
         fn unsupported_stored_types_retain_independent_arrow_type_spelling() {
             for (name, expected) in [
                 ("uint64", "uint64"),
-                ("float32", "float"),
                 ("binary", "binary"),
-                ("milliseconds", "timestamp[ms]"),
                 ("timezone", "timestamp[us, tz=UTC]"),
                 ("list", "list<element: int64>"),
                 ("fixed-list", "fixed_size_list<element: int64>[2]"),
@@ -475,6 +473,82 @@ mod table {
             );
             assert_eq!(table.row_count(), 1);
             assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(1));
+        }
+
+        #[test]
+        fn millisecond_and_nanosecond_timestamps_read_as_the_whole_seconds_they_count() {
+            // The seam is a stored count's unit: each calendar bound in
+            // milliseconds, and the whole seconds nearest the ends of a
+            // nanosecond count, read as the datetimes they name, and a count
+            // short of a whole second, or past the calendar, is refused as
+            // stored (PARQUET-7, PARQUET-9). The datetimes were counted from
+            // 1970-01-01T00:00:00 by hand.
+            let table = parse(&content("timestamp-units")).unwrap();
+            assert_eq!(
+                table
+                    .schema()
+                    .columns()
+                    .iter()
+                    .map(|c| (c.name.as_str(), c.kind))
+                    .collect::<Vec<_>>(),
+                [("MS", ColumnType::DateTime), ("NS", ColumnType::DateTime)]
+            );
+            for (column, fields) in [
+                (0, [(1, 1, 1, 0, 0, 0), (9999, 12, 31, 23, 59, 59)]),
+                (1, [(1677, 9, 21, 0, 12, 44), (2262, 4, 11, 23, 47, 16)]),
+            ] {
+                assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
+                for (row, fields) in [(0, fields[0]), (2, fields[1])] {
+                    let ValueRef::DateTime(value) = table.cell(row, column).unwrap() else {
+                        panic!("datetime cell {row}, {column}")
+                    };
+                    assert_eq!(value.fields(), fields, "row {row}, column {column}");
+                    assert_eq!(value.collected_precision(), Precision::Second);
+                }
+            }
+            for (name, row, value) in [
+                ("fractional-milliseconds", 2, 1_500),
+                ("fractional-nanoseconds", 1, 1),
+                ("beyond-milliseconds", 1, 253_402_300_800_000),
+            ] {
+                let refused = match parse(&content(name)) {
+                    Err(Error::Value { field, row, value }) => Some((field, row, value)),
+                    _ => None,
+                };
+                assert_eq!(refused, Some(("AT".into(), row, value)), "{name}");
+            }
+        }
+
+        #[test]
+        fn single_precision_floats_widen_exactly_and_nonfinite_ones_are_missing() {
+            // The seam is a FLOAT value's bits: it widens to the binary64
+            // value it names, whose bits a saved CSV cannot show, from plain
+            // and dictionary-encoded pages, and a non-finite one is missing
+            // (PARQUET-7, PARQUET-8). The binary64 bits of -0.0, the
+            // single-precision value nearest 0.1, the least subnormal and
+            // the greatest finite value were written by hand.
+            let table = parse(&content("float32-values")).unwrap();
+            let expected = [
+                None,
+                None,
+                None,
+                None,
+                Some(0x8000_0000_0000_0000u64),
+                Some(0x3fb9_9999_a000_0000),
+                Some(0x36a0_0000_0000_0000),
+                Some(0x47ef_ffff_e000_0000),
+            ];
+            for column in 0..2 {
+                assert_eq!(table.schema().columns()[column].kind, ColumnType::Float);
+                let bits: Vec<_> = (0..table.row_count())
+                    .map(|row| match table.cell(row, column).unwrap() {
+                        ValueRef::Float(value) => Some(value.get().to_bits()),
+                        ValueRef::Missing => None,
+                        other => panic!("{other:?}"),
+                    })
+                    .collect();
+                assert_eq!(bits, expected, "column {column}");
+            }
         }
 
         #[test]
