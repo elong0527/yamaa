@@ -35,6 +35,35 @@ const MAGIC: &[u8] = b"PAR1";
 /// i16 ordinal and refused the next.
 const ROW_GROUPS: usize = 1 << 15;
 
+/// A page's size as the Thrift i32 its header holds, or the refusal of a
+/// body larger than an i32 counts, which the 1.0 writer wrapped (#4075).
+fn page_size<E>(body: usize) -> Result<i32, Error<E>> {
+    i32::try_from(body).map_err(|_| Error::Limit {
+        resource: "parquet_page_bytes",
+        limit: i32::MAX as usize,
+        actual: Some(body),
+    })
+}
+
+/// A plain string's length as the four bytes that precede it, or the page's
+/// refusal of a value longer than a u32 counts: that value alone makes its
+/// page one no i32 counts, so it is refused as that page is (#4075).
+fn value_length<E>(value: usize) -> Result<u32, Error<E>> {
+    u32::try_from(value).or_else(|_| page_size(value).map(|size| size as u32))
+}
+
+/// The footer's length as the four bytes that end it, or the refusal of
+/// metadata longer than a u32 counts, which the 1.0 writer wrapped: each
+/// row group repeats every field's name, so long names over many row groups
+/// can pass it within the output byte limit (#4075).
+fn footer_length<E>(metadata: usize) -> Result<u32, Error<E>> {
+    u32::try_from(metadata).map_err(|_| Error::Limit {
+        resource: "parquet_footer_bytes",
+        limit: u32::MAX as usize,
+        actual: Some(metadata),
+    })
+}
+
 /// Format codes of the Parquet Thrift definition.
 mod code {
     pub const INT32: i32 = 1;
@@ -349,7 +378,7 @@ impl Pending {
         }
         match (self.kind, value) {
             (ColumnType::Str, ValueRef::Str(value)) => {
-                let length = u32::try_from(value.len()).map_err(|_| Error::ValueType)?;
+                let length = value_length(value.len())?;
                 self.values.extend(length.to_le_bytes());
                 self.values.extend(value.as_bytes());
             }
@@ -373,21 +402,22 @@ impl Pending {
     }
 
     /// The column chunk's one data page, its header then its body, emptying
-    /// the levels and values for the next row group.
-    fn page(&mut self) -> Vec<u8> {
+    /// the levels and values for the next row group, or the refusal of a
+    /// body its header cannot count.
+    fn page<E>(&mut self) -> Result<Vec<u8>, Error<E>> {
         let mut levels = Levels::new();
         for &level in &self.levels {
             levels.put(level);
         }
         let mut body = levels.finish();
         body.append(&mut self.values);
-        // The 1.0 writer cast each size to Thrift's i32.
-        let size = body.len() as i32;
+        let size = page_size(body.len())?;
         let mut header = Compact::new();
         header.i32(1, code::DATA_PAGE);
         header.i32(2, size);
         header.i32(3, size);
         header.begin(5);
+        // At most ROW_GROUP_ROWS levels.
         header.i32(1, self.levels.len() as i32);
         header.i32(2, code::PLAIN);
         header.i32(3, code::RLE);
@@ -396,7 +426,7 @@ impl Pending {
         let mut page = header.finish();
         page.extend(body);
         self.levels.clear();
-        page
+        Ok(page)
     }
 }
 
@@ -446,7 +476,7 @@ impl File {
         let mut chunks = Vec::with_capacity(pending.len());
         for column in pending {
             let values = column.levels.len();
-            let page = column.page();
+            let page = column.page()?;
             let offset = self.bytes.len();
             self.write(&page)?;
             chunks.push(Chunk {
@@ -459,13 +489,20 @@ impl File {
         Ok(())
     }
 
-    /// The footer: the file metadata, its length and the closing magic.
-    fn footer(&self, names: &[&str], kinds: &[ColumnType], rows: usize) -> Vec<u8> {
+    /// The footer: the file metadata, its length and the closing magic, or
+    /// the refusal of metadata its length cannot count.
+    fn footer<E>(
+        &self,
+        names: &[&str],
+        kinds: &[ColumnType],
+        rows: usize,
+    ) -> Result<Vec<u8>, Error<E>> {
         let mut footer = Compact::new();
         footer.i32(1, 1);
         footer.list(2, wire::STRUCT, names.len() + 1);
         footer.element();
         footer.binary(4, b"schema");
+        // At most Limits::COLUMNS fields, which encode admits.
         footer.i32(5, names.len() as i32);
         footer.end();
         for (name, &kind) in names.iter().zip(kinds) {
@@ -518,6 +555,7 @@ impl File {
                 group.chunks.first().map_or(0, |chunk| chunk.offset) as i64,
             );
             footer.i64(6, size as i64);
+            // Below ROW_GROUPS, which row_group refuses to pass.
             footer.i16(7, ordinal as i16);
             footer.end();
         }
@@ -531,10 +569,10 @@ impl File {
             footer.end();
         }
         let mut metadata = footer.finish();
-        let length = metadata.len() as u32;
+        let length = footer_length(metadata.len())?;
         metadata.extend(length.to_le_bytes());
         metadata.extend(MAGIC);
-        metadata
+        Ok(metadata)
     }
 }
 
@@ -557,6 +595,15 @@ fn encode<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
+    let admit = |rows| -> Result<(), Error<T::Error>> {
+        Limits::table(rows, projection.len()).map_err(|error| Error::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+        })
+    };
+    // The columns, which the footer counts in an i32, whatever the partitions.
+    admit(0)?;
     let names: Vec<&str> = projection
         .iter()
         .map(|&index| columns[index].name.as_str())
@@ -570,11 +617,7 @@ fn encode<T: TableAccess>(
     let (mut held, mut rows) = (0, 0);
     let mut ends = Vec::with_capacity(partitions.len());
     for partition in partitions {
-        Limits::table(partition.len(), projection.len()).map_err(|error| Error::Limit {
-            resource: error.resource,
-            limit: error.limit,
-            actual: error.actual,
-        })?;
+        admit(partition.len())?;
         for row in partition.clone() {
             for (column, &index) in pending.iter_mut().zip(projection) {
                 column.push(table.cell(row, index).map_err(Error::Cell)?)?;
@@ -591,7 +634,7 @@ fn encode<T: TableAccess>(
     if held > 0 {
         file.row_group(&mut pending, held)?;
     }
-    let footer = file.footer(&names, &kinds, rows);
+    let footer = file.footer(&names, &kinds, rows)?;
     file.write(&footer)?;
     Ok(ends)
 }
@@ -645,6 +688,48 @@ mod tests {
             ),
             (0, Ok(()), Err("table_cells")),
             "the default partition of {rows} rows"
+        );
+    }
+
+    /// Seam: the size checks of a page, a footer and a string value, at
+    /// lengths no test could build. A page header counts its body in a
+    /// Thrift i32 and the file's tail counts the footer in four unsigned
+    /// bytes, so each admits its field's largest value and refuses the next
+    /// byte; a string past its four length bytes is refused as its page
+    /// (#4075).
+    #[test]
+    fn a_page_or_footer_its_size_field_cannot_count_is_refused() {
+        use std::convert::Infallible;
+        assert_eq!(
+            (
+                page_size::<Infallible>(2_147_483_647),
+                page_size::<Infallible>(2_147_483_648),
+                footer_length::<Infallible>(4_294_967_295),
+                footer_length::<Infallible>(4_294_967_296),
+                value_length::<Infallible>(4_294_967_295),
+                value_length::<Infallible>(4_294_967_296),
+            ),
+            (
+                Ok(2_147_483_647),
+                Err(Error::Limit {
+                    resource: "parquet_page_bytes",
+                    limit: 2_147_483_647,
+                    actual: Some(2_147_483_648),
+                }),
+                Ok(4_294_967_295),
+                Err(Error::Limit {
+                    resource: "parquet_footer_bytes",
+                    limit: 4_294_967_295,
+                    actual: Some(4_294_967_296),
+                }),
+                Ok(4_294_967_295),
+                Err(Error::Limit {
+                    resource: "parquet_page_bytes",
+                    limit: 2_147_483_647,
+                    actual: Some(4_294_967_296),
+                }),
+            ),
+            "a page, a footer and a string value at their size fields' largest value and one byte past it"
         );
     }
 }

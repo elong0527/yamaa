@@ -43,6 +43,7 @@ the held bytes.
 | diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave, and `{entry}` in its context for that specification's absolute path as the engine resolves it, with forward slashes |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | Two invalid Parquet files, one whose INT96 statistic is too long and one whose row groups name one page with a header parquet 55 could not skip, their issue row, and a readable file with its saved CSV |
+| parquet-writer-defaults | A Parquet file pyarrow 26 wrote with a timestamp in nanoseconds, one in milliseconds and a single-precision float, the specification that reads each, and its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and three refusals, a named file written for 0.5 among them; and a layer that restates its parent's row template without one derivation, with its `partial_restatement` row, written from the style guide, which `fix` leaves |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
@@ -51,7 +52,7 @@ the held bytes.
 | conditions | The condition catalogue's seven columns, every condition it names in name order, and one authored row of each shape: rules in card order, a condition whose issues cite no rule, and the four renames and seven retirements of 0.6.0 |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"), and for a refusal at the `parent` or `include` entry of a layer above the entry, which is located in that layer (D181): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
-| include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, each parent case's fragment, given parent and child, whose two checks return its rows, each refused parent's error text and rows (#3694), and the resolve case's layers, `parent` and `include` resources, resolved columns, the layer of each named value and the fields the resolved specification never holds; `{root}` stands for the study's directory, `{path}` in an error text for the path the test gave and `{parent}` for the parent it gave |
+| include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, each parent case's fragment, given parent and child, whose two checks return its rows, each refused parent's error text and rows (#3694), and the resolve case's layers, `parent` and `include` resources, resolved columns, the whole origin of each named value, with its layer and the line and column where that layer wrote it, and the fields the resolved specification never holds; `{root}` stands for the study's directory, `{path}` in an error text for the path the test gave and `{parent}` for the parent it gave |
 | project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row, or under `calls` each of several calls on those files with its rows; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, its source and output formats, and how every run of it divides its input under the hosts' default partitions (#3794) |
@@ -150,7 +151,9 @@ P-ISSUE-1 before the engine ran. The resolve case's layers follow LAYER-3's
 contribution order, the template, then the fragments in list order, then the
 entry, and its columns LAYER-13's: the template's, then the duration that
 reads two of them, then the severity, each after what it reads and otherwise
-by contribution position.
+by contribution position. Each origin's line and column were counted in the
+text of the layer that writes the value, from 1: the first character of a
+scalar, or the opening brace of a flow mapping.
 
 Its parent cases check a fragment with `check(parent=)`, and the child that
 names that parent, includes the fragment and writes nothing else with
@@ -200,6 +203,19 @@ runs every specification in a fresh process and requires its stderr to be
 empty. The family is named for what it first proved: that the engine
 contained the panic of the upstream decoder on the INT96 statistic, which the
 native reader refuses without one (#3878).
+
+`parquet-writer-defaults` pairs the installed Python and R suites of the
+Parquet types that pandas and pyarrow write by default (#4087). pyarrow 26.0.0
+wrote its file, with its embedded Arrow schema and snappy pages, from a table
+of an `ID`, a `NS` timestamp in nanoseconds, a `MS` timestamp in milliseconds
+and a single-precision `F32`, none adjusted to UTC; each of the last three
+holds one missing value. Each suite runs the specification, which reads every
+field as its column type (PARQUET-7), requires no issue, and compares the CSV
+it saves with `saved_csv`, byte for byte. The CSV was written by hand: the
+nanosecond and millisecond counts are the whole seconds `2024-01-01T10:00:00`
+and `1969-12-31T23:59:59` (PARQUET-9), and the single-precision value nearest
+0.1 widens to the binary64 value whose shortest text is
+`0.10000000149011612`.
 
 `selftest` pairs the installed Python and R selftest suites. Its cases are
 the list in `benchmarks/selftest.yaml`, and its lines are the printed lines of

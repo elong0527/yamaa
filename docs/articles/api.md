@@ -392,7 +392,9 @@ package's Suggests, so install it if you have not; it reads an integer beyond
 
     ```r
     issues <- yamaa_spec("sdtm/dm.yaml")$check()$issues
-    contexts <- lapply(issues$context, jsonlite::fromJSON)  # a named list per issue
+    # A named list per issue; an integer beyond 2^53 stays text.
+    contexts <- lapply(issues$context, jsonlite::fromJSON,
+                       bigint_as_char = TRUE)
     ```
 
 === "Python"
@@ -550,6 +552,13 @@ consumer, not a separate entry. R returns a named list and Python a dict. It
 reads no study data and runs no project code. Each entry records its
 `language_version`, the newest version any of its layers declares in
 `yamaa`.
+
+Each entry's `origins` maps a JSON pointer into the model to where that value
+came from. A value a layer wrote names that layer as `declaring_source`, with
+the `line` and `column` where the layer wrote it, counted from 1, as an
+issue's `file`, `line` and `column` are. A schema default names its schema
+module and no location, and a value composition made, such as the model's
+root, names neither.
 
 === "R"
 

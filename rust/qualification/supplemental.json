@@ -933,6 +933,8 @@
         "rust/crates/yamaa-adapters/src/parquet_source/reader.rs",
         "python/tests/installed/installed_parquet_containment.py",
         "R/yamaa/tests/parquet_containment.R",
+        "python/tests/installed/installed_parquet_writer_defaults.py",
+        "R/yamaa/tests/parquet_writer_defaults.R",
         "python/tests/installed/installed_plan_reuse.py",
         "R/yamaa/tests/plan_reuse.R",
         "python/tests/installed/installed_lint.py",

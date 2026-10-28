@@ -283,18 +283,23 @@ mod tests {
     /// converted type only without one, and by no annotation only where the
     /// row says so; the layout is the embedded schema's, a dictionary's being
     /// its value type's, and a zone, even an empty one, is not one of them.
+    /// A timestamp of each unit reads in the layout of that unit alone.
     #[test]
     fn a_column_row_admits_its_annotations_and_layouts_alone() {
+        use super::super::format::TimeUnit as Unit;
+        use arrow_schema::TimeUnit as Arrow;
         use Converted as C;
         use Physical as P;
+        let stamp = |utc, unit| Some(Logical::Timestamp { utc, unit });
         let micros = |utc| Logical::Timestamp {
             utc,
-            unit: super::super::format::TimeUnit::Micros,
+            unit: Unit::Micros,
         };
         let dictionary = |value| DataType::Dictionary(Box::new(DataType::Int8), Box::new(value));
         let timestamp = |zone: Option<&str>| {
             DataType::Timestamp(arrow_schema::TimeUnit::Microsecond, zone.map(Into::into))
         };
+        let layout = |unit, zone: Option<&str>| DataType::Timestamp(unit, zone.map(Into::into));
         let (text, date) = (Some(ColumnType::Str), Some(ColumnType::Date));
         let (float, datetime) = (Some(ColumnType::Float), Some(ColumnType::DateTime));
         let string = Some(Logical::String);
@@ -318,7 +323,16 @@ mod tests {
                 dictionary(DataType::Float64),
                 float,
             ),
-            (P::Float, None, C::None, DataType::Float32, None),
+            (P::Float, None, C::None, DataType::Float32, float),
+            (
+                P::Float,
+                None,
+                C::None,
+                dictionary(DataType::Float32),
+                float,
+            ),
+            (P::Float, None, C::None, DataType::Float64, None),
+            (P::Double, None, C::None, DataType::Float32, None),
             (P::Int32, None, C::Date, DataType::Date32, date),
             (
                 P::Int32,
@@ -349,6 +363,57 @@ mod tests {
                 None,
             ),
             (P::Int64, None, C::TimestampMicros, timestamp(None), None),
+            (
+                P::Int64,
+                stamp(false, Unit::Millis),
+                C::None,
+                layout(Arrow::Millisecond, None),
+                datetime,
+            ),
+            (
+                P::Int64,
+                stamp(false, Unit::Nanos),
+                C::None,
+                layout(Arrow::Nanosecond, None),
+                datetime,
+            ),
+            (
+                P::Int64,
+                stamp(false, Unit::Nanos),
+                C::None,
+                dictionary(layout(Arrow::Nanosecond, None)),
+                datetime,
+            ),
+            (
+                P::Int64,
+                stamp(false, Unit::Millis),
+                C::None,
+                layout(Arrow::Microsecond, None),
+                None,
+            ),
+            (
+                P::Int64,
+                stamp(false, Unit::Nanos),
+                C::None,
+                layout(Arrow::Millisecond, None),
+                None,
+            ),
+            (
+                P::Int64,
+                stamp(true, Unit::Nanos),
+                C::None,
+                layout(Arrow::Nanosecond, Some("UTC")),
+                None,
+            ),
+            (
+                P::Int64,
+                stamp(true, Unit::Millis),
+                C::TimestampMillis,
+                layout(Arrow::Millisecond, Some("Europe/Paris")),
+                None,
+            ),
+            (P::Int64, None, C::TimestampMillis, timestamp(None), None),
+            (P::Boolean, None, C::None, DataType::Boolean, None),
         ];
         for (physical, logical, converted, layout, expected) in cases {
             let label = format!("{physical:?} {logical:?} {converted:?} {layout:?}");

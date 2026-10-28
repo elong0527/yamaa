@@ -89,6 +89,15 @@ impl TimeUnit {
             Self::Nanos => "NANOS",
         }
     }
+
+    /// How many of the unit make one second.
+    pub(crate) const fn per_second(self) -> i64 {
+        match self {
+            Self::Millis => 1_000,
+            Self::Micros => 1_000_000,
+            Self::Nanos => 1_000_000_000,
+        }
+    }
 }
 
 /// A logical type annotation that the format's Thrift definition declares.

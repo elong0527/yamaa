@@ -25,7 +25,8 @@ Rust strictly decodes the explicitly declared source encoding.
 
 Local changes are limited to removal of writer helpers, the integration bridge
 and iconv shim, checked
-allocation initialization, byte-preserving conversion rejecting embedded NUL,
+allocation initialization, byte-preserving conversion rejecting embedded NUL
+(a refused value recorded by its record and field for the bridge),
 source-authority encoding metadata treatment, early fixed table-shape
 admission, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature

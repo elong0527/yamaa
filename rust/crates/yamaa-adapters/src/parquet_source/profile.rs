@@ -3,6 +3,7 @@
 //! and their order are core-owned.
 use super::closed_profile;
 use super::footer::{Kind, Leaf, Schema as Stored};
+use super::format::Logical;
 use crate::storage_api::LaterType;
 use arrow_schema::{DataType, Schema};
 pub(super) use core_profile::{temporal, Error};
@@ -29,6 +30,15 @@ pub(super) fn width(stored: &Leaf, arrow: &DataType) -> Option<u8> {
 }
 pub(super) fn column_type(stored: &Leaf, arrow: &DataType, annotated: bool) -> Option<ColumnType> {
     row(stored, arrow, annotated).map(|row| row.kind)
+}
+/// How many of the leaf `stored`'s stored counts make one second: its
+/// timestamp annotation's unit, which every column row that reads as
+/// `datetime` names (PARQUET-9); `None` for a leaf of no timestamp.
+pub(super) fn per_second(stored: &Leaf) -> Option<i64> {
+    match stored.logical {
+        Some(Logical::Timestamp { unit, .. }) => Some(unit.per_second()),
+        _ => None,
+    }
 }
 /// The table schema of the fields `arrow` of the schema `stored`, or the
 /// first field's finding. A field has a column type when it is one leaf,
@@ -181,6 +191,29 @@ mod tests {
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
                 ColumnType::DateTime,
             ),
+            // The units pyarrow and pandas write by default, and a
+            // single-precision float (#4087).
+            (
+                Physical::Int64,
+                timestamp(false, TimeUnit::Millis),
+                Converted::None,
+                DataType::Timestamp(ArrowUnit::Millisecond, None),
+                ColumnType::DateTime,
+            ),
+            (
+                Physical::Int64,
+                timestamp(false, TimeUnit::Nanos),
+                Converted::None,
+                DataType::Timestamp(ArrowUnit::Nanosecond, None),
+                ColumnType::DateTime,
+            ),
+            (
+                Physical::Float,
+                None,
+                Converted::None,
+                DataType::Float32,
+                ColumnType::Float,
+            ),
             (
                 Physical::Int32,
                 None,
@@ -219,11 +252,25 @@ mod tests {
                 Converted::TimestampMicros,
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
             ),
+            // A zone is refused in every unit, and a layout of another unit
+            // than the annotation's is no layout of it.
+            (
+                Physical::Int64,
+                timestamp(true, TimeUnit::Nanos),
+                Converted::None,
+                DataType::Timestamp(ArrowUnit::Nanosecond, Some("UTC".into())),
+            ),
+            (
+                Physical::Int64,
+                timestamp(true, TimeUnit::Millis),
+                Converted::TimestampMillis,
+                DataType::Timestamp(ArrowUnit::Millisecond, Some("UTC".into())),
+            ),
             (
                 Physical::Int64,
                 timestamp(false, TimeUnit::Millis),
                 Converted::None,
-                DataType::Timestamp(ArrowUnit::Millisecond, None),
+                DataType::Timestamp(ArrowUnit::Nanosecond, None),
             ),
             (
                 Physical::Int64,
@@ -231,6 +278,13 @@ mod tests {
                 Converted::TimestampMicros,
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
             ),
+            (
+                Physical::Int64,
+                None,
+                Converted::TimestampMillis,
+                DataType::Timestamp(ArrowUnit::Millisecond, None),
+            ),
+            (Physical::Boolean, None, Converted::None, DataType::Boolean),
             (Physical::ByteArray, None, Converted::None, DataType::Binary),
         ] {
             let stored = descriptor(physical, logical, converted);
@@ -333,6 +387,20 @@ mod tests {
                 ColumnType::DateTime,
             ),
             (
+                Physical::Int64,
+                timestamp(false, TimeUnit::Nanos),
+                Converted::None,
+                DataType::Timestamp(ArrowUnit::Nanosecond, None),
+                ColumnType::DateTime,
+            ),
+            (
+                Physical::Float,
+                None,
+                Converted::None,
+                DataType::Float32,
+                ColumnType::Float,
+            ),
+            (
                 Physical::Int32,
                 None,
                 Converted::None,
@@ -404,11 +472,11 @@ mod tests {
     #[test]
     fn temporal_edges_are_integral_and_never_rounded_into_range() {
         for value in [-719_162, 0, 2_932_896] {
-            temporal(ColumnType::Date, value, "D", 1).unwrap();
+            temporal(ColumnType::Date, value, 1, "D", 1).unwrap();
         }
         for value in [-719_163, 2_932_897] {
             assert_eq!(
-                temporal(ColumnType::Date, value, "D", 9),
+                temporal(ColumnType::Date, value, 1, "D", 9),
                 Err(Error::Value {
                     field: "D".into(),
                     row: 9,
@@ -416,16 +484,40 @@ mod tests {
                 })
             );
         }
-        let min = -719_162 * 86_400 * 1_000_000i64;
-        let max = (2_932_896 * 86_400 + 86_399) * 1_000_000i64;
-        for value in [min, -1_000_000, 0, max] {
-            temporal(ColumnType::DateTime, value, "T", 1).unwrap();
-        }
-        for value in [min - 1, max + 1, -1, 1, i64::MIN, i64::MAX] {
-            assert!(matches!(
-                temporal(ColumnType::DateTime, value, "T", 7),
-                Err(Error::Value { row: 7, .. })
-            ));
+        // 0001-01-01T00:00:00 and 9999-12-31T23:59:59, in seconds from
+        // 1970-01-01T00:00:00 (PARQUET-9).
+        let (first, last) = (-719_162 * 86_400i64, 2_932_896 * 86_400 + 86_399i64);
+        for unit in [TimeUnit::Millis, TimeUnit::Micros, TimeUnit::Nanos] {
+            let second = unit.per_second();
+            // Each end and the second beyond it, where the unit's count
+            // reaches it: a nanosecond count reaches neither end.
+            let ends: Vec<_> = [(first, -1), (last, 1)]
+                .into_iter()
+                .filter_map(|(end, out)| {
+                    let at = end.checked_mul(second)?;
+                    Some((at, at + out * second))
+                })
+                .collect();
+            let whole = ends.iter().map(|&(end, _)| end).chain([-second, 0, second]);
+            for value in whole {
+                temporal(ColumnType::DateTime, value, second, "T", 1)
+                    .unwrap_or_else(|error| panic!("{unit:?} {value}: {error}"));
+            }
+            // Beyond either end, or short of a whole second by one count,
+            // the stored value is refused as it was stored.
+            let beyond = ends.iter().map(|&(_, beyond)| beyond);
+            let short = [-1, 1, second / 2, second + 1, i64::MIN, i64::MAX];
+            for value in beyond.chain(short) {
+                assert_eq!(
+                    temporal(ColumnType::DateTime, value, second, "T", 7),
+                    Err(Error::Value {
+                        field: "T".into(),
+                        row: 7,
+                        value
+                    }),
+                    "{unit:?} {value}"
+                );
+            }
         }
     }
 }
