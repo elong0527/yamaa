@@ -9,10 +9,12 @@
 # `run()`, and made again when the object was restored from `saveRDS`, an
 # `.RData` file or another R process.
 
-# A reply's value, or its refusal signalled. An interrupt the call kept is
-# signalled again as R's own: an interrupt handler takes it, and unhandled it
-# runs the `interrupt` option's function and returns to the top level, as
-# Ctrl+C does. stop() would end it as an error, which an error handler takes
+# A reply's value, or its refusal signalled. An interrupt the call kept takes
+# the path of an unhandled Ctrl+C (onintr in R's errors.c): it is signalled
+# again, so an interrupt handler takes it; otherwise the `interrupt` option's
+# function runs, R's newline is printed, the `error` option runs when no
+# `interrupt` option is set, and the call ends at the innermost browser or
+# abort restart. stop() would end it as an error, which an error handler takes
 # (#4070).
 .reply <- function(reply) {
   error <- reply$error
@@ -21,7 +23,15 @@
       signalCondition(error$condition)
       hook <- getOption("interrupt")
       if (is.function(hook)) hook()
-      invokeRestart("abort")
+      cat("\n", file = stderr())
+      if (is.null(getOption("interrupt"))) {
+        handler <- getOption("error")
+        if (is.call(handler)) eval(handler, globalenv())
+        if (is.expression(handler)) for (step in handler) eval(step, globalenv())
+      }
+      ends <- Filter(function(restart) restart[[1L]] %in% c("browser", "tryRestart", "abort"),
+        computeRestarts())
+      invokeRestart(ends[[1L]])
     }
     if (!is.null(error$condition)) stop(error$condition)
     stop(structure(
