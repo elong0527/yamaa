@@ -108,6 +108,7 @@ mod table {
             // starts with a mark of its own.
             for source in [
                 &b"ID\n1\n"[..],
+                b"ID\r\n1\r\n\r\n",
                 b"",
                 b"A,B\r\nx,y",
                 b"\xff",
@@ -330,6 +331,108 @@ mod table {
             let header = parse(b"A,B\n").unwrap();
             assert_eq!(header.names, ["A", "B"]);
             assert!(header.records.is_empty());
+        }
+
+        /// CSV-11: the blank lines that end a source are no record, whatever
+        /// the header's width and line ending, while the header is always
+        /// read and a blank line before the last record is a record of one
+        /// empty field. A line of a space or of a quoted empty field is no
+        /// blank line (CSV-12, CSV-14), and blank lines inside a quoted
+        /// field the source never closes are read as the field's bytes, so
+        /// a carriage return among them fails as it does anywhere in it.
+        #[test]
+        fn trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one() {
+            let ok = |names: &[&str], records: &[&[Option<&str>]]| {
+                Ok(CsvSource {
+                    names: names.iter().map(|&name| name.into()).collect(),
+                    records: records
+                        .iter()
+                        .map(|record| record.iter().map(|v| v.map(String::from)).collect())
+                        .collect(),
+                })
+            };
+            let profile = |cause, record, field| {
+                Err(Error::Profile {
+                    cause,
+                    record,
+                    field: Field::Index(field),
+                })
+            };
+            let ids = ok(&["ID"], &[&[Some("1")], &[Some("2")]]);
+            let pair = ok(&["A", "B"], &[&[Some("1"), Some("2")]]);
+            for (input, expected, case) in [
+                (
+                    &b"ID\n1\n2\n\n"[..],
+                    ids.clone(),
+                    "one column, one blank line",
+                ),
+                (
+                    b"ID\n1\n2\n\n\n\n",
+                    ids.clone(),
+                    "one column, three blank lines",
+                ),
+                (b"ID\r\n1\r\n2\r\n\r\n", ids.clone(), "one column, CR LF"),
+                (b"ID\n1\n2\r\n\n\r\n", ids, "one column, mixed line endings"),
+                (
+                    b"A,B\n1,2\n\n",
+                    pair.clone(),
+                    "two columns, no width finding",
+                ),
+                (b"A,B\r\n1,2\r\n\r\n\r\n", pair, "two columns, CR LF"),
+                (
+                    b"A,B\n\n\n",
+                    ok(&["A", "B"], &[]),
+                    "a header and blank lines",
+                ),
+                (b"A,B\r\n\r\n", ok(&["A", "B"], &[]), "a header and a CR LF"),
+                (
+                    b"ID\n\n1\n\n",
+                    ok(&["ID"], &[&[None], &[Some("1")]]),
+                    "an inner blank line is an empty record",
+                ),
+                (
+                    b"ID\n1\n\"\"\n\n",
+                    ok(&["ID"], &[&[Some("1")], &[None]]),
+                    "a quoted empty field is a record",
+                ),
+                (
+                    b"ID\n1\n \n\n",
+                    ok(&["ID"], &[&[Some("1")], &[Some(" ")]]),
+                    "a line of a space is a record",
+                ),
+                (
+                    b"A,B\n1,2\n\n3,4\n\n",
+                    profile(ProfileCause::RecordWidth, 3, 2),
+                    "an inner blank line of two columns has one field",
+                ),
+                (
+                    b"\n\n",
+                    profile(ProfileCause::FieldNameEmpty, 1, 1),
+                    "blank lines alone hold an empty header name",
+                ),
+                (
+                    b"A\n\"x\n\n",
+                    profile(ProfileCause::QuoteUnterminated, 2, 1),
+                    "blank lines inside an unclosed quote",
+                ),
+                (
+                    b"A\n\"x\r\n\r\n",
+                    profile(ProfileCause::CarriageReturn, 2, 1),
+                    "a CR LF inside an unclosed quote",
+                ),
+                (
+                    b"A\n\"x\n\r\n",
+                    profile(ProfileCause::CarriageReturn, 2, 1),
+                    "a CR LF after a line feed inside an unclosed quote",
+                ),
+                (
+                    b"ID\n1\n\r",
+                    profile(ProfileCause::CarriageReturn, 3, 1),
+                    "a carriage return alone ends no line",
+                ),
+            ] {
+                assert_eq!(parse(input), expected, "{case}");
+            }
         }
 
         #[test]
