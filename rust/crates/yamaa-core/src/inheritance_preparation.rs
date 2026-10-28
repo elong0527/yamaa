@@ -5,8 +5,8 @@ use crate::resolution::{self, Order};
 use crate::resolver::Resolver;
 use crate::schema::{
     shorthand_key, written_path, CompositionOrigin, Document, DocumentError, DocumentNode as N,
-    LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
-    SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
+    LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument, SchemaDiagnostic,
+    SchemaOrigin, SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
 };
 use std::collections::BTreeMap;
 
@@ -21,22 +21,22 @@ pub struct FailureContext<E> {
 }
 
 /// The layer at `source`, its relative paths respelled from the entry
-/// (LAYER-10): an input's `path` and `schema` from the base its composed
-/// `relative_to` selects, and `output`'s `path` and `report` from the base
-/// its own `relative_to` selects, since output composes whole. Node indices
-/// are kept, so origins addressing the layer still hold.
+/// (LAYER-10): an input's `path` and `schema`, and `output`'s `path` and
+/// `report`, each from the base its declaration's composed `relative_to`
+/// selects, whichever layer writes it. Node indices are kept, so origins
+/// addressing the layer still hold.
 fn rebased<R: Resolver>(
     document: &Document,
     source: &Source,
     entry: &Source,
-    input_bases: &BTreeMap<String, bool>,
+    bases: &Bases,
     resolver: &mut R,
 ) -> Result<Document, Rebase<R::Error>> {
     let mut paths = Vec::new();
     if let Some(input) = document.field(document.root(), "input") {
         if let N::Mapping(inputs) = &document.nodes()[input] {
             for &(name, declaration) in inputs {
-                let from_entry = matches!(&document.nodes()[name], N::Text(name) if input_bases.get(name) == Some(&true));
+                let from_entry = matches!(&document.nodes()[name], N::Text(name) if bases.inputs.get(name) == Some(&true));
                 for field in ["path", "schema"] {
                     if let Some(id) = document.field(declaration, field) {
                         paths.push((id, from_entry));
@@ -46,13 +46,9 @@ fn rebased<R: Resolver>(
         }
     }
     if let Some(output) = document.field(document.root(), "output") {
-        // LAYER-5 replaces output atomically, keeping its paths and selector together.
-        let from_entry = document
-            .field(output, "relative_to")
-            .is_some_and(|id| matches!(&document.nodes()[id], N::Text(base) if base == "entry"));
         for field in ["path", "report"] {
             if let Some(id) = document.field(output, field) {
-                paths.push((id, from_entry));
+                paths.push((id, bases.output));
             }
         }
     }
@@ -74,25 +70,37 @@ enum Rebase<E> {
     Document(DocumentError),
 }
 
-/// Record the explicit `relative_to` each input of a layer writes: whether it
-/// selects the entry's directory (FILE-2).
-fn record_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
-    let Some(input) = document.field(document.root(), "input") else {
-        return;
-    };
-    let N::Mapping(inputs) = &document.nodes()[input] else {
-        return;
-    };
-    for &(name, source) in inputs {
-        let N::Text(name) = &document.nodes()[name] else {
-            continue;
-        };
-        if let Some(base) = document.field(source, "relative_to") {
-            bases.insert(
-                name.clone(),
-                matches!(&document.nodes()[base], N::Text(base) if base == "entry"),
-            );
+/// Whether each declaration's composed `relative_to` selects the entry's
+/// directory (FILE-2): each input's, by name, and `output`'s. A declaration
+/// that no layer gives one selects the declaring layer.
+#[derive(Default)]
+struct Bases {
+    inputs: BTreeMap<String, bool>,
+    output: bool,
+}
+
+/// Record the explicit `relative_to` each input of a layer and its `output`
+/// write: whether it selects the entry's directory (FILE-2).
+fn record_bases(document: &Document, bases: &mut Bases) {
+    let entry = |base: usize| matches!(&document.nodes()[base], N::Text(base) if base == "entry");
+    if let Some(N::Mapping(inputs)) = document
+        .field(document.root(), "input")
+        .map(|input| &document.nodes()[input])
+    {
+        for &(name, source) in inputs {
+            let N::Text(name) = &document.nodes()[name] else {
+                continue;
+            };
+            if let Some(base) = document.field(source, "relative_to") {
+                bases.inputs.insert(name.clone(), entry(base));
+            }
         }
+    }
+    if let Some(base) = document
+        .field(document.root(), "output")
+        .and_then(|output| document.field(output, "relative_to"))
+    {
+        bases.output = entry(base);
     }
 }
 
@@ -165,9 +173,10 @@ impl<E> From<Rebase<E>> for VersionedError<E> {
     }
 }
 
-/// Set the inputs whose `relative_to` a layer clears back to the declaring
-/// layer's directory, the default the resolved specification takes again.
-fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
+/// Set each declaration whose `relative_to` a layer clears back to the
+/// declaring layer's directory, the default the resolved specification takes
+/// again.
+fn clear_bases(document: &Document, bases: &mut Bases) {
     let Some(N::Sequence(entries)) = document
         .field(document.root(), "clear")
         .map(|list| &document.nodes()[list])
@@ -178,18 +187,67 @@ fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
         let N::Text(written) = &document.nodes()[entry] else {
             continue;
         };
-        if let Some(path) = SpecPath::parse(written) {
-            if let [input, name, base] = path.keys() {
-                if input == "input" && base == "relative_to" {
-                    bases.insert(name.clone(), false);
-                }
+        match SpecPath::parse(written).as_ref().map(SpecPath::keys) {
+            Some([input, name, base]) if input == "input" && base == "relative_to" => {
+                bases.inputs.insert(name.clone(), false);
             }
+            Some([output, base]) if output == "output" && base == "relative_to" => {
+                bases.output = false;
+            }
+            _ => {}
         }
     }
 }
 
+/// The layers of a 1.x chain that [`crate::inheritance::traverse_versioned`]
+/// admitted against `schema`, as they compose, in contribution order: each
+/// normalized at the version it declares, its copy entries replaced by the
+/// columns they declare, read from the producers their inputs link through
+/// `producer` (SPEC-9), and its relative paths respelled from the entry
+/// through `resolver` (LAYER-10). [`prepare_versioned`] composes them; the
+/// lint compares the entry's with what it composes on.
+pub fn contributed_layers<R: Resolver>(
+    schema: &SchemaStructure,
+    chain: &VersionedChain,
+    resolver: &mut R,
+    producer: impl FnMut(
+        &mut R,
+        &Source,
+        &str,
+        &str,
+        &[&Source],
+    ) -> Option<crate::producer_contract::Contract>,
+) -> Result<Vec<NormalizedDocument>, VersionedError<R::Error>> {
+    let mut normalized = Vec::with_capacity(chain.layers.len());
+    for (index, layer) in chain.layers.iter().enumerate() {
+        let view = schema.at_version(layer.version);
+        normalized.push(
+            view.normalize_versioned_layer(&layer.document)
+                .map_err(|error| VersionedError::Layer {
+                    layer: index,
+                    error,
+                })?,
+        );
+    }
+    crate::copy_expansion::expand(schema, chain, &mut normalized, resolver, producer)?;
+    let entry = &chain.layers.last().expect("a chain holds its entry").source;
+    // The final base of each input and of `output` is selected before any
+    // contributing path is respelled; a cleared `relative_to` selects the
+    // declaring layer again.
+    let mut bases = Bases::default();
+    for layer in &normalized {
+        clear_bases(&layer.document, &mut bases);
+        record_bases(&layer.document, &mut bases);
+    }
+    for (layer, written) in normalized.iter_mut().zip(&chain.layers) {
+        layer.document = rebased(&layer.document, &written.source, entry, &bases, resolver)?;
+    }
+    Ok(normalized)
+}
+
 /// Resolve a 1.x chain that [`crate::inheritance::traverse_versioned`] admitted
-/// against `schema`, the 1.0 specification closure. Each layer is normalized
+/// against `schema`, the 1.0 specification closure: the layers
+/// [`contributed_layers`] gives compose. Each layer is normalized
 /// at the version it declares, and its copy entries replaced by the columns
 /// they declare, read from the producers their inputs link (SPEC-9); its
 /// relative paths are respelled from the entry (LAYER-10); the layers
@@ -220,36 +278,7 @@ pub fn prepare_versioned<R: Resolver>(
         &[&Source],
     ) -> Option<crate::producer_contract::Contract>,
 ) -> Result<ResolvedVersioned, VersionedError<R::Error>> {
-    let mut normalized = Vec::with_capacity(chain.layers.len());
-    for (index, layer) in chain.layers.iter().enumerate() {
-        let view = schema.at_version(layer.version);
-        normalized.push(
-            view.normalize_versioned_layer(&layer.document)
-                .map_err(|error| VersionedError::Layer {
-                    layer: index,
-                    error,
-                })?,
-        );
-    }
-    crate::copy_expansion::expand(schema, chain, &mut normalized, resolver, producer)?;
-    let entry = &chain.layers.last().expect("a chain holds its entry").source;
-    // The final base of each input is selected before any contributing path
-    // is respelled; a cleared `relative_to` selects the declaring layer
-    // again.
-    let mut input_bases = BTreeMap::new();
-    for layer in &normalized {
-        clear_input_bases(&layer.document, &mut input_bases);
-        record_input_bases(&layer.document, &mut input_bases);
-    }
-    for (layer, written) in normalized.iter_mut().zip(&chain.layers) {
-        layer.document = rebased(
-            &layer.document,
-            &written.source,
-            entry,
-            &input_bases,
-            resolver,
-        )?;
-    }
+    let normalized = contributed_layers(schema, chain, resolver, producer)?;
     let view = schema.at_version(chain.version);
     let mut composed = view
         .compose_versioned_layers(&normalized)

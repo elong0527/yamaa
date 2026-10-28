@@ -376,18 +376,57 @@ output: {path: out.csv, columns: [CODE, REASON]}
             assert_eq!(entry.specification, resolved(&prepared));
             let origin = |pointer: &str| {
                 let origin = &entry.origins[pointer];
-                (origin.declaring_source.clone(), origin.source_kind.clone())
+                (
+                    origin.declaring_source.clone(),
+                    origin.line,
+                    origin.column,
+                    origin.source_kind.clone(),
+                )
             };
+            // A value a layer wrote names that layer and the one-based line
+            // and column of its first character there, counted in the text
+            // written above; composition's root names neither.
+            for (pointer, expected) in [
+                (
+                    "/columns/1/derivation/value/mapping/unmapped",
+                    (Some(base.clone()), Some(18), Some(19), OriginKind::Authored),
+                ),
+                (
+                    "/columns/1/label",
+                    (Some(base.clone()), Some(13), Some(12), OriginKind::Authored),
+                ),
+                (
+                    "/output/path",
+                    (Some(base.clone()), Some(20), Some(16), OriginKind::Authored),
+                ),
+                (
+                    "/domain",
+                    (Some(spec.clone()), Some(5), Some(9), OriginKind::Authored),
+                ),
+                ("", (None, None, None, OriginKind::Composed)),
+            ] {
+                assert_eq!(origin(pointer), expected, "the origin of {pointer:?}");
+            }
+            // A default names its schema module and no location.
+            let (_, line, column, kind) = origin("/output/relative_to");
             assert_eq!(
-                origin("/columns/1/derivation/value/mapping/unmapped"),
-                (Some(base.clone()), OriginKind::Authored)
+                (line, column, kind),
+                (None, None, OriginKind::SchemaDefault)
             );
-            assert_eq!(
-                origin("/domain"),
-                (Some(spec.clone()), OriginKind::Authored)
-            );
-            assert_eq!(origin("/output/relative_to").1, OriginKind::SchemaDefault);
-            assert_eq!(origin(""), (None, OriginKind::Composed));
+            // Every value a layer wrote is located, and no other value is.
+            for (pointer, origin) in &entry.origins {
+                let authored = origin.source_kind == OriginKind::Authored;
+                assert_eq!(
+                    (
+                        origin.line.is_some(),
+                        origin.column.is_some(),
+                        origin.end_line.is_some(),
+                        origin.end_column.is_some()
+                    ),
+                    (authored, authored, authored, authored),
+                    "the location of {pointer:?}"
+                );
+            }
             // Each resource keeps its layer's spelling and the base its
             // declaration selects (FILE-2).
             let resources = entry

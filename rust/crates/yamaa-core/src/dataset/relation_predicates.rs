@@ -15,11 +15,10 @@ pub enum CurrentRead {
         index: usize,
         column: usize,
     },
-    /// A named intermediate's bare range value that no output column takes,
-    /// when another intermediate's derivations read it. Only a donor read
-    /// gives it a value, the donor record's field of that name (LOOKUP-16);
-    /// binding refuses every row's read of it (LOOKUP-9), so no row plan
-    /// evaluates it.
+    /// A filter field or range value deferred to a reading donor record
+    /// (LOOKUP-16), bare or qualified by that record's dataset. Binding
+    /// refuses a row's read of an unresolved name (LOOKUP-7, LOOKUP-9),
+    /// so only a rebased donor plan evaluates it.
     Contextual,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

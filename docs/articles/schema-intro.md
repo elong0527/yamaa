@@ -133,7 +133,7 @@ in one schema module per family:
 | Family | Module | Verbs |
 |---|---|---|
 | Core selection | `schema_expression_core.yaml` | `source`, `first_available`, `greatest`, `least`, `case`, `flag` |
-| Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
+| Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `decode`, `cut` |
 | Strings | `schema_expression_str.yaml` | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template`, `str_case` |
 | Rounding | `schema_expression_numeric.yaml` | `round_half_away_from_zero`, `str_decimal` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
@@ -164,7 +164,9 @@ precedence over the ones before it
 A layer need not be complete. Each layer is checked for what it writes, and
 the composed specification for required fields. A root field replaces what
 came before it whole, while `input`, `intermediates`, `columns`, `rows` and
-`windows` compose member by member, matched by their key, `name` or `id`
+`windows` compose member by member, matched by their key, `name` or `id`,
+and `output` and `submission` compose field by field, so a layer that changes
+only `output.columns` or `submission.artifact` writes that field alone
 ([LAYER-5](../../rules/inheritance.md#layer-5)). This study entry inherits
 an adverse-event template and includes two fragments:
 
@@ -290,6 +292,7 @@ in its short form is listed under the field it fills.
 | `case`, in each item | `when`, `then`, `otherwise` | | | | |
 | `flag` | `condition` | | | `true_value`, `false_value`, `missing` | |
 | `mapping` | | `source` | | `dict`, `case_sensitive`, `missing`, `unmapped` | |
+| `decode` | | `source` | `codelist` | `missing`, `unmapped` | |
 | `cut` | | `source` | | `breaks`, `labels`, `closed`, `missing` | |
 | `str_pad` | | `source` | | `width` | |
 | `str_substr` | | `source` | | `start`, `length`, `piece`, `missing` | |

@@ -15,8 +15,9 @@ stale or extra one.
 
 import argparse
 import json
+import re
 
-from tools.paths import ROOT
+from tools.paths import ROOT, WORKSPACE
 from tools.validation.schema_bundle import Bundle
 
 SOURCE = ROOT / "yaml"
@@ -37,15 +38,21 @@ SCALARS = {
     "null": "null",
 }
 # Every layer writes the header (D4). Inside a member of these root
-# collections a layer defers requiredness to the composed specification,
-# except the identity the member composes by (LAYER-4, LAYER-5).
+# collections, and inside these root blocks, which compose field by field as
+# a member does, a layer defers requiredness to the composed specification,
+# except the identity a member composes by (LAYER-4, LAYER-5).
 HEADER = ("yamaa", "type")
 COLLECTIONS = ("input", "windows", "intermediates", "columns", "rows")
+BLOCKS = ("output", "submission")
 # A project file that names a parent, or clears what it inherits, is one layer
-# of a chain too, and inside each of its sections a layer defers requiredness
-# to the composed project (PROJECT-16).
+# of a chain too, and its sections are its blocks: inside each a layer defers
+# requiredness to the composed project (PROJECT-16).
 SECTIONS = ("environments", "study", "sdtm", "adam", "send")
 LINKS = ("parent", "clear")
+# The engine's declarations of the same lists, which layer admission reads
+# (LAYER-4, PROJECT-16); the check refuses a copy here that differs from them.
+LAYER_SOURCE = WORKSPACE / "crates/yamaa-core/src/schema/versioned_layer.rs"
+LAYER_SOURCE_NAME = "rust/crates/yamaa-core/src/schema/versioned_layer.rs"
 IDENTITIES = {
     "column_class": "name",
     "column_copy_class": "copy",
@@ -57,6 +64,50 @@ LAYER = "layer"
 FILE = "project_file"
 FRAGMENT = "fragment."
 GENERATED = "Generated from yaml/ by tools/packaging/generate_json_schema.py."
+
+
+def rust_names(source, name):
+    """The string literals of the Rust array constant `name` in `source`.
+
+    The constant must be declared once, as `const NAME: [&str; N] = [...];`,
+    holding exactly N string literals and nothing else; anything else is
+    refused rather than read.
+    """
+    declarations = re.findall(
+        rf"^pub(?:\([a-z]+\))? const {name}: \[&str; (\d+)\] =\s*\[([^\]]*)\];",
+        source,
+        re.M,
+    )
+    if len(declarations) != 1:
+        raise ValueError(
+            f"{LAYER_SOURCE_NAME}: expected one `const {name}`, "
+            f"found {len(declarations)}"
+        )
+    length, body = declarations[0]
+    names = tuple(re.findall(r'"([^"\\]*)"', body))
+    if len(names) != int(length) or re.sub(r'"[^"\\]*"|[\s,]', "", body):
+        raise ValueError(
+            f"{LAYER_SOURCE_NAME}: `const {name}` is not a list of {length} "
+            "string literals"
+        )
+    return names
+
+
+def declaration_errors(source):
+    """Where this generator's copies differ from the engine's declarations."""
+    errors = []
+    for name, copy in (
+        ("COLLECTIONS", COLLECTIONS),
+        ("BLOCKS", BLOCKS),
+        ("SECTIONS", SECTIONS),
+    ):
+        declared = rust_names(source, name)
+        if declared != copy:
+            errors.append(
+                f"ERROR: {name} is {list(copy)} here but {list(declared)} in "
+                f"{LAYER_SOURCE_NAME}"
+            )
+    return errors
 
 
 def target(file_type):
@@ -199,15 +250,16 @@ def render(file_type):
     renderer = Renderer(Bundle(SOURCE, entry))
     start = {"$ref": f"#/$defs/{root}"}
     if file_type == "spec":
-        renderer.definitions[LAYER] = renderer.layer(root, COLLECTIONS)
+        renderer.definitions[LAYER] = renderer.layer(root, COLLECTIONS + BLOCKS)
         renderer.reference(root, False)
         start = {"$ref": f"#/$defs/{LAYER}"}
         description = (
             "One file of the 1.0 spec type. A specification file may be one layer "
             "of an inheritance chain: the header is required in every layer, a "
             "root field it writes is complete there, and inside a member of input, "
-            "windows, intermediates, columns or rows requiredness waits for the "
-            "composed specification, which $defs/root_class checks (LAYER-4). "
+            "windows, intermediates, columns or rows, and inside output or "
+            "submission, requiredness waits for the composed specification, which "
+            "$defs/root_class checks (LAYER-4). "
         )
     elif file_type == "project":
         renderer.definitions[LAYER] = renderer.layer(root, SECTIONS)
@@ -244,6 +296,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
+    mismatched = declaration_errors(LAYER_SOURCE.read_text(encoding="utf-8"))
+    for error in mismatched:
+        print(error)
+    if mismatched:
+        print("Make the generator's lists the engine's, then regenerate.")
+        return 1
     expected = {target(file_type): render(file_type) for file_type in FILE_TYPES}
     if args.write:
         TARGET.mkdir(parents=True, exist_ok=True)

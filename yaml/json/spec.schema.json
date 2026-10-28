@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "yamaa 1.0 spec file",
-  "description": "One file of the 1.0 spec type. A specification file may be one layer of an inheritance chain: the header is required in every layer, a root field it writes is complete there, and inside a member of input, windows, intermediates, columns or rows requiredness waits for the composed specification, which $defs/root_class checks (LAYER-4). Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
+  "description": "One file of the 1.0 spec type. A specification file may be one layer of an inheritance chain: the header is required in every layer, a root field it writes is complete there, and inside a member of input, windows, intermediates, columns or rows, and inside output or submission, requiredness waits for the composed specification, which $defs/root_class checks (LAYER-4). Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
   "$ref": "#/$defs/layer",
   "$defs": {
     "aggregate_class": {
@@ -2006,6 +2006,36 @@
           },
           "additionalProperties": false
         },
+        "decode": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/fragment.filtered_source",
+              "description": "Variable holding the coded value, or a filtered source carrying it (EXPR-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "filtered_source"
+            },
+            "codelist": {
+              "$ref": "#/$defs/identifier",
+              "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
+              "x-yamaa-kind": "identifier",
+              "x-yamaa-type": "identifier"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            },
+            "unmapped": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is present but no item of the codelist lists it; without it, such a source fails (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
         "cut": {
           "type": "object",
           "properties": {
@@ -2903,6 +2933,55 @@
       },
       "additionalProperties": false
     },
+    "fragment.output_class": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path",
+          "description": "File this specification produces, whose extension selects the serialization profile (OUTPUT-5).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "path"
+        },
+        "relative_to": {
+          "$ref": "#/$defs/path_base",
+          "default": "declaring",
+          "description": "Base for the primary artifact and the run report file (FILE-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "path_base"
+        },
+        "decimals": {
+          "type": "integer",
+          "description": "Fixed display digits for every float column of a csv artifact; the CSV profile defines the rounding and rejects it for parquet.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "description": "Declared columns selected for the artifact, in artifact order (OUTPUT-1).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[identifier]"
+        },
+        "report": {
+          "$ref": "#/$defs/path",
+          "description": "File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "path"
+        },
+        "order_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment.order_by_term"
+          },
+          "description": "Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).",
+          "x-yamaa-kind": "name",
+          "x-yamaa-type": "list[order_by_term]"
+        }
+      },
+      "additionalProperties": false
+    },
     "fragment.page_reference_class": {
       "type": "object",
       "properties": {
@@ -3196,6 +3275,99 @@
           "description": "Supporting documents the comment refers to.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fragment.submission_dataset_class": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "validated",
+            "historical"
+          ],
+          "description": "Validated metadata constrains derivation; historical metadata reproduces declarations without asserting their truth about the derived data (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "artifact": {
+          "$ref": "#/$defs/relative_href",
+          "description": "Literal historical package link; permitted only in historical metadata exports without transport (DEFINE-30).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "relative_href"
+        },
+        "has_no_data": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the submitted dataset has no data, carried for submission composition only (SUB-4).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of the dataset as a whole, distinct from the domain it derives.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "class": {
+          "$ref": "#/$defs/dataset_class_name",
+          "description": "General observation class of the dataset.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "dataset_class_name"
+        },
+        "subclass": {
+          "$ref": "#/$defs/dataset_subclass_name",
+          "description": "Observation subclass, declared when the standard defines one for the dataset.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "dataset_subclass_name"
+        },
+        "structure": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Level of detail one record represents, stated in prose.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "repeating": {
+          "type": "boolean",
+          "description": "Whether the dataset may carry more than one record per subject or pool.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "reference_data": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the dataset carries reference data rather than subject data.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "domain": {
+          "$ref": "#/$defs/identifier",
+          "description": "Domain the dataset belongs to; defaults to the specification's domain.",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "standard": {
+          "$ref": "#/$defs/standard_reference",
+          "description": "Name of the composing section's standard that binds the dataset; the section's first standard when omitted (DEFINE-6, DEFINE-8).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "standard_reference"
+        },
+        "non_standard": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether no implementation guide defines the dataset, as for a custom domain; such a dataset binds no standard and declares none (SUB-4, DEFINE-6).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "comment": {
+          "$ref": "#/$defs/fragment.submission_comment",
+          "description": "Sponsor comment carried with the dataset definition.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "submission_comment"
         }
       },
       "additionalProperties": false
@@ -3820,7 +3992,7 @@
           "x-yamaa-type": "predicate"
         },
         "output": {
-          "$ref": "#/$defs/output_class",
+          "$ref": "#/$defs/fragment.output_class",
           "description": "Artifact presentation, independent of the dependency-ordered declarations (OUTPUT-1).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "output_class"
@@ -3874,7 +4046,7 @@
           "x-yamaa-type": "list[dataset_verification]"
         },
         "submission": {
-          "$ref": "#/$defs/submission_dataset_class",
+          "$ref": "#/$defs/fragment.submission_dataset_class",
           "description": "Governed dataset metadata a submission document is generated from.",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "submission_dataset_class"
@@ -4180,6 +4352,40 @@
           "required": [
             "source",
             "dict"
+          ],
+          "additionalProperties": false
+        },
+        "decode": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/filtered_source",
+              "description": "Variable holding the coded value, or a filtered source carrying it (EXPR-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "filtered_source"
+            },
+            "codelist": {
+              "$ref": "#/$defs/identifier",
+              "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
+              "x-yamaa-kind": "identifier",
+              "x-yamaa-type": "identifier"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            },
+            "unmapped": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is present but no item of the codelist lists it; without it, such a source fails (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "codelist"
           ],
           "additionalProperties": false
         },

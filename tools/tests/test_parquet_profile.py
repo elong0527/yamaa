@@ -55,36 +55,36 @@ class ParquetProfileTests(unittest.TestCase):
 
     def test_a_pair_only_the_table_reads_is_reported(self):
         row = "| `DOUBLE` with no annotation | `float` |"
-        self.replace(CARDS, row, row + "\n| `FLOAT` with no annotation | `float` |")
-        line = self.line("| `FLOAT` with no annotation")
+        self.replace(CARDS, row, row + "\n| `BOOLEAN` with no annotation | `str` |")
+        line = self.line("| `BOOLEAN` with no annotation")
         self.assertEqual(
             OWNER.check(self.root),
             [
-                f"ERROR: rules/reference/parquet.md:{line}: PARQUET-7 reads FLOAT "
-                f"annotated none as float, which {OWNER.PROFILE} does not"
+                f"ERROR: rules/reference/parquet.md:{line}: PARQUET-7 reads BOOLEAN "
+                f"annotated none as str, which {OWNER.PROFILE} does not"
             ],
         )
 
     def test_a_listed_annotation_and_a_timestamp_qualifier_each_count(self):
-        # One annotation of a list leaves the table, and a timestamp's unit
-        # changes: each side then reads a pair the other does not.
+        # One annotation of a list leaves the table, and a timestamp's UTC
+        # adjustment changes: each side then reads a pair the other does not.
         self.replace(CARDS, "`Int(16, signed)` or ", "")
         self.replace(
             CARDS,
-            "`Timestamp`, microseconds, no UTC adjustment",
-            "`Timestamp`, milliseconds, no UTC adjustment",
+            "`Timestamp`, nanoseconds, no UTC adjustment",
+            "`Timestamp`, nanoseconds, adjusted to UTC",
         )
-        line = self.line("`Timestamp`, milliseconds, no UTC adjustment")
+        line = self.line("`Timestamp`, nanoseconds, adjusted to UTC")
         self.assertEqual(
             OWNER.check(self.root),
             [
                 f"ERROR: rules/reference/parquet.md:{line}: PARQUET-7 reads INT64 "
-                "annotated Timestamp(MILLIS, isAdjustedToUTC=false) as datetime, which "
+                "annotated Timestamp(NANOS, isAdjustedToUTC=true) as datetime, which "
                 f"{OWNER.PROFILE} does not",
                 f"ERROR: {OWNER.PROFILE}: reads INT32 annotated Int(16, signed) as int, "
                 "which rules/reference/parquet.md PARQUET-7 does not",
                 f"ERROR: {OWNER.PROFILE}: reads INT64 annotated "
-                "Timestamp(MICROS, isAdjustedToUTC=false) as datetime, which "
+                "Timestamp(NANOS, isAdjustedToUTC=false) as datetime, which "
                 "rules/reference/parquet.md PARQUET-7 does not",
             ],
         )

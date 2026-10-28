@@ -443,17 +443,47 @@ fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_si
     let artifact = study.resolve("child.yaml");
     let origins = &artifact.entries()[0].origins;
     let prefix = "/columns/1/derivation/value/row_number/window";
+    // The use site is the `W` the child wrote on its line 4, and the
+    // definition's term the `RAW.ID` the base wrote on its line 6, each at
+    // the one-based column of its first character.
+    let located = |pointer: &str| {
+        let origin = &origins[pointer];
+        (
+            origin.declaring_source.clone(),
+            origin.line,
+            origin.column,
+            origin.end_line,
+            origin.end_column,
+            origin.source_kind.clone(),
+        )
+    };
     assert_eq!(
-        origins[prefix].declaring_source,
-        Some(study.path("child.yaml"))
+        located(prefix),
+        (
+            Some(study.path("child.yaml")),
+            Some(4),
+            Some(66),
+            Some(4),
+            Some(67),
+            OriginKind::Authored
+        )
     );
     assert_eq!(
-        origins[&format!("{prefix}/order_by/0/variable")].declaring_source,
-        Some(study.path("base.yaml"))
+        located(&format!("{prefix}/order_by/0/variable")),
+        (
+            Some(study.path("base.yaml")),
+            Some(6),
+            Some(26),
+            Some(6),
+            Some(32),
+            OriginKind::Authored
+        )
     );
+    let (_, line, column, end_line, end_column, kind) =
+        located(&format!("{prefix}/order_by/0/direction"));
     assert_eq!(
-        origins[&format!("{prefix}/order_by/0/direction")].source_kind,
-        OriginKind::SchemaDefault
+        (line, column, end_line, end_column, kind),
+        (None, None, None, None, OriginKind::SchemaDefault)
     );
     // An omitted placement has no schema default: missing sorts lowest, so its
     // position follows direction and the resolved term leaves it absent.

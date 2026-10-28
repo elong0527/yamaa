@@ -583,6 +583,9 @@ conditions! {
     WindowBaselineOrder => ("validation", "value_not_permitted", Some("WINDOW-5")),
     WindowRepeatedGroup => ("validation", "invalid_field_type", Some("WINDOW-3")),
     WindowBaselineInputType => ("validation", "incompatible_input_type", Some("VALUE-2")),
+    // An order term, a named intermediate's or a window's, over a field whose
+    // types do not all compare (VALUE-19), such as `str` beside `int` (#4068).
+    OrderTermType => ("validation", "incompatible_input_type", Some("VALUE-22")),
     // A column-level window's read of a driver that some row template does
     // not share names nothing that template's rows hold, as a range value
     // reading such a driver does (LOOKUP-9).

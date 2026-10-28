@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+# pyarrow wrote the export with the types it writes by default: the first
+# exposure in nanoseconds, the last in milliseconds and the weight in single
+# precision.
+input:
+  RAW: input/adsl_raw.parquet
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDTM, TRTEDTM, WEIGHTBL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+
+  - name: TRTSDTM
+    type: datetime
+    label: Datetime of First Exposure to Treatment
+    derivation: RAW.TRTSDTM
+
+  - name: TRTEDTM
+    type: datetime
+    label: Datetime of Last Exposure to Treatment
+    derivation: RAW.TRTEDTM
+
+  - name: WEIGHTBL
+    type: float
+    label: Baseline Weight (kg)
+    derivation: RAW.WEIGHTBL

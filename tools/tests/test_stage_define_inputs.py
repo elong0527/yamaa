@@ -64,6 +64,12 @@ class DefineStage(unittest.TestCase):
             xml_schema.assertValid(xml)
             xml.getroot().set("FileType", "invalid")
             self.assertFalse(xml_schema.validate(xml))
+            # A document validates against the schema of the Define-XML version
+            # its `def` namespace names.
+            define_schemas = {
+                "http://www.cdisc.org/ns/def/v2.0": legacy_schema,
+                "http://www.cdisc.org/ns/def/v2.1": xml_schema,
+            }
             validator = Draft202012Validator(
                 json.loads((schemas / "dataset.schema.json").read_bytes())
             )
@@ -110,9 +116,8 @@ class DefineStage(unittest.TestCase):
                     )
                     continue
                 expected = benchmarks / name / "expected"
-                xml_schema.assertValid(
-                    etree.parse(str(expected / "define.xml"), parser)
-                )
+                document = etree.parse(str(expected / "define.xml"), parser)
+                define_schemas[document.getroot().nsmap["def"]].assertValid(document)
                 for document in expected.glob("*.json"):
                     validator.validate(json.loads(document.read_bytes()))
                 # A newline-delimited golden is its first line with the row

@@ -186,7 +186,8 @@ Fails: `unknown_field`, `prohibited_construct`.
 Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
-`columns` lists bare field names, and every `filter` field is qualified. The
+`columns` lists bare field names, and every `filter` field is qualified,
+except a donor-record name in a donor read ([LOOKUP-16](#lookup-16)). The
 current row's driver is root `base` (or the sole input) without explicit rows,
 or the enclosing `rows[].dataset` during row construction. During column
 derivation the qualifier must be the driver of every row template that the
@@ -197,7 +198,10 @@ intermediate under [ROW-2](rows.md#row-2). Other datasets,
 intermediates that are not the current driver, and unqualified output names
 are not filter scopes. The filter of a structured source or a qualified
 aggregate reads the donor record only; correlated predicates are supported by
-named intermediates.
+named intermediates. When an intermediate derivation reads a named
+intermediate, the reading donor record supplies the correlated fields,
+including its earlier derived fields, bare or qualified by its dataset
+([LOOKUP-16](#lookup-16)).
 
 The current-driver references are dependencies of each lookup read and obey
 the existing phase and group-key rules: in a grouped template, the qualified
@@ -260,7 +264,7 @@ stored order, except that `STR_JOIN` joins them in the aggregate's `order_by`
 order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_an_int_and_a_float_keeps_the_record_whose_exact_value_sorts_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_text_and_an_int_is_refused_before_any_record_is_read`.
 
 A lookup never multiplies rows: of several matching partners, `order_by` with
 `keep` reads one, which is a choice, not a join, and the other partners take no
@@ -277,7 +281,12 @@ construction it fails at the join phase, before any column is derived. A
 handling ([COLUMN-14](columns.md#column-14)).
 
 The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
-of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A lookup
+of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A field the
+lookup derives orders as its result type does ([LOOKUP-15](#lookup-15)): one
+that holds an `int` or a `float` orders by exact value, and one whose types do
+not all compare, such as `str` or `int`, fails validation as
+`incompatible_input_type` at the term before any record is read
+([VALUE-22](values.md#value-22)). A lookup
 whose key is verified unique at `error` severity needs neither `order_by` nor
 `keep`, and one whose uniqueness check only warns declares both, or
 `nearest` ([LOOKUP-17](#lookup-17)). Every reducer but `STR_JOIN` reads an
@@ -976,7 +985,7 @@ for matching, `filter`, `order_by` selection and `columns` projection, and
 behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_a_date_and_a_datetime_is_refused_before_any_record_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_text_and_an_int_is_refused_before_any_record_is_read`.
 
 Each entry is either an untyped expression or a typed binding
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
@@ -1039,6 +1048,16 @@ records as augmented by every derivation declared before it, so its
 derived name, bare or dataset-qualified. A window's fields cannot read the
 current input record directly: derive that value first and let the window read
 the derived name. Base-record order is the final tie-break.
+
+An untyped entry's field may take a type decided per value, which a key
+compares when it matches ([LOOKUP-9](#lookup-9)). An order term over it, in
+the intermediate's `order_by` or a window's order, a `baseline_flag`'s `date`
+included, is decided before any record is read: a field whose types do not all
+compare, such as `case` choosing `'NONE'` or a number, or `date` or `datetime`,
+fails validation as `incompatible_input_type` at the term
+([VALUE-22](values.md#value-22)), while one choosing `0` or a `float` orders by
+exact value. Give such an entry a `type` to convert its results to one type
+first.
 
 A derived name may appear as a target-side `key`, as a bare `between` bound, as
 a dataset-qualified field in `filter` or `order_by`, in `columns`, or in
@@ -1224,7 +1243,7 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-application/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `schema-lookup-donor-derived`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-application/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply
@@ -1305,7 +1324,7 @@ are reported and the selection chooses. A lookup whose key is verified unique
 at `error` needs no selection.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_unique_key_holding_an_int_and_an_equal_float_repeats_as_key_matching_meets_them`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_warning_unique_reports_an_int_and_an_equal_float_and_the_selection_chooses_between_them`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_unique_key_counts_two_missing_values_as_one_combination_though_no_row_matches_them`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
 
 ```yaml
 - id: DS_EOS
@@ -1315,6 +1334,15 @@ Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-interm
   verifications:
     - unique: [STUDYID, USUBJID]
 ```
+
+Two records repeat a combination when each of its columns holds values equal
+as a key compares them ([LOOKUP-9](#lookup-9)): exactly under
+[VALUE-19](values.md#value-19), so an `int` and a `float` of equal value, such
+as `1` and `1.0` of an untyped derivation ([LOOKUP-15](#lookup-15)), are one
+value. A key whose columns check unique therefore matches at most one record.
+Unlike a key, a missing value is a value of the combination: two records
+missing it, and equal in the other columns, repeat, although no row matches
+either.
 
 A pair relation's checks run over its records, the matching pairs its filter
 keeps with their derivations complete, once the relation is built and before

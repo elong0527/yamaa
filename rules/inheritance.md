@@ -25,7 +25,8 @@ is null, the missing value. Absence inherits, and a written value replaces or
 merges under [LAYER-5](#layer-5) to [LAYER-8](#layer-8); only a layer's
 `clear` removes an inherited value ([LAYER-9](#layer-9)). The resolver keeps
 the provenance of every contributed value, down to the leaf a layer wrote,
-while it works. Provenance is diagnostic state, not a field of the resolved
+while it works: the layer that wrote the value, the line and column at
+which it wrote it, and the exclusive end line and column of the written node. Provenance is diagnostic state, not a field of the resolved
 specification; for a relative path it also records the declaring layer and
 that layer's spelling, which [Resource resolution](reference/files.md#file-2)
 resolves once.
@@ -147,9 +148,11 @@ neither `parent` nor `include`.
 Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `prohibited_construct`, `value_not_permitted`.
 Evidence: `negative-version-mismatch`, `negative-include-parent`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_declares_neither_parent_nor_include`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_parent_a_caller_names_contributes_before_the_fragment`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_that_names_a_layer_refuses_the_given_parent_before_it_is_read`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_given_parent_with_an_unread_header_fails_in_that_file`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_parent_of_a_newer_version_fails_at_parent`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_parent_of_another_type_fails_at_parent`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_parent_without_a_header_fails_in_its_layer`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_layer_is_a_fragment_whose_written_fields_are_checked`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_single_layer_is_complete_at_its_version`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_parent_that_declares_schema_version_fails_at_parent`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::schema_version_beside_a_1_0_header_is_refused_at_the_parent_that_names_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::a_column_without_a_name_misses_it_at_its_index`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_empty_column_member_misses_its_name_at_its_index`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_intermediate_without_an_id_misses_it_at_its_index`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::a_row_template_without_an_id_misses_it_at_its_index`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::a_child_column_without_a_name_misses_it_in_the_child`, `rust/tests/host-fixtures/cases.json::a_grandparent_of_another_type_at_the_parent_that_names_it`, `rust/tests/host-fixtures/cases.json::a_fragment_of_another_type_at_the_ancestor_that_includes_it`.
 
-Requiredness is deferred for every root field and at every depth inside a
-member of `input`, `intermediates`, `columns`, `rows` and `windows`. An entry
-file may therefore omit `output` and inherit it. The mapping key identifies an
+Requiredness is deferred for every root field, at every depth inside a
+member of `input`, `intermediates`, `columns`, `rows` and `windows`, and at
+every depth inside the blocks `output` and `submission`. An entry file may
+therefore omit `output` and inherit it, or write only the field of `output`
+or `submission` it changes. The mapping key identifies an
 `input` or `windows` member; a member of `intermediates`, `columns` or `rows`
 carries its `id`, `name` or `id` in the layer that writes it, and one without
 it fails as `missing_required_field` under
@@ -196,15 +199,18 @@ read. A given parent that is the entry itself is an
 
 <a id="layer-5"></a>
 
-### LAYER-5. Root fields replace whole; keyed collections compose member by member
+### LAYER-5. Keyed collections compose member by member, the blocks `output` and `submission` field by field, and every other root field replaces whole
 
 A later layer's root field replaces the accumulated value whole, including
 every mapping and list nested in it. `input`, `intermediates`, `columns`,
 `rows` and `windows` instead compose member by member: a new identifier
 appends in contribution order, and a matching identifier keeps its first
 position and merges with the member it inherits under [LAYER-6](#layer-6).
+The blocks `output` and `submission` compose as one such member does: a
+layer's block merges with the block it inherits under LAYER-6, so a field
+the layer leaves out keeps its inherited value.
 
-Evidence: `schema-inherited-output`, `schema-inherited-input`.
+Evidence: `schema-inherited-output`, `schema-inherited-input`, `schema-block-composition`.
 
 | Root field | Composes |
 |---|---|
@@ -218,16 +224,23 @@ Evidence: `schema-inherited-output`, `schema-inherited-input`.
 | `columns` | by `name` |
 | `rows` | by `id` |
 | `windows` | by name |
+| `output` | field by field ([LAYER-6](#layer-6)) |
+| `submission` | field by field ([LAYER-6](#layer-6)) |
 | every other root field | complete replacement |
 
-Later root `metadata`, `keys`, `output` and `verifications` therefore replace
-their inherited values whole. An entry that inherits `output` publishes at the
-location its inherited `relative_to` selects, and its `path` and `report`
-keep the declaring layer's provenance under
-[LAYER-10](#layer-10); an entry can inherit `relative_to: entry` or replace
-`output` whole. Dataset shorthand is expanded before datasets are matched: a
-bare path becomes the long dataset form, so a later `relative_to` governs an
-inherited `path` and `schema` without restating them. A `copy` entry expands
+Later root `metadata`, `keys` and `verifications` therefore replace their
+inherited values whole. A layer that changes one field of a block writes that
+field alone: `output.columns` alone changes the published variables and keeps
+the inherited `path`, `relative_to`, `report` and `order_by`, and
+`submission.artifact` alone keeps the inherited `mode`, `label`, `class`,
+`structure` and `repeating`. Each field composes by its own kind, so
+`output.columns` and `output.order_by`, lists, replace whole. An inherited
+`path` and `report` keep the provenance of the layer that wrote each, and the
+composed `relative_to` selects their base under [LAYER-10](#layer-10). A
+layer replaces a block whole by clearing the inherited fields it leaves out
+([LAYER-9](#layer-9)). Dataset shorthand is expanded before datasets are
+matched: a bare path becomes the long dataset form, so a later `relative_to`
+governs an inherited `path` and `schema` without restating them. A `copy` entry expands
 to the columns it declares before its layer composes
 ([SPEC-9](specification.md#spec-9)), so each copied column composes by its
 `name`, and a later layer's column of that name merges with it.
@@ -236,8 +249,9 @@ to the columns it declares before its layer composes
 
 ### LAYER-6. A matching member merges recursively: classes by field, mappings by key, scalars and lists by replacement
 
-When a later layer writes a member whose identifier is already present, each
-field it writes composes with the value it inherits: a class field by field
+When a later layer writes a member whose identifier is already present, or a
+block that an earlier layer wrote, each field it writes composes with the
+value it inherits: a class field by field
 and a mapping key by key, each value by its own kind; a registry value only
 when both name the same keyword, and otherwise whole; every scalar and every
 list by replacement. A value of a different kind replaces what it inherits,
@@ -252,15 +266,17 @@ Evidence: `schema-column-composition`, `schema-inherited-input`, `rust/crates/ya
 | Registry value | its one keyword; a different keyword replaces whole |
 | Every scalar and every list | replacement |
 
-The rule is the same for every keyed collection. Every list replaces: a
-column's `verifications`, a lookup or aggregate `key` written as a list, a
-`case`, a window's `group_by` and `order_by`, and ordered arguments such as
+The rule is the same for every keyed collection and both blocks. Every list
+replaces: a column's `verifications`, a lookup or aggregate `key` written as a
+list, a `case`, a window's `group_by` and `order_by`, `output.columns` and
+`output.order_by`, and ordered arguments such as
 `first_available.sources` and the `cut` breaks and labels. A lookup `key`
 written as a mapping merges key by key. A child may thus
 change only `AVAL.label`, add one key to an inherited `AVAL.metadata`, add
 `unconvertible` to an inherited `AVAL.derivation` without restating its
-expression, add one field type to an inherited `input` dataset, or add one
-derivation to an inherited row template; a derivation naming a different
+expression, add one field type to an inherited `input` dataset, add one
+derivation to an inherited row template, or write only `output.columns` or
+only `submission.artifact`; a derivation naming a different
 keyword replaces the inherited expression whole.
 
 A layer that restates an inherited mapping merges with it all the same, so an
@@ -298,11 +314,14 @@ field that no layer supplies fails on the resolved specification, and a later
 layer that never mentions a field cannot replace an earlier value with the
 field's default.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`, `rust/crates/yamaa-application/tests/declaration_layer_composition.rs::a_cleared_field_takes_its_default_again_and_its_path_its_base`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_block_defers_its_requiredness_but_another_root_class_does_not`, `rust/crates/yamaa-application/tests/declaration_layer_composition.rs::a_cleared_field_takes_its_default_again_and_its_path_its_base`.
 
-A whole root field is a complete value in the layer that writes it, so its
+A block composes as a member does, so its requiredness and defaults apply to
+the composed block: a layer may write `submission.artifact` alone, and
+`output.relative_to` takes its default only when no layer writes it. Any other
+root field is a complete value in the layer that writes it, so its
 requiredness and defaults apply there. A default fills a field the composed
-member does not carry, including one a later layer cleared under
+member or block does not carry, including one a later layer cleared under
 [LAYER-9](#layer-9).
 
 <a id="layer-8"></a>
@@ -364,10 +383,16 @@ names an entry of a mapping derivation written bare.
 
 Each layer's clears apply to the value it inherits before its own fields
 compose, so clearing a mapping and writing it in one layer replaces the mapping
-instead of merging with it. A fragment inherits what the layers before it
-compose: its parent chain's and those of the fragments listed before it. A
-fragment's clear may therefore name a value one layer that includes it
-inherits and another does not, and fails as `invalid_clear` there. A cleared
+instead of merging with it. `clear: [submission]` therefore replaces the
+dataset's submission metadata whole. `output` is required, so `clear` never
+names it: a layer replaces it whole by listing each inherited field it leaves
+out, such as `output.report`, as for a named window ([LAYER-8](#layer-8)). A
+required field of a block, such as `output.path` or `submission.label`, is
+never cleared; a layer writes it to replace it. A fragment inherits what the
+layers before it compose: its parent chain's and those of the fragments listed
+before it. A fragment's clear may therefore name a value one layer that
+includes it inherits and another does not, and fails as `invalid_clear` there.
+A cleared
 field with a schema default takes the default again under
 [LAYER-7](#layer-7), and a value that came from a default is not inherited. A
 path that names a value the layer does not inherit, a required field, the
@@ -398,7 +423,17 @@ provenance. A materialized resolved specification writes an inherited relative
 path relative to the entry file, preserving the location it names.
 
 Fails: `parent_on_another_share`.
-Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_respells_layers_on_the_entry_root_relative_to_the_entry`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it`, `rust/crates/yamaa-adapters/src/file_metadata.rs::a_layer_on_another_share_is_refused_with_its_path_and_both_roots`, `rust/crates/yamaa-application/tests/host_resources.rs::a_parent_on_another_drive_reads_its_input_beside_itself`, `rust/crates/yamaa-application/tests/host_resources.rs::a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root`.
+Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_respells_layers_on_the_entry_root_relative_to_the_entry`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it`, `rust/crates/yamaa-adapters/src/file_metadata.rs::a_layer_on_another_share_is_refused_with_its_path_and_both_roots`, `rust/crates/yamaa-application/tests/host_resources.rs::a_parent_on_another_drive_reads_its_input_beside_itself`, `rust/crates/yamaa-application/tests/host_resources.rs::a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root`, `rust/crates/yamaa-application/tests/file_resources.rs::each_output_path_resolves_from_the_base_the_composed_relative_to_selects`.
+
+An input's and the output's `relative_to` compose like any other field
+([LAYER-5](#layer-5)), so the selector and the paths it governs may come from
+different layers. The composed `relative_to` selects the base of every path
+its declaration holds, whichever layer wrote it. Under `declaring`, the
+default, each of `output.path` and `output.report` resolves against the
+directory of the layer that wrote that path, so the two may name files beside
+different layers; under `entry`, both resolve against the entry file's
+directory. A layer that clears an inherited `relative_to` selects the
+declaring layer again ([LAYER-9](#layer-9)).
 
 A fragment is a declaring layer: a relative path it writes is interpreted
 beside the fragment, whichever layer includes it.

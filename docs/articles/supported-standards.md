@@ -1,9 +1,9 @@
 # Supported standards
 
-yamaa generates clinical datasets, Define-XML metadata and SAS Transport
-version 5 files for the implementation guides below. A study declares its
-guide explicitly and supplies the dataset content, terminology and analysis
-rules that follow that guide.
+yamaa generates clinical and nonclinical datasets, Define-XML metadata and
+SAS Transport version 5 files for the implementation guides below. A study
+declares its guide explicitly and supplies the dataset content, terminology
+and analysis rules that follow that guide.
 
 ## Clinical guides
 
@@ -46,6 +46,30 @@ ADaMIG 1.1 does not require Define-XML 2.0 or a terminology release from the
 guide's publication year. The project codelist sources declare the
 terminology releases the study actually uses.
 
+## Nonclinical guide
+
+| Model | Implementation guide version | Supported pair |
+| --- | --- | --- |
+| SEND | 3.1.1 | SDTM 1.5 / SENDIG 3.1.1 |
+
+SENDIG 3.1.1 uses SDTM 1.5. A nonclinical project lists its specifications,
+each declaring `model: SEND`, in its own `send` section, which composes its
+own Define-XML document:
+
+```yaml
+send:
+  specs: [send/bw.yaml]
+  standards:
+    - {name: SENDIG, version: "3.1.1", status: Final}
+  define: send/define.xml
+  transport: xpt
+```
+
+SEND datasets take the tabulation classes, roles and core designations of
+SDTM. An origin's source is optional under SEND, since a nonclinical study
+identifies its test facility in its trial summary, so a value the facility
+collected needs no annotated case report form.
+
 ## Compatibility coverage
 
 The independently authored benchmarks compare derived rows, complete
@@ -63,6 +87,7 @@ an independent reader. The generated XML is checked against CDISC's XSD.
 | ADaMIG 1.1 | [Laboratory analysis](https://elong0527.github.io/yamaa/benchmark/adam-adlb-adamig11.html) | BDS parameters, subject-level treatment joins, relative days, repeated baseline, change and absent baseline |
 | ADaMIG 1.1 | [Adverse-event analysis](https://elong0527.github.io/yamaa/benchmark/adam-adae-adamig11.html) | Occurrence data, partial onset times, imputation flags and numeric analysis date/time transport |
 | ADaMIG 1.2 | [Subject-level analysis](https://elong0527.github.io/yamaa/benchmark/adam-adsl-adamig12.html) | An explicit intermediate guide declaration with the same date/time transport contract |
+| SENDIG 3.1.1 | [Body weights](https://elong0527.github.io/yamaa/benchmark/send-bw-sendig311.html) | A nonclinical findings domain, routine and terminal weighings, standardized numeric results and unsourced collected origins |
 
 The existing submission benchmarks retain SDTMIG 3.4 and ADaMIG 1.3
 coverage. The new examples select the older content directly: MO remains a
@@ -70,21 +95,27 @@ coverage. The new examples select the older content directly: MO remains a
 
 This is generation and export compatibility. The engine checks the study's
 declared metadata and verifications; it does not contain the full catalog
-of every guide's domain, variable and business rules. Study teams validate
-their complete submission against the selected guide and applicable FDA
-rules. Changing the guide declaration alone does not convert newer content
-into a conforming older dataset.
+of every guide's domain, variable and business rules. From 1.0.0, a new
+conformance check arrives only as an opt-in, through a new optional field,
+never as a new refusal or a new run-report row for a file that an earlier
+1.x release admitted, as the
+[stability contract](../release.md#stability-contract) says. Study teams
+validate their complete submission against the selected guide and
+applicable FDA rules. Changing the guide declaration alone does not convert
+newer content into a conforming older dataset.
 
 ## FDA submission use
 
 The minimum pairs above are supported clinical options in FDA Data
-Standards Catalog v11.0. FDA eligibility depends on the study start date,
-submission type and reviewing center. See the current
+Standards Catalog v11.0, which also lists SENDIG 3.1.1 for nonclinical
+studies. FDA eligibility depends on the study start date, submission type
+and reviewing center. See the current
 [FDA catalog](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/data-standards-catalog)
 and [study-data requirements](https://www.fda.gov/industry/study-data-standards-resources/study-data-submission-cder-and-cber)
 when planning a submission.
 
-CDISC's [SDTMIG 3.3](https://www.cdisc.org/standards/foundational/sdtmig/sdtmig-v3-3)
+CDISC's [SDTMIG 3.3](https://www.cdisc.org/standards/foundational/sdtmig/sdtmig-v3-3),
+[SENDIG 3.1.1](https://www.cdisc.org/standards/foundational/send/sendig-v3-1-1)
 and [ADaM compatibility table](https://www.cdisc.org/standards/foundational/adam)
 identify the underlying models and applicable companion documents. Their
 errata and the selected occurrence-data guide remain part of the study's

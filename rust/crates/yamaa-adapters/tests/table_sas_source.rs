@@ -1714,9 +1714,14 @@ mod table {
             }
             let mut source = source;
             source.encoding = Some("utf-8".into());
+            // The first record's TEXT, Windows-1252 " caf\xe9", is no UTF-8.
             assert!(matches!(
                 sas_source::parse(&payload, &source),
-                Err(Error::Invalid("encoding"))
+                Err(Error::Field {
+                    cause: "encoding",
+                    field: yamaa_core::csv_source::Field::Name(name),
+                    record: Some(1),
+                }) if name == "TEXT"
             ));
             source.encoding = Some("windows-1252".into());
             source.types = vec![("ABSENT".into(), ColumnType::Int)];
@@ -1732,6 +1737,98 @@ mod table {
                     sas_source::parse(&sas[..length], &declaration("datetime.sas7bdat"),),
                     Err(Error::Invalid(_))
                 ));
+            }
+        }
+        #[test]
+        fn a_refusal_a_field_locates_names_the_field_and_a_value_also_its_record() {
+            // SAS-7: a field is named by its name, or by its position counted
+            // from one when its name is empty or does not decode, and a value
+            // that does not decode, or that holds a NUL byte, also by its
+            // record counted from one. Every file declares ASCII text.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            use crate::support::xport::{records, transport};
+            use yamaa_core::csv_source::Field;
+            let xpt = |fields: &[(&str, u16)], rows: &[&[&str]]| {
+                transport(5, fields, &"0".repeat(30), &records(fields, rows))
+            };
+            let fields = [("A", 8), ("B", 8)];
+            // The second name, `BX`, with its X replaced by the byte 0xE9.
+            let mut name = xpt(&[("A", 8), ("BX", 8)], &[&["x", "y"]]);
+            let at = name.windows(8).position(|w| w == b"BX      ").unwrap();
+            name[at + 1] = 0xe9;
+            let mut dataset =
+                Dataset::new(Layout::LE32, &[("X", Kind::Num, 8), ("T", Kind::Chr, 4)]);
+            dataset.total = 2;
+            dataset.mix_rows = 2;
+            let rows = vec![
+                dataset.row(&[Cell::Num(1.0), Cell::Text(b"ab")]),
+                dataset.row(&[Cell::Num(2.0), Cell::Text(b"c\0d")]),
+            ];
+            let nul = dataset.file(&[Page::new(MIX, dataset.metadata(), rows)]);
+            let text = |name: &str| Field::Name(name.into());
+            let int = vec![("A".into(), ColumnType::Int)];
+            for (label, bytes, path, types, expected) in [
+                (
+                    "a repeated name",
+                    xpt(&[("A", 8), ("A", 8)], &[&["x", "y"]]),
+                    "built.xpt",
+                    vec![],
+                    ("field_name", text("A"), None),
+                ),
+                (
+                    "an empty name",
+                    xpt(&[("A", 8), ("", 8)], &[&["x", "y"]]),
+                    "built.xpt",
+                    vec![],
+                    ("field_name", Field::Index(2), None),
+                ),
+                (
+                    "a name that does not decode",
+                    name,
+                    "built.xpt",
+                    vec![],
+                    ("encoding", Field::Index(2), None),
+                ),
+                (
+                    "a types entry the character storage does not admit",
+                    xpt(&fields, &[&["x", "y"]]),
+                    "built.xpt",
+                    int,
+                    ("field_type", text("A"), None),
+                ),
+                (
+                    "a value that does not decode",
+                    xpt(&fields, &[&["x", "y"], &["x", "\u{e9}"]]),
+                    "built.xpt",
+                    vec![],
+                    ("encoding", text("B"), Some(2)),
+                ),
+                (
+                    "a transport value holding a NUL byte",
+                    xpt(&fields, &[&["x", "y"], &["x", "y\0z"]]),
+                    "built.xpt",
+                    vec![],
+                    ("encoding", text("B"), Some(2)),
+                ),
+                (
+                    "a dataset value holding a NUL byte",
+                    nul,
+                    "built.sas7bdat",
+                    vec![],
+                    ("encoding", text("T"), Some(2)),
+                ),
+            ] {
+                let mut source = declaration(path);
+                source.encoding = Some("ascii".into());
+                source.types = types;
+                match sas_source::parse(&bytes, &source) {
+                    Err(Error::Field {
+                        cause,
+                        field,
+                        record,
+                    }) => assert_eq!((cause, field, record), expected, "{label}"),
+                    other => panic!("{label}: {other:?}"),
+                }
             }
         }
     }

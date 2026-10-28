@@ -30,6 +30,8 @@ pub enum DecodeFailure {
 pub struct DecodedYaml {
     pub document: Document,
     pub locations: Vec<SourcePosition>,
+    /// Exclusive scanner end, parallel to `locations` and document nodes.
+    pub end_locations: Vec<SourcePosition>,
 }
 
 #[cfg(feature = "yaml")]

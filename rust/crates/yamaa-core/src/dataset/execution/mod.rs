@@ -104,6 +104,8 @@ pub enum Resource {
     OutputRows,
     OutputCells,
     OutputColumns,
+    /// One text value a verb builds (`Limits::TEXT_BYTES`).
+    TextBytes,
 }
 
 /// Complete owned rows are exposed only after output identity and checks succeed.
@@ -454,6 +456,19 @@ pub enum ExecutionError<E> {
     PartitionGlobal {
         path: String,
     },
+}
+
+impl<E> ExecutionError<E> {
+    /// The refusal of a text value longer than `Limits::TEXT_BYTES`, owned by
+    /// the operation at `path` that would build it.
+    pub(crate) fn text(limit: crate::limits::LimitExceeded, path: &str) -> Self {
+        Self::ScopedLimit {
+            resource: Resource::TextBytes,
+            limit: limit.limit,
+            required: limit.actual,
+            spec_paths: vec![path.into()],
+        }
+    }
 }
 
 impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {

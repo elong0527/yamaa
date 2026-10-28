@@ -109,9 +109,10 @@ pub(super) fn prepare(
     }
     Ok(result)
 }
-/// The donor layout, each derived field's record type where it has one, and
-/// each derivation's expression result type for its conversion check.
-type FieldKinds = (TableSchema, Vec<Option<ColumnType>>, Vec<ResultType>);
+/// The donor layout, each derived field's result type, which may be decided
+/// per value (EXPR-14), and each derivation's expression result type for its
+/// conversion check.
+type FieldKinds = (TableSchema, Vec<ResultType>, Vec<ResultType>);
 
 /// A lookup's derivations as they bind: the lookup's name, its derivations
 /// in written order, and the records they extend: the dataset's name (`SELF`
@@ -139,6 +140,7 @@ struct DonorPlan<'a> {
     source: &'a TableSchema,
     secondary: &'a [SecondarySource],
     output: &'a TableSchema,
+    record_types: &'a [ResultType],
 }
 
 fn resolve_field_kinds(
@@ -236,11 +238,7 @@ fn resolve_field_kinds(
     if findings.len() != before {
         return Ok(None);
     }
-    Ok(Some((
-        output,
-        field_types.iter().map(|kind| kind.column_type()).collect(),
-        operation_types,
-    )))
+    Ok(Some((output, field_types, operation_types)))
 }
 
 fn collect_current_fields(cx: intermediates::Context<'_>, lookup: Lookup<'_>) -> Vec<CurrentField> {
@@ -299,18 +297,14 @@ fn build_catalog_context(
     lookup: Lookup<'_>,
     current: &[CurrentField],
     output: &TableSchema,
-    result_kinds: &[Option<ColumnType>],
+    record_types: &[ResultType],
 ) -> Result<(Option<usize>, Vec<SecondarySource>, TableSchema, Catalog), BindError> {
     let binder::Inputs {
         sources,
         schemas,
         driver,
     } = inputs;
-    let Lookup {
-        dataset,
-        stored_kinds,
-        ..
-    } = lookup;
+    let Lookup { dataset, .. } = lookup;
     let donor = sources.iter().position(|source| source.name == dataset);
     if donor.is_none() && dataset != "SELF" {
         return Err(BindError::Internal);
@@ -324,12 +318,11 @@ fn build_catalog_context(
             schema: schemas[index].layout().clone(),
         })
         .collect::<Vec<_>>();
-    // The record's kinds: each stored field's, each derived field's, then
-    // each current read's.
-    let mut source_kinds = stored_kinds
+    // The record's kinds: each stored field's, each derived field's one
+    // type, then each current read's.
+    let mut source_kinds = record_types
         .iter()
-        .chain(result_kinds)
-        .copied()
+        .map(|kind| kind.column_type())
         .collect::<Vec<_>>();
     let mut source_fields = output.columns().to_vec();
     for (index, field) in current.iter().enumerate() {
@@ -408,7 +401,7 @@ fn build_catalog_context(
     let catalog = Catalog::compile(&outputs, &datasets)
         .map_err(BindError::Catalog)?
         .with_record_derivation()
-        .with_record_kinds(stored_kinds.iter().chain(result_kinds).copied().collect());
+        .with_record_types(record_types.to_vec());
     Ok((donor, secondary, source, catalog))
 }
 
@@ -556,20 +549,29 @@ pub(super) fn bind(
         return Ok(None);
     }
     let before = findings.len();
-    let Some((output, result_kinds, operation_types)) =
+    let Some((output, field_types, operation_types)) =
         resolve_field_kinds(cx, lookup, pending_schema, before, findings)?
     else {
         return Ok(None);
     };
+    // Each field's result type: each stored field's kind, then each
+    // derived field's type.
+    let record_types = lookup
+        .stored_kinds
+        .iter()
+        .map(|&kind| ResultType::declared(kind))
+        .chain(field_types)
+        .collect::<Vec<_>>();
     let current = collect_current_fields(cx, lookup);
     let (donor, secondary, source, catalog) =
-        build_catalog_context(cx.inputs, lookup, &current, &output, &result_kinds)?;
+        build_catalog_context(cx.inputs, lookup, &current, &output, &record_types)?;
     let plan = DonorPlan {
         donor,
         name: dataset,
         source: &source,
         secondary: &secondary,
         output: &output,
+        record_types: &record_types,
     };
     let (earlier, unavailable, mut catalog) = select_earlier(cx, lookup, plan, catalog, findings)?;
     let mut assignments = Vec::new();
@@ -666,12 +668,7 @@ pub(super) fn bind(
         output,
         rows,
         assignments,
-        lookup
-            .stored_kinds
-            .iter()
-            .copied()
-            .chain(result_kinds)
-            .collect(),
+        record_types,
     )
     .with_conversion_handlers(handlers);
     *pending_schema = None;
@@ -832,6 +829,92 @@ fn chained_key(
     })
 }
 
+/// A predicate's contextual names now have donor types. Reuse initial
+/// binding's type judgement, preserving deferred key-cardinality precedence.
+fn rebase_filter(
+    filter: &crate::dataset::RelationPredicate,
+    current: Vec<CurrentField>,
+    donor_kinds: &[Option<ColumnType>],
+    record_types: &[ResultType],
+    static_types: bool,
+    findings: &mut Vec<BindFinding>,
+) -> Result<crate::dataset::RelationPredicate, BindError> {
+    let (predicate, deferred) = if filter
+        .current()
+        .iter()
+        .any(|field| field.read == CurrentRead::Contextual)
+    {
+        let kind = |name: &str| {
+            let binding = filter
+                .bindings()
+                .iter()
+                .find(|binding| binding.name == name)?;
+            match binding.read {
+                Read::Source(column) => donor_kinds.get(column).copied().flatten().map(Into::into),
+                Read::Column(slot) => match current.get(slot)?.read {
+                    CurrentRead::Output(column) | CurrentRead::Record { source: 0, column } => {
+                        record_types.get(column)?.single()
+                    }
+                    _ => None,
+                },
+                _ => None,
+            }
+        };
+        let (typed, deferred) =
+            relation_predicates::typed(filter.plan(), kind, static_types, findings);
+        (
+            crate::bound_expression::BoundPredicate::new(typed, filter.bindings().to_vec())
+                .map_err(BindError::InvalidPredicateBinding)?,
+            deferred,
+        )
+    } else {
+        (
+            filter.predicate().clone(),
+            filter.deferred_type_findings().to_vec(),
+        )
+    };
+    Ok(crate::dataset::RelationPredicate::new(predicate, current)
+        .map_err(BindError::InvalidPredicateBinding)?
+        .with_deferred_type_findings(deferred))
+}
+
+/// A deferred range gains the reading donor's known value type before it
+/// is admitted against its bounds, by the range's shared constructor.
+fn rebase_range(
+    range: &crate::dataset::RelationRange,
+    current: CurrentField,
+    record_types: &[ResultType],
+    intermediate: &str,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<crate::dataset::RelationRange>, BindError> {
+    let kind = if range.current().read == CurrentRead::Contextual {
+        match current.read {
+            CurrentRead::Output(column) => record_types.get(column).and_then(|kind| kind.single()),
+            _ => range.value_kind(),
+        }
+    } else {
+        range.value_kind()
+    };
+    match crate::dataset::RelationRange::new(
+        range.path().into(),
+        current,
+        kind,
+        range.lower().cloned(),
+        range.upper().cloned(),
+    ) {
+        Ok(range) => Ok(Some(range)),
+        Err(crate::dataset::RelationRangeError::Incomparable(types)) => {
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                types.diagnostic(range.path(), intermediate),
+            )));
+            Ok(None)
+        }
+        Err(_) => Err(BindError::InvalidPlan(
+            crate::dataset::PlanError::InvalidIntermediate,
+        )),
+    }
+}
+
 /// The lookups bound before this one, as its donor plan reads them: each
 /// one the derivations need keeps its slot, its reads rebased onto the
 /// donor plan's ports ([`rebase_keys`]); one they do not need keeps a
@@ -873,7 +956,12 @@ fn rebase(
                 .ok_or(BindError::Internal)
         }
     };
-    let donor_field = |name: &str| output.columns().iter().position(|field| field.name == name);
+    let donor_field = |name: &str| {
+        let name = name
+            .strip_prefix(&format!("{donor_name}."))
+            .or_else(|| (!name.contains('.')).then_some(name))?;
+        output.columns().iter().position(|field| field.name == name)
+    };
     // Whether `identifier`, written bare or qualified by the donor, names a
     // field of the donor's input that its schema leaves open.
     let open = |identifier: &str| {
@@ -922,7 +1010,7 @@ fn rebase(
             CurrentRead::Intermediate { index, column } => {
                 CurrentRead::Intermediate { index, column }
             }
-            // A bare name reads the donor record's field of that name.
+            // A contextual name reads the donor record, bare or qualified.
             CurrentRead::Contextual => {
                 CurrentRead::Output(donor_field(&field.identifier).ok_or(BindError::Internal)?)
             }
@@ -942,6 +1030,33 @@ fn rebase(
             let placeholder = unused_slot_placeholder(item, donor_name, source);
             *item = placeholder;
             continue;
+        }
+        // A deferred filter reference is judged against the reading donor,
+        // and reports at the filter that declared it. Keep the selector's
+        // schema so this cause does not become an unknown selected field.
+        if let Some(filter) = &item.filter {
+            let mut failed = false;
+            for field in filter.current() {
+                if field.read == CurrentRead::Contextual && donor_field(&field.identifier).is_none()
+                {
+                    let finding = BindFinding::Lookup(LookupFinding::reference(
+                        filter.plan().spec_path(),
+                        &field.identifier,
+                        Some(&item.identifier),
+                        ReferenceCause::Selection,
+                        None,
+                    ));
+                    findings.push(if open(&field.identifier) {
+                        BindFinding::Withheld(Box::new(finding))
+                    } else {
+                        finding
+                    });
+                    failed = true;
+                }
+            }
+            if failed {
+                item.filter = None;
+            }
         }
         // Retain field names before moving this selector's source into the
         // donor catalog, whose secondary coordinates differ from the outer plan.
@@ -1000,6 +1115,12 @@ fn rebase(
             *slot = None;
             continue;
         }
+        let donor_kinds = donor_schema
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(column, _)| cx.inputs.source_kind(item, &original_secondary, column))
+            .collect::<Vec<_>>();
         let name = match &item.source {
             IntermediateSource::Input(index) => Some(original_secondary[*index].name.clone()),
             IntermediateSource::Primary { name, .. } => Some(name.clone()),
@@ -1027,31 +1148,27 @@ fn rebase(
             };
         }
         if let Some(filter) = &item.filter {
-            item.filter = Some(
-                crate::dataset::RelationPredicate::new(
-                    filter.predicate().clone(),
-                    filter
-                        .current()
-                        .iter()
-                        .map(&current_field)
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-                .map_err(BindError::InvalidPredicateBinding)?,
-            );
+            item.filter = Some(rebase_filter(
+                filter,
+                filter
+                    .current()
+                    .iter()
+                    .map(&current_field)
+                    .collect::<Result<Vec<_>, _>>()?,
+                &donor_kinds,
+                plan.record_types,
+                relation_predicates::static_filter_types(&item.keys),
+                findings,
+            )?);
         }
         if let Some(range) = &item.range {
-            item.range = Some(
-                crate::dataset::RelationRange::new(
-                    range.path().into(),
-                    current_field(range.current())?,
-                    range.value_kind(),
-                    range.lower().cloned(),
-                    range.upper().cloned(),
-                )
-                .map_err(|_| {
-                    BindError::InvalidPlan(crate::dataset::PlanError::InvalidIntermediate)
-                })?,
-            );
+            item.range = rebase_range(
+                range,
+                current_field(range.current())?,
+                plan.record_types,
+                &item.identifier,
+                findings,
+            )?;
         }
         if let Some(derived) = &mut item.derivations {
             derived.current = derived
@@ -1108,6 +1225,7 @@ fn rebase_keys(
         source,
         secondary,
         output,
+        ..
     } = plan;
     // The reference of a nearest selection reads the donor record as a
     // key's match value does (LOOKUP-26), after the keys.

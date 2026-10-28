@@ -8,6 +8,7 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
 };
 use yamaa_core::{
+    csv_source::Field,
     limits::Limits,
     specification::{SourceDeclaration, SourceProfile},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
@@ -43,6 +44,9 @@ unsafe extern "C" {
         actual: *mut usize,
         known: *mut c_int,
     ) -> c_int;
+    /// The record and field of the value whose text the reader refused,
+    /// each from zero, or -1 when the refusal was not a value's.
+    fn yamaa_readstat_refused_value(row: *mut c_int, column: *mut c_int);
 }
 
 struct Rows {
@@ -87,14 +91,20 @@ impl Context<'_> {
         }
         Ok(())
     }
-    fn text(&self, bytes: &[u8]) -> Result<String, Error> {
-        decode_text(
-            bytes,
-            self.source
-                .encoding
-                .as_deref()
-                .ok_or(Error::Invalid("encoding"))?,
-        )
+    /// Text under the declared encoding, or `None` when it does not decode.
+    fn text(&self, bytes: &[u8]) -> Option<String> {
+        decode_text(bytes, self.source.encoding.as_deref()?)
+    }
+    /// The refusal of a value, from zero in `row` and `column`, whose text
+    /// does not decode: it names the field and the record (SAS-7).
+    fn undecodable(&self, row: usize, column: usize) -> Error {
+        self.columns
+            .get(column)
+            .map_or(Error::Invalid("encoding"), |field| Error::Field {
+                cause: "encoding",
+                field: Field::Name(field.name.clone()),
+                record: Some(row + 1),
+            })
     }
 }
 
@@ -162,13 +172,30 @@ unsafe extern "C" fn variable(
         callback(opaque, |context| {
             if usize::try_from(column).ok() != Some(context.columns.len())
                 || context.columns.len() >= context.declared_columns
-                || name.is_null()
             {
                 return Err(Error::Invalid("header"));
             }
-            let name = context.text(CStr::from_ptr(name).to_bytes())?;
-            if name.is_empty() || context.columns.iter().any(|column| column.name == name) {
-                return Err(Error::Invalid("field_name"));
+            // A field whose name is empty or does not decode is named by its
+            // position, counted from one, and a repeated name by itself.
+            let position = context.columns.len() + 1;
+            let located = |cause, field| Error::Field {
+                cause,
+                field,
+                record: None,
+            };
+            // ReadStat passes an empty name as null.
+            let name = if name.is_null() {
+                String::new()
+            } else {
+                context
+                    .text(CStr::from_ptr(name).to_bytes())
+                    .ok_or_else(|| located("encoding", Field::Index(position)))?
+            };
+            if name.is_empty() {
+                return Err(located("field_name", Field::Index(position)));
+            }
+            if context.columns.iter().any(|column| column.name == name) {
+                return Err(located("field_name", Field::Name(name)));
             }
             let kind = context
                 .source
@@ -186,7 +213,7 @@ unsafe extern "C" fn variable(
             // SAS types narrow numeric storage. Character values carry no numeric
             // epoch or integer meaning and numeric storage cannot become text.
             if (text != 0) != (kind == ColumnType::Str) {
-                return Err(Error::Invalid("field_type"));
+                return Err(located("field_type", Field::Name(name)));
             }
             context.columns.push(Column { name, kind });
             Ok(())
@@ -228,7 +255,9 @@ unsafe extern "C" fn value(
             let decoded = if missing != 0 || (text.is_null() && !number.is_finite()) {
                 Value::Missing
             } else if !text.is_null() {
-                let text = context.text(CStr::from_ptr(text).to_bytes())?;
+                let text = context
+                    .text(CStr::from_ptr(text).to_bytes())
+                    .ok_or_else(|| context.undecodable(row, column))?;
                 if context.source.text_is_missing(&text) {
                     Value::Missing
                 } else {
@@ -282,12 +311,10 @@ fn numeric(value: f64, kind: ColumnType) -> Option<Value> {
     }
 }
 
-fn decode_text(bytes: &[u8], encoding: &str) -> Result<String, Error> {
+fn decode_text(bytes: &[u8], encoding: &str) -> Option<String> {
     let mut text = String::new();
     if encoding == "utf-8" {
-        text = std::str::from_utf8(bytes)
-            .map_err(|_| Error::Invalid("encoding"))?
-            .into();
+        text = std::str::from_utf8(bytes).ok()?.into();
     } else {
         // Undefined CP1252 octets are rejected. Latin-1 and ASCII are explicit
         // mappings, never replacement decoding or host locale behavior.
@@ -304,18 +331,15 @@ fn decode_text(bytes: &[u8], encoding: &str) -> Result<String, Error> {
                     u32::from(CP1252[usize::from(byte - 0x80)])
                 }
                 "windows-1252" => u32::from(byte),
-                _ => return Err(Error::Invalid("encoding")),
+                _ => return None,
             };
             if scalar == 0 {
-                return Err(Error::Invalid("encoding"));
+                return None;
             }
-            text.push(char::from_u32(scalar).ok_or(Error::Invalid("encoding"))?);
+            text.push(char::from_u32(scalar)?);
         }
     }
-    if text.contains('\0') {
-        return Err(Error::Invalid("encoding"));
-    }
-    Ok(text)
+    (!text.contains('\0')).then_some(text)
 }
 
 fn admit_xport(bytes: &[u8]) -> Result<(), Error> {
@@ -448,7 +472,16 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
         return Err(Error::Invalid("compression"));
     }
     if status == -4 {
-        return Err(Error::Invalid("encoding"));
+        // The reader refuses text holding a NUL byte (SAS-5); a value's
+        // refusal names its field and record.
+        let (mut row, mut column) = (-1, -1);
+        // SAFETY: both pointers are live locals for the call, and the
+        // position is the one this thread's parse above recorded.
+        unsafe { yamaa_readstat_refused_value(&mut row, &mut column) };
+        return Err(match (usize::try_from(row), usize::try_from(column)) {
+            (Ok(row), Ok(column)) => context.undecodable(row, column),
+            _ => Error::Invalid("encoding"),
+        });
     }
     if status == -5 {
         return Err(Error::Invalid("version"));
@@ -1011,9 +1044,9 @@ mod tests {
     #[test]
     fn declared_decoders_reject_incomplete_or_undefined_text() {
         assert_eq!(decode_text(b"caf\xe9", "windows-1252").unwrap(), "café");
-        assert!(decode_text(b"\xc3", "utf-8").is_err());
-        assert!(decode_text(b"\x81", "windows-1252").is_err());
-        assert!(decode_text(b"\xff", "ascii").is_err());
-        assert!(decode_text(b"a\0b", "utf-8").is_err());
+        assert!(decode_text(b"\xc3", "utf-8").is_none());
+        assert!(decode_text(b"\x81", "windows-1252").is_none());
+        assert!(decode_text(b"\xff", "ascii").is_none());
+        assert!(decode_text(b"a\0b", "utf-8").is_none());
     }
 }

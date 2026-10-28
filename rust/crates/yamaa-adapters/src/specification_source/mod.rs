@@ -492,18 +492,8 @@ impl PreparedDocument {
         match materialized {
             Ok(None) => Ok(self),
             Ok(Some(materialized)) => {
-                let Self {
-                    source,
-                    raw,
-                    parents,
-                    specification,
-                    ..
-                } = &mut self;
-                specification.lower_materialized(
-                    &materialized.document,
-                    &materialized.sources,
-                    |layer| crate::document::layer_locations(source, raw, parents, layer),
-                );
+                self.specification
+                    .lower_materialized(&materialized.document, &materialized.sources);
                 self.dictionaries = materialized.captures;
                 Ok(self)
             }
@@ -569,7 +559,8 @@ impl PreparedDocument {
     pub fn written_output_origin(&self) -> Option<yamaa_core::resource::WrittenPath<'_>> {
         self.written_output_field_origin("path")
     }
-    /// Every governed output field retains its original atomic output layer.
+    /// Each output path keeps the layer that wrote it, and the composed
+    /// `relative_to` selects its base, whichever layer wrote that (LAYER-10).
     pub fn written_output_field_origin(
         &self,
         field: &str,

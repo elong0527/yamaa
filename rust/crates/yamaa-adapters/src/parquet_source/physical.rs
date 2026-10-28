@@ -27,6 +27,7 @@ pub(super) fn native<T>(call: impl FnOnce() -> Result<T, ParquetError>) -> Resul
 enum Column {
     Int32(Vec<Option<i32>>),
     Int64(Vec<Option<i64>>),
+    Float(Vec<Option<f32>>),
     Double(Vec<Option<f64>>),
     Bytes(Vec<Option<ByteArray>>),
     Discard,
@@ -170,9 +171,7 @@ pub(super) fn read(
                 ColumnReader::Int96ColumnReader(reader) => {
                     collect(reader, descriptor, (rows, levels, false), &shapes[index])?;
                 }
-                ColumnReader::FloatColumnReader(reader) => {
-                    collect(reader, descriptor, (rows, levels, false), &shapes[index])?;
-                }
+                ColumnReader::FloatColumnReader(reader) => values!(reader, Float),
                 ColumnReader::FixedLenByteArrayColumnReader(reader) => {
                     collect(reader, descriptor, (rows, levels, false), &shapes[index])?;
                 }
@@ -185,6 +184,7 @@ pub(super) fn read(
             result[index] = match descriptor.physical_type() {
                 parquet::basic::Type::INT32 => Column::Int32(Vec::new()),
                 parquet::basic::Type::INT64 => Column::Int64(Vec::new()),
+                parquet::basic::Type::FLOAT => Column::Float(Vec::new()),
                 parquet::basic::Type::DOUBLE => Column::Double(Vec::new()),
                 parquet::basic::Type::BYTE_ARRAY => Column::Bytes(Vec::new()),
                 _ => return Err(Error::Malformed),
@@ -199,6 +199,7 @@ fn converted(column: Column) -> columns::Column {
     match column {
         Column::Int32(values) => columns::Column::Int32(values),
         Column::Int64(values) => columns::Column::Int64(values),
+        Column::Float(values) => columns::Column::Float(values),
         Column::Double(values) => columns::Column::Double(values),
         Column::Bytes(values) => {
             let mut binary = columns::Binary::default();

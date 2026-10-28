@@ -249,6 +249,8 @@ pub struct PreparedSpecification {
     schema: Arc<CapturedSchema>,
     chain: VersionedChain,
     resolved: ResolvedVersioned,
+    positions: Positions,
+    end_positions: Vec<Option<Span>>,
     lowered: Lowered,
 }
 
@@ -281,24 +283,28 @@ impl PreparedSpecification {
     pub fn into_lowered(self) -> Lowered {
         self.lowered
     }
+    /// Parallel to [`PreparedSpecification::resolved`]'s nodes: where the
+    /// layer that wrote each node, numbered by [`Span::file`] in contribution
+    /// order, wrote it, at the line and column its reader decoded, or none
+    /// for a schema default or a node composition made (P-ISSUE-1).
+    pub fn positions(&self) -> &Positions {
+        &self.positions
+    }
+    /// The exclusive scanner end of a resolved node a layer wrote.
+    pub fn end_position(&self, node: usize) -> Option<Span> {
+        self.end_positions.get(node).copied().flatten()
+    }
     /// Lower `materialized`, the resolved specification with each dictionary
     /// file's admitted content in place of its path, in place of the lowering
     /// of the resolved specification: binding reads the dictionary's entries
     /// as it reads an inline one. Each node keeps the position of the node it
     /// copies, and a dictionary's content the position of its `dict` path.
-    /// `locations` gives each layer's decoded positions.
-    pub fn lower_materialized<'a>(
-        &mut self,
-        materialized: &Document,
-        sources: &[usize],
-        locations: impl Fn(&graph::VersionedLayer) -> Option<&'a Vec<SourcePosition>>,
-    ) {
-        let resolved = positions(&self.chain, &self.resolved, locations);
+    pub fn lower_materialized(&mut self, materialized: &Document, sources: &[usize]) {
         let positions = Positions {
-            files: resolved.files,
+            files: self.positions.files.clone(),
             nodes: sources
                 .iter()
-                .map(|&node| resolved.nodes.get(node).copied().flatten())
+                .map(|&node| self.positions.nodes.get(node).copied().flatten())
                 .collect(),
         };
         self.lowered = front_end::lower(materialized, Some(&positions));
@@ -609,7 +615,7 @@ impl VersionedDocument {
         let locations = |layer: &graph::VersionedLayer| {
             layer_locations(&self.source, &self.raw, &parents, layer)
         };
-        let positions = positions(&chain, &resolved, locations);
+        let (positions, end_positions) = positions(&chain, &resolved, locations);
         let lowered = front_end::lower(&resolved.document, Some(&positions));
         let found = front_end::checks::findings(lowered.spec());
         if !found.is_empty() {
@@ -625,6 +631,8 @@ impl VersionedDocument {
                 schema: self.schema,
                 chain,
                 resolved,
+                positions,
+                end_positions,
                 lowered,
             },
             source: self.source,
@@ -634,21 +642,45 @@ impl VersionedDocument {
     }
 }
 
+/// The layers of `chain`, read through `port`, as preparation composes them
+/// ([`lifecycle::contributed_layers`]): each copy entry replaced by the
+/// columns it declares, read from its producer as preparation reads it
+/// (SPEC-9), and each relative path respelled from the entry (LAYER-10).
+/// None when a layer does not normalize or a producer cannot be read:
+/// preparation then reports why.
+#[cfg(feature = "yaml")]
+pub(crate) fn contributed_layers<P: Resolver>(
+    schema: &yamaa_core::schema::SchemaStructure,
+    chain: &VersionedChain,
+    port: &mut P,
+) -> Option<Vec<NormalizedDocument>> {
+    let resolving = [chain.layers.last()?.source.identity.clone()];
+    lifecycle::contributed_layers(
+        schema,
+        chain,
+        port,
+        |port, declaring, written, dataset, layers| {
+            read_producer(port, &resolving, declaring, written, dataset, layers).ok()
+        },
+    )
+    .ok()
+}
+
 /// Where `layer` was decoded: `raw`, the entry read as `source`, or the
 /// parent or fragment of `parents` read under its identity.
-pub(crate) fn layer_locations<'a>(
+fn layer_locations<'a>(
     source: &Source,
     raw: &'a DecodedYaml,
     parents: &'a [CapturedParent],
     layer: &graph::VersionedLayer,
-) -> Option<&'a Vec<SourcePosition>> {
+) -> Option<&'a DecodedYaml> {
     if layer.source.identity == source.identity {
-        Some(&raw.locations)
+        Some(raw)
     } else {
         parents
             .iter()
             .find(|parent| parent.source().identity == layer.source.identity)
-            .map(|parent| &parent.raw().locations)
+            .map(CapturedParent::raw)
     }
 }
 
@@ -658,35 +690,49 @@ pub(crate) fn layer_locations<'a>(
 fn positions<'a, 'b>(
     chain: &'b VersionedChain,
     resolved: &ResolvedVersioned,
-    locations: impl Fn(&'b graph::VersionedLayer) -> Option<&'a Vec<SourcePosition>>,
-) -> Positions {
+    locations: impl Fn(&'b graph::VersionedLayer) -> Option<&'a DecodedYaml>,
+) -> (Positions, Vec<Option<Span>>) {
     let decoded = chain.layers.iter().map(locations).collect::<Vec<_>>();
     let span = |layer: usize, at: &SourcePosition| Span {
         file: FileId(u32::try_from(layer).expect("a chain's layers fit u32")),
         line: u32::try_from(at.line).unwrap_or(u32::MAX),
         column: u32::try_from(at.column).unwrap_or(u32::MAX),
     };
-    Positions {
-        files: chain
-            .layers
-            .iter()
-            .map(|layer| FileRef {
-                identity: layer.source.identity.clone(),
-            })
-            .collect(),
-        nodes: resolved
-            .origins
-            .iter()
-            .map(|origin| {
+    let (nodes, end_positions) = resolved
+        .origins
+        .iter()
+        .map(|origin| {
+            let written = || {
                 let layer = origin.layer?;
                 if !matches!(origin.origin.source, SchemaSource::Input) {
                     return None;
                 }
-                let at = decoded.get(layer)?.as_ref()?.get(origin.origin.node)?;
-                Some(span(layer, at))
-            })
-            .collect(),
-    }
+                let raw = decoded.get(layer)?.as_ref()?;
+                let node = origin.origin.node;
+                Some((
+                    span(layer, raw.locations.get(node)?),
+                    span(layer, raw.end_locations.get(node)?),
+                ))
+            };
+            match written() {
+                Some((start, end)) => (Some(start), Some(end)),
+                None => (None, None),
+            }
+        })
+        .unzip();
+    (
+        Positions {
+            files: chain
+                .layers
+                .iter()
+                .map(|layer| FileRef {
+                    identity: layer.source.identity.clone(),
+                })
+                .collect(),
+            nodes,
+        },
+        end_positions,
+    )
 }
 
 /// The output contract of the producer that input `dataset`'s link,

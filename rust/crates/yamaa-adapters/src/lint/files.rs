@@ -9,7 +9,7 @@ use yamaa_core::limits::Limits;
 
 use super::checks::{check, sort, suppressed};
 use super::document::{Document, Value};
-use super::{fix, inheritance, Error, Finding, Linted};
+use super::{fix, inheritance, restated, Error, Finding, Linted};
 use crate::yaml_decode::DecodeFailure;
 
 /// The findings that remain in `text` once suppressions apply, one-based.
@@ -26,6 +26,7 @@ pub(super) fn findings(
     let mut found = check(&document);
     if let Some(file) = file {
         found.extend(inheritance::check(&document, file));
+        found.extend(restated::check(&document, file));
         sort(&mut found);
     }
     Ok(suppressed(&document, found)

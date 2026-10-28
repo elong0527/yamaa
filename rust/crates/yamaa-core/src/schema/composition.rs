@@ -336,63 +336,23 @@ impl Run<'_> {
     }
 }
 impl SchemaStructure {
-    /// Compose one value of the field whose descriptor is `descriptor` with
-    /// the value it inherits, as a matching keyed member composes (LAYER-6):
-    /// a class merges field by field and a mapping key by key, and scalars
-    /// and lists replace. A project's sections compose so (PROJECT-16). Input
-    /// 0 denotes the accumulated value and input 1 the later contribution.
-    pub(super) fn compose_value_at(
-        &self,
-        descriptor: usize,
-        accumulated: Option<(&Document, usize)>,
-        incoming: (&Document, usize),
-    ) -> Result<ComposedValue, NormalizationError> {
-        if self.descriptors().get(descriptor).is_none()
-            || accumulated.is_some_and(|(document, node)| node >= document.nodes().len())
-            || incoming.1 >= incoming.0.nodes().len()
-        {
-            return Err(ValidationError::InvalidDescriptor.into());
-        }
-        let mut run = Run {
-            schema: self,
-            nodes: Vec::new(),
-            origins: Vec::new(),
-        };
-        let root = run.descriptor(
-            descriptor,
-            accumulated.map(|(document, node)| Site {
-                document,
-                node,
-                input: 0,
-            }),
-            Site {
-                document: incoming.0,
-                node: incoming.1,
-                input: 1,
-            },
-            0,
-        )?;
-        let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
-        Ok(ComposedValue {
-            document,
-            origins: run.origins,
-        })
-    }
     /// Compose one member of a keyed root collection, a `list[T]` or `dict[K, T]`
-    /// field, by its member type `T` (LAYER-5): a class merges field by field
-    /// and a mapping key by key, a registry value composes with the same
-    /// keyword and otherwise replaces, and scalars and lists replace (LAYER-6).
-    /// YAML null composes as a value. Input 0 denotes the accumulated value and
-    /// input 1 the later contribution. Defaults belong to the surrounding pass.
+    /// field, by its member type `T`, or the value of a root block, a field
+    /// whose type is one class, by that class (LAYER-5): a class merges field
+    /// by field and a mapping key by key, a registry value composes with the
+    /// same keyword and otherwise replaces, and scalars and lists replace
+    /// (LAYER-6). YAML null composes as a value. Input 0 denotes the
+    /// accumulated value and input 1 the later contribution. Defaults belong
+    /// to the surrounding pass.
     pub(super) fn compose_member_at(
         &self,
-        collection: usize,
+        field: usize,
         accumulated: Option<(&Document, usize)>,
         incoming: (&Document, usize),
     ) -> Result<ComposedValue, NormalizationError> {
         let located = self
             .descriptors()
-            .get(collection)
+            .get(field)
             .ok_or(ValidationError::InvalidDescriptor)?;
         let [expression] = located.descriptor.members() else {
             return Err(ValidationError::InvalidDescriptor.into());
@@ -400,7 +360,7 @@ impl SchemaStructure {
         let member = match &expression.nodes()[expression.root()] {
             TypeNode::List(inner) => *inner,
             TypeNode::Dictionary { value, .. } => *value,
-            TypeNode::Name(_) => return Err(ValidationError::InvalidDescriptor.into()),
+            TypeNode::Name(_) => expression.root(),
         };
         if accumulated.is_some_and(|(document, node)| node >= document.nodes().len())
             || incoming.1 >= incoming.0.nodes().len()

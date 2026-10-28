@@ -41,4 +41,6 @@ unreachable:
     published dataset of at least 25 million 200-byte values (SUB-24 measures a
     character variable by its longest value) or 625 million numbers; no parity
     case can carry one, so XPT-10's encoder test owns it
-not_covered: {}
+not_covered:
+  "#4089":
+    - codelist_without_decodes

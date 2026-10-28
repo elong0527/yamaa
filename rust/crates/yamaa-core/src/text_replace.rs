@@ -4,6 +4,7 @@
 //! literal replacement text are owned here.
 use crate::{
     diagnostic::Diagnostic,
+    limits::{LimitExceeded, Limits},
     table::ValueRef,
     text_extract::{AdmissionError, StringExtract},
     value::Value,
@@ -32,8 +33,9 @@ pub enum Error {
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RenderError {
-    #[error("text replace output exceeds addressable size")]
-    Size,
+    /// A result longer than `Limits::TEXT_BYTES` (TEXT-11).
+    #[error("text replace: {0}")]
+    Limit(LimitExceeded),
     #[error("text replace output allocation failed")]
     Allocation,
 }
@@ -99,10 +101,13 @@ impl StringReplace {
             .search_all(subject);
         Ok(Step::Matched { subject, spans })
     }
-    /// The unmatched text, in order, with each match replaced by the literal text.
+    /// The unmatched text, in order, with each match replaced by the literal
+    /// text; a result longer than `Limits::TEXT_BYTES` is refused before it is
+    /// built.
     pub fn render(&self, subject: &str, spans: &[(usize, usize)]) -> Result<String, RenderError> {
-        let total =
-            output_bytes(subject.len(), spans, self.replacement.len()).ok_or(RenderError::Size)?;
+        let total = output_bytes(subject.len(), spans, self.replacement.len());
+        Limits::text_bytes(total).map_err(RenderError::Limit)?;
+        let total = total.expect("an admitted length");
         let mut output = String::new();
         output
             .try_reserve_exact(total)
@@ -260,9 +265,10 @@ mod tests {
 
     #[test]
     fn a_long_scan_completes_without_a_step_budget() {
-        // A million and one empty matches, which the retired step guard refused.
+        // A million and one empty matches, which the retired step guard
+        // refused, each replaced by nothing so the text stays within its limit.
         let subject = "a".repeat(1_000_000);
-        assert_eq!(replaced("x*", "-", &subject).len(), 2 * subject.len() + 1);
+        assert_eq!(replaced("x*", "", &subject), subject);
     }
 
     #[test]

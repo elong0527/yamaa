@@ -187,7 +187,11 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
                 )
                 | Error::ProducerMetadata(_)
                 | Error::OdmFields(_)
-                | Error::SasSource(sas_source::Error::Invalid(_) | sas_source::Error::Typing(_))
+                | Error::SasSource(
+                    sas_source::Error::Invalid(_)
+                        | sas_source::Error::Field { .. }
+                        | sas_source::Error::Typing(_)
+                )
                 | Error::DatasetJsonSource(
                     dataset_json_source::Error::Invalid(_)
                         | dataset_json_source::Error::Value { .. }

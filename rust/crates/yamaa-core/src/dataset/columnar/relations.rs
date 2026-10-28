@@ -475,7 +475,9 @@ pub(super) fn verify<'a: 's, 's, E>(
                     columns.push(column);
                 }
             }
-            let groups = crate::table_grouping::partition(&filtered, &columns)
+            // The records a key would match are one combination, and two
+            // missing values are one too (LOOKUP-17).
+            let groups = crate::table_grouping::partition_matching(&filtered, &columns)
                 .map_err(|error| Box::new(ExecutionError::Grouping(error)))?;
             let repeated: Vec<&Vec<usize>> =
                 groups.iter().filter(|group| group.len() > 1).collect();
@@ -1773,7 +1775,8 @@ pub(super) fn select<'t, E>(
     for &row in &candidates[1..] {
         let mut order = Ordering::Equal;
         for term in &selection.order_by {
-            order = compare(read(row, term.column)?, read(best, term.column)?, term);
+            order = compare(read(row, term.column)?, read(best, term.column)?, term)
+                .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
             if order != Ordering::Equal {
                 break;
             }
@@ -1829,10 +1832,18 @@ pub(super) fn nearest<'t, E>(
     Ok((best.map(|(row, ..)| row), measured))
 }
 
-/// Compare values within one normalized column; missing values sort by the
-/// term's placement.
-pub(super) fn compare(left: ValueRef<'_>, right: ValueRef<'_>, term: &OrderTerm) -> Ordering {
-    match (left, right) {
+/// Compare two values of one order term (VALUE-22): missing values by the
+/// term's placement, and present ones in the term's direction under VALUE-19,
+/// whose one comparison (`value::compare_present_refs`) orders a mixed `int`
+/// and `float` pair by exact value. Binding refuses a term whose type holds
+/// two types that do not compare (`ResultType::unordered`); a pair whose
+/// types no source decided before the run fails here, and is never ordered.
+pub(super) fn compare(
+    left: ValueRef<'_>,
+    right: ValueRef<'_>,
+    term: &OrderTerm,
+) -> Result<Ordering, crate::value::ComparisonError> {
+    Ok(match (left, right) {
         (ValueRef::Missing, ValueRef::Missing) => Ordering::Equal,
         (ValueRef::Missing, _) => {
             if term.nulls_first {
@@ -1849,25 +1860,61 @@ pub(super) fn compare(left: ValueRef<'_>, right: ValueRef<'_>, term: &OrderTerm)
             }
         }
         _ => {
-            let order = match (left, right) {
-                (ValueRef::Str(a), ValueRef::Str(b)) => a.cmp(b),
-                (ValueRef::Int(a), ValueRef::Int(b)) => a.cmp(&b),
-                (ValueRef::Float(a), ValueRef::Float(b)) => a
-                    .get()
-                    .partial_cmp(&b.get())
-                    .expect("finite normalized values"),
-                (ValueRef::Bool(a), ValueRef::Bool(b)) => a.cmp(&b),
-                (ValueRef::Date(a), ValueRef::Date(b)) => a.cmp(&b),
-                (ValueRef::DateTime(a), ValueRef::DateTime(b)) => a.cmp(&b),
-                _ => unreachable!("completed columns have one admitted logical type"),
-            };
+            let order = crate::value::compare_present_refs(left, right)?;
             if term.descending {
                 order.reverse()
             } else {
                 order
             }
         }
+    })
+}
+
+/// Sort `items` by the order terms (VALUE-22), `value` reading an item's
+/// value of the term at an index; items equal on every term keep their
+/// order (VALUE-23). Every two present values of a term must compare
+/// ([`comparable`]), or the sort fails before any item moves, so the order
+/// the sort reads is total.
+pub(super) fn sort<'v, T>(
+    items: &mut [T],
+    terms: &[OrderTerm],
+    value: impl Fn(&T, usize) -> ValueRef<'v>,
+) -> Result<(), crate::value::ComparisonError> {
+    comparable(items, terms.len(), &value)?;
+    items.sort_by(|left, right| {
+        terms
+            .iter()
+            .enumerate()
+            .map(|(index, term)| {
+                // Every pair compares: `comparable` admitted them all.
+                compare(value(left, index), value(right, index), term).unwrap_or(Ordering::Equal)
+            })
+            .find(|order| order.is_ne())
+            .unwrap_or(Ordering::Equal)
+    });
+    Ok(())
+}
+
+/// Fails unless every two present values of each of the `terms` order terms
+/// compare under VALUE-19 (`value::comparable_types`). Comparability holds
+/// within `int` and `float` and otherwise within one type, `bool` aside, so
+/// each value is checked against the term's first present value.
+fn comparable<'v, T>(
+    items: &[T],
+    terms: usize,
+    value: impl Fn(&T, usize) -> ValueRef<'v>,
+) -> Result<(), crate::value::ComparisonError> {
+    for index in 0..terms {
+        let mut first = None;
+        for item in items {
+            if let Some(kind) = value(item, index).value_type() {
+                if !crate::value::comparable_types(*first.get_or_insert(kind), kind) {
+                    return Err(crate::value::ComparisonError::IncompatibleTypes);
+                }
+            }
+        }
     }
+    Ok(())
 }
 
 impl<'p, 'a, E> Run<'p, 'a, E> {

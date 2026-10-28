@@ -1,13 +1,23 @@
 //! Read-only SAS binary input, enabled by the default `readstat` feature.
 #[cfg(not(feature = "readstat"))]
 use crate::column_table::ColumnTable;
-use yamaa_core::diagnostic::SourceFinding;
 #[cfg(not(feature = "readstat"))]
 use yamaa_core::specification::SourceDeclaration;
+use yamaa_core::{csv_source::Field, diagnostic::SourceFinding};
 
 #[derive(Debug)]
 pub enum Error {
+    /// A file refused with one closed cause that no field locates (SAS-7).
     Invalid(&'static str),
+    /// A refusal one field locates (SAS-7): the field's name, or the
+    /// position, counted from one, of a field whose name is empty or does
+    /// not decode; and for a value that does not decode, its record,
+    /// counted from one.
+    Field {
+        cause: &'static str,
+        field: Field,
+        record: Option<usize>,
+    },
     Typing(yamaa_core::typed_csv::Error),
     Limit {
         resource: &'static str,
@@ -25,6 +35,19 @@ impl Error {
                 dataset,
                 path,
                 cause,
+                field: None,
+                record: None,
+            }),
+            Self::Field {
+                cause,
+                field,
+                record,
+            } => Some(SourceFinding::Sas {
+                dataset,
+                path,
+                cause,
+                field: Some(field),
+                record: *record,
             }),
             Self::Typing(error) => error.finding(dataset),
             Self::Limit { .. } | Self::Internal | Self::Unavailable => None,

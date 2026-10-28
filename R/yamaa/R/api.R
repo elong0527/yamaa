@@ -9,9 +9,30 @@
 # `run()`, and made again when the object was restored from `saveRDS`, an
 # `.RData` file or another R process.
 
+# A reply's value, or its refusal signalled. An interrupt the call kept takes
+# the path of an unhandled Ctrl+C (onintr in R's errors.c): it is signalled
+# again, so an interrupt handler takes it; otherwise the `interrupt` option's
+# function runs, R's newline is printed, the `error` option runs when no
+# `interrupt` option is set, and the call ends at the innermost browser or
+# abort restart. stop() would end it as an error, which an error handler takes
+# (#4070).
 .reply <- function(reply) {
   error <- reply$error
   if (!is.null(error)) {
+    if (inherits(error$condition, "interrupt")) {
+      signalCondition(error$condition)
+      hook <- getOption("interrupt")
+      if (is.function(hook)) hook()
+      cat("\n", file = stderr())
+      if (is.null(getOption("interrupt"))) {
+        handler <- getOption("error")
+        if (is.call(handler)) eval(handler, globalenv())
+        if (is.expression(handler)) for (step in handler) eval(step, globalenv())
+      }
+      ends <- Filter(function(restart) restart[[1L]] %in% c("browser", "tryRestart", "abort"),
+        computeRestarts())
+      invokeRestart(ends[[1L]])
+    }
     if (!is.null(error$condition)) stop(error$condition)
     stop(structure(
       list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
@@ -30,12 +51,24 @@
 
 .optional_text <- function(value, what) if (is.null(value)) NULL else .text(value, what)
 
-.texts <- function(value, what) {
+# A path argument (#4091) is the text of a character string: its names and
+# class, such as an fs::path() or glue::glue() value carries, are dropped,
+# and a leading `~` expands as base R's file functions expand it. Only a path
+# expands; a name, a section or a TAR member name is text, which .text()
+# takes as written.
+.path <- function(value, what) {
+  if (is.character(value)) value <- path.expand(as.character(unname(value)))
+  .text(value, what)
+}
+
+.optional_path <- function(value, what) if (is.null(value)) NULL else .path(value, what)
+
+.paths <- function(value, what) {
   if (!is.character(value) || length(value) == 0L || anyNA(value)) {
     stop(sprintf("`%s` must be a non-empty character vector without missing values", what),
       call. = FALSE)
   }
-  lapply(unname(value), .utf8_raw)
+  lapply(path.expand(as.character(unname(value))), .utf8_raw)
 }
 
 .version <- function() charToRaw(as.character(getRversion()))

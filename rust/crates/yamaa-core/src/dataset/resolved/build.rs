@@ -1547,7 +1547,14 @@ impl<'p> Builder<'p> {
             node.windowed |= windowed;
             node.nearest = reference.pop();
         }
-        for current in item.filter.iter().flat_map(|filter| filter.current()) {
+        // A contextual filter is only read in a rebased donor region.
+        let filter = item.filter.as_ref().filter(|filter| {
+            filter
+                .current()
+                .iter()
+                .all(|field| field.read != CurrentRead::Contextual)
+        });
+        for current in filter.into_iter().flat_map(|filter| filter.current()) {
             node.current.push(current_read(cx, current)?);
         }
         if let Some(derived) = &item.derivations {
@@ -1581,9 +1588,7 @@ impl<'p> Builder<'p> {
         node.selection = selection_shape(item.selection.as_ref())?;
         node.no_match = item.no_match.clone();
         node.named = Some(Box::new(item.clone()));
-        node.filter = item
-            .filter
-            .as_ref()
+        node.filter = filter
             .map(|filter| self.relation_predicate(cx, id, filter))
             .transpose()?;
         self.out.relations[id.index()] = node;

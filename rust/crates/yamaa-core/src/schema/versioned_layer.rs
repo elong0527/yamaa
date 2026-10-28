@@ -16,11 +16,16 @@ use crate::diagnostic::ConditionCode;
 /// layer defers requiredness to the resolved specification (LAYER-4).
 pub(super) const COLLECTIONS: [&str; 5] = ["input", "windows", "intermediates", "columns", "rows"];
 
-/// The sections of a project, each of which composes as one member, merging
-/// with the section it inherits (PROJECT-16); inside one, as inside a member
-/// of a specification's keyed collection, a layer defers requiredness and
-/// defaults to the composed project (LAYER-4, LAYER-7).
-const SECTIONS: [&str; 5] = ["environments", "study", "sdtm", "adam", "send"];
+/// Root fields whose class composes field by field, as a keyed member's
+/// does (LAYER-5, LAYER-6); inside one a layer defers requiredness to the
+/// resolved specification too (LAYER-4).
+pub const BLOCKS: [&str; 2] = ["output", "submission"];
+
+/// The sections of a project, the blocks of a project file: each composes
+/// field by field with the section it inherits, and inside one a layer
+/// defers requiredness and defaults to the composed project (PROJECT-16,
+/// LAYER-4, LAYER-7).
+pub(super) const SECTIONS: [&str; 5] = ["environments", "study", "sdtm", "adam", "send"];
 
 /// The keyed collections written as lists, and the field each member is
 /// identified by.
@@ -37,17 +42,25 @@ fn identity(field: &str) -> Option<&'static str> {
 }
 
 impl SchemaStructure {
-    /// Whether the root field `field` of a layer read against this view
-    /// composes member by member with the value it inherits, so that a layer
-    /// may write it in part: a keyed collection of a specification (LAYER-5)
-    /// or a section of a project (PROJECT-16). Every other root field is
-    /// complete where it is written and replaces what it inherits.
-    pub(super) fn composes_members(&self, field: &str) -> bool {
+    /// Whether the root field `field` of a layer read against this view is a
+    /// block, whose class composes field by field with the value it
+    /// inherits: a specification's `output` or `submission` (LAYER-5), or a
+    /// project's section (PROJECT-16).
+    pub(super) fn block(&self, field: &str) -> bool {
         if self.root_class().name == crate::language::FileType::Project.root_class() {
             SECTIONS.contains(&field)
         } else {
-            COLLECTIONS.contains(&field)
+            BLOCKS.contains(&field)
         }
+    }
+
+    /// Whether a layer's value at the root field `field` is a fragment whose
+    /// requiredness and defaults wait for the resolved specification or the
+    /// composed project (LAYER-4, LAYER-7): a keyed collection's members, or
+    /// a block. Every other root field is complete where it is written and
+    /// replaces what it inherits.
+    fn deferred(&self, field: &str) -> bool {
+        COLLECTIONS.contains(&field) || self.block(field)
     }
 
     /// The findings of one 1.x specification layer, checked against this view
@@ -56,15 +69,15 @@ impl SchemaStructure {
     /// (`language::read_header`).
     ///
     /// A layer need not be complete: a root field may be absent, and inside a
-    /// member of a keyed collection requiredness waits for the resolved
-    /// specification. A member of a keyed list still carries the identity,
-    /// `name` or `id`, that composition matches it by, at
-    /// `<collection>[i].<identity>` when it does not, and a copy entry, which
-    /// has none, is complete (SPEC-9). Every other value a layer writes is
-    /// checked where it is written: a root field replaces the value it
-    /// inherits whole, so it is complete. YAML null is an ordinary value,
-    /// admitted only where a field's
-    /// type admits it: a value or expression field (P-NULL-1). Two members of
+    /// member of a keyed collection or a block, `output` or `submission`,
+    /// requiredness waits for the resolved specification. A member of a keyed
+    /// list still carries the identity, `name` or `id`, that composition
+    /// matches it by, at `<collection>[i].<identity>` when it does not, and a
+    /// copy entry, which has none, is complete (SPEC-9). Every other value a
+    /// layer writes is checked where it is written: any other root field
+    /// replaces the value it inherits whole, so it is complete. YAML null is
+    /// an ordinary value, admitted only where a field's type admits it: a
+    /// value or expression field (P-NULL-1). Two members of
     /// one keyed collection must not share an identifier (LAYER-4). Each
     /// `clear` entry is a spec path, and no entry covers another; a fault
     /// fails as `invalid_clear` at `clear[i]` (LAYER-9). A list written at
@@ -96,7 +109,7 @@ impl SchemaStructure {
             let Some(value) = input.field(root, &field.name) else {
                 continue;
             };
-            let fragment = self.composes_members(&field.name);
+            let fragment = self.deferred(&field.name);
             let mut found = self.validate_versioned_descriptor(
                 field.descriptor,
                 input,
@@ -177,7 +190,7 @@ impl SchemaStructure {
                     descriptor: field.descriptor,
                 },
             });
-            let fragment = self.composes_members(&field.name);
+            let fragment = self.deferred(&field.name);
             let (_, found) = self.versioned_descriptor_sites(
                 field.descriptor,
                 input,
@@ -293,9 +306,10 @@ impl SchemaStructure {
     /// Normalize one admitted 1.x layer, checked by
     /// [`SchemaStructure::validate_layer`] against this same view, before it
     /// composes (LAYER-4): shorthand is expanded in every field, so equivalent
-    /// spellings contribute the same value. A member of a keyed collection is
-    /// a fragment whose defaults wait for the resolved specification; every
-    /// other root field is complete, so its defaults apply here (LAYER-7).
+    /// spellings contribute the same value. A member of a keyed collection and
+    /// a block are fragments whose defaults wait for the resolved
+    /// specification; every other root field is complete, so its defaults
+    /// apply here (LAYER-7).
     /// YAML null stays the value it is. Root fields follow schema order.
     pub fn normalize_versioned_layer(
         &self,
@@ -319,7 +333,7 @@ impl SchemaStructure {
             ) else {
                 continue;
             };
-            let fragment = self.composes_members(&field.name);
+            let fragment = self.deferred(&field.name);
             let normalized =
                 self.normalize_versioned_descriptor(field.descriptor, input, value, fragment)?;
             let offset = nodes.len();
