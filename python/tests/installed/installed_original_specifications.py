@@ -600,9 +600,7 @@ class ParquetOriginalOutput(unittest.TestCase):
                 )
                 for name, stored in (
                     ("uint64", "uint64"),
-                    ("float32", "float"),
                     ("binary", "binary"),
-                    ("milliseconds", "timestamp[ms]"),
                     ("timezone", "timestamp[us, tz=UTC]"),
                     ("list", "list<element: int64>"),
                     ("fixed-list", "fixed_size_list<element: int64>[2]"),

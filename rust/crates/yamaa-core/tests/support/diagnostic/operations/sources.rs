@@ -144,7 +144,8 @@ fn parquet_columns(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// A stored temporal value of a Parquet column, `{dataset, path, type,
-/// value, field, record}`, `value` in the column's stored unit.
+/// value, field, record}`, `value` in the column's stored unit: days for a
+/// date, microseconds for a datetime.
 fn parquet_value(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["dataset", "path", "type", "value", "field", "record"]);
     parquet_refusal(
@@ -152,6 +153,7 @@ fn parquet_value(input: &Json) -> Vec<Diagnostic> {
         parquet::temporal(
             column_type(input.field("type")),
             input.field("value").integer(),
+            1_000_000,
             text(input, "field"),
             input.field("record").integer(),
         ),

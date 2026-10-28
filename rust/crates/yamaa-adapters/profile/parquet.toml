@@ -59,6 +59,13 @@ physical = "DOUBLE"
 unannotated = true
 layouts = ["double"]
 
+# A single-precision value widens exactly to the binary64 value it names.
+[[column]]
+type = "float"
+physical = "FLOAT"
+unannotated = true
+layouts = ["float"]
+
 [[column]]
 type = "date"
 physical = "INT32"
@@ -66,11 +73,26 @@ logical = ["Date"]
 converted = ["DATE"]
 layouts = ["date32[day]"]
 
+# A timestamp counts its annotation's unit from the epoch, and each stored
+# value must be a whole second of it (PARQUET-9). No zone is admitted: a
+# timestamp adjusted to UTC, as R arrow writes a POSIXct, stays refused.
 [[column]]
 type = "datetime"
 physical = "INT64"
 logical = ["Timestamp(MICROS, isAdjustedToUTC=false)"]
 layouts = ["timestamp[us]"]
+
+[[column]]
+type = "datetime"
+physical = "INT64"
+logical = ["Timestamp(MILLIS, isAdjustedToUTC=false)"]
+layouts = ["timestamp[ms]"]
+
+[[column]]
+type = "datetime"
+physical = "INT64"
+logical = ["Timestamp(NANOS, isAdjustedToUTC=false)"]
+layouts = ["timestamp[ns]"]
 
 # Physical types, by their code in the format, and the value encodings each
 # decodes (PARQUET-5). Every column is decoded before any field is admitted, a
