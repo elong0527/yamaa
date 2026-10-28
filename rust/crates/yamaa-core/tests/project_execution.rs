@@ -1635,26 +1635,71 @@ mod project {
         }
 
         /// A seam the replay cannot reach: the terminology validator's internal
-        /// findings, each a source, a codelist and a `Fault`.
+        /// findings, each a source, a codelist and a `Fault`, and the composed
+        /// catalogue's sources, which keep their indices.
         #[test]
-        fn global_duplicates_across_sources_have_no_override() {
-            let first = source(list());
-            let second = published(first.clone());
-            assert_eq!(
-                validate(&[first, second]),
-                vec![
-                    Finding {
-                        source: 1,
-                        codelist: 0,
-                        fault: Fault::DuplicateId
-                    },
-                    Finding {
-                        source: 1,
-                        codelist: 0,
-                        fault: Fault::DuplicateName
+        fn a_later_source_replaces_an_earlier_codelist_of_its_id_whole() {
+            // CT-1: a later source's list replaces every earlier list of its
+            // `id`, `name` included, and `name` is unique over the composed
+            // lists, each source keeping those no later source replaces.
+            let named = |id: &str, name: &str| Codelist {
+                id: id.into(),
+                name: name.into(),
+                ..list()
+            };
+            let sources = |lists: [Vec<Codelist>; 2]| {
+                lists.map(|codelists| {
+                    Source {
+                        standard: None,
+                        codelists,
                     }
-                ]
-            );
+                    .root()
+                })
+            };
+            let duplicate_name = vec![Finding {
+                source: 1,
+                codelist: 0,
+                fault: Fault::DuplicateName,
+            }];
+            let cases = [
+                (
+                    "a later list of an id replaces the earlier one",
+                    [vec![named("SEX", "Sex")], vec![named("SEX", "Sex")]],
+                    Ok([vec![], vec![named("SEX", "Sex")]]),
+                ),
+                (
+                    "a replacing list takes a name the earlier list frees",
+                    [
+                        vec![named("SEX", "Sex"), named("RACE", "Race")],
+                        vec![named("SEX", "Gender"), named("ETHNIC", "Sex")],
+                    ],
+                    Ok([
+                        vec![named("RACE", "Race")],
+                        vec![named("SEX", "Gender"), named("ETHNIC", "Sex")],
+                    ]),
+                ),
+                (
+                    "a later list reuses a name under another id",
+                    [vec![named("SEX", "Sex")], vec![named("GENDER", "Sex")]],
+                    Err(duplicate_name.clone()),
+                ),
+                (
+                    "a replacing list takes a name a kept list holds",
+                    [
+                        vec![named("SEX", "Sex"), named("RACE", "Race")],
+                        vec![named("SEX", "Race")],
+                    ],
+                    Err(duplicate_name),
+                ),
+            ];
+            for (case, lists, expected) in cases {
+                let expected = expected.map(|kept| sources(kept).to_vec());
+                assert_eq!(
+                    Catalogue::admit(sources(lists).to_vec()).map(|c| c.sources().to_vec()),
+                    expected,
+                    "{case}"
+                );
+            }
         }
         /// A seam the replay cannot reach: every internal `Fault` the
         /// terminology validator keeps beside an invalid shape, by item.

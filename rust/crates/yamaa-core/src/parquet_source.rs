@@ -90,17 +90,24 @@ where
     TableSchema::new(columns).map_err(|_| Error::Invalid)
 }
 
-/// Raw storage integers are checked before conversion or rounding. Temporal
+/// Raw storage integers are checked before conversion or rounding: a date
+/// counts days, and a datetime counts a unit of which `per_second` make one
+/// second, its timestamp's, and must be a whole second (PARQUET-9). Temporal
 /// source findings retain raw values and one-based source rows.
-pub fn temporal(kind: ColumnType, value: i64, field: &str, row: usize) -> Result<(), Error> {
+pub fn temporal(
+    kind: ColumnType,
+    value: i64,
+    per_second: i64,
+    field: &str,
+    row: usize,
+) -> Result<(), Error> {
     const MIN_DAY: i64 = -719_162;
     const MAX_DAY: i64 = 2_932_896;
     let valid = match kind {
         ColumnType::Date => (MIN_DAY..=MAX_DAY).contains(&value),
         ColumnType::DateTime => {
-            (MIN_DAY * 86_400 * 1_000_000..=(MAX_DAY * 86_400 + 86_399) * 1_000_000)
-                .contains(&value)
-                && value % 1_000_000 == 0
+            value % per_second == 0
+                && (MIN_DAY * 86_400..=MAX_DAY * 86_400 + 86_399).contains(&(value / per_second))
         }
         _ => true,
     };

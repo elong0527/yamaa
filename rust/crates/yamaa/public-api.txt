@@ -542,7 +542,7 @@ yamaa::info::Info::version: pub version: &'static str
 yamaa::info::info: pub fn info(host: Host, host_version: Option<&str>) -> Info
 yamaa::lint: pub use yamaa::lint::lint
 yamaa::lint::LINT_COLUMNS: pub const LINT_COLUMNS: [&str; 6]
-yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 15]
+yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 16]
 yamaa::lint::Lint: impl Lint
 yamaa::lint::Lint: pub struct Lint [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::lint::Lint::files: pub fn files(&self) -> usize

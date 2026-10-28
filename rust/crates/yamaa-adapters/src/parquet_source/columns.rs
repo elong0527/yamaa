@@ -48,6 +48,7 @@ const LEVELS: usize = 1024;
 pub(super) enum Column {
     Int32(Vec<Option<i32>>),
     Int64(Vec<Option<i64>>),
+    Float(Vec<Option<f32>>),
     Double(Vec<Option<f64>>),
     Bytes(Binary),
     Discard,
@@ -60,6 +61,7 @@ impl Column {
         Ok(match leaf.physical {
             Physical::Int32 => Self::Int32(Vec::new()),
             Physical::Int64 => Self::Int64(Vec::new()),
+            Physical::Float => Self::Float(Vec::new()),
             Physical::Double => Self::Double(Vec::new()),
             Physical::ByteArray => Self::Bytes(Binary::default()),
             _ => return Err(Error::Malformed),
@@ -120,7 +122,7 @@ impl Values {
     /// No values of the physical type of `leaf`.
     fn empty(leaf: &Leaf) -> Self {
         match leaf.physical {
-            Physical::Int32 | Physical::Int64 | Physical::Double => Self::Fixed {
+            Physical::Int32 | Physical::Int64 | Physical::Float | Physical::Double => Self::Fixed {
                 width: width(leaf),
                 bytes: Vec::new(),
             },
@@ -258,6 +260,12 @@ fn append(column: &mut Column, present: &[bool], values: Values) -> Result<(), E
             out.extend(present.iter().map(|&present| {
                 take(present)
                     .map(|i| i64::from_le_bytes(bytes[8 * i..8 * i + 8].try_into().unwrap()))
+            }));
+        }
+        (Column::Float(out), Values::Fixed { width: 4, bytes }) => {
+            out.extend(present.iter().map(|&present| {
+                take(present)
+                    .map(|i| f32::from_le_bytes(bytes[4 * i..4 * i + 4].try_into().unwrap()))
             }));
         }
         (Column::Double(out), Values::Fixed { width: 8, bytes }) => {
@@ -848,7 +856,9 @@ fn plain(body: &[u8], count: usize, leaf: &Leaf) -> Result<Values, Error> {
 /// Fixed-width values: a kept column's bytes, or how many of another's.
 fn fixed(leaf: &Leaf, width: usize, bytes: Vec<u8>) -> Values {
     match leaf.physical {
-        Physical::Int32 | Physical::Int64 | Physical::Double => Values::Fixed { width, bytes },
+        Physical::Int32 | Physical::Int64 | Physical::Float | Physical::Double => {
+            Values::Fixed { width, bytes }
+        }
         _ => Values::Count(bytes.len() / width),
     }
 }

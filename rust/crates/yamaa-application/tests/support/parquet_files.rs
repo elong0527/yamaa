@@ -21,7 +21,8 @@ use arrow_array::{
     builder::{Int64Builder, MapBuilder, MapFieldNames, StringBuilder},
     ArrayRef, BinaryArray, BooleanArray, Date32Array, Date64Array, FixedSizeListArray,
     Float32Array, Float64Array, Int32Array, Int64Array, LargeStringArray, ListArray, RecordBatch,
-    StringArray, StructArray, TimestampMicrosecondArray, TimestampMillisecondArray, UInt64Array,
+    StringArray, StructArray, TimestampMicrosecondArray, TimestampMillisecondArray,
+    TimestampNanosecondArray, UInt64Array,
 };
 use arrow_buffer::OffsetBuffer;
 use arrow_schema::{DataType, Field, Schema};
@@ -102,6 +103,71 @@ pub fn file(name: &str) -> Vec<u8> {
             )]),
             none(),
         ),
+        // The units pyarrow and pandas write by default (#4087): each
+        // calendar bound in milliseconds, and the whole seconds nearest the
+        // ends of a nanosecond count.
+        "timestamp-units" => write(
+            &batch(vec![
+                (
+                    "MS",
+                    array(TimestampMillisecondArray::from(vec![
+                        Some(-62_135_596_800_000),
+                        None,
+                        Some(253_402_300_799_000),
+                    ])),
+                ),
+                (
+                    "NS",
+                    array(TimestampNanosecondArray::from(vec![
+                        Some(-9_223_372_036_000_000_000),
+                        None,
+                        Some(9_223_372_036_000_000_000),
+                    ])),
+                ),
+            ]),
+            none(),
+        ),
+        "fractional-milliseconds" => write(
+            &batch(vec![(
+                "AT",
+                array(TimestampMillisecondArray::from(vec![0, 1_500])),
+            )]),
+            none(),
+        ),
+        "fractional-nanoseconds" => write(
+            &batch(vec![("AT", array(TimestampNanosecondArray::from(vec![1])))]),
+            none(),
+        ),
+        // 10000-01-01T00:00:00, a whole second past the calendar.
+        "beyond-milliseconds" => write(
+            &batch(vec![(
+                "AT",
+                array(TimestampMillisecondArray::from(vec![253_402_300_800_000])),
+            )]),
+            none(),
+        ),
+        // Single-precision values: each non-finite one, signed zero, the
+        // value nearest 0.1, the least subnormal and the greatest finite
+        // value, in plain pages (`F`) and in dictionary-encoded ones (`D`).
+        "float32-values" => {
+            let values = Float32Array::from(vec![
+                Some(f32::NAN),
+                Some(f32::INFINITY),
+                Some(f32::NEG_INFINITY),
+                None,
+                Some(-0.0),
+                Some(0.1),
+                Some(f32::from_bits(1)),
+                Some(f32::MAX),
+            ]);
+            let properties = none()
+                .set_dictionary_enabled(false)
+                .set_column_dictionary_enabled(ColumnPath::from("D"), true);
+            write(
+                &batch(vec![("F", array(values.clone())), ("D", array(values))]),
+                properties,
+            )
+        }
         "bad-date" => write(
             &batch(vec![("D", array(Date32Array::from(vec![-719_163])))]),
             none(),
@@ -275,7 +341,8 @@ fn ordinary_batch() -> RecordBatch {
 }
 
 /// `unsupported-{name}`: one row of one field, `FIELD`, of a type that the
-/// closed mapping refuses, or of an unannotated INT32.
+/// closed mapping refuses, or of one it refused once and reads now: an
+/// unannotated INT32, a FLOAT and a timestamp in milliseconds.
 fn unsupported(name: &str) -> Option<Vec<u8>> {
     let name = name.strip_prefix("unsupported-")?;
     let properties = || base().set_compression(Compression::ZSTD(ZstdLevel::default()));

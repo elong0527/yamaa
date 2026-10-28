@@ -9,9 +9,30 @@
 # `run()`, and made again when the object was restored from `saveRDS`, an
 # `.RData` file or another R process.
 
+# A reply's value, or its refusal signalled. An interrupt the call kept takes
+# the path of an unhandled Ctrl+C (onintr in R's errors.c): it is signalled
+# again, so an interrupt handler takes it; otherwise the `interrupt` option's
+# function runs, R's newline is printed, the `error` option runs when no
+# `interrupt` option is set, and the call ends at the innermost browser or
+# abort restart. stop() would end it as an error, which an error handler takes
+# (#4070).
 .reply <- function(reply) {
   error <- reply$error
   if (!is.null(error)) {
+    if (inherits(error$condition, "interrupt")) {
+      signalCondition(error$condition)
+      hook <- getOption("interrupt")
+      if (is.function(hook)) hook()
+      cat("\n", file = stderr())
+      if (is.null(getOption("interrupt"))) {
+        handler <- getOption("error")
+        if (is.call(handler)) eval(handler, globalenv())
+        if (is.expression(handler)) for (step in handler) eval(step, globalenv())
+      }
+      ends <- Filter(function(restart) restart[[1L]] %in% c("browser", "tryRestart", "abort"),
+        computeRestarts())
+      invokeRestart(ends[[1L]])
+    }
     if (!is.null(error$condition)) stop(error$condition)
     stop(structure(
       list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
@@ -47,6 +68,48 @@
 
 # Locked bindings refuse assignment, so a binding only reads.
 .read_only <- function(object, name, get) makeActiveBinding(name, function() get(), object)
+
+# A result's memo (#4071). Reading a table converts all of it from Rust, so a
+# table binding keeps the data frame it read and answers a later read with
+# it. One memo serves a result and each member run made from it, which read
+# one native handle. A method of the result can change what the handle
+# answers (a refused save() adds its issues), so each method call starts the
+# memo again, however the call ends. The memo records the package load that
+# made it: an object restored from saveRDS, an `.RData` file or another R
+# process carries a copy, which is not this load's, so its reads reach the
+# native handle, which refuses as expired.
+.loaded <- new.env(parent = emptyenv())
+
+.memo <- function() {
+  memo <- new.env(parent = emptyenv())
+  memo$loaded <- .loaded
+  memo$generation <- 0L
+  memo
+}
+
+# A table binding of a result: the data frame `get` returns is kept until a
+# method of the result runs. Any other value is read again on each read: a
+# failed run's NULL, and a streamed run's output, a fresh stream each time.
+.kept <- function(object, name, memo, get) {
+  kept <- NULL
+  generation <- NA_integer_
+  makeActiveBinding(name, function() {
+    if (!identical(memo$loaded, .loaded)) return(get())
+    if (identical(generation, memo$generation)) return(kept)
+    value <- get()
+    if (is.data.frame(value)) {
+      kept <<- value
+      generation <<- memo$generation
+    }
+    value
+  }, object)
+}
+
+# `value`, the reply of a result's method, after which the memo starts again.
+.changing <- function(memo, value) {
+  on.exit(memo$generation <- memo$generation + 1L)
+  value
+}
 
 .object <- function(object, class) {
   lockEnvironment(object, bindings = TRUE)

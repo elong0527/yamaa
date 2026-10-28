@@ -1,0 +1,79 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAW: {path: input/dm.csv, types: {AGE: int}}
+
+# The original package publishes every subject in subject order.
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AGE, AGEU, SEX]
+  order_by: [USUBJID]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      data_type: text
+      length: 2
+      mandatory: true
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      data_type: text
+      length: 5
+      mandatory: true
+      key_sequence: 1
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+    submission:
+      data_type: text
+      length: 9
+      mandatory: true
+      key_sequence: 2
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: RAW.AGE
+    submission:
+      data_type: integer
+      length: 3
+      mandatory: false
+
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation: RAW.AGEU
+    submission:
+      data_type: text
+      length: 5
+      mandatory: false
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: RAW.SEX
+    submission:
+      data_type: text
+      length: 1
+      mandatory: true
+
+# The dataset's metadata as the original package received it, written once.
+submission:
+  mode: historical
+  artifact: dm.xpt
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false

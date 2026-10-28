@@ -69,6 +69,10 @@ conditions:
   codelist_type_mismatch:
     phases: [validation]
     message: "column {column} binds codelist {codelist}, whose data type {codelist_data_type} its type {column_type} does not admit"
+  # EXPR-15
+  codelist_without_decodes:
+    phases: [validation]
+    message: "the decode at {spec_path} reads codelist {codelist}, which declares no decode"
   conflicting_absence_policy:
     phases: [validation]
     message: "the lookup of {dataset} declares an answer for absence together with require_match: true"

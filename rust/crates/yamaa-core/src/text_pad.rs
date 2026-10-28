@@ -1,6 +1,7 @@
 //! Canonical scalar text with Unicode-character left padding (TEXT-2).
 use crate::{
     conversion::{convert, ConversionError},
+    limits::{LimitExceeded, Limits},
     value::{ColumnType, Value},
 };
 use std::borrow::Cow;
@@ -14,10 +15,6 @@ pub enum DeclarationError {
     Shape,
     #[error("text pad width")]
     Width,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct OutputError {
-    pub required: Option<usize>,
 }
 
 /// Missing does not inspect width or allocate text. Present text has no handler.
@@ -42,7 +39,8 @@ enum Text<'a> {
 }
 
 impl StringPad {
-    /// A positive width beyond usize stays valid; present output refuses overflow.
+    /// A positive width beyond usize stays valid; present output refuses it
+    /// as text longer than `Limits::TEXT_BYTES`.
     pub fn new(source: &str, path: &str, width: &str) -> Result<Self, DeclarationError> {
         if source.is_empty() || path.is_empty() {
             return Err(DeclarationError::Shape);
@@ -108,8 +106,9 @@ impl PreparedText<'_> {
             Text::Present { required, .. } => *required,
         }
     }
-    /// Refuse the complete output size before its allocation or any authored copy.
-    pub fn render(self) -> Result<Value, OutputError> {
+    /// Refuse a result longer than `Limits::TEXT_BYTES` before its allocation
+    /// or any authored copy (TEXT-2).
+    pub fn render(self) -> Result<Value, LimitExceeded> {
         match self.0 {
             Text::Missing => Ok(Value::Missing),
             Text::Present {
@@ -117,19 +116,12 @@ impl PreparedText<'_> {
                 padding,
                 required,
             } => {
-                let Some(required) = required else {
-                    return Err(OutputError { required });
-                };
-                let padding = padding.expect("representable required output");
+                Limits::text_bytes(required)?;
+                let padding = padding.expect("an admitted output has its padding");
                 if padding == 0 {
                     return Ok(Value::Str(text.into_owned()));
                 }
-                let mut output = String::new();
-                output
-                    .try_reserve_exact(required)
-                    .map_err(|_| OutputError {
-                        required: Some(required),
-                    })?;
+                let mut output = String::with_capacity(text.len() + padding);
                 output.extend(std::iter::repeat_n(' ', padding));
                 output.push_str(&text);
                 Ok(Value::Str(output))

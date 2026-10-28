@@ -102,6 +102,33 @@ fn admitted_text(content: &[u8], byte_order_mark: bool) -> Result<&str, Error> {
     Ok(text)
 }
 
+/// Where the records of a source's `text` end (CSV-11): after the first of
+/// the line terminators that end the source, so the blank lines after it
+/// are no record, whatever the header's width. The lexer stops here only at
+/// the start of a record: a quoted field open across it reads on to the end
+/// of the source, every byte of it.
+fn records_end(text: &str) -> usize {
+    let mut end = text.len();
+    let mut last = end;
+    while let Some(rest) = text[..end].strip_suffix('\n') {
+        last = end;
+        end = rest.strip_suffix('\r').unwrap_or(rest).len();
+    }
+    last
+}
+
+/// Read a source's text from its header on, as the whole read and the scan
+/// by partition both read it, and return where its records end: no record
+/// begins at or after [`records_end`]. The header is always read, a blank
+/// line before the last record is a record of one empty field, and a
+/// quoted field the source never closes reads on through the blank lines
+/// and fails as it would without them.
+fn lex_source<'t>(text: &'t str, sink: &mut impl Sink<'t>) -> Result<usize, Error> {
+    let end = records_end(text);
+    lex(text, 1, end, sink)?;
+    Ok(end)
+}
+
 /// Decode completely, then scan all syntax before header and row-width findings.
 /// File and table boundaries precede retaining the corresponding bytes or shape.
 ///
@@ -110,7 +137,7 @@ fn admitted_text(content: &[u8], byte_order_mark: bool) -> Result<&str, Error> {
 pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource, Error> {
     let text = admitted_text(content, byte_order_mark)?;
     let mut records = Records::new(usize::MAX, true);
-    lex(text, 1, &mut records)?;
+    lex_source(text, &mut records)?;
     let names = records.names()?;
     yamaa_core::limits::Limits::table(records.kept.len(), names.len()).map_err(limit_failure)?;
     Ok(CsvSource {
@@ -233,11 +260,9 @@ impl Offsets {
             kept.skip = range.start - first * self.rows;
             let span = self.span(&range);
             // The header is record 1, so data record `n` is record `n + 2`.
-            lex(
-                &text[span.start - base..span.end - base],
-                first * self.rows + 2,
-                &mut kept,
-            )?;
+            // The scan's spans end where records do.
+            let span = &text[span.start - base..span.end - base];
+            lex(span, first * self.rows + 2, span.len(), &mut kept)?;
         }
         Ok(CsvSource {
             names: self.names.clone(),
@@ -279,11 +304,11 @@ pub fn scan(
 ) -> Result<Partitions<'_>, Error> {
     let text = admitted_text(content, byte_order_mark)?;
     let mut records = Records::new(rows.get(), false);
-    lex(text, 1, &mut records)?;
+    let end = lex_source(text, &mut records)?;
     let names = records.names()?;
     let mut starts = records.starts;
     if records.count % rows != 0 || records.count == 0 {
-        starts.push(text.len());
+        starts.push(end);
     }
     Ok(Partitions {
         text,
@@ -336,9 +361,10 @@ trait Sink<'t> {
 }
 
 /// Read `text`, which begins at a record, record by record, numbering the
-/// first record `first`: a field's count is admitted before it is read, and
-/// a finding stops the pass at its record and field.
-fn lex<'t>(text: &'t str, first: usize, sink: &mut impl Sink<'t>) -> Result<(), Error> {
+/// first record `first`, until a record would begin at or after byte `end`:
+/// a field's count is admitted before it is read, and a finding stops the
+/// pass at its record and field.
+fn lex<'t>(text: &'t str, first: usize, end: usize, sink: &mut impl Sink<'t>) -> Result<(), Error> {
     let bytes = text.as_bytes();
     let mut fields = Vec::new();
     let mut index = 0;
@@ -407,7 +433,7 @@ fn lex<'t>(text: &'t str, first: usize, sink: &mut impl Sink<'t>) -> Result<(), 
         sink.record(number, &fields, index)?;
         fields.clear();
         number += 1;
-        if index >= bytes.len() {
+        if index >= end {
             break;
         }
     }
@@ -648,7 +674,7 @@ mod field_boundary_tests {
                 ",".repeat(yamaa_core::limits::Limits::COLUMNS)
             );
             assert_eq!(
-                lex(&source, 1, &mut Records::new(usize::MAX, true)).err(),
+                lex_source(&source, &mut Records::new(usize::MAX, true)).err(),
                 Some(Error::Limit {
                     resource: "columns",
                     limit: yamaa_core::limits::Limits::COLUMNS,

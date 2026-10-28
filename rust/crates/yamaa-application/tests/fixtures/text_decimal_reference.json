@@ -1,5 +1,5 @@
 {
-  "about": "The text str_decimal writes (TEXT-15), one run per declaration: a run's type, decimals and optional width and missing declare one TEXT column over a VALUE input field, and each row gives a value as the input writes it and the text authored for it; a null value is missing and a null text the missing value. A run's source, VALUE by default, is the variable TEXT reads; with donor, the CSV text of a DONOR input, it reads through D, a named intermediate over DONOR keyed by KEY = SRC.ID. A run with issues is refused with exactly those issue rows and saves nothing. The rows of the three ties_and_near_ties runs are the boundary rows of rounding_rational.tsv at those places (row is its id, bits its input binary64, value the shortest text that reads as those bits), and each text is that file's expected binary64 written with exactly that many decimals. Every other row was written by hand from TEXT-15, FORMULA-16 and CSV-9 and checked by an exact rational computation, never by a run; a count too large for one saved file is refused as a str_pad width beyond any length is. A run with display also writes VALUE under the file's display precision with the same decimals (CSV-9), which gives the same text.",
+  "about": "The text str_decimal writes (TEXT-15), one run per declaration: a run's type, decimals and optional width and missing declare one TEXT column over a VALUE input field, and each row gives a value as the input writes it and the text authored for it; a null value is missing and a null text the missing value. A run's source, VALUE by default, is the variable TEXT reads; with donor, the CSV text of a DONOR input, it reads through D, a named intermediate over DONOR keyed by KEY = SRC.ID. A run with issues is refused with exactly those issue rows and saves nothing. The rows of the three ties_and_near_ties runs are the boundary rows of rounding_rational.tsv at those places (row is its id, bits its input binary64, value the shortest text that reads as those bits), and each text is that file's expected binary64 written with exactly that many decimals. Every other row was written by hand from TEXT-15, FORMULA-16 and CSV-9 and checked by an exact rational computation, never by a run; a count that would write text longer than one text value may hold, 1 MiB (TEXT-2), is refused before the text is built as a str_pad width beyond it is. A run with display also writes VALUE under the file's display precision with the same decimals (CSV-9), which gives the same text.",
   "runs": [
     {
       "run": "the_issue_table",
@@ -231,24 +231,24 @@
       "run": "decimals_beyond_the_platform_refuse_a_present_value",
       "type": "float",
       "decimals": 999999999999999999999999999999,
-      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["columns.TEXT.derivation.str_decimal"], "context": {"step": "execute", "code": "execution_limit", "resource": "text_bytes", "limit": 1048576}}],
       "rows": [
         {"row": "1.5", "value": "1.5"}
       ]
     },
     {
-      "run": "decimals_beyond_a_saved_file_need_no_text_for_a_missing_value",
+      "run": "decimals_beyond_the_text_limit_need_no_text_for_a_missing_value",
       "type": "float",
-      "decimals": 20000000000,
+      "decimals": 1048575,
       "rows": [
         {"row": "missing", "value": null, "text": null}
       ]
     },
     {
-      "run": "decimals_beyond_a_saved_file_refuse_a_present_value",
+      "run": "decimals_beyond_the_text_limit_refuse_a_present_value",
       "type": "float",
-      "decimals": 20000000000,
-      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "decimals": 1048575,
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["columns.TEXT.derivation.str_decimal"], "context": {"step": "execute", "code": "execution_limit", "resource": "text_bytes", "limit": 1048576}}],
       "rows": [
         {"row": "1.5", "value": "1.5"}
       ]
@@ -267,26 +267,26 @@
       "type": "float",
       "decimals": 2,
       "width": 999999999999999999999999999999,
-      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["columns.TEXT.derivation.str_decimal"], "context": {"step": "execute", "code": "execution_limit", "resource": "text_bytes", "limit": 1048576}}],
       "rows": [
         {"row": "1.5", "value": "1.5"}
       ]
     },
     {
-      "run": "width_beyond_a_saved_file_need_no_text_for_a_missing_value",
+      "run": "width_beyond_the_text_limit_need_no_text_for_a_missing_value",
       "type": "float",
       "decimals": 2,
-      "width": 20000000000,
+      "width": 1048577,
       "rows": [
         {"row": "missing", "value": null, "text": null}
       ]
     },
     {
-      "run": "width_beyond_a_saved_file_refuse_a_present_value",
+      "run": "width_beyond_the_text_limit_refuse_a_present_value",
       "type": "float",
       "decimals": 2,
-      "width": 20000000000,
-      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "width": 1048577,
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["columns.TEXT.derivation.str_decimal"], "context": {"step": "execute", "code": "execution_limit", "resource": "text_bytes", "limit": 1048576, "actual": 1048577}}],
       "rows": [
         {"row": "1.5", "value": "1.5"}
       ]

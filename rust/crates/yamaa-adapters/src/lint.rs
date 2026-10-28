@@ -8,7 +8,8 @@
 //! events with the positions a reader sees; a 1.x file is also read through
 //! its file type's schema, as validation reads it. A 1.x specification that
 //! declares `parent` or `include` is compared with the layers it inherits,
-//! read through the same resolver, for `partial_restatement` alone. A
+//! read through the same resolver, for `partial_restatement` and
+//! `restated_inherited_value` alone. A
 //! specification that declares either, or that a specification of the call
 //! includes, itself or through the parent chain it inherits, is a layer: a
 //! value it writes may replace one it inherits.
@@ -39,6 +40,10 @@ mod files;
 mod fix;
 #[cfg(feature = "yaml")]
 mod inheritance;
+#[cfg(feature = "yaml")]
+mod layers;
+#[cfg(feature = "yaml")]
+mod restated;
 
 #[cfg(all(test, feature = "yaml"))]
 mod tests;
@@ -48,7 +53,7 @@ use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
-pub const FINDINGS: [&str; 15] = [
+pub const FINDINGS: [&str; 16] = [
     "field_order",
     "root_spacing",
     "entry_spacing",
@@ -64,6 +69,7 @@ pub const FINDINGS: [&str; 15] = [
     "unused_input_key",
     "equality_filter",
     "partial_restatement",
+    "restated_inherited_value",
 ];
 
 /// One departure, at the one-based line and column where it starts.
@@ -257,7 +263,8 @@ pub fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
 
 /// The findings in `text`, a specification file's complete contents. Text
 /// has no location to read a `parent` or a fragment from, so it gives no
-/// `partial_restatement`, and it is never a fragment another file includes.
+/// `partial_restatement` and no `restated_inherited_value`, and it is never
+/// a fragment another file includes.
 pub fn check_text(text: &[u8]) -> Result<Vec<Finding>, DecodeFailure> {
     #[cfg(feature = "yaml")]
     {

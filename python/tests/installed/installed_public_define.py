@@ -29,6 +29,12 @@ NS = {
     "o": "http://www.cdisc.org/ns/odm/v1.3",
     "d": "http://www.cdisc.org/ns/def/v2.1",
 }
+# A document validates against the schema of the Define-XML version its `def`
+# namespace names.
+DEFINE_SCHEMAS = {
+    "http://www.cdisc.org/ns/def/v2.0": "define/2.0/define2-0-0.xsd",
+    "http://www.cdisc.org/ns/def/v2.1": "define/2.1/define2-1-0.xsd",
+}
 
 
 class PublicDefine(unittest.TestCase):
@@ -115,10 +121,10 @@ class PublicDefine(unittest.TestCase):
 
     def validate_xml(self, content):
         parser = etree.XMLParser(no_network=True, resolve_entities=False)
-        schema = etree.XMLSchema(
-            etree.parse(str(SCHEMAS / "define/2.1/define2-1-0.xsd"), parser)
-        )
         root = etree.fromstring(content, parser)
+        schema = etree.XMLSchema(
+            etree.parse(str(SCHEMAS / DEFINE_SCHEMAS[root.nsmap["def"]]), parser)
+        )
         schema.assertValid(root)
         return root
 
@@ -977,9 +983,14 @@ class PublicDefine(unittest.TestCase):
                 directory = Path(
                     tempfile.mkdtemp(prefix=case["name"] + "-", dir=self.base)
                 )
-                for path in source.iterdir():
-                    if path.is_file():
-                        shutil.copy2(path, directory / path.name)
+                # The staged case, codelist files in their directories
+                # included, without its expected truth.
+                shutil.copytree(
+                    source,
+                    directory,
+                    ignore=shutil.ignore_patterns("expected"),
+                    dirs_exist_ok=True,
+                )
                 for name in case["published"]:
                     shutil.copy2(source / "expected" / name, directory / name)
                 result = yamaa.project(directory / case["project"]).submission(

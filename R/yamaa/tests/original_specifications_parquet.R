@@ -106,8 +106,8 @@ local({
     c("mixed-empty","source_field_name_empty","PARQUET-6",'"dataset":"SRC","field":1,"path":"input.parquet"'),
     c("mixed-duplicate","source_field_name_duplicate","PARQUET-6",'"dataset":"SRC","field":"I","path":"input.parquet"')
   )
-  unsupported_types <- c(uint64="uint64",float32="float",binary="binary",
-    milliseconds="timestamp[ms]",timezone="timestamp[us, tz=UTC]",list="list<element: int64>",
+  unsupported_types <- c(uint64="uint64",binary="binary",
+    timezone="timestamp[us, tz=UTC]",list="list<element: int64>",
     "fixed-list"="fixed_size_list<element: int64>[2]",struct="struct<item: int64>",decimal="decimal128(10, 2)",
     # Types that the pinned Arrow and Parquet releases do not know (#3155).
     decimal32="decimal32(9, 2)",decimal64="decimal64(18, 2)","list-view"="list_view<element: int64>",

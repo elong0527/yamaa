@@ -1,8 +1,9 @@
 //! `partial_restatement` through the public [`yamaa::lint`] facade: a layer
 //! that restates a mapping it inherits, an input's `types`, an
-//! intermediate's `key` or `derivations`, a row template's `derivations` or a
-//! named window, and leaves out entries that come back from its parent
-//! (LAYER-6, LAYER-8, LAYER-9). Each expected row is written by hand: its
+//! intermediate's `key` or `derivations`, a row template's `derivations`, a
+//! named window or a block, `output` or `submission`, and leaves out entries
+//! that come back from its parent (LAYER-5, LAYER-6, LAYER-8, LAYER-9). Each
+//! expected row is written by hand: its
 //! position is the restated mapping's key in the child as written, its
 //! entries are those the parent supplies and the child neither writes nor
 //! clears, and its message is the style guide's.
@@ -12,10 +13,11 @@ use crate::support::scratch::Scratch;
 
 use yamaa::lint;
 
-/// The parent every case inherits: an input with field types, a named
-/// window, a named intermediate whose `key` is a mapping, a row template, and
-/// a `copy` entry, which composes only once its producer is read (SPEC-9) and
-/// so never keeps the other collections from composing here.
+/// The parent every case inherits: an input with field types, an output
+/// with a report, a named window, a named intermediate whose `key` is a
+/// mapping, a row template, a `copy` entry, which composes only once its
+/// producer is read (SPEC-9) and so never keeps the other collections from
+/// composing here, and submission metadata with a comment.
 const PARENT: &str = r#"yamaa: "1.0"
 type: spec
 domain: ADTOY
@@ -30,6 +32,7 @@ input:
 output:
   path: out.csv
   columns: [USUBJID, VISIT, AVAL, NOTE]
+  report: report.csv
 
 windows:
   BYSUBJ:
@@ -60,6 +63,13 @@ rows:
       VISIT: SC.VISIT
       AVAL: SC.SCORE
       NOTE: SC.COMMENT
+
+submission:
+  label: Scores by Visit
+  class: BASIC DATA STRUCTURE
+  structure: One record per subject per visit
+  repeating: true
+  comment: Scores the site entered
 "#;
 
 /// A child of `parent.yaml` whose sections are `body`.
@@ -204,6 +214,43 @@ fn a_restated_mapping_that_leaves_inherited_entries_out_is_reported() {
                  `windows.BYSUBJ.filter` in `clear` to drop them, or write only what this \
                  layer changes",
             )],
+        ),
+        (
+            "an output restated with its path, whose fields are each cleared by their own path",
+            child("\noutput:\n  path: out.csv\n  columns: [USUBJID, AVAL]\n"),
+            vec![row(
+                5,
+                1,
+                "output",
+                "`report` comes back from the parent; list `output.report` in `clear` to \
+                 drop it, or write only what this layer changes",
+            )],
+        ),
+        (
+            "submission metadata restated without its comment",
+            child("\nsubmission:\n  label: Scores by Visit\n  repeating: true\n"),
+            vec![row(
+                5,
+                1,
+                "submission",
+                "`comment` comes back from the parent; list `submission.comment` in `clear` \
+                 to drop it, or write only what this layer changes",
+            )],
+        ),
+        (
+            "a required field that comes back is written, not cleared, so it is not named",
+            child("\noutput:\n  columns: [USUBJID, VISIT, AVAL, NOTE]\n  report: own.csv\n"),
+            vec![],
+        ),
+        (
+            "changing one output field is a patch",
+            child("\noutput:\n  columns: [USUBJID, AVAL]\n"),
+            vec![],
+        ),
+        (
+            "clearing the output field left out removes it",
+            child("clear:\n  - output.report\n\noutput:\n  path: out.csv\n  columns: [USUBJID, AVAL]\n"),
+            vec![],
         ),
         (
             "changing one derivation is a patch",
