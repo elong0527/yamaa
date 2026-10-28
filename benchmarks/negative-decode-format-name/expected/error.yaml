@@ -1,0 +1,8 @@
+phase: validation
+condition: pattern_mismatch
+spec_paths:
+  - columns.PARAM.derivation.decode.codelist
+rule: SCHEMA-12
+context:
+  value: $PARAMCD
+  pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
