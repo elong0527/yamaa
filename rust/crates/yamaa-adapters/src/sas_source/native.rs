@@ -72,6 +72,7 @@ impl TableAccess for Rows {
 struct Context<'a> {
     source: &'a SourceDeclaration,
     encoding: Option<&'a str>,
+    has_stored_encoding: bool,
     columns: Vec<Column>,
     rows: Vec<Vec<Value>>,
     declared_rows: Option<usize>,
@@ -145,6 +146,9 @@ unsafe extern "C" fn metadata(
                 return Err(Error::Invalid("version"));
             }
             if context.source.profile == SourceProfile::Sas7bdat {
+                if !context.has_stored_encoding {
+                    return Err(Error::Invalid("encoding"));
+                }
                 let stored = if encoding.is_null() {
                     None
                 } else {
@@ -450,6 +454,13 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
     let mut context = Context {
         source,
         encoding: source.encoding.as_deref(),
+        // SAS header byte 70 is the stored encoding code. ReadStat maps
+        // 0 (unset) and 204 (any) to Windows-1252; neither names an encoding.
+        // The metadata callback checks this only after C admits the header.
+        has_stored_encoding: bytes
+            .get(70)
+            .copied()
+            .is_some_and(|code| !matches!(code, 0 | 204)),
         columns: Vec::new(),
         rows: Vec::new(),
         declared_rows: None,
@@ -572,6 +583,7 @@ mod tests {
             let mut context = Context {
                 source: &source,
                 encoding: source.encoding.as_deref(),
+                has_stored_encoding: true,
                 columns: Vec::new(),
                 rows: Vec::new(),
                 declared_rows: None,

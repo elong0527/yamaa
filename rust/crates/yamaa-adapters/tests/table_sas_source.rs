@@ -111,12 +111,22 @@ mod table {
                 }
                 other => panic!("the contradiction is refused: {other:?}"),
             }
-            let mut unsupported = fixture;
-            unsupported[70] = 136; // CP932 is outside the closed encoding list.
-            assert!(matches!(
-                read_built(&unsupported),
-                Err(Error::Invalid("encoding"))
-            ));
+            for code in [0, 204, 136] {
+                // Unset, any, and CP932 do not supply an admitted encoding.
+                let mut unsupported = fixture.clone();
+                unsupported[70] = code;
+                for encoding in [None, Some("utf-8".into())] {
+                    let mut source = declaration("built.sas7bdat");
+                    source.encoding = encoding;
+                    assert!(
+                        matches!(
+                            sas_source::parse(&unsupported, &source),
+                            Err(Error::Invalid("encoding"))
+                        ),
+                        "code {code}"
+                    );
+                }
+            }
         }
         #[test]
         fn raw_rows_that_begin_like_a_subheader_signature_stay_rows_in_64_bit_files() {

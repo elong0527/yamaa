@@ -3562,6 +3562,120 @@
         "declared_encoding": "windows-1252",
         "stored_encoding": "utf-8"
       }
+    },
+    {
+      "file": "utf8-concentration.sas7bdat",
+      "specification": {
+        "yamaa": "1.0",
+        "type": "spec",
+        "domain": "TEST",
+        "keys": [
+          "ID"
+        ],
+        "input": {
+          "SRC": {
+            "path": "utf8-concentration.sas7bdat",
+            "types": {
+              "ID": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "ID",
+            "type": "int",
+            "label": "Record Identifier",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "UNIT",
+            "type": "str",
+            "label": "Concentration Unit",
+            "derivation": "SRC.UNIT"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "ID",
+            "UNIT"
+          ]
+        }
+      },
+      "id": "sas7bdat-unset-encoding",
+      "mutation": {
+        "set_byte": [
+          70,
+          0
+        ]
+      },
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "spec_paths": [
+        "input.SRC.path"
+      ],
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "utf8-concentration.sas7bdat",
+        "cause": "encoding"
+      }
+    },
+    {
+      "file": "utf8-concentration.sas7bdat",
+      "specification": {
+        "yamaa": "1.0",
+        "type": "spec",
+        "domain": "TEST",
+        "keys": [
+          "ID"
+        ],
+        "input": {
+          "SRC": {
+            "path": "utf8-concentration.sas7bdat",
+            "types": {
+              "ID": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "ID",
+            "type": "int",
+            "label": "Record Identifier",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "UNIT",
+            "type": "str",
+            "label": "Concentration Unit",
+            "derivation": "SRC.UNIT"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "ID",
+            "UNIT"
+          ]
+        }
+      },
+      "id": "sas7bdat-any-encoding",
+      "mutation": {
+        "set_byte": [
+          70,
+          204
+        ]
+      },
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "spec_paths": [
+        "input.SRC.path"
+      ],
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "utf8-concentration.sas7bdat",
+        "cause": "encoding"
+      }
     }
   ],
   "static_refusals": [
