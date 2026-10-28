@@ -1,0 +1,7 @@
+phase: validation
+condition: value_not_permitted
+rule: DEFINE-25
+spec_paths: [datasets.ZE.submission.non_standard]
+context:
+  detail: 'schema_violation: Define-XML 2.0 representation'
+  value: 2.0 has no IsNonStandard declaration

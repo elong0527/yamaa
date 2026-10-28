@@ -1,0 +1,20 @@
+yamaa: "1.0"
+type: project
+study:
+  id: NS01
+  name: Custom examination study
+  description: Sponsor-defined examination records
+  protocol_name: NS01
+
+sdtm:
+  specs: [spec.yaml]
+  standards: [{name: SDTMIG, version: '3.4', status: Final}]
+  define: define.xml
+  define_version: '2.0.0'
+  documents:
+  - id: acrf
+    kind: annotated_crf
+    link: acrf.pdf
+    title: Annotated Case Report Form
+  transport: xpt
+  source_system_version: '1.0'
