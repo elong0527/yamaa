@@ -12,8 +12,8 @@ The estimates have already been calculated from plasma concentrations.
 - `PPSEQ` numbers parameters within each subject by reference dose time,
   analyte and standard parameter code.
 - `PPTESTCD` and `PPTEST` identify the software's `Cmax`, `Tmax` and
-  `AUClast` as `CMAX` (Max Conc), `TMAX` (Time of CMAX) and `AUCLST`
-  (AUC to Last Nonzero Conc).
+  `AUClast` as `CMAX` (Max Conc), `TMAX` (Time of CMAX Observation) and
+  `AUCLST` (AUC to Last Nonzero Conc).
 - `PPCAT` carries the analyte name.
 - `PPORRES` and `PPSTRESC` retain the estimate as text, including its
   reported decimal places; `PPSTRESN` holds the same value as a number.

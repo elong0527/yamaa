@@ -46,7 +46,7 @@ columns:
         source: PPTESTCD
         dict:
           CMAX: Max Conc
-          TMAX: Time of CMAX
+          TMAX: Time of CMAX Observation
           AUCLST: AUC to Last Nonzero Conc
 
   - name: PPCAT
