@@ -1,0 +1,30 @@
+lifecycle: draft
+standard: ADaM
+domain: BANDDOSE
+entries:
+  python:
+  - specification: spec_filter_qualified.yaml
+    environment: null
+  - specification: spec_filter_bare.yaml
+    environment: null
+  - specification: spec_between_qualified.yaml
+    environment: null
+  - specification: spec_between_bare.yaml
+    environment: null
+  - specification: spec_filter_expression.yaml
+    environment: null
+  - specification: spec_self_join.yaml
+    environment: null
+  r:
+  - specification: spec_filter_qualified.yaml
+    environment: null
+  - specification: spec_filter_bare.yaml
+    environment: null
+  - specification: spec_between_qualified.yaml
+    environment: null
+  - specification: spec_between_bare.yaml
+    environment: null
+  - specification: spec_filter_expression.yaml
+    environment: null
+  - specification: spec_self_join.yaml
+    environment: null

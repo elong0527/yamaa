@@ -14,6 +14,7 @@ pub(super) fn bind(
     self_rows: bool,
     inputs: binder::Inputs<'_>,
     static_filter_types: bool,
+    contextual: bool,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationPredicate>, BindError> {
     let intermediates::Donor {
@@ -60,20 +61,22 @@ pub(super) fn bind(
                             schemas[index].position(field).map(|column| (index, column))
                         })
                 })
-                .map(|(index, column)| {
+                .map(|(index, column)| CurrentRead::Record {
+                    source: if index == driver {
+                        0
+                    } else if index < driver {
+                        index + 1
+                    } else {
+                        index
+                    },
+                    column,
+                })
+                .or_else(|| contextual.then_some(CurrentRead::Contextual))
+                .map(|read| {
                     let slot = current.len();
                     current.push(CurrentField {
                         identifier: name.into(),
-                        read: CurrentRead::Record {
-                            source: if index == driver {
-                                0
-                            } else if index < driver {
-                                index + 1
-                            } else {
-                                index
-                            },
-                            column,
-                        },
+                        read,
                     });
                     Read::Column(slot)
                 })
@@ -294,6 +297,15 @@ pub(super) fn admit_reads<'a>(
             }
             if let Some(filter) = &item.filter {
                 for field in filter.current() {
+                    if field.read == CurrentRead::Contextual {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            filter.plan().spec_path(),
+                            &field.identifier,
+                            Some(&item.identifier),
+                            ReferenceCause::Selection,
+                            None,
+                        )));
+                    }
                     if let CurrentRead::Record {
                         source: driver,
                         column,

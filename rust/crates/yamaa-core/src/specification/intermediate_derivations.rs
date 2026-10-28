@@ -868,7 +868,12 @@ fn rebase(
                 .ok_or(BindError::Internal)
         }
     };
-    let donor_field = |name: &str| output.columns().iter().position(|field| field.name == name);
+    let donor_field = |name: &str| {
+        let name = name
+            .strip_prefix(&format!("{donor_name}."))
+            .or_else(|| (!name.contains('.')).then_some(name))?;
+        output.columns().iter().position(|field| field.name == name)
+    };
     // Whether `identifier`, written bare or qualified by the donor, names a
     // field of the donor's input that its schema leaves open.
     let open = |identifier: &str| {
@@ -917,7 +922,7 @@ fn rebase(
             CurrentRead::Intermediate { index, column } => {
                 CurrentRead::Intermediate { index, column }
             }
-            // A bare name reads the donor record's field of that name.
+            // A contextual name reads the donor record, bare or qualified.
             CurrentRead::Contextual => {
                 CurrentRead::Output(donor_field(&field.identifier).ok_or(BindError::Internal)?)
             }
@@ -937,6 +942,33 @@ fn rebase(
             let placeholder = unused_slot_placeholder(item, donor_name, source);
             *item = placeholder;
             continue;
+        }
+        // A deferred filter reference is judged against the reading donor,
+        // and reports at the filter that declared it. Keep the selector's
+        // schema so this cause does not become an unknown selected field.
+        if let Some(filter) = &item.filter {
+            let mut failed = false;
+            for field in filter.current() {
+                if field.read == CurrentRead::Contextual && donor_field(&field.identifier).is_none()
+                {
+                    let finding = BindFinding::Lookup(LookupFinding::reference(
+                        filter.plan().spec_path(),
+                        &field.identifier,
+                        Some(&item.identifier),
+                        ReferenceCause::Selection,
+                        None,
+                    ));
+                    findings.push(if open(&field.identifier) {
+                        BindFinding::Withheld(Box::new(finding))
+                    } else {
+                        finding
+                    });
+                    failed = true;
+                }
+            }
+            if failed {
+                item.filter = None;
+            }
         }
         // Retain field names before moving this selector's source into the
         // donor catalog, whose secondary coordinates differ from the outer plan.
