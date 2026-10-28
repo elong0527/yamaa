@@ -174,10 +174,10 @@ Evidence: `negative-implausible-age`, `schema-adsl-age-quality`, `schema-verific
 ### CHECK-8. `max_length` bounds a string column's values by their count of Unicode scalar values
 
 `max_length` requires every non-missing string to contain at most `max`
-[Values](values.md) scalar values, and `max` is at least one. It is
-declared only on a `str` column: the text a number or a temporal value renders
-as is a property of [Values](values.md)'s rendering rather
-than of the value.
+Unicode scalar values ([VALUE-11](values.md#value-11)), and `max` is at least
+one. It is declared only on a `str` column: the text a number or a temporal
+value renders as is a property of [Values](values.md)'s rendering rather than
+of the value.
 
 Fails: `length_failed`, `invalid_declaration`.
 Evidence: `negative-usubjid-length`, `rust/crates/yamaa-application/tests/fixtures/static_verification_checks.json`.

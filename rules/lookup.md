@@ -260,7 +260,7 @@ stored order, except that `STR_JOIN` joins them in the aggregate's `order_by`
 order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_an_int_and_a_float_keeps_the_record_whose_exact_value_sorts_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_text_and_an_int_is_refused_before_any_record_is_read`.
 
 A lookup never multiplies rows: of several matching partners, `order_by` with
 `keep` reads one, which is a choice, not a join, and the other partners take no
@@ -277,7 +277,12 @@ construction it fails at the join phase, before any column is derived. A
 handling ([COLUMN-14](columns.md#column-14)).
 
 The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
-of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A lookup
+of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A field the
+lookup derives orders as its result type does ([LOOKUP-15](#lookup-15)): one
+that holds an `int` or a `float` orders by exact value, and one whose types do
+not all compare, such as `str` or `int`, fails validation as
+`incompatible_input_type` at the term before any record is read
+([VALUE-22](values.md#value-22)). A lookup
 whose key is verified unique at `error` severity needs neither `order_by` nor
 `keep`, and one whose uniqueness check only warns declares both, or
 `nearest` ([LOOKUP-17](#lookup-17)). Every reducer but `STR_JOIN` reads an
@@ -976,7 +981,7 @@ for matching, `filter`, `order_by` selection and `columns` projection, and
 behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_a_date_and_a_datetime_is_refused_before_any_record_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_text_and_an_int_is_refused_before_any_record_is_read`.
 
 Each entry is either an untyped expression or a typed binding
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
@@ -1039,6 +1044,16 @@ records as augmented by every derivation declared before it, so its
 derived name, bare or dataset-qualified. A window's fields cannot read the
 current input record directly: derive that value first and let the window read
 the derived name. Base-record order is the final tie-break.
+
+An untyped entry's field may take a type decided per value, which a key
+compares when it matches ([LOOKUP-9](#lookup-9)). An order term over it, in
+the intermediate's `order_by` or a window's order, a `baseline_flag`'s `date`
+included, is decided before any record is read: a field whose types do not all
+compare, such as `case` choosing `'NONE'` or a number, or `date` or `datetime`,
+fails validation as `incompatible_input_type` at the term
+([VALUE-22](values.md#value-22)), while one choosing `0` or a `float` orders by
+exact value. Give such an entry a `type` to convert its results to one type
+first.
 
 A derived name may appear as a target-side `key`, as a bare `between` bound, as
 a dataset-qualified field in `filter` or `order_by`, in `columns`, or in

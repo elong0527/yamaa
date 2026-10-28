@@ -1,0 +1,75 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
+base: LB
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, SEX, PARAMCD, AVAL, ANRLO, ANRHI, AVALVAR]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: ADSL.SEX
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+
+  # The non-parametric 95% reference limits of each parameter and sex: the
+  # 2.5th and 97.5th percentiles of the study's results, R's default (type
+  # 7). A test not done takes no part.
+  - name: ANRLO
+    type: float
+    label: Analysis Normal Range Lower Limit
+    derivation:
+      aggregate:
+        group_by: [STUDYID, PARAMCD, SEX]
+        quantile: 0.025
+        expr: "QUANTILE(AVAL)"
+
+  - name: ANRHI
+    type: float
+    label: Analysis Normal Range Upper Limit
+    derivation:
+      aggregate:
+        group_by: [STUDYID, PARAMCD, SEX]
+        quantile: 0.975
+        expr: "QUANTILE(AVAL)"
+
+  # The sample variance of the same results, with divisor n - 1.
+  - name: AVALVAR
+    type: float
+    label: Analysis Value Variance
+    derivation:
+      aggregate:
+        group_by: [STUDYID, PARAMCD, SEX]
+        expr: "VARIANCE(AVAL)"
+
+verifications:
+  - assert:
+      id: lower-limit-not-above-upper-limit
+      when: "ANRLO IS NOT NULL"
+      require: "ANRLO <= ANRHI"

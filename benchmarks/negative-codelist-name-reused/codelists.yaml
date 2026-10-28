@@ -1,0 +1,13 @@
+yamaa: "1.0"
+type: codelists
+
+# The defect: the package means to replace the study's reasons, but writes
+# its list under another id, so the study's list is kept beside it and both
+# carry one name.
+codelists:
+  - id: DCSREASP
+    name: Reason for Discontinuation
+    items:
+      - {value: ADVERSE EVENT, decode: ADVERSE EVENT}
+      - {value: COMPLETED, decode: COMPLETED}
+      - {value: WITHDRAWAL BY SUBJECT, decode: WITHDRAWAL BY SUBJECT}

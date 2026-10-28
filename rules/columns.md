@@ -266,6 +266,8 @@ the handler is omitted.
 | join | `intermediates[].absent` | The intermediate selects no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | mapping | `mapping.missing` | Missing input | Missing |
 | mapping | `mapping.unmapped` | Non-missing value with no mapping | Fails |
+| mapping | `decode.missing` | Missing coded input ([EXPR-15](expressions.md#expr-15)) | Missing |
+| mapping | `decode.unmapped` | Non-missing value no item of the codelist lists | Fails |
 | mapping | `cut.missing` | Missing numeric input | Missing |
 | mapping | `missing` of `str_extract`, `str_replace`, `str_case`, `str_substr` and `str_length` | Missing string input | Missing |
 | mapping | `str_decimal.missing` | Missing numeric input | Missing |
@@ -415,8 +417,8 @@ the filter.
 Evidence: `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-application/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-application/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
 
 A default substitution is counted where the handler it stands for would be: at
-`<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
-`str_case`, `str_substr`, `str_length`, `str_decimal`, `flag`,
+`<operation>.missing` for `mapping`, `decode`, `cut`, `str_extract`,
+`str_replace`, `str_case`, `str_substr`, `str_length`, `str_decimal`, `flag`,
 `first_available`, `impute` and `precision`; and at `<path>.absent` for a read
 through an implicit join or of a named intermediate, at the source binding or
 operand that makes the read ([LOOKUP-24](lookup.md#lookup-24),
@@ -515,7 +517,7 @@ Evidence: `negative-adlb-duplicate-wbc`, `negative-multiple-baselines`, `tools/t
 | `ingest` | reading an input snapshot into typed records |
 | `row_construction` | building output rows ([Row construction](rows.md)) |
 | `join` | a lookup's match, narrow and select steps ([LOOKUP-25](lookup.md#lookup-25)) |
-| `mapping` | the value-mapping verbs `mapping`, `cut`, `str_extract` and `str_template` |
+| `mapping` | the value-mapping verbs `mapping`, `decode`, `cut`, `str_extract` and `str_template` |
 | `impute` | completing collected dates and times ([Dates and times](temporal.md)) |
 | `derivation` | evaluating any other expression of a value |
 | `convert` | converting a completed result to its column type, and handling a failed conversion ([COLUMN-8](#column-8), stages 2 and 3) |

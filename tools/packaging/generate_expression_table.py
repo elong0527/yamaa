@@ -35,7 +35,8 @@ lowering and the executor dispatch on:
 An argument's role follows its kind (yaml/README.md): a ``name`` is an
 operand, an ``expression`` text is a template whose placeholders are the
 operands, a ``substitute_value`` is a handler, a ``window_selection`` is the
-window, and any other ``value`` is a parameter. A name is a variant's,
+window, and an ``identifier``, which names a declared item such as a
+codelist, and any other ``value`` are parameters. A name is a variant's,
 field's or slot's spelling in upper camel case by its ``_``-separated words,
 ``LOG10`` being ``Log10`` and ``mdy_slash`` ``MdySlash``; a spelling that
 joins its words without ``_``, such as ``NULLIF`` or ``datetime``, names them
@@ -322,7 +323,7 @@ class Declarations:
                 form="Placeholders",
                 parameter=parameter,
             )
-        if kind != "value":
+        if kind not in ("value", "identifier"):
             raise DeclarationError(f"{label}: a {kind} argument has no role")
         parameter = self.parameter(verb, field.name, descriptor, label)
         return Argument(field.name, "parameter", required, default, parameter=parameter)

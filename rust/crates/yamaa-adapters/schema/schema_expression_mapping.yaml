@@ -20,6 +20,21 @@ expressions:
         - unmapped:
             type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
+    decode: # See EXPR-15.
+        - source:
+            type: filtered_source
+            required: true
+            description: Variable holding the coded value, or a filtered source carrying it (EXPR-15).
+        - codelist:
+            type: identifier
+            required: true
+            description: Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-15).
+        - unmapped:
+            type: substitute_value
+            description: Value returned when the source is present but no item of the codelist lists it; without it, such a source fails (EXPR-15).
     cut: # See EXPR-13.
         - source:
             type: filtered_source

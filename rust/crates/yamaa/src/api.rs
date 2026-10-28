@@ -1025,11 +1025,13 @@ impl ProjectRun {
     /// and a run that built no specification with `nothing_to_save`.
     ///
     /// The save polls `token` once, after every file is staged and before
-    /// the first commit (D74), so it writes either nothing or everything it
-    /// planned. A cancelled save removes what it staged and fails with the
-    /// cancellation's error text, `cannot save <subject>: operation
-    /// cancelled`, with no issue and no path; `token` then reports itself
-    /// cancelled, which tells a cancellation from a refusal.
+    /// the first commit (D74), so a cancellation never stops it partway.
+    /// Replacement is atomic per file, not across the save: when a file
+    /// cannot replace its target, the files already replaced stay
+    /// (OUTPUT-10, PROJECT-12). A cancelled save removes what it staged and
+    /// fails with the cancellation's error text, `cannot save <subject>:
+    /// operation cancelled`, with no issue and no path; `token` then reports
+    /// itself cancelled, which tells a cancellation from a refusal.
     pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure> {
         self.outcome
             .save(crate::outcome::Operation::ProjectRun, &self.subject, token)
