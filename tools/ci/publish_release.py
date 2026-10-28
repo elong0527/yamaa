@@ -44,7 +44,7 @@ def publish(root, destination, tag, repository):
     ]
     if not all(path.is_file() for path in assets):
         raise ValueError("a selected release asset is missing")
-    release_assets.match(assets, release_assets.declared(), identity)
+    pairs = release_assets.match(assets, release_assets.declared(), identity)
     subprocess.run(
         [
             "gh",
@@ -59,7 +59,7 @@ def publish(root, destination, tag, repository):
             "--notes-file",
             str(destination / "release-notes.md"),
             *(["--prerelease"] if identity.candidate is not None else []),
-            *map(str, assets),
+            *(f"{path}#{asset.title}" for asset, path in pairs),
         ],
         cwd=root,
         check=True,

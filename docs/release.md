@@ -792,12 +792,22 @@ Re-running failed jobs or all jobs keeps a run eligible: earlier attempts'
 artifacts stay on the run, and the workflow takes only the copy that its
 uploading job created during the execution the run's final attempt lists.
 
+A release asset's display label is its title in the table above: it names
+Python, R, the command line or the conformance resources, with the platform
+and R series where applicable. The publisher passes these labels to GitHub
+without renaming or changing any package.
+
 A release is titled `yamaa vX.Y.Z`, or `yamaa vX.Y.Z-rc.N` for release
 candidate N, in the Cargo spelling of its version. The release body of a
 final release X.Y.Z is its committed notes,
-`docs/releases/X.Y.Z.md`, then a "Qualified native artifacts" section that
-links the native run attempt and lists the selected artifacts. A release
-candidate is created as a GitHub pre-release. Its body first says that it is
+`docs/releases/X.Y.Z.md`, with a "Choose your download" section after the
+title. It groups direct links to every selected asset into Python, R, CLI
+and developer resources, using the same declared titles as the display
+labels. The links use the actual qualified file names and the release's
+tag; the Python command pins its Python version. A "Qualified native
+artifacts" section follows the notes, links the native run attempt and
+lists the selected artifacts. A release candidate is created as a GitHub
+pre-release. Its body first says that it is
 release candidate N of X.Y.Z and not the final release, where to report
 feedback, how to install it from PyPI, and that the R package keeps version
 X.Y.Z, so R users reinstall it when X.Y.Z is released. Then comes the
@@ -806,8 +816,9 @@ committed `docs/releases/X.Y.Z-rc.N.md`: for candidate 1 under the heading
 previous candidate, with a link that compares the two tags. Then come the
 notes of X.Y.Z so far and the native evidence. Candidate N follows
 candidate N-1: that candidate's tag must exist and be an ancestor of the tag
-commit. A body longer than GitHub's limit of 125,000 characters fails before
-the downloads.
+commit. The notes are checked against GitHub's limit of 125,000 characters
+before the downloads, and the complete body is checked again after the
+download links have been added, before publication.
 
 The GitHub release uses the workflow's GitHub token, and the workflow
 publishes nothing else: the owner then uploads the release's Python packages
