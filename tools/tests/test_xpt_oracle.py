@@ -1,5 +1,5 @@
 """Controls for the independent SAS Transport version 5 oracle, its goldens and
-the transport input of schema-source-xpt that it encodes."""
+the benchmark transport inputs that it encodes."""
 
 import datetime
 import importlib.util
@@ -193,19 +193,28 @@ class Goldens(unittest.TestCase):
 
 class BenchmarkInput(unittest.TestCase):
     def test_the_committed_input_is_the_authored_table(self):
-        # The selftest case reads it through the SAS reader, so its bytes come
-        # from the literal table and the public layout, never from a reader.
-        self.assertEqual(
-            build_xport_fixtures.BENCHMARK_INPUT.read_bytes(),
-            build_xport_fixtures.benchmark_input(),
-        )
-        self.assertEqual(
-            len(build_xport_fixtures.benchmark_input()),
-            xpt_oracle.file_size(
-                build_xport_fixtures.BENCHMARK_VARIABLES,
-                len(build_xport_fixtures.BENCHMARK_ROWS),
+        # The benchmarks read them through the SAS reader, so their bytes come
+        # from the literal tables and the public layout, never from a reader.
+        fixtures = build_xport_fixtures
+        for path, encoded, variables, rows in [
+            (
+                fixtures.BENCHMARK_INPUT,
+                fixtures.benchmark_input(),
+                fixtures.BENCHMARK_VARIABLES,
+                fixtures.BENCHMARK_ROWS,
             ),
-        )
+            (
+                fixtures.NEGATIVE_INPUT,
+                fixtures.negative_input(),
+                fixtures.NEGATIVE_VARIABLES,
+                fixtures.NEGATIVE_ROWS,
+            ),
+        ]:
+            with self.subTest(case=path.parent.parent.name):
+                self.assertEqual(path.read_bytes(), encoded)
+                self.assertEqual(
+                    len(encoded), xpt_oracle.file_size(variables, len(rows))
+                )
 
 
 if __name__ == "__main__":

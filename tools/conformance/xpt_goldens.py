@@ -584,6 +584,113 @@ GOLDENS.extend(
 )
 
 
+# The SENDIG witness: send-bw-sendig311/expected/bw.csv. A SEND date is its
+# canonical text, as an SDTM date is.
+BW_VARIABLES = [
+    character("DOMAIN", "Domain Abbreviation", 2),
+    character("STUDYID", "Study Identifier", 5),
+    character("USUBJID", "Unique Subject Identifier", 10),
+    numeric("BWSEQ", "Sequence Number"),
+    character("BWTESTCD", "Test Short Name", 6),
+    character("BWTEST", "Test Name", 20),
+    character("BWORRES", "Result or Findings as Collected", 5),
+    character("BWORRESU", "Unit of the Original Result", 1),
+    character("BWSTRESC", "Standardized Result in Character Format", 5),
+    numeric("BWSTRESN", "Standardized Result in Numeric Format"),
+    character("BWSTRESU", "Unit of the Standardized Result", 1),
+    character("BWDTC", "Date/Time Animal Weighed", 10),
+]
+BW_ROWS = [
+    [
+        "BW",
+        "TOX01",
+        "TOX01-1001",
+        1,
+        "BW",
+        "Body Weight",
+        "245.3",
+        "g",
+        "245.3",
+        245.3,
+        "g",
+        "2026-03-02",
+    ],
+    [
+        "BW",
+        "TOX01",
+        "TOX01-1001",
+        2,
+        "BW",
+        "Body Weight",
+        "281.0",
+        "g",
+        "281",
+        281.0,
+        "g",
+        "2026-03-09",
+    ],
+    [
+        "BW",
+        "TOX01",
+        "TOX01-1001",
+        3,
+        "TERMBW",
+        "Terminal Body Weight",
+        "341.8",
+        "g",
+        "341.8",
+        341.8,
+        "g",
+        "2026-03-30",
+    ],
+    [
+        "BW",
+        "TOX01",
+        "TOX01-2001",
+        1,
+        "BW",
+        "Body Weight",
+        "182.6",
+        "g",
+        "182.6",
+        182.6,
+        "g",
+        "2026-03-02",
+    ],
+    [
+        "BW",
+        "TOX01",
+        "TOX01-2001",
+        2,
+        "BW",
+        "Body Weight",
+        "198.2",
+        "g",
+        "198.2",
+        198.2,
+        "g",
+        "2026-03-09",
+    ],
+    [
+        "BW",
+        "TOX01",
+        "TOX01-2001",
+        3,
+        "TERMBW",
+        "Terminal Body Weight",
+        "226.4",
+        "g",
+        "226.4",
+        226.4,
+        "g",
+        "2026-03-30",
+    ],
+]
+GOLDENS.append(
+    ("send-bw-sendig311", "bw.xpt", "BW", "Body Weight", BW_VARIABLES, BW_ROWS)
+)
+
+
 def golden(benchmark, name, label, variables, rows):
     """The bytes of one golden, after checking each authored width."""
     for index, variable in enumerate(variables):

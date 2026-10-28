@@ -43,6 +43,7 @@ the held bytes.
 | diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave, and `{entry}` in its context for that specification's absolute path as the engine resolves it, with forward slashes |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | Two invalid Parquet files, one whose INT96 statistic is too long and one whose row groups name one page with a header parquet 55 could not skip, their issue row, and a readable file with its saved CSV |
+| parquet-writer-defaults | A Parquet file pyarrow 26 wrote with a timestamp in nanoseconds, one in milliseconds and a single-precision float, the specification that reads each, and its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and three refusals, a named file written for 0.5 among them; a layer that restates its parent's row template without one derivation, with its `partial_restatement` row and a `restated_inherited_value` row for each derivation it writes as the parent does; and a layer that writes a derivation, a label and a copied column's label as its parent and the producer the parent copies from give them, beside a changed label and a derivation it clears, with its `restated_inherited_value` rows: each row written from the style guide, which `fix` leaves |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
@@ -200,6 +201,19 @@ runs every specification in a fresh process and requires its stderr to be
 empty. The family is named for what it first proved: that the engine
 contained the panic of the upstream decoder on the INT96 statistic, which the
 native reader refuses without one (#3878).
+
+`parquet-writer-defaults` pairs the installed Python and R suites of the
+Parquet types that pandas and pyarrow write by default (#4087). pyarrow 26.0.0
+wrote its file, with its embedded Arrow schema and snappy pages, from a table
+of an `ID`, a `NS` timestamp in nanoseconds, a `MS` timestamp in milliseconds
+and a single-precision `F32`, none adjusted to UTC; each of the last three
+holds one missing value. Each suite runs the specification, which reads every
+field as its column type (PARQUET-7), requires no issue, and compares the CSV
+it saves with `saved_csv`, byte for byte. The CSV was written by hand: the
+nanosecond and millisecond counts are the whole seconds `2024-01-01T10:00:00`
+and `1969-12-31T23:59:59` (PARQUET-9), and the single-precision value nearest
+0.1 widens to the binary64 value whose shortest text is
+`0.10000000149011612`.
 
 `selftest` pairs the installed Python and R selftest suites. Its cases are
 the list in `benchmarks/selftest.yaml`, and its lines are the printed lines of

@@ -1,0 +1,10 @@
+phase: ingest
+condition: source_sas_invalid
+spec_paths:
+  - input.AE_RAW.types.AETERM
+rule: SAS-7
+context:
+  dataset: AE_RAW
+  path: input/ae_raw.xpt
+  cause: field_type
+  field: AETERM
