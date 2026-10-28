@@ -5,8 +5,8 @@ use crate::resolution::{self, Order};
 use crate::resolver::Resolver;
 use crate::schema::{
     shorthand_key, written_path, CompositionOrigin, Document, DocumentError, DocumentNode as N,
-    LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
-    SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
+    LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument, SchemaDiagnostic,
+    SchemaOrigin, SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
 };
 use std::collections::BTreeMap;
 
@@ -188,27 +188,14 @@ fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
     }
 }
 
-/// Resolve a 1.x chain that [`crate::inheritance::traverse_versioned`] admitted
-/// against `schema`, the 1.0 specification closure. Each layer is normalized
-/// at the version it declares, and its copy entries replaced by the columns
-/// they declare, read from the producers their inputs link (SPEC-9); its
-/// relative paths are respelled from the entry (LAYER-10); the layers
-/// compose, each layer's `clear` applied before its own fields (LAYER-9); the
-/// chain's version replaces `yamaa`; the composition is pruned and ordered on
-/// its 1.0 lowering (LAYER-11, LAYER-13); and what survives is normalized at
-/// the chain's version, which materializes defaults and checks requiredness
-/// (LAYER-7, LAYER-12).
-///
-/// `resolver` respells each relative path. `producer` reads the output
-/// contract of the producing specification that a copy entry copies columns
-/// from (SPEC-9): given `resolver`, the layer that declares the link, the
-/// link as written, the input `dataset` it belongs to, and the layers that
-/// count as being resolved while it is read, entry first: the entry and each
-/// parent layer up to the last one with a copy entry that reads `dataset`.
-/// The producer is read and resolved, never compiled or run (INPUT-10); it
-/// returns `None` when it cannot be, keeps why, and the chain does not
-/// resolve.
-pub fn prepare_versioned<R: Resolver>(
+/// The layers of a 1.x chain that [`crate::inheritance::traverse_versioned`]
+/// admitted against `schema`, as they compose, in contribution order: each
+/// normalized at the version it declares, its copy entries replaced by the
+/// columns they declare, read from the producers their inputs link through
+/// `producer` (SPEC-9), and its relative paths respelled from the entry
+/// through `resolver` (LAYER-10). [`prepare_versioned`] composes them; the
+/// lint compares the entry's with what it composes on.
+pub fn contributed_layers<R: Resolver>(
     schema: &SchemaStructure,
     chain: &VersionedChain,
     resolver: &mut R,
@@ -219,7 +206,7 @@ pub fn prepare_versioned<R: Resolver>(
         &str,
         &[&Source],
     ) -> Option<crate::producer_contract::Contract>,
-) -> Result<ResolvedVersioned, VersionedError<R::Error>> {
+) -> Result<Vec<NormalizedDocument>, VersionedError<R::Error>> {
     let mut normalized = Vec::with_capacity(chain.layers.len());
     for (index, layer) in chain.layers.iter().enumerate() {
         let view = schema.at_version(layer.version);
@@ -250,6 +237,43 @@ pub fn prepare_versioned<R: Resolver>(
             resolver,
         )?;
     }
+    Ok(normalized)
+}
+
+/// Resolve a 1.x chain that [`crate::inheritance::traverse_versioned`] admitted
+/// against `schema`, the 1.0 specification closure: the layers
+/// [`contributed_layers`] gives compose. Each layer is normalized
+/// at the version it declares, and its copy entries replaced by the columns
+/// they declare, read from the producers their inputs link (SPEC-9); its
+/// relative paths are respelled from the entry (LAYER-10); the layers
+/// compose, each layer's `clear` applied before its own fields (LAYER-9); the
+/// chain's version replaces `yamaa`; the composition is pruned and ordered on
+/// its 1.0 lowering (LAYER-11, LAYER-13); and what survives is normalized at
+/// the chain's version, which materializes defaults and checks requiredness
+/// (LAYER-7, LAYER-12).
+///
+/// `resolver` respells each relative path. `producer` reads the output
+/// contract of the producing specification that a copy entry copies columns
+/// from (SPEC-9): given `resolver`, the layer that declares the link, the
+/// link as written, the input `dataset` it belongs to, and the layers that
+/// count as being resolved while it is read, entry first: the entry and each
+/// parent layer up to the last one with a copy entry that reads `dataset`.
+/// The producer is read and resolved, never compiled or run (INPUT-10); it
+/// returns `None` when it cannot be, keeps why, and the chain does not
+/// resolve.
+pub fn prepare_versioned<R: Resolver>(
+    schema: &SchemaStructure,
+    chain: &VersionedChain,
+    resolver: &mut R,
+    producer: impl FnMut(
+        &mut R,
+        &Source,
+        &str,
+        &str,
+        &[&Source],
+    ) -> Option<crate::producer_contract::Contract>,
+) -> Result<ResolvedVersioned, VersionedError<R::Error>> {
+    let normalized = contributed_layers(schema, chain, resolver, producer)?;
     let view = schema.at_version(chain.version);
     let mut composed = view
         .compose_versioned_layers(&normalized)

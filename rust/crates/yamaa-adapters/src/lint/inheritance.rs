@@ -13,20 +13,15 @@
 //! changes is patching, which is never reported. Either meaning may be the
 //! author's, so no fix is offered.
 //!
-//! It is the one finding that reads more than the file it reports: the
-//! layers the specification inherits and includes, followed from the file
-//! through the local file resolver and admitted as composition admits them
-//! (LAYER-1 to LAYER-4), each normalized at the version it declares, and
-//! composed by the engine's own composition in contribution order. A file whose chain cannot
-//! be followed, admitted or composed is not read for it: validation reports
-//! why.
+//! Like `restated_inherited_value`, it reads more than the file it reports:
+//! the layers the specification inherits and includes, read as
+//! [`super::layers`] reads them, each normalized at the version it declares,
+//! and composed by the engine's own composition in contribution order. A
+//! file whose chain cannot be followed, admitted or composed is not read for
+//! it: validation reports why.
 
 use std::path::Path;
 
-use yamaa_core::file_preparation::AliasCache;
-use yamaa_core::inheritance as graph;
-use yamaa_core::language::{FileType, LANGUAGE_VERSION};
-use yamaa_core::resolver::{Name, Resolver};
 use yamaa_core::schema::{
     Document as Values, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaStructure,
 };
@@ -118,44 +113,20 @@ fn restatements(document: &Document, file: &Path) -> Option<Vec<Departure>> {
 /// to the collections composed here, with the view of the version the chain
 /// needs (P-VER-1).
 fn layers(file: &Path, entry: Values) -> Option<(SchemaStructure, Vec<NormalizedDocument>)> {
-    let (mut resources, name) = crate::file_configuration::resources(file.to_str()?).ok()?;
-    let source = Resolver::inspect(
-        &mut resources,
-        Name::Entry {
-            declaring: None,
-            written: &name,
-        },
-    )
-    .ok()?;
-    let captured = crate::shipped_schema::capture_versioned(FileType::Spec).ok()?;
-    let schema = captured.structure();
-    // Each parent is read through the local file resolver from the layer
-    // that names it (LAYER-2), captured by the spelling that located it, and
-    // decoded with the shared YAML reader. Why a layer cannot be read does
-    // not matter here: the chain is then not read at all.
-    let chain = graph::traverse_versioned(
-        schema,
-        LANGUAGE_VERSION,
-        source,
-        entry,
-        None,
-        &mut AliasCache::new(&mut resources),
-        &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
-    )
-    .ok()?
-    .chain;
-    let layers = chain
-        .layers
-        .iter()
-        .map(|layer| {
-            let normalized = schema
-                .at_version(layer.version)
-                .normalize_versioned_layer(&layer.document)
-                .ok()?;
-            reduced(&normalized)
-        })
-        .collect::<Option<Vec<_>>>()?;
-    Some((schema.at_version(chain.version), layers))
+    super::layers::read(file, entry, |schema, chain, _| {
+        let layers = chain
+            .layers
+            .iter()
+            .map(|layer| {
+                let normalized = schema
+                    .at_version(layer.version)
+                    .normalize_versioned_layer(&layer.document)
+                    .ok()?;
+                reduced(&normalized)
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some((schema.at_version(chain.version), layers))
+    })
 }
 
 /// `layer` holding only the collections composed here and the `clear` paths
@@ -402,7 +373,7 @@ fn written(document: &Document, site: Site<'_>) -> Option<(usize, usize)> {
 }
 
 /// `items` joined as prose: `a`, `a and b`, `a, b and c`.
-fn prose(items: &[String]) -> String {
+pub(super) fn prose(items: &[String]) -> String {
     match items {
         [] => String::new(),
         [only] => only.clone(),

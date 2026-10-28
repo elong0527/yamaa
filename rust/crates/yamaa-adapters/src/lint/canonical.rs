@@ -69,7 +69,7 @@ fn view(values: &Values) -> Option<(SchemaStructure, bool)> {
 
 /// The lint's node for each decoded node, walking both trees together; none
 /// when they differ, which one scan never gives.
-fn correspond(document: &Document, values: &Values) -> Option<Vec<usize>> {
+pub(super) fn correspond(document: &Document, values: &Values) -> Option<Vec<usize>> {
     fn walk(
         document: &Document,
         values: &Values,
