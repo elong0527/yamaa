@@ -1,6 +1,7 @@
 //! Compile original output-window declarations into the existing shared evaluator.
 use super::*;
 use crate::expression_table::Verb;
+use crate::result_type::ResultType;
 use crate::{
     bound_expression::BoundPredicate,
     dataset::{OrderTerm, Window, WindowKind},
@@ -503,15 +504,33 @@ impl Declaration {
             ..
         } = &self.kind
         {
-            let kind = |name: &str| match catalog.bind(name) {
-                Some(reference_binding::Binding::Output { column_type, .. })
-                | Some(reference_binding::Binding::Dataset { column_type, .. }) => Ok(column_type),
-                None => Err(BindError::Internal),
+            let kind = |name: &str| {
+                catalog
+                    .bind(name)
+                    .map(|_| catalog.result_type(name))
+                    .ok_or(BindError::Internal)
             };
             if let Some(finding) = self.baseline_type_finding(kind(date)?, kind(reference_date)?) {
                 findings.push(BindFinding::Scalar(finding));
                 return Ok(None);
             }
+        }
+        // Every two values of each order term compare (VALUE-22).
+        for (name, path) in self.order_terms() {
+            let kind = catalog.result_type(name);
+            if kind.unordered() {
+                findings.push(BindFinding::Scalar(
+                    crate::diagnostic::lookup::order_term_type(
+                        &path,
+                        crate::diagnostic::lookup::Owner::Window(&self.operation),
+                        name,
+                        kind,
+                    ),
+                ));
+            }
+        }
+        if findings.len() != start {
+            return Ok(None);
         }
         let filter = filter
             .map(|plan| {
@@ -599,24 +618,38 @@ pub(super) fn admit(spec: &ast::Spec, e: ExprId) -> Result<(), PrepareError> {
     derivations::predicate_limits(spec, window.filter)
 }
 
-fn type_name(kind: ColumnType) -> &'static str {
-    match kind {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
-}
-
 impl Declaration {
-    /// A type the schema source does not decide is not compared.
+    /// Each order term the window reads, with its read's path, in order: a
+    /// baseline's date and tie-break terms, its own operands
+    /// ([`Self::operands`]), or each `window.order_by` term.
+    fn order_terms(&self) -> Vec<(&str, String)> {
+        let mut operands = self.operands();
+        let order = operands.split_off(operands.len() - self.order.len());
+        match &self.kind {
+            Kind::BaselineFlag { tie_break, .. } => {
+                let date = operands.remove(0);
+                // The reference and the source follow the date.
+                std::iter::once(date)
+                    .chain(operands.drain(2..2 + tie_break.len()))
+                    .collect()
+            }
+            _ => order,
+        }
+    }
+    /// A baseline's date has one type, `date` or `datetime`, and its
+    /// reference that type (VALUE-2). A date whose types do not all compare,
+    /// such as `date` beside `datetime`, is refused as an order term
+    /// instead (VALUE-22); a type no source decides, or a result that is
+    /// always missing, is not compared.
     fn baseline_type_finding(
         &self,
-        date_kind: Option<ColumnType>,
-        reference_kind: Option<ColumnType>,
+        date_kind: ResultType,
+        reference_kind: ResultType,
     ) -> Option<crate::diagnostic::Diagnostic> {
-        let date_kind = date_kind?;
+        let decided = |kind: ResultType| kind != ResultType::UNKNOWN && !kind.is_missing();
+        if !decided(date_kind) || date_kind.unordered() {
+            return None;
+        }
         let Kind::BaselineFlag {
             date,
             reference_date,
@@ -625,19 +658,18 @@ impl Declaration {
         else {
             return None;
         };
-        let invalid = if !matches!(date_kind, ColumnType::Date | ColumnType::DateTime) {
-            Some(("date", date, "date or datetime", date_kind))
-        } else {
-            reference_kind
-                .filter(|kind| *kind != date_kind)
-                .map(|reference_kind| {
+        let invalid = match date_kind.column_type() {
+            Some(ColumnType::Date | ColumnType::DateTime) => {
+                (decided(reference_kind) && reference_kind != date_kind).then(|| {
                     (
                         "reference_date",
                         reference_date,
-                        type_name(date_kind),
+                        date_kind.name(),
                         reference_kind,
                     )
                 })
+            }
+            _ => Some(("date", date, "date or datetime".into(), date_kind)),
         };
         let (operand, source, expected, actual) = invalid?;
         // The date is the first read and the reference the second.
@@ -652,8 +684,8 @@ impl Declaration {
         for (name, value) in [
             ("operation", Verb::BaselineFlag.name()),
             ("source", source.as_str()),
-            ("expected", expected),
-            ("actual", type_name(actual)),
+            ("expected", expected.as_str()),
+            ("actual", actual.name().as_str()),
         ] {
             finding.text(name, value);
         }
