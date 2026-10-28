@@ -122,8 +122,30 @@ ADSL_ROWS = [
     ["CATH", "CATH-MCGILL-0003", "NOT TREATED", 52, 165.2, None, None],
 ]
 
+# schema-define-non-standard/expected/ze.csv, authored from the examination
+# transfer. Character widths are the longest literal values in each column.
+ZE_VARIABLES = [
+    character("DOMAIN", "Domain Abbreviation", 2),
+    character("STUDYID", "Study Identifier", 4),
+    character("USUBJID", "Unique Subject Identifier", 7),
+    numeric("ZESEQ", "Sequence Number"),
+    character("ZETERM", "Examination Name", 10),
+]
+ZE_ROWS = [
+    ["ZE", "NS01", "NS01-01", 1, "Slit lamp"],
+    ["ZE", "NS01", "NS01-02", 1, "Fundoscopy"],
+]
+
 # benchmark, file, member name, member label, variables, rows
 GOLDENS = [
+    (
+        "schema-define-non-standard",
+        "ze.xpt",
+        "ZE",
+        "Eye Examinations",
+        ZE_VARIABLES,
+        ZE_ROWS,
+    ),
     ("sdtm-dm-xpt", "dm.xpt", "DM", "Demographics", DM_VARIABLES, DM_ROWS),
     (
         "adam-adsl-xpt",
