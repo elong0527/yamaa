@@ -45,7 +45,7 @@ codelist_class:
         type: str
         required: true
         min_length: 1
-        description: Name of the codelist, unique within the document.
+        description: Name of the codelist, unique among the project's composed codelists (CT-1).
     - data_type:
         type: str
         default: text

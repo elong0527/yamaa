@@ -21,10 +21,10 @@ PUBLISHED = (".csv", ".parquet")
 def stage_benchmarks(destination: Path):
     """Stage every benchmark declaring a Define call, with a JSON manifest.
 
-    Each case keeps its specifications, its project file and its
-    independent ``expected/`` truth; the published tables are the expected
-    ones. The manifest carries the call and the expected error so hosts read
-    no YAML.
+    Each case keeps its specifications, its project file, the codelist
+    files that project lists, at their paths from it, and its independent
+    ``expected/`` truth; the published tables are the expected ones. The
+    manifest carries the call and the expected error so hosts read no YAML.
     """
     destination.mkdir()
     cases = []
@@ -36,7 +36,13 @@ def stage_benchmarks(destination: Path):
         target.mkdir()
         for spec in sorted(case.glob("spec*.yaml")):
             shutil.copy2(spec, target / spec.name)
-        shutil.copy2(case / define["environment"], target / define["environment"])
+        project = case / define["environment"]
+        shutil.copy2(project, target / define["environment"])
+        listed = yaml.safe_load(project.read_text(encoding="utf-8")).get("codelists")
+        for source in listed or []:
+            if isinstance(source, str):
+                (target / source).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(project.parent / source, target / source)
         shutil.copytree(case / "expected", target / "expected")
         error = case / "expected" / "error.yaml"
         expected = sorted(path.name for path in (case / "expected").iterdir())

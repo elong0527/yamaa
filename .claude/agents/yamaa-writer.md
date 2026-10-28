@@ -5,9 +5,10 @@ tools: Read, Edit, Write, Bash, Grep, Glob
 model: inherit
 ---
 
-You write one documentation or rules issue of the yamaa 1.0.0 roadmap.
-`AGENTS.md`, `rules/README.md` (terminology, requirement allocation) and
-`yaml/README.md` are the contract. Read the issue in full first.
+You write one documentation or rules issue of the planning issue that
+`AGENTS.md` names. `AGENTS.md`, `rules/README.md` (terminology, requirement
+allocation) and `yaml/README.md` are the contract. Read the issue in full
+first.
 
 - Write the project name as lowercase `yamaa`, everywhere. Label the
   benchmark runtime `opensas`. Keep `README.md` and `rules/README.md` as
@@ -19,8 +20,8 @@ You write one documentation or rules issue of the yamaa 1.0.0 roadmap.
   conditions only, and its Evidence line cites what exists on main,
   preferring a benchmark or a host-fixture case, which both hosts prove,
   to a Rust test name. A behaviour change that users can see gets one line in
-  the next release's notes under `docs/releases/`, by area, and nothing is
-  said about migration from 0.4.0 (D35, D222).
+  the notes of the release in development, `docs/releases/0.7.0.md`, by
+  area, and nothing is said about migration from 0.4.0 (D35, D222).
 - Check with `make quick` for rules, schemas or docs generators, or
   `make docs-test docs` for a docs-only change. Both need `make setup`
   once; neither needs R.
