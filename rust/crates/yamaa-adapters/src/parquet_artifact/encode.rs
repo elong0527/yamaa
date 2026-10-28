@@ -45,6 +45,14 @@ fn page_size<E>(body: usize) -> Result<i32, Error<E>> {
     })
 }
 
+/// A PLAIN byte array's u32 prefix. A string larger than a page can hold
+/// must report the page limit before narrowing its length or copying bytes.
+fn byte_array_length<E>(bytes: usize) -> Result<u32, Error<E>> {
+    page_size::<E>(bytes)?;
+    // The stricter signed page bound also fits the unsigned value prefix.
+    Ok(bytes as u32)
+}
+
 /// The footer's length as the four bytes that end it, or the refusal of
 /// metadata longer than a u32 counts, which the 1.0 writer wrapped: each
 /// row group repeats every field's name, so long names over many row groups
@@ -371,7 +379,7 @@ impl Pending {
         }
         match (self.kind, value) {
             (ColumnType::Str, ValueRef::Str(value)) => {
-                let length = u32::try_from(value.len()).map_err(|_| Error::ValueType)?;
+                let length = byte_array_length(value.len())?;
                 self.values.extend(length.to_le_bytes());
                 self.values.extend(value.as_bytes());
             }
@@ -697,6 +705,7 @@ mod tests {
                 page_size::<Infallible>(2_147_483_648),
                 footer_length::<Infallible>(4_294_967_295),
                 footer_length::<Infallible>(4_294_967_296),
+                byte_array_length::<Infallible>(4_294_967_296),
             ),
             (
                 Ok(2_147_483_647),
@@ -709,6 +718,11 @@ mod tests {
                 Err(Error::Limit {
                     resource: "parquet_footer_bytes",
                     limit: 4_294_967_295,
+                    actual: Some(4_294_967_296),
+                }),
+                Err(Error::Limit {
+                    resource: "parquet_page_bytes",
+                    limit: 2_147_483_647,
                     actual: Some(4_294_967_296),
                 }),
             ),

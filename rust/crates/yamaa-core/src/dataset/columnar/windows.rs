@@ -273,9 +273,11 @@ fn complete<E>(built: &mut WindowRun, cx: &Cx<'_, E>, position: usize) -> Result
     // latest date; its partition keeps construction order.
     let baseline = matches!(window.kind, WindowKind::BaselineFlag { .. });
     if !baseline && !window.order_by.is_empty() {
-        members.sort_by(|&left, &right| {
-            ordered(built, cx, &window, left, right).then_with(|| left.cmp(&right))
-        });
+        // Members are in construction order, which a tie keeps (VALUE-23).
+        super::relations::sort(&mut members, &window.order_by, |&member, term| {
+            built.get(cx, member, window.order_by[term].column)
+        })
+        .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
     }
     if let Some(filter) = &window.filter {
         let mut eligible = Vec::with_capacity(members.len());
@@ -315,15 +317,15 @@ fn complete<E>(built: &mut WindowRun, cx: &Cx<'_, E>, position: usize) -> Result
                 {
                     continue;
                 }
-                match temporal_order(candidate, reference) {
+                match temporal_order(candidate, reference)? {
                     Ordering::Greater => continue,
                     Ordering::Equal if !inclusive => continue,
                     _ => {}
                 }
                 let order = match latest {
                     None => Ordering::Greater,
-                    Some(best) => match temporal_order(candidate, built.get(cx, best, date)) {
-                        Ordering::Equal => ordered(built, cx, &window, member, best),
+                    Some(best) => match temporal_order(candidate, built.get(cx, best, date))? {
+                        Ordering::Equal => ordered(built, cx, &window, member, best)?,
                         order => order,
                     },
                 };
@@ -377,7 +379,7 @@ fn complete<E>(built: &mut WindowRun, cx: &Cx<'_, E>, position: usize) -> Result
             for (index, &member) in members.iter().enumerate() {
                 let new_rank = index == 0
                     || window.kind == WindowKind::RowNumber
-                    || ordered(built, cx, &window, members[index - 1], member) != Ordering::Equal;
+                    || ordered(built, cx, &window, members[index - 1], member)? != Ordering::Equal;
                 if new_rank {
                     rank = if window.kind == WindowKind::Dense {
                         rank + 1
@@ -442,32 +444,37 @@ fn answer<E>(
     })
 }
 
-/// Compare declared order terms between two positions.
+/// Compare declared order terms between two positions. Binding refuses a
+/// term whose values do not all compare (VALUE-22); a pair whose types no
+/// source decided before the run fails the run here, never a guess.
 fn ordered<E>(
     built: &WindowRun,
     cx: &Cx<'_, E>,
     window: &Window,
     left: usize,
     right: usize,
-) -> Ordering {
+) -> Result<Ordering, Fail<E>> {
     for term in &window.order_by {
         let order = super::relations::compare(
             built.get(cx, left, term.column),
             built.get(cx, right, term.column),
             term,
-        );
+        )
+        .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
         if order != Ordering::Equal {
-            return order;
+            return Ok(order);
         }
     }
-    Ordering::Equal
+    Ok(Ordering::Equal)
 }
 
-/// Baseline admission requires matching temporal types.
-fn temporal_order(left: ValueRef<'_>, right: ValueRef<'_>) -> Ordering {
+/// A baseline's dates in order: binding admits a date and a reference of one
+/// temporal type, decided before any row is read (VALUE-2); a pair of
+/// another kind, whose types no source decided, fails the run.
+fn temporal_order<E>(left: ValueRef<'_>, right: ValueRef<'_>) -> Result<Ordering, Fail<E>> {
     match (left, right) {
-        (ValueRef::Date(left), ValueRef::Date(right)) => left.cmp(&right),
-        (ValueRef::DateTime(left), ValueRef::DateTime(right)) => left.cmp(&right),
-        _ => unreachable!("admitted matching temporal baseline columns"),
+        (ValueRef::Date(left), ValueRef::Date(right)) => Ok(left.cmp(&right)),
+        (ValueRef::DateTime(left), ValueRef::DateTime(right)) => Ok(left.cmp(&right)),
+        _ => Err(Box::new(ExecutionError::SchemaMismatch)),
     }
 }
