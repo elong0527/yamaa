@@ -968,7 +968,8 @@
         "python/tests/installed/installed_interface.py",
         "R/yamaa/tests/interface.R",
         "python/tests/installed/installed_handle_lifetime.py",
-        "R/yamaa/tests/handle_lifetime.R"
+        "R/yamaa/tests/handle_lifetime.R",
+        "R/yamaa/tests/kept_tables.R"
       ]
     },
     {

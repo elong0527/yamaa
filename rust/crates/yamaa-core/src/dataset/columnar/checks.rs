@@ -936,12 +936,14 @@ pub(super) fn partition(
     )
 }
 
-/// Stable presentation order over completed rows, after all verification.
-pub(super) fn output_order(plan: &ResolvedPlan, frame: &Frame) -> Vec<usize> {
+/// Stable presentation order over completed rows, after all verification:
+/// each output column has its declared type, so every two of its values
+/// compare (VALUE-22).
+pub(super) fn output_order<E>(plan: &ResolvedPlan, frame: &Frame) -> Result<Vec<usize>, Fail<E>> {
     let mut rows: Vec<usize> = (0..frame.rows()).collect();
     let terms = plan.output_order();
     if terms.is_empty() || rows.len() < 2 {
-        return rows;
+        return Ok(rows);
     }
     let first = plan
         .region_columns(RegionId::DATASET)
@@ -955,18 +957,10 @@ pub(super) fn output_order(plan: &ResolvedPlan, frame: &Frame) -> Vec<usize> {
             nulls_first: term.nulls_first,
         })
         .collect();
-    rows.sort_by(|&left, &right| {
-        for term in &terms {
-            let order = super::relations::compare(
-                frame.get(left, term.column),
-                frame.get(right, term.column),
-                term,
-            );
-            if order != std::cmp::Ordering::Equal {
-                return order;
-            }
-        }
-        left.cmp(&right)
-    });
-    rows
+    // Rows are in construction order, which a tie keeps (VALUE-23).
+    super::relations::sort(&mut rows, &terms, |&row, term| {
+        frame.get(row, terms[term].column)
+    })
+    .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
+    Ok(rows)
 }

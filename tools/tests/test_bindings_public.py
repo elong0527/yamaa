@@ -121,7 +121,8 @@ class RenderingTests(unittest.TestCase):
             'yamaa_spec <- function(path) .spec(.text(path, "path"), NULL)',
             "`[[.yamaa_project_run` <- function(x, i, ...) {",
             "    plans <<- .reply(.native_plans(plans))",
-            "  object$save <- function() invisible(.reply(.native_run_save(native)))",
+            "  object$save <- function() "
+            "invisible(.changing(memo, .reply(.native_run_save(native))))",
             ".run_observations <- function(run, include_measurements = FALSE) {",
         ):
             with self.subTest(expected=expected):
@@ -238,10 +239,53 @@ class RenderingTests(unittest.TestCase):
             "yamaa_selftest <- function() .self_test(.reply(.native_selftest(.version())))",
             '  .read_only(object, "status", '
             "function() .reply(.native_selftest_status(native)))",
+            '  .kept(object, "cases", memo, function() .reply(.native_selftest_cases(native)))',
             '  .read_only(object, "info", function() .reply(.native_selftest_info(native)))',
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, r)
+
+    def test_a_result_keeps_its_tables_until_a_method_runs_in_r(self):
+        r = self.public.render_r([])
+        # #4071: a table property of a result reads through its memo, which
+        # every method starts again; any other property reads each time, and
+        # a lazy object, which reads no table, has no memo.
+        self.assertIn(
+            ".run <- function(native, memo = .memo()) {\n"
+            "  force(native)\n"
+            "  force(memo)\n"
+            "  object <- new.env(parent = emptyenv())\n"
+            "  object$.handle <- native\n"
+            '  .read_only(object, "status", function() .reply(.native_run_status(native)))\n'
+            '  .kept(object, "output", memo, function() .reply(.native_run_output(native)))\n'
+            '  .kept(object, "issues", memo, function() .reply(.native_run_issues(native)))\n'
+            '  .kept(object, "report", memo, function() .reply(.native_run_report(native)))\n'
+            '  .kept(object, "timings", memo, function() .reply(.native_run_timings(native)))\n'
+            "  object$save <- function() "
+            "invisible(.changing(memo, .reply(.native_run_save(native))))\n"
+            '  .object(object, "yamaa_run")\n'
+            "}\n",
+            r,
+        )
+        self.assertIn(
+            '  .read_only(object, "created", '
+            "function() .reply(.native_submission_created(native)))\n",
+            r,
+        )
+        self.assertIn(".spec <- function(path, project) {\n", r)
+        self.assertIn(
+            '  .read_only(object, "names", '
+            "function() .reply(.native_project_names(path, .version())))\n",
+            r,
+        )
+        # A member that the index makes shares its container's memo, so the
+        # container's save() starts the member's tables again.
+        self.assertIn("  object$.handle <- native\n  object$.memo <- memo\n", r)
+        self.assertEqual(r.count("object$.memo <- memo"), 1)
+        self.assertIn(
+            '  .member_run(native, name, get(".memo", envir = x, inherits = FALSE))\n}\n',
+            r,
+        )
 
     def test_a_path_list_converts_each_path_in_both_hosts(self):
         python = self.public.render_python([])

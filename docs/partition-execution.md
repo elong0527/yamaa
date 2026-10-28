@@ -523,10 +523,12 @@ New execution strategies require these equivalence controls in addition to the
 existing suites; this inventory alone does not establish an implementation.
 The partitioned executor's controls are `yamaa-core`'s
 `dataset/partitioned_execution.rs` and the facade's `partitioned_corpus.rs`,
-which runs every single-specification benchmark over one-record partitions
-and over key-bounded partitions of one key group each against its expected
-files, reads each as a stream of one-record batches, and lists the ADaM
-benchmarks key-bounded partitions must admit, and `end_states.rs`, one test
+which runs every benchmark as its corpus readers stage it, its entries,
+project and submission included, over one-record partitions and over
+key-bounded partitions of one key group each against its expected files,
+reads each build as a stream of one-record batches, lists the ADaM
+benchmarks key-bounded partitions must admit and leaves out only the twelve
+whose projects supply project functions (#4092), and `end_states.rs`, one test
 per cell of the end states. That a run holds one decoded partition at a time is
 proved by `partitioned_execution.rs`'s partition source, which counts the
 partitions it has decoded and not yet dropped, and by the facade's

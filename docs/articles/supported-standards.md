@@ -70,10 +70,14 @@ coverage. The new examples select the older content directly: MO remains a
 
 This is generation and export compatibility. The engine checks the study's
 declared metadata and verifications; it does not contain the full catalog
-of every guide's domain, variable and business rules. Study teams validate
-their complete submission against the selected guide and applicable FDA
-rules. Changing the guide declaration alone does not convert newer content
-into a conforming older dataset.
+of every guide's domain, variable and business rules. From 1.0.0, a new
+conformance check arrives only as an opt-in, through a new optional field,
+never as a new refusal or a new run-report row for a file that an earlier
+1.x release admitted, as the
+[stability contract](../release.md#stability-contract) says. Study teams
+validate their complete submission against the selected guide and
+applicable FDA rules. Changing the guide declaration alone does not convert
+newer content into a conforming older dataset.
 
 ## FDA submission use
 

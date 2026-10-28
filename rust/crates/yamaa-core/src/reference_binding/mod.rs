@@ -81,7 +81,7 @@ pub enum Diagnostic {
 #[derive(Debug)]
 pub struct Catalog {
     record_derivation: bool,
-    record_kinds: Option<Vec<Option<ColumnType>>>,
+    record_types: Option<Vec<crate::result_type::ResultType>>,
     outputs: BTreeMap<String, (usize, Option<ColumnType>)>,
     datasets: BTreeMap<String, DatasetCatalog>,
     selected: BTreeMap<String, SelectedRelation>,
@@ -148,9 +148,11 @@ impl Catalog {
     pub(crate) fn record_derivation(&self) -> bool {
         self.record_derivation
     }
-    /// Raw donor results need not have one known kind despite having a layout slot.
-    pub(crate) fn with_record_kinds(mut self, kinds: Vec<Option<ColumnType>>) -> Self {
-        self.record_kinds = Some(kinds);
+    /// Raw donor results need not have one known kind despite having a
+    /// layout slot: each record field's result type, which may be decided
+    /// per value (EXPR-14).
+    pub(crate) fn with_record_types(mut self, types: Vec<crate::result_type::ResultType>) -> Self {
+        self.record_types = Some(types);
         self
     }
     pub(crate) fn with_selected(
@@ -216,33 +218,43 @@ impl Catalog {
     pub(crate) fn joined(&self, name: &str) -> Option<&JoinedRelation> {
         self.joined.get(name)
     }
+    /// The one type of the field `name` reads, where it has one.
     pub(crate) fn type_of(&self, name: &str) -> Option<ColumnType> {
+        self.result_type(name).column_type()
+    }
+
+    /// The result type of the field `name` reads (EXPR-14): a record field's
+    /// as its donor derives it, which may be decided per value, and any
+    /// other field's kind; unknown where no source decides it.
+    pub(crate) fn result_type(&self, name: &str) -> crate::result_type::ResultType {
+        use crate::result_type::ResultType;
+        let record = |slot: usize, column_type| {
+            self.record_types
+                .as_ref()
+                .map_or(ResultType::declared(column_type), |types| {
+                    types.get(slot).copied().unwrap_or(ResultType::UNKNOWN)
+                })
+        };
         if let Some(binding) = self.bind(name) {
             return match binding {
                 Binding::Output {
                     column,
                     column_type,
-                } => self
-                    .record_kinds
-                    .as_ref()
-                    .map_or(column_type, |kinds| kinds.get(column).copied().flatten()),
+                } => record(column, column_type),
                 Binding::Dataset {
                     dataset: 0,
                     field,
                     column_type,
-                } => self
-                    .record_kinds
-                    .as_ref()
-                    .map_or(column_type, |kinds| kinds.get(field).copied().flatten()),
-                Binding::Dataset { column_type, .. } => column_type,
+                } => record(field, column_type),
+                Binding::Dataset { column_type, .. } => ResultType::declared(column_type),
             };
         }
-        name.split_once('.').and_then(|(relation, field)| {
+        ResultType::declared(name.split_once('.').and_then(|(relation, field)| {
             self.joined(relation)?
                 .fields
                 .get(field)
                 .and_then(|(_, kind)| *kind)
-        })
+        }))
     }
 
     /// Row-template implicit joins match raw driver fields, independently of output derivations.
@@ -428,7 +440,7 @@ impl Catalog {
         }
         Ok(Self {
             record_derivation: false,
-            record_kinds: None,
+            record_types: None,
             outputs: output_index,
             datasets: dataset_index,
             selected: BTreeMap::new(),
