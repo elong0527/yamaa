@@ -511,7 +511,7 @@ whose graph holds Arrow 55.2.0 builds the engine unchanged. Other Arrow and
 Parquet releases are unsupported: the adapter's version-specific APIs, confined
 to `storage_api.rs`, are adapted and qualified for 55.2.0 only. Broadening that range requires separate adapter and
 installed-host qualification first. The direct storage codec floors are brotli
-8.0.4, lz4_flex 0.11.6, zstd 0.13.3 and base64 0.22.1. Portable libm remains
+8.0.4, lz4_flex 0.11.6, zstd 0.14.3 and base64 0.22.1. Portable libm remains
 exactly 0.2.16. The reviewed
 saphyr-parser 0.2.1 with its compact-flow fix is vendored as
 `yamaa-saphyr-parser`, which `yamaa-adapters` depends on by path. It is
@@ -523,14 +523,20 @@ binding builds with PyO3 0.27, the newest release that builds with Rust 1.82;
 the lock and the minimum dependency graph select 0.27.2.
 
 The engine links one version of each crate. yamaa's own requirements on
-lz4_flex, zstd, base64 and num-bigint stay in the series that Parquet 55.2.0
-and the num crate of the Arrow crates require (0.11, 0.13, 0.22 and 0.4), so
+lz4_flex, base64 and num-bigint stay in the series that Parquet 55.2.0
+and the num crate of the Arrow crates require (0.11, 0.22 and 0.4), so
 each resolves to the release that Parquet uses (#3696): no package builds
-Parquet any more, but the adapters' tests compile it as their differential
-oracle (#3878). num-bigint's floor,
-0.4.8, carries the division fix that 0.4.7 lacks. The duplicate versions that
-`cargo tree -d` still lists add no second linked copy: syn serves procedural
-macros, and the extra getrandom version serves a procedural macro too.
+Parquet any more, but the adapters' and the application's tests compile it as
+their differential oracle (#3878). zstd left Parquet's 0.13 series for 0.14.3,
+which with zstd-safe 8.2.0 fixes RUSTSEC-2026-0391 and RUSTSEC-2026-0395 to
+0406, so those tests also compile zstd 0.13.3 and zstd-safe 7.3.0 for the
+oracle alone, and the advisory checks ignore those advisories as test-only
+(#4066). Both zstd-safe releases link the one zstd-sys, as its
+`links = "zstd"` requires, so no build links a second zstd library.
+num-bigint's floor, 0.4.8, carries the division fix that 0.4.7 lacks. The
+duplicate versions that `cargo tree -d` still lists add no second linked copy:
+syn serves procedural macros, the extra getrandom version serves a procedural
+macro too, and the older zstd and zstd-safe serve the oracle.
 
 yamaa names flate2's zlib-rs backend beside its rust_backend (miniz_oxide),
 as Parquet 55 did while the engine built it, and flate2 prefers zlib-rs, so
