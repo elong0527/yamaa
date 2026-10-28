@@ -18,10 +18,9 @@ The estimates have already been calculated from plasma concentrations.
 - `PPCAT` carries the analyte name, or is missing when none is supplied.
 - `PPORRES` retains the estimate as text, including its reported decimal
   places; it is missing when the estimate is absent.
-- `PPORRESU` retains the supplied analysis unit: `ng/mL` for maximum
-  concentration, `h` for its time and `h*ng/mL` for the area under the
-  concentration-time curve (AUC). It is missing when the unit is absent,
-  independently of whether an estimate is supplied.
+- `PPORRESU` retains the analysis unit supplied for that estimate, without
+  assigning a unit from the parameter code. It is missing when the unit
+  is absent, independently of whether an estimate is supplied.
 - `PPSTRESC` retains the estimate as text with its reported decimal places;
   it is missing when the estimate is absent, regardless of the unit.
 - `PPSTRESN` holds the estimate as a number; it is missing when the estimate
