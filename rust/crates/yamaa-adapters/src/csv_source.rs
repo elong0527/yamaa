@@ -74,7 +74,7 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
 /// The text of a source, decoded completely before any syntax is admitted:
 /// within the source byte limit, valid UTF-8, beginning with a byte-order
 /// mark exactly when `byte_order_mark` declares one, which is skipped, and
-/// holding a header.
+/// holding a header, up to the end of its last record.
 ///
 /// `byte_order_mark` is the input's declaration (CSV-10): when it is true the
 /// source must begin with one mark, which is skipped, and the first record
@@ -99,7 +99,26 @@ fn admitted_text(content: &[u8], byte_order_mark: bool) -> Result<&str, Error> {
     if text.is_empty() {
         return Err(failure(ProfileCause::HeaderAbsent, 1, 1));
     }
-    Ok(text)
+    Ok(without_trailing_blank_lines(text))
+}
+
+/// `text` up to the end of its last record (CSV-11): the line terminators
+/// that end the source are the last record's terminator, and the blank
+/// lines after it, which are no record, whatever the header's width. The
+/// header is always read, and a blank line before the last record is an
+/// empty record. Every read lexes this text, and a read by partition the
+/// spans its scan found in it, so no path reads the blank lines.
+///
+/// A run of terminators inside a quoted field the source never closes keeps
+/// its first terminator, so the field still fails as it would whole.
+fn without_trailing_blank_lines(text: &str) -> &str {
+    let mut end = text.len();
+    let mut last = end;
+    while let Some(rest) = text[..end].strip_suffix('\n') {
+        last = end;
+        end = rest.strip_suffix('\r').unwrap_or(rest).len();
+    }
+    &text[..last]
 }
 
 /// Decode completely, then scan all syntax before header and row-width findings.

@@ -220,23 +220,33 @@ before any input is read; on an input whose path selects no profile,
 
 <a id="csv-11"></a>
 
-### CSV-11. A record ends in `U+000A`, optionally preceded by `U+000D`, and the last may end the file
+### CSV-11. A record ends in `U+000A`, optionally preceded by `U+000D`, the last may end the file, and blank lines that end the file are no record
 
 A reader admits a spelling other than the one [CSV-1](#csv-1) writes only when
 both spellings deliver the same records. A record terminator is `U+000A`,
 optionally preceded by `U+000D`, and the final record may omit its terminator.
-`U+000D` occurs only as the first character of a record terminator; anywhere
-else, including inside a quoted field, it fails rather than joining the value.
+Blank lines after the last record, up to the end of the file, are no record,
+whatever the header's width. `U+000D` occurs only as the first character of a
+record terminator; anywhere else, including inside a quoted field, it fails
+rather than joining the value.
 
 Fails: `source_carriage_return`.
-Evidence: `adam-advs-windows`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`, `negative-source-carriage-return`.
+Evidence: `adam-advs-windows`, `schema-source-trailing-blank-line`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::trailing_blank_lines_are_no_record_of_any_partition`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`, `negative-source-carriage-return`.
 
 A writer controls its bytes and emits one spelling, while a reader receives a
 study file as stored. The admitted spellings are a record terminated by
-`U+000D U+000A` rather than `U+000A`, and a final record with no terminator at
-all. Every other difference is refused rather than silently repaired: a
-byte-order mark the input does not declare ([CSV-10](#csv-10)), a `U+000D`
-anywhere else, and every reader option [CSV-15](#csv-15) excludes.
+`U+000D U+000A` rather than `U+000A`, a final record with no terminator at
+all, and a final record followed by blank lines. A blank line holds no
+character before its terminator; every blank line from the last record's
+terminator to the end of the file ends the file and is no record, so a source
+of one field ends cleanly and a wider source has no short record to refuse
+([CSV-13](#csv-13)). The header is always the first record: a file of blank
+lines alone has an empty header name, and a header followed by blank lines
+holds no records. A blank line before the last record is a record of one empty
+field, and a line holding a space or a quoted empty field is no blank line
+([CSV-12](#csv-12)). Every other difference is refused rather than silently
+repaired: a byte-order mark the input does not declare ([CSV-10](#csv-10)), a
+`U+000D` anywhere else, and every reader option [CSV-15](#csv-15) excludes.
 
 <a id="csv-12"></a>
 
@@ -301,11 +311,16 @@ preamble, no alternate delimiter or quote character, no whitespace trimming,
 no header synthesis or renaming, and no missing-value sentinel. A reader does
 not repair a rejected file by skipping a mark, trimming a field, padding a
 record, renaming a duplicate name or normalizing a terminator inside a value.
+Blank lines that end the file terminate it ([CSV-11](#csv-11)); that is no
+repair.
 
-Evidence: `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
+Evidence: `negative-source-na-age`, `schema-source-trailing-blank-line`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
 
 [Inputs](../inputs.md) fixes what a stored field means,
-including that no text spells absence.
+including that no text spells absence. No reader option skips a blank line
+before the last record: that line is a record ([CSV-11](#csv-11)), and a source
+whose header names more than one field refuses it for its width
+([CSV-13](#csv-13)).
 
 <a id="csv-16"></a>
 

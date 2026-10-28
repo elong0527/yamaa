@@ -220,6 +220,65 @@ mod table {
                 }
             }
 
+            /// The blank lines that end a source are no record of any
+            /// partition, and a blank line before the last record is an
+            /// empty record of its own, wherever the partitions fall
+            /// (CSV-11): every partition size, and every range of records
+            /// decoded again, holds the whole read's table.
+            #[test]
+            fn trailing_blank_lines_are_no_record_of_any_partition() {
+                let source = declaration(SourceProfile::Csv, &[], None);
+                for (bytes, expected) in [
+                    (
+                        &b"ID\n1\n\n2\n3\n\r\n\n"[..],
+                        vec![
+                            vec![Str("1")],
+                            vec![Missing],
+                            vec![Str("2")],
+                            vec![Str("3")],
+                        ],
+                    ),
+                    (
+                        b"A,B\r\n1,x\r\n2,y\r\n3,z\r\n\r\n\r\n",
+                        vec![
+                            vec![Str("1"), Str("x")],
+                            vec![Str("2"), Str("y")],
+                            vec![Str("3"), Str("z")],
+                        ],
+                    ),
+                ] {
+                    let count = expected.len();
+                    for records in 1..=count + 1 {
+                        let (whole, divided) =
+                            read(&source, bytes, SourceInterpretation::Ordinary, records);
+                        let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                        let sizes = (0..count)
+                            .step_by(records)
+                            .map(|first| records.min(count - first))
+                            .collect::<Vec<_>>();
+                        let case = format!("{bytes:?}, partitions of {records}");
+                        assert_eq!(cells(&whole), expected, "the whole read: {case}");
+                        assert_eq!(joined(&divided.parts), expected, "{case}");
+                        assert_eq!(divided.sizes, sizes, "{case}");
+                        let mut decoder = Decoder::<Infallible>::default();
+                        for first in 0..count {
+                            let range = first..count;
+                            let part = decoder
+                                .partition(
+                                    &divided.scanned,
+                                    &source,
+                                    bytes,
+                                    SourceInterpretation::Ordinary,
+                                    None,
+                                    range.clone(),
+                                )
+                                .unwrap();
+                            assert_eq!(cells(&part), expected[range.clone()], "{case}: {range:?}");
+                        }
+                    }
+                }
+            }
+
             fn profile(cause: ProfileCause, record: usize, field: usize) -> CsvError {
                 CsvError::Profile {
                     cause,
@@ -336,12 +395,19 @@ mod table {
                 }
             }
 
-            /// A source of a header alone is one empty partition with the
-            /// header's schema.
+            /// A source of a header alone, or of a header and the blank
+            /// lines that end the source (CSV-11), is one empty partition
+            /// with the header's schema.
             #[test]
             fn a_source_without_records_is_one_empty_partition() {
                 let source = declaration(SourceProfile::Csv, &[], None);
-                for bytes in [&b"A,B"[..], b"A,B\n", b"A,B\r\n"] {
+                for bytes in [
+                    &b"A,B"[..],
+                    b"A,B\n",
+                    b"A,B\r\n",
+                    b"A,B\n\n",
+                    b"A,B\r\n\r\n\n",
+                ] {
                     let (_, divided) = read(&source, bytes, SourceInterpretation::Ordinary, 3);
                     let divided = divided.unwrap();
                     assert_eq!(divided.sizes, [0], "{bytes:?}");
