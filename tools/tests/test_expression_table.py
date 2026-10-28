@@ -26,6 +26,7 @@ FILES = (
     "yaml",
     "docs/articles/schema.md",
     "rust/crates/yamaa-core/src/expression_table.rs",
+    "rust/crates/yamaa-core/src/schema/versioned_layer.rs",
     "rust/crates/yamaa-adapters/schema",
     "rust/crates/yamaa-adapters/src/shipped_schema/data.rs",
     "rust/crates/yamaa-adapters/src/lint/fields.rs",

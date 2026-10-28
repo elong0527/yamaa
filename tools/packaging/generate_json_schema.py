@@ -13,8 +13,9 @@ stale or extra one.
 
 import argparse
 import json
+import re
 
-from tools.paths import ROOT
+from tools.paths import ROOT, WORKSPACE
 from tools.validation.schema_bundle import Bundle
 
 SOURCE = ROOT / "yaml"
@@ -41,6 +42,10 @@ SCALARS = {
 HEADER = ("yamaa", "type")
 COLLECTIONS = ("input", "windows", "intermediates", "columns", "rows")
 BLOCKS = ("output", "submission")
+# The engine's declarations of the same two lists, which layer admission
+# reads (LAYER-4); the check refuses a copy here that differs from them.
+LAYER_SOURCE = WORKSPACE / "crates/yamaa-core/src/schema/versioned_layer.rs"
+LAYER_SOURCE_NAME = "rust/crates/yamaa-core/src/schema/versioned_layer.rs"
 IDENTITIES = {
     "column_class": "name",
     "column_copy_class": "copy",
@@ -50,6 +55,46 @@ IDENTITIES = {
 LAYER = "layer"
 FRAGMENT = "fragment."
 GENERATED = "Generated from yaml/ by tools/packaging/generate_json_schema.py."
+
+
+def rust_names(source, name):
+    """The string literals of the Rust array constant `name` in `source`.
+
+    The constant must be declared once, as `const NAME: [&str; N] = [...];`,
+    holding exactly N string literals and nothing else; anything else is
+    refused rather than read.
+    """
+    declarations = re.findall(
+        rf"^pub(?:\([a-z]+\))? const {name}: \[&str; (\d+)\] =\s*\[([^\]]*)\];",
+        source,
+        re.M,
+    )
+    if len(declarations) != 1:
+        raise ValueError(
+            f"{LAYER_SOURCE_NAME}: expected one `const {name}`, "
+            f"found {len(declarations)}"
+        )
+    length, body = declarations[0]
+    names = tuple(re.findall(r'"([^"\\]*)"', body))
+    if len(names) != int(length) or re.sub(r'"[^"\\]*"|[\s,]', "", body):
+        raise ValueError(
+            f"{LAYER_SOURCE_NAME}: `const {name}` is not a list of {length} "
+            "string literals"
+        )
+    return names
+
+
+def declaration_errors(source):
+    """Where this generator's copies differ from the engine's declarations."""
+    errors = []
+    for name, copy in (("COLLECTIONS", COLLECTIONS), ("BLOCKS", BLOCKS)):
+        declared = rust_names(source, name)
+        if declared != copy:
+            errors.append(
+                f"ERROR: {name} is {list(copy)} here but {list(declared)} in "
+                f"{LAYER_SOURCE_NAME}"
+            )
+    return errors
 
 
 def target(file_type):
@@ -221,6 +266,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
+    mismatched = declaration_errors(LAYER_SOURCE.read_text(encoding="utf-8"))
+    for error in mismatched:
+        print(error)
+    if mismatched:
+        print("Make the generator's lists the engine's, then regenerate.")
+        return 1
     expected = {target(file_type): render(file_type) for file_type in FILE_TYPES}
     if args.write:
         TARGET.mkdir(parents=True, exist_ok=True)
