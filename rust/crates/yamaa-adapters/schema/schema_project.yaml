@@ -27,7 +27,7 @@ project_class:
     - codelists:
         type: "list[codelist_source]"
         required: false
-        description: Codelist sources supplying study terminology (CT-1).
+        description: Codelist sources supplying study terminology, in order; a later source's codelist replaces an earlier one of its id (CT-1).
     - study:
         type: study_class
         required: false

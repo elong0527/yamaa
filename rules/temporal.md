@@ -172,19 +172,27 @@ before the dose therefore has a negative relative time.
 
 ### TIME-5. `closed` sets which endpoints a day count between two dates includes, and only that count takes it
 
-`closed` counts the endpoints of a day range of dates. `right` counts from
-`start` to `end` excluding `start`; `both` counts both endpoints and is one
-greater; `neither` counts neither and is one smaller. With `type: datetime`,
+`closed` counts the endpoints of a day range of dates. `right` counts the days
+from `start` to `end` excluding `start`; `both` counts both endpoints, one day
+more; `neither` counts neither, one day fewer but never fewer than zero. A
+reversed range negates that count ([TIME-4](#time-4)). With `type: datetime`,
 or with `unit: week`, `unit: month` or `unit: year`, `closed` must be absent
 or `right`; any other value fails validation with `value_not_permitted`, where
 the specification is read, before any data is seen.
 
 Fails: `value_not_permitted`.
-Evidence: `negative-date-diff-units`, `adam-adsl-crossover-periods`, `adam-adtte-os`.
+Evidence: `negative-date-diff-units`, `adam-adsl-crossover-periods`, `adam-adtte-os`, `rust/crates/yamaa-core/tests/scalar_declarative_temporal.rs::whole_calendar_units_preserve_clamped_anniversaries_sign_and_endpoint_rules`.
 
 `right` is the default, and `diff` takes no `left`. The failure names the
 offending `closed` value and the permitted value `right`. Like every
 validation failure, no handler answers it and no artifact is accepted.
+
+A range of one date counts 0 under `right`, 1 under `both` and 0, never -1,
+under `neither`; a range of two consecutive dates counts 1, 2 and 0. A
+reversed range counts its exchanged operands under the same `closed` and
+negates the count: `2025-01-03` to `2025-01-01` is -2 under `right`, -3 under
+`both` and -1 under `neither`, and `2025-01-02` to `2025-01-01` is -2 under
+`both` and 0 under `neither`.
 
 <a id="time-6"></a>
 

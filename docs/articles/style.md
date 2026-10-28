@@ -247,7 +247,7 @@ keep their text.
 is written: in an expression field, a handler or a value list
 ([COLUMN-10](../../rules/columns.md#column-10)). An omitted handler that
 answers with missing needs no null: a lookup's `absent`, and `missing` on
-`first_available`, `mapping`, `cut`, `str_extract`, `str_replace`,
+`first_available`, `mapping`, `decode`, `cut`, `str_extract`, `str_replace`,
 `str_case`, `str_substr`, `str_length` and `str_decimal`, and a flag's
 `false_value` and `missing`, each written as `null`, restate their default.
 So does any field that writes the default its schema declares, such as an

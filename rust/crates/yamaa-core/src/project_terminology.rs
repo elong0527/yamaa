@@ -99,20 +99,32 @@ pub enum BindingFinding {
     RedundantAllowedValues,
 }
 
-/// No source overrides another; catalogue order is the authored source/list order.
+/// The composed codelists: a later source's list replaces each earlier list of
+/// its `id` whole (CT-1). Each source keeps the lists no later source
+/// replaces, in authored source/list order, so a list stays with the source
+/// whose `standard` it is drawn from (CT-2).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Catalogue {
     sources: Vec<Codelists>,
 }
 impl Catalogue {
-    /// Transfer the globally admitted environment's original source ownership.
-    pub(crate) fn from_admitted(sources: Vec<Codelists>) -> Self {
+    /// Compose the globally admitted environment's original sources, which
+    /// keep their indices: a source whose lists are all replaced stays empty.
+    pub(crate) fn from_admitted(mut sources: Vec<Codelists>) -> Self {
+        let replaced = replaced(&sources);
+        for (index, source) in sources.iter_mut().enumerate() {
+            let mut codelist = 0;
+            source.codelists.retain(|_| {
+                codelist += 1;
+                !replaced.contains(&(index, codelist - 1))
+            });
+        }
         Self { sources }
     }
     pub fn admit(sources: Vec<Codelists>) -> Result<Self, Vec<Finding>> {
         let findings = validate(&sources);
         if findings.is_empty() {
-            Ok(Self { sources })
+            Ok(Self::from_admitted(sources))
         } else {
             Err(findings)
         }
@@ -151,12 +163,31 @@ impl Catalogue {
     }
 }
 
+/// The position, by source and list, of each list a later source replaces by
+/// declaring its `id` (CT-1).
+fn replaced(sources: &[Codelists]) -> BTreeSet<(usize, usize)> {
+    let mut later = BTreeSet::new();
+    let mut replaced = BTreeSet::new();
+    for (source, declared) in sources.iter().enumerate().rev() {
+        for (codelist, list) in declared.codelists.iter().enumerate() {
+            if later.contains(list.id.name.as_str()) {
+                replaced.insert((source, codelist));
+            }
+        }
+        later.extend(declared.codelists.iter().map(|list| list.id.name.as_str()));
+    }
+    replaced
+}
+
 /// Validate every list across every captured source without resolving dictionaries.
+/// A replaced list is still checked on its own; an `id` repeats only within
+/// one source, and a `name` is unique over the composed lists (CT-1).
 pub fn validate(sources: &[Codelists]) -> Vec<Finding> {
     let mut findings = Vec::new();
-    let mut ids = BTreeSet::new();
+    let replaced = replaced(sources);
     let mut names = BTreeSet::new();
     for (source_index, source) in sources.iter().enumerate() {
+        let mut ids = BTreeSet::new();
         for (codelist, list) in source.codelists.iter().enumerate() {
             let mut push = |fault| {
                 findings.push(Finding {
@@ -168,7 +199,7 @@ pub fn validate(sources: &[Codelists]) -> Vec<Finding> {
             if !ids.insert(&list.id.name) {
                 push(Fault::DuplicateId);
             }
-            if !names.insert(&list.name.text) {
+            if !replaced.contains(&(source_index, codelist)) && !names.insert(&list.name.text) {
                 push(Fault::DuplicateName);
             }
             // A text codelist's SAS format is a character format, whose name

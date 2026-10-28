@@ -1,0 +1,25 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+# The study's codelists, which every submission package of the study shares,
+# then this package's own, which declares only the discontinuation reasons
+# it decodes differently and replaces the study's list of them.
+codelists:
+- study/codelists.yaml
+- codelists.yaml
+study:
+  id: CATH
+  name: CATH
+  description: Example study resubmitting subject-level analysis data
+  protocol_name: CATH-01
+
+adam:
+  specs:
+  - spec.yaml
+  standards:
+  - name: ADaMIG
+    version: '1.3'
+    status: Final
+  define: define.xml
+  context: Other
+  source_system_version: '1.0'
