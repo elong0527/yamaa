@@ -1,0 +1,173 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: EG
+keys: [STUDYID, USUBJID, EGSEQ]
+input:
+  ODM:
+    path: input/odm.csv
+    types:
+      ItemGroupRepeatKey: int
+
+output:
+  path: eg.csv
+  columns: [DOMAIN, STUDYID, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES,
+            EGORRESU, EGSTRESC, EGSTRESN, EGSTRESU, EGREPNUM, VISIT, EGDTC,
+            EGTPT, EGTPTNUM]
+  order_by: [STUDYID, USUBJID, EGSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'EG'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SE.DAY1: DAY 1
+
+  # Each planned time point has its own ECG form.
+  - name: EGTPT
+    type: str
+    label: Planned Time Point Name
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.EG_PREDOSE: PRE-DOSE
+          FO.EG_2H: 2 H POST-DOSE
+
+  - name: EGTPTNUM
+    type: int
+    label: Planned Time Point Number
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.EG_PREDOSE: 1
+          FO.EG_2H: 2
+
+  # The replicate ECGs of one time point are the repeats of its item group.
+  - name: EGREPNUM
+    type: int
+    label: Repetition Number
+    derivation: ODM.ItemGroupRepeatKey
+
+  - name: EGTESTCD
+    type: str
+    label: ECG Test or Examination Short Name
+    verifications:
+      - allowed_values:
+          values: [QTAG, INTP]
+
+  - name: EGTEST
+    type: str
+    label: ECG Test or Examination Name
+
+  - name: EGORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: EGORRESU
+    type: str
+    label: Original Units
+
+  # Every result was collected in standard units or standard terms, so the
+  # standard character result is the collected one, for both kinds of test.
+  - name: EGSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: EGORRES
+
+  - name: EGSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - name: EGSTRESU
+    type: str
+    label: Standard Units
+    derivation: EGORRESU
+
+  - name: EGDTC
+    type: datetime
+    label: Date/Time of ECG
+
+  - name: EGSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [EGTPTNUM, EGREPNUM, EGTESTCD]
+
+# One candidate record per test for each replicate ECG, the repeat of the
+# ECG item group on a time point's form. A result left blank, or an item the
+# repeat does not hold, gives no record; the date and time item of the same
+# repeat dates both records.
+rows:
+  - id: qt-interval
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
+               ODM.ItemGroupRepeatKey]
+    filter: "EGORRES IS NOT NULL"
+    derivations:
+      EGTESTCD: "'QTAG'"
+      EGTEST: "'QT Interval, Aggregate'"
+      EGORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.EG.QT'"
+          expr: "ONLY(ODM.Value)"
+      EGORRESU: "'msec'"
+      EGSTRESN: EGORRES
+      EGDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.EG.EGDTC'"
+          expr: "ONLY(ODM.Value)"
+
+  # The interpretation is a character result: it has no numeric result and
+  # no unit.
+  - id: interpretation
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,
+               ODM.ItemGroupRepeatKey]
+    filter: "EGORRES IS NOT NULL"
+    derivations:
+      EGTESTCD: "'INTP'"
+      EGTEST: "'Interpretation'"
+      EGORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.EG.INTP'"
+          expr: "ONLY(ODM.Value)"
+      EGORRESU: null
+      EGSTRESN: null
+      EGDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.EG.EGDTC'"
+          expr: "ONLY(ODM.Value)"
+
+verifications:
+  - row_count:
+      min: 23
+      max: 23
+  - assert:
+      id: interval-carries-its-number-and-unit
+      when: "EGTESTCD = 'QTAG'"
+      require: "EGSTRESN IS NOT NULL AND EGSTRESU = 'msec'"
+  - assert:
+      id: interpretation-carries-no-number-or-unit
+      when: "EGTESTCD = 'INTP'"
+      require: "EGSTRESN IS NULL AND EGORRESU IS NULL AND EGSTRESU IS NULL"

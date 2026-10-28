@@ -486,9 +486,11 @@ stopifnot("the manifest lists the transport and metadata cases" =
 for (case in manifest$cases) {
   source <- file.path(fixtures, "benchmarks", case$name)
   root <- tempfile(paste0(case$name, "-")); dir.create(root)
-  files <- list.files(source)
-  files <- files[!dir.exists(file.path(source, files))]
-  stopifnot_case(case$name, "the benchmark's files are copied" = all(file.copy(file.path(source, files), root)))
+  # The staged case, codelist files in their directories included, without
+  # its expected truth.
+  files <- setdiff(list.files(source), "expected")
+  stopifnot_case(case$name, "the benchmark's files are copied" =
+    all(file.copy(file.path(source, files), root, recursive = TRUE)))
   for (name in unlist(case$published)) stopifnot_case(case$name, "a published dataset is copied" =
     file.copy(file.path(source, "expected", name), file.path(root, name)))
   result <- yamaa_project(file.path(root, case$project))$submission(case$standard, created = case$created)
