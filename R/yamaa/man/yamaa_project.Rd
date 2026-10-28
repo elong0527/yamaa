@@ -55,7 +55,9 @@ yamaa_project(path)
 \method{length}{yamaa_submission}(x)
 }
 \arguments{
-  \item{path}{Path of a \code{project.yaml}.}
+  \item{path}{Path of a \code{project.yaml}, taken as \code{\link{yamaa_spec}}
+    takes its path: names and a class are dropped, and a leading \code{~}
+    expands to the home directory.}
   \item{x}{A project, a project run, one specification's run of a project run,
     or a submission.}
   \item{i}{The \code{domain} name of a specification the run built.}

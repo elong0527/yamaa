@@ -167,7 +167,7 @@ format.yamaa_submission <- function(x, ...) {
   object$.path <- path
   object$check <- function(parent = NULL, progress = NULL) {
     .check(.reply(.native_spec_check(
-      path, project, .optional_text(parent, "parent"), .version(), .progress(progress, "progress")
+      path, project, .optional_path(parent, "parent"), .version(), .progress(progress, "progress")
     )))
   }
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
@@ -260,14 +260,14 @@ format.yamaa_selftest <- function(x, ...) {
   .reply(.native_selftest_summary(native))
 }
 
-yamaa_spec <- function(path) .spec(.text(path, "path"), NULL)
+yamaa_spec <- function(path) .spec(.path(path, "path"), NULL)
 
-yamaa_project <- function(path) .project(.text(path, "path"))
+yamaa_project <- function(path) .project(.path(path, "path"))
 
 yamaa_read_odm <- function(source, archive_member = NULL, max_archive_members = 10000,
                            max_expanded_bytes = 268435456, max_xml_depth = 64) {
   .reply(.native_read_odm(
-    .text(source, "source"),
+    .path(source, "source"),
     .optional_text(archive_member, "archive_member"),
     max_archive_members,
     max_expanded_bytes,
@@ -275,7 +275,7 @@ yamaa_read_odm <- function(source, archive_member = NULL, max_archive_members = 
   ))
 }
 
-yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))
+yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.paths(paths, "paths"), fix))
 
 yamaa_schema <- function(file_type) .reply(.native_schema(.text(file_type, "file_type")))
 

@@ -180,11 +180,15 @@ qualify_signatures <- function() {
   locked(spec, c(expected_members("spec"), "extra"))
   locked(project, c(expected_members("project"), "extra"))
   locked(run, c(expected_members("run"), "extra"))
+  # A classed or named string is a mistake for a text argument only: a path
+  # argument takes it as its text (#4091, path_arguments.R).
   for (value in list(NULL, 7L, TRUE, NA_character_, character(), c("a", "b"),
     structure("a", class = "path"), structure("a", names = "path"))) {
-    argument_failure(yamaa_spec(value))
-    argument_failure(yamaa_project(value))
-    argument_failure(yamaa_read_odm(value))
+    if (is.null(attributes(value))) {
+      argument_failure(yamaa_spec(value))
+      argument_failure(yamaa_project(value))
+      argument_failure(yamaa_read_odm(value))
+    }
     argument_failure(project$spec(value))
     if (!is.null(value)) {
       argument_failure(project$run(value))
