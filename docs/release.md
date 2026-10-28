@@ -356,7 +356,20 @@ starts at 1.0.0 (#3030 D1).
   `yamaa-core`, `yamaa-adapters`, `yamaa-application` and `yamaa-boundary`
   are not covered, nor
   are the native modules (`yamaa._native` and the R package's registered
-  routines), which are internal (#3679).
+  routines), which are internal (#3679). Those items carry Arrow's types:
+  the facade re-exports types of `arrow-array` and `arrow-schema`, and its
+  own signatures take and return them, such as `Table::batches`,
+  `InputFrame::import` and `SpecRequest::stream`. The Arrow major that the
+  facade builds with, 55 (exactly 55.2.0, as
+  [Supported dependency combinations](#supported-dependency-combinations)
+  says), is therefore part of its contract, and moving to another Arrow
+  major is a facade major release. Production builds use the native Parquet
+  reader and writer; the `parquet` crate is only a test oracle. Its 55.2.0
+  saved-byte identity is frozen separately by the saved-artifact contract
+  below. Changing that identity requires a major release too. Every item that names an Arrow
+  type sits behind the facade's default `arrow` feature, so an embedder that
+  builds the facade without that feature opts out of the coupled surface
+  (#4081).
 - Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
   version 5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an
   admitted project and its inputs, on every supported platform. The Parquet
