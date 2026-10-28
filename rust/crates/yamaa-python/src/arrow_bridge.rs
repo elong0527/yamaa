@@ -69,12 +69,13 @@ impl Table {
     }
 
     /// The whole table: the held one, or a streamed run's output read whole,
-    /// inside a native call that raises an interrupt again (D46). A streamed
-    /// run's refusal is a `RuntimeError`, as a busy handle's is.
+    /// detached from the interpreter (#4072) inside a native call that raises
+    /// an interrupt again (D46). A streamed run's refusal is a
+    /// `RuntimeError`, as a busy handle's is.
     fn whole(&self, py: Python<'_>) -> PyResult<yamaa::Table> {
         crate::interrupt::run(py, |_| match &self.held {
             Held::Table(table) => Ok(table.clone()),
-            Held::Stream(streamed) => streamed.table().map_err(|failure| {
+            Held::Stream(streamed) => py.detach(|| streamed.table()).map_err(|failure| {
                 crate::api_entry::raise(py, crate::api_entry::streamed(failure))
             }),
         })

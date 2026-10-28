@@ -118,7 +118,7 @@ class RenderingTests(unittest.TestCase):
         )
         text = self.public.render_r([])
         for expected in (
-            'yamaa_spec <- function(path) .spec(.text(path, "path"), NULL)',
+            'yamaa_spec <- function(path) .spec(.path(path, "path"), NULL)',
             "`[[.yamaa_project_run` <- function(x, i, ...) {",
             "    plans <<- .reply(.native_plans(plans))",
             "  object$save <- function() "
@@ -292,9 +292,40 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("def lint(paths, fix: bool = False) -> Table:", python)
         self.assertIn("return _call(_native._lint, _fspaths(paths), fix)", python)
         self.assertIn(
-            'yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))',
+            'yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.paths(paths, "paths"), fix))',
             self.public.render_r([]),
         )
+
+    def test_an_r_path_argument_expands_and_a_text_argument_is_taken_as_written(self):
+        # #4091: each argument declared `path`, `optional_path` or `path_list`
+        # reaches api.R's path conversion, which expands a leading `~`; a
+        # `text` or `optional_text` argument, such as a name or a TAR member,
+        # and the path a native call returns keep the text conversion.
+        r = self.public.render_r([])
+        for expected in (
+            'yamaa_spec <- function(path) .spec(.path(path, "path"), NULL)',
+            'yamaa_project <- function(path) .project(.path(path, "path"))',
+            '    .path(source, "source"),\n'
+            '    .optional_text(archive_member, "archive_member"),\n',
+            '.reply(.native_lint(.paths(paths, "paths"), fix))',
+            '      path, project, .optional_path(parent, "parent"), .version(), '
+            '.progress(progress, "progress")\n',
+            '    .spec(.text(.reply(.native_project_spec(path, .text(name, "name"), '
+            '.version())), "path"), path)\n',
+            '      .optional_text(section, "section"),\n'
+            '      .optional_text(created, "created"),\n',
+            'yamaa_schema <- function(file_type) .reply(.native_schema(.text(file_type, "file_type")))',
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, r)
+        for removed in (
+            ".texts(",
+            ".text(path, ",
+            ".text(source, ",
+            ".optional_text(parent, ",
+        ):
+            with self.subTest(removed=removed):
+                self.assertNotIn(removed, r)
 
     def test_a_file_type_argument_gives_the_text_its_native_call_returns(self):
         python = self.public.render_python([])

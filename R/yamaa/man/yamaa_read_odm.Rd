@@ -10,7 +10,10 @@ yamaa_read_odm(source, archive_member = NULL, max_archive_members = 10000,
                max_expanded_bytes = 268435456, max_xml_depth = 64)
 }
 \arguments{
-  \item{source}{Path of an ODM XML file or TAR archive.}
+  \item{source}{Path of an ODM XML file or TAR archive, taken as
+    \code{\link{yamaa_spec}} takes its path: names and a class are dropped,
+    and a leading \code{~} expands to the home directory. The
+    \code{archive_member} name is never expanded.}
   \item{archive_member}{Name of the XML member to read from a TAR, or
     \code{NULL} to select the only XML member.}
   \item{max_archive_members}{Most members a TAR may hold.}

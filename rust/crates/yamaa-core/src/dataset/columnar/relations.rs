@@ -475,7 +475,9 @@ pub(super) fn verify<'a: 's, 's, E>(
                     columns.push(column);
                 }
             }
-            let groups = crate::table_grouping::partition(&filtered, &columns)
+            // The records a key would match are one combination, and two
+            // missing values are one too (LOOKUP-17).
+            let groups = crate::table_grouping::partition_matching(&filtered, &columns)
                 .map_err(|error| Box::new(ExecutionError::Grouping(error)))?;
             let repeated: Vec<&Vec<usize>> =
                 groups.iter().filter(|group| group.len() > 1).collect();

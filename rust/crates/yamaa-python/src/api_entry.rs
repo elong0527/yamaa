@@ -6,6 +6,11 @@
 //! The facade engine of every call is built in one place, [`engine`], from
 //! the Python host, the running interpreter's version and, for a call that
 //! may run project functions, the installed functions' port.
+//!
+//! Each call that runs the engine, or reads a result that may run it, runs
+//! detached from the interpreter, so that other threads run meanwhile
+//! (#4072): its progress callback, project functions and interrupt probe
+//! attach again, and its refusal is raised once it has attached.
 use pyo3::{exceptions::PyException, exceptions::PyRuntimeError, prelude::*, types::PyDict};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -159,38 +164,61 @@ impl Progress {
     }
 }
 
-/// Run a cancellable call of the engine with the interpreter's interrupts
-/// behind its token. Once the call returns the token is polled once more,
-/// so an interrupt that arrived as it returned still cancels it (D186).
-fn called<T>(
+/// Run `run` detached from the interpreter, with the interpreter's
+/// interrupts behind its token. Once it returns the token is polled once
+/// more, so an interrupt that arrived as it returned still cancels it
+/// (D186).
+fn cancellable<T: Send>(
+    py: Python<'_>,
+    run: impl Send + FnOnce(&CancellationToken) -> Result<T, Refused>,
+) -> PyResult<T> {
+    crate::interrupt::run(py, |state| {
+        let token = crate::interrupt::token(state);
+        py.detach(|| {
+            let answer = run(&token);
+            if token.is_cancelled() {
+                Err(Refused::Cancelled)
+            } else {
+                answer
+            }
+        })
+        .map_err(|refusal| raise(py, refusal))
+    })
+}
+
+/// Run a cancellable call of the engine, which may call project functions
+/// and report to `progress`.
+fn called<T: Send>(
     py: Python<'_>,
     (functions, progress): (bool, Option<Bound<'_, PyAny>>),
-    run: impl FnOnce(&yamaa::Engine, &CancellationToken) -> Result<T, Refused>,
+    run: impl Send + FnOnce(&yamaa::Engine, &CancellationToken) -> Result<T, Refused>,
 ) -> PyResult<T> {
     gate()?;
     let version = runtime(py);
     let progress = Progress::of(progress)?;
-    crate::interrupt::run(py, |state| {
-        let token = crate::interrupt::token(state);
-        let answer = run(&engine(&version, functions, progress.as_ref()), &token);
-        let answer = if token.is_cancelled() {
-            Err(Refused::Cancelled)
-        } else {
-            answer
-        };
-        answer.map_err(|refusal| raise(py, refusal))
+    cancellable(py, |token| {
+        run(&engine(&version, functions, progress.as_ref()), token)
     })
 }
 
-/// Run a call of the engine that reads files and calls no project function.
-fn plain<T>(py: Python<'_>, run: impl FnOnce(&yamaa::Engine) -> Result<T, Refused>) -> PyResult<T> {
+/// Run a call of the engine that reads files and calls no project function,
+/// detached from the interpreter.
+fn plain<T: Send>(
+    py: Python<'_>,
+    run: impl Send + FnOnce(&yamaa::Engine) -> Result<T, Refused>,
+) -> PyResult<T> {
     gate()?;
-    run(&engine(&runtime(py), false, None)).map_err(|refusal| raise(py, refusal))
+    let version = runtime(py);
+    py.detach(|| run(&engine(&version, false, None)))
+        .map_err(|refusal| raise(py, refusal))
 }
 
-/// A result's accessor, which reaches only the result itself.
-fn read<T>(py: Python<'_>, read: impl FnOnce() -> Result<T, Refused>) -> PyResult<T> {
-    crate::interrupt::run(py, |_| read().map_err(|refusal| raise(py, refusal)))
+/// A result's accessor, which reaches only the result itself, detached from
+/// the interpreter: a streamed run nobody started to read runs whole here.
+fn read<T: Send>(py: Python<'_>, read: impl Send + FnOnce() -> Result<T, Refused>) -> PyResult<T> {
+    crate::interrupt::run(py, |_| {
+        py.detach(read).map_err(|refusal| raise(py, refusal))
+    })
 }
 
 /// A result, unless another call holds it (D258): `noun` names its kind in
@@ -201,22 +229,12 @@ fn locked<'a, T>(value: &'a Mutex<T>, noun: &str) -> Result<MutexGuard<'a, T>, R
         .map_err(|_| Refused::Boundary(format!("{noun} handle is in use or poisoned")))
 }
 
-/// Save a result with `save`, with the interpreter's interrupts behind the
-/// call's token.
+/// Save a result with `save`, a cancellable call.
 fn save(
     py: Python<'_>,
-    save: impl FnOnce(&CancellationToken) -> Result<Vec<String>, Refused>,
+    save: impl Send + FnOnce(&CancellationToken) -> Result<Vec<String>, Refused>,
 ) -> PyResult<Vec<String>> {
-    crate::interrupt::run(py, |state| {
-        let token = crate::interrupt::token(state);
-        let saved = save(&token);
-        let saved = if token.is_cancelled() {
-            Err(Refused::Cancelled)
-        } else {
-            saved
-        };
-        saved.map_err(|refusal| raise(py, refusal))
-    })
+    cancellable(py, save)
 }
 
 /// The request of `specification`, read with `project` when one is given.
@@ -270,7 +288,11 @@ impl Run {
     /// Read the run's result with `read`. A streamed run nobody started to
     /// read runs whole first; one whose stream has not ended, or that was
     /// cancelled, refuses.
-    fn result<T>(&self, py: Python<'_>, read: impl FnOnce(&yamaa::Run) -> T) -> PyResult<T> {
+    fn result<T: Send>(
+        &self,
+        py: Python<'_>,
+        read: impl Send + FnOnce(&yamaa::Run) -> T,
+    ) -> PyResult<T> {
         self::read(py, || match &self.held {
             Held::Built(run) => Ok(read(&*locked(run, "run")?)),
             Held::Streamed(run) => Ok(read(&*run.run().map_err(streamed)?)),
@@ -348,7 +370,11 @@ impl Check {
         }
     }
 
-    fn result<T>(&self, py: Python<'_>, read: impl FnOnce(&yamaa::Check) -> T) -> PyResult<T> {
+    fn result<T: Send>(
+        &self,
+        py: Python<'_>,
+        read: impl Send + FnOnce(&yamaa::Check) -> T,
+    ) -> PyResult<T> {
         self::read(py, || Ok(read(&*locked(&self.check, "check")?)))
     }
 }
@@ -444,18 +470,21 @@ pub fn _spec_run(
         let progress = Progress::of(progress)?;
         let token = crate::interrupt::stream_token();
         let run = crate::interrupt::run(py, |_| {
-            let engine = engine(&version, true, progress.as_ref());
-            let request = spec_request(&engine, specification, project).cancel_with(&token);
-            let run = match plans {
-                Some(plans) => request.reusing(plans),
-                None => request,
-            }
-            .stream();
-            // As a built run's call, the start polls its token once more.
-            if token.is_cancelled() {
-                return Err(raise(py, Refused::Cancelled));
-            }
-            run.map_err(|failure| raise(py, failure.into()))
+            py.detach(|| {
+                let engine = engine(&version, true, progress.as_ref());
+                let request = spec_request(&engine, specification, project).cancel_with(&token);
+                let run = match plans {
+                    Some(plans) => request.reusing(plans),
+                    None => request,
+                }
+                .stream();
+                // As a built run's call, the start polls its token once more.
+                if token.is_cancelled() {
+                    return Err(Refused::Cancelled);
+                }
+                run.map_err(Refused::from)
+            })
+            .map_err(|refusal| raise(py, refusal))
         })?;
         return Ok(Run::new(Held::Streamed(Arc::new(run))));
     }
@@ -596,8 +625,9 @@ pub fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 pub fn _selftest(py: Python<'_>) -> PyResult<SelfTest> {
     gate()?;
     let version = python_version(py);
+    let selftest = py.detach(|| yamaa::selftest(yamaa::Host::Python, Some(&version)));
     Ok(SelfTest {
-        selftest: yamaa::selftest(yamaa::Host::Python, Some(&version)),
+        selftest,
         _live: CENSUS.hold(HandleKind::SelfTest),
     })
 }
@@ -609,20 +639,20 @@ pub struct ProjectRun {
 }
 
 impl ProjectRun {
-    fn result<T>(
+    fn result<T: Send>(
         &self,
         py: Python<'_>,
-        read: impl FnOnce(&yamaa::ProjectRun) -> Result<T, Refused>,
+        read: impl Send + FnOnce(&yamaa::ProjectRun) -> Result<T, Refused>,
     ) -> PyResult<T> {
         self::read(py, || read(&*locked(&self.runs, "project run")?))
     }
 
     /// Read the member `name` of the project run with `read`.
-    fn member<T>(
+    fn member<T: Send>(
         &self,
         py: Python<'_>,
         name: &str,
-        read: impl FnOnce(&yamaa::Run) -> T,
+        read: impl Send + FnOnce(&yamaa::Run) -> T,
     ) -> PyResult<T> {
         self.result(py, |runs| Ok(read(runs.member(name)?)))
     }
@@ -682,7 +712,11 @@ pub struct Submission {
 }
 
 impl Submission {
-    fn result<T>(&self, py: Python<'_>, read: impl FnOnce(&yamaa::Submission) -> T) -> PyResult<T> {
+    fn result<T: Send>(
+        &self,
+        py: Python<'_>,
+        read: impl Send + FnOnce(&yamaa::Submission) -> T,
+    ) -> PyResult<T> {
         self::read(py, || Ok(read(&*locked(&self.submission, "submission")?)))
     }
 }

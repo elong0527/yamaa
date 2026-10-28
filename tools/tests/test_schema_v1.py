@@ -1150,13 +1150,6 @@ RESERVED = {
         [("submission_dataset_class", "supplemental")],
         lambda d: d["submission"].update(supplemental={"dataset": "SUPPDM"}),
     ),
-    ("submission: {split: {by: COLUMN, datasets: {NAME: [V, ...]}}}", "a dataset"): (
-        "spec",
-        [("submission_dataset_class", "split")],
-        lambda d: d["submission"].update(
-            split={"by": "SEX", "datasets": {"DMF": ["F"]}}
-        ),
-    ),
     ("pages: {type, first, last}", "a document reference"): (
         "spec",
         [("page_reference_class", "first"), ("page_reference_class", "last")],
@@ -1183,13 +1176,6 @@ RESERVED = {
         "spec",
         [],
         lambda d: d["submission"].update(standard={"name": "SDTMIG", "version": "3.4"}),
-    ),
-    ("transactions: replay", "an ODM input"): (
-        "spec",
-        [("dataset_class", "transactions")],
-        lambda d: d["input"].update(
-            DM_RAW={"path": "odm.xml", "transactions": "replay"}
-        ),
     ),
     ("archive_member: NAME", "an ODM input"): (
         "spec",

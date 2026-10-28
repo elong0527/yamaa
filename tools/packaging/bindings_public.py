@@ -105,16 +105,18 @@ _DEFAULTS = {
     "flag": {"false", "true"},
     "count": None,  # a nonnegative integer
 }
-# Handwritten conversions the generated code calls.
+# Handwritten conversions the generated code calls. R's path conversions take
+# a named or classed string and expand a leading `~`, as base R's file
+# functions do; its text conversions take text as written (#4091).
 _PY_ARGUMENT = {
     "path": "_fspath",
     "path_list": "_fspaths",
     "optional_path": "_optional_fspath",
 }
 _R_ARGUMENT = {
-    "path": ".text",
-    "path_list": ".texts",
-    "optional_path": ".optional_text",
+    "path": ".path",
+    "path_list": ".paths",
+    "optional_path": ".optional_path",
     "text": ".text",
     "optional_text": ".optional_text",
     "file_type": ".text",
@@ -1154,6 +1156,8 @@ class Public:
         values = []
         for index, (hold, role) in enumerate(self.holds(target)):
             if index == 0 and first is not None:
+                # The path a native call returns is the engine's text, which
+                # is not expanded as a path argument is.
                 if self.kind(target) == "lazy":
                     first = _Call(".text", [first, f'"{hold}"'])
                 values.append(first)

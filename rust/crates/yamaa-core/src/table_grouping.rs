@@ -8,8 +8,10 @@ use crate::{
 use std::collections::BTreeMap;
 
 /// Map ordering is internal: returned groups always follow first source occurrence.
-/// Finite float bits suffice for equality after canonicalizing signed zero. Types
-/// remain distinct; normalized table columns have one declared logical type.
+/// Finite float bits suffice for equality after canonicalizing signed zero. Under
+/// grouping equality (`From`) types remain distinct; normalized table columns
+/// have one declared logical type. Under key equality ([`Key::matching`]) an
+/// integral float is the integer it equals.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Key<'a> {
     Missing,
@@ -54,6 +56,26 @@ impl<'a> From<ValueRef<'a>> for Key<'a> {
             ValueRef::Date(value) => Self::Date(value),
             ValueRef::DateTime(value) => Self::DateTime(value),
         }
+    }
+}
+
+impl<'a> Key<'a> {
+    /// `value` under key equality (VALUE-19, LOOKUP-9), as key matching and
+    /// an intermediate's `unique` check compare it: numbers by value, so an
+    /// integral float within the `int` range is the `Int` it equals, and
+    /// every other value as grouping equality has it, a missing value its
+    /// own key. Key matching never offers a missing key; `unique` counts two
+    /// missing values as one combination (LOOKUP-17).
+    pub(crate) fn matching(value: ValueRef<'a>) -> Self {
+        if let ValueRef::Float(number) = value {
+            let number = number.get();
+            if number == number.trunc()
+                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&number)
+            {
+                return Self::Int(number as i64);
+            }
+        }
+        Self::from(value)
     }
 }
 
@@ -128,6 +150,27 @@ pub fn partition<T: TableAccess + ?Sized>(
     table: &T,
     columns: &[usize],
 ) -> Result<Vec<Vec<usize>>, GroupingError<T::Error>> {
+    partition_by(table, columns, Key::from)
+}
+
+/// Partition all rows as [`partition`] does, comparing each value under key
+/// equality ([`Key::matching`]): an intermediate's `unique` check groups the
+/// combinations key matching would meet, and missing values still compare
+/// equal (LOOKUP-17).
+pub(crate) fn partition_matching<T: TableAccess + ?Sized>(
+    table: &T,
+    columns: &[usize],
+) -> Result<Vec<Vec<usize>>, GroupingError<T::Error>> {
+    partition_by(table, columns, Key::matching)
+}
+
+/// The one partition both equalities share: each row's key is `key_of` of
+/// each of its cells.
+fn partition_by<'t, T: TableAccess + ?Sized>(
+    table: &'t T,
+    columns: &[usize],
+    key_of: fn(ValueRef<'t>) -> Key<'t>,
+) -> Result<Vec<Vec<usize>>, GroupingError<T::Error>> {
     if columns.is_empty() {
         return Err(GroupingError::EmptyColumns);
     }
@@ -148,7 +191,7 @@ pub fn partition<T: TableAccess + ?Sized>(
         key.try_reserve_exact(columns.len())
             .map_err(|_| GroupingError::Allocation)?;
         for &column in columns {
-            key.push(Key::from(
+            key.push(key_of(
                 table
                     .cell(row, column)
                     .map_err(|error| GroupingError::Cell { row, column, error })?,
