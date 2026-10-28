@@ -6828,19 +6828,20 @@
           }
         },
         {
-          "name": "a_1_0_root_replacement_hides_parent_fields",
+          "name": "a_1_0_report_cleared_below_a_later_output_locates_at_the_clear_entry",
           "files": {
             "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
-            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
+            "cleared.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\nclear: [output.report]\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: cleared.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
             "raw.csv": "ID\nS1\n"
           },
           "call": {"operation": "check", "path": "child.yaml"},
           "issue": {
             "condition": "missing_report",
             "spec_path": "output.report",
-            "file": "child.yaml",
+            "file": "cleared.yaml",
             "line": 4,
-            "column": 1
+            "column": 9
           }
         },
         {
@@ -7325,11 +7326,42 @@
           "ADURN",
           "ASEVN"
         ],
-        "declaring_sources": {
-          "/columns/0/label": "ae.yaml",
-          "/columns/4/label": "duration.yaml",
-          "/columns/5/label": "severity.yaml",
-          "/domain": "adae.yaml"
+        "origins": {
+          "/columns/0/label": {
+            "declaring_source": "ae.yaml",
+            "line": 7,
+            "column": 39,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/4/label": {
+            "declaring_source": "duration.yaml",
+            "line": 6,
+            "column": 12,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/4/derivation/value": {
+            "declaring_source": "duration.yaml",
+            "line": 7,
+            "column": 17,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/5/label": {
+            "declaring_source": "severity.yaml",
+            "line": 6,
+            "column": 12,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/domain": {
+            "declaring_source": "adae.yaml",
+            "line": 5,
+            "column": 9,
+            "source_kind": "authored",
+            "generated": false
+          }
         },
         "absent_fields": [
           "parent",

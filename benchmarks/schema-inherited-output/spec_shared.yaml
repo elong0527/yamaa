@@ -4,7 +4,8 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 
 # Written once here and inherited whole. The path is read from this
-# file's directory; a study that writes its own output replaces all of it.
+# file's directory; a study that writes one field of its own output keeps
+# the others.
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGE, AGEU]

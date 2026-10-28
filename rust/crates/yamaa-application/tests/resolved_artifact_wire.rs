@@ -4,30 +4,33 @@
 //! `from_json` and `to_json`, and `specification_value` over core `Document`
 //! arenas built by code: no case operation returns a resolved artifact.
 use crate::support::Edit as _;
-use yamaa_application::resolved_artifact::model::specification_value;
+use yamaa_application::resolved_artifact::model::{self, specification_value};
 use yamaa_application::resolved_artifact::ResolvedArtifact;
 use yamaa_core::schema::{Document, DocumentError, DocumentNode as N};
 
+/// A version 1 artifact as an engine before 0.7.0 wrote it: no origin
+/// carries a line or a column.
+const TEXT: &str = r#"{
+  "format":"yamaa.resolved-specification", "artifact_version":1,
+  "model_kind":"normalized_with_named_dictionary_references", "replay":"inspection_only",
+  "entry":"/held/spec.yaml", "project":null,
+  "entries":[{
+    "entry":"/held/spec.yaml", "language_version":"1.0",
+    "specification":{"yamaa":"1.0","examples":[123456789012345678901234567890,1.0]},
+    "mapping_order":{"": ["yamaa","examples"]},
+    "origins":{
+      "":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
+      "/yamaa":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
+      "/examples":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
+      "/examples/0":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
+      "/examples/1":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false}
+    },
+    "layers":["/held/spec.yaml"], "resources":[]
+  }]
+}"#;
+
 #[test]
 fn inspection_round_trip_requires_no_yaml_or_parquet_reader() {
-    const TEXT: &str = r#"{
-      "format":"yamaa.resolved-specification", "artifact_version":1,
-      "model_kind":"normalized_with_named_dictionary_references", "replay":"inspection_only",
-      "entry":"/held/spec.yaml", "project":null,
-      "entries":[{
-        "entry":"/held/spec.yaml", "language_version":"1.0",
-        "specification":{"yamaa":"1.0","examples":[123456789012345678901234567890,1.0]},
-        "mapping_order":{"": ["yamaa","examples"]},
-        "origins":{
-          "":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
-          "/yamaa":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
-          "/examples":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
-          "/examples/0":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
-          "/examples/1":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false}
-        },
-        "layers":["/held/spec.yaml"], "resources":[]
-      }]
-    }"#;
     let artifact = ResolvedArtifact::from_json(TEXT).unwrap();
     let serialized = artifact.to_json().unwrap();
     assert!(serialized.contains("123456789012345678901234567890,1.0"));
@@ -36,6 +39,72 @@ fn inspection_round_trip_requires_no_yaml_or_parquet_reader() {
         &serialized.edit("\"artifact_version\":1", "\"artifact_version\":2")
     )
     .is_err());
+}
+
+#[test]
+fn an_origin_reads_with_the_line_and_column_its_layer_wrote_or_without_either() {
+    // The seam is the wire's origin ledger, which version 1 extended with an
+    // optional location: an authored origin carries a written line and
+    // column, both one-based, or neither, as an earlier engine wrote it.
+    const WRITTEN: &str = r#""/yamaa":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false}"#;
+    let origin = |fields: &str| format!(r#""/yamaa":{{{fields},"generated":false}}"#);
+    let authored = |location: &str| {
+        origin(&format!(
+            r#""declaring_source":"/held/spec.yaml",{location}"source_kind":"authored""#
+        ))
+    };
+    let artifact =
+        ResolvedArtifact::from_json(&TEXT.edit(WRITTEN, &authored(r#""line":1,"column":8,"#)))
+            .unwrap();
+    let value = artifact.to_value().unwrap();
+    let origins = &value["entries"][0]["origins"];
+    assert_eq!(
+        (&origins["/yamaa"], &origins["/examples"]),
+        (
+            &yamaa_adapters::json!({
+                "declaring_source": "/held/spec.yaml", "line": 1, "column": 8,
+                "source_kind": "authored", "generated": false
+            }),
+            &yamaa_adapters::json!({
+                "declaring_source": "/held/spec.yaml",
+                "source_kind": "authored", "generated": false
+            }),
+        ),
+        "a located origin and one without a location, written back"
+    );
+    assert_eq!(
+        ResolvedArtifact::from_json(&artifact.to_json().unwrap()).unwrap(),
+        artifact
+    );
+    let default = |location: &str| {
+        origin(&format!(
+            r#""declaring_source":"yamaa:schema",{location}"source_kind":"schema_default""#
+        ))
+    };
+    for (label, refused) in [
+        ("a line without a column", authored(r#""line":1,"#)),
+        ("a column without a line", authored(r#""column":8,"#)),
+        ("line zero", authored(r#""line":0,"column":8,"#)),
+        ("column zero", authored(r#""line":1,"column":0,"#)),
+        (
+            "a located schema default",
+            default(r#""line":1,"column":8,"#),
+        ),
+        (
+            "a located composed value",
+            origin(r#""declaring_source":null,"line":1,"column":8,"source_kind":"composed""#),
+        ),
+    ] {
+        assert!(
+            matches!(
+                ResolvedArtifact::from_json(&TEXT.edit(WRITTEN, &refused)),
+                Err(model::Error::Facts("origin location is not a written one"))
+            ),
+            "{label}"
+        );
+    }
+    // Without a location, the same schema default reads.
+    assert!(ResolvedArtifact::from_json(&TEXT.edit(WRITTEN, &default(""))).is_ok());
 }
 
 #[test]

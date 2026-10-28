@@ -164,7 +164,9 @@ precedence over the ones before it
 A layer need not be complete. Each layer is checked for what it writes, and
 the composed specification for required fields. A root field replaces what
 came before it whole, while `input`, `intermediates`, `columns`, `rows` and
-`windows` compose member by member, matched by their key, `name` or `id`
+`windows` compose member by member, matched by their key, `name` or `id`,
+and `output` and `submission` compose field by field, so a layer that changes
+only `output.columns` or `submission.artifact` writes that field alone
 ([LAYER-5](../../rules/inheritance.md#layer-5)). This study entry inherits
 an adverse-event template and includes two fragments:
 

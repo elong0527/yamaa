@@ -431,8 +431,11 @@ mapping, writing it empty or writing again an entry exactly as it inherits
 it, and leaves out entries that then come back is reported at the mapping,
 and the message names the entries that come back. The mappings read are an
 input's `types`, a named intermediate's `key` written as a mapping and its
-`derivations`, a row template's `derivations` and the settings of a named
-window. A layer that writes only what it adds or changes is patching and is
+`derivations`, a row template's `derivations`, the settings of a named window
+and the fields of `output` and `submission`
+([LAYER-5](../../rules/inheritance.md#layer-5)); a required field of
+`output` or `submission` that comes back is not named, since a layer writes
+it to replace it. A layer that writes only what it adds or changes is patching and is
 never reported, and neither is a mapping the layer clears: clearing a mapping
 and writing it in the same layer replaces it
 ([LAYER-9](../../rules/inheritance.md#layer-9)).
@@ -455,7 +458,9 @@ comes back and `rows.scores.derivations` is reported. List the mapping in
 `clear`, as `clear: [rows.scores.derivations]`, to replace it, or write only
 the derivations this layer changes to keep the parent's. A named window is a
 keyed member, which `clear` never names, so each setting the layer leaves
-out is cleared by its own path, such as `windows.BYSUBJ.filter`. Either
+out is cleared by its own path, such as `windows.BYSUBJ.filter`, and so is
+each field a layer leaves out of `output` or `submission`, such as
+`output.report`. Either
 meaning may be intended, so `fix` makes neither rewrite. Each derivation the
 layer writes as the parent does is also reported, as
 `restated_inherited_value`, and either rewrite settles both. The check
