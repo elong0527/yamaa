@@ -34,8 +34,9 @@ fn reference(path: &str, name: &str, intermediate: &str, code: C, findings: &mut
 /// name is an output column alone, so one that no column takes fails at
 /// `between.value`, whatever the bounds bind; when another intermediate's
 /// derivations read this one (`contextual`), it stays contextual instead: a
-/// donor read takes the donor record's field of that name (LOOKUP-16), and
-/// every row that reads the intermediate refuses it ([`lookup_range::admit`]).
+/// donor read takes the donor record's field of that name (LOOKUP-16), as
+/// does a qualified value its input does not store; every row that reads an
+/// unresolved value refuses it ([`lookup_range::admit`]).
 pub(super) fn bind(
     declaration: &lookup_range::Declaration,
     relation: &intermediates::Donor<'_>,
@@ -75,7 +76,9 @@ pub(super) fn bind(
             },
         );
     }
-    let current = declaration.current_value(catalog, donors, None, None, &mut Vec::new())?;
+    let current = declaration
+        .current_value(catalog, donors, None, None, &mut Vec::new())?
+        .or_else(|| contextual.then_some((CurrentRead::Contextual, None)));
     let Some((read, kind)) = current else {
         findings.push(wrap(declaration.unknown_value(owner)));
         return Ok(None);
