@@ -312,6 +312,16 @@ mod table {
                         "a carriage return in a quoted field",
                     ),
                     (
+                        b"A,B\n1,x\n2,y\n3,\"z\n\r\n",
+                        profile(CarriageReturn, 4, 2),
+                        "a CR LF after a line feed in an unclosed quote",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3,\"z\n\n",
+                        profile(QuoteUnterminated, 4, 2),
+                        "blank lines in an unclosed quote",
+                    ),
+                    (
                         b"A,B\n1,x\n2,y\n3,\"z\"w\n",
                         profile(TextAfterQuote, 4, 2),
                         "text after a closing quote",

@@ -338,7 +338,8 @@ mod table {
         /// read and a blank line before the last record is a record of one
         /// empty field. A line of a space or of a quoted empty field is no
         /// blank line (CSV-12, CSV-14), and blank lines inside a quoted
-        /// field the source never closes still fail as that field.
+        /// field the source never closes are read as the field's bytes, so
+        /// a carriage return among them fails as it does anywhere in it.
         #[test]
         fn trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one() {
             let ok = |names: &[&str], records: &[&[Option<&str>]]| {
@@ -418,6 +419,11 @@ mod table {
                     b"A\n\"x\r\n\r\n",
                     profile(ProfileCause::CarriageReturn, 2, 1),
                     "a CR LF inside an unclosed quote",
+                ),
+                (
+                    b"A\n\"x\n\r\n",
+                    profile(ProfileCause::CarriageReturn, 2, 1),
+                    "a CR LF after a line feed inside an unclosed quote",
                 ),
                 (
                     b"ID\n1\n\r",

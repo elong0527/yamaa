@@ -244,9 +244,13 @@ of one field ends cleanly and a wider source has no short record to refuse
 lines alone has an empty header name, and a header followed by blank lines
 holds no records. A blank line before the last record is a record of one empty
 field, and a line holding a space or a quoted empty field is no blank line
-([CSV-12](#csv-12)). Every other difference is refused rather than silently
-repaired: a byte-order mark the input does not declare ([CSV-10](#csv-10)), a
-`U+000D` anywhere else, and every reader option [CSV-15](#csv-15) excludes.
+([CSV-12](#csv-12)). A line feed inside a quoted field is a character of its
+value, so no line a quoted field holds is a blank line: a quoted field the
+file never closes is read to the end of the file, and fails at the first
+`U+000D` it holds or else as unterminated. Every other difference is refused
+rather than silently repaired: a byte-order mark the input does not declare
+([CSV-10](#csv-10)), a `U+000D` anywhere else, and every reader option
+[CSV-15](#csv-15) excludes.
 
 <a id="csv-12"></a>
 
