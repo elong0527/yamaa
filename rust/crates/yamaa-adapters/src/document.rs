@@ -601,6 +601,30 @@ impl VersionedDocument {
     }
 }
 
+/// The layers of `chain`, read through `port`, as preparation composes them
+/// ([`lifecycle::contributed_layers`]): each copy entry replaced by the
+/// columns it declares, read from its producer as preparation reads it
+/// (SPEC-9), and each relative path respelled from the entry (LAYER-10).
+/// None when a layer does not normalize or a producer cannot be read:
+/// preparation then reports why.
+#[cfg(feature = "yaml")]
+pub(crate) fn contributed_layers<P: Resolver>(
+    schema: &yamaa_core::schema::SchemaStructure,
+    chain: &VersionedChain,
+    port: &mut P,
+) -> Option<Vec<NormalizedDocument>> {
+    let resolving = [chain.layers.last()?.source.identity.clone()];
+    lifecycle::contributed_layers(
+        schema,
+        chain,
+        port,
+        |port, declaring, written, dataset, layers| {
+            read_producer(port, &resolving, declaring, written, dataset, layers).ok()
+        },
+    )
+    .ok()
+}
+
 /// Where `layer` was decoded: `raw`, the entry read as `source`, or the
 /// parent or fragment of `parents` read under its identity.
 fn layer_locations<'a>(

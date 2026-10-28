@@ -1,5 +1,6 @@
 """Installed yamaa.lint: the P-LINT-2 table, fixes, a partial restatement of
-an inherited mapping, which reads the parent layer, and refusals.
+an inherited mapping and values restated as they are inherited, which read
+the parent layer, and refusals.
 
 The lint's complete suite is native (the adapters' lint tests); this checks
 what the installed host returns for the shared truth, which R reads too.
@@ -61,17 +62,19 @@ class Lint(unittest.TestCase):
         self.assertEqual(self.path.read_bytes().decode("utf-8"), TRUTH["fixed_yaml"])
         self.check_table(yamaa.lint(self.path), TRUTH["fixed_rows"])
 
-    def test_a_partial_restatement_is_reported_and_fix_leaves_it(self):
-        case = TRUTH["partial_restatement"]
-        for name, text in case["files"].items():
-            (self.root / name).write_bytes(text.encode("utf-8"))
-        path = self.root / case["file_name"]
-        for fix in (False, True):
-            with self.subTest(fix=fix):
-                self.check_table(yamaa.lint(path, fix=fix), case["rows"], path)
-                self.assertEqual(
-                    path.read_bytes().decode("utf-8"), case["files"][case["file_name"]]
-                )
+    def test_a_layer_is_compared_with_its_parent_and_fix_leaves_it(self):
+        for key in ("partial_restatement", "restated_inherited_value"):
+            case = TRUTH[key]
+            for name, text in case["files"].items():
+                (self.root / name).write_bytes(text.encode("utf-8"))
+            path = self.root / case["file_name"]
+            for fix in (False, True):
+                with self.subTest(case=key, fix=fix):
+                    self.check_table(yamaa.lint(path, fix=fix), case["rows"], path)
+                    self.assertEqual(
+                        path.read_bytes().decode("utf-8"),
+                        case["files"][case["file_name"]],
+                    )
 
     def test_a_clean_table_keeps_its_columns(self):
         self.path.write_bytes(b"")

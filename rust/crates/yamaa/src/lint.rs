@@ -12,8 +12,8 @@
 //! linted and names the files a fix rewrote, for the command line's summary
 //! line, `N lint findings in M of K files`. A 1.x specification that declares
 //! `parent` or `include` is also compared with the layers it inherits, read
-//! through the same resolver, for `partial_restatement`, which no fix
-//! rewrites. A file that declares either, or that a specification of the
+//! through the same resolver, for `partial_restatement` and
+//! `restated_inherited_value`, which no fix rewrites. A file that declares either, or that a specification of the
 //! call includes, itself or through the parent chain it inherits, is a layer,
 //! which `restated_default`, `unused_input_key` and `missing_label` do not
 //! read.
@@ -42,7 +42,7 @@ use crate::text::{self, Action};
 pub const LINT_COLUMNS: [&str; 6] = ["file", "line", "column", "finding", "spec_path", "message"];
 
 /// Every value of the lint table's `finding` column.
-pub const LINT_FINDINGS: [&str; 15] = yamaa_adapters::lint::FINDINGS;
+pub const LINT_FINDINGS: [&str; 16] = yamaa_adapters::lint::FINDINGS;
 
 /// What [`lint`] found: the findings that remain, in table order, with the
 /// number of files it read and the files a fix rewrote. The hosts return its

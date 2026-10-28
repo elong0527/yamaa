@@ -37,7 +37,8 @@ The check reads each file as its author wrote it, before any inherited layer
 is resolved, and returns a table with one row per finding: the file's absolute
 path with forward slashes, the one-based line and column where the departure
 starts, the finding, its spec path and a message. Only
-[`partial_restatement`](#authoring-findings) also reads the layers a
+[`partial_restatement`](#authoring-findings) and
+[`restated_inherited_value`](#authoring-findings) also read the layers a
 specification inherits and includes.
 
 | file | line | column | finding | spec_path | message |
@@ -84,6 +85,7 @@ The findings, in the order the lint lists them:
 | `unused_input_key` | An input's `key` that no read uses | no |
 | `equality_filter` | A lookup filter comparing a donor field and a row value | no |
 | `partial_restatement` | A layer restating an inherited mapping with entries left out | no |
+| `restated_inherited_value` | A layer value written exactly as it is inherited | no |
 
 ## Field order
 
@@ -459,10 +461,60 @@ keyed member, which `clear` never names, so each setting the layer leaves
 out is cleared by its own path, such as `windows.BYSUBJ.filter`, and so is
 each field a layer leaves out of `output` or `submission`, such as
 `output.report`. Either
-meaning may be intended, so `fix` makes neither rewrite. The check follows
-the file's `parent` chain and the fragments its layers include through the
-same resolver and composes them as the engine does; a file whose layers
-cannot be read or composed is not read for this finding, and validation
+meaning may be intended, so `fix` makes neither rewrite. Each derivation the
+layer writes as the parent does is also reported, as
+`restated_inherited_value`, and either rewrite settles both. The check
+follows the file's `parent` chain and the fragments its layers include
+through the same resolver and composes them as the engine does; a file whose
+layers cannot be read or composed is not read for this finding, and
+validation reports why.
+
+**`restated_inherited_value`.** A layer's root fields compose apart, and so
+do the fields, entries and members of a value that merges with the one it
+inherits: a keyed member, a class, a mapping, or a registry value naming the
+same keyword ([LAYER-5](../../rules/inheritance.md#layer-5),
+[LAYER-6](../../rules/inheritance.md#layer-6)). A value written there exactly
+as the layer inherits it composes the same specification as the layer
+without it, yet reads as a change to a reviewer, and it stops following the
+parent when the parent changes. It is reported at the outermost such value,
+a scalar, a list, a whole registry value such as a derivation, a mapping or
+a whole member, and the message names the layers the value is inherited
+from, spelled from the file's directory. A value that differs is a change
+and is never reported, and neither is the header every layer writes, a
+member's `name` or `id`, a column a `copy` entry declares, or a value the
+layer lists in `clear`, which it no longer inherits
+([LAYER-9](../../rules/inheritance.md#layer-9)). A value that replaces what
+it inherits whole, such as the root `metadata` or a list, is compared whole.
+
+```yaml
+yamaa: "1.0"
+type: spec
+parent: adtte_v1.yaml
+
+columns:
+  - name: PARAMCD
+    derivation: "'TTDE'"
+
+  - name: CNSR
+    label: Censor
+
+  - name: PARAM
+    label: Parameter
+```
+
+When `adtte_v1.yaml` derives `PARAMCD` as `'TTDE'` and labels `CNSR` as
+`Censor`, `columns.PARAMCD.derivation` and `columns.CNSR.label` are reported,
+and the new `PARAM` label is a change. Remove a reported value to keep
+inheriting it. Either meaning may be intended, so `fix` makes no rewrite: a
+layer that restates a value on purpose, such as a label a package keeps
+whatever its parent says, suppresses the finding with its reason. The layers
+are read as the engine prepares them: the `parent` chain and the fragments its layers include, through the
+same resolver, each `copy` entry expanded from its producer, so a copied
+column's label is compared too, and each relative path respelled from the
+file, so a path restates only the location it inherits
+([LAYER-10](../../rules/inheritance.md#layer-10),
+[SPEC-9](../../rules/specification.md#spec-9)). A file whose layers cannot be
+read, expanded or composed is not read for this finding, and validation
 reports why.
 
 ## Fixes

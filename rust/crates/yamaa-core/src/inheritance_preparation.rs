@@ -5,8 +5,8 @@ use crate::resolution::{self, Order};
 use crate::resolver::Resolver;
 use crate::schema::{
     shorthand_key, written_path, CompositionOrigin, Document, DocumentError, DocumentNode as N,
-    LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
-    SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
+    LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument, SchemaDiagnostic,
+    SchemaOrigin, SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
 };
 use std::collections::BTreeMap;
 
@@ -199,8 +199,55 @@ fn clear_bases(document: &Document, bases: &mut Bases) {
     }
 }
 
+/// The layers of a 1.x chain that [`crate::inheritance::traverse_versioned`]
+/// admitted against `schema`, as they compose, in contribution order: each
+/// normalized at the version it declares, its copy entries replaced by the
+/// columns they declare, read from the producers their inputs link through
+/// `producer` (SPEC-9), and its relative paths respelled from the entry
+/// through `resolver` (LAYER-10). [`prepare_versioned`] composes them; the
+/// lint compares the entry's with what it composes on.
+pub fn contributed_layers<R: Resolver>(
+    schema: &SchemaStructure,
+    chain: &VersionedChain,
+    resolver: &mut R,
+    producer: impl FnMut(
+        &mut R,
+        &Source,
+        &str,
+        &str,
+        &[&Source],
+    ) -> Option<crate::producer_contract::Contract>,
+) -> Result<Vec<NormalizedDocument>, VersionedError<R::Error>> {
+    let mut normalized = Vec::with_capacity(chain.layers.len());
+    for (index, layer) in chain.layers.iter().enumerate() {
+        let view = schema.at_version(layer.version);
+        normalized.push(
+            view.normalize_versioned_layer(&layer.document)
+                .map_err(|error| VersionedError::Layer {
+                    layer: index,
+                    error,
+                })?,
+        );
+    }
+    crate::copy_expansion::expand(schema, chain, &mut normalized, resolver, producer)?;
+    let entry = &chain.layers.last().expect("a chain holds its entry").source;
+    // The final base of each input and of `output` is selected before any
+    // contributing path is respelled; a cleared `relative_to` selects the
+    // declaring layer again.
+    let mut bases = Bases::default();
+    for layer in &normalized {
+        clear_bases(&layer.document, &mut bases);
+        record_bases(&layer.document, &mut bases);
+    }
+    for (layer, written) in normalized.iter_mut().zip(&chain.layers) {
+        layer.document = rebased(&layer.document, &written.source, entry, &bases, resolver)?;
+    }
+    Ok(normalized)
+}
+
 /// Resolve a 1.x chain that [`crate::inheritance::traverse_versioned`] admitted
-/// against `schema`, the 1.0 specification closure. Each layer is normalized
+/// against `schema`, the 1.0 specification closure: the layers
+/// [`contributed_layers`] gives compose. Each layer is normalized
 /// at the version it declares, and its copy entries replaced by the columns
 /// they declare, read from the producers their inputs link (SPEC-9); its
 /// relative paths are respelled from the entry (LAYER-10); the layers
@@ -231,30 +278,7 @@ pub fn prepare_versioned<R: Resolver>(
         &[&Source],
     ) -> Option<crate::producer_contract::Contract>,
 ) -> Result<ResolvedVersioned, VersionedError<R::Error>> {
-    let mut normalized = Vec::with_capacity(chain.layers.len());
-    for (index, layer) in chain.layers.iter().enumerate() {
-        let view = schema.at_version(layer.version);
-        normalized.push(
-            view.normalize_versioned_layer(&layer.document)
-                .map_err(|error| VersionedError::Layer {
-                    layer: index,
-                    error,
-                })?,
-        );
-    }
-    crate::copy_expansion::expand(schema, chain, &mut normalized, resolver, producer)?;
-    let entry = &chain.layers.last().expect("a chain holds its entry").source;
-    // The final base of each input and of `output` is selected before any
-    // contributing path is respelled; a cleared `relative_to` selects the
-    // declaring layer again.
-    let mut bases = Bases::default();
-    for layer in &normalized {
-        clear_bases(&layer.document, &mut bases);
-        record_bases(&layer.document, &mut bases);
-    }
-    for (layer, written) in normalized.iter_mut().zip(&chain.layers) {
-        layer.document = rebased(&layer.document, &written.source, entry, &bases, resolver)?;
-    }
+    let normalized = contributed_layers(schema, chain, resolver, producer)?;
     let view = schema.at_version(chain.version);
     let mut composed = view
         .compose_versioned_layers(&normalized)

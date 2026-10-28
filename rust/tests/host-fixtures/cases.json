@@ -6341,6 +6341,58 @@
             "finding": "partial_restatement",
             "spec_path": "rows.scores.derivations",
             "message": "`NOTE` comes back from the parent; list `rows.scores.derivations` in `clear` to replace the mapping, or write only what this layer changes"
+          },
+          {
+            "line": "8",
+            "column": "7",
+            "finding": "restated_inherited_value",
+            "spec_path": "rows.scores.derivations.USUBJID",
+            "message": "`rows.scores.derivations.USUBJID` writes the value it inherits from parent.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "9",
+            "column": "7",
+            "finding": "restated_inherited_value",
+            "spec_path": "rows.scores.derivations.VISIT",
+            "message": "`rows.scores.derivations.VISIT` writes the value it inherits from parent.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "10",
+            "column": "7",
+            "finding": "restated_inherited_value",
+            "spec_path": "rows.scores.derivations.AVAL",
+            "message": "`rows.scores.derivations.AVAL` writes the value it inherits from parent.yaml; remove it to keep inheriting"
+          }
+        ]
+      },
+      "restated_inherited_value": {
+        "files": {
+          "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID, AGE]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM.AGE\n",
+          "adtte_v1.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADTTE\nkeys: [USUBJID, PARAMCD]\ninput:\n  ADSL: {path: adsl.csv, schema: adsl.yaml}\n\noutput:\n  path: adtte.csv\n  columns: [USUBJID, AGE, PARAMCD, PARAM, CNSR]\n\ncolumns:\n  - copy: {dataset: ADSL, columns: [USUBJID, AGE]}\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: \"'TTDE'\"\n\n  - name: PARAM\n    type: str\n    label: Parameter Name\n    derivation: \"'Time to Dermatologic Event'\"\n\n  - name: CNSR\n    type: int\n    label: Censor\n    derivation: 1\n",
+          "adtte_v2.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adtte_v1.yaml\nclear:\n  - columns.PARAM.derivation\n\ncolumns:\n  - name: PARAMCD\n    derivation: \"'TTDE'\"\n\n  - name: PARAM\n    label: Parameter\n    derivation: \"'Time to Dermatologic Event'\"\n\n  - name: CNSR\n    label: Censor\n\n  - name: AGE\n    label: Age\n"
+        },
+        "file_name": "adtte_v2.yaml",
+        "rows": [
+          {
+            "line": "9",
+            "column": "5",
+            "finding": "restated_inherited_value",
+            "spec_path": "columns.PARAMCD.derivation",
+            "message": "`columns.PARAMCD.derivation` writes the value it inherits from adtte_v1.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "16",
+            "column": "5",
+            "finding": "restated_inherited_value",
+            "spec_path": "columns.CNSR.label",
+            "message": "`columns.CNSR.label` writes the value it inherits from adtte_v1.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "19",
+            "column": "5",
+            "finding": "restated_inherited_value",
+            "spec_path": "columns.AGE.label",
+            "message": "`columns.AGE.label` writes the value it inherits from adtte_v1.yaml; remove it to keep inheriting"
           }
         ]
       }
