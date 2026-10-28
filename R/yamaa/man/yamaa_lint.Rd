@@ -11,8 +11,10 @@ meaning, and a file runs as its canonical form does.
 yamaa_lint(paths, fix = FALSE)
 }
 \arguments{
-  \item{paths}{Paths of yamaa files. A directory names the yamaa files of
-    every file type beneath it, outside hidden directories.}
+  \item{paths}{Paths of yamaa files, a character vector whose names and class
+    are dropped and whose leading \code{~} expands to the home directory, as
+    \code{\link{yamaa_spec}} takes its path. A directory names the yamaa files
+    of every file type beneath it, outside hidden directories.}
   \item{fix}{Whether to apply the proved fixes first. A file is replaced only
     when the fixed text reads as the same values with the same comments, or
     as those values with exactly the canonical rewrite a finding names.}
