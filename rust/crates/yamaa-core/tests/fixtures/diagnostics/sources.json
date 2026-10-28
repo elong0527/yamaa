@@ -20,6 +20,36 @@
       "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.sas7bdat", "cause": "deleted_records", "hint": "rewrite the SAS dataset first, for example with PROC COPY or a DATA step, to remove the records deleted in place"}}]
     },
     {
+      "case": "a_repeated_sas_field_name_names_the_name",
+      "operation": "sas_source",
+      "input": {"dataset": "SRC", "path": "source.xpt", "cause": "field_name", "field": "AETERM"},
+      "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.xpt", "cause": "field_name", "field": "AETERM"}}]
+    },
+    {
+      "case": "an_empty_sas_field_name_names_its_position",
+      "operation": "sas_source",
+      "input": {"dataset": "SRC", "path": "source.xpt", "cause": "field_name", "field": 2},
+      "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.xpt", "cause": "field_name", "field": 2}}]
+    },
+    {
+      "case": "a_sas_field_name_that_does_not_decode_names_its_position",
+      "operation": "sas_source",
+      "input": {"dataset": "SRC", "path": "source.sas7bdat", "cause": "encoding", "field": 3},
+      "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.sas7bdat", "cause": "encoding", "field": 3}}]
+    },
+    {
+      "case": "a_types_entry_a_sas_field_cannot_take_is_refused_at_the_entry",
+      "operation": "sas_source",
+      "input": {"dataset": "SRC", "path": "source.xpt", "cause": "field_type", "field": "AETERM"},
+      "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.types.AETERM"], "context": {"dataset": "SRC", "path": "source.xpt", "cause": "field_type", "field": "AETERM"}}]
+    },
+    {
+      "case": "a_sas_value_that_does_not_decode_names_its_field_and_record",
+      "operation": "sas_source",
+      "input": {"dataset": "SRC", "path": "source.sas7bdat", "cause": "encoding", "field": "AETERM", "record": 2},
+      "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.sas7bdat", "cause": "encoding", "field": "AETERM", "record": 2}}]
+    },
+    {
       "case": "a_dataset_json_file_that_is_not_its_json_text_is_malformed",
       "operation": "dataset_json_source",
       "input": {"dataset": "SRC", "path": "source.json", "cause": "malformed"},

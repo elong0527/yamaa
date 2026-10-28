@@ -14,6 +14,7 @@
 extern int yamaa_readstat_admit(size_t, size_t);
 extern int yamaa_readstat_admit_bytes(uint64_t);
 extern readstat_error_t yamaa_readstat_deleted_records(void);
+extern readstat_error_t yamaa_readstat_refuse_value(int, int, readstat_error_t);
 
 typedef struct col_info_s {
     sas_text_ref_t  name_ref;
@@ -457,6 +458,7 @@ static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable
         retval = readstat_convert(ctx->scratch_buffer, ctx->scratch_buffer_len,
                 col_data, col_info->width, ctx->converter);
         if (retval != READSTAT_OK) {
+            retval = yamaa_readstat_refuse_value(ctx->parsed_row_count, variable->index, retval);
             if (ctx->handle.error) {
                 snprintf(ctx->error_buf, sizeof(ctx->error_buf),
                         "ReadStat: Error converting string (row=%u, col=%u) to specified encoding: %.*s",

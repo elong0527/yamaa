@@ -167,13 +167,20 @@ fn parquet_refusal<T>(input: &Json, result: Result<T, parquet::Error>) -> Vec<Di
     }
 }
 
-/// A SAS reader's classified refusal, `{dataset, path, cause}`.
+/// A SAS reader's classified refusal, `{dataset, path, cause}` and the facts
+/// that locate it: a `field` name or position, and a value's `record`.
 fn sas_source(input: &Json) -> Vec<Diagnostic> {
-    let input = input.closed(&["dataset", "path", "cause"]);
+    let input = input.closed(&["dataset", "path", "cause", "field", "record"]);
+    let field = input.get("field").map(|field| match field {
+        Json::String(name) => CsvField::Name(name.clone()),
+        index => CsvField::Index(index.integer()),
+    });
     vec![SourceFinding::Sas {
         dataset: text(input, "dataset"),
         path: text(input, "path"),
         cause: text(input, "cause"),
+        field: field.as_ref(),
+        record: input.get("record").map(|record| record.integer()),
     }
     .diagnostic()]
 }

@@ -2357,8 +2357,15 @@
       ],
       "condition": "source_sas_invalid",
       "phase": "ingest",
-      "causes": [
-        "encoding"
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "v5.xpt",
+        "cause": "encoding",
+        "field": "TEXT",
+        "record": 1
+      },
+      "spec_paths": [
+        "input.SRC.path"
       ]
     },
     {
@@ -2414,8 +2421,15 @@
       ],
       "condition": "source_sas_invalid",
       "phase": "ingest",
-      "causes": [
-        "encoding"
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "v5.xpt",
+        "cause": "encoding",
+        "field": "TEXT",
+        "record": 1
+      },
+      "spec_paths": [
+        "input.SRC.path"
       ]
     },
     {
@@ -2471,8 +2485,15 @@
       ],
       "condition": "source_sas_invalid",
       "phase": "ingest",
-      "causes": [
-        "encoding"
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "v5.xpt",
+        "cause": "encoding",
+        "field": "TEXT",
+        "record": 1
+      },
+      "spec_paths": [
+        "input.SRC.path"
       ],
       "mutation": {
         "replace_hex": [
@@ -2534,8 +2555,15 @@
       ],
       "condition": "source_sas_invalid",
       "phase": "ingest",
-      "causes": [
-        "encoding"
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "utf8.xpt",
+        "cause": "encoding",
+        "field": "TEXT",
+        "record": 1
+      },
+      "spec_paths": [
+        "input.SRC.path"
       ],
       "mutation": {
         "replace_hex": [
@@ -3154,8 +3182,14 @@
       ],
       "condition": "source_sas_invalid",
       "phase": "ingest",
-      "causes": [
-        "field_type"
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "v5.xpt",
+        "cause": "field_type",
+        "field": "TEXT"
+      },
+      "spec_paths": [
+        "input.SRC.types.TEXT"
       ]
     },
     {
@@ -3214,8 +3248,14 @@
       ],
       "condition": "source_sas_invalid",
       "phase": "ingest",
-      "causes": [
-        "field_type"
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "v5.xpt",
+        "cause": "field_type",
+        "field": "NUM"
+      },
+      "spec_paths": [
+        "input.SRC.types.NUM"
       ]
     },
     {
@@ -3335,8 +3375,15 @@
       ],
       "condition": "source_sas_invalid",
       "phase": "ingest",
-      "causes": [
-        "encoding"
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "v5.xpt",
+        "cause": "encoding",
+        "field": "TEXT",
+        "record": 1
+      },
+      "spec_paths": [
+        "input.SRC.path"
       ],
       "mutation": {
         "replace_hex": [
