@@ -13,8 +13,13 @@
 # was driven by it and wrote the repository's 0.5 files in 1.0; once none
 # was left, #3443 deleted the converter. The table stays as the record of
 # the rename, which the 1.0.0 release notes link, and changes only to
-# correct that record. tools/tests/test_schema_v1.py compares each entry's
-# 1.0 spelling, type, requirement, default and kind with the 1.0 schema.
+# correct that record. Withdrawing a reservation whose feature the owner
+# has since declined is such a correction (#4085): reserved no longer
+# lists submission.split on a dataset (split datasets, declined in #3824,
+# where the owner prefers several specifications) or transactions: replay
+# on an ODM input (transactional ODM, declined in #3818).
+# tools/tests/test_schema_v1.py compares each entry's 1.0 spelling, type,
+# requirement, default and kind with the 1.0 schema.
 #
 # Measured at main 1758ad145. Counts are occurrences in parsed documents.
 #
@@ -99,7 +104,7 @@ summary:
     value, decided: 5
   conditions: 20
   paths: 13
-  reserved: 21
+  reserved: 19
 transforms:
   header: replace schema_version with yamaa (same version text, quoted) and type
   environment_to_function_files: 'merge each function''s python and r definitions into one type: function
@@ -7914,12 +7919,6 @@ reserved:
   ref: P-SUPP-1
   decision: decided (D58)
   meaning: Overrides of the derivable SUPP-- name and IDVAR.
-- spelling: 'submission: {split: {by: COLUMN, datasets: {NAME: [V, ...]}}}'
-  where: a dataset
-  ref: P-SUPP-1
-  decision: decided (D58)
-  meaning: Split datasets defined once, written into split/ beside define.xml (SDTM-MSG 2.0 packaging
-    mode A).
 - spelling: 'submission: {has_no_data: true}'
   where: a column
   ref: P-CDISC-1
@@ -7948,11 +7947,6 @@ reserved:
   decision: decided (D58)
   meaning: The SCHEMA-10 long form of the standard selector, for a section that lists two versions of
     one implementation guide.
-- spelling: 'transactions: replay'
-  where: an ODM input
-  ref: P-ODMIN-1
-  decision: decided (D58)
-  meaning: Replay transactional ODM content into a snapshot; its absence keeps the 1.0 refusal.
 - spelling: 'archive_member: NAME'
   where: an ODM input
   ref: P-ODMIN-1
