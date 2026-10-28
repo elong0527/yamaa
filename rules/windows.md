@@ -64,13 +64,14 @@ values equal other missing values, and rows with equal present values and equal
 missing group positions share one partition.
 
 Fails: `invalid_field_type`.
-Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `negative-window-repeated-group`.
+Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `negative-window-repeated-group`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_an_int_and_a_float_numbers_the_records_by_exact_value`.
 
 A `window.group_by` names each variable once; a variable listed again fails as
 `invalid_field_type` at that entry, reporting the variable. A window partition
 is a group of rows, and `window.order_by` orders the rows within each partition
-under [Values](values.md). The intermediate-derivation context is the one of
-[LOOKUP-15](lookup.md#lookup-15).
+under [VALUE-22](values.md#value-22). The intermediate-derivation context is
+the one of [LOOKUP-15](lookup.md#lookup-15), where an earlier untyped
+derivation may hold an `int` or a `float`, which order by exact value.
 
 A window expression used during row construction partitions the rows its
 enclosing row template constructs; a window that reads rows from another
@@ -166,12 +167,19 @@ with that `date` ascending, and its later terms break ties
 ([WINDOW-9](#window-9)).
 
 Fails: `window_order_by_required`, `value_not_permitted`.
-Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_baseline_order_starting_with_another_variable_is_refused_at_that_term`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_baseline_order_starting_with_the_date_descending_is_refused_at_that_term`, `rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv`.
+Evidence: `negative-locf-no-order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_text_and_an_int_is_refused_before_any_record_is_read`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_window_order_term_whose_derived_type_holds_a_date_and_a_datetime_is_refused`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_baseline_order_starting_with_another_variable_is_refused_at_that_term`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_baseline_order_starting_with_the_date_descending_is_refused_at_that_term`, `rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv`.
 
 A `baseline_flag` order whose first term is not its `date` ascending fails
 validation as `value_not_permitted` at that term, its context naming the
 term's variable, its direction, the `date` and the refused `value`: the
 variable, or `desc` when the term orders the `date` descending.
+
+Each term of the order, a baseline's `date` and tie-break terms included,
+sorts under [VALUE-22](values.md#value-22): a term whose field's types do not
+all compare, which only an untyped intermediate derivation can give it
+([LOOKUP-15](lookup.md#lookup-15)), fails validation as
+`incompatible_input_type` at the term, naming the window operation as
+`operation`.
 
 ## Window operations
 
@@ -272,11 +280,13 @@ are ordered by `window.order_by`, each term with its own direction and missing
 placement. Eligible rows tied for last on every term fail.
 
 Fails: `ambiguous_baseline`, `incompatible_input_type`.
-Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_descending_time_tie_break_prefers_the_smallest_time_and_keeps_a_missing_time_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_tie_break_declaring_nulls_last_places_a_missing_time_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_descending_sequence_tie_break_picks_the_lowest_sequence_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::same_date_rows_still_tied_on_every_tie_break_term_fail_naming_the_date_the_count_and_the_partition`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::baseline_flag_judges_each_row_by_its_own_reference_within_its_partition`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::the_latest_eligible_date_is_the_baseline`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_date_after_its_reference_and_a_missing_date_are_never_eligible_for_baseline_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_same_date_row_after_its_own_reference_is_not_eligible_for_baseline_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_date_equal_to_its_own_reference_is_eligible_for_baseline_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::ineligible_rows_do_not_end_the_baseline_search`.
+Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_descending_time_tie_break_prefers_the_smallest_time_and_keeps_a_missing_time_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_tie_break_declaring_nulls_last_places_a_missing_time_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_descending_sequence_tie_break_picks_the_lowest_sequence_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::same_date_rows_still_tied_on_every_tie_break_term_fail_naming_the_date_the_count_and_the_partition`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::baseline_flag_judges_each_row_by_its_own_reference_within_its_partition`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::the_latest_eligible_date_is_the_baseline`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_date_after_its_reference_and_a_missing_date_are_never_eligible_for_baseline_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_same_date_row_after_its_own_reference_is_not_eligible_for_baseline_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::a_date_equal_to_its_own_reference_is_eligible_for_baseline_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/windows.json::ineligible_rows_do_not_end_the_baseline_search`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_baseline_date_over_a_date_and_a_datetime_is_refused_before_any_record_is_read`.
 
 `date` and `reference` are both `date` columns or both `datetime` columns;
 any other pairing fails validation as `incompatible_input_type` at the
-operand. With `datetime` columns the bound and the order use the time of day
+operand. A `date` whose type an untyped intermediate derivation decides per
+value between `date` and `datetime` is an order term whose types do not
+compare, and fails under [VALUE-22](values.md#value-22) at the `date`. With `datetime` columns the bound and the order use the time of day
 as well. `source` may hold any type and only its being missing matters: it
 names the analysis value the baseline is for, so the baseline is the last
 non-missing value. `inclusive` defaults to `true`. Each row is compared with

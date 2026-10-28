@@ -145,6 +145,20 @@ impl ResultType {
                 .types()
                 .any(|left| other.types().any(|right| comparable(left, right)))
     }
+    /// Whether an order term over values of this type is refused before any
+    /// record is read (VALUE-22): two of its member types, or one with
+    /// itself, do not compare under VALUE-19 (`value::comparable_types`), so
+    /// `int` beside `float` orders and `str` beside `int`, `date` beside
+    /// `datetime` or `bool` alone does not. A type no source decides yet is
+    /// compared with nothing, and a result that is always missing has
+    /// nothing to order.
+    pub fn unordered(self) -> bool {
+        self != Self::UNKNOWN
+            && self.types().any(|left| {
+                self.types()
+                    .any(|right| !crate::value::comparable_types(left, right))
+            })
+    }
     /// The type's spelling in diagnostic context: one type's name, the
     /// alternatives of a type decided per value, or `missing`.
     pub fn name(self) -> String {

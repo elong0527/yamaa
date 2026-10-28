@@ -12,7 +12,7 @@
 # reason, and lists the fields 1.0 adds. Phase 2's internal converter (D35)
 # was driven by it and wrote the repository's 0.5 files in 1.0; once none
 # was left, #3443 deleted the converter. The table stays as the record of
-# the rename, which the 1.0.0 release notes link, and changes only to
+# the rename, which the 0.6.0 release notes link, and changes only to
 # correct that record. tools/tests/test_schema_v1.py compares each entry's
 # 1.0 spelling, type, requirement, default and kind with the 1.0 schema.
 #
@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 663
-  changes: 94
+  entries: 664
+  changes: 95
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 48
+    new, decided: 49
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7622,6 +7622,20 @@ entries:
     0 through 1 fails as invalid_field_type (FORMULA-18). No 0.5 file declares it, so the converter wrote
     none.'
   field_kind: value
+  convert: {action: none}
+- id: new.spec.expressions.decode
+  file_type: spec
+  path: columns[].derivation.decode
+  today: null
+  kind: new
+  proposed: 'decode: {source: VARIABLE, codelist: IDENTIFIER, missing: VALUE, unmapped: VALUE}'
+  decision: decided (owner on #4089)
+  reason: 'An addition to the approved table under D27: the owner put a verb that decodes a value through
+    a codelist the project file declares, as SAS put(PARAMCD, $PARAM.) does, in 0.7.0 (#4089). It returns
+    the decode of the item whose value equals the source, with mapping''s missing and unmapped handlers;
+    a codelist the project does not declare fails as unknown_codelist, one without decodes as
+    codelist_without_decodes, and a specification checked or run without its project file as
+    project_binding_missing (EXPR-15, CT-13). No 0.5 file declares it, so the converter wrote none.'
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

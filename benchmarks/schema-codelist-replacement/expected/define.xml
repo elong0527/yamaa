@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="CATH.adam.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Other">
+  <Study OID="STDY.CATH">
+    <GlobalVariables>
+      <StudyName>CATH</StudyName>
+      <StudyDescription>Example study resubmitting subject-level analysis data</StudyDescription>
+      <ProtocolName>CATH-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CATH.adam" Name="CATH adam metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.ADaMIG" Name="ADaMIG" Type="IG" Version="1.3" Status="Final"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.ADSL" Name="ADSL" Purpose="Analysis" SASDatasetName="ADSL" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:ArchiveLocationID="LF.ADSL" def:StandardOID="STD.ADaMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Subject-Level Analysis Dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.ADSL.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADSL.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.ADSL.TRT01P" OrderNumber="3" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.DCSREAS" OrderNumber="4" Mandatory="Yes"/>
+        <def:Class Name="SUBJECT LEVEL ANALYSIS DATASET"/>
+        <def:leaf ID="LF.ADSL" xlink:href="adsl.csv">
+          <def:title>adsl.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.ADSL.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.STUDYID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.USUBJID" Name="USUBJID" DataType="text" Length="9" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.USUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.TRT01P" Name="TRT01P" DataType="text" Length="10" SASFieldName="TRT01P">
+        <Description>
+          <TranslatedText xml:lang="en">Planned Treatment for Period 01</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.TRT01P"/>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.TRT01P</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.DCSREAS" Name="DCSREAS" DataType="text" Length="21" SASFieldName="DCSREAS">
+        <Description>
+          <TranslatedText xml:lang="en">Reason for Discontinuation from Study</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.DCSREAS"/>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL_RAW.DCSREAS</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <CodeList OID="CL.TRT01P" Name="Planned Treatment for Period 01" DataType="text" def:IsNonStandard="Yes">
+        <CodeListItem CodedValue="PLACEBO">
+          <Decode>
+            <TranslatedText xml:lang="en">Placebo</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="VITAMIN D3">
+          <Decode>
+            <TranslatedText xml:lang="en">Vitamin D3 5000 IU daily</TranslatedText>
+          </Decode>
+        </CodeListItem>
+      </CodeList>
+      <CodeList OID="CL.DCSREAS" Name="Reason for Discontinuation from Study" DataType="text" def:IsNonStandard="Yes">
+        <CodeListItem CodedValue="ADVERSE EVENT">
+          <Decode>
+            <TranslatedText xml:lang="en">ADVERSE EVENT</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="COMPLETED">
+          <Decode>
+            <TranslatedText xml:lang="en">COMPLETED</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="LOST TO FOLLOW-UP">
+          <Decode>
+            <TranslatedText xml:lang="en">LOST TO FOLLOW-UP</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="WITHDRAWAL BY SUBJECT">
+          <Decode>
+            <TranslatedText xml:lang="en">WITHDRAWAL BY SUBJECT</TranslatedText>
+          </Decode>
+        </CodeListItem>
+      </CodeList>
+    </MetaDataVersion>
+  </Study>
+</ODM>

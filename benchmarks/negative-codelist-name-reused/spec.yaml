@@ -1,0 +1,29 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW: input/adsl_raw.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, DCSREAS]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+
+  - name: DCSREAS
+    type: str
+    label: Reason for Discontinuation from Study
+    derivation: ADSL_RAW.DCSREAS
+    submission:
+      codelist: DCSREASP

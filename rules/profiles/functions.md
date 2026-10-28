@@ -182,11 +182,12 @@ range (`integer_range`), a `DATE` or `DATETIME` literal that names no day or
 second (`invalid_date`, `invalid_datetime`), or a value that is no scalar
 (`invalid_shape`), each naming the text it is written as in `value`, null when
 it is no scalar text. A call with other fields than `name` and `args`, or
-whose `args` are no mapping, fails as `invalid_shape` there, naming no
-argument. A run that passes a function an argument it does not accept fails
-in the derivation phase, its context naming the `function` and its `call`,
-and the `unknown` arguments, or the `argument`, with `expected_type` and
-`actual_type` for a type mismatch.
+whose `args` are no mapping, fails with `invalid_function_argument` there,
+with the cause `invalid_shape`, naming no argument and no `value`. A run that
+passes a function an argument it does not accept fails in the derivation
+phase, its context naming the `function` and its `call`, and the `unknown`
+arguments, or the `argument`, with `expected_type` and `actual_type` for a
+type mismatch.
 
 A function file writes a `date` or `datetime` default, test argument or result
 as text, which the declared parameter or return type reads; text that type
