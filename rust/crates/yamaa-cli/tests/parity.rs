@@ -429,9 +429,9 @@ fn each_project_parity_case_prints_the_issue_rows_both_hosts_return() {
 /// rows of the child that includes it under that parent, each refused parent
 /// its rows and error text (#3694), and `resolve` prints the facts both hosts
 /// compare: the layers in contribution order, the `parent` and `include`
-/// resources, the resolved columns, the layer each named value comes from and
-/// the fields the resolved specification never holds (LAYER-1 to LAYER-4,
-/// LAYER-14).
+/// resources, the resolved columns, the origin of each named value, its layer
+/// and the line and column it was written at, and the fields the resolved
+/// specification never holds (LAYER-1 to LAYER-4, LAYER-14).
 #[test]
 fn the_include_fragments_study_prints_the_rows_and_facts_both_hosts_return() {
     let truth = family("include-fragments");
@@ -572,11 +572,12 @@ fn the_include_fragments_study_prints_the_rows_and_facts_both_hosts_return() {
         resolve["columns"].as_array().unwrap().clone(),
         "the resolved columns"
     );
-    for (pointer, name) in resolve["declaring_sources"].as_object().unwrap() {
+    for (pointer, origin) in resolve["origins"].as_object().unwrap() {
+        let mut expected = origin.clone();
+        expected["declaring_source"] = located(&origin["declaring_source"]);
         assert_eq!(
-            entry["origins"][pointer]["declaring_source"],
-            located(name),
-            "the layer {pointer} comes from"
+            entry["origins"][pointer], expected,
+            "the origin of {pointer}: its layer, line and column"
         );
     }
     for field in resolve["absent_fields"].as_array().unwrap() {

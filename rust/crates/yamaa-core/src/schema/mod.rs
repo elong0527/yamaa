@@ -52,5 +52,6 @@ pub use validation::{
 };
 pub use versioned_composition::VersionedCompositionError;
 pub(crate) use versioned_composition::{shorthand_key, written_path};
+pub use versioned_layer::BLOCKS;
 
 pub use windows::{ExpandedWindows, WindowReference};

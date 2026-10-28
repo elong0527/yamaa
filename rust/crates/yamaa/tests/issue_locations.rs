@@ -303,10 +303,12 @@ fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
     assert!(issues.is_empty(), "{issues:?}");
 }
 
-/// A root mapping replaces its parent whole; a clear removes the named
-/// inherited field. Neither operation can be fixed at the parent's old key.
+/// A child's output composes field by field with its parent's (LAYER-5), so
+/// it keeps the inherited report; a clear removes the named inherited field,
+/// which then locates at that clear, never at the parent's old key, even
+/// where a later layer writes the output again (LAYER-9).
 #[test]
-fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
+fn cleared_fields_do_not_locate_in_overridden_parent_values() {
     let study = Study::new();
     let (text, _) = spec(&[
         "domain: IT",
@@ -331,7 +333,7 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
             .diagnostics()
     };
     assert!(check("parent.yaml").is_empty());
-    let (text, offset) = spec(&[
+    let (text, _) = spec(&[
         "parent: parent.yaml",
         "output:",
         "  path: child.csv",
@@ -339,11 +341,9 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
     ]);
     write(&study, "child.yaml", &text);
     let issues = check("child.yaml");
-    assert_eq!(issues[0].code.as_str(), "missing_report", "{issues:?}");
-    assert_eq!(issues[0].spec_path, ["output.report"]);
-    assert_eq!(
-        location(&issues),
-        Some((study.file("child.yaml"), offset + 2, 1))
+    assert!(
+        issues.is_empty(),
+        "a child output keeps the inherited report: {issues:?}"
     );
     for (cleared, code, path) in [
         ("output.report", "missing_report", "output.report"),
@@ -364,9 +364,11 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
             Some((study.file("cleared.yaml"), offset + 2, 9))
         );
     }
-    let (text, _) = spec(&["parent: parent.yaml", "clear: [output.report]"]);
+    // The grandchild's output merges with the one `cleared.yaml` left
+    // without a report, so the report stays removed, by that clear.
+    let (text, offset) = spec(&["parent: parent.yaml", "clear: [output.report]"]);
     write(&study, "cleared.yaml", &text);
-    let (text, offset) = spec(&[
+    let (text, _) = spec(&[
         "parent: cleared.yaml",
         "output:",
         "  path: grandchild.csv",
@@ -374,10 +376,16 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
     ]);
     write(&study, "grandchild.yaml", &text);
     let issues = check("grandchild.yaml");
-    assert_eq!(issues[0].code.as_str(), "missing_report", "{issues:?}");
+    let first = issues
+        .first()
+        .map(|issue| (issue.code.as_str(), issue.spec_path.clone()));
     assert_eq!(
-        location(&issues),
-        Some((study.file("grandchild.yaml"), offset + 2, 1))
+        (first, location(&issues)),
+        (
+            Some(("missing_report", vec!["output.report".to_owned()])),
+            Some((study.file("cleared.yaml"), offset + 2, 9))
+        ),
+        "a report cleared below a later output: {issues:?}"
     );
 }
 
