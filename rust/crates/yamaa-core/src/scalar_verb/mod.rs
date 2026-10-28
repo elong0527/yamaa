@@ -434,7 +434,7 @@ pub(crate) enum Typing {
     Bound,
     /// Each operand once it binds, by its captured type: a name a lookup
     /// selects by its donor's, anything else by the catalog (`mapping`,
-    /// `cut`).
+    /// `cut`, `decode`).
     Captured,
     /// Every operand by its captured type, bound or not, compared together
     /// once all are read ([`Operation::incomparable`]; `greatest`, `least`).
@@ -491,13 +491,9 @@ impl Operation {
             }
             ScalarOp::StrTemplate { .. } => str_template::from_tree(spec, e),
             ScalarOp::Greatest | ScalarOp::Least => extremes::from_tree(spec, e),
-            ScalarOp::Mapping { .. } | ScalarOp::Cut { .. } => mapping_cut::from_tree(spec, e),
-            // The executor reads no project codelist yet, so a `decode`
-            // (EXPR-15) is refused before any source is read.
-            ScalarOp::Decode { .. } => Err(Refusal::Unsupported {
-                operation: crate::expression_table::Verb::Decode.name(),
-                path: path(spec, e),
-            }),
+            ScalarOp::Mapping { .. } | ScalarOp::Cut { .. } | ScalarOp::Decode { .. } => {
+                mapping_cut::from_tree(spec, e)
+            }
         }
     }
 

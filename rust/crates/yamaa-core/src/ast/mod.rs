@@ -169,6 +169,10 @@ pub struct Spec {
     /// one was not composed.
     pub written: Written,
     pub meta: Meta,
+    /// The project codelists its `decode` expressions read, each once, as
+    /// the project file declares them (EXPR-15). Lowering leaves it empty;
+    /// preparation in a project fills it.
+    pub codelists: Vec<Codelist>,
 }
 
 impl Spec {

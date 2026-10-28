@@ -1,0 +1,59 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  LB:
+    path: input/lb.csv
+    types: {LBSTRESN: float, VISITNUM: int}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISITN, AVISIT, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  # The parameter name is the decode the project's PARAMCD codelist gives
+  # the code, stated once there rather than restated here.
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      decode:
+        source: PARAMCD
+        codelist: PARAMCD
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation: LB.VISITNUM
+
+  # A visit the codelist does not list is an unscheduled visit.
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation:
+      decode:
+        source: AVISITN
+        codelist: AVISITN
+        unmapped: Unscheduled
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
