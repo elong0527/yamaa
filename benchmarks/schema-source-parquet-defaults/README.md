@@ -20,5 +20,7 @@ a single-precision number.
 **Note:** a time stored to the millisecond or the nanosecond reads as the
 same date and time as one stored to the microsecond, as long as it falls on
 a whole second. A single-precision number holds fewer digits than an
-ordinary one, so a weight typed as 81.3 is stored as 81.30000305175781 and
-arrives as exactly that number, not rounded back to 81.3.
+ordinary one, so a weight typed as 81.3 is stored as exactly
+81.3000030517578125 and arrives as that number, not rounded back to 81.3;
+the saved table writes it as 81.30000305175781, the shortest text that
+reads back as the same number.
