@@ -35,10 +35,12 @@ SCALARS = {
     "null": "null",
 }
 # Every layer writes the header (D4). Inside a member of these root
-# collections a layer defers requiredness to the composed specification,
-# except the identity the member composes by (LAYER-4, LAYER-5).
+# collections, and inside these root blocks, which compose field by field as
+# a member does, a layer defers requiredness to the composed specification,
+# except the identity a member composes by (LAYER-4, LAYER-5).
 HEADER = ("yamaa", "type")
 COLLECTIONS = ("input", "windows", "intermediates", "columns", "rows")
+BLOCKS = ("output", "submission")
 IDENTITIES = {
     "column_class": "name",
     "column_copy_class": "copy",
@@ -176,7 +178,7 @@ class Renderer:
         return {
             "type": "object",
             "properties": self.properties(
-                root, fields, lambda item: item.name in COLLECTIONS
+                root, fields, lambda item: item.name in COLLECTIONS + BLOCKS
             ),
             "required": list(HEADER),
             "additionalProperties": False,
@@ -195,8 +197,9 @@ def render(file_type):
             "One file of the 1.0 spec type. A specification file may be one layer "
             "of an inheritance chain: the header is required in every layer, a "
             "root field it writes is complete there, and inside a member of input, "
-            "windows, intermediates, columns or rows requiredness waits for the "
-            "composed specification, which $defs/root_class checks (LAYER-4). "
+            "windows, intermediates, columns or rows, and inside output or "
+            "submission, requiredness waits for the composed specification, which "
+            "$defs/root_class checks (LAYER-4). "
         )
     else:
         renderer.reference(root, False)

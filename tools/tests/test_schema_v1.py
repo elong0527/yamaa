@@ -956,7 +956,7 @@ class JsonSchemaTests(unittest.TestCase):
             },
         )
 
-    def test_a_layer_defers_requiredness_only_inside_keyed_members(self):
+    def test_a_layer_defers_requiredness_only_inside_keyed_members_and_blocks(self):
         layer = validator("spec")
         complete = validator("spec", "root_class")
         organization = support.load_yaml(
@@ -968,9 +968,16 @@ class JsonSchemaTests(unittest.TestCase):
         )
         partial = {"yamaa": "1.0", "type": "spec", "columns": [{"name": "AVAL"}]}
         self.assertEqual(messages(layer, partial), [])
+        # A block composes field by field, so a layer writes one field of it
+        # (LAYER-5).
+        blocks = {**partial, "output": {"path": "a.csv"}, "submission": {"label": "A"}}
+        self.assertEqual(messages(layer, blocks), [])
         for document, expected in (
-            # A whole root field is complete in the layer that writes it.
-            ({**partial, "output": {"path": "a.csv"}}, "'columns' is a required"),
+            # Any other root field is complete in the layer that writes it.
+            (
+                {**partial, "verifications": [{"all_or_none": {}}]},
+                "'columns' is a required",
+            ),
             # Every layer carries the header.
             ({"type": "spec"}, "'yamaa' is a required"),
             # A keyed member carries its identity.

@@ -150,49 +150,134 @@ mod file {
             }
         }
 
-        /// Seam: the composed document's output fields and its written output
-        /// origin, which no operation reports; its save also writes a run
-        /// report whose bytes the test does not compare, and a case's
-        /// `saved` states every file whole.
+        /// Seam: the composed document's output fields and the written origin
+        /// of each output path, which no operation reports; its save also
+        /// writes a run report whose bytes the test does not compare, and a
+        /// case's `saved` states every file whole. Each expectation follows
+        /// LAYER-10: the composed `relative_to` selects the base of both
+        /// paths, the declaring layer of each by default, and the resolved
+        /// specification spells each relative to the entry.
         #[test]
-        fn complete_output_replacement_resets_the_base_for_primary_and_report_files() {
+        fn each_output_path_resolves_from_the_base_the_composed_relative_to_selects() {
             use yamaa_application::specification_report::Identity;
             use yamaa_core::{domain_entry::Request, schema::DocumentNode};
 
-            for inherited_base in ["", "relative_to: entry, "] {
+            /// One composition: what the base layer adds to its output, what
+            /// the shared replacement clears and what the entry writes; the
+            /// resolved path and report, the composed base, and the layer
+            /// that writes the report and the directory each file is saved
+            /// in.
+            struct Case {
+                label: &'static str,
+                inherited_base: &'static str,
+                clear: &'static str,
+                entry: &'static str,
+                resolved: [&'static str; 2],
+                base: &'static str,
+                report: (&'static str, &'static str),
+                saved: [&'static str; 2],
+            }
+            let shared = "shared/replacement.yaml";
+            let entry = "entry/spec.yaml";
+            let cases = [
+                Case {
+                    label: "no layer writes a base",
+                    inherited_base: "",
+                    clear: "",
+                    entry: "",
+                    resolved: ["../shared/result.csv", "../shared/report.csv"],
+                    base: "declaring",
+                    report: (shared, "report.csv"),
+                    saved: ["shared", "shared"],
+                },
+                Case {
+                    label: "an inherited entry base governs the paths a later layer writes",
+                    inherited_base: "relative_to: entry, ",
+                    clear: "",
+                    entry: "",
+                    resolved: ["result.csv", "report.csv"],
+                    base: "entry",
+                    report: (shared, "report.csv"),
+                    saved: ["entry", "entry"],
+                },
+                Case {
+                    label: "a cleared base selects the declaring layer again",
+                    inherited_base: "relative_to: entry, ",
+                    clear: "clear: [output.relative_to]\n",
+                    entry: "",
+                    resolved: ["../shared/result.csv", "../shared/report.csv"],
+                    base: "declaring",
+                    report: (shared, "report.csv"),
+                    saved: ["shared", "shared"],
+                },
+                Case {
+                    label: "each path resolves beside the layer that wrote it",
+                    inherited_base: "",
+                    clear: "",
+                    entry: "output: {report: own-report.csv}\n",
+                    resolved: ["../shared/result.csv", "own-report.csv"],
+                    base: "declaring",
+                    report: (entry, "own-report.csv"),
+                    saved: ["shared", "entry"],
+                },
+            ];
+            for case in cases {
+                let label = case.label;
                 let study = Study::new();
-                fs::write(study.0.join("shared/base.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], report: ignored-report.csv}}\n")).unwrap();
-                fs::write(study.0.join("shared/replacement.yaml"), "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\noutput: {path: result.csv, columns: [ID], report: report.csv}\n").unwrap();
+                fs::write(study.0.join("shared/base.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {}columns: [ID], report: ignored-report.csv}}\n", case.inherited_base)).unwrap();
+                fs::write(study.0.join(shared), format!("yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\n{}output: {{path: result.csv, columns: [ID], report: report.csv}}\n", case.clear)).unwrap();
                 fs::write(
-                    study.0.join("entry/spec.yaml"),
-                    "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/replacement.yaml\n",
+                    study.0.join(entry),
+                    format!(
+                        "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/replacement.yaml\n{}",
+                        case.entry
+                    ),
                 )
                 .unwrap();
                 fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
-                let path = study.text("entry/spec.yaml");
-                let (resources, entry) = file_configuration::resources(&path).unwrap();
-                let prepared = FileSpecification::prepare(resources, &entry).unwrap();
+                let path = study.text(entry);
+                let (resources, located) = file_configuration::resources(&path).unwrap();
+                let prepared = FileSpecification::prepare(resources, &located).unwrap();
                 let document = prepared.run().document().document();
                 let output = document.field(document.root(), "output").unwrap();
-                for (field, written) in [("path", "result.csv"), ("report", "report.csv")] {
+                for (field, value) in [
+                    ("path", case.resolved[0]),
+                    ("report", case.resolved[1]),
+                    ("relative_to", case.base),
+                ] {
                     let node = document.field(output, field).unwrap();
                     assert_eq!(
                         document.nodes()[node],
-                        DocumentNode::Text(format!("../shared/{written}"))
+                        DocumentNode::Text(value.into()),
+                        "{label}: output.{field}"
                     );
                 }
-                let base = document.field(output, "relative_to").unwrap();
-                assert_eq!(
-                    document.nodes()[base],
-                    DocumentNode::Text("declaring".into())
-                );
-                let origin = prepared.run().document().written_output_origin().unwrap();
-                assert_eq!(
-                    origin.declaring_source,
-                    study.text("shared/replacement.yaml")
-                );
-                assert_eq!(origin.base_source, study.text("shared/replacement.yaml"));
-                assert_eq!(origin.written, "result.csv");
+                let base = |declaring: &str| {
+                    study.text(if case.base == "entry" {
+                        entry
+                    } else {
+                        declaring
+                    })
+                };
+                for (field, declaring, written) in [
+                    ("path", shared, "result.csv"),
+                    ("report", case.report.0, case.report.1),
+                ] {
+                    let origin = prepared
+                        .run()
+                        .document()
+                        .written_output_field_origin(field)
+                        .unwrap();
+                    assert_eq!(
+                        (origin.declaring_source, origin.base_source, origin.written),
+                        (
+                            study.text(declaring).as_str(),
+                            base(declaring).as_str(),
+                            written
+                        ),
+                        "{label}: the origin of output.{field}"
+                    );
+                }
                 drop(prepared);
 
                 let mut result = crate::support::study::domain(
@@ -211,20 +296,33 @@ mod file {
                     },
                 )
                 .unwrap();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(!study.0.join("shared/result.csv").exists());
-                assert!(result.save().unwrap());
+                assert!(result.issues().is_empty(), "{label}: {:?}", result.issues());
+                assert!(result.save().unwrap(), "{label}");
+                let [primary, report] = case.saved;
                 assert_eq!(
-                    fs::read(study.0.join("shared/result.csv")).unwrap(),
-                    b"ID\n7\n"
+                    fs::read(study.0.join(primary).join("result.csv")).unwrap(),
+                    b"ID\n7\n",
+                    "{label}"
                 );
-                for written in ["result.csv", "report.csv"] {
-                    assert!(study.0.join("shared").join(written).is_file());
-                    assert!(!study.0.join("entry").join(written).exists());
-                }
+                assert!(
+                    study.0.join(report).join(case.report.1).is_file(),
+                    "{label}: the report beside {report}"
+                );
                 for directory in ["shared", "entry"] {
+                    for written in ["result.csv", case.report.1] {
+                        let held = (directory == primary && written == "result.csv")
+                            || (directory == report && written == case.report.1);
+                        assert_eq!(
+                            study.0.join(directory).join(written).exists(),
+                            held,
+                            "{label}: {directory}/{written}"
+                        );
+                    }
                     for written in ["ignored.csv", "ignored-report.csv"] {
-                        assert!(!study.0.join(directory).join(written).exists());
+                        assert!(
+                            !study.0.join(directory).join(written).exists(),
+                            "{label}: {directory}/{written}"
+                        );
                     }
                 }
             }

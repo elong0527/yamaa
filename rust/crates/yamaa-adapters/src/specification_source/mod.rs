@@ -569,7 +569,8 @@ impl PreparedDocument {
     pub fn written_output_origin(&self) -> Option<yamaa_core::resource::WrittenPath<'_>> {
         self.written_output_field_origin("path")
     }
-    /// Every governed output field retains its original atomic output layer.
+    /// Each output path keeps the layer that wrote it, and the composed
+    /// `relative_to` selects its base, whichever layer wrote that (LAYER-10).
     pub fn written_output_field_origin(
         &self,
         field: &str,
