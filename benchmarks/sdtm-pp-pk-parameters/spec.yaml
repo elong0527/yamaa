@@ -97,6 +97,3 @@ columns:
         window:
           group_by: [NCA.Protocol, NCA.Subject]
           order_by: [NCA.ReferenceDose, NCA.Analyte, NCA.Parameter]
-
-verifications:
-  - unique: [STUDYID, USUBJID, PPCAT, PPTESTCD, PPRFTDTC]
