@@ -249,6 +249,7 @@ pub struct PreparedSpecification {
     schema: Arc<CapturedSchema>,
     chain: VersionedChain,
     resolved: ResolvedVersioned,
+    positions: Positions,
     lowered: Lowered,
 }
 
@@ -281,24 +282,24 @@ impl PreparedSpecification {
     pub fn into_lowered(self) -> Lowered {
         self.lowered
     }
+    /// Parallel to [`PreparedSpecification::resolved`]'s nodes: where the
+    /// layer that wrote each node, numbered by [`Span::file`] in contribution
+    /// order, wrote it, at the line and column its reader decoded, or none
+    /// for a schema default or a node composition made (P-ISSUE-1).
+    pub fn positions(&self) -> &Positions {
+        &self.positions
+    }
     /// Lower `materialized`, the resolved specification with each dictionary
     /// file's admitted content in place of its path, in place of the lowering
     /// of the resolved specification: binding reads the dictionary's entries
     /// as it reads an inline one. Each node keeps the position of the node it
     /// copies, and a dictionary's content the position of its `dict` path.
-    /// `locations` gives each layer's decoded positions.
-    pub fn lower_materialized<'a>(
-        &mut self,
-        materialized: &Document,
-        sources: &[usize],
-        locations: impl Fn(&graph::VersionedLayer) -> Option<&'a Vec<SourcePosition>>,
-    ) {
-        let resolved = positions(&self.chain, &self.resolved, locations);
+    pub fn lower_materialized(&mut self, materialized: &Document, sources: &[usize]) {
         let positions = Positions {
-            files: resolved.files,
+            files: self.positions.files.clone(),
             nodes: sources
                 .iter()
-                .map(|&node| resolved.nodes.get(node).copied().flatten())
+                .map(|&node| self.positions.nodes.get(node).copied().flatten())
                 .collect(),
         };
         self.lowered = front_end::lower(materialized, Some(&positions));
@@ -590,6 +591,7 @@ impl VersionedDocument {
                 schema: self.schema,
                 chain,
                 resolved,
+                positions,
                 lowered,
             },
             source: self.source,
@@ -601,7 +603,7 @@ impl VersionedDocument {
 
 /// Where `layer` was decoded: `raw`, the entry read as `source`, or the
 /// parent or fragment of `parents` read under its identity.
-pub(crate) fn layer_locations<'a>(
+fn layer_locations<'a>(
     source: &Source,
     raw: &'a DecodedYaml,
     parents: &'a [CapturedParent],

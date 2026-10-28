@@ -550,6 +550,13 @@ reads no study data and runs no project code. Each entry records its
 `language_version`, the newest version any of its layers declares in
 `yamaa`.
 
+Each entry's `origins` maps a JSON pointer into the model to where that value
+came from. A value a layer wrote names that layer as `declaring_source`, with
+the `line` and `column` where the layer wrote it, counted from 1, as an
+issue's `file`, `line` and `column` are. A schema default names its schema
+module and no location, and a value composition made, such as the model's
+root, names neither.
+
 === "R"
 
     ```r
