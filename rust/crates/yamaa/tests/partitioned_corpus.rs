@@ -4,27 +4,39 @@
     feature = "readstat",
     feature = "odm"
 ))]
-//! Partitioned and streamed runs reproduce the benchmark corpus (#3697): the
-//! whole-table results each benchmark states, independently authored, in
-//! `expected/`.
+//! Partitioned and streamed runs reproduce the benchmark corpus (#3697,
+//! #4092): the whole-table results each benchmark states, independently
+//! authored, in `expected/`.
 //!
-//! Every benchmark with one specification and no project runs on an engine
-//! that divides its driver input into one-record partitions, the division
-//! with the most partition boundaries. A plan whose steps are all
-//! partition-safe runs divided; a plan with a step that needs the whole
-//! table is refused, and runs again with the whole-table fallback. Either
-//! way, a positive benchmark's saved files equal its expected files byte for
-//! byte. A negative benchmark's first issue has the phase, condition, spec
-//! paths and rule its `expected/error.yaml` states, and every issue, context
-//! included, equals the whole-table run's. A Parquet file has no byte
-//! guarantee (PARQUET-4), so it equals the whole-table run's file instead,
-//! which the hosts' conformance checks compare with the expected file's
-//! content.
+//! Every benchmark runs as its corpus readers run it (`tools/benchmark.py`):
+//! in a copy staged without its truth, each entry its `benchmark.yaml` lists
+//! for Python builds in order, read with the project file the entry names,
+//! and saves before the next one builds, so a later entry reads an earlier
+//! entry's artifact; then the submission it declares composes over the
+//! saved artifacts. A benchmark that lists no entries builds its one
+//! specification, and an entry that names no environment is read with the
+//! benchmark's `project.yaml` when it has one. Only the benchmarks whose
+//! projects supply project functions are left out, each listed in
+//! [`FUNCTIONS`] with the reason.
 //!
-//! Each benchmark is also read as a stream on the same engine (#3697, step
-//! 4), whose batches then hold one record each: a positive benchmark's
+//! Every build runs on an engine that divides its driver input into
+//! one-record partitions, the division with the most partition boundaries.
+//! A plan whose steps are all partition-safe runs divided; a plan with a step
+//! that needs the whole table is refused, and runs again with the
+//! whole-table fallback. Either way, a positive benchmark reports no issue
+//! and saves exactly its expected files, each equal byte for byte. A negative
+//! benchmark's first issue, its entries' or else its submission's, holds
+//! every field its `expected/error.yaml` states, context included, and every
+//! issue equals the whole-table run's over the same staged files. A Parquet
+//! file has no byte guarantee (PARQUET-4), so it equals the whole-table run's
+//! file instead, which the hosts' conformance checks compare with the
+//! expected file's content. A submission composes from the saved artifacts,
+//! so partitions reach a Define or transport file only through the builds.
+//!
+//! Each build is also read as a stream on the same engine (#3697, step
+//! 4), whose batches then hold one record each: a positive build's
 //! batches hold its run's output table, record for record, under the schema
-//! the stream gave before its first pull, and a negative benchmark's stream
+//! the stream gave before its first pull, and a refused build's stream
 //! ends at its first pull with its run's issues. Either way the streamed
 //! run's issues are its run's.
 //!
@@ -34,14 +46,16 @@
 //! group its windows and aggregates by those keys is admitted: it runs with
 //! no fallback, divided where its input is grouped by those keys and as one
 //! partition where it is not.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use crate::support::scratch::Scratch;
 use yamaa::{
-    CancellationToken, Engine, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
+    CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Failure, FailureKind,
+    HostLanguage, Partitions, SpecRequest, SubmissionOptions,
 };
+use yamaa_core::schema::{Document, DocumentNode};
 
 /// Benchmarks that must divide, read from their specifications: each
 /// derives only from its input's own records (source reads, mappings, date
@@ -102,34 +116,215 @@ const KEY_BOUNDED: [&str; 34] = [
     "adam-clinsite-site-level",
 ];
 
+/// The benchmarks this test leaves out: exactly those whose project lists
+/// function files, which the test requires. Their functions are Python or R
+/// code run under the project's uv and renv locks. The engine here has no
+/// functions port to call them (see `engine`), and the hosts, which do call
+/// them, run every build over key-bounded partitions of up to 624,640
+/// records (#3794), with no setting for smaller ones, so a benchmark's input
+/// is one partition there. Running these partitioned needs a private
+/// partition override in each host, which is host work outside #4092.
+const FUNCTIONS: [&str; 12] = [
+    "adam-adsl-bmi",
+    "adam-advs-percentiles",
+    "negative-donor-function-unkept",
+    "negative-function-contract",
+    "negative-function-host-error",
+    "negative-function-name-twice",
+    "negative-function-non-finite-result",
+    "negative-function-test-mismatch",
+    "schema-functions",
+    "schema-keys-record-reads",
+    "schema-non-finite",
+    "schema-window-key-records",
+];
+
 fn benchmarks() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks")
 }
 
-/// The benchmarks one specification run reproduces: one `spec.yaml`, no
-/// project file and no declared entries, in name order.
-fn cases() -> Vec<PathBuf> {
-    let mut cases: Vec<PathBuf> = std::fs::read_dir(benchmarks())
+/// The YAML file at `path` as the engine's YAML reader decodes it, or none
+/// when it cannot be read.
+fn yaml(path: &Path) -> Option<ContextValue> {
+    fn value(document: &Document, node: usize) -> ContextValue {
+        match &document.nodes()[node] {
+            DocumentNode::Null => ContextValue::Null,
+            DocumentNode::Boolean(value) => ContextValue::Bool(*value),
+            DocumentNode::Integer(value) => value
+                .parse()
+                .map_or_else(|_| ContextValue::Wide(value.clone()), ContextValue::Int),
+            DocumentNode::Float(value) => ContextValue::Float(*value),
+            DocumentNode::Text(value) => ContextValue::Text(value.clone()),
+            DocumentNode::Sequence(items) => {
+                ContextValue::List(items.iter().map(|&item| value(document, item)).collect())
+            }
+            DocumentNode::Mapping(pairs) => ContextValue::Map(
+                pairs
+                    .iter()
+                    .map(|&(key, item)| {
+                        let key = match value(document, key) {
+                            ContextValue::Text(key) => key,
+                            key => key.to_json(),
+                        };
+                        (key, value(document, item))
+                    })
+                    .collect(),
+            ),
+        }
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let document = yamaa_adapters::yaml_decode::decode_yaml(&bytes)
+        .ok()?
+        .document;
+    Some(value(&document, document.root()))
+}
+
+/// The field `key` of a mapping, or none.
+fn field<'a>(value: &'a ContextValue, key: &str) -> Option<&'a ContextValue> {
+    match value {
+        ContextValue::Map(fields) => fields.get(key),
+        _ => None,
+    }
+}
+
+/// The text of a field, or none.
+fn text(value: Option<&ContextValue>) -> Option<String> {
+    match value {
+        Some(ContextValue::Text(text)) => Some(text.clone()),
+        _ => None,
+    }
+}
+
+/// One build a benchmark lists: its specification, and the project file it
+/// is read with, if any, each a path in the benchmark.
+struct Entry {
+    specification: String,
+    project: Option<String>,
+}
+
+/// The submission a benchmark declares, its `define`: the project file, the
+/// section it composes and the creation time it composes with.
+struct Define {
+    project: String,
+    section: String,
+    created: String,
+}
+
+/// A benchmark as its corpus readers run it.
+struct Case {
+    path: PathBuf,
+    name: String,
+    entries: Vec<Entry>,
+    define: Option<Define>,
+}
+
+impl Case {
+    /// The benchmark at `path`: the entries its `benchmark.yaml` lists for
+    /// Python, or else its one `spec*.yaml`, and the submission it declares.
+    fn read(path: PathBuf) -> Self {
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let metadata = yaml(&path.join("benchmark.yaml"))
+            .unwrap_or_else(|| panic!("{name}: benchmark.yaml does not read"));
+        let project = path
+            .join("project.yaml")
+            .is_file()
+            .then(|| "project.yaml".to_owned());
+        let listed = field(&metadata, "entries").and_then(|entries| field(entries, "python"));
+        let entries = match listed {
+            Some(ContextValue::List(calls)) => calls
+                .iter()
+                .map(|call| Entry {
+                    specification: text(field(call, "specification"))
+                        .unwrap_or_else(|| panic!("{name}: an entry names no specification")),
+                    project: match field(call, "environment") {
+                        None => project.clone(),
+                        Some(ContextValue::Null) => None,
+                        environment => Some(
+                            text(environment)
+                                .unwrap_or_else(|| panic!("{name}: an environment is a path")),
+                        ),
+                    },
+                })
+                .collect(),
+            _ => {
+                let specifications: Vec<String> = std::fs::read_dir(&path)
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                    .filter(|file| file.starts_with("spec") && file.ends_with(".yaml"))
+                    .collect();
+                assert_eq!(
+                    specifications.len(),
+                    1,
+                    "{name}: a benchmark without entries has one specification"
+                );
+                specifications
+                    .into_iter()
+                    .map(|specification| Entry {
+                        specification,
+                        project: project.clone(),
+                    })
+                    .collect()
+            }
+        };
+        let define = field(&metadata, "define").map(|define| Define {
+            project: text(field(define, "environment")).unwrap(),
+            section: text(field(define, "standard")).unwrap(),
+            created: text(field(define, "created")).unwrap(),
+        });
+        Self {
+            path,
+            name,
+            entries,
+            define,
+        }
+    }
+
+    /// Whether a project file the benchmark reads lists function files, read
+    /// as the conformance planner reads it: a file that cannot be read lists
+    /// none.
+    fn supplies_functions(&self) -> bool {
+        self.entries
+            .iter()
+            .filter_map(|entry| entry.project.as_deref())
+            .chain(self.define.as_ref().map(|define| define.project.as_str()))
+            .filter_map(|project| yaml(&self.path.join(project)))
+            .any(|project| match field(&project, "functions") {
+                None | Some(ContextValue::Null | ContextValue::Bool(false)) => false,
+                Some(ContextValue::List(items)) => !items.is_empty(),
+                Some(ContextValue::Map(items)) => !items.is_empty(),
+                Some(_) => true,
+            })
+    }
+
+    /// What the benchmark states of its first issue, its
+    /// `expected/error.yaml`, or none for a positive benchmark.
+    fn stated_issue(&self) -> Option<ContextValue> {
+        let error = self.path.join("expected/error.yaml");
+        error
+            .is_file()
+            .then(|| yaml(&error).unwrap_or_else(|| panic!("{}: expected/error.yaml", self.name)))
+    }
+
+    /// Whether the comparison needs the whole-table run: a negative
+    /// benchmark's issues, or a Parquet file's content.
+    fn needs_whole_table(&self) -> bool {
+        std::fs::read_dir(self.path.join("expected"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .any(|file| file == "error.yaml" || file.to_string_lossy().ends_with(".parquet"))
+    }
+}
+
+/// Every benchmark, in name order: each directory of `benchmarks/` that
+/// holds a `benchmark.yaml`.
+fn cases() -> Vec<Case> {
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(benchmarks())
         .unwrap()
         .map(|entry| entry.unwrap().path())
-        .filter(|case| case.join("benchmark.yaml").is_file() && case.join("spec.yaml").is_file())
-        .filter(|case| {
-            let metadata = std::fs::read_to_string(case.join("benchmark.yaml")).unwrap();
-            let specifications = std::fs::read_dir(case)
-                .unwrap()
-                .filter(|entry| {
-                    let name = entry.as_ref().unwrap().file_name();
-                    let name = name.to_string_lossy();
-                    name.starts_with("spec") && name.ends_with(".yaml")
-                })
-                .count();
-            specifications == 1
-                && !case.join("project.yaml").exists()
-                && !metadata.lines().any(|line| line.starts_with("entries:"))
-        })
+        .filter(|case| case.join("benchmark.yaml").is_file())
         .collect();
-    cases.sort();
-    cases
+    paths.sort();
+    paths.into_iter().map(Case::read).collect()
 }
 
 /// Copy the benchmark into `to` without what it states as truth, keeping
@@ -160,6 +355,9 @@ fn stage(from: &Path, to: &Path) -> bool {
     true
 }
 
+/// The engine of a Rust embedder that names the Python host: with no
+/// functions port, so a build that calls a project function reports it
+/// unsupported, and with `partitions`, or whole tables.
 fn engine(partitions: Option<Partitions>) -> Engine {
     let options = EngineOptions::new(HostLanguage::Python, "yamaa".into(), "0".into());
     Engine::new(match partitions {
@@ -168,125 +366,39 @@ fn engine(partitions: Option<Partitions>) -> Engine {
     })
 }
 
-/// A run's first issue: its phase, condition, spec paths and rule.
-type Issue = (String, String, Vec<String>, Option<String>);
-
-/// One run of a staged specification: the first issue of a run with no
-/// output, or else the bytes of each file its save wrote, by file name.
-enum Outcome {
-    Issue(Option<Issue>),
-    Saved(Result<BTreeMap<String, Vec<u8>>, String>),
+/// An entry's specification and project file in a staged copy.
+struct Staged {
+    specification: String,
+    project: Option<String>,
 }
 
-fn outcome(mut run: yamaa::Run) -> Outcome {
-    if run.output().is_none() {
-        return Outcome::Issue(run.diagnostics().first().map(|issue| {
-            (
-                issue.phase.as_str().to_owned(),
-                issue.code.as_str().to_owned(),
-                issue.spec_path.clone(),
-                issue.rule.clone(),
-            )
-        }));
-    }
-    Outcome::Saved(
-        run.save(&CancellationToken::new())
-            .map(|saved| {
-                saved
-                    .into_iter()
-                    .map(|path| {
-                        let bytes = std::fs::read(&path).unwrap();
-                        let name = Path::new(&path).file_name().unwrap();
-                        (name.to_string_lossy().into_owned(), bytes)
-                    })
-                    .collect()
-            })
-            .map_err(|failure| failure.message),
-    )
-}
-
-/// A `key: value` scalar of a flat `expected/error.yaml`.
-fn scalar(text: &str, key: &str) -> Option<String> {
-    text.lines()
-        .find_map(|line| line.strip_prefix(&format!("{key}: ")))
-        .map(|value| value.trim().trim_matches('"').to_owned())
-}
-
-/// The `spec_paths` of an `expected/error.yaml`, written inline or as a
-/// block list.
-fn spec_paths(text: &str) -> Vec<String> {
-    let mut lines = text
-        .lines()
-        .skip_while(|line| !line.starts_with("spec_paths:"));
-    let head = lines.next().unwrap_or("");
-    let unquote = |path: &str| path.trim().trim_matches('"').to_owned();
-    match head.strip_prefix("spec_paths: ") {
-        Some(inline) => inline
-            .trim_matches(|c| c == '[' || c == ']')
-            .split(',')
-            .map(unquote)
-            .filter(|path| !path.is_empty())
-            .collect(),
-        None => lines
-            .map_while(|line| line.strip_prefix("  - "))
-            .map(unquote)
-            .collect(),
-    }
-}
-
-/// The whole-table run's saved file `name`, for a file with no byte
-/// guarantee.
-fn whole_table_file(case: &Path, name: &str) -> Option<Vec<u8>> {
-    let whole = Scratch::new("partitioned-corpus-whole");
-    stage(case, &whole);
-    let spec = whole.join("spec.yaml");
-    let run = engine(None).spec(spec.to_str().unwrap()).run().unwrap();
-    match outcome(run) {
-        Outcome::Saved(Ok(mut files)) => files.remove(name),
-        _ => None,
-    }
-}
-
-/// What differs between a case's partitioned run and what it states.
-fn problems(case: &Path, outcome: Outcome) -> Vec<String> {
-    let error = case.join("expected/error.yaml");
-    let mut problems = Vec::new();
-    match outcome {
-        Outcome::Issue(first) if error.is_file() => {
-            let text = std::fs::read_to_string(&error).unwrap();
-            let expected = (
-                scalar(&text, "phase").unwrap(),
-                scalar(&text, "condition").unwrap(),
-                spec_paths(&text),
-                scalar(&text, "rule"),
-            );
-            if first.as_ref() != Some(&expected) {
-                problems.push(format!("first issue {first:?}, expected {expected:?}"));
-            }
+impl Staged {
+    fn new(staged: &Path, entry: &Entry) -> Self {
+        let path = |file: &str| staged.join(file).to_str().unwrap().to_owned();
+        Self {
+            specification: path(&entry.specification),
+            project: entry.project.as_deref().map(path),
         }
-        Outcome::Saved(Ok(saved)) if !error.is_file() => {
-            for file in std::fs::read_dir(case.join("expected")).unwrap() {
-                let file = file.unwrap().path();
-                let name = file.file_name().unwrap().to_string_lossy().into_owned();
-                let expected = if name.ends_with(".parquet") {
-                    whole_table_file(case, &name)
-                } else {
-                    Some(std::fs::read(&file).unwrap())
-                };
-                if expected.is_none() || saved.get(&name) != expected.as_ref() {
-                    problems.push(format!("{name} differs from what the benchmark states"));
-                }
-            }
-        }
-        Outcome::Issue(first) => problems.push(format!("no output: {first:?}")),
-        Outcome::Saved(Ok(_)) => problems.push("an output where an issue is expected".into()),
-        Outcome::Saved(Err(message)) => problems.push(format!("save refused: {message}")),
     }
-    problems
+}
+
+/// The request of `entry` on `engine`, polling `token`.
+fn request<'a>(
+    engine: &'a Engine,
+    entry: &'a Staged,
+    token: &'a CancellationToken,
+) -> SpecRequest<'a> {
+    let request = engine.spec(&entry.specification).cancel_with(token);
+    match &entry.project {
+        Some(project) => request.project(project),
+        None => request,
+    }
 }
 
 /// What differs between `run` and the same specification read as a stream
-/// on an engine with one-record partitions.
+/// on an engine with one-record partitions: its batches hold the output's
+/// records one each, or, for an output with no record, are the output's
+/// one empty batch, as the whole table is.
 fn stream_problems(run: &yamaa::Run, streamed: yamaa::Streamed) -> Vec<String> {
     let mut problems = Vec::new();
     match run.output() {
@@ -294,11 +406,14 @@ fn stream_problems(run: &yamaa::Run, streamed: yamaa::Streamed) -> Vec<String> {
             if streamed.schema() != Some(table.schema()) {
                 problems.push("the stream's schema differs from the output's".into());
             }
-            let rows = table
-                .batches()
-                .iter()
-                .flat_map(|batch| (0..batch.num_rows()).map(|row| batch.slice(row, 1)))
-                .collect::<Vec<_>>();
+            let rows = match table.rows() {
+                0 => table.batches().to_vec(),
+                _ => table
+                    .batches()
+                    .iter()
+                    .flat_map(|batch| (0..batch.num_rows()).map(|row| batch.slice(row, 1)))
+                    .collect::<Vec<_>>(),
+            };
             match streamed.reader().collect::<Result<Vec<_>, _>>() {
                 Ok(batches) if batches == rows => {}
                 Ok(_) => problems.push("streamed records differ from the output's".into()),
@@ -322,18 +437,16 @@ fn stream_problems(run: &yamaa::Run, streamed: yamaa::Streamed) -> Vec<String> {
     problems
 }
 
-/// A run of `spec` on an engine with `partitions`, run again with the
+/// A run of `entry` on an engine with `partitions`, run again with the
 /// whole-table fallback when a step that needs the whole table refuses it:
 /// the run, the partitions it ran on, and whether the partitions admitted
 /// it, so it ran with no fallback.
 fn partitioned_run(
-    spec: &str,
+    entry: &Staged,
     partitions: Partitions,
     token: &CancellationToken,
 ) -> (yamaa::Run, Partitions, bool) {
-    let run = engine(Some(partitions))
-        .spec(spec)
-        .cancel_with(token)
+    let run = request(&engine(Some(partitions)), entry, token)
         .run()
         .unwrap();
     let refused = run.diagnostics().first().is_some_and(|issue| {
@@ -347,76 +460,257 @@ fn partitioned_run(
         return (run, partitions, true);
     }
     let partitions = partitions.with_whole_table_fallback();
-    let run = engine(Some(partitions))
-        .spec(spec)
-        .cancel_with(token)
+    let run = request(&engine(Some(partitions)), entry, token)
         .run()
         .unwrap();
     (run, partitions, false)
 }
 
-/// What differs between a partitioned run and what its case states: a
-/// negative benchmark's first issue, and every issue, context included,
-/// against the whole-table run's over the same staged files; a positive
-/// benchmark's saved files.
-fn run_problems(case: &Path, run: yamaa::Run, whole: Option<&yamaa::Run>) -> Vec<String> {
-    let issues = whole.and_then(|whole| {
-        (run.diagnostics() != whole.diagnostics())
-            .then(|| "issues differ from the whole-table run's".to_owned())
-    });
-    let mut problems = problems(case, outcome(run));
-    problems.extend(issues);
+/// One engine's builds of a case, entry by entry, then its submission: the
+/// issues of each, in that order, the bytes of each file their saves wrote,
+/// by file name, whether the partitions admitted every build, and what a
+/// save or a stream showed wrong.
+struct Chain {
+    partitions: Option<Partitions>,
+    issues: Vec<Vec<Diagnostic>>,
+    saved: BTreeMap<String, Vec<u8>>,
+    admitted: bool,
+    problems: Vec<String>,
+}
+
+impl Chain {
+    fn new(partitions: Option<Partitions>) -> Self {
+        Self {
+            partitions,
+            issues: Vec::new(),
+            saved: BTreeMap::new(),
+            admitted: true,
+            problems: Vec::new(),
+        }
+    }
+
+    /// Build `entry` on the chain's engine: the run, and the partitions it
+    /// ran on.
+    fn build(
+        &mut self,
+        entry: &Staged,
+        token: &CancellationToken,
+    ) -> (yamaa::Run, Option<Partitions>) {
+        match self.partitions {
+            Some(partitions) => {
+                let (run, partitions, admitted) = partitioned_run(entry, partitions, token);
+                self.admitted &= admitted;
+                (run, Some(partitions))
+            }
+            None => (request(&engine(None), entry, token).run().unwrap(), None),
+        }
+    }
+
+    /// Keep `run`'s issues, and save its output when it built one, as the
+    /// corpus readers do before the next entry builds.
+    fn keep(&mut self, mut run: yamaa::Run, token: &CancellationToken) {
+        self.issues.push(run.diagnostics());
+        if run.output().is_some() {
+            self.save(run.save(token));
+        }
+    }
+
+    /// Keep the bytes of each file a save wrote, by file name.
+    fn save(&mut self, saved: Result<Vec<String>, Failure>) {
+        match saved {
+            Ok(paths) => {
+                for path in paths {
+                    let bytes = std::fs::read(&path).unwrap();
+                    let name = Path::new(&path).file_name().unwrap();
+                    self.saved
+                        .insert(name.to_string_lossy().into_owned(), bytes);
+                }
+            }
+            Err(failure) => self
+                .problems
+                .push(format!("save refused: {}", failure.message)),
+        }
+    }
+
+    /// Compose the submission `define` declares over the artifacts saved in
+    /// `staged`, keep its issues, and save it when it reports none.
+    fn submit(&mut self, staged: &Path, define: &Define, token: &CancellationToken) {
+        let project = staged.join(&define.project);
+        let options = SubmissionOptions::new(yamaa::VERSION).with_created(define.created.as_str());
+        let submission = engine(self.partitions)
+            .project(project.to_str().unwrap())
+            .section(&define.section)
+            .cancel_with(token)
+            .submission(&options);
+        let issues = match submission {
+            Ok(mut submission) => {
+                let issues = submission.diagnostics();
+                if issues.is_empty() {
+                    self.save(submission.save(token));
+                }
+                issues
+            }
+            Err(failure) => failure.diagnostics,
+        };
+        self.issues.push(issues);
+    }
+}
+
+/// A case's chains over one staged copy: on one-record partitions, whose
+/// problems hold what each build's stream showed, on key-bounded
+/// partitions, and over the whole table when the comparison needs it.
+struct Chains {
+    one: Chain,
+    keyed: Chain,
+    whole: Option<Chain>,
+}
+
+/// Run `case` on each chain, or none where this platform cannot stage it.
+/// Every run of an entry, and its stream, comes before its saves write
+/// their files.
+fn reproduce(case: &Case, token: &CancellationToken) -> Option<Chains> {
+    let scratch = Scratch::new("partitioned-corpus");
+    if !stage(&case.path, &scratch) {
+        return None;
+    }
+    let keyed = Partitions::by_keys(NonZeroUsize::new(2).unwrap(), NonZeroUsize::MIN);
+    let mut chains = Chains {
+        one: Chain::new(Some(Partitions::new(NonZeroUsize::MIN))),
+        keyed: Chain::new(Some(keyed)),
+        whole: case.needs_whole_table().then(|| Chain::new(None)),
+    };
+    for entry in &case.entries {
+        let entry = Staged::new(&scratch, entry);
+        let (run, partitions) = chains.one.build(&entry, token);
+        let (keyed_run, _) = chains.keyed.build(&entry, token);
+        let streamed = request(&engine(partitions), &entry, token)
+            .stream()
+            .unwrap();
+        let streaming = stream_problems(&run, streamed);
+        chains.one.problems.extend(streaming);
+        let whole_run = chains
+            .whole
+            .as_mut()
+            .map(|whole| whole.build(&entry, token).0);
+        chains.one.keep(run, token);
+        chains.keyed.keep(keyed_run, token);
+        if let (Some(whole), Some(run)) = (chains.whole.as_mut(), whole_run) {
+            whole.keep(run, token);
+        }
+    }
+    if let Some(define) = &case.define {
+        let Chains { one, keyed, whole } = &mut chains;
+        for chain in [one, keyed].into_iter().chain(whole.as_mut()) {
+            chain.submit(&scratch, define, token);
+        }
+    }
+    Some(chains)
+}
+
+/// Whether `reported` holds every field `stated` writes: a mapping states
+/// the fields it writes, recursively, and any other value is compared
+/// whole.
+fn states(stated: &ContextValue, reported: &ContextValue) -> bool {
+    match (stated, reported) {
+        (ContextValue::Map(stated), ContextValue::Map(reported)) => {
+            stated.iter().all(|(key, stated)| {
+                reported
+                    .get(key)
+                    .is_some_and(|reported| states(stated, reported))
+            })
+        }
+        (ContextValue::Map(_), _) => false,
+        _ => stated == reported,
+    }
+}
+
+/// What differs between `chain` and what `case` states: a negative
+/// benchmark's first issue, and every issue, context included, against the
+/// whole-table run's over the same staged files; a positive benchmark's
+/// issues, none; and the files the chain saved, exactly the expected files.
+/// A negative benchmark without a submission states its issue alone: its
+/// builds save nothing, and, as for its corpus readers, no other expected
+/// file is compared.
+fn problems(case: &Case, chain: Chain, whole: Option<&Chain>) -> Vec<String> {
+    let mut problems = chain.problems;
+    let first = chain.issues.iter().flatten().next();
+    let stated = case.stated_issue();
+    let compared = stated.is_none() || case.define.is_some();
+    match stated {
+        Some(stated) => {
+            if !first.is_some_and(|first| states(&stated, &first.to_value())) {
+                let first = first.map(Diagnostic::to_value);
+                problems.push(format!("first issue {first:?}, stated {stated:?}"));
+            }
+            if whole.is_some_and(|whole| whole.issues != chain.issues) {
+                problems.push("issues differ from the whole-table run's".into());
+            }
+        }
+        None => problems
+            .extend(first.map(|first| format!("an issue where none is stated: {}", first.text()))),
+    }
+    let mut unstated: BTreeSet<&String> = chain.saved.keys().collect();
+    for file in std::fs::read_dir(case.path.join("expected")).unwrap() {
+        let file = file.unwrap().path();
+        let name = file.file_name().unwrap().to_string_lossy().into_owned();
+        if name == "error.yaml" || !compared {
+            continue;
+        }
+        unstated.remove(&name);
+        let expected = if name.ends_with(".parquet") {
+            whole.and_then(|whole| whole.saved.get(&name).cloned())
+        } else {
+            Some(std::fs::read(&file).unwrap())
+        };
+        if expected.is_none() || chain.saved.get(&name) != expected.as_ref() {
+            problems.push(format!("{name} differs from what the benchmark states"));
+        }
+    }
+    problems.extend(
+        unstated
+            .into_iter()
+            .map(|name| format!("{name} was saved, which the benchmark does not state")),
+    );
     problems
 }
 
 #[test]
-fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark() {
+fn partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_functions() {
     let token = CancellationToken::new();
-    let one = Partitions::new(NonZeroUsize::MIN);
-    let keyed = Partitions::by_keys(NonZeroUsize::new(2).unwrap(), NonZeroUsize::MIN);
     let mut mismatched = BTreeMap::new();
+    let mut exempt = Vec::new();
     let mut divided = Vec::new();
     let mut key_admitted = Vec::new();
     for case in cases() {
-        let name = case.file_name().unwrap().to_string_lossy().into_owned();
-        let scratch = Scratch::new("partitioned-corpus");
-        if !stage(&case, &scratch) {
+        if case.supplies_functions() {
+            exempt.push(case.name);
             continue;
         }
-        let spec = scratch.join("spec.yaml");
-        let spec = spec.to_str().unwrap();
-        // Every run and the stream before a save writes its files.
-        let (run, partitions, admitted) = partitioned_run(spec, one, &token);
-        let (keyed_run, _, keyed_admitted) = partitioned_run(spec, keyed, &token);
+        let Some(Chains { one, keyed, whole }) = reproduce(&case, &token) else {
+            continue;
+        };
         // One-record partitions divide every run they admit over more than
         // one record.
-        if admitted {
-            divided.push(name.clone());
+        if one.admitted {
+            divided.push(case.name.clone());
         }
-        if keyed_admitted {
-            key_admitted.push(name.clone());
+        if keyed.admitted {
+            key_admitted.push(case.name.clone());
         }
-        let streamed = engine(Some(partitions))
-            .spec(spec)
-            .cancel_with(&token)
-            .stream()
-            .unwrap();
-        let streaming = stream_problems(&run, streamed);
-        let whole = case
-            .join("expected/error.yaml")
-            .is_file()
-            .then(|| engine(None).spec(spec).cancel_with(&token).run().unwrap());
-        let mut problems = run_problems(&case, run, whole.as_ref());
-        problems.extend(streaming);
-        problems.extend(
-            run_problems(&case, keyed_run, whole.as_ref())
+        let mut found = problems(&case, one, whole.as_ref());
+        found.extend(
+            problems(&case, keyed, whole.as_ref())
                 .into_iter()
                 .map(|problem| format!("key-bounded partitions: {problem}")),
         );
-        if !problems.is_empty() {
-            mismatched.insert(name, problems);
+        if !found.is_empty() {
+            mismatched.insert(case.name, found);
         }
     }
+    assert_eq!(
+        exempt, FUNCTIONS,
+        "the benchmarks whose projects supply project functions"
+    );
     assert!(mismatched.is_empty(), "{mismatched:#?}");
     for name in DIVIDED {
         assert!(divided.iter().any(|case| case == name), "{name} divides");
