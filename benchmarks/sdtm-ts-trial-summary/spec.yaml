@@ -39,6 +39,8 @@ columns:
   - name: TSVAL
     type: str
     label: Parameter Value
+    verifications:
+      - not_missing
 
   - name: TSVALCD
     type: str

@@ -19,5 +19,5 @@ trial title, phase, randomization decision and planned enrollment.
 - `TSVCDREF` is `CDISC` for those controlled terms and empty for uncoded
   values.
 
-**Note:** each value fits in one trial summary record. Splitting long
-values and describing value-level submission metadata are separate tasks.
+**Note:** a missing protocol parameter stops the run. Each value fits in
+one trial summary record.
