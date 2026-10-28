@@ -70,13 +70,15 @@ pub enum InheritanceFinding<'a> {
         named: Named,
         declaring: Option<&'a str>,
     },
-    /// A layer declares a type other than `spec` (SCHEMA-2, LAYER-4): reported
-    /// at the entry's `type`, or at the `parent` or `include` entry naming it,
-    /// which the layer `declaring` writes.
+    /// A layer declares a type other than `expected`, the one every layer of
+    /// its chain declares (SCHEMA-2, LAYER-4, PROJECT-16): reported at the
+    /// entry's `type`, or at the `parent` or `include` entry naming it, which
+    /// the layer `declaring` writes.
     FileType {
         source: &'a str,
         entry: &'a str,
         file_type: &'a str,
+        expected: crate::language::FileType,
         named: Named,
         declaring: Option<&'a str>,
     },
@@ -212,16 +214,13 @@ impl InheritanceFinding<'_> {
                 source,
                 entry,
                 file_type,
+                expected,
                 named,
                 declaring,
             } => {
                 context.insert("source".into(), text(source));
                 context.insert("entry".into(), text(entry));
-                crate::language::file_type_context(
-                    &mut context,
-                    file_type,
-                    crate::language::FileType::Spec,
-                );
+                crate::language::file_type_context(&mut context, file_type, expected);
                 match naming_field(&mut context, named, declaring)? {
                     None => (C::HeaderFileType, "type".into()),
                     Some(field) => (C::InheritanceParentFileType, field),

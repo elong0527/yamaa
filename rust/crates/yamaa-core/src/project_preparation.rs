@@ -2,9 +2,12 @@
 //! Code activation, study data and publication authority are absent from this service.
 //!
 //! The caller supplies one project file, which the decoder admits as a 1.0
-//! project (SCHEMA-2). Each captured file lowers once into its root
-//! ([`crate::ast::project`]); every later read is of those roots. Paths a
-//! project writes resolve from the project file.
+//! project (SCHEMA-2). A project file that names a `parent` lowers composed
+//! with its parent chain ([`crate::project_layers`], PROJECT-16). Each
+//! captured file lowers once into its root ([`crate::ast::project`]); every
+//! later read is of those roots. Paths a project writes resolve from the
+//! project file, a parent's respelled from it so that each names the
+//! location beside the file that writes it (PROJECT-4).
 //!
 //! A project lists its function files in `functions` and holds each host
 //! language's lock in `environments.<host>.lock` (D8). Each listed function
@@ -103,12 +106,14 @@ pub struct SourceOrigins {
     pub codelists: Vec<usize>,
 }
 #[derive(Debug)]
-pub struct PreparedEnvironment<D> {
+pub struct PreparedEnvironment<D, R> {
     /// The project file lowered.
     pub project: ast::Project,
     pub origins: SourceOrigins,
     /// The caller-supplied project file.
     pub root: D,
+    /// The project's parent chain, from the entry up, as captured and decoded.
+    pub parents: Vec<crate::inheritance_capture::CapturedParent<R>>,
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -148,10 +153,17 @@ pub enum Failure<E, D, X> {
     },
     #[error("project preparation rejected: {0:?}")]
     Rejected(Box<RejectedEnvironment<E, D, X>>),
+    /// The project file, admitted as `root`, names a `parent`, and its
+    /// layers do not compose (PROJECT-16).
+    #[error("project preparation layers: root={root:?}, failure={failure:?}")]
+    Layers {
+        root: Box<D>,
+        failure: Box<crate::project_layers::Failure<E, X>>,
+    },
 }
 
 /// Preparation moves both admitted metadata and original boundary evidence.
-pub type PreparationResult<E, D, X> = Result<PreparedEnvironment<D>, Failure<E, D, X>>;
+pub type PreparationResult<E, D, X, R> = Result<PreparedEnvironment<D, R>, Failure<E, D, X>>;
 
 /// Resolve and capture one file the project names, under the shared size
 /// cap. An interrupt aborts immediately; ordinary independent failures
@@ -261,12 +273,47 @@ pub fn prepare<P: Resolver, D: Decoder>(
     source: Source,
     host: Option<Language>,
     port: &mut P,
-) -> PreparationResult<P::Error, D::Admitted, D::DocumentError> {
+) -> PreparationResult<P::Error, D::Admitted, D::DocumentError, D::Raw> {
     Limits::spec_bytes(source.bytes.len()).map_err(Failure::RootLimit)?;
     let root = decoder
         .admitted(source, DecodeTarget::Project)
         .map_err(Failure::Root)?;
-    let project = match lower::project(D::admitted_document(&root), None) {
+    // A project file that names a parent lowers composed with its parent
+    // chain (PROJECT-16).
+    let composed = match D::admitted_layers(&root) {
+        Some((schema, written))
+            if crate::inheritance::reads_as_layer(crate::language::FileType::Project, written) =>
+        {
+            let identity = D::admitted_source(&root).identity.clone();
+            let entry = crate::inheritance::Source {
+                display_path: identity.clone(),
+                identity,
+            };
+            let written = written.clone();
+            match crate::project_layers::compose(
+                schema,
+                crate::language::LANGUAGE_VERSION,
+                entry,
+                written,
+                port,
+                decoder,
+            ) {
+                Ok(composed) => Some(composed),
+                Err(failure) => {
+                    return Err(Failure::Layers {
+                        root: Box::new(root),
+                        failure: Box::new(failure),
+                    })
+                }
+            }
+        }
+        _ => None,
+    };
+    let document = composed
+        .as_ref()
+        .map(|composed| &composed.document)
+        .unwrap_or_else(|| D::admitted_document(&root));
+    let project = match lower::project(document, None) {
         Ok(project) => project,
         Err(findings) => {
             return Err(Failure::RootScalar {
@@ -275,6 +322,9 @@ pub fn prepare<P: Resolver, D: Decoder>(
             })
         }
     };
+    let parents = composed
+        .map(|composed| composed.parents)
+        .unwrap_or_default();
     let mut collected = Collected {
         failures: Vec::new(),
         origins: SourceOrigins::default(),
@@ -323,6 +373,7 @@ pub fn prepare<P: Resolver, D: Decoder>(
             project,
             origins,
             root,
+            parents,
             captures,
             lock,
             environment,

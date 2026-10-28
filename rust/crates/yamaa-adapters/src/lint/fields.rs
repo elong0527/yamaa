@@ -55,7 +55,7 @@ pub(super) static PROJECT: &Class = &PROJECT_CLASS;
 
 #[rustfmt::skip]
 static PROJECT_CLASS: Class = Class {
-    fields: &["yamaa", "type", "functions", "environments", "codelists", "study", "sdtm", "adam", "send"],
+    fields: &["yamaa", "type", "parent", "clear", "functions", "environments", "codelists", "study", "sdtm", "adam", "send"],
     members: &[
         ("environments", Holds::Value, &ENVIRONMENTS_CLASS),
         ("codelists", Holds::Items, &CODELIST_SOURCE_CLASS),

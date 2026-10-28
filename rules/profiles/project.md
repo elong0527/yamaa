@@ -26,9 +26,12 @@ no terminology and no dataset inventory.
 
 Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::the_converted_project_files_lower_with_their_written_positions`, `rust/tests/host-fixtures/cases.json::a_listed_function_file_and_codelist_file_that_do_not_exist`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_project_file_that_declares_schema_version_is_refused_as_language_0_5`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_project_file_that_declares_neither_header_declares_no_version`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_file_that_is_absent_fails_at_the_callers_path`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`.
 
-A project file declares `yamaa`, `type`, `functions`, `environments`,
-`codelists`, `study`, and the `sdtm`, `adam` and `send` sections, each optional
-except `yamaa` and `type`. A codelist source is written inline or as the path
+A project file declares `yamaa`, `type`, `parent`, `clear`, `functions`,
+`environments`, `codelists`, `study`, and the `sdtm`, `adam` and `send`
+sections, each optional except `yamaa` and `type`. A project file that names
+a `parent` is the entry of a chain of project files, which compose into the
+project before any file it names is read ([PROJECT-16](#project-16)); the
+caller still passes only the entry. A codelist source is written inline or as the path
 of a codelist file, which declares `type: codelists`
 ([CT-1](terminology.md#ct-1)). A project file whose content does not validate
 against the project schema fails, before any activation or study read, with
@@ -46,6 +49,54 @@ supplies ([CT-13](terminology.md#ct-13)).
 A project file that declares `schema_version` is refused under
 [SCHEMA-2](../reference/schema-language.md#schema-2) before any file it names
 is read.
+
+<a id="project-16"></a>
+
+### PROJECT-16. A project file names at most one `parent`, and composes on it section by section
+
+`parent` names one local project file to inherit from, which may name its
+own. Project files compose from the root ancestor to the entry, a later file
+taking precedence: `study`, `environments` and each section merge with the
+one they inherit as a specification's matching members merge, and
+`functions`, `codelists` and every list or scalar in a section replace what
+they inherit. A file removes an inherited value only by listing its path in
+`clear`. Each file is checked as a partial project, and the composed project
+as a complete one.
+
+Fails: `invalid_parent_path`, `parent_not_found`, `inheritance_cycle`, `invalid_clear`.
+Evidence: `schema-project-parent`, `negative-project-parent-missing`, `negative-project-parent-cycle`, `negative-project-two-parents`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_layers.json::a_parent_section_without_specs_composes_once_a_later_file_lists_them`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_layers.json::a_composed_section_without_specs_fails_at_its_composed_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_layers.json::a_clear_naming_a_required_field_or_nothing_inherited_fails_at_each_entry`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_layers.json::a_clear_in_a_project_file_without_a_parent_names_nothing_it_inherits`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_layers.json::a_parent_written_as_a_uri_is_refused_as_written`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_layers.json::a_parent_that_declares_another_type_fails_at_the_parent_naming_it`.
+
+A project file composes as a specification layer does, with the project's
+fields in place of a specification's: `parent` is one local path
+([LAYER-2](../inheritance.md#layer-2)), each file is admitted at the
+version it declares and must declare `type: project` before its parent is
+read, and the chain is followed to its root first
+([LAYER-3](../inheritance.md#layer-3),
+[LAYER-4](../inheritance.md#layer-4)). A project includes no fragment, so
+`include` is not a field of it. A list written at `parent` fails as
+`invalid_field_type` with the hint to write one parent per file, and a
+parent that reaches a file already on the chain as `inheritance_cycle`.
+
+Each of `study`, `environments`, `sdtm`, `adam` and `send` composes as one
+member under [LAYER-6](../inheritance.md#layer-6): a class merges field by
+field and a mapping key by key, so a section that writes only `define`
+keeps the `specs`, `standards`, `documents` and every other field it
+inherits, and `environments.python` keeps the `r` lock it inherits. A list
+replaces whole, so a file that lists `codelists` lists every codelist source
+the project reads, the inherited ones included, and a later source may then
+replace a codelist by `id` ([CT-1](terminology.md#ct-1)). `clear` lists
+paths in the notation of [LAYER-9](../inheritance.md#layer-9), such as
+`adam.originator` or `send`, and is applied before the file's own fields
+compose; a required field, such as a section's `specs`, cannot be cleared,
+and a path naming nothing the file inherits fails as `invalid_clear` at
+`clear[i]`. Requiredness and defaults apply to the composed project, so a
+parent may declare a section without `specs` that a later file completes
+([LAYER-7](../inheritance.md#layer-7)). `parent` and `clear` are consumed by
+the composition, and the composed project holds neither.
+
+The composed project is what every operation reads: a check, a run and a
+project submission alike. A relative path keeps the file that writes it as
+its base ([PROJECT-4](#project-4)).
 
 <a id="project-2"></a>
 
@@ -90,18 +141,26 @@ another by name in `submission.standard`
 
 <a id="project-4"></a>
 
-### PROJECT-4. A project file's relative paths resolve from the project file
+### PROJECT-4. A project file's relative paths resolve from the project file that writes them
 
-Every relative path the project file writes, namely each function file, lock,
-codelist source, section specification and Define-XML target, resolves from
-the directory of the project file. Absolute local paths and parent segments
-have their [File resolution](../reference/files.md) meaning.
+Every relative path a project file writes, namely its `parent`, each function
+file, lock, codelist source, section specification and Define-XML target,
+resolves from the directory of the project file that writes it, the entry or
+a parent ([PROJECT-16](#project-16)). Absolute local paths and parent
+segments have their [File resolution](../reference/files.md) meaning.
 
 Fails: `resource_path_missing`.
-Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::a_project_reads_a_codelist_file_it_lists_relative_to_itself`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
+Evidence: `schema-project-parent`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::a_project_reads_a_codelist_file_it_lists_relative_to_itself`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
 
-An absent file fails at its one selected location, without discovery or a
-fallback search. The project file does not change where a specification's own
+A path a parent writes keeps its location when it composes into the entry,
+as a specification layer's does ([LAYER-10](../inheritance.md#layer-10)):
+the composed project spells it from the entry, so a section a package
+inherits lists the specifications beside the parent that lists them. A
+section's `stylesheet` and each document's `link` are literal links relative
+to the generated document instead, wherever they are written
+([DEFINE-13](define-xml.md#define-13), [DEFINE-23](define-xml.md#define-23)).
+An absent file fails at its one
+selected location, without discovery or a fallback search. The project file does not change where a specification's own
 resources resolve under [FILE-1](../reference/files.md#file-1).
 
 ## Specification names

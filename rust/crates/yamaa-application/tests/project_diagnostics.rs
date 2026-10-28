@@ -970,7 +970,9 @@ mod project {
             use yamaa_adapters::specification_source::Error as SourceError;
             use yamaa_application::project_environment_diagnostics::schema_root;
             let mut port = port();
-            let body = format!("{LISTING}parent: base.yaml\nruntime: {{}}\nversion: '1'\n");
+            // A project names no fragment, so `include` is no field of it
+            // (PROJECT-16).
+            let body = format!("{LISTING}include: [base.yaml]\nruntime: {{}}\nversion: '1'\n");
             let Failure::Root(SourceError::Findings(captured)) =
                 prepare(&mut port, &body).unwrap_err()
             else {
@@ -978,7 +980,7 @@ mod project {
             };
             let issues = schema_root(&captured).unwrap();
             assert_eq!(issues.len(), 3);
-            for (issue, field) in issues.iter().zip(["parent", "runtime", "version"]) {
+            for (issue, field) in issues.iter().zip(["include", "runtime", "version"]) {
                 assert_eq!(issue.spec_paths, [field]);
                 assert_eq!(issue.condition(), "unknown_field");
                 assert_eq!(issue.rule(), Some("SCHEMA-13"));

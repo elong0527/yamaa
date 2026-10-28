@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import posixpath
 import shutil
 from pathlib import Path
 
@@ -18,13 +19,38 @@ CASES = (
 PUBLISHED = (".csv", ".parquet")
 
 
+def stage_project(case: Path, target: Path, written: str):
+    """Copy the project file `written` of `case` into `target`, with each
+    parent project file of its chain and the codelist files each lists, all
+    at their paths from the case (PROJECT-4, PROJECT-16)."""
+
+    def copy(relative: str):
+        (target / relative).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(case / relative, target / relative)
+
+    seen = set()
+    while written not in seen and (case / written).is_file():
+        seen.add(written)
+        copy(written)
+        layer = yaml.safe_load((case / written).read_text(encoding="utf-8"))
+        base = posixpath.dirname(written)
+        for source in layer.get("codelists") or []:
+            if isinstance(source, str):
+                copy(posixpath.normpath(posixpath.join(base, source)))
+        parent = layer.get("parent")
+        if not isinstance(parent, str):
+            break
+        written = posixpath.normpath(posixpath.join(base, parent))
+
+
 def stage_benchmarks(destination: Path):
     """Stage every benchmark declaring a Define call, with a JSON manifest.
 
-    Each case keeps its specifications, its project file, the codelist
-    files that project lists, at their paths from it, and its independent
-    ``expected/`` truth; the published tables are the expected ones. The
-    manifest carries the call and the expected error so hosts read no YAML.
+    Each case keeps its specifications, its project file, each parent
+    project file and the codelist files each lists, at their paths from the
+    case, and its independent ``expected/`` truth; the published tables are
+    the expected ones. The manifest carries the call and the expected error
+    so hosts read no YAML.
     """
     destination.mkdir()
     cases = []
@@ -36,13 +62,7 @@ def stage_benchmarks(destination: Path):
         target.mkdir()
         for spec in sorted(case.glob("spec*.yaml")):
             shutil.copy2(spec, target / spec.name)
-        project = case / define["environment"]
-        shutil.copy2(project, target / define["environment"])
-        listed = yaml.safe_load(project.read_text(encoding="utf-8")).get("codelists")
-        for source in listed or []:
-            if isinstance(source, str):
-                (target / source).parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(project.parent / source, target / source)
+        stage_project(case, target, define["environment"])
         shutil.copytree(case / "expected", target / "expected")
         error = case / "expected" / "error.yaml"
         expected = sorted(path.name for path in (case / "expected").iterdir())

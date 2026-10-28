@@ -1,0 +1,22 @@
+# The study's project, which every submission package of the study names as
+# its parent.
+yamaa: "1.0"
+type: project
+codelists:
+- codelists.yaml
+study:
+  id: CATH
+  name: CATH
+  description: Example study resubmitting subject-level analysis data
+  protocol_name: CATH-01
+
+adam:
+  specs:
+  - ../spec.yaml
+  standards:
+  - name: ADaMIG
+    version: '1.3'
+    status: Final
+  context: Other
+  originator: CATH Pilot Vendor
+  source_system_version: '1.0'

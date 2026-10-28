@@ -14,6 +14,7 @@ from pathlib import Path
 
 from tools.conformance import public_conformance as judge
 from tools.paths import ROOT
+from tools.tests.support import write
 
 SPEC = """yamaa: "1.0"
 type: spec
@@ -261,6 +262,68 @@ class PublicConformance(unittest.TestCase):
             'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\ndomain: CHILD\n'
         )
         self.assertEqual(domain_of(self.case / "spec_child.yaml"), "CHILD")
+
+    def test_the_python_runner_stages_parent_locks_from_their_declaring_layers(self):
+        # Seam: inject the installation's lock before engine admission, keeping
+        # authored locks and leaving malformed parent chains for the engine.
+        lock = self.root / "installed.lock"
+        lock.write_bytes(b"installed lock\n")
+        stage_lock = installed_runner().stage_lock
+        for label, files, expected in (
+            (
+                "inherited",
+                {
+                    "package/project.yaml": "parent: ../study/project.yaml\n",
+                    "study/project.yaml": "parent: ../program/project.yaml\n",
+                    "program/project.yaml": "environments: {python: {lock: locks/uv.lock}}\n",
+                },
+                {"program/locks/uv.lock": b"installed lock\n"},
+            ),
+            (
+                "overridden",
+                {
+                    "package/project.yaml": "parent: ../study/project.yaml\nenvironments: {python: {lock: uv.lock}}\n",
+                    "study/project.yaml": "environments: {python: {lock: uv.lock}}\n",
+                    "study/uv.lock": "authored lock\n",
+                },
+                {
+                    "package/uv.lock": b"installed lock\n",
+                    "study/uv.lock": b"authored lock\n",
+                },
+            ),
+            (
+                "cycle",
+                {
+                    "package/project.yaml": "parent: ../study/project.yaml\n",
+                    "study/project.yaml": "parent: ../package/project.yaml\nenvironments: {python: {lock: uv.lock}}\n",
+                },
+                {"study/uv.lock": b"installed lock\n"},
+            ),
+            ("missing", {"package/project.yaml": "parent: missing.yaml\n"}, {}),
+            (
+                "malformed",
+                {
+                    "package/project.yaml": "parent: broken.yaml\n",
+                    "package/broken.yaml": "[",
+                },
+                {},
+            ),
+            (
+                "two-parents",
+                {"package/project.yaml": "parent: [one.yaml, two.yaml]\n"},
+                {},
+            ),
+        ):
+            with self.subTest(case=label):
+                case = self.case / label
+                for name, text in files.items():
+                    write(case, name, text)
+                stage_lock(case, "package/project.yaml", lock)
+                actual = {
+                    path.relative_to(case).as_posix(): path.read_bytes()
+                    for path in case.rglob("*.lock")
+                }
+                self.assertEqual(actual, expected)
 
     def test_the_python_runner_records_saved_paths_below_the_case_root(self):
         relative = installed_runner().relative

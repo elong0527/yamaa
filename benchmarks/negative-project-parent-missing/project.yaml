@@ -1,0 +1,9 @@
+yamaa: "1.0"
+type: project
+# The defect: the study's project was never copied into this package's
+# folder, so the parent it names is not there.
+parent: study/project.yaml
+
+adam:
+  specs:
+  - spec.yaml

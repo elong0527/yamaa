@@ -6,7 +6,9 @@ field carries its kind and its schema-notation type as ``x-yamaa-kind`` and
 ``x-yamaa-type``, and a field a later language version introduced its
 ``since`` as ``x-yamaa-since``. A specification file may be one layer of an inheritance
 chain, so the spec schema checks what one layer may write (LAYER-4), and its
-``$defs/root_class`` checks a complete specification. The schemas are
+``$defs/root_class`` checks a complete specification. A project file that
+names a parent or clears what it inherits is checked as one layer too, and
+any other as a complete project (PROJECT-16). The schemas are
 committed beside their sources; without ``--write`` this check refuses a
 stale or extra one.
 """
@@ -42,8 +44,13 @@ SCALARS = {
 HEADER = ("yamaa", "type")
 COLLECTIONS = ("input", "windows", "intermediates", "columns", "rows")
 BLOCKS = ("output", "submission")
-# The engine's declarations of the same two lists, which layer admission
-# reads (LAYER-4); the check refuses a copy here that differs from them.
+# A project file that names a parent, or clears what it inherits, is one layer
+# of a chain too, and its sections are its blocks: inside each a layer defers
+# requiredness to the composed project (PROJECT-16).
+SECTIONS = ("environments", "study", "sdtm", "adam", "send")
+LINKS = ("parent", "clear")
+# The engine's declarations of the same lists, which layer admission reads
+# (LAYER-4, PROJECT-16); the check refuses a copy here that differs from them.
 LAYER_SOURCE = WORKSPACE / "crates/yamaa-core/src/schema/versioned_layer.rs"
 LAYER_SOURCE_NAME = "rust/crates/yamaa-core/src/schema/versioned_layer.rs"
 IDENTITIES = {
@@ -53,6 +60,8 @@ IDENTITIES = {
     "row_class": "id",
 }
 LAYER = "layer"
+# A project file: one layer of a chain, or a complete project.
+FILE = "project_file"
 FRAGMENT = "fragment."
 GENERATED = "Generated from yaml/ by tools/packaging/generate_json_schema.py."
 
@@ -87,7 +96,11 @@ def rust_names(source, name):
 def declaration_errors(source):
     """Where this generator's copies differ from the engine's declarations."""
     errors = []
-    for name, copy in (("COLLECTIONS", COLLECTIONS), ("BLOCKS", BLOCKS)):
+    for name, copy in (
+        ("COLLECTIONS", COLLECTIONS),
+        ("BLOCKS", BLOCKS),
+        ("SECTIONS", SECTIONS),
+    ):
         declared = rust_names(source, name)
         if declared != copy:
             errors.append(
@@ -217,13 +230,14 @@ class Renderer:
             "maxProperties": 1,
         }
 
-    def layer(self, root):
-        """What one specification layer may write (LAYER-4, LAYER-7)."""
+    def layer(self, root, members):
+        """What one layer may write, a root field among `members` in part
+        (LAYER-4, LAYER-7, PROJECT-16)."""
         fields = self.bundle.fields(root)
         return {
             "type": "object",
             "properties": self.properties(
-                root, fields, lambda item: item.name in COLLECTIONS + BLOCKS
+                root, fields, lambda item: item.name in members
             ),
             "required": list(HEADER),
             "additionalProperties": False,
@@ -234,10 +248,11 @@ def render(file_type):
     """The JSON Schema text of one file type."""
     entry, root = FILE_TYPES[file_type]
     renderer = Renderer(Bundle(SOURCE, entry))
+    start = {"$ref": f"#/$defs/{root}"}
     if file_type == "spec":
-        renderer.definitions[LAYER] = renderer.layer(root)
+        renderer.definitions[LAYER] = renderer.layer(root, COLLECTIONS + BLOCKS)
         renderer.reference(root, False)
-        start = LAYER
+        start = {"$ref": f"#/$defs/{LAYER}"}
         description = (
             "One file of the 1.0 spec type. A specification file may be one layer "
             "of an inheritance chain: the header is required in every layer, a "
@@ -246,9 +261,24 @@ def render(file_type):
             "submission, requiredness waits for the composed specification, which "
             "$defs/root_class checks (LAYER-4). "
         )
+    elif file_type == "project":
+        renderer.definitions[LAYER] = renderer.layer(root, SECTIONS)
+        renderer.reference(root, False)
+        renderer.definitions[FILE] = {
+            "if": {"anyOf": [{"required": [link]} for link in LINKS]},
+            "then": {"$ref": f"#/$defs/{LAYER}"},
+            "else": {"$ref": f"#/$defs/{root}"},
+        }
+        start = {"$ref": f"#/$defs/{FILE}"}
+        description = (
+            "One file of the 1.0 project type. A project file that names a parent "
+            "or clears what it inherits is one layer of a chain: the header is "
+            "required in every layer, a root field it writes is complete there, "
+            "and inside environments, study or a section requiredness waits for "
+            "the composed project, which $defs/project_class checks (PROJECT-16). "
+        )
     else:
         renderer.reference(root, False)
-        start = root
         description = f"One file of the 1.0 {file_type} type. "
     document = {
         "$schema": DIALECT,
@@ -256,7 +286,7 @@ def render(file_type):
         "description": description
         + "Each field carries its kind as x-yamaa-kind and its schema-notation "
         "type as x-yamaa-type. " + GENERATED,
-        "$ref": f"#/$defs/{start}",
+        **start,
         "$defs": dict(sorted(renderer.definitions.items())),
     }
     return json.dumps(document, indent=2, ensure_ascii=True) + "\n"

@@ -165,6 +165,13 @@ as a replacement written under a misspelled `id`, fails with
 [terminology rule](../../rules/profiles/terminology.md#ct-1) states the
 composition.
 
+A package whose project file names the study's as its `parent` inherits the
+study's `codelists` and needs none of its own. To replace a list, it writes
+`codelists` itself, and since a list it writes replaces the inherited one
+whole, it lists the study's files as well as its own, each path written from
+the package's project file
+([project layering](../../rules/profiles/project.md#project-16)).
+
 ## Terminology standards and implementation guides
 
 A codelists file's `standard` and a section's `standards` name different

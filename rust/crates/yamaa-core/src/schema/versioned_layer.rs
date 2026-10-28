@@ -21,12 +21,11 @@ pub(super) const COLLECTIONS: [&str; 5] = ["input", "windows", "intermediates", 
 /// resolved specification too (LAYER-4).
 pub const BLOCKS: [&str; 2] = ["output", "submission"];
 
-/// Whether a layer's value at the root field `field` is a fragment whose
-/// requiredness and defaults wait for the resolved specification (LAYER-4,
-/// LAYER-7): a keyed collection's members, or a block.
-fn deferred(field: &str) -> bool {
-    COLLECTIONS.contains(&field) || BLOCKS.contains(&field)
-}
+/// The sections of a project, the blocks of a project file: each composes
+/// field by field with the section it inherits, and inside one a layer
+/// defers requiredness and defaults to the composed project (PROJECT-16,
+/// LAYER-4, LAYER-7).
+pub(super) const SECTIONS: [&str; 5] = ["environments", "study", "sdtm", "adam", "send"];
 
 /// The keyed collections written as lists, and the field each member is
 /// identified by.
@@ -43,6 +42,27 @@ fn identity(field: &str) -> Option<&'static str> {
 }
 
 impl SchemaStructure {
+    /// Whether the root field `field` of a layer read against this view is a
+    /// block, whose class composes field by field with the value it
+    /// inherits: a specification's `output` or `submission` (LAYER-5), or a
+    /// project's section (PROJECT-16).
+    pub(super) fn block(&self, field: &str) -> bool {
+        if self.root_class().name == crate::language::FileType::Project.root_class() {
+            SECTIONS.contains(&field)
+        } else {
+            BLOCKS.contains(&field)
+        }
+    }
+
+    /// Whether a layer's value at the root field `field` is a fragment whose
+    /// requiredness and defaults wait for the resolved specification or the
+    /// composed project (LAYER-4, LAYER-7): a keyed collection's members, or
+    /// a block. Every other root field is complete where it is written and
+    /// replaces what it inherits.
+    fn deferred(&self, field: &str) -> bool {
+        COLLECTIONS.contains(&field) || self.block(field)
+    }
+
     /// The findings of one 1.x specification layer, checked against this view
     /// of the 1.0 closure: the one its declared version selects
     /// ([`SchemaStructure::at_version`]). The header has already been read
@@ -89,7 +109,7 @@ impl SchemaStructure {
             let Some(value) = input.field(root, &field.name) else {
                 continue;
             };
-            let fragment = deferred(&field.name);
+            let fragment = self.deferred(&field.name);
             let mut found = self.validate_versioned_descriptor(
                 field.descriptor,
                 input,
@@ -104,7 +124,7 @@ impl SchemaStructure {
             if field.name == "parent" && matches!(input.nodes()[value], N::Sequence(_)) {
                 for finding in &mut found {
                     if finding.code == ConditionCode::SchemaInvalidFieldType {
-                        finding.context.push(one_parent_hint());
+                        finding.context.push(one_parent_hint(&class.name));
                     }
                 }
             }
@@ -170,7 +190,7 @@ impl SchemaStructure {
                     descriptor: field.descriptor,
                 },
             });
-            let fragment = deferred(&field.name);
+            let fragment = self.deferred(&field.name);
             let (_, found) = self.versioned_descriptor_sites(
                 field.descriptor,
                 input,
@@ -313,7 +333,7 @@ impl SchemaStructure {
             ) else {
                 continue;
             };
-            let fragment = deferred(&field.name);
+            let fragment = self.deferred(&field.name);
             let normalized =
                 self.normalize_versioned_descriptor(field.descriptor, input, value, fragment)?;
             let offset = nodes.len();

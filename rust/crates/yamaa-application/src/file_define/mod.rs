@@ -318,6 +318,7 @@ impl Reads {
                 written: &self.environment_written,
                 host: self.host,
                 root: environment.root(),
+                parents: environment.parents(),
                 project: environment.project()?,
                 lock: environment.lock(),
                 captures: environment.captures(),

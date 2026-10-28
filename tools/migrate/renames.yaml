@@ -93,11 +93,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 665
-  changes: 96
+  entries: 667
+  changes: 98
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 50
+    new, decided: 52
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7652,6 +7652,32 @@ entries:
     a codelist the project does not declare fails as unknown_codelist, one without decodes as
     codelist_without_decodes, and a specification checked or run without its project file as
     project_binding_missing (EXPR-15, CT-13). No 0.5 file declares it, so the converter wrote none.'
+  convert: {action: none}
+- id: new.project.parent
+  file_type: project
+  path: parent
+  today: null
+  kind: new
+  proposed: 'parent: PROJECT_FILE'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27, the owner decision of 2026-10-28 on #4101.
+    Optional: the one local project file a project file inherits from, relative to that file. Project
+    files compose from the root ancestor to the entry, each section merging with the one it inherits
+    and every list replacing, and every relative path keeps the file that writes it as its base
+    (PROJECT-4, PROJECT-16). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: path
+  convert: {action: none}
+- id: new.project.clear
+  file_type: project
+  path: clear
+  today: null
+  kind: new
+  proposed: 'clear: [PATH, ...]'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27, with new.project.parent: the inherited values a
+    project file removes before its own fields compose, each named by its path as a specification layer
+    names one (LAYER-9, PROJECT-16). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

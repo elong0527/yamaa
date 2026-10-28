@@ -63,6 +63,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("order_term_types.json"),
     fixture!("producer_links.json"),
     fixture!("project_files.json"),
+    fixture!("project_layers.json"),
     fixture!("project_run.json"),
     fixture!("rounding.json"),
     fixture!("row_derivations.json"),

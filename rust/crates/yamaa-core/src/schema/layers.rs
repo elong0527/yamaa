@@ -195,10 +195,10 @@ impl Run<'_> {
         Ok(offset + composed.document.root())
     }
     /// Root fields: keyed collections compose member by member, a block,
-    /// `output` or `submission`, field by field as a member does, and every
-    /// other field replaces whole; a layer clears only through `clear`, in
-    /// which null is the missing value (LAYER-9). `parent`, `include` and
-    /// `clear` are never contributed.
+    /// `output` or `submission`, or a project's section field by field as a
+    /// member does, and every other field replaces whole; a layer clears only
+    /// through `clear`, in which null is the missing value (LAYER-9).
+    /// `parent`, `include` and `clear` are never contributed.
     fn root(
         &mut self,
         old: Site<'_>,
@@ -231,7 +231,7 @@ impl Run<'_> {
                 Some(&(_, identity)) => {
                     self.collection(field.descriptor, identity, previous, value, depth + 1)?
                 }
-                None if BLOCKS.contains(&name) => self.merge(field.descriptor, previous, value)?,
+                None if self.schema.block(name) => self.merge(field.descriptor, previous, value)?,
                 None => self.copy(value, depth + 1)?,
             };
             changes.push(Change::Value(value));

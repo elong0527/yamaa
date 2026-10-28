@@ -15,7 +15,15 @@ project_class:
         type: str
         required: true
         values: [project]
-        description: File type of a project file (SCHEMA-2).
+        description: File type of a project file, which every layer of a chain declares (SCHEMA-2).
+    - parent:
+        type: path
+        required: false
+        description: Local project file this one inherits from, relative to this file; its sections compose with this file's before any file the project names is read (PROJECT-16).
+    - clear:
+        type: "list[spec_path]"
+        required: false
+        description: Inherited values this project file removes before its own fields compose, each named by its path (PROJECT-16, LAYER-9).
     - functions:
         type: "list[project_path]"
         required: false

@@ -81,9 +81,6 @@ def cell(value, kind):
     raise ValueError("unknown public table type: " + kind)
 
 
-SECTIONS = ("sdtm", "adam", "send")
-
-
 def read_yaml(path):
     """Read a project or specification document; inputs, never truth."""
     import yaml12
@@ -109,46 +106,33 @@ def domain_of(path):
     raise ValueError(f"{path}: cyclic parent")
 
 
-def project_for(case, project, entry, specification):
-    """The project file that lists `specification`, relative to the case.
-
-    A project selects only a specification it lists. A metamorphic variant
-    keeps its entry's project metadata through a copy beside the project
-    that lists the variant in place of the entry.
-    """
-    original = (case / entry).resolve()
-    if (case / specification).resolve() == original:
-        return project
-    document = read_yaml(case / project)
-    base = PurePosixPath(project).parent
-    target = PurePosixPath(os.path.relpath(case / specification, case / base))
-    replaced = False
-    for section in SECTIONS:
-        if isinstance(document.get(section), dict):
-            specs = document[section].get("specs") or []
-            for index, spec in enumerate(specs):
-                if (case / base / spec).resolve() == original:
-                    specs[index], replaced = target.as_posix(), True
-    if not replaced:
-        raise ValueError(f"{project} does not list {entry}")
-    derived = base / ("__project_" + PurePosixPath(specification).stem + ".yaml")
-    # JSON is YAML; the copy resolves its links from the project's directory.
-    (case / derived).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    return derived.as_posix()
-
-
 def stage_lock(case, project, lock):
-    """Supply the packaging lock a project names for Python in
-    `environments.python.lock`, relative to the project file."""
-    document = read_yaml(case / project)
-    linked = (document.get("environments") or {}).get("python")
-    written = linked.get("lock") if isinstance(linked, dict) else None
-    if written is None:
-        return
-    target = (case / project).parent / PurePosixPath(written)
-    if not target.exists():
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(lock, target)
+    """Supply each layer's declared Python lock beside its declaring file.
+
+    Stage declared inputs without composing the project: the engine decides
+    which lock survives replacement or clear, and reports invalid parents.
+    """
+    path, seen = case / project, set()
+    while path.resolve() not in seen:
+        seen.add(path.resolve())
+        try:
+            document = read_yaml(path)
+        except (OSError, ValueError):
+            return  # Leave missing or malformed parent diagnostics to the engine.
+        if not isinstance(document, dict):
+            return
+        environments = document.get("environments")
+        linked = environments.get("python") if isinstance(environments, dict) else None
+        written = linked.get("lock") if isinstance(linked, dict) else None
+        if isinstance(written, str):
+            target = path.parent / PurePosixPath(written)
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(lock, target)
+        parent = document.get("parent")
+        if not isinstance(parent, str):
+            return
+        path = path.parent / PurePosixPath(parent)
 
 
 def relative(paths, case):
@@ -331,12 +315,18 @@ def main(argv=None):
             spec = yamaa.spec(called / specification)
         else:
             stage_lock(case, project, args.python_lock)
-            # A project names a specification by its entry's `domain`, which
-            # a layer may inherit from its parent.
-            name = domain_of(case / entry["specification"])
-            listing = project_for(case, project, entry["specification"], specification)
             try:
-                spec = yamaa.project(called / listing).spec(name)
+                if specification == entry["specification"]:
+                    # A project names a specification by its entry's domain.
+                    name = domain_of(case / entry["specification"])
+                    spec = yamaa.project(called / project).spec(name)
+                else:
+                    # Variants keep the same project, whose specs may be
+                    # inherited. Use the spec-with-project constructor, as
+                    # the R runner does; the engine composes its metadata.
+                    spec = yamaa.Spec(
+                        called / specification, os.fspath(called / project)
+                    )
             except yamaa.Error as refusal:
                 # A project that fails admission refuses to name its specs.
                 # The spec-with-project object, which R's runner opens for
@@ -344,7 +334,7 @@ def main(argv=None):
                 # project's issues, which the record keeps. A refusal that
                 # this spec's check does not reproduce exactly stays this
                 # record's error.
-                spec = yamaa.Spec(called / specification, os.fspath(called / listing))
+                spec = yamaa.Spec(called / specification, os.fspath(called / project))
                 checked = spec.check().issues
                 if not checked.num_rows or (
                     checked.to_pylist() != refusal.issues.to_pylist()

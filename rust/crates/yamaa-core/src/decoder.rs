@@ -11,7 +11,7 @@ use crate::{
     producer_contract::Contract,
     project_environment::LockKind,
     project_preparation::{DecodeTarget, Source},
-    schema::Document,
+    schema::{Document, SchemaStructure},
     specification::{SourceDeclaration, SourceInterpretation},
     table::{TableAccess, TableSchema},
 };
@@ -49,6 +49,13 @@ pub trait Decoder {
     fn admitted_document(admitted: &Self::Admitted) -> &Document;
     /// The held file a project's file was admitted from.
     fn admitted_source(admitted: &Self::Admitted) -> &Source;
+    /// The 1.0 closure a project file was admitted against and its document
+    /// as written, against which a project file that names a `parent`
+    /// composes its layers (PROJECT-16); `None` when this decoder composes
+    /// no project layers.
+    fn admitted_layers(_admitted: &Self::Admitted) -> Option<(&SchemaStructure, &Document)> {
+        None
+    }
     /// The packaging tool whose lock syntax the held bytes are, or `None`
     /// when they are no lock the engine reads.
     fn lock(&mut self, source: &Source) -> Option<LockKind>;

@@ -1,0 +1,7 @@
+phase: validation
+condition: parent_not_found
+spec_paths:
+  - parent
+rule: LAYER-2
+context:
+  path: study/project.yaml

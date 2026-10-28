@@ -92,6 +92,85 @@ mod file {
         const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
 
         #[test]
+        fn changed_project_ancestors_report_the_held_parent_declaration() {
+            // Seam: change or delete a captured ancestor between preparation
+            // and verification, while keeping its declaration and location.
+            use yamaa_core::diagnostic::{ConditionCode, Diagnostic};
+            for (target, declaring, written, line) in [
+                (
+                    "parent/project.yaml",
+                    "project.yaml",
+                    "parent/project.yaml",
+                    6,
+                ),
+                (
+                    "outside/project.yaml",
+                    "parent/project.yaml",
+                    "../outside/project.yaml",
+                    3,
+                ),
+            ] {
+                for deleted in [false, true] {
+                    let study = Study::new();
+                    study.write(
+                        "project.yaml",
+                        &format!("{PROJECT}parent: parent/project.yaml\n"),
+                    );
+                    study.write(
+                        "parent/project.yaml",
+                        "yamaa: \"1.0\"\ntype: project\nparent: ../outside/project.yaml\n",
+                    );
+                    study.write("outside/project.yaml", "yamaa: \"1.0\"\ntype: project\n");
+                    let project = study.prepare(&study.text(""), &[]).unwrap();
+                    let captured = project.run().captured_environment();
+                    let held = captured
+                        .parents()
+                        .iter()
+                        .map(|parent| {
+                            (
+                                parent.source().identity.clone(),
+                                parent.source().bytes.clone(),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let expected_held = ["parent/project.yaml", "outside/project.yaml"]
+                        .map(|name| (study.identity(name), fs::read(study.0.join(name)).unwrap()));
+                    assert_eq!(held, expected_held, "{target}, deleted={deleted}");
+                    if deleted {
+                        fs::remove_file(study.0.join(target)).unwrap();
+                    } else {
+                        study.write(target, "changed after preparation\n");
+                    }
+                    let failure = project.verify_metadata().unwrap_err();
+                    let expected = Diagnostic {
+                        code: if deleted {
+                            ConditionCode::ResourceMissing
+                        } else {
+                            ConditionCode::ResourceContentChanged
+                        },
+                        spec_paths: vec!["parent".into()],
+                        context: [
+                            ("path".into(), written.into()),
+                            ("source".into(), study.identity(declaring).into()),
+                        ]
+                        .into(),
+                        source_span: None,
+                        operand_route: None,
+                    };
+                    assert_eq!(failure, [expected], "{target}, deleted={deleted}");
+                    let locator = yamaa_application::issue_location::prepared(&project);
+                    assert_eq!(
+                        locator
+                            .locate(&failure[0])
+                            .map(|at| (at.file, at.line, at.column)),
+                        Some((study.identity(declaring), line, 1)),
+                        "{target}, deleted={deleted}",
+                    );
+                }
+            }
+        }
+
+        #[test]
         fn public_preparation_accepts_native_absolute_environment_paths_without_study_reads() {
             // Seam: the public preparation's capture reads, which a check does not return.
             let study = Study::new();

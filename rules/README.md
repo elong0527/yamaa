@@ -137,7 +137,7 @@ profiles in `rules/profiles/`.
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 | [SAS Transport](profiles/xpt.md) | XPT | Write a dataset as one deterministic SAS Transport version 5 file in the public record layout. |
 | [Project functions](profiles/functions.md) | FUNC | Define each project function once in a function file, resolve immutable runtimes, and validate function inputs, results, and activation conformance. |
-| [Project file](profiles/project.md) | PROJECT | List a study's function files and host locks, declare its terminology and submission sections once, and check, run and package the specifications its sections list. |
+| [Project file](profiles/project.md) | PROJECT | List a study's function files and host locks, declare its terminology and submission sections once, compose a project file on one parent, and check, run and package the specifications its sections list. |
 
 The [rule index](https://elong0527.github.io/yamaa/reference/rule-index/),
 [rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)

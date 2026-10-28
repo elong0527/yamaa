@@ -1,0 +1,7 @@
+yamaa: "1.0"
+type: project
+parent: study/project.yaml
+
+adam:
+  specs:
+  - spec.yaml
