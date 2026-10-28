@@ -93,18 +93,18 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 666
-  changes: 97
+  entries: 667
+  changes: 98
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 51
+    new, decided: 52
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
     value, decided: 5
   conditions: 20
   paths: 13
-  reserved: 19
+  reserved: 18
 transforms:
   header: replace schema_version with yamaa (same version text, quoted) and type
   environment_to_function_files: 'merge each function''s python and r definitions into one type: function
@@ -7238,6 +7238,17 @@ entries:
   reason: A custom SDTM or SEND domain is marked def:IsNonStandard instead of claiming a guide in def:StandardOID; omission keeps every existing document.
   field_kind: value
   convert: {action: none}
+- id: new.spec.submission.has_no_data
+  file_type: spec
+  path: columns[].submission.has_no_data
+  today: null
+  kind: new
+  proposed: has_no_data
+  decision: decided (D-next, owner decision on issue 4082, option 2; the D58 reserved spelling)
+  ref: SUB-28
+  reason: Validated metadata measures an ItemRef's def:HasNoData from the published data, as SUB-24 measures Length; only historical metadata declares it, and Define-XML 2.0 refuses the declaration.
+  field_kind: value
+  convert: {action: none}
 - id: new.project.transport=dataset_ndjson
   file_type: project
   path: <section>.transport
@@ -7959,11 +7970,6 @@ reserved:
   ref: P-SUPP-1
   decision: decided (D58)
   meaning: Overrides of the derivable SUPP-- name and IDVAR.
-- spelling: 'submission: {has_no_data: true}'
-  where: a column
-  ref: P-CDISC-1
-  decision: decided (D58)
-  meaning: ItemRef def:HasNoData, with a required comment.
 - spelling: 'pages: {type, first, last}'
   where: a document reference
   ref: P-CDISC-1

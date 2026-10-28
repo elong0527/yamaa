@@ -612,7 +612,7 @@ conditions:
     message: "the extension of {path} is not one of {permitted}"
   unknown_codelist:
     phases: [validation]
-    message: "column {column} binds codelist {codelist}, which is not declared"
+    message: "{spec_path} names codelist {codelist}, which is not declared"
   # LOOKUP-22
   unknown_derive_variable:
     phases: [validation]

@@ -1,5 +1,5 @@
 {
-  "about": "Scalar operations, moved from the scalar_language module of scalar_language.rs at a47519f5d, whose tests saved output.csv and compared its bytes, or compared what a check and a refused build report. greatest and least skip missing operands, keep integers beyond 2^53 exact and keep dates as dates; a row template's str_template and greatest derive as a column derivation does; a Boolean literal in a row derivation converts to no column type, so it fails validation before any record is read (VALUE-24) and every save of that result fails, publishing nothing; an invalid regular expression in a str_extract over a CSV text column, or a group beyond its pattern's, is reported by the check and the refused build alike before the source is captured (TEXT-6, TEXT-10), whether or not the column is typed str; a str_extract over a non-text source fails first as incompatible_input_type (TEXT-1); and a decode, which reads a codelist the project file declares (EXPR-15), is refused as an unsupported operation by the check and the refused build alike, before any source is read, since this engine reads no project codelist for one (COLUMN-15). Each specification is its test's spec(derivation, type) template: the scalar document, with its RESULT column edited. The tests ran in a copy of adam-adae-text-cleanup whose spec.yaml and input.csv they replaced; their specifications read input.csv alone, so a case stages those two files, and no input.csv where its test removed it. A partial issue check keeps its compares. No engine output supplied these values.",
+  "about": "Scalar operations, moved from the scalar_language module of scalar_language.rs at a47519f5d, whose tests saved output.csv and compared its bytes, or compared what a check and a refused build report. greatest and least skip missing operands, keep integers beyond 2^53 exact and keep dates as dates; a row template's str_template and greatest derive as a column derivation does; a Boolean literal in a row derivation converts to no column type, so it fails validation before any record is read (VALUE-24) and every save of that result fails, publishing nothing; an invalid regular expression in a str_extract over a CSV text column, or a group beyond its pattern's, is reported by the check and the refused build alike before the source is captured (TEXT-6, TEXT-10), whether or not the column is typed str; and a str_extract over a non-text source fails first as incompatible_input_type (TEXT-1). Each specification is its test's spec(derivation, type) template: the scalar document, with its RESULT column edited. The tests ran in a copy of adam-adae-text-cleanup whose spec.yaml and input.csv they replaced; their specifications read input.csv alone, so a case stages those two files, and no input.csv where its test removed it. A partial issue check keeps its compares. No engine output supplied these values.",
   "documents": {
     "scalar": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float, D: date}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}}\n",
     "row_literal": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: false\n"
@@ -209,18 +209,6 @@
       "compares": ["condition", "rule", "spec_paths"],
       "issues": [
         {"condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.RESULT.derivation.str_extract.source"]}
-      ]
-    },
-    {
-      "case": "a_decode_is_refused_as_an_unsupported_operation_before_any_source_is_read",
-      "operation": ["check", "build"],
-      "input": {
-        "files": {"spec.yaml": {"base": "scalar", "edits": [{"from": "RESULT, type: str, derivation: {greatest: {sources: [SRC.I, SRC.F]}}", "to": "RESULT, type: str, derivation: {decode: {source: SRC.TEXT, codelist: PARAMCD}}"}, {"from": "I: int, F: float, D: date", "to": "I: int, F: float, D: date, TEXT: str"}]}},
-        "specification": "spec.yaml"
-      },
-      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [
-        {"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["columns.RESULT.derivation.decode"], "context": {"operation": "decode"}}
       ]
     }
   ]

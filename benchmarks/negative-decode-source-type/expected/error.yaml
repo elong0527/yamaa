@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.AVISIT.derivation.decode.source
+rule: EXPR-15
+context:
+  source: AVISITN
+  expected: str
+  actual: int

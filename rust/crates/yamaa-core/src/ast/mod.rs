@@ -169,6 +169,10 @@ pub struct Spec {
     /// one was not composed.
     pub written: Written,
     pub meta: Meta,
+    /// The project codelists its `decode` expressions read, each once, as
+    /// the project file declares them (EXPR-15). Lowering leaves it empty;
+    /// preparation in a project fills it.
+    pub codelists: Vec<Codelist>,
 }
 
 impl Spec {
@@ -558,6 +562,8 @@ pub struct ColumnSubmission {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SubmissionMetadata {
     pub key_sequence: Option<Constant>,
+    /// A historical ItemRef's declared `def:HasNoData` (DEFINE-30).
+    pub has_no_data: Option<bool>,
     pub core: Option<Text>,
     pub mandatory: Option<bool>,
     pub role: Option<Text>,

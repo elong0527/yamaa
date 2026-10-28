@@ -55,3 +55,21 @@ only the first metadata compression signature from SASYZCRL to UNKNOWN!.
 The RDC overlap control follows upstream `test_rdc_overlapping_back_reference`: 
 change bytes 120922:120924 from 8d00 to 8100; expected Column11 repeats the
 last four bytes of the independently authored first-row Column9 (0.621).
+
+`utf8-concentration.sas7bdat` is independently assembled by
+`tests/support/sas7bdat.rs::utf8_concentration`, using the documented layout
+builder described in that module. It holds ID 1 as an eight-byte binary64
+number and UNIT `\u00b5mol/L` as a twelve-byte, space-padded UTF-8 character
+field. Header byte 70 is encoding code 20 (UTF-8). The helper writes one
+1024-byte header and one 4096-byte MIX page. It imports neither yamaa nor
+ReadStat. The same bytes are the inputs of `schema-source-sas7bdat-encoding`
+and `negative-sas7bdat-encoding-mismatch`; the adapter codec test compares
+all three files to the independent builder. To recreate them, compile a
+small Rust program that imports `tests/support/sas7bdat.rs` by path and
+writes `sas7bdat::utf8_concentration()` to those three paths. No output
+expectation is obtained from the reader.
+
+The pandas big-endian RDC fixture records encoding code 29 (ISO-8859-1),
+while the little-endian compressed fixtures record code 62 (Windows-1252).
+The shared host truth declares those encodings per file; its cell values
+remain the unchanged upstream CSV truth.

@@ -644,3 +644,16 @@ impl Dataset {
         bytes
     }
 }
+
+/// Independent UTF-8 fixture: ID 1, a concentration unit with a micro sign.
+/// The header records code 20; the character slot holds literal UTF-8 bytes.
+pub fn utf8_concentration() -> Vec<u8> {
+    let mut dataset = Dataset::new(
+        Layout::LE32,
+        &[("ID", Kind::Num, 8), ("UNIT", Kind::Chr, 12)],
+    );
+    dataset.total = 1;
+    dataset.mix_rows = 1;
+    let row = dataset.row(&[Cell::Num(1.0), Cell::Text("\u{b5}mol/L".as_bytes())]);
+    dataset.file(&[Page::new(MIX, dataset.metadata(), vec![row])])
+}

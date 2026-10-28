@@ -1,0 +1,13 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - codelists:
+      - id: VISIT
+        name: Analysis Visit
+        items:
+          - {value: "1", decode: Baseline}
+          - {value: "2", decode: Week 2}
+
+adam:
+  specs:
+  - spec.yaml

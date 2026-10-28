@@ -1,0 +1,10 @@
+phase: ingest
+condition: source_sas_invalid
+rule: SAS-7
+spec_paths: [input.SRC.encoding]
+context:
+  dataset: SRC
+  path: input/concentration.sas7bdat
+  cause: encoding_mismatch
+  declared_encoding: windows-1252
+  stored_encoding: utf-8

@@ -1,5 +1,5 @@
 {
-  "about": "Binding a specification's codelists to the project's catalogue: a codelist the catalogue does not hold (CT-1), one whose data type the column's type does not admit (CT-8), and an allowed_values verification that restates a bound codelist's items (CT-9), every fault reported in order. `codelist_binding` binds directly against a catalogue of one source, where a codelist names an external dictionary in place of its items; `prepare_in` prepares `coded`, whose CODE column binds the codelist SEX beside its submission origins under the ADaM model (SUB-3, SUB-15), in a 1.0 project run by the Python host whose one codelist file declares SEX, holding the value F, and reports what preparation refuses, the reserved metadata a coded specification cannot declare (SUB-2) among it. A case compares the fields its table compared.",
+  "about": "Binding a specification's codelists to the project's catalogue: a codelist the catalogue does not hold (CT-1), one whose data type the column's type does not admit (CT-8), and an allowed_values verification that restates a bound codelist's items (CT-9), every fault reported in order. `codelist_binding` binds directly against a catalogue of one source, where a codelist names an external dictionary in place of its items; `prepare_in` prepares `coded`, whose CODE column binds the codelist SEX beside its submission origins under the ADaM model (SUB-3, SUB-15), in a 1.0 project run by the Python host whose one codelist file declares SEX, holding the value F, and reports what preparation refuses, the reserved metadata a coded specification cannot declare (SUB-2) among it. It also binds the codelist each `decode` reads (EXPR-15): `decoded` derives SEXDESC by decoding SRC.SEX through SEX, and preparation refuses a codelist the project does not declare and one that declares no decode, whether its items have none or it names an external dictionary, while binding refuses a source of another type than the one the codelist's data type is held in. A case compares the fields its table compared.",
   "documents": {
     "coded": {
       "yamaa": "1.0",
@@ -14,6 +14,18 @@
         {"name": "LATE", "type": "int", "derivation": {"value": "SRC.LATE"}}
       ],
       "output": {"path": "output.csv", "columns": ["ID", "CODE", "LATE"]}
+    },
+    "decoded": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "SEXDESC", "type": "str", "derivation": {"value": {"decode": {"source": "SRC.SEX", "codelist": "SEX"}}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "SEXDESC"]}
     }
   },
   "cases": [
@@ -169,6 +181,59 @@
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "issues": [{"phase": "validation", "condition": "reserved_metadata_key", "rule": "SUB-2", "spec_paths": ["metadata.has_no_data"]}]
+    },
+    {
+      "case": "a_decode_of_a_declared_codelist_with_decodes_binds_a_source_of_its_type",
+      "operation": "prepare_in",
+      "input": {
+        "base": "decoded",
+        "edits": [
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}, {"name": "SEXDESC", "type": "str", "derivation": {"value": {"decode": {"source": "SRC.SEX", "codelist": "SEX"}}}}, {"name": "AGEGR", "type": "str", "derivation": {"value": {"decode": {"source": "SRC.AGEGRN", "codelist": "AGEGR"}}}}]},
+          {"set": ["output", "columns"], "to": ["ID", "SEXDESC", "AGEGR"]}
+        ],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F", "decode": "Female"}, {"value": "M", "decode": "Male"}]}, {"id": "AGEGR", "name": "Age Group", "data_type": "integer", "items": [{"value": 1, "decode": "<65"}, {"value": 2, "decode": ">=65"}]}]}]},
+        "sources": {"SRC": [["ID", "int"], ["SEX", "str"], ["AGEGRN", "int"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_decode_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared",
+      "operation": "prepare_in",
+      "input": {
+        "base": "decoded",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "decode", "codelist"], "to": "GENDER"}],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F", "decode": "Female"}, {"value": "M", "decode": "Male"}]}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_codelist", "rule": "EXPR-15", "spec_paths": ["columns.SEXDESC.derivation.decode.codelist"], "context": {"codelist": "GENDER"}}]
+    },
+    {
+      "case": "a_decode_of_a_codelist_that_declares_no_decode_is_refused_when_prepared",
+      "operation": "prepare_in",
+      "input": {
+        "base": "decoded",
+        "edits": [
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}, {"name": "SEXDESC", "type": "str", "derivation": {"value": {"decode": {"source": "SRC.SEX", "codelist": "SEX"}}}}, {"name": "TERM", "type": "str", "derivation": {"value": {"decode": {"source": "SRC.AEDECOD", "codelist": "MEDDRA"}}}}]},
+          {"set": ["output", "columns"], "to": ["ID", "SEXDESC", "TERM"]}
+        ],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F"}, {"value": "M"}]}, {"id": "MEDDRA", "name": "MedDRA", "external": {"dictionary": "MedDRA", "version": "26.0"}}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "codelist_without_decodes", "rule": "EXPR-15", "spec_paths": ["columns.SEXDESC.derivation.decode.codelist"], "context": {"codelist": "SEX"}},
+        {"phase": "validation", "condition": "codelist_without_decodes", "rule": "EXPR-15", "spec_paths": ["columns.TERM.derivation.decode.codelist"], "context": {"codelist": "MEDDRA"}}
+      ]
+    },
+    {
+      "case": "a_decode_source_of_another_type_than_its_codelist_holds_is_refused_when_bound",
+      "operation": "prepare_in",
+      "input": {
+        "base": "decoded",
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F", "decode": "Female"}, {"value": "M", "decode": "Male"}]}]}]},
+        "sources": {"SRC": [["ID", "int"], ["SEX", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "EXPR-15", "spec_paths": ["columns.SEXDESC.derivation.decode.source"], "context": {"source": "SRC.SEX", "expected": "str", "actual": "int"}}]
     }
   ]
 }

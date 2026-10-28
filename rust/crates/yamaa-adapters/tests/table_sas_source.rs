@@ -55,7 +55,78 @@ mod table {
         }
         /// A file built at test time, read as `built.sas7bdat`.
         fn read_built(bytes: &[u8]) -> Result<yamaa_adapters::column_table::ColumnTable, Error> {
-            sas_source::parse(bytes, &declaration("built.sas7bdat"))
+            let mut source = declaration("built.sas7bdat");
+            source.encoding = None;
+            sas_source::parse(bytes, &source)
+        }
+        #[test]
+        fn stored_encoding_decodes_names_and_values_and_rejects_a_contradictory_declaration() {
+            // Seam: the binary codec and its stored metadata, independent of
+            // specification preparation. Fixtures come from the layout builder.
+            use crate::support::sas7bdat::{
+                utf8_concentration, Cell, Dataset, Kind, Layout, Page, MIX,
+            };
+            let fixture = utf8_concentration();
+            for path in [
+                "rust/crates/yamaa-adapters/tests/fixtures/sas/utf8-concentration.sas7bdat",
+                "benchmarks/schema-source-sas7bdat-encoding/input/concentration.sas7bdat",
+                "benchmarks/negative-sas7bdat-encoding-mismatch/input/concentration.sas7bdat",
+            ] {
+                let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+                assert_eq!(std::fs::read(root.join(path)).unwrap(), fixture, "{path}");
+            }
+            for (code, encoding, text, expected) in [
+                (20, "utf-8", "\u{b5}mol/L".as_bytes(), "\u{b5}mol/L"),
+                (62, "windows-1252", &b"\xb5mol/L"[..], "\u{b5}mol/L"),
+                (29, "iso-8859-1", &b"\xb5mol/L"[..], "\u{b5}mol/L"),
+                (28, "ascii", &b"umol/L"[..], "umol/L"),
+            ] {
+                let mut dataset = Dataset::new(
+                    Layout::LE32,
+                    &[("ID", Kind::Num, 8), ("UNIT", Kind::Chr, 12)],
+                );
+                dataset.encoding = code;
+                dataset.total = 1;
+                dataset.mix_rows = 1;
+                let row = dataset.row(&[Cell::Num(1.0), Cell::Text(text)]);
+                let bytes = dataset.file(&[Page::new(MIX, dataset.metadata(), vec![row])]);
+                for declared in [None, Some(encoding)] {
+                    let mut source = declaration("built.sas7bdat");
+                    source.encoding = declared.map(String::from);
+                    let table = sas_source::parse(&bytes, &source).unwrap();
+                    assert_eq!(
+                        cells(&table),
+                        [[float(1.0), ValueRef::Str(expected)]],
+                        "{encoding} {declared:?}"
+                    );
+                }
+            }
+            let source = declaration("built.sas7bdat");
+            match sas_source::parse(&fixture, &source) {
+                Err(Error::EncodingMismatch { declared, stored }) => {
+                    assert_eq!(
+                        (declared.as_str(), stored.as_str()),
+                        ("windows-1252", "utf-8")
+                    );
+                }
+                other => panic!("the contradiction is refused: {other:?}"),
+            }
+            for code in [0, 204, 136] {
+                // Unset, any, and CP932 do not supply an admitted encoding.
+                let mut unsupported = fixture.clone();
+                unsupported[70] = code;
+                for encoding in [None, Some("utf-8".into())] {
+                    let mut source = declaration("built.sas7bdat");
+                    source.encoding = encoding;
+                    assert!(
+                        matches!(
+                            sas_source::parse(&unsupported, &source),
+                            Err(Error::Invalid("encoding"))
+                        ),
+                        "code {code}"
+                    );
+                }
+            }
         }
         #[test]
         fn raw_rows_that_begin_like_a_subheader_signature_stay_rows_in_64_bit_files() {
@@ -317,6 +388,7 @@ mod table {
                 ]
             );
             let mut source = declaration("built.sas7bdat");
+            source.encoding = None;
             source.empty_string_present = true;
             let table = sas_source::parse(&bytes, &source).unwrap();
             assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str(""));
@@ -646,7 +718,9 @@ mod table {
             let mut data = bytes(file);
             assert_eq!(&data[120922..120924], &[0x8d, 0x00]);
             data[120922..120924].copy_from_slice(&[0x81, 0x00]);
-            let table = sas_source::parse(&data, &declaration(file)).unwrap();
+            let mut source = declaration(file);
+            source.encoding = Some("iso-8859-1".into()); // Header code 29.
+            let table = sas_source::parse(&data, &source).unwrap();
             let independent_original = 0.621f64.to_be_bytes();
             let mut repeated = [0; 8];
             repeated[..4].copy_from_slice(&independent_original[4..]);
@@ -1758,6 +1832,7 @@ mod table {
             name[at + 1] = 0xe9;
             let mut dataset =
                 Dataset::new(Layout::LE32, &[("X", Kind::Num, 8), ("T", Kind::Chr, 4)]);
+            dataset.encoding = 28; // The file records the declared ASCII.
             dataset.total = 2;
             dataset.mix_rows = 2;
             let rows = vec![

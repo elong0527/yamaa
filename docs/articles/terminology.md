@@ -361,6 +361,33 @@ lacks the `$`, or a numeric list's that begins with one, fails validation with
 project's codelists are read, before any data, so a run refuses it although
 only a Define-XML document carries the name.
 
+## Decode a coded value
+
+A codelist's items pair each coded value with its `decode`, so a derivation
+reads a parameter or visit name from the list instead of restating it in a
+`mapping`. `decode` returns the `decode` of the item whose `value` equals its
+`source`, as SAS `put(PARAMCD, $PARAM.)` does:
+
+```yaml
+- name: PARAM
+  type: str
+  derivation:
+    decode:
+      source: PARAMCD
+      codelist: PARAMCD
+```
+
+It reads the list by its `id`, never by its `format_name`, and takes
+`mapping`'s answers: a missing source gives `missing`, or missing when none
+is declared, and a value no item lists gives `unmapped`, and fails as
+`unmapped_value` without it. Before any data is read, the source's type must
+be the one the list's `data_type` is held in, `str` for a `text` list, and a
+list the project does not declare fails with `unknown_codelist`, one without
+decodes, or an `external` one, with `codelist_without_decodes`
+([EXPR-15](../../rules/expressions.md#expr-15)). The
+[parameter names example](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-parameter-names)
+decodes a text and an integer list.
+
 ## A specification checked without its project
 
 A specification that binds a codelist names something only its project

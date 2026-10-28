@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_codelist
+spec_paths:
+  - columns.PARAM.derivation.decode.codelist
+rule: EXPR-15
+context:
+  codelist: PARAM

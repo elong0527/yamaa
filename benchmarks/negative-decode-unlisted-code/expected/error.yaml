@@ -1,0 +1,12 @@
+phase: mapping
+condition: unmapped_value
+spec_paths:
+  - columns.PARAM.derivation.decode
+rule: COLUMN-10
+context:
+  source: PARAMCD
+  value: GGT
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102
+      PARAMCD: GGT

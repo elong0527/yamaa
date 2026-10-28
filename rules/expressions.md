@@ -366,6 +366,7 @@ read, and so does a specification checked or run without its project file
 ([CT-13](profiles/terminology.md#ct-13)).
 
 Fails: `incompatible_input_type`, `unknown_codelist`, `codelist_without_decodes`.
+Evidence: `adam-adlb-parameter-names`, `negative-decode-unknown-codelist`, `negative-decode-without-decodes`, `negative-decode-source-type`, `negative-decode-unlisted-code`, `negative-decode-without-project`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_decode_of_a_declared_codelist_with_decodes_binds_a_source_of_its_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_decode_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_decode_of_a_codelist_that_declares_no_decode_is_refused_when_prepared`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_decode_source_of_another_type_than_its_codelist_holds_is_refused_when_bound`.
 
 The source may be a filtered source carrying the variable with its range,
 filter, selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Its type

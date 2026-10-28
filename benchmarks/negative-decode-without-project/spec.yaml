@@ -1,0 +1,37 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  # The defect: the codelist is declared by the study's project file, and this
+  # spec is built on its own, so the spec is rejected before any data is read.
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      decode:
+        source: PARAMCD
+        codelist: PARAMCD

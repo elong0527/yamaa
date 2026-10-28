@@ -264,6 +264,7 @@
       "operation": "parquet_value",
       "input": {"dataset": "SRC", "path": "data.parquet", "type": "datetime", "value": -9223372036854775808, "field": "DT", "record": 18446744073709551615},
       "issues": [{"phase": "ingest", "condition": "source_field_value_invalid", "rule": "PARQUET-9", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "data.parquet", "field": "DT", "record": 18446744073709551615, "value": -9223372036854775808}}]
-    }
+    },
+    {"case": "a_sas_encoding_contradiction_names_both_encodings_at_the_declaration", "operation": "sas_encoding_mismatch", "input": {"dataset": "SRC", "path": "received.sas7bdat", "declared_encoding": "windows-1252", "stored_encoding": "utf-8"}, "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.encoding"], "context": {"dataset": "SRC", "path": "received.sas7bdat", "cause": "encoding_mismatch", "declared_encoding": "windows-1252", "stored_encoding": "utf-8"}}]}
   ]
 }

@@ -1,0 +1,24 @@
+yamaa: "1.0"
+type: spec
+domain: TEST
+keys: [ID]
+input:
+  SRC:
+    path: input/concentration.sas7bdat
+    types: {ID: int}
+    encoding: windows-1252
+
+output:
+  path: concentration.csv
+  columns: [ID, UNIT]
+
+columns:
+  - name: ID
+    type: int
+    label: Record Identifier
+    derivation: SRC.ID
+
+  - name: UNIT
+    type: str
+    label: Concentration Unit
+    derivation: SRC.UNIT

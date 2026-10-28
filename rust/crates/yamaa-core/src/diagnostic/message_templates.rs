@@ -192,7 +192,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("ungrouped_driver_field", "{identifier} reads a driver field that is neither a group key nor inside an aggregate"),
     ("unique_failed", "the combination of {columns} repeats in {failure_count} of the rows"),
     ("unknown_artifact_profile", "the extension of {path} is not one of {permitted}"),
-    ("unknown_codelist", "column {column} binds codelist {codelist}, which is not declared"),
+    ("unknown_codelist", "{spec_path} names codelist {codelist}, which is not declared"),
     ("unknown_derive_variable", "{variable} is not a derive binding of the aggregate"),
     ("unknown_document", "{spec_path} names the document {document}, which is not declared"),
     ("unknown_field", "{identifier} is not a known field or reference at {spec_path}"),

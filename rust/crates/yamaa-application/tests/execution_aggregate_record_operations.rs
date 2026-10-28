@@ -486,6 +486,18 @@ mod execution {
                 "the codelists are declared by the project file, which this harness does not pass",
             ),
             (
+                "negative-decode-source-type",
+                "the codelist the decode reads is declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-decode-unknown-codelist",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-decode-without-decodes",
+                "the codelist the decode reads is declared by the project file, which this harness does not pass",
+            ),
+            (
                 "negative-donor-function-unkept",
                 "this harness passes no project file, so its project function is unknown",
             ),

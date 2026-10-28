@@ -120,6 +120,10 @@ pub struct Column {
     pub(crate) values: Vec<ValueDefinition>,
     /// The width a transport file gives a character column (SUB-24).
     pub(crate) transport_length: Option<usize>,
+    /// The `ItemRef`'s `def:HasNoData`: measured from the published rows
+    /// when a transport is requested (SUB-28), or declared in historical
+    /// metadata (DEFINE-30).
+    pub(crate) has_no_data: bool,
 }
 /// One composed origin of a column or value-level entry: its declaration, the
 /// source the model admits or derives (SUB-15) and its document references,
@@ -325,6 +329,12 @@ impl Column {
     /// (SUB-24).
     pub fn transport_length(&self) -> Option<usize> {
         self.transport_length
+    }
+    /// Whether the `ItemRef` says the column or entry has no data: no
+    /// published row it describes holds a value (SUB-28), or historical
+    /// metadata declares it (DEFINE-30).
+    pub fn has_no_data(&self) -> bool {
+        self.has_no_data
     }
     pub fn runtime_type(&self) -> crate::value::ColumnType {
         use crate::value::ColumnType as T;
@@ -750,12 +760,19 @@ impl ColumnAdmission<'_> {
             );
             return None;
         };
-        if metadata.key_sequence.is_some() {
-            findings.push(crate::define_diagnostics::xml_invalid(
-                column_path,
-                "historical key_sequence requires mode historical",
-                crate::json::Value::String(name.clone()),
-            ));
+        // The ItemRef facts only historical metadata declares (DEFINE-30);
+        // validated metadata measures `has_no_data` instead (SUB-28).
+        for (field, declared) in [
+            ("key_sequence", metadata.key_sequence.is_some()),
+            ("has_no_data", metadata.has_no_data.is_some()),
+        ] {
+            if declared {
+                findings.push(crate::define_diagnostics::xml_invalid(
+                    column_path,
+                    &format!("historical {field} requires mode historical"),
+                    crate::json::Value::String(name.clone()),
+                ));
+            }
         }
         if metadata.origins.is_empty() {
             findings.push(
@@ -968,6 +985,7 @@ impl ColumnAdmission<'_> {
             key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
             values: Vec::new(),
             transport_length: None,
+            has_no_data: false,
         })
     }
     /// Admit one declared origin of the column or entry at `column_path`, at

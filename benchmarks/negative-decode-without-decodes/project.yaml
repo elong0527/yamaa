@@ -1,0 +1,14 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - codelists:
+      - id: PARAMCD
+        name: Parameter Code
+        format_name: $PARAMCD
+        items:
+          - {value: ALT}
+          - {value: AST}
+
+adam:
+  specs:
+  - spec.yaml
