@@ -7265,11 +7265,42 @@
           "ADURN",
           "ASEVN"
         ],
-        "declaring_sources": {
-          "/columns/0/label": "ae.yaml",
-          "/columns/4/label": "duration.yaml",
-          "/columns/5/label": "severity.yaml",
-          "/domain": "adae.yaml"
+        "origins": {
+          "/columns/0/label": {
+            "declaring_source": "ae.yaml",
+            "line": 7,
+            "column": 39,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/4/label": {
+            "declaring_source": "duration.yaml",
+            "line": 6,
+            "column": 12,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/4/derivation/value": {
+            "declaring_source": "duration.yaml",
+            "line": 7,
+            "column": 17,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/5/label": {
+            "declaring_source": "severity.yaml",
+            "line": 6,
+            "column": 12,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/domain": {
+            "declaring_source": "adae.yaml",
+            "line": 5,
+            "column": 9,
+            "source_kind": "authored",
+            "generated": false
+          }
         },
         "absent_fields": [
           "parent",
