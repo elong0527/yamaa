@@ -2,9 +2,9 @@
 
 **Goal:** identify whether each integer value falls inside its own range.
 
-**Input:** twelve records with a range identifier and an integer value, and
-six ranges: 1 to 8, 8 to 8, 8 to 1, and ranges missing their lower, upper or
-both endpoints. Three alternative specifications produce the same table.
+**Input:** `spec_named.yaml`, `spec_source.yaml` and `spec_aggregate.yaml`
+are independent alternatives over the same record and range files. Each
+produces the same `ranges.csv` table with the same endpoint decisions.
 
 **Variables:**
 
@@ -21,6 +21,6 @@ both endpoints. Three alternative specifications produce the same table.
 - `UPPEREX` is 1 when the value precedes the upper endpoint, without a
   lower bound.
 
-Every other answer is blank. A missing value or a missing stated endpoint
-never matches. Equal endpoints match only with both included; reversed
+**Note:** Every other answer is blank. A missing value or a missing stated
+endpoint never matches. Equal endpoints match only with both included; reversed
 endpoints never match. Omitting a bound leaves that side unrestricted.

@@ -2,9 +2,9 @@
 
 **Goal:** assign each integer value to one of two adjacent windows.
 
-**Input:** eight records, with values at, inside and outside the windows
-1 to 8 and 8 to 15, plus a missing value. Three alternative specifications
-produce the same table.
+**Input:** `spec_named.yaml`, `spec_source.yaml` and `spec_aggregate.yaml`
+are independent alternatives over the same records and adjacent windows,
+1 to 8 and 8 to 15. Each produces the same `ranges.csv` table.
 
 **Variables:**
 
@@ -15,5 +15,5 @@ produce the same table.
 - `RIGHTN` is the window number when the lower endpoint is excluded and the
   upper included: value 8 belongs to window 1.
 
-A record outside both windows, or missing its value, has a blank answer.
-Each record at the shared endpoint belongs to exactly one window.
+**Note:** A record outside both windows, or missing its value, has a blank
+answer. Each record at the shared endpoint belongs to exactly one window.
