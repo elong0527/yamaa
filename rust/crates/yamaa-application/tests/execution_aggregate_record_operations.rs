@@ -448,7 +448,7 @@ mod execution {
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 21] = [
+        const NOT_BUILT_HERE: [(&str, &str); 24] = [
             (
                 "negative-allowed-values-beside-codelist",
                 "the bound codelist's items come from its host environment, which this harness does not pass",
