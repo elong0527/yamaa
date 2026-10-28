@@ -10,7 +10,7 @@ mod encode;
 #[cfg(all(test, feature = "parquet"))]
 mod upstream;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error<E> {
     /// This build omits the optional Parquet reader and writer.
     Unavailable,
