@@ -3,8 +3,9 @@
 **Goal:** carry examination sequence (`ZESEQ`) and name (`ZETERM`) in a
 sponsor-defined domain, with its submission metadata and transport file.
 
-**Input:** an electronic case report form export lists each subject's
-examination records with a sequence number and the recorded examination name.
+**Input:** `project.yaml` composes `spec.yaml` into a Define-XML 2.1
+submission with a transport. The specification marks the examination domain
+as sponsor-defined and maps `input/examinations.csv` into examination records.
 
 **Variables:**
 
