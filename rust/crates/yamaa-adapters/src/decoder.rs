@@ -181,6 +181,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
                 | Error::OdmFields(_)
                 | Error::SasSource(
                     sas_source::Error::Invalid(_)
+                        | sas_source::Error::EncodingMismatch { .. }
                         | sas_source::Error::Field { .. }
                         | sas_source::Error::Typing(_)
                 )

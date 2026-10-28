@@ -300,7 +300,9 @@ pub(in crate::specification) fn source_findings(
         }
         let profile = input.source.profile;
         let sas = matches!(profile, Some(ast::Profile::Xport | ast::Profile::Sas7bdat));
-        if sas != input.source.encoding.is_some() {
+        if (!sas && input.source.encoding.is_some())
+            || (profile == Some(ast::Profile::Xport) && input.source.encoding.is_none())
+        {
             findings.push(PreflightFinding::Scalar(Diagnostic {
                 code: C::SasSourceEncoding,
                 spec_paths: vec![format!("input.{name}.encoding")],

@@ -91,6 +91,13 @@ pub enum SourceFinding<'a> {
         field: Option<&'a Field>,
         record: Option<usize>,
     },
+    /// A declared encoding contradicting the dataset's recorded encoding.
+    SasEncodingMismatch {
+        dataset: &'a str,
+        path: &'a str,
+        declared: &'a str,
+        stored: &'a str,
+    },
     /// A Dataset-JSON input the profile cannot read (DSJSON-5).
     DatasetJson {
         dataset: &'a str,
@@ -167,7 +174,7 @@ fn kind(value: ColumnType) -> &'static str {
 impl SourceFinding<'_> {
     fn code(self) -> C {
         match self {
-            Self::Sas { .. } => C::SasInvalid,
+            Self::Sas { .. } | Self::SasEncodingMismatch { .. } => C::SasInvalid,
             Self::DatasetJson { .. } => C::DatasetJsonInvalid,
             Self::DatasetJsonValue { .. } => C::DatasetJsonFieldParse,
             Self::Odm { dataset, finding } => finding.finding(dataset).code(),
@@ -201,12 +208,25 @@ impl SourceFinding<'_> {
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
             Self::Sas { dataset, .. }
+            | Self::SasEncodingMismatch { dataset, .. }
             | Self::DatasetJson { dataset, .. }
             | Self::DatasetJsonValue { dataset, .. } => dataset,
             Self::OrdinalCollision { dataset, .. } => dataset,
         };
         let mut context = Context::from([("dataset".into(), text(dataset))]);
         let spec_path = match self {
+            Self::SasEncodingMismatch {
+                path,
+                declared,
+                stored,
+                ..
+            } => {
+                context.insert("path".into(), text(path));
+                context.insert("cause".into(), text("encoding_mismatch"));
+                context.insert("declared_encoding".into(), text(declared));
+                context.insert("stored_encoding".into(), text(stored));
+                format!("input.{dataset}.encoding")
+            }
             Self::Sas {
                 path,
                 cause,

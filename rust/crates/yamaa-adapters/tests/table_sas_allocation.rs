@@ -49,7 +49,7 @@ mod table {
                 path: "built.sas7bdat".into(),
                 types: vec![],
                 profile: SourceProfile::Sas7bdat,
-                encoding: Some("windows-1252".into()),
+                encoding: None,
                 byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,

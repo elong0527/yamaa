@@ -71,6 +71,7 @@ impl TableAccess for Rows {
 }
 struct Context<'a> {
     source: &'a SourceDeclaration,
+    encoding: Option<&'a str>,
     columns: Vec<Column>,
     rows: Vec<Vec<Value>>,
     declared_rows: Option<usize>,
@@ -91,9 +92,9 @@ impl Context<'_> {
         }
         Ok(())
     }
-    /// Text under the declared encoding, or `None` when it does not decode.
+    /// Text under the admitted encoding, or `None` when it does not decode.
     fn text(&self, bytes: &[u8]) -> Option<String> {
-        decode_text(bytes, self.source.encoding.as_deref()?)
+        decode_text(bytes, self.encoding?)
     }
     /// The refusal of a value, from zero in `row` and `column`, whose text
     /// does not decode: it names the field and the record (SAS-7).
@@ -134,7 +135,7 @@ unsafe extern "C" fn metadata(
     rows: i64,
     columns: c_int,
     version: c_int,
-    _encoding: *const c_char,
+    encoding: *const c_char,
     opaque: *mut c_void,
 ) -> c_int {
     // SAFETY: ReadStat passes back the `Context` pointer `parse` supplied.
@@ -142,6 +143,23 @@ unsafe extern "C" fn metadata(
         callback(opaque, |context| {
             if context.source.profile == SourceProfile::Xport && !matches!(version, 5 | 8) {
                 return Err(Error::Invalid("version"));
+            }
+            if context.source.profile == SourceProfile::Sas7bdat {
+                let stored = if encoding.is_null() {
+                    None
+                } else {
+                    stored_encoding(CStr::from_ptr(encoding).to_bytes())
+                }
+                .ok_or(Error::Invalid("encoding"))?;
+                if let Some(declared) = context.source.encoding.as_deref() {
+                    if declared != stored {
+                        return Err(Error::EncodingMismatch {
+                            declared: declared.into(),
+                            stored: stored.into(),
+                        });
+                    }
+                }
+                context.encoding = Some(stored);
             }
             let columns = usize::try_from(columns).map_err(|_| Error::Invalid("header"))?;
             if columns == 0 {
@@ -311,6 +329,17 @@ fn numeric(value: f64, kind: ColumnType) -> Option<Value> {
     }
 }
 
+/// ReadStat's metadata spellings of the four admitted text encodings.
+fn stored_encoding(name: &[u8]) -> Option<&'static str> {
+    match name {
+        b"UTF-8" => Some("utf-8"),
+        b"WINDOWS-1252" => Some("windows-1252"),
+        b"ISO-8859-1" => Some("iso-8859-1"),
+        b"US-ASCII" => Some("ascii"),
+        _ => None,
+    }
+}
+
 fn decode_text(bytes: &[u8], encoding: &str) -> Option<String> {
     let mut text = String::new();
     if encoding == "utf-8" {
@@ -397,7 +426,8 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
     if !matches!(
         source.encoding.as_deref(),
         Some("utf-8" | "windows-1252" | "iso-8859-1" | "ascii")
-    ) {
+    ) && !(source.profile == SourceProfile::Sas7bdat && source.encoding.is_none())
+    {
         return Err(Error::Invalid("encoding"));
     }
     Limits::source_bytes(bytes.len())?;
@@ -419,6 +449,7 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
     }
     let mut context = Context {
         source,
+        encoding: source.encoding.as_deref(),
         columns: Vec::new(),
         rows: Vec::new(),
         declared_rows: None,
@@ -540,6 +571,7 @@ mod tests {
         ] {
             let mut context = Context {
                 source: &source,
+                encoding: source.encoding.as_deref(),
                 columns: Vec::new(),
                 rows: Vec::new(),
                 declared_rows: None,
@@ -933,7 +965,8 @@ mod tests {
     fn sas_encoding_codes_name_their_charsets_in_recorded_metadata() {
         // Header byte 70 of the independent haven fixture holds the SAS
         // encoding code: 62 is wlatin1, 136 is ms-932 and 38 is latin6. The
-        // reader only records the name; the declared encoding decodes text.
+        // bridge records these names; admission accepts the closed subset
+        // supported by the strict text decoder.
         let fixture = include_bytes!("../../tests/fixtures/sas/datetime.sas7bdat");
         assert_eq!(fixture[70], 62);
         unsafe extern "C" fn meta(

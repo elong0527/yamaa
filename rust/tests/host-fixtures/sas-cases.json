@@ -1732,6 +1732,123 @@
           ]
         ]
       }
+    },
+    {
+      "id": "sas7bdat-stored-utf8",
+      "file": "utf8-concentration.sas7bdat",
+      "specification": {
+        "yamaa": "1.0",
+        "type": "spec",
+        "domain": "TEST",
+        "keys": [
+          "ID"
+        ],
+        "input": {
+          "SRC": {
+            "path": "utf8-concentration.sas7bdat",
+            "types": {
+              "ID": "int"
+            }
+          }
+        },
+        "columns": [
+          {
+            "name": "ID",
+            "type": "int",
+            "label": "Record Identifier",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "UNIT",
+            "type": "str",
+            "label": "Concentration Unit",
+            "derivation": "SRC.UNIT"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "ID",
+            "UNIT"
+          ]
+        }
+      },
+      "fields": [
+        {
+          "name": "ID",
+          "type": "int"
+        },
+        {
+          "name": "UNIT",
+          "type": "str"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          "\u00b5mol/L"
+        ]
+      ],
+      "csv": "ID,UNIT\n1,\u00b5mol/L\n"
+    },
+    {
+      "id": "sas7bdat-declared-utf8",
+      "file": "utf8-concentration.sas7bdat",
+      "specification": {
+        "yamaa": "1.0",
+        "type": "spec",
+        "domain": "TEST",
+        "keys": [
+          "ID"
+        ],
+        "input": {
+          "SRC": {
+            "path": "utf8-concentration.sas7bdat",
+            "types": {
+              "ID": "int"
+            },
+            "encoding": "utf-8"
+          }
+        },
+        "columns": [
+          {
+            "name": "ID",
+            "type": "int",
+            "label": "Record Identifier",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "UNIT",
+            "type": "str",
+            "label": "Concentration Unit",
+            "derivation": "SRC.UNIT"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "ID",
+            "UNIT"
+          ]
+        }
+      },
+      "fields": [
+        {
+          "name": "ID",
+          "type": "int"
+        },
+        {
+          "name": "UNIT",
+          "type": "str"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          "\u00b5mol/L"
+        ]
+      ],
+      "csv": "ID,UNIT\n1,\u00b5mol/L\n"
     }
   ],
   "refusals": [
@@ -3391,6 +3508,60 @@
           "20630066e9"
         ]
       }
+    },
+    {
+      "id": "sas7bdat-contradictory-encoding",
+      "file": "utf8-concentration.sas7bdat",
+      "specification": {
+        "yamaa": "1.0",
+        "type": "spec",
+        "domain": "TEST",
+        "keys": [
+          "ID"
+        ],
+        "input": {
+          "SRC": {
+            "path": "utf8-concentration.sas7bdat",
+            "types": {
+              "ID": "int"
+            },
+            "encoding": "windows-1252"
+          }
+        },
+        "columns": [
+          {
+            "name": "ID",
+            "type": "int",
+            "label": "Record Identifier",
+            "derivation": "SRC.ID"
+          },
+          {
+            "name": "UNIT",
+            "type": "str",
+            "label": "Concentration Unit",
+            "derivation": "SRC.UNIT"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "ID",
+            "UNIT"
+          ]
+        }
+      },
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "spec_paths": [
+        "input.SRC.encoding"
+      ],
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "utf8-concentration.sas7bdat",
+        "cause": "encoding_mismatch",
+        "declared_encoding": "windows-1252",
+        "stored_encoding": "utf-8"
+      }
     }
   ],
   "static_refusals": [
@@ -3586,7 +3757,12 @@
       "Column90",
       "Column94",
       "Column98"
-    ]
+    ],
+    "encodings": {
+      "rle.sas7bdat": "windows-1252",
+      "rdc.sas7bdat": "windows-1252",
+      "rdc-big-endian.sas7bdat": "iso-8859-1"
+    }
   },
   "snapshot_case": "xpt-v5-narrowed"
 }

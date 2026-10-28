@@ -182,7 +182,7 @@ run_sas_sources <- function() {
   })
   for (file in owner$files) {
     document <- list(yamaa = "1.0", type = "spec", domain = "TEST", base = "SRC", keys = list("RECORD"),
-      input = list(SRC = list(path = file, encoding = "windows-1252", ordinal = "RECORD")),
+      input = list(SRC = list(path = file, encoding = owner$encodings[[file]], ordinal = "RECORD")),
       columns = lapply(fields, function(field) c(field, list(label = field$name, derivation = paste0("SRC.", field$name)))),
       output = list(path = "result.csv", columns = as.list(field_names(fields))))
     case <- list(id = file, file = file, specification = document, fields = fields, rows = expected_rows)
