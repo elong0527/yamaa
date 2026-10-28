@@ -1428,10 +1428,10 @@ check the saved file size before extending it. Table admission checks rows,
 columns and their product before constructing or growing the corresponding
 geometry. A regular expression is refused when it compiles, never while it
 matches: matching takes time linear in the subject, so there is no step budget.
-A text value is refused once its length is counted, before it is built, as
-`text_bytes` at the operation that builds it. Only the results of these verbs
-are counted: text read from a source or copied by another operation is not,
-and each writer keeps its own saved-file bound.
+A text value is refused before it is built past the limit, as `text_bytes`
+at the operation that builds it. Only the results of these verbs are counted:
+text read from a source or copied by another operation is not, and each
+writer keeps its own saved-file bound.
 
 Semantic admission and retained observations stay complete. The final public
 issue collection keeps its first 10,000 findings in their existing order. Source

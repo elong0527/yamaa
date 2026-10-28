@@ -3,9 +3,9 @@
 //! result of exactly `Limits::TEXT_BYTES` bytes and refuse one byte more.
 //!
 //! The seam is each verb's own building step, the call that sizes and then
-//! allocates its result: a benchmark reaches the refusal
-//! (`negative-str-pad-text-limit`), but the admitted edge would need a
-//! mebibyte of expected text.
+//! allocates its result: the application's diagnostics fixtures reach the
+//! refusals of `str_pad` and `STR_JOIN` through a run, but the admitted edge
+//! would need a mebibyte of expected text.
 use yamaa_core::{
     aggregate_reduction::{reduce_values, AggregateReductionError, ReductionFields},
     expression::Reducer,
@@ -108,30 +108,49 @@ fn str_replace(bytes: usize) -> Result<usize, LimitExceeded> {
 /// `bytes - 3` bytes of `a` and the int `7`, joined by `", "`.
 fn str_join(bytes: usize) -> Result<usize, LimitExceeded> {
     let text = "a".repeat(bytes - 3);
+    let values = [ValueRef::Str(&text), ValueRef::Missing, ValueRef::Int(7)];
+    join(&values, false)
+}
+
+/// The same two texts each written twice, joined once each with `distinct`:
+/// a repeated text adds nothing to the length.
+fn str_join_distinct(bytes: usize) -> Result<usize, LimitExceeded> {
+    let text = "a".repeat(bytes - 3);
+    let values = [
+        ValueRef::Str(&text),
+        ValueRef::Int(7),
+        ValueRef::Str(&text),
+        ValueRef::Int(7),
+    ];
+    join(&values, true)
+}
+
+fn join(values: &[ValueRef<'_>], distinct: bool) -> Result<usize, LimitExceeded> {
     let fields = ReductionFields {
         separator: ", ",
-        distinct: false,
+        distinct,
         quantile: 0.0,
     };
-    let values = [ValueRef::Str(&text), ValueRef::Missing, ValueRef::Int(7)];
-    match reduce_values(&values, Reducer::StrJoin, fields, "STR_JOIN(D.V)") {
+    match reduce_values(values, Reducer::StrJoin, fields, "STR_JOIN(D.V)") {
         Ok(value) => Ok(length(value)),
         Err(AggregateReductionError::Limit(limit)) => Err(limit),
-        Err(other) => panic!("two present values join, not {other:?}"),
+        Err(other) => panic!("present values join, not {other:?}"),
     }
 }
 
 #[test]
 fn every_growing_text_verb_admits_the_text_limit_and_refuses_one_byte_more() {
     // Whether the refusal reports the length: the decimal writing refuses
-    // its decimals without counting the text it would write.
-    let verbs: [(&str, Build, bool); 6] = [
+    // its decimals without counting the text it would write, and a join
+    // stops at the value that would cross the limit, reading no further.
+    let verbs: [(&str, Build, bool); 7] = [
         ("str_pad", str_pad, true),
         ("str_decimal width", str_decimal_width, true),
         ("str_decimal decimals", str_decimal_decimals, false),
         ("str_template", str_template, true),
         ("str_replace", str_replace, true),
-        ("STR_JOIN", str_join, true),
+        ("STR_JOIN", str_join, false),
+        ("STR_JOIN distinct", str_join_distinct, false),
     ];
     for (label, build, counted) in verbs {
         assert_eq!(build(Limits::TEXT_BYTES), Ok(1_048_576), "{label} at");

@@ -33,7 +33,7 @@ it does not truncate longer text. A missing source yields missing. A width
 below one fails as `invalid_field_type`.
 
 Fails: `invalid_field_type`, `engine_rejected`.
-Evidence: `negative-str-pad-width`, `negative-str-pad-text-limit`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
+Evidence: `negative-str-pad-width`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/text_pad.json::a_present_value_padded_one_byte_past_the_text_limit_refuses_the_run`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 An unknown source or a failed conversion reports its existing condition.
 
@@ -197,7 +197,7 @@ least `width` characters, a positive integer when declared; it never
 truncates. A missing source returns `missing`, or missing when it is omitted.
 
 Fails: `incompatible_input_type`, `invalid_field_type`, `engine_rejected`.
-Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
+Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json::width_beyond_the_text_limit_refuse_a_present_value`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 The rounding and the writing are those of CSV display precision
 ([CSV-9](reference/csv.md#csv-9)): a tie, or a value within

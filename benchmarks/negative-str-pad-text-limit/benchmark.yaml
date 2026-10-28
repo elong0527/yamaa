@@ -1,5 +1,0 @@
-lifecycle: draft
-standard: ADaM
-domain: ADLB
-covers:
-- str_pad
