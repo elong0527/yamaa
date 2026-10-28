@@ -1,0 +1,18 @@
+yamaa: "1.0"
+type: spec
+domain: IDS
+keys: [ID]
+input:
+  # A hand-edited one-column list of identifiers whose last line is blank.
+  L: input/ids.csv
+base: L
+
+output:
+  path: ids.csv
+  columns: [ID]
+
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: L.ID
