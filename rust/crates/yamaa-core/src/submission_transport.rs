@@ -1,6 +1,7 @@
 //! Read-side admission of a published artifact shared by both transports, and
-//! the transport lengths measured from it (JSON-3, JSON-5, SUB-24, XPT-7,
-//! XPT-8). Nothing here executes a specification or encodes a byte.
+//! the transport lengths and empty columns measured from it (JSON-3, JSON-5,
+//! SUB-24, SUB-28, XPT-7, XPT-8). Nothing here executes a specification or
+//! encodes a byte.
 use crate::json::Value as JsonValue;
 use crate::{
     application_issue::{Fault, Step},
@@ -291,53 +292,71 @@ fn selects<T: TableAccess>(
     })
 }
 
-/// SUB-24: measure every character column of the selected section from the
-/// held tables. A column's length is the longest value, in bytes and at least
-/// one, across the section's datasets carrying a column of that name; a SUPP--
-/// dataset is measured on its own. A value-level definition is measured over
-/// the rows its where clause selects. `tables` holds one entry per dataset,
-/// absent for a dataset with no data.
+/// What the held rows show of one column or value-level entry: its longest
+/// value in transport bytes, and whether any row holds a value.
+#[derive(Clone, Copy, Default)]
+struct Measured {
+    longest: usize,
+    held: bool,
+}
+impl Measured {
+    fn add(&mut self, value: ValueRef<'_>) {
+        self.longest = self.longest.max(width(value));
+        self.held |= value != ValueRef::Missing;
+    }
+}
+
+/// SUB-24 and SUB-28: measure every column of the selected section from the
+/// held tables. A character column's length is the longest value, in bytes
+/// and at least one, across the section's datasets carrying a column of that
+/// name; a SUPP-- dataset is measured on its own. A value-level definition is
+/// measured over the rows its where clause selects. A column, or an entry,
+/// of a dataset with rows has no data when none of the rows it describes
+/// holds a value. `tables` holds one entry per dataset, absent for a dataset
+/// declared to have no data: its columns add no length and carry no flag,
+/// since the dataset's own flag says so.
 pub fn measure<T: TableAccess>(study: &mut Study, tables: &[Option<&T>]) -> Result<(), Finding> {
     let mut groups = BTreeMap::<(Option<usize>, String), usize>::new();
-    let mut values = Vec::new();
+    let mut measured = Vec::new();
     for (index, dataset) in study.datasets.iter().enumerate() {
         let scope = dataset.supplemental().then_some(index);
         let table = tables.get(index).copied().flatten();
-        let mut dataset_values = Vec::new();
+        let mut dataset_measures = Vec::new();
         for (position, column) in dataset.columns.iter().enumerate() {
-            if !character(study, column) {
-                dataset_values.push(Vec::new());
-                continue;
-            }
-            let mut longest = 0;
-            let mut by_entry = vec![0; column.values.len()];
+            let mut whole = Measured::default();
+            let mut by_entry = vec![Measured::default(); column.values.len()];
             if let Some(table) = table {
                 for row in 0..table.row_count() {
-                    let size = width(
-                        table
-                            .cell(row, position)
-                            .map_err(|_| artifact_mismatch(dataset, "held artifact access"))?,
-                    );
-                    longest = longest.max(size);
-                    for (value, best) in column.values.iter().zip(&mut by_entry) {
-                        if selects(dataset, table, row, value)? {
-                            *best = (*best).max(size);
+                    let value = table
+                        .cell(row, position)
+                        .map_err(|_| artifact_mismatch(dataset, "held artifact access"))?;
+                    whole.add(value);
+                    for (entry, measure) in column.values.iter().zip(&mut by_entry) {
+                        if selects(dataset, table, row, entry)? {
+                            measure.add(value);
                         }
                     }
                 }
             }
-            let group = groups
-                .entry((scope, column.declaration.name.value.clone()))
-                .or_insert(0);
-            *group = (*group).max(longest);
-            dataset_values.push(by_entry);
+            if character(study, column) {
+                let group = groups
+                    .entry((scope, column.declaration.name.value.clone()))
+                    .or_insert(0);
+                *group = (*group).max(whole.longest);
+            }
+            dataset_measures.push((whole, by_entry));
         }
-        values.push(dataset_values);
+        measured.push((table.is_some(), dataset_measures));
     }
     let adam = study.section.family == Submission::Adam;
     for (index, dataset) in study.datasets.iter_mut().enumerate() {
         let scope = dataset.supplemental().then_some(index);
-        for (position, column) in dataset.columns.iter_mut().enumerate() {
+        let (has_rows, dataset_measures) = &measured[index];
+        for (column, (whole, by_entry)) in dataset.columns.iter_mut().zip(dataset_measures) {
+            column.has_no_data = *has_rows && !whole.held;
+            for (value, measure) in column.values.iter_mut().zip(by_entry) {
+                value.column.has_no_data = *has_rows && !measure.held;
+            }
             let column_type = column.declaration.column_type.value;
             let is_character = column_type == spec::ColumnType::String
                 || column_type.temporal() && column_type.numeric_date_format(adam).is_none();
@@ -349,9 +368,9 @@ pub fn measure<T: TableAccess>(study: &mut Study, tables: &[Option<&T>]) -> Resu
             if column.data_type == DataType::Text {
                 column.length = Some(length.to_string());
             }
-            for (value, longest) in column.values.iter_mut().zip(&values[index][position]) {
+            for (value, measure) in column.values.iter_mut().zip(by_entry) {
                 if value.column.data_type == DataType::Text {
-                    value.column.length = Some((*longest).max(1).to_string());
+                    value.column.length = Some(measure.longest.max(1).to_string());
                 }
             }
         }

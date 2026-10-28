@@ -1,0 +1,107 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: TS
+keys: [STUDYID, TSSEQ]
+input:
+  PROTOCOL:
+    path: input/protocol.csv
+    types: {PlannedSubjects: int}
+
+output:
+  path: ts.csv
+  columns: [DOMAIN, STUDYID, TSSEQ, TSPARMCD, TSPARM, TSVAL, TSVALCD, TSVCDREF]
+  order_by: [STUDYID, TSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'TS'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: PROTOCOL.Study
+
+  - name: TSSEQ
+    type: int
+    label: Sequence Number
+
+  - name: TSPARMCD
+    type: str
+    label: Trial Summary Parameter Short Name
+
+  - name: TSPARM
+    type: str
+    label: Trial Summary Parameter Name
+
+  - name: TSVAL
+    type: str
+    label: Parameter Value
+    verifications:
+      - not_missing
+
+  - name: TSVALCD
+    type: str
+    label: Parameter Value Code
+
+  - name: TSVCDREF
+    type: str
+    label: Name of the Reference Terminology
+
+rows:
+  - id: title
+    derivations:
+      TSSEQ: 1
+      TSPARMCD: "'TITLE'"
+      TSPARM: "'Trial Title'"
+      TSVAL: PROTOCOL.Title
+      TSVALCD: null
+      TSVCDREF: null
+
+  - id: phase
+    derivations:
+      TSSEQ: 2
+      TSPARMCD: "'TPHASE'"
+      TSPARM: "'Trial Phase Classification'"
+      TSVAL:
+        mapping:
+          source: PROTOCOL.Phase
+          dict: {Phase 2: PHASE II TRIAL}
+      TSVALCD:
+        mapping:
+          source: PROTOCOL.Phase
+          dict: {Phase 2: C15601}
+      TSVCDREF: "'CDISC'"
+
+  - id: randomized
+    derivations:
+      TSSEQ: 3
+      TSPARMCD: "'RANDOM'"
+      TSPARM: "'Trial is Randomized'"
+      TSVAL:
+        mapping:
+          source: PROTOCOL.Randomized
+          dict: {'Yes': Y, 'No': N}
+      TSVALCD:
+        mapping:
+          source: PROTOCOL.Randomized
+          dict: {'Yes': C49488, 'No': C49487}
+      TSVCDREF: "'CDISC'"
+
+  - id: planned-enrollment
+    derivations:
+      TSSEQ: 4
+      TSPARMCD: "'PLANSUB'"
+      TSPARM: "'Planned Number of Subjects'"
+      TSVAL: PROTOCOL.PlannedSubjects
+      TSVALCD: null
+      TSVCDREF: null
+
+verifications:
+  - row_count: {min: 4, max: 4}
+  - assert:
+      id: coded-parameters-name-their-terminology
+      when: "TSVALCD IS NOT NULL"
+      require: "TSVCDREF = 'CDISC'"

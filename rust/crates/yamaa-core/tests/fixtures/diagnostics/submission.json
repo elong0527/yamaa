@@ -401,6 +401,23 @@
       "issues": [{"phase": "validation", "condition": "submission_metadata_missing", "rule": "DEFINE-17"}]
     },
     {
+      "case": "a_validated_column_declares_no_has_no_data",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "has_no_data"], "to": true}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "context": {"detail": "schema_violation: historical has_no_data requires mode historical", "value": "VALUE"}
+        }
+      ]
+    },
+    {
       "case": "a_non_standard_dataset_selecting_a_guide_is_refused",
       "operation": "compose",
       "input": {

@@ -2,9 +2,10 @@
 use crate::expression_table::Verb;
 use crate::json::Value as V;
 use crate::{
+    ast::Codelist,
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
-    value::{compare_present_refs, FiniteFloat, Value},
+    value::{compare_present_refs, ColumnType, FiniteFloat, Value, ValueType},
 };
 use std::cmp::Ordering;
 use std::{collections::BTreeMap, vec};
@@ -57,10 +58,24 @@ pub struct Cut {
     right: bool,
     missing: Option<Value>,
 }
+/// A `decode`: the coded values of a project codelist, each with its item's
+/// decode, in the codelist's order (EXPR-15).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Decode {
+    source: String,
+    path: String,
+    /// The type the codelist's `data_type` is held in, the one source type
+    /// it reads.
+    kind: ColumnType,
+    items: Vec<(Value, String)>,
+    missing: Option<Value>,
+    unmapped: Option<Value>,
+}
 #[derive(Clone, Debug, PartialEq)]
 pub enum MappingCut {
     Mapping(Mapping),
     Cut(Cut),
+    Decode(Decode),
 }
 fn shape(source: &str, path: &str) -> Result<(), AdmissionError> {
     if source.is_empty() || path.is_empty() {
@@ -278,50 +293,136 @@ impl Cut {
         )
     }
 }
+impl Decode {
+    /// The `decode` at `path` of `source` through `codelist`, a codelist of
+    /// items that each declare a decode, which preparation has admitted.
+    pub fn new(
+        source: String,
+        path: String,
+        codelist: &Codelist,
+        missing: Option<Value>,
+        unmapped: Option<Value>,
+    ) -> Result<Self, AdmissionError> {
+        shape(&source, &path)?;
+        let items = codelist
+            .items
+            .as_deref()
+            .ok_or(AdmissionError::Shape)?
+            .iter()
+            .map(|item| {
+                let decode = item.decode.as_ref().ok_or(AdmissionError::Shape)?;
+                Ok((item.value.clone(), decode.text.clone()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            source,
+            path,
+            kind: codelist.data_type.column_type(),
+            items,
+            missing,
+            unmapped,
+        })
+    }
+    /// A present value takes the decode of the item whose value it equals
+    /// (EXPR-15); one no item lists takes `unmapped`, and fails without it.
+    pub fn select(&self, value: ValueRef<'_>) -> Result<Selected<'_>, Diagnostic> {
+        if matches!(value, ValueRef::Missing) {
+            return Ok(missing_source(self.missing.as_ref()));
+        }
+        if value.value_type() != Some(ValueType::from(self.kind)) {
+            return Err(self.input_diagnostic(actual(value)));
+        }
+        let listed = self
+            .items
+            .iter()
+            .find(|(coded, _)| compare_present_refs(value, coded.into()) == Ok(Ordering::Equal));
+        if let Some((_, decode)) = listed {
+            return Ok(Selected {
+                value: SelectedValue::Label(decode),
+                handler: None,
+            });
+        }
+        self.unmapped
+            .as_ref()
+            .map(|value| Selected {
+                value: SelectedValue::Literal(value),
+                handler: Some("unmapped"),
+            })
+            .ok_or_else(|| {
+                let value = match value {
+                    ValueRef::Str(written) => text(written),
+                    ValueRef::Int(number) => V::from(&Value::Int(number)),
+                    ValueRef::Float(number) => V::from(&Value::Float(number)),
+                    _ => unreachable!("a decode reads text or a number"),
+                };
+                diagnostic(
+                    C::MappingUnmapped,
+                    &self.path,
+                    [("source", text(&self.source)), ("value", value)],
+                )
+            })
+    }
+    pub fn input_diagnostic(&self, actual: &str) -> Diagnostic {
+        diagnostic(
+            C::DecodeInput,
+            &format!("{}.source", self.path),
+            [
+                ("source", text(&self.source)),
+                ("expected", text(self.kind.name())),
+                ("actual", text(actual)),
+            ],
+        )
+    }
+}
 impl MappingCut {
     pub fn source(&self) -> &str {
         match self {
             Self::Mapping(item) => &item.source,
             Self::Cut(item) => &item.source,
+            Self::Decode(item) => &item.source,
         }
     }
     pub fn path(&self) -> &str {
         match self {
             Self::Mapping(item) => &item.path,
             Self::Cut(item) => &item.path,
+            Self::Decode(item) => &item.path,
         }
     }
     pub fn missing(&self) -> Option<&Value> {
         match self {
             Self::Mapping(item) => item.missing.as_ref(),
             Self::Cut(item) => item.missing.as_ref(),
+            Self::Decode(item) => item.missing.as_ref(),
         }
     }
     pub fn unmapped(&self) -> Option<&Value> {
         match self {
             Self::Mapping(item) => item.unmapped.as_ref(),
             Self::Cut(_) => None,
+            Self::Decode(item) => item.unmapped.as_ref(),
         }
     }
     pub fn select(&self, value: ValueRef<'_>) -> Result<Selected<'_>, Diagnostic> {
         match self {
             Self::Mapping(item) => item.select(value),
             Self::Cut(item) => item.select(value),
+            Self::Decode(item) => item.select(value),
         }
     }
     pub fn input_diagnostic(&self, actual: &str) -> Diagnostic {
         match self {
             Self::Mapping(item) => item.input_diagnostic(actual),
             Self::Cut(item) => item.input_diagnostic(actual),
+            Self::Decode(item) => item.input_diagnostic(actual),
         }
     }
-    pub fn accepts(&self, kind: crate::value::ColumnType) -> bool {
+    pub fn accepts(&self, kind: ColumnType) -> bool {
         match self {
-            Self::Mapping(_) => kind == crate::value::ColumnType::Str,
-            Self::Cut(_) => matches!(
-                kind,
-                crate::value::ColumnType::Int | crate::value::ColumnType::Float
-            ),
+            Self::Mapping(_) => kind == ColumnType::Str,
+            Self::Cut(_) => matches!(kind, ColumnType::Int | ColumnType::Float),
+            // The type the codelist's data type is held in (EXPR-15, CT-8).
+            Self::Decode(item) => kind == item.kind,
         }
     }
 }

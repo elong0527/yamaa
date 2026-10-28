@@ -186,7 +186,8 @@ Fails: `unknown_field`, `prohibited_construct`.
 Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
-`columns` lists bare field names, and every `filter` field is qualified. The
+`columns` lists bare field names, and every `filter` field is qualified,
+except a donor-record name in a donor read ([LOOKUP-16](#lookup-16)). The
 current row's driver is root `base` (or the sole input) without explicit rows,
 or the enclosing `rows[].dataset` during row construction. During column
 derivation the qualifier must be the driver of every row template that the
@@ -197,7 +198,10 @@ intermediate under [ROW-2](rows.md#row-2). Other datasets,
 intermediates that are not the current driver, and unqualified output names
 are not filter scopes. The filter of a structured source or a qualified
 aggregate reads the donor record only; correlated predicates are supported by
-named intermediates.
+named intermediates. When an intermediate derivation reads a named
+intermediate, the reading donor record supplies the correlated fields,
+including its earlier derived fields, bare or qualified by its dataset
+([LOOKUP-16](#lookup-16)).
 
 The current-driver references are dependencies of each lookup read and obey
 the existing phase and group-key rules: in a grouped template, the qualified
@@ -1239,7 +1243,7 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-application/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `schema-lookup-donor-derived`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-application/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply

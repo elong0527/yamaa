@@ -25,19 +25,23 @@ artifact profile, and this reader reads those files like any other.
 
 <a id="sas-2"></a>
 
-### SAS-2. Every SAS or Transport input declares the encoding of its text
+### SAS-2. A SAS input uses its stored encoding, and a Transport input declares its encoding
 
-Each SAS or Transport input declares `dataset_class.encoding`: `utf-8`,
-`windows-1252`, `iso-8859-1` or `ascii`. The declaration supplies the text
-authority for character values and field names, including when a SAS dataset
-embeds different encoding metadata; neither profile guesses from text or the
-host locale. Encoding is absent on CSV and Parquet inputs. A missing SAS
-encoding, or an encoding declaration on another profile, fails validation.
+A SAS dataset uses its stored text encoding when `dataset_class.encoding` is
+omitted. A declaration, when present, must agree with that stored encoding.
+Transport stores no encoding; its input declares one. Both profiles admit `utf-8`, `windows-1252`, `iso-8859-1` or `ascii` for character
+values and field names; neither guesses from text or the host locale.
+Encoding is absent on CSV and Parquet inputs.
 
-Fails: `source_encoding_required`.
-Evidence: `schema-source-xpt`, `rust/crates/yamaa-adapters/src/sas_source/native.rs::declared_decoders_reject_incomplete_or_undefined_text`, `python/tests/installed/installed_sas_sources.py::test_static_encoding_contract_is_shared_by_check_and_run`.
+Fails: `source_encoding_required`, `source_sas_invalid`.
+Evidence: `schema-source-xpt`, `schema-source-sas7bdat-encoding`, `negative-sas7bdat-encoding-mismatch`, `rust/crates/yamaa-adapters/src/sas_source/native.rs::declared_decoders_reject_incomplete_or_undefined_text`, `python/tests/installed/installed_sas_sources.py::test_static_encoding_contract_is_shared_by_check_and_run`.
 
-The failure reports `source_encoding_required` at `input.<dataset>.encoding`.
+A missing Transport encoding, or an encoding declaration on another profile,
+fails validation as `source_encoding_required` at `input.<dataset>.encoding`.
+A contradictory SAS declaration fails ingestion as `source_sas_invalid`,
+cause `encoding_mismatch`, at that encoding entry, with `declared_encoding`
+and `stored_encoding` in its context. An absent or unsupported stored SAS
+encoding fails ingestion with cause `encoding` ([SAS-7](#sas-7)).
 
 ```yaml
 input:
@@ -147,10 +151,11 @@ limit.
 ### SAS-7. A SAS or Transport file that cannot be decoded fails ingestion with one closed cause
 
 `source_sas_invalid` reports in the `ingest` phase at `input.<dataset>.path`,
-or at the `types` entry for cause `field_type`, with the dataset, the path and
+at the `encoding` entry for cause `encoding_mismatch`, or at the `types`
+entry for cause `field_type`, with the dataset, the path and
 a closed `cause`: `framing`, `members`, `version`, `encoding`, `compression`,
-`header`, `field_name`, `field_type`, `record_order`, `deleted_records`,
-`truncated` or `malformed`. A cause that one field locates names the `field`,
+`header`, `field_name`, `field_type`, `encoding_mismatch`, `record_order`,
+`deleted_records`, `truncated` or `malformed`. A cause that one field locates names the `field`,
 and a value's also its `record`. Undecodable text fails without replacement
 characters. Unsupported versions, unsupported compression signatures,
 malformed compressed data, duplicate or empty field names and incomplete
@@ -162,6 +167,7 @@ Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_sas
 | Cause | Context beyond the dataset, path and cause |
 |---|---|
 | `field_name` | `field`: an empty name's position, or the repeated name |
+| `encoding_mismatch` | `declared_encoding` and `stored_encoding`, at `input.<dataset>.encoding` ([SAS-2](#sas-2)) |
 | `field_type` | `field`, at `input.<dataset>.types.<field>` ([SAS-3](#sas-3)) |
 | `encoding` | for a field name that does not decode, `field`, its position; for a value that does not decode or holds a NUL byte ([SAS-5](#sas-5)), `field` and `record` |
 | `deleted_records` | `hint` |

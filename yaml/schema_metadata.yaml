@@ -122,6 +122,10 @@ submission_metadata_fields:
         type: int
         required: false
         description: Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).
+    - has_no_data:
+        type: bool
+        required: false
+        description: Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).
     - fields_from: submission_role_fields
     - data_type:
         type: define_data_type

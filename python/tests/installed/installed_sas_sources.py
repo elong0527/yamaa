@@ -168,7 +168,7 @@ class SasSources(unittest.TestCase):
                     "input": {
                         "SRC": {
                             "path": file,
-                            "encoding": "windows-1252",
+                            "encoding": owner["encodings"][file],
                             "ordinal": "RECORD",
                         }
                     },

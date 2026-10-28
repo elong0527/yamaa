@@ -80,10 +80,10 @@
       "issues": [{"phase": "validation", "condition": "source_encoding_required", "rule": "SAS-2", "spec_paths": ["input.SRC.encoding"], "context": {"dataset": "SRC"}}]
     },
     {
-      "case": "a_sas_dataset_input_declares_its_encoding",
+      "case": "a_sas_dataset_input_may_omit_its_encoding",
       "operation": "prepare",
       "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.sas7bdat"}}}]},
-      "issues": [{"phase": "validation", "condition": "source_encoding_required", "rule": "SAS-2", "spec_paths": ["input.SRC.encoding"], "context": {"dataset": "SRC"}}]
+      "issues": []
     },
     {
       "case": "a_csv_input_declares_no_encoding",

@@ -1,0 +1,45 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  LB:
+    path: input/lb.csv
+    types: {VISITNUM: int}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVISIT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation: LB.VISITNUM
+
+  # The defect: the visit codelist's codes are text, while the visit number
+  # is an integer, so no visit number could ever equal a code and the spec
+  # is rejected before any data is read.
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation:
+      decode:
+        source: AVISITN
+        codelist: VISIT

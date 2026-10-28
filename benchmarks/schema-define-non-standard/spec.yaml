@@ -1,0 +1,75 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: ZE
+keys: [STUDYID, USUBJID, ZESEQ]
+input:
+  EYE_RAW: {path: input/examinations.csv, types: {SEQ: int}}
+
+output:
+  path: ze.csv
+  columns: [DOMAIN, STUDYID, USUBJID, ZESEQ, ZETERM]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'ZE'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins: [{type: Assigned, source: Sponsor}]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: "'NS01'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 4
+      origins: [{type: Protocol, source: Sponsor}]
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EYE_RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 7
+      origins: [{type: Assigned, source: Sponsor}]
+
+  - name: ZESEQ
+    type: int
+    label: Sequence Number
+    derivation: EYE_RAW.SEQ
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origins: [{type: Assigned, source: Sponsor}]
+
+  - name: ZETERM
+    type: str
+    label: Examination Name
+    derivation: EYE_RAW.TERM
+    submission:
+      core: Req
+      role: Topic
+      length: 10
+      origins:
+      - type: Collected
+        source: Investigator
+        documents:
+        - document: acrf
+          pages: {type: PhysicalRef, refs: '1'}
+
+submission:
+  label: Eye Examinations
+  domain: ZE
+  class: FINDINGS
+  structure: One record per examination per subject
+  repeating: true
+  non_standard: true

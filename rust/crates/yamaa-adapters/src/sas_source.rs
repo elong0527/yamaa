@@ -18,6 +18,11 @@ pub enum Error {
         field: Field,
         record: Option<usize>,
     },
+    /// The declaration contradicts the encoding recorded by a SAS dataset.
+    EncodingMismatch {
+        declared: String,
+        stored: String,
+    },
     Typing(yamaa_core::typed_csv::Error),
     Limit {
         resource: &'static str,
@@ -49,6 +54,14 @@ impl Error {
                 field: Some(field),
                 record: *record,
             }),
+            Self::EncodingMismatch { declared, stored } => {
+                Some(SourceFinding::SasEncodingMismatch {
+                    dataset,
+                    path,
+                    declared,
+                    stored,
+                })
+            }
             Self::Typing(error) => error.finding(dataset),
             Self::Limit { .. } | Self::Internal | Self::Unavailable => None,
         }

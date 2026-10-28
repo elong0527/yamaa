@@ -143,7 +143,7 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | Field | Meaning |
 | --- | --- |
 | `format` | `yamaa.resolved-specification`, distinct from authored YAML. |
-| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line` and `column` in 0.7.0. |
+| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line`, `column`, `end_line` and `end_column` in 0.7.0; the end is exclusive, and starts-only or unlocated origins remain readable. |
 | `model_kind` | `normalized_with_named_dictionary_references`. |
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |
@@ -167,8 +167,9 @@ records its original `declaring_source`, `source_kind` (`authored`,
 `schema_default`, or `composed`) and whether normalization generated it.
 An authored origin also records the one-based `line` and `column` at which its
 layer wrote the value, the reader's start of that node, as issue locations
-use; no other origin has either, and an artifact from an earlier engine may
-omit both. Composed containers with no single declaring layer have a null
+use. Its optional `end_line` and `end_column` give the exclusive scanner end,
+at or after the start. An end pair requires a start pair. No other origin
+has locations, and an artifact from an earlier engine may omit either pair. Composed containers with no single declaring layer have a null
 source. Default origins identify the retained schema module. `mapping_order`
 uses the same pointers to retain every mapping's original key order; JSON
 object keys alone cannot retain semantic iteration order. Arrays retain their

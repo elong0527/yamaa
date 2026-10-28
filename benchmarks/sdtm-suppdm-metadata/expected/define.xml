@@ -40,13 +40,13 @@
         <ItemRef ItemOID="IT.SUPPDM.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
         <ItemRef ItemOID="IT.SUPPDM.RDOMAIN" OrderNumber="2" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.SUPPDM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
-        <ItemRef ItemOID="IT.SUPPDM.IDVAR" OrderNumber="4" Mandatory="No"/>
-        <ItemRef ItemOID="IT.SUPPDM.IDVARVAL" OrderNumber="5" Mandatory="No"/>
+        <ItemRef ItemOID="IT.SUPPDM.IDVAR" OrderNumber="4" Mandatory="No" def:HasNoData="Yes"/>
+        <ItemRef ItemOID="IT.SUPPDM.IDVARVAL" OrderNumber="5" Mandatory="No" def:HasNoData="Yes"/>
         <ItemRef ItemOID="IT.SUPPDM.QNAM" OrderNumber="6" Mandatory="Yes" KeySequence="3"/>
         <ItemRef ItemOID="IT.SUPPDM.QLABEL" OrderNumber="7" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.SUPPDM.QVAL" OrderNumber="8" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.SUPPDM.QORIG" OrderNumber="9" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SUPPDM.QEVAL" OrderNumber="10" Mandatory="No"/>
+        <ItemRef ItemOID="IT.SUPPDM.QEVAL" OrderNumber="10" Mandatory="No" def:HasNoData="Yes"/>
         <def:Class Name="RELATIONSHIP"/>
         <def:leaf ID="LF.SUPPDM" xlink:href="suppdm.json">
           <def:title>suppdm.json</def:title>

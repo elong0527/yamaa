@@ -787,13 +787,17 @@ impl PreparedSpecification {
                 column.submission = None;
             }
         }
-        let spec = &tree;
         // A 1.x specification prepared without a project file, which is when
         // `prepare_tree_linked` gives none of a project's functions, codelists
         // or inventory, binds nothing a project supplies: each codelist,
         // inventory vocabulary and project function it names fails validation
         // as `project_binding_missing` (CT-13).
         let projectless = functions.is_none() && catalogue.is_none() && inventory.is_none();
+        // The codelists the decodes read join the tree, from which each
+        // decode builds its operation (EXPR-15).
+        let decodes = terminology::decodes(&tree, catalogue, projectless);
+        tree.codelists = decodes.codelists;
+        let spec = &tree;
         match_values::declaration_admission(spec)?;
         let mut findings = checks::root::findings(spec);
         findings.extend(checks::odm::context_findings(spec)?);
@@ -835,6 +839,7 @@ impl PreparedSpecification {
             projectless,
             &mut findings,
         )?;
+        findings.extend(decodes.findings);
         // Operand types before capture: each link's producer types its input.
         let declared = types::DeclaredTypes::new(
             spec,

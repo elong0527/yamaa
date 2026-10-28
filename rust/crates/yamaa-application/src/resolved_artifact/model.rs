@@ -20,6 +20,12 @@ pub struct FieldOrigin {
     pub line: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub column: Option<u32>,
+    /// Exclusive end of the authored node, present as a pair when known.
+    /// Older version 1 artifacts may carry the start alone or no location.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_column: Option<u32>,
     pub source_kind: OriginKind,
     pub generated: bool,
 }
@@ -254,10 +260,26 @@ fn validate_ledgers(entry: &Entry) -> Result<(), Error> {
         }
         // A location is a written one: a line and a column, both one-based,
         // where a layer wrote the value.
-        match (origin.line, origin.column) {
-            (None, None) => {}
-            (Some(line), Some(column))
-                if origin.source_kind == OriginKind::Authored && line > 0 && column > 0 => {}
+        match (
+            origin.line,
+            origin.column,
+            origin.end_line,
+            origin.end_column,
+        ) {
+            (None, None, None, None) => {}
+            (Some(line), Some(column), end_line, end_column)
+                if origin.source_kind == OriginKind::Authored
+                    && line > 0
+                    && column > 0
+                    && match (end_line, end_column) {
+                        (None, None) => true,
+                        (Some(end_line), Some(end_column)) => {
+                            end_line > 0
+                                && end_column > 0
+                                && (line, column) <= (end_line, end_column)
+                        }
+                        _ => false,
+                    } => {}
             _ => return Err(Error::Facts("origin location is not a written one")),
         }
         match value {
