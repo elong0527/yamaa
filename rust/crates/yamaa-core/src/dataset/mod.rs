@@ -677,7 +677,7 @@ pub struct DatasetPlan {
     secondary: Vec<SecondarySource>,
     intermediates: Vec<Intermediate>,
     output: TableSchema,
-    output_kinds: Vec<Option<crate::value::ColumnType>>,
+    output_types: Vec<crate::result_type::ResultType>,
     templates: Vec<RowTemplate>,
     row_contexts: Vec<Option<AggregateRowContext>>,
     columns: Vec<ColumnBinding>,
@@ -767,21 +767,21 @@ impl DatasetPlan {
     }
 
     /// A donor plan has no publication key gate, and a derived column of its
-    /// output may have no declared type (`output_kinds`).
+    /// output may have a type decided per value (`output_types`, EXPR-14).
     pub(crate) fn new_donor(
         sources: SourceSchemas,
         intermediates: Vec<Intermediate>,
         output: TableSchema,
         templates: Vec<RowTemplate>,
         columns: Vec<Assignment>,
-        output_kinds: Vec<Option<crate::value::ColumnType>>,
+        output_types: Vec<crate::result_type::ResultType>,
     ) -> Self {
         let columns = columns
             .into_iter()
             .map(|assignment| ColumnBinding::every_template(assignment, &templates))
             .collect();
         Self {
-            output_kinds,
+            output_types,
             ..Self::assemble(
                 sources,
                 intermediates,
@@ -804,17 +804,17 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
     ) -> Self {
-        let output_kinds = output
+        let output_types = output
             .columns()
             .iter()
-            .map(|column| Some(column.kind))
+            .map(|column| crate::result_type::ResultType::column(column.kind))
             .collect();
         Self {
             source: sources.primary,
             secondary: sources.secondary,
             intermediates,
             output,
-            output_kinds,
+            output_types,
             templates,
             columns,
             keys,
@@ -899,7 +899,15 @@ impl DatasetPlan {
     }
     /// Physical layout slots do not promise a type for untyped donor results.
     pub(crate) fn output_kind(&self, column: usize) -> Option<crate::value::ColumnType> {
-        self.output_kinds.get(column).copied().flatten()
+        self.output_type(column).column_type()
+    }
+    /// An output column's result type (EXPR-14): its declared type, or an
+    /// untyped donor result's, which may be decided per value.
+    pub(crate) fn output_type(&self, column: usize) -> crate::result_type::ResultType {
+        self.output_types
+            .get(column)
+            .copied()
+            .unwrap_or(crate::result_type::ResultType::UNKNOWN)
     }
     /// Borrow admitted templates without exposing mutation.
     pub fn templates(&self) -> &[RowTemplate] {

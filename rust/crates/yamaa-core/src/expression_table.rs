@@ -258,6 +258,7 @@ pub enum Verb {
     Case,
     Flag,
     Mapping,
+    Decode,
     Cut,
     StrPad,
     StrSubstr,
@@ -294,7 +295,7 @@ pub enum Verb {
 #[rustfmt::skip]
 impl Verb {
     /// Every variant, in the registry's order.
-    pub const ALL: [Self; 38] = [
+    pub const ALL: [Self; 39] = [
         Self::Source,
         Self::FirstAvailable,
         Self::Greatest,
@@ -302,6 +303,7 @@ impl Verb {
         Self::Case,
         Self::Flag,
         Self::Mapping,
+        Self::Decode,
         Self::Cut,
         Self::StrPad,
         Self::StrSubstr,
@@ -344,6 +346,7 @@ impl Verb {
             Self::Case => "case",
             Self::Flag => "flag",
             Self::Mapping => "mapping",
+            Self::Decode => "decode",
             Self::Cut => "cut",
             Self::StrPad => "str_pad",
             Self::StrSubstr => "str_substr",
@@ -439,6 +442,7 @@ impl Verb {
             Self::Greatest
             | Self::Least
             | Self::Mapping
+            | Self::Decode
             | Self::Cut
             | Self::StrPad
             | Self::StrSubstr
@@ -493,6 +497,7 @@ impl Verb {
             Self::FirstAvailable => &["missing"],
             Self::Flag => &["true_value", "false_value", "missing"],
             Self::Mapping => &["missing", "unmapped"],
+            Self::Decode => &["missing", "unmapped"],
             Self::Cut => &["missing"],
             Self::StrSubstr => &["missing"],
             Self::StrLength => &["missing"],
@@ -519,6 +524,9 @@ impl Verb {
                 OperandField { field: "sources", slot: Slot::Sources, required: true, form: OperandForm::Names },
             ],
             Self::Mapping => &[
+                OperandField { field: "source", slot: Slot::Source, required: true, form: OperandForm::Binding },
+            ],
+            Self::Decode => &[
                 OperandField { field: "source", slot: Slot::Source, required: true, form: OperandForm::Binding },
             ],
             Self::Cut => &[
@@ -753,6 +761,10 @@ pub enum ScalarOp {
         dict: Dictionary,
         case_sensitive: bool,
     },
+    /// `decode`.
+    Decode {
+        codelist: String,
+    },
     /// `cut`.
     Cut {
         breaks: Vec<f64>,
@@ -858,6 +870,7 @@ impl ScalarOp {
             Self::Greatest => Verb::Greatest,
             Self::Least => Verb::Least,
             Self::Mapping { .. } => Verb::Mapping,
+            Self::Decode { .. } => Verb::Decode,
             Self::Cut { .. } => Verb::Cut,
             Self::StrPad { .. } => Verb::StrPad,
             Self::StrSubstr { .. } => Verb::StrSubstr,
@@ -893,6 +906,9 @@ impl ScalarOp {
             Verb::Mapping => Self::Mapping {
                 dict: written.dictionary("dict")??,
                 case_sensitive: written.boolean("case_sensitive")?.unwrap_or(true),
+            },
+            Verb::Decode => Self::Decode {
+                codelist: written.text("codelist")??,
             },
             Verb::Cut => Self::Cut {
                 breaks: written.numbers("breaks")??,

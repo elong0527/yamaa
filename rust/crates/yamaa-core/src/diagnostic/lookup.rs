@@ -25,11 +25,13 @@ fn finding(code: C, paths: Vec<String>, context: Context) -> Diagnostic {
 }
 
 /// The lookup that raised a finding, named in its context when it has a
-/// name: a named intermediate, or the variable a source binding reads.
+/// name: a named intermediate, or the variable a source binding reads; or
+/// the window operation whose order a finding names.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Owner<'a> {
     Intermediate(&'a str),
     Source(&'a str),
+    Window(&'a str),
     Unnamed,
 }
 
@@ -41,6 +43,9 @@ impl Owner<'_> {
             }
             Self::Source(variable) => {
                 context.insert("variable".into(), text(variable));
+            }
+            Self::Window(operation) => {
+                context.insert("operation".into(), text(operation));
             }
             Self::Unnamed => {}
         }
@@ -168,6 +173,25 @@ pub(crate) fn selection_unpaired(
         owner => owner.add(&mut context),
     }
     finding(C::LookupSelectionUnpaired, vec![path.into()], context)
+}
+
+/// An order term whose field holds values of types that do not all compare
+/// under VALUE-19, a type with itself included, so the term orders nothing
+/// (VALUE-22): a named intermediate's `order_by` or a window's order, before
+/// any record is read. `actual` is the field's type, decided per value.
+pub(crate) fn order_term_type(
+    path: &str,
+    owner: Owner<'_>,
+    identifier: &str,
+    actual: ResultType,
+) -> Diagnostic {
+    let mut context: Context = [
+        ("identifier".into(), text(identifier)),
+        ("actual".into(), text(&actual.name())),
+    ]
+    .into();
+    owner.add(&mut context);
+    finding(C::OrderTermType, vec![path.into()], context)
 }
 
 /// `order_by` or `keep` beside a nearest selection, which replaces them

@@ -30,13 +30,14 @@ use super::document::{Document, Style, Value};
 /// by the class or operation that declares them, so YAML null restates them.
 /// A handler whose omission fails, such as `unmapped` or `unconvertible`,
 /// declares an answer when it is null.
-const HANDLERS: [(&str, &str); 13] = [
+const HANDLERS: [(&str, &str); 14] = [
     ("source_binding_class", "absent"),
     ("intermediate_class", "absent"),
     (Verb::FirstAvailable.name(), "missing"),
     ("flag_class", "false_value"),
     ("flag_class", "missing"),
     (Verb::Mapping.name(), "missing"),
+    (Verb::Decode.name(), "missing"),
     (Verb::Cut.name(), "missing"),
     (Verb::StrExtract.name(), "missing"),
     (Verb::StrReplace.name(), "missing"),

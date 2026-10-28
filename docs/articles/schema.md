@@ -43,7 +43,7 @@ expressions read.
 | Module | Expressions |
 |---|---|
 | [`schema_expression_core.yaml`](../../yaml/schema_expression_core.yaml) | `source`, `first_available`, `greatest`, `least`, `case` and `flag` |
-| [`schema_expression_mapping.yaml`](../../yaml/schema_expression_mapping.yaml) | `mapping` and `cut` |
+| [`schema_expression_mapping.yaml`](../../yaml/schema_expression_mapping.yaml) | `mapping`, `decode` and `cut` |
 | [`schema_expression_str.yaml`](../../yaml/schema_expression_str.yaml) | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template` and `str_case` |
 | [`schema_expression_numeric.yaml`](../../yaml/schema_expression_numeric.yaml) | `round_half_away_from_zero` and `str_decimal` |
 | [`schema_expression_date.yaml`](../../yaml/schema_expression_date.yaml) | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `date_text`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` and `duration_text` |
