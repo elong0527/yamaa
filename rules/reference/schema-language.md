@@ -360,7 +360,7 @@ Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostic
 | `required` | a class field descriptor only | whether the field must be written; defaults to false |
 | `description` | every descriptor; optional | a non-empty string documenting the field or value type; it has no effect on validation |
 | `pattern` | `str` only | a regular expression; [Text](../text.md) owns its syntax, the engine that reads it, and what satisfying it means |
-| `min_length` | `str` only | a minimum length, counted in [Values](../values.md) scalar values |
+| `min_length` | `str` only | a minimum length, counted in Unicode scalar values ([VALUE-11](../values.md#value-11)) |
 | `size` | `list` or `dict` only | an exact size |
 | `values` | `str` only | permitted values, compared by [Values](../values.md) equality |
 | `default` | when `required` is false or absent | a value satisfying the same descriptor |

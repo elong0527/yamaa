@@ -28,11 +28,13 @@ one row:
 | `domain` | `keys` | One row per |
 |---|---|---|
 | ADSL | `[STUDYID, USUBJID]` | subject |
-| ADLB | `[STUDYID, USUBJID, PARAMCD, ADT, ASEQ]` | analysis record |
+| ADLB | `[STUDYID, USUBJID, PARAMCD, ASEQ]` | analysis record |
 | ADAE | `[STUDYID, USUBJID, AESEQ]` | event |
 
 Every completed row must have non-missing key values, and no two rows may
-have the same key combination.
+have the same key combination. A key therefore names only columns every row
+carries: an analysis date such as ADT, missing on a record collected without
+one, would fail the build on that record.
 
 ## Without `rows`: distinct keys construct the rows
 
@@ -181,7 +183,7 @@ input:
   DM: source/dm.csv
   EX:
     path: source/ex.csv
-    types: {EXSTDTC: date, EXDOSE: float}
+    types: {EXDOSE: float}
     key: [STUDYID, USUBJID]
 base: DM
 
@@ -190,12 +192,15 @@ output:
   columns: [STUDYID, USUBJID, TRTSDT, CUMDOSE]
 
 intermediates:
-  # Each subject's first exposure record.
+  # Each subject's first exposure record, by the date its start carries.
   - id: FIRSTEX
     dataset: EX
     key: [STUDYID, USUBJID]
-    order_by: [EX.EXSTDTC]
+    filter: "EX.EXSTDT IS NOT NULL"
+    order_by: [EX.EXSTDT]
     keep: first
+    derivations:
+      EXSTDT: {to_date: {source: EXSTDTC}}
 
 columns:
   - name: STUDYID
@@ -211,7 +216,7 @@ columns:
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation: FIRSTEX.EXSTDTC
+    derivation: FIRSTEX.EXSTDT
 
   - name: CUMDOSE
     type: float
@@ -234,6 +239,12 @@ and each kind of read treats them in its own way:
   own `key`, here the same columns, with `order_by` and `keep` choosing the
   first exposure. The exceptions are an intermediate that drives a row
   template and one that is a side of a pair relation, which declare no key.
+  Its `derivations` add a field to each `EX` record: `EXSTDT`, the date
+  `to_date` reads from `EXSTDTC`, missing for a partial start, which `filter`
+  and `order_by` read as `EX.EXSTDT`. `EXSTDTC` itself stays text, as
+  collected: an SDTM `--DTC` may be partial, and typing it `date` at ingest
+  would fail the whole input on the first partial value
+  ([INPUT-7](../../rules/inputs.md#input-7)).
 - **A pair relation**, a named intermediate that writes `inner_join`, keeps
   every matching pair of two relations as a record of its own, matched on its
   `key`, so a row template driving on it builds one row for each pair, such as
