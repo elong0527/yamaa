@@ -13,6 +13,7 @@ const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
 /// as `origins` (P-ORIGIN-1).
 const SUBMISSION: &[F] = &[
     F::KeySequence,
+    F::HasNoData,
     F::Core,
     F::Mandatory,
     F::Role,
@@ -31,6 +32,7 @@ const SUBMISSION: &[F] = &[
 /// An entry's fields, with a 1.0 entry's `origins` (P-ORIGIN-1).
 const ENTRY: &[F] = &[
     F::KeySequence,
+    F::HasNoData,
     F::Id,
     F::Where,
     F::Label,
@@ -51,6 +53,7 @@ const ENTRY: &[F] = &[
 /// The metadata fields an entry shares with its column.
 const ENTRY_METADATA: &[F] = &[
     F::KeySequence,
+    F::HasNoData,
     F::Core,
     F::Mandatory,
     F::Role,
@@ -666,8 +669,15 @@ impl<'a> Parser<'a> {
         let origins = self.origins_of(node, path)?;
         let method = self.method(self.get(node, F::Method), path.field(F::Method))?;
         let comment = self.comment(self.get(node, F::Comment), path.field(F::Comment))?;
+        let has_no_data = self.boolean(
+            self.get(node, F::HasNoData),
+            path.field(F::HasNoData),
+            None,
+            false,
+        )?;
         Ok(ColumnSubmission {
             key_sequence: self.text_field(node, F::KeySequence, path, TextRule::Integer, false)?,
+            has_no_data,
             origin,
             fields: self.fields(node, allowed),
             core,

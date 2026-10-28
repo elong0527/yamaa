@@ -138,7 +138,9 @@ the dataset carries reference data rather than subject data. A
 reporting the dataset.
 
 `has_no_data` is carried for submission composition. It does not suppress
-domain execution or replace row-count checks. `standard` names the guide of
+domain execution or replace row-count checks. A column or value-level entry
+has no such field in validated metadata: whether it has data is measured from
+the published dataset ([SUB-28](#sub-28)). `standard` names the guide of
 the composing section that binds the dataset, and composition resolves it
 ([DEFINE-8](define-xml.md#define-8)).
 
@@ -1044,15 +1046,15 @@ Checked when a document composes the specification:
   [SUB-3](#sub-3) makes the specification's.
 
 The row checks of [SUB-13](#sub-13) run in every build of the specification,
-before publication. The transport lengths of [SUB-24](#sub-24) are measured
-after composition, from the published artifacts, when a transport is
-requested.
+before publication. The transport lengths of [SUB-24](#sub-24) and the
+columns without data of [SUB-28](#sub-28) are measured after composition,
+from the published artifacts, when a transport is requested.
 
 The specification names its model, and only the study document names the
 standard its identifier refers to. A specification that is never composed is
 not yet part of a submission.
 
-## Transport lengths and dates
+## Transport measurements and dates
 
 <a id="sub-24"></a>
 
@@ -1088,6 +1090,38 @@ with `context: Submission`, every published text value is printable ASCII
 `Length` and Dataset-JSON `length` can exceed its declared `length` while
 every value meets that bound: three ASCII letters and `U+00E9` are four scalar
 values within a `length` of 4, and five bytes of published length.
+
+<a id="sub-28"></a>
+
+### SUB-28. With a transport, a column or value-level definition that holds no value in its dataset has no data
+
+When the selected section requests a transport, a column of a dataset with
+rows has no data when none of the dataset's published rows holds a value in
+it, and a value-level definition has no data when none of the rows its where
+clause selects holds one. The document writes `def:HasNoData="Yes"` on that
+column's or definition's `ItemRef` ([DEFINE-18](define-xml.md#define-18),
+[DEFINE-27](define-xml.md#define-27)). Validated metadata never declares it.
+
+Evidence: `sdtm-dm-no-deaths`, `sdtm-suppdm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`.
+
+The usual case is an Expected column the study kept but never filled, such
+as a date of death when no subject died. A missing value is no value; a
+present empty string, which a Dataset-JSON file can carry and a SAS Transport
+file cannot ([XPT-7](xpt.md#xpt-7)), is one. Unlike a length, the flag is
+measured within one dataset, since each dataset's `ItemRef` is its own. A
+value-level definition whose where clause selects no row has no data. The
+artifact of a dataset declared to have no data is not read
+([JSON-3](dataset-json.md#json-3)): its own `def:HasNoData` says so
+([SUB-4](#sub-4)), and none of its columns carries one. Without a transport
+no artifact is read and no column is marked. The flag is measured, not
+declared, so unlike a dataset declared to have no data
+([DEFINE-17](define-xml.md#define-17)) it needs no comment.
+
+A validated column or entry declaring `has_no_data` fails with
+`value_not_permitted` at its `submission`; historical metadata declares it
+instead ([DEFINE-30](define-xml.md#define-30)). A Define-XML 2.0 document
+has no `def:HasNoData`: it omits the measured flag and refuses a declared one
+([DEFINE-29](define-xml.md#define-29)).
 
 <a id="sub-25"></a>
 

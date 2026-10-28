@@ -547,7 +547,7 @@ independently declarable: membership in `keys` determines it, and using a
 sponsor variable in `output.order_by` or a `unique` verification does not
 independently assign it.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-no-deaths`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
 
 | Attribute | Source |
 |---|---|
@@ -557,6 +557,7 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encod
 | `KeySequence` | one-based position in `keys`; omit when not a key |
 | `Role` | `submission.role`, when declared |
 | `MethodOID` | generated method identifier; omit without `submission.method` |
+| `def:HasNoData` | `Yes` when the column has no data ([SUB-28](submission.md#sub-28)), else omitted |
 
 The [output identity example](../output.md#output-3) shows how to
 use those variables when some values may be missing.
@@ -743,7 +744,7 @@ flushed and closed, and atomically moved onto the target. A failure leaves the
 previous file and no residue.
 
 Fails: `value_not_permitted`, `publication_failed`.
-Evidence: `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_creation_time_outside_the_schema_facet_is_a_schema_violation`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`.
+Evidence: `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_creation_time_outside_the_schema_facet_is_a_schema_violation`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`.
 
 Conformance to this profile is not a substitute for schema validation: an
 implementation that produces a schema-invalid document has a defect regardless
@@ -781,9 +782,6 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
   non-standard variable belongs in under `Submission`
 - A comment on a standard, codelist, or metadata version: a shared comment
   identifier space
-- `def:HasNoData` on an `ItemRef`: a column with no data. Only an output
-  dataset's `ItemGroupDef` carries it, from `has_no_data`
-  ([SUB-4](submission.md#sub-4))
 - A value-level definition selected by several where clauses, joined by OR,
   or by a range comparison: each entry has one `def:WhereClauseRef` and one
   `def:WhereClauseDef`, whose `RangeCheck` elements compare by `EQ`, `IN`,
@@ -819,16 +817,17 @@ a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
 the column's metadata merged with the entry's. The column's own `ItemDef`
 carries the `def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 The mapping to Define-XML is fixed:
 
 - each value-list `ItemRef` carries `ItemOID`, the entry's per-value
   identifier ([DEFINE-9](#define-9)), `OrderNumber`, the entry's one-based
   position among the column's entries, `Mandatory`, the entry's resolution of
-  [SUB-10](submission.md#sub-10), and `Role` and `MethodOID` when its merged
-  metadata declares them. The column's `ItemDef` carries its single
-  `def:ValueListRef` after its `def:Origin` elements;
+  [SUB-10](submission.md#sub-10), `Role` and `MethodOID` when its merged
+  metadata declares them, and `def:HasNoData="Yes"` when the entry has no
+  data ([SUB-28](submission.md#sub-28)). The column's `ItemDef` carries its
+  single `def:ValueListRef` after its `def:Origin` elements;
 - each `def:WhereClauseDef` carries one `RangeCheck` per where column, in the
   clause's written order: `Comparator="EQ"` when the column lists one value
   and `"IN"` when it lists several, or the comparator the column writes,
@@ -897,21 +896,23 @@ implementation guide.
 Declarations requiring 2.1 constructs fail before publication, under
 [DEFINE-25](#define-25).
 
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
 above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
 `StandardName` and `StandardVersion` on `MetaDataVersion`, and a dataset
 `Class` attribute. ADaMIG, SDTMIG and SENDIG are written as ADaM-IG, SDTM-IG
 and SEND-IG. It omits 2.1-only standards, standard references, codelist
-non-standard flags, context and origin sources. Under SDTM and ADaM,
+non-standard flags, context, origin sources and the `def:HasNoData` that
+[SUB-28](submission.md#sub-28) measures on an `ItemRef`. Under SDTM and ADaM,
 Collected is written as CRF; Derived, Assigned, Protocol and Predecessor retain their
 names, and Other and Not Available are refused. Under SEND the admitted
 types are Collected, Derived, Other and Not Available, written as COLLECTED,
 DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused.
 
-Multiple guides, terminology releases, a subclass, HasNoData and a
-non-standard dataset have no faithful representation and are refused. An
+Multiple guides, terminology releases, a subclass, a dataset's HasNoData, a
+column's or value-level entry's declared `has_no_data` and a non-standard
+dataset have no faithful representation and are refused. An
 explicit origin source is representable only when it is the older type's
 implicit source: Investigator for Collected, Sponsor for Derived, Assigned,
 Protocol or Other. This version choice does not change derivations, ordinary
@@ -934,16 +935,21 @@ admits closed metadata, resolves every codelist and document reference, and
 requires a schema-valid document. It makes no data-conformance assertion.
 
 Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`.
 
 The historical export requires explicit column `data_type`, `mandatory` and
 labels. Lengths, formats, origins, methods and codelists remain as declared.
 `key_sequence` declares a historical ItemRef key position independently of
-executable `keys`. `artifact` declares a literal relative package link; its
-filename supplies the leaf title. Omission writes no historical artifact
-leaf. Both fields are refused on validated metadata. Historical value-level
-entries inherit the column metadata as ordinary entries do, except key
-positions never inherit.
+executable `keys`, and a column's or value-level entry's `has_no_data` its
+ItemRef's `def:HasNoData`, which validated metadata measures instead
+([SUB-28](submission.md#sub-28)). `artifact` declares a literal relative
+package link; its filename supplies the leaf title. Omission writes no
+historical artifact leaf. These three fields are refused on validated
+metadata, each with `value_not_permitted` at the `submission` that declares
+it. Historical value-level entries inherit the column metadata as ordinary
+entries do, except key positions and `has_no_data` never inherit. A Define-XML
+2.0 document has no `def:HasNoData`, so a declared `has_no_data: true` is
+refused there ([DEFINE-29](#define-29)), as a dataset's is.
 
 The current executable output need not share the document's directory, and
 historical composition does not read its run report, artifact or inputs.

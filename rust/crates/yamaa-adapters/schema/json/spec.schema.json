@@ -3079,6 +3079,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
+        "has_no_data": {
+          "type": "boolean",
+          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "core": {
           "$ref": "#/$defs/core_designation",
           "description": "Standard core designation, declared and derived by model (SUB-10).",
@@ -3320,6 +3326,12 @@
           "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
+        },
+        "has_no_data": {
+          "type": "boolean",
+          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
         },
         "core": {
           "$ref": "#/$defs/core_designation",
@@ -5700,6 +5712,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
+        "has_no_data": {
+          "type": "boolean",
+          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "core": {
           "$ref": "#/$defs/core_designation",
           "description": "Standard core designation, declared and derived by model (SUB-10).",
@@ -6049,6 +6067,12 @@
           "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
+        },
+        "has_no_data": {
+          "type": "boolean",
+          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
         },
         "core": {
           "$ref": "#/$defs/core_designation",

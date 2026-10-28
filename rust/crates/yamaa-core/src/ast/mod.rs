@@ -558,6 +558,8 @@ pub struct ColumnSubmission {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SubmissionMetadata {
     pub key_sequence: Option<Constant>,
+    /// A historical ItemRef's declared `def:HasNoData` (DEFINE-30).
+    pub has_no_data: Option<bool>,
     pub core: Option<Text>,
     pub mandatory: Option<bool>,
     pub role: Option<Text>,

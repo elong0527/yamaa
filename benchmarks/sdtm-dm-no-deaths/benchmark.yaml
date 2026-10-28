@@ -1,0 +1,7 @@
+lifecycle: draft
+standard: SDTM
+domain: DM
+define:
+  environment: project.yaml
+  standard: sdtm
+  created: '2026-10-28T00:00:00'

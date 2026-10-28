@@ -334,6 +334,10 @@ fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, S
 /// Append one value-list definition per column that declares values, in
 /// dataset and column order.
 fn push_value_lists(metadata: &mut Element, study: &Study) {
+    let modern = matches!(
+        study.section().define_version,
+        ast::project::DefineVersion::V2_1(_)
+    );
     for dataset in study.datasets() {
         for column in dataset.columns() {
             if column.values().is_empty() {
@@ -365,6 +369,11 @@ fn push_value_lists(metadata: &mut Element, study: &Study) {
                     .optional(
                         "MethodOID",
                         meta.method.as_ref().map(|_| format!("MT.{identity}")),
+                    )
+                    // No row the entry selects holds a value (SUB-28).
+                    .optional(
+                        "def:HasNoData",
+                        (modern && value.column().has_no_data()).then_some("Yes"),
                     );
                 reference.push(
                     Element::new("def:WhereClauseRef", value.path())
@@ -492,6 +501,11 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                     .optional(
                         "MethodOID",
                         meta.method.as_ref().map(|_| format!("MT.{id}.{name}")),
+                    )
+                    // No published row holds a value in the column (SUB-28).
+                    .optional(
+                        "def:HasNoData",
+                        (modern && column.has_no_data()).then_some("Yes"),
                     ),
             );
         }
@@ -887,6 +901,20 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
             ));
         }
         for (column, identity) in variants(dataset) {
+            // The measured flag is a 2.1 attribute 2.0 omits; a declared
+            // one is a fact it cannot carry.
+            if column
+                .declaration()
+                .submission
+                .as_ref()
+                .and_then(|metadata| metadata.has_no_data.as_ref())
+                .is_some_and(|declared| declared.value)
+            {
+                return Err(invalid(
+                    &format!("datasets.{identity}.submission.has_no_data"),
+                    "2.0 has no HasNoData declaration",
+                ));
+            }
             for origin in column.origins() {
                 let declared = origin.declaration();
                 let implicit_source = match declared.kind.value.name() {
