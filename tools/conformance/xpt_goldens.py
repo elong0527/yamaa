@@ -713,6 +713,12 @@ GOLDENS.append(
 )
 
 
+# Define-XML release selection changes metadata, not the transport table.
+GOLDENS.append(
+    ("schema-define-2-0", "dm.xpt", "DM", "Demographics", DM_VARIABLES, DM_ROWS)
+)
+
+
 def golden(benchmark, name, label, variables, rows):
     """The bytes of one golden, after checking each authored width."""
     for index, variable in enumerate(variables):

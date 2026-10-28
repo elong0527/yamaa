@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.0" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="CATH.sdtm.Define-XML_2.0" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0">
+  <Study OID="STDY.CATH">
+    <GlobalVariables>
+      <StudyName>CATH</StudyName>
+      <StudyDescription>Example study submitting demographics in SAS transport</StudyDescription>
+      <ProtocolName>CATH-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CATH.sdtm" Name="CATH sdtm metadata" def:DefineVersion="2.0.0" def:StandardName="SDTM-IG" def:StandardVersion="3.4">
+      <def:AnnotatedCRF>
+        <def:DocumentRef leafID="LF.acrf"/>
+      </def:AnnotatedCRF>
+      <ItemGroupDef OID="IG.DM" Name="DM" Domain="DM" Purpose="Tabulation" SASDatasetName="DM" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:Class="SPECIAL PURPOSE" def:ArchiveLocationID="LF.DM">
+        <Description>
+          <TranslatedText xml:lang="en">Demographics</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.SUBJID" OrderNumber="4" Mandatory="Yes" Role="Topic"/>
+        <ItemRef ItemOID="IT.DM.RFSTDTC" OrderNumber="5" Mandatory="No" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.SITEID" OrderNumber="6" Mandatory="Yes" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.AGE" OrderNumber="7" Mandatory="No" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.AGEU" OrderNumber="8" Mandatory="No" Role="Variable Qualifier"/>
+        <ItemRef ItemOID="IT.DM.SEX" OrderNumber="9" Mandatory="Yes" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.RACE" OrderNumber="10" Mandatory="No" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.COUNTRY" OrderNumber="11" Mandatory="Yes" Role="Record Qualifier"/>
+        <def:leaf ID="LF.DM" xlink:href="dm.xpt">
+          <def:title>dm.xpt</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="16" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.SUBJID" Name="SUBJID" DataType="text" Length="4" SASFieldName="SUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.RFSTDTC" Name="RFSTDTC" DataType="date" SASFieldName="RFSTDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.SITEID" Name="SITEID" DataType="text" Length="6" SASFieldName="SITEID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.AGE" Name="AGE" DataType="integer" Length="3" SASFieldName="AGE">
+        <Description>
+          <TranslatedText xml:lang="en">Age</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.AGEU" Name="AGEU" DataType="text" Length="5" SASFieldName="AGEU">
+        <Description>
+          <TranslatedText xml:lang="en">Age Units</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.SEX" Name="SEX" DataType="text" Length="1" SASFieldName="SEX">
+        <Description>
+          <TranslatedText xml:lang="en">Sex</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.RACE" Name="RACE" DataType="text" Length="25" SASFieldName="RACE">
+        <Description>
+          <TranslatedText xml:lang="en">Race</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.COUNTRY" Name="COUNTRY" DataType="text" Length="3" SASFieldName="COUNTRY">
+        <Description>
+          <TranslatedText xml:lang="en">Country</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <def:leaf ID="LF.acrf" xlink:href="acrf.pdf">
+        <def:title>Annotated Case Report Form</def:title>
+      </def:leaf>
+    </MetaDataVersion>
+  </Study>
+</ODM>
