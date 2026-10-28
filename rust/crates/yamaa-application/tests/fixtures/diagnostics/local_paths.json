@@ -1,12 +1,12 @@
 {
-  "about": "Local paths on the file route (FILE, LAYER): an inherited output that an entry's output replaces whole, a written input path refused in its written form before any source profile is read, and a URI source refused where its layer is read. Moved from file_resources.rs's local_paths module, whose remaining tests prove the resources' captures and resolved locations, which no operation reports. The written-path cases compared each issue's phase, condition, rule, spec paths and context; the inherited-output cases compared the count, the condition and the spec paths, whose order is the output class's field order in the schema (path, then columns; SCHEMA-13). A parent spelled with an empty segment, a trailing separator, a network share's root or a backslash is refused as resource_path_not_normalized at parent (FILE-5, LAYER-2), naming the path as written and the layer that writes it, by check and build alike, before any parent is resolved. Moved from the local file half of host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route, which compared the one issue's phase, condition, spec paths and context on each route; that test keeps the local resolve and prepare routes and every route through a caller's resolver.",
+  "about": "Local paths on the file route (FILE, LAYER): an inherited output that an entry's output patches field by field, a written input path refused in its written form before any source profile is read, and a URI source refused where its layer is read. Moved from file_resources.rs's local_paths module, whose remaining tests prove the resources' captures and resolved locations, which no operation reports. The written-path cases compared each issue's phase, condition, rule, spec paths and context; the inherited-output cases compared the count, the condition and the spec paths of the fields an entry's output left out when it replaced the inherited one whole. An output now composes field by field (LAYER-5, LAYER-6), so an entry that writes only `relative_to` or only `path` keeps the inherited `path`, `columns` and `report`, and the composed output carries every required field (LAYER-7), so the static check reports nothing. A parent spelled with an empty segment, a trailing separator, a network share's root or a backslash is refused as resource_path_not_normalized at parent (FILE-5, LAYER-2), naming the path as written and the layer that writes it, by check and build alike, before any parent is resolved. Moved from the local file half of host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route, which compared the one issue's phase, condition, spec paths and context on each route; that test keeps the local resolve and prepare routes and every route through a caller's resolver.",
   "documents": {
     "base_output": "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n",
     "written_path": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: SOURCE}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n"
   },
   "cases": [
     {
-      "case": "an_output_base_alone_cannot_patch_an_inherited_output",
+      "case": "an_output_base_alone_patches_an_inherited_output",
       "operation": "check",
       "input": {
         "files": {
@@ -15,14 +15,10 @@
         },
         "specification": "entry/spec.yaml"
       },
-      "compares": ["condition", "spec_paths"],
-      "issues": [
-        {"condition": "missing_required_field", "spec_paths": ["output.path"]},
-        {"condition": "missing_required_field", "spec_paths": ["output.columns"]}
-      ]
+      "issues": []
     },
     {
-      "case": "an_output_path_alone_cannot_patch_an_inherited_output",
+      "case": "an_output_path_alone_patches_an_inherited_output",
       "operation": "check",
       "input": {
         "files": {
@@ -31,10 +27,7 @@
         },
         "specification": "entry/spec.yaml"
       },
-      "compares": ["condition", "spec_paths"],
-      "issues": [
-        {"condition": "missing_required_field", "spec_paths": ["output.columns"]}
-      ]
+      "issues": []
     },
     {
       "case": "a_bare_input_path_with_a_backslash_is_refused_before_its_source_profile",

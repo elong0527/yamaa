@@ -337,20 +337,22 @@ impl Run<'_> {
 }
 impl SchemaStructure {
     /// Compose one member of a keyed root collection, a `list[T]` or `dict[K, T]`
-    /// field, by its member type `T` (LAYER-5): a class merges field by field
-    /// and a mapping key by key, a registry value composes with the same
-    /// keyword and otherwise replaces, and scalars and lists replace (LAYER-6).
-    /// YAML null composes as a value. Input 0 denotes the accumulated value and
-    /// input 1 the later contribution. Defaults belong to the surrounding pass.
+    /// field, by its member type `T`, or the value of a root block, a field
+    /// whose type is one class, by that class (LAYER-5): a class merges field
+    /// by field and a mapping key by key, a registry value composes with the
+    /// same keyword and otherwise replaces, and scalars and lists replace
+    /// (LAYER-6). YAML null composes as a value. Input 0 denotes the
+    /// accumulated value and input 1 the later contribution. Defaults belong
+    /// to the surrounding pass.
     pub(super) fn compose_member_at(
         &self,
-        collection: usize,
+        field: usize,
         accumulated: Option<(&Document, usize)>,
         incoming: (&Document, usize),
     ) -> Result<ComposedValue, NormalizationError> {
         let located = self
             .descriptors()
-            .get(collection)
+            .get(field)
             .ok_or(ValidationError::InvalidDescriptor)?;
         let [expression] = located.descriptor.members() else {
             return Err(ValidationError::InvalidDescriptor.into());
@@ -358,7 +360,7 @@ impl SchemaStructure {
         let member = match &expression.nodes()[expression.root()] {
             TypeNode::List(inner) => *inner,
             TypeNode::Dictionary { value, .. } => *value,
-            TypeNode::Name(_) => return Err(ValidationError::InvalidDescriptor.into()),
+            TypeNode::Name(_) => expression.root(),
         };
         if accumulated.is_some_and(|(document, node)| node >= document.nodes().len())
             || incoming.1 >= incoming.0.nodes().len()
