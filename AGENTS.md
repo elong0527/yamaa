@@ -52,13 +52,14 @@ The whole of this guide is the contract; this list is the order of work.
   leave the files intact.
 - **Breaking a user-facing interface is a decision.** Until 1.0.0, a change
   that breaks the specification language, the Python or R API, saved outputs
-  or diagnostic identity follows a decision recorded on #3030 or an owner
-  decision on its own issue. It gets a one-line entry in the next release's
-  notes under `docs/releases/` and no step-by-step migration text. Internal
-  interfaces, including the unpublished Rust crates, may change freely,
-  except the `yamaa` facade's public items, frozen from 1.0.0. Remove
-  obsolete interfaces and callers together instead of adding compatibility
-  aliases. From 1.0.0, the stability contract in `docs/release.md` applies.
+  or diagnostic identity follows a D-decision ([Decisions](#decisions)) or
+  an owner decision on its own issue. It gets a one-line entry in the notes
+  of the release in development, `docs/releases/0.7.0.md`, and no
+  step-by-step migration text. Internal interfaces, including the
+  unpublished Rust crates, may change freely, except the `yamaa` facade's
+  public items, frozen from 1.0.0. Remove obsolete interfaces and callers
+  together instead of adding compatibility aliases. From 1.0.0, the
+  stability contract in `docs/release.md` applies.
 - **Complete review before merging.** The owner's maintenance session
   reviews and merges every pull request (D175 on #3030), only once CI is
   green on the exact head (D176) and one completed review of that head is
@@ -149,11 +150,13 @@ homes and their readers, and how to measure the ceilings.
   too; "does not close #N" once closed the planning issue. Write a
   closing keyword only for an issue the pull request completes, and name
   every other issue without one.
-- Branch from and target `main`; `release/1.0.0` is cut only to qualify
-  release candidates. The planning issue is #3960 for 1.0.0, which
-  follows the feedback on 0.6.0. The closed planning issues stay the
-  record and keep their citations: #3030 holds the design and the
-  decisions D1 to D230, and #3673 holds D231 to D291.
+- Branch from and target `main`; a `release/X.Y.Z` branch is cut only to
+  qualify release candidates. The planning issue is #4064 for 0.7.0, the
+  release between 0.6.x and 1.0.0; 1.0.0 follows 0.7.0 and the feedback
+  on it (D294). The closed planning issues stay the record and keep their
+  citations: #3030 holds the design and the decisions D1 to D230, #3673
+  holds D231 to D291, and #3960, the 1.0.0 plan that 0.7.0 now precedes,
+  holds four entries that #4064 numbers D292, D293, D295 and D296.
 - **Open ready for review**, not as a draft, once it builds and its nearest
   tests pass (D148). The one exception is a pull request that cannot merge
   until another one merges: it stays a draft, with `[hold: after #N]` at
@@ -172,9 +175,9 @@ homes and their readers, and how to measure the ceilings.
 
 ## Parallel sessions
 
-Several agent sessions work the 1.0 plan at once, each on its own batch
-of issues. These rules keep them from colliding; `CONTRIBUTING.md` owns the
-merge steps and the review gate.
+Several agent sessions work the 0.7.0 plan (#4064) at once, each on its own
+batch of issues. These rules keep them from colliding; `CONTRIBUTING.md` owns
+the merge steps and the review gate.
 
 - **Claim by assignment.** Assign yourself to each issue before creating a
   branch, or link the pull request on the issue when you cannot assign.
@@ -216,23 +219,23 @@ merge steps and the review gate.
 ## Decisions
 
 The owner's decisions are D-numbers: D1 to D230 on #3030, D231 to D291 on
-#3673, and D292 onward on the planning issue #3960, which continues the
-sequence. Three kinds of choice reach it; everything else is recorded where
-the work is.
+#3673, and D292 onward on the planning issue #4064, which holds D292 to D298
+and continues the sequence from D299. Three kinds of choice reach it;
+everything else is recorded where the work is.
 
 - **Ask the owner** before building a new user-facing concept, reversing a
   D-decision, or changing a golden file no D-decision covers.
-- **Record on #3960, as the next D-number**, a routine decision that
+- **Record on #4064, as the next D-number**, a routine decision that
   changes what a user sees: a condition, context key, spelling, saved byte,
   printed text or host surface settled under the owner's standing
   instruction. One short paragraph: what, why, and the pull request. A
-  session that cannot reach the counter writes "D-next" and the 1.0
-  session numbers it.
+  session that cannot reach the counter writes "D-next" and the
+  maintenance session numbers it.
 - **Record in the pull request body** everything else: how an internal
   behaviour was built, which option an issue's question took, what a
-  refactor left out. The pull request is the record; a comment on #3960 is
-  not needed and the log stays readable. The 1.0 session folds a decision
-  into the log only when a later issue cites it.
+  refactor left out. The pull request is the record; a comment on #4064 is
+  not needed and the log stays readable. The maintenance session folds a
+  decision into the log only when a later issue cites it.
 
 ## Before a push
 
@@ -348,9 +351,9 @@ the patterns and helpers of each language; these are the rules.
 
 ## Pointers
 
-- Subagent definitions for the 1.0 orchestration (an engineer, a release
-  engineer, a writer and a reviewer, each deferring to this guide):
-  `.claude/agents/`
+- Subagent definitions for the orchestration of the current plan (an
+  engineer, a release engineer, a writer and a reviewer, each deferring to
+  this guide): `.claude/agents/`
 - Language contracts and terminology: `rules/README.md`
 - Schemas, grammars, and conformance fixtures: `yaml/README.md`
 - Benchmark authoring: `benchmarks/AGENTS.md`
