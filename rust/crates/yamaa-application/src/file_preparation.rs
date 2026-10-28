@@ -231,6 +231,7 @@ impl FileSpecification {
                     written,
                     host: self.run.environment().host(),
                     root,
+                    parents: captured.parents(),
                     project,
                     lock: captured.lock(),
                     captures: captured.captures(),

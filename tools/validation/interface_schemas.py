@@ -190,6 +190,13 @@ def _alternatives(node, where, inner=False):
             *(_alternatives(member, where, True) for member in node["anyOf"])
         )
     names = node.get("type")
+    if names is None and {"if", "then", "else"} <= node.keys():
+        # A conditional wrapper admits types from either branch. Its
+        # predicate and both branches remain conservative constraints in
+        # `other`, so changing any of them is still reported as breaking.
+        return _alternatives(node["then"], where, True) | _alternatives(
+            node["else"], where, True
+        )
     names = [names] if isinstance(names, str) else names
     if not (
         isinstance(names, list)

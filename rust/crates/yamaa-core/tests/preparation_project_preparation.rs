@@ -101,7 +101,7 @@ mod preparation {
         #[derive(Debug)]
         struct Opaque(Box<str>);
         type Outcome = Result<
-            PreparedEnvironment<MetadataDocument>,
+            PreparedEnvironment<MetadataDocument, crate::support::ports::Never>,
             Failure<Opaque, MetadataDocument, Opaque>,
         >;
         /// A 1.0 project's preparation, scripted capture by capture.

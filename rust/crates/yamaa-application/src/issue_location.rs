@@ -444,6 +444,12 @@ impl Locator {
     fn environment(&mut self, files: ProjectFiles<'_>) -> Option<usize> {
         use crate::project_source::Origin;
         let project = files.root.map(|root| self.captured(root));
+        // Parent findings name the declaring layer as their source (FILE-10).
+        // Register its held decoding so a parent-of-parent refusal locates there.
+        for parent in files.parents {
+            let layer = self.layer(&parent.source().identity, parent.raw());
+            self.root(&parent.source().identity, vec![layer], None, Vec::new());
+        }
         if let Some(lock) = files.lock {
             self.file(lock);
         }
@@ -776,6 +782,7 @@ pub(crate) fn project<'a>(
 #[derive(Clone, Copy, Default)]
 pub(crate) struct ProjectFiles<'a> {
     pub(crate) root: Option<&'a CapturedDocument>,
+    pub(crate) parents: &'a [crate::specification_source::CapturedParent],
     pub(crate) captures: &'a [crate::project_source::DocumentCapture],
     pub(crate) lock: Option<&'a str>,
 }
@@ -784,6 +791,7 @@ impl<'a> From<&'a crate::project_source::CapturedEnvironment> for ProjectFiles<'
     fn from(captured: &'a crate::project_source::CapturedEnvironment) -> Self {
         Self {
             root: captured.root_optional(),
+            parents: captured.parents(),
             captures: captured.captures(),
             lock: captured.lock().map(|lock| lock.source.identity.as_str()),
         }
@@ -794,6 +802,7 @@ impl<'a> From<&'a crate::project_source::OwnedEnvironment> for ProjectFiles<'a> 
     fn from(owned: &'a crate::project_source::OwnedEnvironment) -> Self {
         Self {
             root: owned.root_optional(),
+            parents: owned.parents(),
             captures: owned.captures(),
             lock: owned.lock().map(|lock| lock.source.identity.as_str()),
         }

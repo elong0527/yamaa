@@ -106,12 +106,14 @@ pub struct SourceOrigins {
     pub codelists: Vec<usize>,
 }
 #[derive(Debug)]
-pub struct PreparedEnvironment<D> {
+pub struct PreparedEnvironment<D, R> {
     /// The project file lowered.
     pub project: ast::Project,
     pub origins: SourceOrigins,
     /// The caller-supplied project file.
     pub root: D,
+    /// The project's parent chain, from the entry up, as captured and decoded.
+    pub parents: Vec<crate::inheritance_capture::CapturedParent<R>>,
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -161,7 +163,7 @@ pub enum Failure<E, D, X> {
 }
 
 /// Preparation moves both admitted metadata and original boundary evidence.
-pub type PreparationResult<E, D, X> = Result<PreparedEnvironment<D>, Failure<E, D, X>>;
+pub type PreparationResult<E, D, X, R> = Result<PreparedEnvironment<D, R>, Failure<E, D, X>>;
 
 /// Resolve and capture one file the project names, under the shared size
 /// cap. An interrupt aborts immediately; ordinary independent failures
@@ -271,7 +273,7 @@ pub fn prepare<P: Resolver, D: Decoder>(
     source: Source,
     host: Option<Language>,
     port: &mut P,
-) -> PreparationResult<P::Error, D::Admitted, D::DocumentError> {
+) -> PreparationResult<P::Error, D::Admitted, D::DocumentError, D::Raw> {
     Limits::spec_bytes(source.bytes.len()).map_err(Failure::RootLimit)?;
     let root = decoder
         .admitted(source, DecodeTarget::Project)
@@ -296,7 +298,7 @@ pub fn prepare<P: Resolver, D: Decoder>(
                 port,
                 decoder,
             ) {
-                Ok(composed) => Some(composed.document),
+                Ok(composed) => Some(composed),
                 Err(failure) => {
                     return Err(Failure::Layers {
                         root: Box::new(root),
@@ -309,6 +311,7 @@ pub fn prepare<P: Resolver, D: Decoder>(
     };
     let document = composed
         .as_ref()
+        .map(|composed| &composed.document)
         .unwrap_or_else(|| D::admitted_document(&root));
     let project = match lower::project(document, None) {
         Ok(project) => project,
@@ -319,6 +322,9 @@ pub fn prepare<P: Resolver, D: Decoder>(
             })
         }
     };
+    let parents = composed
+        .map(|composed| composed.parents)
+        .unwrap_or_default();
     let mut collected = Collected {
         failures: Vec::new(),
         origins: SourceOrigins::default(),
@@ -367,6 +373,7 @@ pub fn prepare<P: Resolver, D: Decoder>(
             project,
             origins,
             root,
+            parents,
             captures,
             lock,
             environment,

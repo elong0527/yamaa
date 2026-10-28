@@ -545,6 +545,44 @@ class Breaks(Temporary):
             {SCHEMA: [("$ref", "allOf changed from none to `[false]`", True)]},
         )
 
+    def test_conditional_wrappers_keep_the_predicate_and_both_branches(self):
+        # Seam: schema inventory comparisons against an authored release,
+        # including a wrapper with no direct type or reference.
+        document = copy.deepcopy(DOCUMENT)
+        wrapper = {
+            "if": {"required": ["parent"]},
+            "then": {"$ref": "#/$defs/identifier"},
+            "else": {"$ref": "#/$defs/thing_class"},
+        }
+        document["$defs"]["thing_file"] = wrapper
+        document["$ref"] = "#/$defs/thing_file"
+        repo, current, definitions, _ = self.repository(document)
+        self.assertEqual(repo.changes(), {})
+        for keyword, replacement, what in (
+            (
+                "if",
+                {"required": ["clear"]},
+                'if changed from `{"required": ["parent"]}` '
+                'to `{"required": ["clear"]}`',
+            ),
+            (
+                "then",
+                {"anyOf": [{"$ref": "#/$defs/identifier"}]},
+                'then changed from `{"$ref": "#/$defs/identifier"}` '
+                'to `{"anyOf": [{"$ref": "#/$defs/identifier"}]}`',
+            ),
+            (
+                "else",
+                {"anyOf": [{"$ref": "#/$defs/thing_class"}]},
+                'else changed from `{"$ref": "#/$defs/thing_class"}` '
+                'to `{"anyOf": [{"$ref": "#/$defs/thing_class"}]}`',
+            ),
+        ):
+            with self.subTest(keyword=keyword):
+                definitions["thing_file"] = {**wrapper, keyword: replacement}
+                repo.save(current)
+                self.assertEqual(repo.changes(), {SCHEMA: [("thing_file", what, True)]})
+
     def test_schema_valued_extra_property_rules_are_compared(self):
         document = copy.deepcopy(DOCUMENT)
         document["$defs"]["thing_class"]["additionalProperties"] = {"type": "string"}
