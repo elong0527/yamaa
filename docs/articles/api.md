@@ -389,7 +389,7 @@ package's Suggests, so install it if you have not; it reads an integer beyond
 
     ```r
     issues <- yamaa_spec("sdtm/dm.yaml")$check()$issues
-    contexts <- lapply(issues$context, jsonlite::fromJSON)  # a named list per issue
+    contexts <- lapply(issues$context, jsonlite::fromJSON, bigint_as_char = TRUE)
     ```
 
 === "Python"

@@ -94,7 +94,8 @@ the files written before the refusal.
 Each row of an \code{issues} data frame is one problem, and its
 \code{context} column holds the problem's facts as canonical JSON text, one
 object per row. \code{jsonlite::fromJSON()} parses it into a named list, so
-\code{lapply(issues$context, jsonlite::fromJSON)} gives one list per issue;
+\code{lapply(issues$context, jsonlite::fromJSON, bigint_as_char = TRUE)} gives one
+list per issue;
 jsonlite is a suggested package, which you install yourself. The column is
 text so that the package needs no JSON library, and because an R double
 cannot hold every integer that a context may hold.
