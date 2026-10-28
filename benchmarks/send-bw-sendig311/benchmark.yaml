@@ -1,0 +1,7 @@
+lifecycle: draft
+standard: SEND
+domain: BW
+define:
+  environment: project.yaml
+  standard: send
+  created: '2026-09-11T00:00:00'

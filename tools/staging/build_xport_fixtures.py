@@ -9,6 +9,8 @@ as SAS writes it, with labels, display formats and header times, encoded from
 the literal table below by the repository's transport oracle
 (`tools/conformance/xpt_oracle.py`). The benchmark's expected output is
 authored by hand from the same table and the rules, never read from a reader.
+The input of `negative-xpt-character-as-int` (`negative_input`) is encoded
+the same way, and its expected error is authored from the rules.
 """
 
 import datetime
@@ -26,6 +28,7 @@ from tools.paths import ROOT
 
 FIXTURES = ROOT / "rust/crates/yamaa-adapters/tests/fixtures/sas"
 BENCHMARK_INPUT = ROOT / "benchmarks/schema-source-xpt/input/adsl_raw.xpt"
+NEGATIVE_INPUT = ROOT / "benchmarks/negative-xpt-character-as-int/input/ae_raw.xpt"
 
 
 def record(value):
@@ -157,6 +160,34 @@ def benchmark_input():
     )
 
 
+# negative-xpt-character-as-int's input: reported adverse events. AETERM, the
+# reported term, is character storage, and AESEQ numeric storage; the
+# benchmark's specification declares both `int`, which SAS-3 admits only for
+# AESEQ.
+NEGATIVE_VARIABLES = [
+    Variable("STUDYID", "Study Identifier", True, width=8),
+    Variable("USUBJID", "Unique Subject Identifier", True, width=12),
+    Variable("AESEQ", "Sequence Number", False, format=Format("", 3)),
+    Variable("AETERM", "Reported Term for the Adverse Event", True, width=40),
+]
+NEGATIVE_ROWS = [
+    ["PILOT7", "P7-741", 1, "HEADACHE"],
+    ["PILOT7", "P7-741", 2, "NAUSEA"],
+    ["PILOT7", "P7-742", 1, "DIZZINESS"],
+]
+
+
+def negative_input():
+    """The bytes of negative-xpt-character-as-int's input, from the table above."""
+    return encode(
+        "AE_RAW",
+        "Adverse Events Raw Data",
+        BENCHMARK_CREATED,
+        NEGATIVE_VARIABLES,
+        NEGATIVE_ROWS,
+    )
+
+
 if __name__ == "__main__":
     columns = [
         ("ID", False, 8),
@@ -222,3 +253,5 @@ if __name__ == "__main__":
         )
     BENCHMARK_INPUT.parent.mkdir(parents=True, exist_ok=True)
     BENCHMARK_INPUT.write_bytes(benchmark_input())
+    NEGATIVE_INPUT.parent.mkdir(parents=True, exist_ok=True)
+    NEGATIVE_INPUT.write_bytes(negative_input())
