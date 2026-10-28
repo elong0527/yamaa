@@ -1064,6 +1064,7 @@ def _held_out_case(
     benchmark_name: str = "adam-adsl-age-group",
     language: str = "python",
     challenge_required: bool = False,
+    submitted_script: str | None = None,
 ) -> dict:
     """Grade, with the verifier's reruns, a submission of
     `benchmark_name` whose script is `agent` ("reference" or "hardcode")
@@ -1087,7 +1088,8 @@ def _held_out_case(
         """Embed the temporary app path in a script without native backslashes."""
         return text.replace("/app/", f"{app.as_posix()}/")
 
-    (app / "output" / script).write_text(at_app(texts[agent]))
+    submitted = texts[agent] if submitted_script is None else submitted_script
+    (app / "output" / script).write_text(at_app(submitted))
     reference_path = None
     if reference:
         reference_path = tmp_path / "reference" / script

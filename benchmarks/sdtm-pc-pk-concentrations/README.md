@@ -15,7 +15,9 @@ plasma concentration, units and actual collection date and time.
 - `PCTESTCD` and `PCTEST` identify the measured drug, `ZX201` and `ZX-201`.
 - `PCORRES` and `PCSTRESC` retain the reported result as text, including
   `BLQ` for below the limit of quantification.
-- `PCORRESU` and `PCSTRESU` retain the reported `ng/mL` units.
+- `PCORRESU` and `PCSTRESU` retain the supplied unit independently of the
+  result. They are empty when no unit is supplied; no unit conversion is
+  applied.
 - `PCSTRESN` holds numeric results and is empty for `BLQ`; no limit-based
   numeric replacement is made.
 - `PCSPEC` is `PLASMA`, and `PCDTC` retains the actual collection time.

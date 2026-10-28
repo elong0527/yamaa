@@ -18,7 +18,7 @@ live on Harbor Hub or in the chosen output directory.
 | `Dockerfile`, `install-r-packages.R`, `images.py` | language images and their runtime checks |
 | `build.py` | tasks, dataset pages, and model job configurations |
 | `grade.py`, `sandbox.py` | grading and isolated program reruns |
-| `measurements.json` | authored measurement columns used by changed-input checks |
+| `measurements.json` | authored scaling columns and text substitutions for changed-input checks |
 | `leaderboards/config.yaml` | shared Hub schemas, columns, ranking and minimum attempts |
 | `leaderboards/task-populations.json` | frozen benchmark populations for versioned boards |
 | `leaderboard.py`, `hub.py`, `run.py` | result aggregation and private Hub publication |
