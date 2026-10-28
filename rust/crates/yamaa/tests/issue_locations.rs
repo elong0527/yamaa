@@ -340,7 +340,11 @@ fn cleared_fields_do_not_locate_in_overridden_parent_values() {
         "  columns: [ID]",
     ]);
     write(&study, "child.yaml", &text);
-    assert!(check("child.yaml").is_empty());
+    let issues = check("child.yaml");
+    assert!(
+        issues.is_empty(),
+        "a child output keeps the inherited report: {issues:?}"
+    );
     for (cleared, code, path) in [
         ("output.report", "missing_report", "output.report"),
         (
@@ -372,11 +376,16 @@ fn cleared_fields_do_not_locate_in_overridden_parent_values() {
     ]);
     write(&study, "grandchild.yaml", &text);
     let issues = check("grandchild.yaml");
-    assert_eq!(issues[0].code.as_str(), "missing_report", "{issues:?}");
-    assert_eq!(issues[0].spec_path, ["output.report"]);
+    let first = issues
+        .first()
+        .map(|issue| (issue.code.as_str(), issue.spec_path.clone()));
     assert_eq!(
-        location(&issues),
-        Some((study.file("cleared.yaml"), offset + 2, 9))
+        (first, location(&issues)),
+        (
+            Some(("missing_report", vec!["output.report".to_owned()])),
+            Some((study.file("cleared.yaml"), offset + 2, 9))
+        ),
+        "a report cleared below a later output: {issues:?}"
     );
 }
 
