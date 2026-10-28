@@ -811,7 +811,7 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-application
 |---|---|---|
 | a bare read: a `source`, an `odm` read or an `ONLY` pivot, directly or through a plain lookup | every type | none |
 | a literal | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
-| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_substr`, `str_replace`, `str_extract`, `str_template`, `to_date`, `date_text`, `dtc` or `duration_text`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
+| a recode: `mapping`, `decode`, `case`, `first_available`, `str_case`, `str_pad`, `str_substr`, `str_replace`, `str_extract`, `str_template`, `to_date`, `date_text`, `dtc` or `duration_text`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
 | anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
 
 An `ONLY` pivot is an `aggregate` whose `expr` is exactly `ONLY(<variable>)`,

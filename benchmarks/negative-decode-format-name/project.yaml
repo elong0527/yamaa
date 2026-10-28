@@ -1,0 +1,16 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - codelists:
+      - id: PARAMCD
+        name: Parameter Code
+        # The format a reader of the submission applies to the codes; the
+        # specification names the codelist by its id, never by this name.
+        format_name: $PARAMCD
+        items:
+          - {value: ALT, decode: Alanine Aminotransferase (U/L)}
+          - {value: AST, decode: Aspartate Aminotransferase (U/L)}
+
+adam:
+  specs:
+  - spec.yaml

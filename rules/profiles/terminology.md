@@ -134,7 +134,9 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs
 
 A list whose values are already the words a reader needs has no decode to add.
 Lists with and without `decode` are different kinds of list rather than a list
-with gaps.
+with gaps. A `decode` ([EXPR-15](../expressions.md#expr-15)) returns an item's
+`decode`, so a codelist it names that declares none fails it as
+`codelist_without_decodes`.
 
 <a id="ct-6"></a>
 
@@ -182,23 +184,28 @@ Fails: `project_binding_missing`.
 Evidence: `negative-codelist-without-project`, `negative-inventory-vocabulary-without-project`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa/tests/project_binding.rs::with_its_project_a_binding_names_what_the_project_declares`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::each_binding_of_a_specification_prepared_without_its_project_is_missing`.
 
 The bindings are those of the resolved specification: the `codelist` of a
-column or of a value-level entry ([SUB-12](submission.md#sub-12)), an
-`inventory_vocabulary: true` on a column or an entry ([CT-11](#ct-11)), where
-an entry's `false` binds nothing, and each `function` call a derivation
-evaluates ([FUNC-1](functions.md#func-1)). A check and a run fail alike, and
-the run reads no input.
+column or of a value-level entry ([SUB-12](submission.md#sub-12)), the
+`codelist` of each `decode` a derivation evaluates
+([EXPR-15](../expressions.md#expr-15)), an `inventory_vocabulary: true` on a
+column or an entry ([CT-11](#ct-11)), where an entry's `false` binds nothing,
+and each `function` call a derivation evaluates
+([FUNC-1](functions.md#func-1)). A check and a run fail alike, and the run
+reads no input.
 
 Each binding is reported once, at the field that binds it, with `binding`
-naming that field: a codelist at its `codelist`, with the `column` and the
-`codelist`; an inventory vocabulary at its `inventory_vocabulary`, with the
-`column`; a call at its `name`, with the `function`. They are reported with
-the specification's other validation findings: the calls where
+naming that field: a column's or an entry's codelist at its `codelist`, with
+the `column` and the `codelist`; a `decode`'s codelist at its `codelist`, with
+the `codelist`; an inventory vocabulary at its `inventory_vocabulary`, with
+the `column`; a call at its `name`, with the `function`. They are reported
+with the specification's other validation findings: the calls where
 [FUNC-4](functions.md#func-4) reports an undeclared function, then each
 column's codelists and inventory vocabularies, in column order, the column's
-own before its entries'.
+own before its entries', then each `decode`'s codelist, in the order the
+resolved specification writes them.
 
 Nothing that needs the bound item is checked without it: no codelist's items,
 data type or restatement ([CT-7](#ct-7), [CT-8](#ct-8), [CT-9](#ct-9)), no
+`decode`'s decodes or source type ([EXPR-15](../expressions.md#expr-15)), no
 where value against its where column's codelists
 ([SUB-12](submission.md#sub-12)), no dataset inventory ([CT-11](#ct-11)) and
 no call against its function's signature ([FUNC-5](functions.md#func-5)).

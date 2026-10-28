@@ -1,0 +1,5 @@
+lifecycle: draft
+standard: ADaM
+domain: ADLB
+covers:
+- decode
