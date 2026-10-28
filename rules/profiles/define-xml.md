@@ -781,8 +781,9 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
   non-standard variable belongs in under `Submission`
 - A comment on a standard, codelist, or metadata version: a shared comment
   identifier space
-- `def:HasNoData` on an `ItemRef`: a column with no data. Only a dataset's
-  `ItemGroupDef` carries it, from `has_no_data` ([SUB-4](submission.md#sub-4))
+- `def:HasNoData` on an `ItemRef`: a column with no data. Only an output
+  dataset's `ItemGroupDef` carries it, from `has_no_data`
+  ([SUB-4](submission.md#sub-4))
 - A value-level definition selected by several where clauses, joined by OR,
   or by a range comparison: each entry has one `def:WhereClauseRef` and one
   `def:WhereClauseDef`, whose `RangeCheck` elements compare by `EQ`, `IN`,
@@ -795,8 +796,8 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
 - A pooled method or comment, one definition several elements reference: a
   method or comment is declared on the element it describes, and no other
   element can cite it. Each column or value-level entry with a method has its
-  own `MethodDef`, and each dataset, column or entry with a comment its own
-  `def:CommentDef`, even when their declarations are identical
+  own `MethodDef`, and each output dataset, column or entry with a comment
+  its own `def:CommentDef`, even when their declarations are identical
 - `RoleCodeListOID` on an `ItemRef`: a codelist of roles. An `ItemRef`
   carries a `Role` from the closed role list ([SUB-9](submission.md#sub-9))
   and no codelist for it
