@@ -160,6 +160,9 @@ EXPECTED = {
     "new.spec.submission.non_standard": [
         Field("submission_dataset_class", "non_standard", "bool", default=False)
     ],
+    "new.spec.submission.has_no_data": [
+        Field("submission_metadata_fields", "has_no_data", "bool")
+    ],
     # D4: the header replaces schema_version in every file type.
     "spec.root_class.schema_version": [Absent("root_class", "schema_version")],
     "project.project_class.schema_version": [Absent("project_class", "schema_version")],
@@ -1146,11 +1149,6 @@ RESERVED = {
         "spec",
         [("submission_dataset_class", "supplemental")],
         lambda d: d["submission"].update(supplemental={"dataset": "SUPPDM"}),
-    ),
-    ("submission: {has_no_data: true}", "a column"): (
-        "spec",
-        [("submission_column_class", "has_no_data")],
-        lambda d: d["columns"][0]["submission"].update(has_no_data=True),
     ),
     ("pages: {type, first, last}", "a document reference"): (
         "spec",

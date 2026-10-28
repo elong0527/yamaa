@@ -1037,6 +1037,9 @@ impl<'d> Lower<'d> {
         });
         SubmissionMetadata {
             key_sequence: self.bound(meta, node, "key_sequence"),
+            has_no_data: self
+                .field(node, "has_no_data")
+                .map(|_| self.boolean(node, "has_no_data", false)),
             core: self.text_field(meta, node, "core"),
             mandatory: self
                 .field(node, "mandatory")

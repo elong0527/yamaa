@@ -142,5 +142,9 @@ pub(super) fn column(
         key_sequence,
         values: Vec::new(),
         transport_length: None,
+        has_no_data: metadata
+            .has_no_data
+            .as_ref()
+            .is_some_and(|field| field.value),
     })
 }

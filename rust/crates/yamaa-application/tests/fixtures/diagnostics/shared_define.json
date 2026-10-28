@@ -1438,6 +1438,116 @@
       "saved": {}
     },
     {
+      "case": "define_2_0_refuses_a_declared_column_without_data",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      has_no_data: true\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "datasets.D0.VALUE.submission.has_no_data"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "2.0 has no HasNoData declaration"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_value_level_entry_selecting_no_row_has_no_data",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-suppdm-metadata",
+        "edits": {
+          "spec.yaml": [
+            {
+              "from": "        - id: RACEOTH\n",
+              "to": "        - id: RACE3\n          where: {QNAM: [RACE3]}\n          label: Race 3\n          codelist: RACE\n        - id: RACEOTH\n"
+            }
+          ]
+        },
+        "files": {
+          "suppdm.csv": {
+            "file": "benchmarks/sdtm-suppdm-metadata/expected/suppdm.csv"
+          }
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "suppdm.json": {
+          "file": "benchmarks/sdtm-suppdm-metadata/expected/suppdm.json"
+        },
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/def:ValueListDef[@OID='VL.SUPPDM.QVAL']": [
+              "<def:ValueListDef OID=\"VL.SUPPDM.QVAL\">\n        <ItemRef ItemOID=\"IT.SUPPDM.QVAL.RACE\" OrderNumber=\"1\" Mandatory=\"Yes\">\n          <def:WhereClauseRef WhereClauseOID=\"WC.SUPPDM.QVAL.RACE\"/>\n        </ItemRef>\n        <ItemRef ItemOID=\"IT.SUPPDM.QVAL.RACE3\" OrderNumber=\"2\" Mandatory=\"Yes\" def:HasNoData=\"Yes\">\n          <def:WhereClauseRef WhereClauseOID=\"WC.SUPPDM.QVAL.RACE3\"/>\n        </ItemRef>\n        <ItemRef ItemOID=\"IT.SUPPDM.QVAL.RACEOTH\" OrderNumber=\"3\" Mandatory=\"Yes\">\n          <def:WhereClauseRef WhereClauseOID=\"WC.SUPPDM.QVAL.RACEOTH\"/>\n        </ItemRef>\n      </def:ValueListDef>"
+            ],
+            "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.SUPPDM']/ItemRef[@ItemOID='IT.SUPPDM.QVAL']": [
+              "<ItemRef ItemOID=\"IT.SUPPDM.QVAL\" OrderNumber=\"8\" Mandatory=\"Yes\"/>"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "define_2_0_omits_the_measured_no_data_flag",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-no-deaths",
+        "edits": {
+          "project.yaml": [
+            {
+              "from": "  transport: dataset_json\n",
+              "to": "  transport: dataset_json\n  define_version: '2.0.0'\n"
+            }
+          ]
+        },
+        "files": {
+          "dm.csv": {
+            "file": "benchmarks/sdtm-dm-no-deaths/expected/dm.csv"
+          }
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-10-28T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "dm.json": {
+          "select": {
+            "/fileOID": [
+              "\"CATH.sdtm.Define-XML_2.0.DM\""
+            ]
+          }
+        },
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.DM']/ItemRef[@ItemOID='IT.DM.DTHDTC']": [
+              "<ItemRef ItemOID=\"IT.DM.DTHDTC\" OrderNumber=\"5\" Mandatory=\"No\" Role=\"Record Qualifier\"/>"
+            ],
+            "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.DM']/ItemRef[@ItemOID='IT.DM.DTHFL']": [
+              "<ItemRef ItemOID=\"IT.DM.DTHFL\" OrderNumber=\"6\" Mandatory=\"No\" Role=\"Record Qualifier\" MethodOID=\"MT.DM.DTHFL\"/>"
+            ]
+          }
+        }
+      }
+    },
+    {
       "case": "define_2_0_refuses_other_origins_for_sdtm",
       "operation": "define",
       "input": {

@@ -51,6 +51,7 @@ pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
 ];
 pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
     FieldName::KeySequence,
+    FieldName::HasNoData,
     FieldName::Core,
     FieldName::Mandatory,
     FieldName::Role,
@@ -69,6 +70,7 @@ pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
 /// description and every column metadata field except `value_level`.
 pub const VALUE_ENTRY_FIELDS: &[FieldName] = &[
     FieldName::KeySequence,
+    FieldName::HasNoData,
     FieldName::Id,
     FieldName::Where,
     FieldName::Label,
@@ -334,6 +336,9 @@ pub struct Column {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnSubmission {
     pub key_sequence: Option<Field<String>>,
+    /// A historical ItemRef's declared `def:HasNoData`; validated metadata
+    /// measures it from the published rows instead (SUB-28, DEFINE-30).
+    pub has_no_data: Option<Field<bool>>,
     pub origin: Origin,
     pub fields: Vec<Origin>,
     pub core: Option<Field<Core>>,
@@ -382,8 +387,9 @@ impl ColumnSubmission {
     /// Missing entry fields inherit the complete column declaration. Nested
     /// class values replace their counterpart, and an entry without origins of
     /// its own takes the column's whole list (DEFINE-27); occurrence facts stay
-    /// attached. The merged metadata describes one entry, so it carries no
-    /// entries.
+    /// attached. A historical ItemRef's `key_sequence` and `has_no_data` are
+    /// its own and never inherit (DEFINE-30). The merged metadata describes
+    /// one entry, so it carries no entries.
     pub fn inherit(&self, base: &Self) -> Self {
         let mut merged = self.clone();
         macro_rules! inherit {

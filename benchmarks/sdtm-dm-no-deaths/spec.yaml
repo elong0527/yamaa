@@ -1,0 +1,97 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, RFSTDTC, DTHDTC, DTHFL]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 20
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 30
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: RFSTDTC
+    type: date
+    label: Subject Reference Start Date/Time
+    derivation: DM_RAW.RFSTDTC
+    submission:
+      core: Exp
+      role: Record Qualifier
+      origins:
+        - type: Collected
+          source: Investigator
+          documents:
+            - document: acrf
+              pages: {type: PhysicalRef, refs: "1"}
+
+  # Expected variables: the dataset keeps them although no subject died.
+  - name: DTHDTC
+    type: date
+    label: Date/Time of Death
+    derivation: DM_RAW.DTHDAT
+    submission:
+      core: Exp
+      role: Record Qualifier
+      origins:
+        - type: Collected
+          source: Investigator
+          documents:
+            - document: acrf
+              pages: {type: PhysicalRef, refs: "2"}
+
+  - name: DTHFL
+    type: str
+    label: Subject Death Flag
+    derivation:
+      flag: "DTHDTC IS NOT NULL"
+    submission:
+      core: Exp
+      role: Record Qualifier
+      length: 1
+      origins:
+        - type: Derived
+          source: Sponsor
+      method: Y when the subject has a date of death; otherwise empty.
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
