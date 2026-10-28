@@ -53,6 +53,7 @@ mod table_grouping;
 // paths when each file was its own binary.
 #[allow(clippy::module_inception)]
 mod temporal_date_text;
+mod text_value_limit;
 
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`
 /// in the manifest would never run (#3556).

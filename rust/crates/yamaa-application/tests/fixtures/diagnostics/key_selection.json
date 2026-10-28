@@ -259,7 +259,7 @@
         "specification": "spec.yaml"
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"code": "result_projection", "step": "build"}}],
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["intermediates.LOOK.key.K"], "context": {"step": "execute", "code": "execution_limit", "resource": "text_bytes", "limit": 1048576}}],
       "saved": {}
     },
     {

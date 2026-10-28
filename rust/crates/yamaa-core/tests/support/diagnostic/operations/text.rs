@@ -123,7 +123,9 @@ fn str_decimal_apply(input: &Json) -> Vec<Diagnostic> {
     match operation.apply(ValueRef::from(&value)) {
         Ok(_) => Vec::new(),
         Err(DecimalError::Diagnostic(diagnostic)) => vec![diagnostic],
-        Err(DecimalError::Allocation) => panic!("{input:?} writes text the engine holds"),
+        Err(DecimalError::Limit(limit)) => {
+            panic!("{input:?} writes text within the limit, not {limit}")
+        }
     }
 }
 

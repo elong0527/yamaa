@@ -602,8 +602,8 @@ written only beside a reducer that reads it, and beside every reducer that
 needs it, as the field table below pairs them. Any new reduction amends this
 table.
 
-Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`, `invalid_field_type`.
-Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `negative-quantile-out-of-range`, `negative-quantile-unset`, `negative-mean-quantile`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_quantile_above_one_fails_at_the_field_before_any_record`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`.
+Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`, `invalid_field_type`, `engine_rejected`.
+Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `negative-quantile-out-of-range`, `negative-quantile-unset`, `negative-mean-quantile`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_quantile_above_one_fails_at_the_field_before_any_record`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 | Reducer | Result |
 |---|---|
@@ -672,9 +672,12 @@ counts the different non-missing values of `x`: text equal scalar for scalar,
 numbers by exact value, an `int` and a `float` alike
 ([VALUE-19](values.md#value-19)), and dates and datetimes on the day or second
 they name ([VALUE-21](values.md#value-21)). `COUNT(D.*)` counts records and
-takes no `distinct`. A joined text has no length limit of its own: a value too
-long for an output is refused there, as any other text is, by
-[XPT-7](profiles/xpt.md#xpt-7) and [SUB-8](profiles/submission.md#sub-8).
+takes no `distinct`. A joined text is at most the 1 MiB of
+[TEXT-2](text.md#text-2): a longer one refuses the run before it is built, as
+`engine_rejected` with `resource` `text_bytes` and the path of the
+aggregate's `expr`, and a shorter value too long for an output is refused
+there, as any other text is, by [XPT-7](profiles/xpt.md#xpt-7) and
+[SUB-8](profiles/submission.md#sub-8).
 
 ```yaml
 - name: AESEQS

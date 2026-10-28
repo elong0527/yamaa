@@ -32,10 +32,19 @@ adds ASCII spaces to the left until the text has at least `width` characters;
 it does not truncate longer text. A missing source yields missing. A width
 below one fails as `invalid_field_type`.
 
-Fails: `invalid_field_type`.
-Evidence: `negative-str-pad-width`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json`.
+Fails: `invalid_field_type`, `engine_rejected`.
+Evidence: `negative-str-pad-width`, `negative-str-pad-text-limit`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 An unknown source or a failed conversion reports its existing condition.
+
+The padded text is at most 1 MiB, 1,048,576 bytes, the `text_bytes` limit of
+the [fixed resource policy](../docs/release.md#resource-limits). A present
+source whose text and padding would be longer refuses the run before the text
+is built, as `engine_rejected` with `resource` `text_bytes`, the applied
+`limit`, the `actual` length when it is known, and the `str_pad` path; a
+missing source needs no text, whatever the width. `str_decimal`,
+`str_template`, `str_replace` and `STR_JOIN` hold the text they build to the
+same limit.
 
 <a id="text-13"></a>
 
@@ -187,8 +196,8 @@ value is below zero, then adds ASCII spaces on the left until the text has at
 least `width` characters, a positive integer when declared; it never
 truncates. A missing source returns `missing`, or missing when it is omitted.
 
-Fails: `incompatible_input_type`, `invalid_field_type`.
-Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`.
+Fails: `incompatible_input_type`, `invalid_field_type`, `engine_rejected`.
+Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 The rounding and the writing are those of CSV display precision
 ([CSV-9](reference/csv.md#csv-9)): a tie, or a value within
@@ -234,9 +243,11 @@ before any record is read where its declared type shows it
 of the field it reads, a lookup's field by its donor's. `decimals` below zero
 and `width` below one each fail validation with `invalid_field_type` at their
 own field, both reported in field order. A larger count is admitted, but no
-text is built longer than one saved file may hold: a missing source needs
-none, and a present value whose decimals or width would exceed it refuses the
-run before the text is built. The result type is `str`, and the text is
+text is built longer than the 1 MiB of [TEXT-2](#text-2): a missing source
+needs none, and a present value whose decimals or width would exceed it
+refuses the run before the text is built, as `engine_rejected` with
+`resource` `text_bytes` and the `str_decimal` path, without an `actual`
+length when its decimals exceed it. The result type is `str`, and the text is
 presentation ([VALUE-9](values.md#value-9)): the source keeps its unrounded
 value for every other reader, arithmetic refuses the text
 ([FORMULA-12](formulas.md#formula-12)), and a value that must itself be
@@ -291,8 +302,8 @@ unlike a single-input verb's missing source, fails without it. Otherwise the
 result is the exact concatenation of literal text and values, the empty string
 when the template is empty.
 
-Fails: `incompatible_input_type`, `missing_input`.
-Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-application/tests/fixtures/text_template_reference.json`, `negative-str-template-missing-placeholder`.
+Fails: `incompatible_input_type`, `missing_input`, `engine_rejected`.
+Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-application/tests/fixtures/text_template_reference.json`, `negative-str-template-missing-placeholder`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 `str_template` accepts a bare template as
 [Schema language](reference/schema-language.md) shorthand. The shorthand
@@ -323,7 +334,9 @@ under [VALUE-2](values.md#value-2). `missing` answers when any placeholder
 value is missing; without it, the missing value fails as `missing_input` in
 the `mapping` phase, and a template never gives missing by default
 ([COLUMN-10](columns.md#column-10)). The concatenation is exact under
-[VALUE-12](values.md#value-12).
+[VALUE-12](values.md#value-12). A result longer than the 1 MiB of
+[TEXT-2](#text-2) refuses the run before it is built, as `engine_rejected`
+with `resource` `text_bytes` and the `str_template` path.
 
 Text joined from several parts is written as one template: literal text, with
 braces written `{{` and `}}`, sits beside the placeholders, and a value that
@@ -571,7 +584,8 @@ step starts one scalar later, copying that scalar unchanged. Each match is
 replaced by the literal `replacement` text, scalars outside matches are kept in
 order, and an empty result is the empty string.
 
-Evidence: `schema-str-replace`, `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs`, `yaml/conformance/regex.yaml`.
+Fails: `engine_rejected`.
+Evidence: `schema-str-replace`, `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs`, `yaml/conformance/regex.yaml`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 Every step matches against the whole source, so `^` still matches only before
 its first scalar and an assertion such as `\b` reads the scalars around the
@@ -587,6 +601,11 @@ unchanged, and a result with no scalars is the empty string, never missing. A
 missing source returns the declared `missing` value, or missing when that
 handler is omitted, counted under `missing`
 ([COLUMN-10](columns.md#column-10)).
+
+A result longer than the 1 MiB of [TEXT-2](#text-2), such as a replacement
+longer than its match written at many matches, refuses the run before it is
+built, as `engine_rejected` with `resource` `text_bytes` and the
+`str_replace` path.
 
 <a id="text-12"></a>
 

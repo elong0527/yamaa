@@ -3,6 +3,7 @@
 use crate::{
     conversion::{convert, ConversionError},
     expression::Reducer,
+    limits::{LimitExceeded, Limits},
     numeric::{
         binary, math, sqrt, ArithmeticError, ArithmeticErrorKind, BinaryOperator, MathFunction,
         Number,
@@ -11,6 +12,7 @@ use crate::{
     table::ValueRef,
     value::{compare_present_refs, ColumnType, Value, ValueType},
 };
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -32,6 +34,10 @@ pub enum AggregateReductionError {
         argument: usize,
         error: ConversionError,
     },
+    /// A `STR_JOIN` text longer than `Limits::TEXT_BYTES`, refused before
+    /// it is built.
+    #[error("aggregate reduction: {0}")]
+    Limit(LimitExceeded),
 }
 
 /// The fields of an aggregate a reducer reads besides its argument
@@ -314,33 +320,45 @@ fn geometric_mean(
 /// text of VALUE-8, the canonical text of VALUE-17, or text as it is), with
 /// the separator between two of them. With `distinct`, each text is written
 /// once, where it first occurs. A group with no present value joins to
-/// missing, never to the empty string (FORMULA-24).
+/// missing, never to the empty string (FORMULA-24). Every value is written
+/// as text first, and a joined text longer than `Limits::TEXT_BYTES` is
+/// refused before it is built.
 fn join(
     values: &[ValueRef<'_>],
     fields: ReductionFields<'_>,
 ) -> Result<Value, AggregateReductionError> {
-    let mut joined: Option<String> = None;
-    let mut seen = HashSet::new();
+    let mut texts = Vec::with_capacity(values.len());
     for (argument, value) in values.iter().copied().enumerate() {
-        let text = match value {
+        texts.push(match value {
             ValueRef::Missing => continue,
-            ValueRef::Str(text) => text.to_owned(),
+            ValueRef::Str(text) => Cow::Borrowed(text),
             other => match convert(&owned(other), ColumnType::Str) {
-                Ok(Value::Str(text)) => text,
+                Ok(Value::Str(text)) => Cow::Owned(text),
                 Ok(_) => unreachable!("a value converts to str as text"),
                 Err(error) => return Err(AggregateReductionError::Text { argument, error }),
             },
-        };
-        if fields.distinct && !seen.insert(text.clone()) {
-            continue;
-        }
-        match joined.as_mut() {
-            None => joined = Some(text),
-            Some(joined) => {
-                joined.push_str(fields.separator);
-                joined.push_str(&text);
-            }
-        }
+        });
     }
-    Ok(joined.map_or(Value::Missing, Value::Str))
+    let mut seen = HashSet::new();
+    let written: Vec<&str> = texts
+        .iter()
+        .map(|text| text.as_ref())
+        .filter(|text| !fields.distinct || seen.insert(*text))
+        .collect();
+    let Some((first, rest)) = written.split_first() else {
+        return Ok(Value::Missing);
+    };
+    let total = rest.iter().try_fold(first.len(), |total, text| {
+        total
+            .checked_add(fields.separator.len())?
+            .checked_add(text.len())
+    });
+    Limits::text_bytes(total).map_err(AggregateReductionError::Limit)?;
+    let mut joined = String::with_capacity(total.expect("an admitted length"));
+    joined.push_str(first);
+    for text in rest {
+        joined.push_str(fields.separator);
+        joined.push_str(text);
+    }
+    Ok(Value::Str(joined))
 }
