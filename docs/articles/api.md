@@ -556,7 +556,9 @@ reads no study data and runs no project code. Each entry records its
 Each entry's `origins` maps a JSON pointer into the model to where that value
 came from. A value a layer wrote names that layer as `declaring_source`, with
 the `line` and `column` where the layer wrote it, counted from 1, as an
-issue's `file`, `line` and `column` are. A schema default names its schema
+issue's `file`, `line` and `column` are. `end_line` and `end_column` give the
+exclusive end of the written node. Earlier version 1 artifacts may omit the
+end pair, or all location fields. A schema default names its schema
 module and no location, and a value composition made, such as the model's
 root, names neither.
 

@@ -121,6 +121,7 @@ fn bind_filter(
     relation: &Donor<'_>,
     inputs: binder::Inputs<'_>,
     pairs: &[IntermediateKey],
+    contextual: bool,
     failed: &mut bool,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::RelationPredicate>, BindError> {
@@ -131,17 +132,8 @@ fn bind_filter(
                 relation,
                 matches!(item.source, self_relations::Relation::SelfRows),
                 inputs,
-                // Current source-key cardinality is resolved before
-                // selecting donor records. Its failure must precede
-                // the filter's operand types.
-                !(pairs.iter().any(|key| key.value.is_expression())
-                    && pairs.iter().flat_map(|key| key.value.reads()).any(|read| {
-                        matches!(
-                            read,
-                            crate::dataset::MatchRead::Record { .. }
-                                | crate::dataset::MatchRead::SecondaryRecord { .. }
-                        )
-                    })),
+                relation_predicates::static_filter_types(pairs),
+                contextual,
                 findings,
             )?;
             if filter.is_none() {
@@ -627,7 +619,15 @@ fn bind_one(
         }
         None => None,
     };
-    let filter = bind_filter(item, &donor, inputs, &pairs, &mut failed, findings)?;
+    let filter = bind_filter(
+        item,
+        &donor,
+        inputs,
+        &pairs,
+        contextual_reader,
+        &mut failed,
+        findings,
+    )?;
     // A derived field's type may be decided per value (EXPR-14).
     let field_type = |column| match &derivations {
         Some(derived) => derived.column_type(column),

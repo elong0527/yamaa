@@ -76,6 +76,44 @@ fn an_origin_reads_with_the_line_and_column_its_layer_wrote_or_without_either() 
         ResolvedArtifact::from_json(&artifact.to_json().unwrap()).unwrap(),
         artifact
     );
+    for (label, location, end) in [
+        (
+            "exclusive scalar end",
+            r#""line":1,"column":8,"end_line":1,"end_column":13,"#,
+            yamaa_adapters::json!({"end_line":1,"end_column":13}),
+        ),
+        (
+            "multiline node end",
+            r#""line":1,"column":8,"end_line":3,"end_column":1,"#,
+            yamaa_adapters::json!({"end_line":3,"end_column":1}),
+        ),
+        (
+            "empty node",
+            r#""line":1,"column":8,"end_line":1,"end_column":8,"#,
+            yamaa_adapters::json!({"end_line":1,"end_column":8}),
+        ),
+    ] {
+        let artifact =
+            ResolvedArtifact::from_json(&TEXT.edit(WRITTEN, &authored(location))).unwrap();
+        let mut expected = yamaa_adapters::json!({
+            "declaring_source":"/held/spec.yaml", "line":1,"column":8,
+            "source_kind":"authored","generated":false
+        });
+        expected
+            .as_object_mut()
+            .unwrap()
+            .extend(end.as_object().unwrap().clone());
+        assert_eq!(
+            artifact.to_value().unwrap()["entries"][0]["origins"]["/yamaa"],
+            expected,
+            "{label}"
+        );
+        assert_eq!(
+            ResolvedArtifact::from_json(&artifact.to_json().unwrap()).unwrap(),
+            artifact,
+            "{label}"
+        );
+    }
     let default = |location: &str| {
         origin(&format!(
             r#""declaring_source":"yamaa:schema",{location}"source_kind":"schema_default""#
@@ -86,6 +124,38 @@ fn an_origin_reads_with_the_line_and_column_its_layer_wrote_or_without_either() 
         ("a column without a line", authored(r#""column":8,"#)),
         ("line zero", authored(r#""line":0,"column":8,"#)),
         ("column zero", authored(r#""line":1,"column":0,"#)),
+        (
+            "an end line without its column",
+            authored(r#""line":1,"column":8,"end_line":1,"#),
+        ),
+        (
+            "an end column without its line",
+            authored(r#""line":1,"column":8,"end_column":13,"#),
+        ),
+        (
+            "an end without a start",
+            authored(r#""end_line":1,"end_column":13,"#),
+        ),
+        (
+            "end line zero",
+            authored(r#""line":1,"column":8,"end_line":0,"end_column":13,"#),
+        ),
+        (
+            "end column zero",
+            authored(r#""line":1,"column":8,"end_line":1,"end_column":0,"#),
+        ),
+        (
+            "an earlier end line",
+            authored(r#""line":2,"column":8,"end_line":1,"end_column":13,"#),
+        ),
+        (
+            "an earlier end column",
+            authored(r#""line":1,"column":8,"end_line":1,"end_column":7,"#),
+        ),
+        (
+            "an end on a default",
+            default(r#""line":1,"column":8,"end_line":1,"end_column":13,"#),
+        ),
         (
             "a located schema default",
             default(r#""line":1,"column":8,"#),

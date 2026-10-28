@@ -264,6 +264,26 @@ fn document_order_locations_and_unique_occurrences_survive_decoding() {
         }
     );
     assert_eq!(result.locations.len(), 9);
+    // Hand-counted exclusive ends in the two lines above, including each
+    // flow delimiter and the block mapping's end at the following line.
+    assert_eq!(
+        result
+            .end_locations
+            .iter()
+            .map(|at| (at.offset, at.line, at.column))
+            .collect::<Vec<_>>(),
+        [
+            (1, 1, 2),
+            (5, 1, 6),
+            (8, 1, 9),
+            (9, 1, 10),
+            (11, 2, 2),
+            (15, 2, 6),
+            (21, 2, 12),
+            (22, 2, 13),
+            (23, 3, 1)
+        ]
+    );
 }
 
 #[test]
@@ -532,6 +552,7 @@ fn unicode_walk_does_not_copy_long_ancestor_paths_for_valid_siblings() {
     let node = |value| Node {
         value,
         start: position,
+        end: position,
         merge: false,
     };
     let mut nodes = vec![node(Value::Scalar(N::Text("a".repeat(131_072))))];
@@ -574,6 +595,7 @@ fn unicode_decoder_retains_every_raw_finding_before_the_public_issue_sink() {
         .map(|_| Node {
             value: Value::InvalidText(vec![0xd800]),
             start: position,
+            end: position,
             merge: false,
         })
         .collect();
@@ -581,6 +603,7 @@ fn unicode_decoder_retains_every_raw_finding_before_the_public_issue_sink() {
     nodes.push(Node {
         value: Value::Sequence((0..10_001).collect()),
         start: position,
+        end: position,
         merge: false,
     });
     let DecodeFailure::InvalidText(issues) = check_unicode(&nodes, root).unwrap_err() else {
