@@ -1,7 +1,7 @@
 # Submit demographics with the older metadata format
 
 **Goal:** carry the demographics identifiers and collected values with
-Define-XML 2.0.0 metadata and a SAS transport file.
+Define-XML 2.0.0 metadata and a SAS transport file; `DOMAIN` holds `DM`.
 
 **Input:** `project.yaml` selects Define-XML 2.0.0 and composes `spec.yaml`,
 which maps demographic capture records from `input/dm_raw.csv` into the
