@@ -25,8 +25,8 @@ is null, the missing value. Absence inherits, and a written value replaces or
 merges under [LAYER-5](#layer-5) to [LAYER-8](#layer-8); only a layer's
 `clear` removes an inherited value ([LAYER-9](#layer-9)). The resolver keeps
 the provenance of every contributed value, down to the leaf a layer wrote,
-while it works: the layer that wrote the value and the line and column at
-which it wrote it. Provenance is diagnostic state, not a field of the resolved
+while it works: the layer that wrote the value, the line and column at
+which it wrote it, and the exclusive end line and column of the written node. Provenance is diagnostic state, not a field of the resolved
 specification; for a relative path it also records the declaring layer and
 that layer's spelling, which [Resource resolution](reference/files.md#file-2)
 resolves once.
