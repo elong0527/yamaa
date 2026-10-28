@@ -1,0 +1,37 @@
+{
+  "about": "An intermediate's unique verification compares its combinations as key matching compares keys (LOOKUP-17, LOOKUP-9, VALUE-19), except that two missing values are one combination (#4069). ONE matches LAB on KEYN, an untyped case that takes LAB.ID, an int, where LAB.VAL is missing and LAB.VAL, a float, otherwise, so KEYN is decided per value (EXPR-14, LOOKUP-15). LAB's records give KEYN 1 (SEQ 1), 1.0 (SEQ 2) and 2 (SEQ 3). Under VALUE-19 1 and 1.0 are one number, so the row whose ID is 1 matches SEQ 1 and SEQ 2, and the unique check finds that combination repeated once: at error severity the run fails at verification before any row is built, as negative-lookup-duplicate-intermediate's error states the record, its context naming the intermediate, the dataset, the columns and one duplicate; at warning severity, beside order_by SEQ and keep last, the check is violated once out of two combinations, its key the first record's KEYN, 1, as run_report.json states such a row, and the selection keeps SEQ 2 for ID 1 and SEQ 3 for ID 2. With LAB's first two IDs missing, KEYN is missing on both records, which match no row (LOOKUP-9), and the unique check still counts them as one repeated combination.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  LAB: {path: lab.csv, types: {ID: int, SEQ: int, VAL: float}}\noutput: {path: out.csv, columns: [ID, SEQ]}\nintermediates:\n  - id: ONE\n    dataset: LAB\n    key: {KEYN: ID}\n    derivations:\n      KEYN:\n        case:\n          - {when: \"LAB.VAL IS NULL\", then: LAB.ID}\n          - {otherwise: LAB.VAL}\n    verifications:\n      - unique: [KEYN]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: ONE.SEQ}\n",
+    "src": "ID\n1\n2\n",
+    "lab": "ID,SEQ,VAL\n1,1,\n1,2,1.0\n2,3,\n"
+  },
+  "cases": [
+    {
+      "case": "a_unique_key_holding_an_int_and_an_equal_float_repeats_as_key_matching_meets_them",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "src.csv": {"base": "src"}, "lab.csv": {"base": "lab"}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.ONE.verifications[0].unique"], "context": {"intermediate": "ONE", "dataset": "LAB", "columns": ["KEYN"], "duplicate_count": 1}}],
+      "saved": {}
+    },
+    {
+      "case": "a_warning_unique_reports_an_int_and_an_equal_float_and_the_selection_chooses_between_them",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "output: {path: out.csv, columns: [ID, SEQ]}", "to": "output: {path: out.csv, columns: [ID, SEQ], report: report.csv}"}, {"from": "      - unique: [KEYN]\n", "to": "      - unique: {columns: [KEYN], severity: warning}\n    order_by: [LAB.SEQ]\n    keep: last\n"}]}, "src.csv": {"base": "src"}, "lab.csv": {"base": "lab"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [["ID", "SEQ"], [1, 2], [2, 3]],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "intermediates.ONE.verifications[0].unique", "unique", null, null, "LOOKUP-17", "warning", "violated", "duplicate_intermediate_records", 1, 2, "[{\"KEYN\":1}]", "{\"columns\":[\"KEYN\"],\"dataset\":\"LAB\",\"intermediate\":\"ONE\"}"]
+        ]
+      }
+    },
+    {
+      "case": "a_unique_key_counts_two_missing_values_as_one_combination_though_no_row_matches_them",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "src.csv": {"base": "src"}, "lab.csv": "ID,SEQ,VAL\n,1,\n,2,\n2,3,\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.ONE.verifications[0].unique"], "context": {"intermediate": "ONE", "dataset": "LAB", "columns": ["KEYN"], "duplicate_count": 1}}],
+      "saved": {}
+    }
+  ]
+}

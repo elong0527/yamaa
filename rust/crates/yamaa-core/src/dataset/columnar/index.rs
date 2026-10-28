@@ -3,15 +3,17 @@
 //! order, so every later step of a match (range, filter, selection) sees the
 //! records the scan would reach, in its order.
 //!
-//! A key index groups by key equality (VALUE-19): numbers by value, so an
-//! integral float shares the integer's bucket and both zeros share one;
-//! temporal values by their civil fields, whatever their precision; text by
-//! its bytes. A missing key is in no bucket. A grouping index groups by
-//! grouping equality instead, where a missing value is a key of its own and
-//! `int` and `float` never meet.
+//! A key index groups by key equality (VALUE-19), as
+//! [`Key::matching`] encodes it: numbers by value, so an integral float
+//! shares the integer's bucket and both zeros share one; temporal values by
+//! their civil fields, whatever their precision; text by its bytes. A missing
+//! key is in no bucket. A grouping index groups by grouping equality instead
+//! (`Key::from`), where a missing value is a key of its own and `int` and
+//! `float` never meet.
 use super::{Fail, Table};
 use crate::dataset::resolved::ExprId;
 use crate::table::{TableAccess, ValueRef};
+use crate::table_grouping::Key;
 use crate::value::{comparable_types, ValueType};
 use std::collections::HashMap;
 
@@ -299,41 +301,40 @@ pub(super) fn exact_pair(value: ValueRef<'_>, kind: Option<ValueType>) -> bool {
     }
 }
 
+/// Append `value`'s bytes under `equality`: the [`Key`] it is, as key
+/// matching or grouping compares it.
 fn encode(key: &mut Vec<u8>, value: ValueRef<'_>, equality: Equality) {
+    let value = match equality {
+        Equality::Key => Key::matching(value),
+        Equality::Grouping => Key::from(value),
+    };
     match value {
-        ValueRef::Missing => key.push(0),
-        ValueRef::Str(value) => {
+        Key::Missing => key.push(0),
+        Key::Str(value) => {
             key.push(1);
             key.extend_from_slice(&(value.len() as u64).to_be_bytes());
             key.extend_from_slice(value.as_bytes());
         }
-        ValueRef::Int(value) => encode_int(key, value),
-        ValueRef::Float(value) => {
-            let value = value.get();
-            if equality == Equality::Key
-                && value == value.trunc()
-                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value)
-            {
-                encode_int(key, value as i64);
-            } else {
-                key.push(3);
-                // Both zeros are one value.
-                let value = if value == 0.0 { 0.0 } else { value };
-                key.extend_from_slice(&value.to_bits().to_be_bytes());
-            }
+        Key::Int(value) => {
+            key.push(2);
+            key.extend_from_slice(&value.to_be_bytes());
         }
-        ValueRef::Bool(value) => {
+        Key::Float(bits) => {
+            key.push(3);
+            key.extend_from_slice(&bits.to_be_bytes());
+        }
+        Key::Bool(value) => {
             key.push(4);
             key.push(u8::from(value));
         }
-        ValueRef::Date(value) => {
+        Key::Date(value) => {
             let (year, month, day) = value.fields();
             key.push(5);
             key.extend_from_slice(&year.to_be_bytes());
             key.push(month);
             key.push(day);
         }
-        ValueRef::DateTime(value) => {
+        Key::DateTime(value) => {
             let (year, month, day, hour, minute, second) = value.fields();
             key.push(6);
             key.extend_from_slice(&year.to_be_bytes());
@@ -344,11 +345,6 @@ fn encode(key: &mut Vec<u8>, value: ValueRef<'_>, equality: Equality) {
             key.push(second);
         }
     }
-}
-
-fn encode_int(key: &mut Vec<u8>, value: i64) {
-    key.push(2);
-    key.extend_from_slice(&value.to_be_bytes());
 }
 
 #[cfg(test)]

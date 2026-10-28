@@ -39,7 +39,11 @@ yamaa_spec(path)
 \method{length}{yamaa_run}(x)
 }
 \arguments{
-  \item{path}{Path of a specification file.}
+  \item{path}{Path of a specification file: one character string, which may
+    carry names or a class, as an \code{fs::path()} or \code{glue::glue()}
+    value does. A leading \code{~} expands to the home directory, as
+    \code{\link[base]{path.expand}} expands it. The \code{parent} of
+    \code{$check()} is taken the same way.}
   \item{x}{A specification, a check or a run.}
   \item{...}{Unused.}
 }
@@ -103,7 +107,8 @@ cannot hold every integer that a context may hold.
 \code{format()} returns the lines that the engine renders for an object, the
 same words that Python and the command line print, and \code{print()} writes
 them and returns the object invisibly. A specification prints
-\code{yamaa spec <path>}, with the path as given, since it has read nothing.
+\code{yamaa spec <path>}, with the path as given and its \code{~} expanded,
+since it has read nothing.
 A check prints \code{yamaa check of <path>: <status>, <n> issues}, and a run
 \code{yamaa run of <dataset>: <status>, <size>, <n> issues}, where the size
 is \code{<r> rows x <c> columns} or \code{no output}; either then prints its
