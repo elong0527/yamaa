@@ -21,6 +21,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("codelist_partial_item_field", &["validation"], None),
     ("codelist_shape_invalid", &["validation"], None),
     ("codelist_type_mismatch", &["validation"], None),
+    ("codelist_without_decodes", &["validation"], None),
     ("conflicting_absence_policy", &["validation"], None),
     ("conflicting_origins", &["validation"], None),
     ("conflicting_row_construction", &["validation"], None),

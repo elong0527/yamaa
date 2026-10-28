@@ -60,9 +60,9 @@ impl ScalarOp {
     /// fraction; a shift and `impute` keep their declared type; a duration
     /// is a fraction in every unit; `to_date` is a date; assembled date
     /// parts, dates read from their declared forms, duration text, the other
-    /// text verbs, precisions, imputation flags and cuts are text; a mapping
-    /// returns the types its dictionary values take; `greatest` and `least`
-    /// take every type their `operands` take.
+    /// text verbs, precisions, imputation flags, decodes and cuts are text; a
+    /// mapping returns the types its dictionary values take; `greatest` and
+    /// `least` take every type their `operands` take.
     pub(crate) fn result_type(&self, operands: &mut dyn Iterator<Item = ResultType>) -> ResultType {
         let temporal = |kind: &ast::TemporalType| match kind {
             ast::TemporalType::Date => ResultType::DATE,
@@ -94,6 +94,7 @@ impl ScalarOp {
             | Self::StrExtract { .. }
             | Self::StrReplace { .. }
             | Self::StrTemplate { .. }
+            | Self::Decode { .. }
             | Self::Cut { .. } => ResultType::STR,
             Self::Mapping {
                 dict: ast::Dictionary::Inline(entries),
@@ -149,7 +150,7 @@ impl ScalarOp {
 
     /// The preflight check that refuses the verb's declaration and its
     /// declared operand types before any input is read ([`preflight`]);
-    /// `str_pad`, `mapping` and `cut` have none.
+    /// `str_pad`, `mapping`, `decode` and `cut` have none.
     pub(crate) fn preflight(&self) -> Option<Preflight> {
         Some(match self {
             Self::RoundHalfAwayFromZero { .. } => Preflight::Rounding,
@@ -172,7 +173,9 @@ impl ScalarOp {
             Self::StrTemplate { .. } => Preflight::Template,
             Self::StrSubstr { .. } | Self::StrLength => Preflight::Position,
             Self::StrDecimal { .. } => Preflight::Decimal,
-            Self::StrPad { .. } | Self::Mapping { .. } | Self::Cut { .. } => return None,
+            Self::StrPad { .. } | Self::Mapping { .. } | Self::Decode { .. } | Self::Cut { .. } => {
+                return None
+            }
         })
     }
 
@@ -187,6 +190,7 @@ impl ScalarOp {
     pub(crate) fn recode(&self) -> Recode {
         match self {
             Self::Mapping { .. }
+            | Self::Decode { .. }
             | Self::StrCase { .. }
             | Self::StrPad { .. }
             | Self::StrSubstr { .. }
@@ -488,6 +492,12 @@ impl Operation {
             ScalarOp::StrTemplate { .. } => str_template::from_tree(spec, e),
             ScalarOp::Greatest | ScalarOp::Least => extremes::from_tree(spec, e),
             ScalarOp::Mapping { .. } | ScalarOp::Cut { .. } => mapping_cut::from_tree(spec, e),
+            // The executor reads no project codelist yet, so a `decode`
+            // (EXPR-15) is refused before any source is read.
+            ScalarOp::Decode { .. } => Err(Refusal::Unsupported {
+                operation: crate::expression_table::Verb::Decode.name(),
+                path: path(spec, e),
+            }),
         }
     }
 

@@ -270,6 +270,27 @@ class SdtmMappingTests(unittest.TestCase):
             rule.endswith("; missing values stay missing; unlisted values are errors.")
         )
 
+    def test_decode_rule_names_its_codelist_and_both_answers(self):
+        # A decode takes mapping's handlers: an omitted `missing` keeps the
+        # missing value and an omitted `unmapped` fails (EXPR-15, COLUMN-10).
+        arrow = mapping_doc.ARROW
+        for node, expected in (
+            (
+                {"source": "PARAMCD", "codelist": "PARAMCD"},
+                "Decode PARAMCD through codelist PARAMCD; missing values stay"
+                " missing; unlisted values are errors.",
+            ),
+            (
+                {"source": "LB.LBTESTCD", "codelist": "LBTEST", "unmapped": "Other"},
+                "Decode LB.LBTESTCD through codelist LBTEST; missing values stay"
+                " missing; unlisted values " + arrow + ' "Other".',
+            ),
+        ):
+            with self.subTest(case=expected):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"decode": node}), expected
+                )
+
 
 class AdamMappingTests(unittest.TestCase):
     def test_named_window_summary_keeps_the_reference_visible(self):

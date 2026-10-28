@@ -675,7 +675,8 @@ order. A term is a bare variable or a mapping declaring `variable`,
 `desc`. A declared `nulls: first` or `nulls: last` places missing values there
 under either direction.
 
-Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_last_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_last_by_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_first_by_nulls`.
+Fails: `incompatible_input_type`.
+Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_last_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_last_by_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_first_by_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_an_int_and_a_float_keeps_the_record_whose_exact_value_sorts_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_an_int_and_a_float_numbers_the_records_by_exact_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_text_and_an_int_is_refused_before_any_record_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_a_date_and_a_datetime_is_refused_before_any_record_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_text_and_an_int_is_refused_before_any_record_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_baseline_date_over_a_date_and_a_datetime_is_refused_before_any_record_is_read`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_lookup_order_term_whose_derived_type_holds_text_and_an_int_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_window_order_term_whose_derived_type_holds_a_date_and_a_datetime_is_refused`.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
 union, whichever operation declares the list, and a mapping holding only
@@ -703,9 +704,20 @@ Non-missing values use the order their type owns: exact numeric comparison
 under [VALUE-19](#value-19), including a mixed `int` and `float` pair without
 rounding the integer to binary64; text order under [VALUE-20](#value-20); and
 chronological order for `date` and `datetime` under [VALUE-21](#value-21).
-Window ordering requires mutually comparable values for each term;
-[Inputs](inputs.md) fixes source-field types ([INPUT-5](inputs.md#input-5)),
-and [VALUE-1](#value-1) declared column types.
+Every two non-missing values of one term must compare under
+[VALUE-19](#value-19). A term names a field whose type is fixed before any
+record is read: [Inputs](inputs.md) fixes source-field types
+([INPUT-5](inputs.md#input-5)), [VALUE-1](#value-1) declared column types, and
+an untyped intermediate derivation takes its expression's result type
+([EXPR-14](expressions.md#expr-14)), which may be decided per value. A field
+whose types do not all compare, such as an untyped `case` that chooses `str`
+or `int`, or `date` or `datetime`, or a `bool`, which owns no order, fails
+validation as `incompatible_input_type` at the term before any record is
+read, its context naming the field as `identifier`, its types as `actual`,
+and the named intermediate as `intermediate` or the window operation as
+`operation`. A choice of `int` or `float` orders by exact value. A
+`baseline_flag`'s `date` is the first term of its order and is refused the
+same way ([WINDOW-9](windows.md#window-9)).
 
 Ties, totality and tie-breaking follow [VALUE-23](#value-23), so a row's
 neighbours are determined.
