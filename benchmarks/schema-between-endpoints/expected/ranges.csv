@@ -1,0 +1,13 @@
+STUDYID,RANGE,SEQ,VALUE,BOTHN,LEFTN,RIGHTN,NEITHERN,LOWEREX,UPPEREX
+S,A,1,0,,,,,,1
+S,A,2,1,1,1,,,,1
+S,A,3,4,1,1,1,1,1,1
+S,A,4,8,1,,1,,1,
+S,A,5,9,,,,,1,
+S,A,6,,,,,,,
+S,B,7,8,1,,,,,
+S,C,8,4,,,,,,
+S,C,9,8,,,,,,
+S,D,10,4,,,,,,1
+S,E,11,4,,,,,1,
+S,F,12,4,,,,,,

@@ -69,16 +69,17 @@ candidate as a record of its own; it runs once, before any row is built
 
 ### LOOKUP-9. Match keeps the records whose keys equal the current row's match values and whose bounds hold its range value
 
-Step one keeps each record whose every key column equals its paired match
-value and, with `between`, whose stated bounds hold the range value:
-`lower <= value` and `value <= upper`, both inclusive. Values compare exactly
+Step one keeps records whose keys equal their paired match values and whose
+`between` bounds hold the range value.
+`closed` chooses which endpoints are included: `both` (the default),
+`left` (lower only), `right` (upper only) or `neither`. Values compare exactly
 under [VALUE-19](values.md#value-19), with no operand converted, and a pair or
 bound whose types cannot compare fails. A missing match or range value seeks
 no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `schema-between-endpoints`, `schema-between-adjacent-windows`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/tests/host-fixtures/cases.json`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -92,13 +93,30 @@ must match exactly.
 
 `between` declares `value` and `lower`, `upper` or both, each bound a field of
 the lookup's relation: a stored field, or a name an intermediate derives
-([LOOKUP-15](#lookup-15)). An omitted bound leaves that side unbounded without
-excluding the stated endpoint. Every kind of lookup may declare it: a named
-intermediate, a qualified aggregate, and an implicit join through a structured
-`source:` binding or a filtered source ([LOOKUP-1](#lookup-1)). The range is
+([LOOKUP-15](#lookup-15)). An omitted bound leaves that side unbounded;
+`closed` still decides whether the stated endpoint is included. Every kind of
+lookup may declare it: a named intermediate, a qualified aggregate, and an
+implicit join through a structured `source:` binding or a filtered source
+([LOOKUP-1](#lookup-1)). The range is
 compared only on the records whose keys match, and a record missing a stated
 bound is ineligible rather than open-ended. A missing range value seeks no
 record; it never widens the match to every record whose keys match.
+
+| `closed` | Lower comparison | Upper comparison |
+| --- | --- | --- |
+| `both` | `lower <= value` | `value <= upper` |
+| `left` | `lower <= value` | `value < upper` |
+| `right` | `lower < value` | `value <= upper` |
+| `neither` | `lower < value` | `value < upper` |
+
+Only stated bounds are compared. Adjacent windows `[1, 8)` and `[8, 15)`
+therefore match day 8 once with `closed: left`. Equal bounds match only their
+endpoint under `both`; reversed bounds match nothing. Missing values and
+missing stated bounds keep the same no-match behavior for every mode.
+This `closed` selects range endpoints. The `closed` of
+[`diff`](temporal.md#time-5) counts elapsed boundaries, the `closed` of
+[`cut`](expressions.md#expr-13) assigns classification edges, and
+[`baseline_flag`](windows.md#window-9) uses its own `inclusive` comparison.
 
 ```yaml
 intermediates:

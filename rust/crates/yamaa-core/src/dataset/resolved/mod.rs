@@ -618,6 +618,7 @@ pub struct RangeNode {
     pub current: Read,
     pub lower: Option<u32>,
     pub upper: Option<u32>,
+    pub closed: crate::expression_table::Closed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

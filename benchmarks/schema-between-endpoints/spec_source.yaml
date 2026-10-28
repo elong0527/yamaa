@@ -1,0 +1,88 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: RANGES
+keys: [STUDYID, RANGE, SEQ]
+input:
+  RECORDS:
+    path: input/records.csv
+    types: {SEQ: int, VALUE: int}
+  WINDOWS:
+    path: input/windows.csv
+    types: {WIN: int, LOW: int, HIGH: int}
+    key: [STUDYID, RANGE]
+base: RECORDS
+
+output:
+  path: ranges.csv
+  columns: [STUDYID, RANGE, SEQ, VALUE, BOTHN, LEFTN, RIGHTN, NEITHERN,
+            LOWEREX, UPPEREX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RECORDS.STUDYID
+
+  - name: RANGE
+    type: str
+    label: Range Identifier
+    derivation: RECORDS.RANGE
+
+  - name: SEQ
+    type: int
+    label: Record Sequence Number
+    derivation: RECORDS.SEQ
+
+  - name: VALUE
+    type: int
+    label: Range Value
+    derivation: RECORDS.VALUE
+
+  - name: BOTHN
+    type: int
+    label: BOTHN Window
+    derivation:
+      source:
+        variable: WINDOWS.WIN
+        between: {value: VALUE, lower: LOW, upper: HIGH}
+
+  - name: LEFTN
+    type: int
+    label: LEFTN Window
+    derivation:
+      source:
+        variable: WINDOWS.WIN
+        between: {value: VALUE, lower: LOW, upper: HIGH, closed: left}
+
+  - name: RIGHTN
+    type: int
+    label: RIGHTN Window
+    derivation:
+      source:
+        variable: WINDOWS.WIN
+        between: {value: VALUE, lower: LOW, upper: HIGH, closed: right}
+
+  - name: NEITHERN
+    type: int
+    label: NEITHERN Window
+    derivation:
+      source:
+        variable: WINDOWS.WIN
+        between: {value: VALUE, lower: LOW, upper: HIGH, closed: neither}
+
+  - name: LOWEREX
+    type: int
+    label: LOWEREX Window
+    derivation:
+      source:
+        variable: WINDOWS.WIN
+        between: {value: VALUE, lower: LOW, closed: right}
+
+  - name: UPPEREX
+    type: int
+    label: UPPEREX Window
+    derivation:
+      source:
+        variable: WINDOWS.WIN
+        between: {value: VALUE, upper: HIGH, closed: left}

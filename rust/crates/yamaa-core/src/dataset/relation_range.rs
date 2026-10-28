@@ -1,6 +1,7 @@
-//! Inclusive donor narrowing retains endpoint effects and exact numeric comparison.
+//! Donor narrowing retains endpoint policy, read effects and exact numeric comparison.
 use super::*;
 use crate::{
+    expression_table::Closed,
     table::ValueRef,
     value::{compare_present_refs, ValueType},
 };
@@ -97,6 +98,7 @@ pub struct RelationRange {
     value_kind: Option<ValueType>,
     lower: Option<RelationRangeBound>,
     upper: Option<RelationRangeBound>,
+    closed: Closed,
     /// The variable of the source binding whose implicit join the range
     /// narrows, which findings about the range name; none for another kind of
     /// lookup.
@@ -118,6 +120,7 @@ impl RelationRange {
         value_kind: Option<ValueType>,
         lower: Option<RelationRangeBound>,
         upper: Option<RelationRangeBound>,
+        closed: Closed,
     ) -> Result<Self, RelationRangeError> {
         if lower.is_none() && upper.is_none() {
             return Err(RelationRangeError::NoBounds);
@@ -147,6 +150,7 @@ impl RelationRange {
             value_kind,
             lower,
             upper,
+            closed,
             variable: None,
         })
     }
@@ -173,6 +177,9 @@ impl RelationRange {
     }
     pub fn upper(&self) -> Option<&RelationRangeBound> {
         self.upper.as_ref()
+    }
+    pub fn closed(&self) -> Closed {
+        self.closed
     }
     /// Endpoint reads precede comparisons. Missing lower prevents an upper read;
     /// a lower comparison which excludes the record prevents an upper comparison.
@@ -210,12 +217,20 @@ impl RelationRange {
             })
         };
         if let Some(lower) = lower {
-            if compare_present_refs(lower, value).map_err(|_| mismatch())? == Ordering::Greater {
+            let order = compare_present_refs(lower, value).map_err(|_| mismatch())?;
+            if order == Ordering::Greater
+                || (order == Ordering::Equal
+                    && matches!(self.closed, Closed::Right | Closed::Neither))
+            {
                 return Ok(false);
             }
         }
         if let Some(upper) = upper {
-            if compare_present_refs(value, upper).map_err(|_| mismatch())? == Ordering::Greater {
+            let order = compare_present_refs(value, upper).map_err(|_| mismatch())?;
+            if order == Ordering::Greater
+                || (order == Ordering::Equal
+                    && matches!(self.closed, Closed::Left | Closed::Neither))
+            {
                 return Ok(false);
             }
         }

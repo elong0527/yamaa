@@ -1,0 +1,100 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: RANGES
+keys: [STUDYID, RANGE, SEQ]
+input:
+  RECORDS:
+    path: input/records.csv
+    types: {SEQ: int, VALUE: int}
+  WINDOWS:
+    path: input/windows.csv
+    types: {WIN: int, LOW: int, HIGH: int}
+base: RECORDS
+
+output:
+  path: ranges.csv
+  columns: [STUDYID, RANGE, SEQ, VALUE, BOTHN, LEFTN, RIGHTN, NEITHERN,
+            LOWEREX, UPPEREX]
+
+intermediates:
+  - id: W_BOTHN
+    dataset: WINDOWS
+    key: [STUDYID, RANGE]
+    between: {value: VALUE, lower: LOW, upper: HIGH}
+
+  - id: W_LEFTN
+    dataset: WINDOWS
+    key: [STUDYID, RANGE]
+    between: {value: VALUE, lower: LOW, upper: HIGH, closed: left}
+
+  - id: W_RIGHTN
+    dataset: WINDOWS
+    key: [STUDYID, RANGE]
+    between: {value: VALUE, lower: LOW, upper: HIGH, closed: right}
+
+  - id: W_NEITHERN
+    dataset: WINDOWS
+    key: [STUDYID, RANGE]
+    between: {value: VALUE, lower: LOW, upper: HIGH, closed: neither}
+
+  - id: W_LOWEREX
+    dataset: WINDOWS
+    key: [STUDYID, RANGE]
+    between: {value: VALUE, lower: LOW, closed: right}
+
+  - id: W_UPPEREX
+    dataset: WINDOWS
+    key: [STUDYID, RANGE]
+    between: {value: VALUE, upper: HIGH, closed: left}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RECORDS.STUDYID
+
+  - name: RANGE
+    type: str
+    label: Range Identifier
+    derivation: RECORDS.RANGE
+
+  - name: SEQ
+    type: int
+    label: Record Sequence Number
+    derivation: RECORDS.SEQ
+
+  - name: VALUE
+    type: int
+    label: Range Value
+    derivation: RECORDS.VALUE
+
+  - name: BOTHN
+    type: int
+    label: BOTHN Window
+    derivation: W_BOTHN.WIN
+
+  - name: LEFTN
+    type: int
+    label: LEFTN Window
+    derivation: W_LEFTN.WIN
+
+  - name: RIGHTN
+    type: int
+    label: RIGHTN Window
+    derivation: W_RIGHTN.WIN
+
+  - name: NEITHERN
+    type: int
+    label: NEITHERN Window
+    derivation: W_NEITHERN.WIN
+
+  - name: LOWEREX
+    type: int
+    label: LOWEREX Window
+    derivation: W_LOWEREX.WIN
+
+  - name: UPPEREX
+    type: int
+    label: UPPEREX Window
+    derivation: W_UPPEREX.WIN

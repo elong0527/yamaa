@@ -1,0 +1,18 @@
+lifecycle: draft
+standard: ADaM
+domain: RANGES
+entries:
+  python:
+    - specification: spec_named.yaml
+      environment: null
+    - specification: spec_source.yaml
+      environment: null
+    - specification: spec_aggregate.yaml
+      environment: null
+  r:
+    - specification: spec_named.yaml
+      environment: null
+    - specification: spec_source.yaml
+      environment: null
+    - specification: spec_aggregate.yaml
+      environment: null

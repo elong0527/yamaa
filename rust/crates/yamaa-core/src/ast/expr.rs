@@ -3,7 +3,7 @@
 
 use super::{Constant, JoinKey, Meta, Named, Text};
 use crate::expression::{CompileError, CompiledExpression, Context};
-use crate::expression_table::{DeclaredDefault, Handlers, ScalarOp, Slot, WindowFunction};
+use crate::expression_table::{Closed, DeclaredDefault, Handlers, ScalarOp, Slot, WindowFunction};
 use crate::value::{ColumnType, Value};
 
 /// An expression: an index into its spec's expression arena.
@@ -196,6 +196,7 @@ pub struct Between {
     pub value: ExprId,
     pub lower: Option<ExprId>,
     pub upper: Option<ExprId>,
+    pub closed: Closed,
     pub meta: Meta,
 }
 

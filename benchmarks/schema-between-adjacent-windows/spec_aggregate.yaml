@@ -1,0 +1,55 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: RANGES
+keys: [STUDYID, RANGE, SEQ]
+input:
+  RECORDS:
+    path: input/records.csv
+    types: {SEQ: int, VALUE: int}
+  WINDOWS:
+    path: input/windows.csv
+    types: {WIN: int, LOW: int, HIGH: int}
+    key: [STUDYID, RANGE]
+base: RECORDS
+
+output:
+  path: ranges.csv
+  columns: [STUDYID, RANGE, SEQ, VALUE, LEFTN, RIGHTN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RECORDS.STUDYID
+
+  - name: RANGE
+    type: str
+    label: Range Identifier
+    derivation: RECORDS.RANGE
+
+  - name: SEQ
+    type: int
+    label: Record Sequence Number
+    derivation: RECORDS.SEQ
+
+  - name: VALUE
+    type: int
+    label: Range Value
+    derivation: RECORDS.VALUE
+
+  - name: LEFTN
+    type: int
+    label: LEFTN Window
+    derivation:
+      aggregate:
+        between: {value: VALUE, lower: LOW, upper: HIGH, closed: left}
+        expr: "MIN(WINDOWS.WIN)"
+
+  - name: RIGHTN
+    type: int
+    label: RIGHTN Window
+    derivation:
+      aggregate:
+        between: {value: VALUE, lower: LOW, upper: HIGH, closed: right}
+        expr: "MIN(WINDOWS.WIN)"

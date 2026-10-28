@@ -21,6 +21,7 @@ pub(super) struct Declaration {
     pub value: String,
     lower: Option<String>,
     upper: Option<String>,
+    closed: crate::expression_table::Closed,
     path: String,
 }
 
@@ -38,6 +39,7 @@ impl Declaration {
             value: name(between.value).ok_or(PrepareError::Internal)?,
             lower: between.lower.and_then(name),
             upper: between.upper.and_then(name),
+            closed: between.closed,
             path: checks::render(spec, between.meta),
         })
     }
@@ -194,6 +196,7 @@ impl Declaration {
             kind,
             lower,
             upper,
+            self.closed,
         ) {
             Ok(range) => Ok(Ok(range)),
             Err(RelationRangeError::Incomparable(types)) => {
@@ -462,6 +465,7 @@ mod tests {
             value: "OTHER.REFDAY".into(),
             lower: Some("LO".into()),
             upper: Some("HI".into()),
+            closed: crate::expression_table::Closed::Both,
             path: "intermediates[0].between".into(),
         };
         let mut findings = Vec::new();

@@ -41,6 +41,8 @@ mod execution {
                 "schema-derive-date-epoch",
                 "schema-derive-text-score",
                 "schema-aggregate-derive-intermediate",
+                "schema-between-endpoints",
+                "schema-between-adjacent-windows",
                 "adam-adsl-new-therapy",
                 "adam-adtr-nadir",
                 "adam-adtte-pfs",
