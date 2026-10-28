@@ -11,13 +11,16 @@
 
 # A reply's value, or its refusal signalled. An interrupt the call kept is
 # signalled again as R's own: an interrupt handler takes it, and unhandled it
-# returns to the top level as Ctrl+C does. stop() would end it as an error,
-# which an error handler takes (#4070).
+# runs the `interrupt` option's function and returns to the top level, as
+# Ctrl+C does. stop() would end it as an error, which an error handler takes
+# (#4070).
 .reply <- function(reply) {
   error <- reply$error
   if (!is.null(error)) {
     if (inherits(error$condition, "interrupt")) {
       signalCondition(error$condition)
+      hook <- getOption("interrupt")
+      if (is.function(hook)) hook()
       invokeRestart("abort")
     }
     if (!is.null(error$condition)) stop(error$condition)

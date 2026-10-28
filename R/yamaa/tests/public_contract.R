@@ -553,21 +553,27 @@ qualify_callbacks()
 
 # An interrupt a call kept reaches R as an interrupt, never as an error
 # (#4070): an interrupt handler hears it once, an error handler never takes
-# it, and unhandled it ends at R's top level, as Ctrl+C does. The seam is the
-# reply envelope that every public call ends in. An error handler takes the
-# interrupt only where no interrupt handler exits first, and the runs above
-# can show that only by aborting this script, so `.reply()` is fed the reply
-# and `withRestarts(abort = )` stands in for the top level. The interrupt of
-# R's SIGINT carries no message; a project function's may carry one.
+# it, and unhandled it runs the `interrupt` option's function once, when one
+# is set, and ends at R's top level, as Ctrl+C does (?options). The seam is
+# the reply envelope that every public call ends in. An error handler takes
+# the interrupt only where no interrupt handler exits first, and the runs
+# above can show that only by aborting this script, so `.reply()` is fed the
+# reply and `withRestarts(abort = )` stands in for the top level. The
+# interrupt of R's SIGINT carries no message; a project function's may carry
+# one.
 qualify_interrupt_reply <- function() {
+  previous <- options(interrupt = NULL)
+  on.exit(options(previous), add = TRUE)
   interrupts <- list(
     "R's interrupt" = structure(list(), class = c("interrupt", "condition")),
     "a classed interrupt with a message" = structure(
       list(message = host_truth[["interrupt_message"]], call = NULL),
       class = c("public_contract_interrupt", "interrupt", "condition")))
-  for (label in names(interrupts)) {
+  for (label in names(interrupts)) for (hooked in c(FALSE, TRUE)) {
     interrupt <- interrupts[[label]]
     heard <- list()
+    hook <- function() heard[[length(heard) + 1L]] <<- "the interrupt option"
+    options(interrupt = if (hooked) hook else NULL)
     outcome <- withRestarts(withCallingHandlers(
       tryCatch({
         yamaa:::.reply(list(value = NULL, error = list(condition = interrupt)))
@@ -575,9 +581,11 @@ qualify_interrupt_reply <- function() {
       }, error = function(error) "caught as an error"),
       interrupt = function(condition) heard[[length(heard) + 1L]] <<- condition),
     abort = function() "aborted")
+    expected <- if (hooked) list(interrupt, "the interrupt option") else list(interrupt)
     expect_identical(list(outcome = outcome, heard = heard),
-      list(outcome = "aborted", heard = list(interrupt)),
-      paste(label, "in a reply passes an error handler and aborts"))
+      list(outcome = "aborted", heard = expected),
+      sprintf("%s in a reply, %s, passes an error handler and aborts", label,
+        if (hooked) "with an interrupt option" else "without an interrupt option"))
   }
   cat("an interrupt in a reply reaches R as an interrupt\n")
 }
