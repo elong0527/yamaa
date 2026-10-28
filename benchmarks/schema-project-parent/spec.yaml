@@ -1,0 +1,70 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW: input/adsl_raw.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01P, DCSREAS]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 9
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.USUBJID
+
+  # The study's planned treatments, which no package changes.
+  - name: TRT01P
+    type: str
+    label: Planned Treatment for Period 01
+    derivation: ADSL_RAW.TRT01P
+    submission:
+      core: Req
+      mandatory: true
+      length: 10
+      codelist: TRT01P
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.TRT01P
+
+  # The discontinuation reasons, which each package may decode its own way.
+  - name: DCSREAS
+    type: str
+    label: Reason for Discontinuation from Study
+    derivation: ADSL_RAW.DCSREAS
+    submission:
+      core: Perm
+      mandatory: true
+      length: 21
+      codelist: DCSREAS
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.DCSREAS
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

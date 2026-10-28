@@ -194,10 +194,10 @@ impl Run<'_> {
         }
         Ok(offset + composed.document.root())
     }
-    /// Root fields: keyed collections compose member by member and every
-    /// other field replaces whole; a layer clears only through `clear`, in
-    /// which null is the missing value (LAYER-9). `parent`, `include` and
-    /// `clear` are never contributed.
+    /// Root fields: keyed collections compose member by member, a project's
+    /// sections each as one member, and every other field replaces whole; a
+    /// layer clears only through `clear`, in which null is the missing value
+    /// (LAYER-9). `parent`, `include` and `clear` are never contributed.
     fn root(
         &mut self,
         old: Site<'_>,
@@ -229,6 +229,16 @@ impl Run<'_> {
             {
                 Some(&(_, identity)) => {
                     self.collection(field.descriptor, identity, previous, value, depth + 1)?
+                }
+                // A project section merges with the one it inherits
+                // (PROJECT-16).
+                None if self.schema.composes_members(name) => {
+                    let composed = self.schema.compose_value_at(
+                        field.descriptor,
+                        previous.map(|site| (site.document, site.node)),
+                        (value.document, value.node),
+                    )?;
+                    self.import(composed, previous, value)?
                 }
                 None => self.copy(value, depth + 1)?,
             };

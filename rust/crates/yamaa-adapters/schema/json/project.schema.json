@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "yamaa 1.0 project file",
-  "description": "One file of the 1.0 project type. Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
-  "$ref": "#/$defs/project_class",
+  "description": "One file of the 1.0 project type. A project file that names a parent or clears what it inherits is one layer of a chain: the header is required in every layer, a root field it writes is complete there, and inside environments, study or a section requiredness waits for the composed project, which $defs/project_class checks (PROJECT-16). Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
+  "$ref": "#/$defs/project_file",
   "$defs": {
     "codelist_class": {
       "type": "object",
@@ -248,6 +248,280 @@
       ],
       "additionalProperties": false
     },
+    "fragment.document_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name references to this document use.",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "annotated_crf",
+            "supplemental",
+            "other"
+          ],
+          "description": "Where the document is listed; an other document is listed only where it is referenced.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "link": {
+          "$ref": "#/$defs/relative_href",
+          "description": "File the document is, relative to the directory holding the generated document.",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "relative_href"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Label a reader sees for the document.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fragment.environments_class": {
+      "type": "object",
+      "properties": {
+        "python": {
+          "$ref": "#/$defs/fragment.host_environment_class",
+          "description": "Environment of the Python host (PROJECT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "host_environment_class"
+        },
+        "r": {
+          "$ref": "#/$defs/fragment.host_environment_class",
+          "description": "Environment of the R host (PROJECT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "host_environment_class"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fragment.host_environment_class": {
+      "type": "object",
+      "properties": {
+        "lock": {
+          "$ref": "#/$defs/project_path",
+          "description": "Packaging lock the installed called packages are verified against, relative to the project file (FUNC-3).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "project_path"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fragment.implementation_guide_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/standard_name",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "standard_name"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "Draft",
+            "Final",
+            "Provisional"
+          ],
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fragment.metadata_version_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier this metadata version's generated identity is built from (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "define_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of this metadata version.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of what this metadata version covers.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fragment.study_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier the study's generated identity is built from (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "define_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the study.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of the study.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "protocol_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Protocol the study runs under.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fragment.submission_section_class": {
+      "type": "object",
+      "properties": {
+        "specs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "description": "Ordered specifications of this model, resolved with their parent layers; the only field a run needs (PROJECT-3, DEFINE-5).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "list[path]"
+        },
+        "standards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment.implementation_guide_class"
+          },
+          "description": "Implementation guides that bind the selected datasets, the first being the one a specification takes when it names none; Define-XML requires them (DEFINE-6, DEFINE-28).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[implementation_guide_class]"
+        },
+        "define": {
+          "$ref": "#/$defs/path",
+          "description": "Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "path"
+        },
+        "define_version": {
+          "type": "string",
+          "enum": [
+            "2.0.0",
+            "2.1.0",
+            "2.1.1",
+            "2.1.2",
+            "2.1.3",
+            "2.1.4",
+            "2.1.5",
+            "2.1.6",
+            "2.1.7",
+            "2.1.8",
+            "2.1.9",
+            "2.1.10",
+            "2.1.11"
+          ],
+          "description": "Define-XML release to generate; every published release from 2.0.0 through 2.1.11 is admitted, omission retains 2.1.11, and 2.0.0 refuses metadata its version cannot represent (DEFINE-29).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment.document_class"
+          },
+          "description": "Supporting document IDs, kinds, literal links and titles (DEFINE-13).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[document_class]"
+        },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "dataset_json",
+            "dataset_ndjson",
+            "xpt"
+          ],
+          "description": "Transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON in its single-object form, dataset_ndjson for its newline-delimited form and xpt for SAS Transport; required under context Submission, and its omission under Other writes only the Define-XML document (DEFINE-4, JSON-1, JSON-4, XPT-1).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "context": {
+          "type": "string",
+          "enum": [
+            "Submission",
+            "Other"
+          ],
+          "default": "Submission",
+          "description": "Submission or Other; defaults to Submission (DEFINE-4).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "xml_lang": {
+          "$ref": "#/$defs/language_tag",
+          "default": "en",
+          "description": "Language of generated translated text; defaults to en (DEFINE-21).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "language_tag"
+        },
+        "file_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "metadata_version": {
+          "$ref": "#/$defs/fragment.metadata_version_class",
+          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "metadata_version_class"
+        },
+        "originator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional submitting party (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "stylesheet": {
+          "$ref": "#/$defs/relative_href",
+          "description": "Optional relative stylesheet link (DEFINE-23).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "relative_href"
+        },
+        "source_system_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty XML and JSON source-system version; omission selects the installed package version (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "additionalProperties": false
+    },
     "host_environment_class": {
       "type": "object",
       "properties": {
@@ -312,6 +586,94 @@
       ],
       "description": "Language version a file declares in `yamaa`, the oldest that admits every field it writes (SCHEMA-2)."
     },
+    "layer": {
+      "type": "object",
+      "properties": {
+        "yamaa": {
+          "$ref": "#/$defs/language_version",
+          "description": "Oldest language version this project file needs, always quoted (SCHEMA-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "language_version"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "project"
+          ],
+          "description": "File type of a project file, which every layer of a chain declares (SCHEMA-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "parent": {
+          "$ref": "#/$defs/path",
+          "description": "Local project file this one inherits from, relative to this file; its sections compose with this file's before any file the project names is read (PROJECT-16).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "path"
+        },
+        "clear": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/spec_path"
+          },
+          "description": "Inherited values this project file removes before its own fields compose, each named by its path (PROJECT-16, LAYER-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "list[spec_path]"
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/project_path"
+          },
+          "description": "Function files defining the project functions specifications may call, each relative to the project file (FUNC-1).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "list[project_path]"
+        },
+        "environments": {
+          "$ref": "#/$defs/fragment.environments_class",
+          "description": "Lock of each host language, by language key; a host that declares no lock has no entry (PROJECT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "environments_class"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_source"
+          },
+          "description": "Codelist sources supplying study terminology, in order; a later source's codelist replaces an earlier one of its id (CT-1).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[codelist_source]"
+        },
+        "study": {
+          "$ref": "#/$defs/fragment.study_class",
+          "description": "Study the specifications belong to; Define-XML requires it (DEFINE-1, DEFINE-28).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "study_class"
+        },
+        "sdtm": {
+          "$ref": "#/$defs/fragment.submission_section_class",
+          "description": "Tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "submission_section_class"
+        },
+        "adam": {
+          "$ref": "#/$defs/fragment.submission_section_class",
+          "description": "Analysis specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "submission_section_class"
+        },
+        "send": {
+          "$ref": "#/$defs/fragment.submission_section_class",
+          "description": "Nonclinical tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "submission_section_class"
+        }
+      },
+      "required": [
+        "yamaa",
+        "type"
+      ],
+      "additionalProperties": false
+    },
     "literal_value": {
       "type": [
         "string",
@@ -370,9 +732,24 @@
           "enum": [
             "project"
           ],
-          "description": "File type of a project file (SCHEMA-2).",
+          "description": "File type of a project file, which every layer of a chain declares (SCHEMA-2).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "parent": {
+          "$ref": "#/$defs/path",
+          "description": "Local project file this one inherits from, relative to this file; its sections compose with this file's before any file the project names is read (PROJECT-16).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "path"
+        },
+        "clear": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/spec_path"
+          },
+          "description": "Inherited values this project file removes before its own fields compose, each named by its path (PROJECT-16, LAYER-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "list[spec_path]"
         },
         "functions": {
           "type": "array",
@@ -429,6 +806,28 @@
       ],
       "additionalProperties": false
     },
+    "project_file": {
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "parent"
+            ]
+          },
+          {
+            "required": [
+              "clear"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/layer"
+      },
+      "else": {
+        "$ref": "#/$defs/project_class"
+      }
+    },
     "project_path": {
       "type": "string",
       "minLength": 1,
@@ -438,6 +837,11 @@
       "type": "string",
       "pattern": "^(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)(?:/(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)?)*$",
       "description": "Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated."
+    },
+    "spec_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Dotted path of a value in the resolved specification or the composed project, naming a keyed member by its identity and quoting any other segment that is not a name (LAYER-9, PROJECT-16)."
     },
     "standard_name": {
       "type": "string",

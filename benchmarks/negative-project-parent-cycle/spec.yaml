@@ -1,0 +1,30 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW: input/adsl_raw.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01P]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+
+  # The study's planned treatments, which the study's project declares.
+  - name: TRT01P
+    type: str
+    label: Planned Treatment for Period 01
+    derivation: ADSL_RAW.TRT01P
+    submission:
+      codelist: TRT01P

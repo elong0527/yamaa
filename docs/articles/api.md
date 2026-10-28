@@ -588,6 +588,31 @@ adam:
   section that composes define.xml must name its `transport`
   ([Create define.xml](#create-definexml-and-submission-datasets)).
 
+The submission packages of one study can share one project file and write
+only what each package changes. A package's project file names the study's
+as its `parent`:
+
+```yaml
+# package/project.yaml
+yamaa: "1.0"
+type: project
+parent: ../study/project.yaml
+clear: [adam.originator]
+
+adam:
+  define: define.xml
+```
+
+The package keeps everything its parent declares and changes only the fields
+it writes: `study`, `environments` and each section merge field by field, so
+this `adam` keeps the parent's `specs` and `standards`, and a list such as
+`functions`, `codelists` or a section's `specs` replaces the inherited one
+whole. `clear` removes an inherited value. Each path resolves from the file
+that writes it, so the `specs` this package inherits name the specifications
+beside `../study/project.yaml`. A project file names at most one parent,
+which may name its own, and you open the package by its own project file
+([project layering](../../rules/profiles/project.md#project-16)).
+
 A function file declares one project function: its parameters, what it
 returns, the callable that implements it in each host language, and its
 tests. Every build that calls the function runs its tests first, in whichever

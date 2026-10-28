@@ -352,6 +352,10 @@ EXPECTED = {
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
+    # The owner decision of 2026-10-28 on #4101: a project file composes on
+    # one parent (PROJECT-16).
+    "new.project.parent": [Field("project_class", "parent", "path")],
+    "new.project.clear": [Field("project_class", "clear", "list[spec_path]")],
     # D264: str_case writes proper case as SAS PROPCASE does, after the
     # delimiters a declared list names (TEXT-5).
     "new.spec.str_case.to=proper": [Values("expressions.str_case", "to", ("proper",))],

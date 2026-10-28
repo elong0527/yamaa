@@ -203,13 +203,19 @@ pub(super) fn diagnostic(
 /// The hint for a list of parents: a layer names at most one, so its layers
 /// compose as a chain (LAYER-2). An undeclared `parents` key carries it, and
 /// so does a list written at a 1.x specification's `parent`.
-pub(super) fn one_parent_hint() -> (&'static str, SchemaContext) {
-    (
-        "hint",
-        SchemaContext::Text(
-            "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent; a fragment that several files share goes under include and names no parent".into(),
-        ),
-    )
+/// The hint for more than one parent in a file whose root class is `class`:
+/// a specification, whose shared fragments go under `include`, or a project
+/// file, which includes none (LAYER-2, PROJECT-16).
+pub(super) fn one_parent_hint(class: &str) -> (&'static str, SchemaContext) {
+    let mut hint = String::from(
+        "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent",
+    );
+    if class == crate::language::FileType::Spec.root_class() {
+        hint.push_str(
+            "; a fragment that several files share goes under include and names no parent",
+        );
+    }
+    ("hint", SchemaContext::Text(hint))
 }
 
 /// Shared context for an undeclared field, including a retired parent list.
@@ -223,8 +229,14 @@ pub(super) fn unknown_field_context(
         ("class", SchemaContext::Text(class.into())),
         ("identifier", SchemaContext::Text(field.into())),
     ];
-    if class == "root_class" && field == "parents" {
-        context.push(one_parent_hint());
+    let layered = [
+        crate::language::FileType::Spec,
+        crate::language::FileType::Project,
+    ]
+    .iter()
+    .any(|file_type| file_type.root_class() == class);
+    if layered && field == "parents" {
+        context.push(one_parent_hint(class));
     }
     context
 }

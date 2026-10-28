@@ -448,7 +448,7 @@ mod execution {
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 18] = [
+        const NOT_BUILT_HERE: [(&str, &str); 21] = [
             (
                 "negative-allowed-values-beside-codelist",
                 "the bound codelist's items come from its host environment, which this harness does not pass",
@@ -512,6 +512,18 @@ mod execution {
             (
                 "negative-numeric-format-name-with-dollar",
                 "the codelist is declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-project-parent-cycle",
+                "the project file names the parent, which this harness does not pass",
+            ),
+            (
+                "negative-project-parent-missing",
+                "the project file names the parent, which this harness does not pass",
+            ),
+            (
+                "negative-project-two-parents",
+                "the project file names the parents, which this harness does not pass",
             ),
             (
                 "negative-terminology-standard-unknown",

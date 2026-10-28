@@ -223,6 +223,10 @@ pub enum Failure<E> {
         findings: Vec<project_function_document::Finding>,
     },
     Rejected(Box<RejectedEnvironment<E>>),
+    /// The project file names a `parent`, and its layers do not compose
+    /// (PROJECT-16): refused as a specification's layers are, with the
+    /// project closure and the project file as the entry.
+    Layers(Box<crate::specification_source::InheritanceError<E>>),
 }
 
 /// Decode `source`, a file a project names, and admit it as `target` against
@@ -243,7 +247,15 @@ pub(crate) fn admit(
 ) -> Result<CapturedDocument, Error> {
     let document = match target {
         DecodeTarget::Project => {
-            document::decode(source, FileType::Project, Some(LANGUAGE_VERSION), closures)?
+            let document =
+                document::decode(source, FileType::Project, Some(LANGUAGE_VERSION), closures)?;
+            // A project file that names a parent is a layer of its chain,
+            // which composes it (PROJECT-16).
+            if yamaa_core::inheritance::reads_as_layer(FileType::Project, &document.raw().document)
+            {
+                return Ok(document.admit_layer()?.into_captured());
+            }
+            document
         }
         DecodeTarget::FunctionFile => {
             document::decode_referenced(source, FileType::Function, LANGUAGE_VERSION, closures)?
@@ -300,6 +312,49 @@ pub fn adapt_preparation<E>(
                 Failure::RootScalar { root, findings }
             }
             application::Failure::Rejected(rejected) => Failure::Rejected(rejected),
+            application::Failure::Layers { root, failure } => {
+                Failure::Layers(Box::new(layers_failure(&root, *failure)))
+            }
         }),
+    }
+}
+
+/// The refusal of a project file, admitted as `root`, whose layers do not
+/// compose, as the refusal of a specification's layers (PROJECT-16).
+fn layers_failure<E>(
+    root: &CapturedDocument,
+    failure: yamaa_core::project_layers::Failure<E, Error>,
+) -> crate::specification_source::InheritanceError<E> {
+    use crate::document::SpecificationError as V;
+    use yamaa_core::project_layers::Failure as F;
+    use yamaa_core::schema::NormalizationError;
+    let error = match failure {
+        F::Traversal(error) => V::Traversal(error),
+        F::Clear {
+            source,
+            document,
+            findings,
+        } => V::Clear {
+            source,
+            document,
+            findings,
+        },
+        F::Path(error) => V::Path(crate::specification_source::SourceFailure::Host(error)),
+        F::Normalize {
+            document: Some(document),
+            error: NormalizationError::Invalid(found),
+        } => V::Entry(document::findings(
+            root.schema(),
+            root.source().clone(),
+            document,
+            found,
+        )),
+        F::Normalize { error, .. } => V::Entry(Error::Normalize(error)),
+        F::Finding(finding) => V::Finding(finding),
+    };
+    crate::specification_source::InheritanceError::Versioned {
+        schema: std::sync::Arc::clone(root.schema()),
+        entry: root.source().identity.clone(),
+        error: Box::new(error),
     }
 }

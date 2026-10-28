@@ -1,0 +1,98 @@
+{
+  "about": "A project file that names a parent, composed with its parent chain before any file it names is read, as a check and a project check read it (PROJECT-4, PROJECT-16, LAYER-2, LAYER-4, LAYER-7, LAYER-9). Each project file is checked as a partial project and the composed project as a complete one, so a parent's section may wait for a later file to complete it, and a composed section without specs fails at the composed path. A clear entry naming a required field or nothing the file inherits fails at its index in the file that writes it. A parent written as a URI is refused as written, and a parent of another type at the parent that names it. Each file is named by its path in the study.",
+  "documents": {
+    "spec": "yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: ADSL\ninput: {SRC: input.csv}\nkeys: [USUBJID]\ncolumns:\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\noutput: {path: adsl.csv, columns: [USUBJID]}\n",
+    "study": "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [../adam/adsl.yaml]\n  context: Other\n"
+  },
+  "cases": [
+    {
+      "case": "a_parent_section_without_specs_composes_once_a_later_file_lists_them",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "study/project.yaml": "yamaa: \"1.0\"\ntype: project\nadam:\n  context: Other\n  originator: Study Vendor\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: study/project.yaml\nadam:\n  specs: [adam/adsl.yaml]\n",
+          "adam/adsl.yaml": {"base": "spec"}
+        },
+        "specification": "adam/adsl.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_composed_section_without_specs_fails_at_its_composed_path",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "study/project.yaml": "yamaa: \"1.0\"\ntype: project\nadam:\n  context: Other\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: study/project.yaml\nadam:\n  originator: Package Sponsor\n",
+          "adam/adsl.yaml": {"base": "spec"}
+        },
+        "specification": "adam/adsl.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.field"],
+      "issues": [{"condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["adam.specs"], "context": {"field": "specs"}}]
+    },
+    {
+      "case": "a_clear_naming_a_required_field_or_nothing_inherited_fails_at_each_entry",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "study"},
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: study/project.yaml\nclear: [adam.specs, study, adam.context]\n",
+          "adam/adsl.yaml": {"base": "spec"}
+        },
+        "specification": "adam/adsl.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "invalid_clear", "rule": "LAYER-9", "spec_paths": ["clear[0]"], "context": {"field": "specs", "source": "{study}/project.yaml", "entry": "{study}/project.yaml"}},
+        {"condition": "invalid_clear", "rule": "LAYER-9", "spec_paths": ["clear[1]"], "context": {"field": "study", "source": "{study}/project.yaml", "entry": "{study}/project.yaml"}}
+      ]
+    },
+    {
+      "case": "a_clear_in_a_project_file_without_a_parent_names_nothing_it_inherits",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nclear: [adam.originator]\nadam:\n  specs: [adam/adsl.yaml]\n  context: Other\n",
+          "adam/adsl.yaml": {"base": "spec"}
+        },
+        "specification": "adam/adsl.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "invalid_clear", "rule": "LAYER-9", "spec_paths": ["clear[0]"], "context": {"field": "originator", "source": "{study}/project.yaml", "entry": "{study}/project.yaml"}}]
+    },
+    {
+      "case": "a_parent_written_as_a_uri_is_refused_as_written",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: https://example.org/study/project.yaml\n",
+          "adam/adsl.yaml": {"base": "spec"}
+        },
+        "specification": "adam/adsl.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "invalid_parent_path", "rule": "LAYER-2", "spec_paths": ["parent"], "context": {"reason": "remote_reference", "parent": "https://example.org/study/project.yaml", "source": "{study}/project.yaml"}}]
+    },
+    {
+      "case": "a_parent_that_declares_another_type_fails_at_the_parent_naming_it",
+      "operation": ["check", "check_resources"],
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: adam/adsl.yaml\n",
+          "adam/adsl.yaml": {"base": "spec"}
+        },
+        "specification": "adam/adsl.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unexpected_file_type", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"source": "{study}/adam/adsl.yaml", "entry": "{study}/project.yaml", "declaring_source": "{study}/project.yaml", "type": "spec", "expected": "project"}}]
+    }
+  ]
+}

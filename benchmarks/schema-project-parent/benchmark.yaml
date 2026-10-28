@@ -1,0 +1,18 @@
+lifecycle: draft
+standard: ADaM
+domain: ADSL
+entries:
+  python:
+  - specification: spec.yaml
+    environment: pilot3/project.yaml
+  - specification: spec.yaml
+    environment: project.yaml
+  r:
+  - specification: spec.yaml
+    environment: pilot3/project.yaml
+  - specification: spec.yaml
+    environment: project.yaml
+define:
+  environment: project.yaml
+  standard: adam
+  created: '2026-09-11T00:00:00'

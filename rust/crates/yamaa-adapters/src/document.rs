@@ -188,7 +188,7 @@ pub fn file_type(source: Source, reads: LanguageVersion) -> Result<FileType, Err
     }
 }
 
-fn findings(
+pub(crate) fn findings(
     schema: &Arc<CapturedSchema>,
     source: Source,
     document: Document,
@@ -371,6 +371,10 @@ pub enum SpecificationError<E> {
     /// The producing specification a copy entry copies from could not be
     /// read (SPEC-9).
     Producer(ProducerFailure<E>),
+    /// A parent the port refused as written, or a layer it would not respell,
+    /// with the finding it classified, for a project file's layers
+    /// (PROJECT-16).
+    Finding(Box<yamaa_core::diagnostic::Diagnostic>),
 }
 
 /// Why the producing specification a copy entry copies from was not read
@@ -437,6 +441,37 @@ impl VersionedDocument {
             )),
             Err(error) => Err(Error::Normalize(error)),
         }
+    }
+
+    /// Admit one layer of a project file's chain, a project file that names a
+    /// `parent`, against the view of its closure at the version it declares,
+    /// as a specification's layers are admitted: a layer need not be
+    /// complete, and inside a section requiredness and defaults wait for the
+    /// composed project (LAYER-4, PROJECT-16).
+    pub fn admit_layer(self) -> Result<AdmittedDocument, Error> {
+        let view = self.schema.structure().at_version(self.header.version);
+        match view.validate_layer(&self.raw.document) {
+            Ok(found) if found.is_empty() => {}
+            Ok(found) => {
+                return Err(findings(
+                    &self.schema,
+                    self.source,
+                    self.raw.document,
+                    found,
+                ))
+            }
+            Err(error) => return Err(Error::Validation(error)),
+        }
+        let normalized = view
+            .normalize_versioned_layer(&self.raw.document)
+            .map_err(Error::Normalize)?;
+        Ok(AdmittedDocument {
+            source: self.source,
+            raw: self.raw,
+            header: self.header,
+            schema: self.schema,
+            normalized,
+        })
     }
 
     /// Prepare a 1.x specification. Its layers are followed from this entry,

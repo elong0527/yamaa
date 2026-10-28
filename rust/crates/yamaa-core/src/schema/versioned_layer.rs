@@ -16,6 +16,12 @@ use crate::diagnostic::ConditionCode;
 /// layer defers requiredness to the resolved specification (LAYER-4).
 pub(super) const COLLECTIONS: [&str; 5] = ["input", "windows", "intermediates", "columns", "rows"];
 
+/// The sections of a project, each of which composes as one member, merging
+/// with the section it inherits (PROJECT-16); inside one, as inside a member
+/// of a specification's keyed collection, a layer defers requiredness and
+/// defaults to the composed project (LAYER-4, LAYER-7).
+const SECTIONS: [&str; 5] = ["environments", "study", "sdtm", "adam", "send"];
+
 /// The keyed collections written as lists, and the field each member is
 /// identified by.
 pub(super) const IDENTITIES: [(&str, &str); 3] =
@@ -31,6 +37,19 @@ fn identity(field: &str) -> Option<&'static str> {
 }
 
 impl SchemaStructure {
+    /// Whether the root field `field` of a layer read against this view
+    /// composes member by member with the value it inherits, so that a layer
+    /// may write it in part: a keyed collection of a specification (LAYER-5)
+    /// or a section of a project (PROJECT-16). Every other root field is
+    /// complete where it is written and replaces what it inherits.
+    pub(super) fn composes_members(&self, field: &str) -> bool {
+        if self.root_class().name == crate::language::FileType::Project.root_class() {
+            SECTIONS.contains(&field)
+        } else {
+            COLLECTIONS.contains(&field)
+        }
+    }
+
     /// The findings of one 1.x specification layer, checked against this view
     /// of the 1.0 closure: the one its declared version selects
     /// ([`SchemaStructure::at_version`]). The header has already been read
@@ -77,7 +96,7 @@ impl SchemaStructure {
             let Some(value) = input.field(root, &field.name) else {
                 continue;
             };
-            let fragment = COLLECTIONS.contains(&field.name.as_str());
+            let fragment = self.composes_members(&field.name);
             let mut found = self.validate_versioned_descriptor(
                 field.descriptor,
                 input,
@@ -92,7 +111,7 @@ impl SchemaStructure {
             if field.name == "parent" && matches!(input.nodes()[value], N::Sequence(_)) {
                 for finding in &mut found {
                     if finding.code == ConditionCode::SchemaInvalidFieldType {
-                        finding.context.push(one_parent_hint());
+                        finding.context.push(one_parent_hint(&class.name));
                     }
                 }
             }
@@ -158,7 +177,7 @@ impl SchemaStructure {
                     descriptor: field.descriptor,
                 },
             });
-            let fragment = COLLECTIONS.contains(&field.name.as_str());
+            let fragment = self.composes_members(&field.name);
             let (_, found) = self.versioned_descriptor_sites(
                 field.descriptor,
                 input,
@@ -300,7 +319,7 @@ impl SchemaStructure {
             ) else {
                 continue;
             };
-            let fragment = COLLECTIONS.contains(&field.name.as_str());
+            let fragment = self.composes_members(&field.name);
             let normalized =
                 self.normalize_versioned_descriptor(field.descriptor, input, value, fragment)?;
             let offset = nodes.len();

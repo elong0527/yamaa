@@ -6391,7 +6391,7 @@
         {
           "file_type": "project",
           "title": "yamaa 1.0 project file",
-          "ref": "#/$defs/project_class"
+          "ref": "#/$defs/project_file"
         },
         {
           "file_type": "codelists",

@@ -5659,7 +5659,7 @@
     "spec_path": {
       "type": "string",
       "minLength": 1,
-      "description": "Dotted path of a value in the resolved specification, naming a keyed member by its identity and quoting any other segment that is not a name (LAYER-9)."
+      "description": "Dotted path of a value in the resolved specification or the composed project, naming a keyed member by its identity and quoting any other segment that is not a name (LAYER-9, PROJECT-16)."
     },
     "standard_reference": {
       "type": "string",

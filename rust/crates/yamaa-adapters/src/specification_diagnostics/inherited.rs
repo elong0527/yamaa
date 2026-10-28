@@ -208,6 +208,7 @@ fn versioned_failure_ref<'a, T>(
         ),
         // A copy entry's producer that was not read reports what its link
         // would (INPUT-10): findings at the link, or the producer's own.
+        V::Finding(finding) => Rejection::Invalid(vec![finding.as_ref().clone()]),
         V::Producer(failure) => match failure {
             crate::document::ProducerFailure::Findings(findings) => {
                 Rejection::Invalid(findings.clone())

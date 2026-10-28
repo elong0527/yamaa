@@ -141,6 +141,14 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
     fn admitted_source(admitted: &CapturedDocument) -> &Source {
         admitted.source()
     }
+    fn admitted_layers(
+        admitted: &CapturedDocument,
+    ) -> Option<(
+        &yamaa_core::schema::SchemaStructure,
+        &yamaa_core::schema::Document,
+    )> {
+        Some((admitted.schema().structure(), &admitted.raw().document))
+    }
     /// The packaging tool whose lock syntax the held bytes parse as.
     fn lock(&mut self, source: &Source) -> Option<LockKind> {
         crate::project_lock::kind(&source.bytes).ok()

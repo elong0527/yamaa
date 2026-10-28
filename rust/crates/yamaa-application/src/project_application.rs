@@ -141,6 +141,9 @@ fn environment_failure(error: &EnvironmentFailure<crate::file_resources::Error>)
         EnvironmentFailure::Interrupted { error, .. } => {
             return file_application::resource_failure(Step::Environment, error)
         }
+        // A project file whose layers do not compose is refused as a
+        // specification's layers are (PROJECT-16).
+        EnvironmentFailure::Layers(error) => return inherited(error),
         EnvironmentFailure::Root(error @ SourceError::Decode { identity, .. }) => {
             diagnostics::root_boundary(error, identity)
         }
@@ -327,6 +330,7 @@ fn environment_issues<'a>(
         F::RootScalar { root, findings } => {
             issues.extend(D::scalar_root(root, findings).map_err(|_| invalid())?)
         }
+        F::Layers(error) => return inheritance_issues(owner, error),
         F::Rejected(rejected) => {
             for rows in [
                 D::admission(rejected),
@@ -381,6 +385,7 @@ fn inheritance_issues<'a>(
                 V::Entry(S::Findings(_))
                 | V::Clear { .. }
                 | V::Copy { .. }
+                | V::Finding(_)
                 | V::Producer(P::Findings(_)) => true,
                 // A copy entry's producer that did not prepare reports its
                 // own findings, as a link's producer does (INPUT-10).

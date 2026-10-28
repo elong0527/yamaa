@@ -1,0 +1,11 @@
+yamaa: "1.0"
+type: project
+# The defect: the study's project names the package's as its own parent.
+parent: ../project.yaml
+codelists:
+- codelists:
+  - id: TRT01P
+    name: Planned Treatment for Period 01
+    items:
+    - {value: PLACEBO}
+    - {value: VITAMIN D3}

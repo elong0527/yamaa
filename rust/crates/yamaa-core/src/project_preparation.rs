@@ -2,9 +2,12 @@
 //! Code activation, study data and publication authority are absent from this service.
 //!
 //! The caller supplies one project file, which the decoder admits as a 1.0
-//! project (SCHEMA-2). Each captured file lowers once into its root
-//! ([`crate::ast::project`]); every later read is of those roots. Paths a
-//! project writes resolve from the project file.
+//! project (SCHEMA-2). A project file that names a `parent` lowers composed
+//! with its parent chain ([`crate::project_layers`], PROJECT-16). Each
+//! captured file lowers once into its root ([`crate::ast::project`]); every
+//! later read is of those roots. Paths a project writes resolve from the
+//! project file, a parent's respelled from it so that each names the
+//! location beside the file that writes it (PROJECT-4).
 //!
 //! A project lists its function files in `functions` and holds each host
 //! language's lock in `environments.<host>.lock` (D8). Each listed function
@@ -148,6 +151,13 @@ pub enum Failure<E, D, X> {
     },
     #[error("project preparation rejected: {0:?}")]
     Rejected(Box<RejectedEnvironment<E, D, X>>),
+    /// The project file, admitted as `root`, names a `parent`, and its
+    /// layers do not compose (PROJECT-16).
+    #[error("project preparation layers: root={root:?}, failure={failure:?}")]
+    Layers {
+        root: Box<D>,
+        failure: Box<crate::project_layers::Failure<E, X>>,
+    },
 }
 
 /// Preparation moves both admitted metadata and original boundary evidence.
@@ -266,7 +276,41 @@ pub fn prepare<P: Resolver, D: Decoder>(
     let root = decoder
         .admitted(source, DecodeTarget::Project)
         .map_err(Failure::Root)?;
-    let project = match lower::project(D::admitted_document(&root), None) {
+    // A project file that names a parent lowers composed with its parent
+    // chain (PROJECT-16).
+    let composed = match D::admitted_layers(&root) {
+        Some((schema, written))
+            if crate::inheritance::reads_as_layer(crate::language::FileType::Project, written) =>
+        {
+            let identity = D::admitted_source(&root).identity.clone();
+            let entry = crate::inheritance::Source {
+                display_path: identity.clone(),
+                identity,
+            };
+            let written = written.clone();
+            match crate::project_layers::compose(
+                schema,
+                crate::language::LANGUAGE_VERSION,
+                entry,
+                written,
+                port,
+                decoder,
+            ) {
+                Ok(composed) => Some(composed.document),
+                Err(failure) => {
+                    return Err(Failure::Layers {
+                        root: Box::new(root),
+                        failure: Box::new(failure),
+                    })
+                }
+            }
+        }
+        _ => None,
+    };
+    let document = composed
+        .as_ref()
+        .unwrap_or_else(|| D::admitted_document(&root));
+    let project = match lower::project(document, None) {
         Ok(project) => project,
         Err(findings) => {
             return Err(Failure::RootScalar {

@@ -806,6 +806,8 @@ fn layer_header(input: &Json) -> Vec<Diagnostic> {
                 source: text(input, "source"),
                 entry: text(input, "entry"),
                 file_type: text(input, "file_type"),
+                // A specification's layers each declare `type: spec`.
+                expected: yamaa_core::language::FileType::Spec,
                 named,
                 declaring,
             }

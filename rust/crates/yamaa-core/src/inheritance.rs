@@ -141,8 +141,12 @@ pub enum Error<E> {
 pub enum HeaderMismatch {
     /// A version the engine does not read, beside the versions it reads.
     Version { version: String, reads: Vec<String> },
-    /// A type other than `spec`.
-    FileType { file_type: String },
+    /// A type other than the one every layer of the chain declares,
+    /// `expected`: `spec`, or `project` for a project's layers.
+    FileType {
+        file_type: String,
+        expected: FileType,
+    },
 }
 
 impl<E> From<crate::limits::LimitExceeded> for Error<E> {
@@ -215,10 +219,14 @@ impl<E> Error<E> {
                     named: *named,
                     declaring: declaring.as_deref(),
                 },
-                HeaderMismatch::FileType { file_type } => F::FileType {
+                HeaderMismatch::FileType {
+                    file_type,
+                    expected,
+                } => F::FileType {
                     source,
                     entry,
                     file_type,
+                    expected: *expected,
                     named: *named,
                     declaring: declaring.as_deref(),
                 },
@@ -335,6 +343,20 @@ pub fn declares_parent(document: &Document) -> bool {
         .is_some_and(|node| !matches!(document.nodes()[node], N::Null))
 }
 
+/// Whether a 1.x document of `file_type` is read as one layer of a chain,
+/// which need not be complete: a specification always (LAYER-4), and a
+/// project file that names a `parent` or clears what it inherits, so that a
+/// clear naming nothing it inherits fails as one (PROJECT-16).
+pub fn reads_as_layer(file_type: FileType, document: &Document) -> bool {
+    match file_type {
+        FileType::Spec => true,
+        FileType::Project => {
+            declares_parent(document) || document.field(document.root(), "clear").is_some()
+        }
+        FileType::Codelists | FileType::Function => false,
+    }
+}
+
 /// The traversal error a refused header gives: a malformed header is a
 /// finding in the layer, as is the `schema_version` of a layer no field names,
 /// the entry or the parent a caller names; a version or type the traversal
@@ -356,7 +378,14 @@ fn header_error<E>(
             reads,
         },
         HeaderFault::Version { version, reads, .. } => HeaderMismatch::Version { version, reads },
-        HeaderFault::FileType { file_type, .. } => HeaderMismatch::FileType { file_type },
+        HeaderFault::FileType {
+            file_type,
+            expected,
+            ..
+        } => HeaderMismatch::FileType {
+            file_type,
+            expected,
+        },
         HeaderFault::Shape(_) | HeaderFault::Legacy { .. } => {
             return Error::Layer {
                 source: source.identity,
@@ -726,9 +755,56 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
     resolver: &mut R,
     decoder: &mut D,
 ) -> Result<Traversal<D::Raw>, Error<ReadFailure<R, D>>> {
+    traverse(
+        (schema, FileType::Spec),
+        reads,
+        entry,
+        entry_document,
+        parent,
+        resolver,
+        decoder,
+    )
+}
+
+/// Follow a project file's parents from the entry, as
+/// [`traverse_versioned`] follows a specification's, admitting each layer
+/// against `schema`, the 1.0 project closure, at the version it declares:
+/// every layer declares `type: project` (PROJECT-16). A project names no
+/// fragment, and no file names a parent for it.
+pub fn traverse_project<R: Resolver, D: Decoder>(
+    schema: &SchemaStructure,
+    reads: LanguageVersion,
+    entry: Source,
+    entry_document: Document,
+    resolver: &mut R,
+    decoder: &mut D,
+) -> Result<Traversal<D::Raw>, Error<ReadFailure<R, D>>> {
+    traverse(
+        (schema, FileType::Project),
+        reads,
+        entry,
+        entry_document,
+        None,
+        resolver,
+        decoder,
+    )
+}
+
+/// The traversal of a chain whose every layer declares `file_type`, each
+/// admitted against `schema`, its 1.0 closure.
+fn traverse<R: Resolver, D: Decoder>(
+    (schema, file_type): (&SchemaStructure, FileType),
+    reads: LanguageVersion,
+    entry: Source,
+    entry_document: Document,
+    parent: Option<CallerParent<'_>>,
+    resolver: &mut R,
+    decoder: &mut D,
+) -> Result<Traversal<D::Raw>, Error<ReadFailure<R, D>>> {
     let mut parents = Vec::new();
     let admission = LayerAdmission {
         schema,
+        file_type,
         reads,
         given_parent: parent.map(|parent| parent.given),
     };
@@ -761,6 +837,8 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
 #[derive(Clone, Copy)]
 struct LayerAdmission<'a> {
     schema: &'a SchemaStructure,
+    /// The type every layer declares.
+    file_type: FileType,
     reads: LanguageVersion,
     given_parent: Option<&'a str>,
 }
@@ -778,10 +856,11 @@ fn admit_versioned<E>(
 ) -> Result<(VersionedLayer, Links), Error<E>> {
     let LayerAdmission {
         schema,
+        file_type,
         reads,
         given_parent,
     } = admission;
-    let header = match language::read_header(&input, Some(reads), FileType::Spec) {
+    let header = match language::read_header(&input, Some(reads), file_type) {
         Ok(header) => header,
         Err(fault) => return Err(header_error(fault, entry, source, input, named, declaring)),
     };
