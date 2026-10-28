@@ -318,6 +318,16 @@ mod tests {
                         ]),
                     ),
                 ),
+                value(
+                    "DECODED",
+                    op(
+                        "decode",
+                        fields(vec![
+                            ("source", Tree::text("SRC.T")),
+                            ("codelist", Tree::text("PARAMCD"))
+                        ]),
+                    ),
+                ),
                 value("NUMBER", op("row_number", fields(vec![]))),
                 value("ODM", op("odm", Tree::text("ODM.IT"))),
                 value(
@@ -341,6 +351,7 @@ mod tests {
                 ResultType::STR,
                 ResultType::INT,
                 ResultType::FLOAT,
+                ResultType::STR,
                 ResultType::STR,
                 ResultType::INT,
                 ResultType::STR,

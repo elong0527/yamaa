@@ -133,7 +133,7 @@ in one schema module per family:
 | Family | Module | Verbs |
 |---|---|---|
 | Core selection | `schema_expression_core.yaml` | `source`, `first_available`, `greatest`, `least`, `case`, `flag` |
-| Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
+| Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `decode`, `cut` |
 | Strings | `schema_expression_str.yaml` | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template`, `str_case` |
 | Rounding | `schema_expression_numeric.yaml` | `round_half_away_from_zero`, `str_decimal` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
@@ -285,6 +285,7 @@ in its short form is listed under the field it fills.
 | `case`, in each item | `when`, `then`, `otherwise` | | | | |
 | `flag` | `condition` | | | `true_value`, `false_value`, `missing` | |
 | `mapping` | | `source` | | `dict`, `case_sensitive`, `missing`, `unmapped` | |
+| `decode` | | `source` | `codelist` | `missing`, `unmapped` | |
 | `cut` | | `source` | | `breaks`, `labels`, `closed`, `missing` | |
 | `str_pad` | | `source` | | `width` | |
 | `str_substr` | | `source` | | `start`, `length`, `piece`, `missing` | |
