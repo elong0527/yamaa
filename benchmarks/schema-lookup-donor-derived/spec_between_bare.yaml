@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+domain: BANDDOSE
+keys: [USUBJID]
+input:
+  SUBJECTS: input/subjects.csv
+  DOSES: {path: input/doses.csv, types: {SEQ: int, DAY: int, DUR: int}}
+  BANDS: {path: input/bands.csv, types: {BAND: int, LO: int, HI: int}}
+base: SUBJECTS
+
+output:
+  path: between_bare.csv
+  columns: [USUBJID, B2SEQ]
+
+intermediates:
+  - id: BAND_OF
+    dataset: BANDS
+    key: [USUBJID]
+    between: {value: LASTDAY, lower: LO, upper: HI}
+
+  - id: FIRST_B2
+    dataset: DOSES
+    key: [USUBJID]
+    filter: "DOSES.DOSEBAND = 2"
+    order_by: [DOSES.DAY]
+    keep: first
+    derivations:
+      LASTDAY: "DAY + DUR - 1"
+      DOSEBAND: {type: int, derivation: BAND_OF.BAND}
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SUBJECTS.USUBJID
+
+  - name: B2SEQ
+    type: int
+    label: First Qualifying Dose Sequence
+    derivation: FIRST_B2.SEQ

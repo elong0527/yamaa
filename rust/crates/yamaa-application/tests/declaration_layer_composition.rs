@@ -417,8 +417,13 @@ output: {path: out.csv, columns: [CODE, REASON]}
             for (pointer, origin) in &entry.origins {
                 let authored = origin.source_kind == OriginKind::Authored;
                 assert_eq!(
-                    (origin.line.is_some(), origin.column.is_some()),
-                    (authored, authored),
+                    (
+                        origin.line.is_some(),
+                        origin.column.is_some(),
+                        origin.end_line.is_some(),
+                        origin.end_column.is_some()
+                    ),
+                    (authored, authored, authored, authored),
                     "the location of {pointer:?}"
                 );
             }

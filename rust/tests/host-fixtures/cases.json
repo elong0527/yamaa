@@ -7331,6 +7331,8 @@
             "declaring_source": "ae.yaml",
             "line": 7,
             "column": 39,
+            "end_line": 7,
+            "end_column": 46,
             "source_kind": "authored",
             "generated": false
           },
@@ -7338,6 +7340,8 @@
             "declaring_source": "duration.yaml",
             "line": 6,
             "column": 12,
+            "end_line": 6,
+            "end_column": 20,
             "source_kind": "authored",
             "generated": false
           },
@@ -7345,6 +7349,8 @@
             "declaring_source": "duration.yaml",
             "line": 7,
             "column": 17,
+            "end_line": 7,
+            "end_column": 88,
             "source_kind": "authored",
             "generated": false
           },
@@ -7352,6 +7358,8 @@
             "declaring_source": "severity.yaml",
             "line": 6,
             "column": 12,
+            "end_line": 6,
+            "end_column": 20,
             "source_kind": "authored",
             "generated": false
           },
@@ -7359,6 +7367,8 @@
             "declaring_source": "adae.yaml",
             "line": 5,
             "column": 9,
+            "end_line": 5,
+            "end_column": 13,
             "source_kind": "authored",
             "generated": false
           }

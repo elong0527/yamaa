@@ -290,12 +290,15 @@ fn versioned_origins(prepared: &PreparedSpecification) -> BTreeMap<String, Field
         };
         // Only a node a layer wrote has a position.
         let written = positions.get(node).copied().flatten();
+        let end = prepared.end_position(node);
         result.insert(
             pointer.clone(),
             FieldOrigin {
                 declaring_source,
                 line: written.map(|at| at.line),
                 column: written.map(|at| at.column),
+                end_line: end.map(|at| at.line),
+                end_column: end.map(|at| at.column),
                 source_kind,
                 generated: original.origin.generated,
             },

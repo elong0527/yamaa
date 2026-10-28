@@ -5,6 +5,37 @@ use crate::{
     dataset::{CurrentField, CurrentRead, Intermediate, RelationPredicate},
 };
 
+/// A current expression key must resolve its source cardinality before the
+/// filter's operand types. Both initial binding and donor rebasing use this.
+pub(super) fn static_filter_types(keys: &[crate::dataset::IntermediateKey]) -> bool {
+    !(keys.iter().any(|key| key.value.is_expression())
+        && keys.iter().flat_map(|key| key.value.reads()).any(|read| {
+            matches!(
+                read,
+                crate::dataset::MatchRead::Record { .. }
+                    | crate::dataset::MatchRead::SecondaryRecord { .. }
+            )
+        }))
+}
+
+/// Type one predicate from the fields its binding supplies. Deferred donor
+/// names get the same judgement once those fields are known.
+pub(super) fn typed(
+    plan: &CompiledExpression,
+    kind: impl Fn(&str) -> Option<crate::value::ValueType>,
+    static_types: bool,
+    findings: &mut Vec<BindFinding>,
+) -> (CompiledExpression, Vec<crate::diagnostic::Diagnostic>) {
+    let types = types::predicate_kinds(plan, &kind);
+    if static_types {
+        findings.extend(types.iter().cloned().map(BindFinding::Predicate));
+    }
+    (
+        plan.typed(|name| crate::result_type::ResultType::known(kind(name))),
+        if static_types { Vec::new() } else { types },
+    )
+}
+
 /// Bind a lookup's filter over the relation it reads: a field of the
 /// relation, or a field of another input's current record; with the
 /// predicate's operand types when `static_filter_types`.
@@ -14,6 +45,7 @@ pub(super) fn bind(
     self_rows: bool,
     inputs: binder::Inputs<'_>,
     static_filter_types: bool,
+    contextual: bool,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationPredicate>, BindError> {
     let intermediates::Donor {
@@ -60,20 +92,22 @@ pub(super) fn bind(
                             schemas[index].position(field).map(|column| (index, column))
                         })
                 })
-                .map(|(index, column)| {
+                .map(|(index, column)| CurrentRead::Record {
+                    source: if index == driver {
+                        0
+                    } else if index < driver {
+                        index + 1
+                    } else {
+                        index
+                    },
+                    column,
+                })
+                .or_else(|| contextual.then_some(CurrentRead::Contextual))
+                .map(|read| {
                     let slot = current.len();
                     current.push(CurrentField {
                         identifier: name.into(),
-                        read: CurrentRead::Record {
-                            source: if index == driver {
-                                0
-                            } else if index < driver {
-                                index + 1
-                            } else {
-                                index
-                            },
-                            column,
-                        },
+                        read,
                     });
                     Read::Column(slot)
                 })
@@ -137,25 +171,17 @@ pub(super) fn bind(
             _ => None,
         }
     };
-    let type_findings = types::predicate_kinds(plan, kind);
-    if static_filter_types {
-        findings.extend(type_findings.iter().cloned().map(BindFinding::Predicate));
-    }
+    let (typed, deferred) = typed(plan, kind, static_filter_types, findings);
     if !references_resolved {
         return Ok(None);
     }
-    let typed = plan.typed(|name| crate::result_type::ResultType::known(kind(name)));
     Ok(Some(
         RelationPredicate::new(
             BoundPredicate::new(typed, bindings).map_err(BindError::InvalidPredicateBinding)?,
             current,
         )
         .map_err(BindError::InvalidPredicateBinding)?
-        .with_deferred_type_findings(if static_filter_types {
-            Vec::new()
-        } else {
-            type_findings
-        }),
+        .with_deferred_type_findings(deferred),
     ))
 }
 
@@ -294,6 +320,15 @@ pub(super) fn admit_reads<'a>(
             }
             if let Some(filter) = &item.filter {
                 for field in filter.current() {
+                    if field.read == CurrentRead::Contextual {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            filter.plan().spec_path(),
+                            &field.identifier,
+                            Some(&item.identifier),
+                            ReferenceCause::Selection,
+                            None,
+                        )));
+                    }
                     if let CurrentRead::Record {
                         source: driver,
                         column,
