@@ -97,12 +97,14 @@ codelists:
 ```
 
 A list's `id` is what a column binds, and its `name` is the human-readable
-description; each is unique across all the project's sources, and a duplicate
-fails validation with `duplicate_define_identifier`. `alias` records the
-published concept identifier of a list or of one item, independent of the
-binding `id`. A Define-XML document under `context: Submission` requires an
-`alias` on every `CDISC/NCI` list that declares items and on each of its
-items except a sponsor addition, as the
+description. An `id` is declared once in a file, and a later file may
+replace a list by its `id` ([below](#replace-a-shared-list)); a `name` is
+unique among the lists the project keeps. A repeated `id` in one file, or a
+repeated `name`, fails validation with `duplicate_define_identifier`.
+`alias` records the published concept identifier of a list or of one item,
+independent of the binding `id`. A Define-XML document under
+`context: Submission` requires an `alias` on every `CDISC/NCI` list that
+declares items and on each of its items except a sponsor addition, as the
 [Define-XML rule](../../rules/profiles/define-xml.md#define-4) describes.
 
 Each list declares either `items` or `external`, never both and never
@@ -138,6 +140,30 @@ itself in place of a path; a file lets several studies share one terminology
 release. A project may declare lists that no specification binds: a
 Define-XML document carries only the lists its datasets bind, so one set of
 files serves the `sdtm` and `adam` sections alike.
+
+## Replace a shared list
+
+The submission packages of one study can share the study's codelists files
+and declare only the lists a package changes. The package's project lists the
+shared files first, then its own file, and a list in a later file replaces
+every earlier list of the same `id`:
+
+```yaml
+codelists:
+  - ../study/codelists/sponsor.yaml
+  - codelists/package.yaml # declares only DCSREAS
+```
+
+The replacing list is the later declaration alone, its `name`, items and
+decodes included; nothing of the list it replaces is kept. It belongs to its
+own file, so it is drawn from that file's `standard`, and a Define-XML
+document lists it where that file lists it. Every other list of the shared
+files is kept as declared. A `name` stays unique among the lists the project
+keeps: a later list that reuses a kept list's `name` under another `id`, such
+as a replacement written under a misspelled `id`, fails with
+`duplicate_define_identifier`. The
+[terminology rule](../../rules/profiles/terminology.md#ct-1) states the
+composition.
 
 ## Terminology standards and implementation guides
 

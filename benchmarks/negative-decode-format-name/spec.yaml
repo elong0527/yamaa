@@ -1,0 +1,39 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  # The defect: $PARAMCD is the format name a parameter codelist carries for
+  # a reader, not the id a project file declares the codelist under, and no
+  # codelist id begins with a dollar sign, so the spec is rejected before any
+  # data is read.
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      decode:
+        source: PARAMCD
+        codelist: $PARAMCD
