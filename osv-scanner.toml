@@ -30,3 +30,68 @@ reason = "PyO3 0.27.2 is the newest release that builds with the workspace's min
 id = "RUSTSEC-2026-0177"
 ignoreUntil = 2027-01-31
 reason = "PyO3 0.27.2 is the newest release that builds with the workspace's minimum Rust 1.82 (#3111), which stays the minimum through 1.0.0 for CRAN's two-year-old cargo rule (#3154). The fix arrived in 0.29.0, which needs Rust 1.83, and no 0.27 or 0.28 release carries it. The Python binding never calls PyCFunction::new_closure, and no other locked crate depends on PyO3."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0391"
+ignoreUntil = 2027-01-31
+reason = "zstd 0.13.3 (fixed in 0.14.3) arrives only through parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd@0.13.3 lists nothing."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0395"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0396"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0397"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0398"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0399"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0400"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0401"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0402"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0403"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0404"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0405"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0406"
+ignoreUntil = 2027-01-31
+reason = "zstd-safe 7.3.0 (fixed in 8.2.0) arrives only through zstd 0.13.3 and parquet 55.2.0, which requires zstd 0.13 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which compresses and decompresses only the Parquet pages those tests write or save (#3878). Every package builds zstd-safe 8.2.0, through zstd 0.14.3 (#4066), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i zstd-safe@7.3.0 lists nothing. RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which zstd-safe is not, so rust/deny.toml does not list it."

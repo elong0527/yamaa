@@ -129,6 +129,6 @@ zerocopy	0.8.63	MIT	crates.io	transitive dependency of ahash and half: checked b
 zerocopy-derive	0.8.63	MIT	crates.io	procedural macro: zerocopy's derives, which half enables
 zlib-rs	0.6.8	Zlib	crates.io	transitive dependency of flate2: the DEFLATE backend that yamaa-adapters names (the parquet and odm features), which flate2 prefers
 zmij	1.0.23	MIT	crates.io	transitive dependency of serde_json: floating-point formatting
-zstd	0.13.3	MIT	crates.io	Zstandard codec for Parquet pages (the parquet feature)
-zstd-safe	7.3.0	BSD-3-Clause	crates.io	transitive dependency of zstd: safe bindings to the zstd C library
+zstd	0.14.3	BSD-3-Clause	crates.io	Zstandard codec for Parquet pages (the parquet feature)
+zstd-safe	8.2.0	BSD-3-Clause	crates.io	transitive dependency of zstd: safe bindings to the zstd C library
 zstd-sys	2.1.2+zstd.1.5.7	BSD-3-Clause	crates.io	transitive dependency of zstd-safe: builds and links the zstd C library that it bundles
