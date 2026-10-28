@@ -26,8 +26,8 @@ columns:
     label: Parameter Code
     derivation: LB.LBTESTCD
 
-  # The defect: $PARAMCD is the format name the project's parameter codelist
-  # carries for a reader, not the id the project declares it under, and no
+  # The defect: $PARAMCD is the format name a parameter codelist carries for
+  # a reader, not the id a project file declares the codelist under, and no
   # codelist id begins with a dollar sign, so the spec is rejected before any
   # data is read.
   - name: PARAM

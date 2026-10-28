@@ -20,8 +20,20 @@ record is read and no artifact is accepted.
 
 ## How to fix
 
-Refer to the terminology by the `id` the project file declares it under,
-`PARAMCD`, rather than by its `format_name`:
+Refer to the terminology by the `id` the study's project file declares it
+under, `PARAMCD`, rather than by its `format_name`, and build the dataset
+from that project file, which declares the codes and their decodes once:
+
+```yaml
+codelists:
+  - codelists:
+      - id: PARAMCD
+        name: Parameter Code
+        format_name: $PARAMCD
+        items:
+          - {value: ALT, decode: Alanine Aminotransferase (U/L)}
+          - {value: AST, decode: Aspartate Aminotransferase (U/L)}
+```
 
 ```yaml
 derivation:
