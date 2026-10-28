@@ -58,9 +58,9 @@ declaring file. A rooted path names its absolute local location regardless of
 
 Evidence: `rust/crates/yamaa-application/tests/file_resources.rs::entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts`, `rust/crates/yamaa-application/tests/file_resources.rs::composed_relative_input_base_can_change_without_redeclaring_the_inherited_path`, `rust/crates/yamaa-application/tests/resolved_artifact.rs::two_studies_and_their_schema_links_match_the_actual_direct_preparation`, `python/tests/installed/installed_file_resources.py::test_entry_relative_schema_links_select_each_study_producer_wrapper`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_entry_relative_schema_resolves_from_the_entry_in_every_layer`.
 
-The schema fixes the closed values and the default. An inherited input uses
-its composed setting, even when another layer supplied the path. An inherited
-output uses its complete inherited declaration.
+The schema fixes the closed values and the default. An inherited input or
+output uses its composed setting, even when another layer supplied the path
+([LAYER-10](../inheritance.md#layer-10)).
 
 A `schema` link selects the producing specification's file, which may inherit
 shared layers. A shared consumer can select a study's producer wrapper with

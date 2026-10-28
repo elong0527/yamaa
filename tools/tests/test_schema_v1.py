@@ -927,6 +927,39 @@ class JsonSchemaTests(unittest.TestCase):
                 (target / "environment.schema.json").write_text("{}\n")
                 self.assertEqual(run(), 1)
 
+    def test_the_check_refuses_lists_that_differ_from_the_engine_declarations(self):
+        source = generator.LAYER_SOURCE.read_text(encoding="utf-8")
+        self.assertEqual(generator.declaration_errors(source), [])
+        declared = 'pub const BLOCKS: [&str; 2] = ["output", "submission"];'
+        self.assertIn(declared, source)
+        narrower = source.replace(declared, 'pub const BLOCKS: [&str; 1] = ["output"];')
+        self.assertEqual(
+            generator.declaration_errors(narrower),
+            [
+                "ERROR: BLOCKS is ['output', 'submission'] here but ['output'] in "
+                "rust/crates/yamaa-core/src/schema/versioned_layer.rs"
+            ],
+        )
+        for case, unread in (
+            ("no declaration", ""),
+            ("a length its literals miss", '["output", "submission"]'),
+            ("an item that is no literal", '["output", OTHER]'),
+        ):
+            if unread:
+                length = 3 if case.startswith("a length") else 2
+                unread = f"pub const BLOCKS: [&str; {length}] = {unread};"
+            with self.subTest(case=case), self.assertRaises(ValueError):
+                generator.declaration_errors(source.replace(declared, unread))
+        with tempfile.TemporaryDirectory() as directory:
+            changed = Path(directory) / "versioned_layer.rs"
+            changed.write_text(narrower, encoding="utf-8")
+            with (
+                mock.patch.object(generator, "LAYER_SOURCE", changed),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(generator.main([]), 1)
+                self.assertEqual(generator.main(["--write"]), 1)
+
     def test_every_field_carries_its_kind_and_notation_type(self):
         for file_type in generator.FILE_TYPES:
             schema = json.loads(generator.target(file_type).read_text("ascii"))
@@ -965,7 +998,7 @@ class JsonSchemaTests(unittest.TestCase):
             },
         )
 
-    def test_a_layer_defers_requiredness_only_inside_keyed_members(self):
+    def test_a_layer_defers_requiredness_only_inside_keyed_members_and_blocks(self):
         layer = validator("spec")
         complete = validator("spec", "root_class")
         organization = support.load_yaml(
@@ -977,9 +1010,16 @@ class JsonSchemaTests(unittest.TestCase):
         )
         partial = {"yamaa": "1.0", "type": "spec", "columns": [{"name": "AVAL"}]}
         self.assertEqual(messages(layer, partial), [])
+        # A block composes field by field, so a layer writes one field of it
+        # (LAYER-5).
+        blocks = {**partial, "output": {"path": "a.csv"}, "submission": {"label": "A"}}
+        self.assertEqual(messages(layer, blocks), [])
         for document, expected in (
-            # A whole root field is complete in the layer that writes it.
-            ({**partial, "output": {"path": "a.csv"}}, "'columns' is a required"),
+            # Any other root field is complete in the layer that writes it.
+            (
+                {**partial, "verifications": [{"all_or_none": {}}]},
+                "'columns' is a required",
+            ),
             # Every layer carries the header.
             ({"type": "spec"}, "'yamaa' is a required"),
             # A keyed member carries its identity.

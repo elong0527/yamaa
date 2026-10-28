@@ -1,9 +1,9 @@
 //! Ordered layer composition; filesystem graph traversal stays outside the schema core.
 
 use super::{
-    scalar_diagnostic_label, ComposedValue, CompositionOrigin, Document, DocumentNode as N,
-    NormalizationError, NormalizationResource, SchemaOrigin, SchemaSource, SchemaStructure,
-    ValidationError,
+    scalar_diagnostic_label, versioned_layer::BLOCKS, ComposedValue, CompositionOrigin, Document,
+    DocumentNode as N, NormalizationError, NormalizationResource, SchemaOrigin, SchemaSource,
+    SchemaStructure, ValidationError,
 };
 use std::vec;
 
@@ -194,7 +194,8 @@ impl Run<'_> {
         }
         Ok(offset + composed.document.root())
     }
-    /// Root fields: keyed collections compose member by member and every
+    /// Root fields: keyed collections compose member by member, a block,
+    /// `output` or `submission`, field by field as a member does, and every
     /// other field replaces whole; a layer clears only through `clear`, in
     /// which null is the missing value (LAYER-9). `parent`, `include` and
     /// `clear` are never contributed.
@@ -230,6 +231,7 @@ impl Run<'_> {
                 Some(&(_, identity)) => {
                     self.collection(field.descriptor, identity, previous, value, depth + 1)?
                 }
+                None if BLOCKS.contains(&name) => self.merge(field.descriptor, previous, value)?,
                 None => self.copy(value, depth + 1)?,
             };
             changes.push(Change::Value(value));
@@ -261,6 +263,22 @@ impl Run<'_> {
             }
         }
         Ok(self.push(N::Mapping(output), old.origin()))
+    }
+    /// The value `new` writes merged with the one it inherits, `old`, by the
+    /// member type of the collection `descriptor` describes, or by the class
+    /// of the block it describes (LAYER-6).
+    fn merge(
+        &mut self,
+        descriptor: usize,
+        old: Option<Site<'_>>,
+        new: Site<'_>,
+    ) -> Result<usize, NormalizationError> {
+        let composed = self.schema.compose_member_at(
+            descriptor,
+            old.map(|site| (site.document, site.node)),
+            (new.document, new.node),
+        )?;
+        self.import(composed, old, new)
     }
     fn identity<'a>(
         &mut self,
@@ -319,12 +337,7 @@ impl Run<'_> {
                 .iter()
                 .find(|(candidate, _, _)| candidate == name)
                 .map(|&(_, _, node)| old.expect("nonempty before").child(node));
-            let composed = self.schema.compose_member_at(
-                descriptor,
-                previous.map(|site| (site.document, site.node)),
-                (incoming.document, incoming.node),
-            )?;
-            changed.push(self.import(composed, previous, incoming)?);
+            changed.push(self.merge(descriptor, previous, incoming)?);
         }
         let mut entries = Vec::with_capacity(before.len().saturating_add(after.len()));
         for (name, key, node) in &before {
@@ -470,6 +483,19 @@ fn provenance(
                     )?;
                 }
             }
+            // A block composes field by field, so each field it holds keeps
+            // the layer that wrote it (LAYER-5).
+            block if BLOCKS.contains(&block) => {
+                record(
+                    document,
+                    value,
+                    name.clone(),
+                    origins,
+                    &mut output,
+                    0,
+                    notation,
+                )?;
+            }
             _ => {
                 output.push(LayerProvenance {
                     path: name.clone(),
@@ -492,8 +518,8 @@ pub(super) fn empty() -> Result<(Document, Vec<Option<CompositionOrigin>>), Norm
 }
 
 /// Compose one normalized layer, numbered `layer.0` in contribution order, onto
-/// the accumulated value: keyed collections member by member and every other
-/// root field whole (LAYER-5, LAYER-6).
+/// the accumulated value: keyed collections member by member, the blocks
+/// field by field and every other root field whole (LAYER-5, LAYER-6).
 pub(super) fn compose_step(
     schema: &SchemaStructure,
     accumulated: (&Document, &[Option<CompositionOrigin>]),
