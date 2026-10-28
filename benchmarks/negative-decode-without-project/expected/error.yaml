@@ -1,0 +1,8 @@
+phase: validation
+condition: project_binding_missing
+spec_paths:
+  - columns.PARAM.derivation.decode.codelist
+rule: CT-13
+context:
+  binding: codelist
+  codelist: PARAMCD

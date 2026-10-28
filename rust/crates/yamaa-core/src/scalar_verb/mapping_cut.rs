@@ -1,6 +1,7 @@
-//! One mapping/cut declaration shared by root, row and case dispatch.
+//! One mapping, cut or decode declaration shared by root, row and case
+//! dispatch.
 use super::*;
-use crate::mapping_cut::{AdmissionError, Cut, Mapping};
+use crate::mapping_cut::{AdmissionError, Cut, Decode, Mapping};
 
 fn admission<T>(result: Result<T, AdmissionError>) -> Result<T, Refusal> {
     result.map_err(|error| match error {
@@ -8,10 +9,12 @@ fn admission<T>(result: Result<T, AdmissionError>) -> Result<T, Refusal> {
         AdmissionError::Diagnostic(finding) => Refusal::Findings(vec![finding]),
     })
 }
-/// The executor's mapping or cut at `e`. Its source is a source binding,
-/// whose declaration preparation admits first; it binds as the scope
-/// decides, and its type is a lookup read's donor type or the catalog's
-/// type of the name. A dictionary file is refused before binding.
+/// The executor's mapping, cut or decode at `e`. Its source is a source
+/// binding, whose declaration preparation admits first; it binds as the
+/// scope decides, and its type is a lookup read's donor type or the
+/// catalog's type of the name. A dictionary file is refused before binding.
+/// A decode reads the codelist its project supplied to the tree, which
+/// preparation has admitted (EXPR-15).
 pub(super) fn from_tree(spec: &Spec, e: ExprId) -> Result<Operation, Refusal> {
     let ExprKind::Scalar {
         op,
@@ -79,6 +82,21 @@ pub(super) fn from_tree(spec: &Spec, e: ExprId) -> Result<Operation, Refusal> {
                 labels.clone(),
                 *closed == ast::Closed::Right,
                 missing,
+            ))?)
+        }
+        ScalarOp::Decode { codelist } => {
+            let codelist = spec
+                .codelists
+                .iter()
+                .find(|list| list.id.name == *codelist)
+                .ok_or(Refusal::Internal)?;
+            let unmapped = handler(spec, handlers.unmapped.as_ref())?;
+            MappingCut::Decode(admission(Decode::new(
+                variable.into(),
+                path.clone(),
+                codelist,
+                missing,
+                unmapped,
             ))?)
         }
         _ => return Err(Refusal::Internal),

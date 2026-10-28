@@ -199,7 +199,7 @@ With a project file, a binding to an item the project does not declare fails
 as [CT-1](#ct-1) and the [project-function rules](functions.md) state.
 
 Fails: `project_binding_missing`.
-Evidence: `negative-codelist-without-project`, `negative-inventory-vocabulary-without-project`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa/tests/project_binding.rs::with_its_project_a_binding_names_what_the_project_declares`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::each_binding_of_a_specification_prepared_without_its_project_is_missing`.
+Evidence: `negative-codelist-without-project`, `negative-inventory-vocabulary-without-project`, `negative-decode-without-project`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa/tests/project_binding.rs::with_its_project_a_binding_names_what_the_project_declares`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::each_binding_of_a_specification_prepared_without_its_project_is_missing`.
 
 The bindings are those of the resolved specification: the `codelist` of a
 column or of a value-level entry ([SUB-12](submission.md#sub-12)), the
@@ -218,8 +218,8 @@ the `column`; a call at its `name`, with the `function`. They are reported
 with the specification's other validation findings: the calls where
 [FUNC-4](functions.md#func-4) reports an undeclared function, then each
 column's codelists and inventory vocabularies, in column order, the column's
-own before its entries', then each `decode`'s codelist, in the order the
-resolved specification writes them.
+own before its entries', then each `decode`'s codelist, in the order of the
+columns, row templates and intermediates that hold them.
 
 Nothing that needs the bound item is checked without it: no codelist's items,
 data type or restatement ([CT-7](#ct-7), [CT-8](#ct-8), [CT-9](#ct-9)), no

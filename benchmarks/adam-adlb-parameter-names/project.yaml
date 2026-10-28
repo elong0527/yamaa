@@ -1,0 +1,22 @@
+yamaa: "1.0"
+type: project
+# The study's parameter and visit terminology, declared once: each coded
+# value with the text it stands for.
+codelists:
+  - codelists:
+      - id: PARAMCD
+        name: Parameter Code
+        format_name: $PARAMCD
+        items:
+          - {value: ALT, decode: Alanine Aminotransferase (U/L)}
+          - {value: AST, decode: Aspartate Aminotransferase (U/L)}
+      - id: AVISITN
+        name: Analysis Visit
+        data_type: integer
+        items:
+          - {value: 1, decode: Baseline}
+          - {value: 2, decode: Week 2}
+
+adam:
+  specs:
+  - spec.yaml

@@ -343,9 +343,10 @@
             {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
             {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"codelist": "SEX"}},
             {"name": "SRCDOM", "type": "str", "derivation": {"value": "SRC.SRCDOM"}, "submission": {"value_level": [{"id": "AE", "where": {"SEX": ["F"]}, "inventory_vocabulary": true}]}},
-            {"name": "BMI", "type": "float", "derivation": {"value": {"function": {"name": "bmi", "args": {"weight": "SRC.WEIGHT"}}}}}
+            {"name": "BMI", "type": "float", "derivation": {"value": {"function": {"name": "bmi", "args": {"weight": "SRC.WEIGHT"}}}}},
+            {"name": "SEXDESC", "type": "str", "derivation": {"value": {"decode": {"source": "SRC.SEX", "codelist": "SEX"}}}}
           ]},
-          {"set": ["output", "columns"], "to": ["ID", "SEX", "SRCDOM", "BMI"]}
+          {"set": ["output", "columns"], "to": ["ID", "SEX", "SRCDOM", "BMI", "SEXDESC"]}
         ]
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
@@ -353,7 +354,8 @@
       "issues": [
         {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.BMI.derivation.function.name"], "context": {"binding": "function", "function": "bmi"}},
         {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.SEX.submission.codelist"], "context": {"binding": "codelist", "codelist": "SEX", "column": "SEX"}},
-        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.SRCDOM.submission.value_level.AE.inventory_vocabulary"], "context": {"binding": "inventory_vocabulary", "column": "SRCDOM"}}
+        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.SRCDOM.submission.value_level.AE.inventory_vocabulary"], "context": {"binding": "inventory_vocabulary", "column": "SRCDOM"}},
+        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.SEXDESC.derivation.decode.codelist"], "context": {"binding": "codelist", "codelist": "SEX"}}
       ]
     }
   ]

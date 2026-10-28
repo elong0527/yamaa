@@ -63,6 +63,95 @@ pub(super) fn unbound(spec: &ast::Spec) -> Vec<PreflightFinding> {
     findings
 }
 
+/// The project codelists a specification's `decode` expressions read, and
+/// what refuses each read (EXPR-15).
+pub(super) struct Decodes {
+    /// Each codelist a decode reads, once, as the project declares it.
+    pub(super) codelists: Vec<ast::Codelist>,
+    pub(super) findings: Vec<PreflightFinding>,
+}
+
+/// Bind the codelist of each `decode`, in the order of the columns, row
+/// templates and intermediates that hold them. Without a project file each
+/// fails as `project_binding_missing` (CT-13); with one, a codelist the
+/// project does not declare fails as `unknown_codelist`, and one that
+/// declares no decode, whether its items have none or it defers to an
+/// external dictionary, as `codelist_without_decodes`, each at the decode's
+/// `codelist` with the codelist (EXPR-15).
+pub(super) fn decodes(
+    spec: &ast::Spec,
+    catalogue: Option<&Catalogue>,
+    projectless: bool,
+) -> Decodes {
+    use crate::diagnostic::{ConditionCode, Context, Diagnostic};
+    use crate::json::Value;
+    let finding = |code, path: String, binding: bool, codelist: &str| {
+        let mut context = Context::new();
+        if binding {
+            context.insert("binding".into(), Value::String("codelist".into()));
+        }
+        context.insert("codelist".into(), Value::String(codelist.into()));
+        PreflightFinding::Scalar(Diagnostic {
+            code,
+            spec_paths: vec![path],
+            context,
+            source_span: None,
+            operand_route: None,
+        })
+    };
+    let mut decodes = Decodes {
+        codelists: Vec::new(),
+        findings: Vec::new(),
+    };
+    for expr in &spec.exprs {
+        let ast::ExprKind::Scalar {
+            op: ast::ScalarOp::Decode { codelist },
+            ..
+        } = &expr.kind
+        else {
+            continue;
+        };
+        let path = format!("{}.codelist", spec.cite(expr.meta));
+        if projectless {
+            decodes.findings.push(finding(
+                ConditionCode::ProjectBindingMissing,
+                path,
+                true,
+                codelist,
+            ));
+            continue;
+        }
+        let Some(list) = catalogue.and_then(|catalogue| catalogue.get(codelist)) else {
+            decodes.findings.push(finding(
+                ConditionCode::DecodeUnknownCodelist,
+                path,
+                false,
+                codelist,
+            ));
+            continue;
+        };
+        // A codelist declares a decode for every item or for none (CT-5).
+        let decoded = list.items.as_deref().is_some_and(|items| {
+            !items.is_empty() && items.iter().all(|item| item.decode.is_some())
+        });
+        if !decoded {
+            decodes.findings.push(finding(
+                ConditionCode::DecodeWithoutDecodes,
+                path,
+                false,
+                codelist,
+            ));
+        } else if !decodes
+            .codelists
+            .iter()
+            .any(|kept| kept.id.name == list.id.name)
+        {
+            decodes.codelists.push(list.clone());
+        }
+    }
+    decodes
+}
+
 /// One binding: the column's own, or an entry's over the rows its where
 /// clause selects.
 struct Declaration<'a> {

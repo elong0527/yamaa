@@ -341,6 +341,7 @@ impl<'d> Lower<'d> {
             files: Vec::new(),
             written: self.written(root, &["parent", "include"]),
             meta,
+            codelists: Vec::new(),
         }
     }
 

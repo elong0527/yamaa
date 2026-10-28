@@ -1,0 +1,7 @@
+phase: validation
+condition: codelist_without_decodes
+spec_paths:
+  - columns.PARAM.derivation.decode.codelist
+rule: EXPR-15
+context:
+  codelist: PARAMCD
