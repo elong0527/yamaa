@@ -318,7 +318,12 @@ class RenderingTests(unittest.TestCase):
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, r)
-        for removed in (".texts(", ".text(path, ", ".text(source, ", ".optional_text(parent, "):
+        for removed in (
+            ".texts(",
+            ".text(path, ",
+            ".text(source, ",
+            ".optional_text(parent, ",
+        ):
             with self.subTest(removed=removed):
                 self.assertNotIn(removed, r)
 
