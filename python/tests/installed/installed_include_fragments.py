@@ -11,9 +11,10 @@ rows (#3694); each refused parent raises its error text and its rows, where
 `{path}` stands for the path the test gave and `{parent}` for the parent it
 gave.
 The resolve case compares the layers the entry composes, in contribution
-order, the `parent` and `include` resources, the resolved columns, the layer
-each named value comes from, and the fields the resolved specification never
-holds (LAYER-14). R's include_fragments.R checks the same truth.
+order, the `parent` and `include` resources, the resolved columns, the origin
+of each named value, its layer and the line and column it was written at, and
+the fields the resolved specification never holds (LAYER-14). R's
+include_fragments.R checks the same truth.
 """
 
 from __future__ import annotations
@@ -153,14 +154,15 @@ class IncludeFragments(unittest.TestCase):
             [column["name"] for column in specification["columns"]], truth["columns"]
         )
         self.assertEqual(
+            {pointer: entry["origins"][pointer] for pointer in truth["origins"]},
             {
-                pointer: entry["origins"][pointer]["declaring_source"]
-                for pointer in truth["declaring_sources"]
+                pointer: {
+                    **origin,
+                    "declaring_source": located(origin["declaring_source"]),
+                }
+                for pointer, origin in truth["origins"].items()
             },
-            {
-                pointer: located(name)
-                for pointer, name in truth["declaring_sources"].items()
-            },
+            "the origin of each named value: its layer, line and column",
         )
         for field in truth["absent_fields"]:
             self.assertNotIn(field, specification)

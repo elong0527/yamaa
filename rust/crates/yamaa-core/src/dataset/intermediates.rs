@@ -87,6 +87,11 @@ impl IntermediateDerivations {
     pub fn column_kind(&self, column: usize) -> Option<ColumnType> {
         self.plan.output_kind(column)
     }
+    /// A field's result type: [`Self::column_kind`]'s one type, or the
+    /// types an untyped derivation decides per value (EXPR-14).
+    pub fn column_type(&self, column: usize) -> crate::result_type::ResultType {
+        self.plan.output_type(column)
+    }
 }
 
 /// A selection by distance (LOOKUP-26): of the candidates, the one whose

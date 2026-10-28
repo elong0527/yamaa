@@ -15,6 +15,7 @@
 
 extern int yamaa_readstat_admit(size_t, size_t);
 extern void yamaa_readstat_number(const unsigned char *);
+extern readstat_error_t yamaa_readstat_refuse_value(int, int, readstat_error_t);
 
 #define LINE_LEN        80
 
@@ -613,8 +614,10 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
             }
             retval = readstat_convert(string, 4*variable->storage_width+1,
                     &row[pos], variable->storage_width, ctx->converter);
-            if (retval != READSTAT_OK)
+            if (retval != READSTAT_OK) {
+                retval = yamaa_readstat_refuse_value(ctx->parsed_row_count, variable->index, retval);
                 goto cleanup;
+            }
 
             value.v.string_value = string;
         } else {

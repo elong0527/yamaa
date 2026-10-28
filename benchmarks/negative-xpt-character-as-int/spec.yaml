@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  # Reported adverse events in a SAS transport file (version 5), written from
+  # the public record layout by tools/staging/build_xport_fixtures.py. The
+  # reported term is stored as character data, but the entry below declares
+  # it a whole number, as the sequence number is.
+  AE_RAW:
+    path: input/ae_raw.xpt
+    types: {AESEQ: int, AETERM: int}
+    encoding: windows-1252
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'AE'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE_RAW.AETERM

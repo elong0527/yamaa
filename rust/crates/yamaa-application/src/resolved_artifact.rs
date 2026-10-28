@@ -259,9 +259,11 @@ pub fn versioned(
 }
 
 /// The origin of every value of a 1.x resolved specification: the layer that
-/// wrote it, the schema module whose default it is, or composition itself.
+/// wrote it, with the line and column it wrote the value at, the schema
+/// module whose default it is, or composition itself.
 fn versioned_origins(prepared: &PreparedSpecification) -> BTreeMap<String, FieldOrigin> {
     let resolved = prepared.resolved();
+    let positions = &prepared.positions().nodes;
     let mut result = BTreeMap::new();
     let mut pending = vec![(resolved.root(), String::new())];
     while let Some((node, pointer)) = pending.pop() {
@@ -286,10 +288,14 @@ fn versioned_origins(prepared: &PreparedSpecification) -> BTreeMap<String, Field
                 OriginKind::SchemaDefault,
             ),
         };
+        // Only a node a layer wrote has a position.
+        let written = positions.get(node).copied().flatten();
         result.insert(
             pointer.clone(),
             FieldOrigin {
                 declaring_source,
+                line: written.map(|at| at.line),
+                column: written.map(|at| at.column),
                 source_kind,
                 generated: original.origin.generated,
             },

@@ -500,7 +500,8 @@ class DashboardTests(unittest.TestCase):
             page,
         )
         self.assertIn("Does it follow CDISC SDTM:", ask("sdtm-dm-basic")[1])
-        # Metadata outside SDTM or ADaM reads as CDISC standards.
+        self.assertIn("Does it follow CDISC SEND:", ask("send-bw-sendig311")[1])
+        # Metadata outside SDTM, ADaM or SEND reads as CDISC standards.
         self.assertIn(
             "Does it follow CDISC standards:", ask("schema-source-ordinal")[1]
         )

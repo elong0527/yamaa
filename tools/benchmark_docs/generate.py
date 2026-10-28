@@ -44,7 +44,7 @@ PROMPT_TIERS = (
 SOLUTION_FILES = ("result.R", "result.py", "result.sas")
 # The review ask names the README's standard when it is one of these; other
 # README standards (CDISC, TEST) read as "CDISC standards".
-REVIEW_STANDARDS = ("SDTM", "ADaM")
+REVIEW_STANDARDS = ("SDTM", "ADaM", "SEND")
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
 # outlive any deployment. Each benchmark maps to one discussion whose title is
@@ -80,6 +80,7 @@ GROUP_NOTES = {
     "schema": "Assess yamaa schema",
     "adam": "Assess SDTM to ADaM and ADaM to results derivations",
     "sdtm": "Assess ODM to SDTM derivations",
+    "send": "Assess collected nonclinical data to SEND derivations",
     "negative": "Assess yamaa error handling",
 }
 YAML_TOKEN = re.compile(

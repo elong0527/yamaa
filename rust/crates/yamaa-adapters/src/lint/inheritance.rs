@@ -7,37 +7,41 @@
 //! inherited value. Clearing the mapping in the same layer replaces it
 //! instead. The finding reads the mappings whose entries a layer names: an
 //! input's `types`, a named intermediate's `key` written as a mapping and its
-//! `derivations`, a row template's `derivations`, and the settings of a named
-//! window. A layer restates one when it writes it empty, or writes again an
-//! entry exactly as it inherits it; one that writes only what it adds or
-//! changes is patching, which is never reported. Either meaning may be the
-//! author's, so no fix is offered.
+//! `derivations`, a row template's `derivations`, the settings of a named
+//! window, and the fields of the blocks `output` and `submission`, which
+//! compose as a member does (LAYER-5). A layer restates one when it writes it
+//! empty, or writes again an entry exactly as it inherits it; one that writes
+//! only what it adds or changes is patching, which is never reported. A
+//! block's required field that comes back is not named, since a layer writes
+//! it rather than clears it (LAYER-9). Either meaning may be the author's, so
+//! no fix is offered.
 //!
-//! It is the one finding that reads more than the file it reports: the
-//! layers the specification inherits and includes, followed from the file
-//! through the local file resolver and admitted as composition admits them
-//! (LAYER-1 to LAYER-4), each normalized at the version it declares, and
-//! composed by the engine's own composition in contribution order. A file whose chain cannot
-//! be followed, admitted or composed is not read for it: validation reports
-//! why.
+//! Like `restated_inherited_value`, it reads more than the file it reports:
+//! the layers the specification inherits and includes, read as
+//! [`super::layers`] reads them, each normalized at the version it declares,
+//! and composed by the engine's own composition in contribution order. A
+//! file whose chain cannot be followed, admitted or composed is not read for
+//! it: validation reports why.
 
 use std::path::Path;
 
-use yamaa_core::file_preparation::AliasCache;
-use yamaa_core::inheritance as graph;
-use yamaa_core::language::{FileType, LANGUAGE_VERSION};
-use yamaa_core::resolver::{Name, Resolver};
 use yamaa_core::schema::{
     Document as Values, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaStructure,
+    BLOCKS,
 };
 
 use super::canonical::same;
 use super::checks::Departure;
 use super::document::Document;
 
-/// The keyed collections whose members hold the mappings a layer restates,
-/// and the only root fields composed here (LAYER-5).
+/// The keyed collections whose members hold the mappings a layer restates;
+/// with the blocks, the only root fields composed here (LAYER-5).
 const COLLECTIONS: [&str; 4] = ["input", "intermediates", "rows", "windows"];
+
+/// Whether the root field `name` is composed here.
+fn composed_here(name: &str) -> bool {
+    COLLECTIONS.contains(&name) || BLOCKS.contains(&name)
+}
 
 /// A mapping a layer may restate, named by the identities that reach it.
 #[derive(Clone, Copy)]
@@ -54,6 +58,9 @@ enum Site<'a> {
     /// A named window, whose settings compose as a class's fields
     /// (LAYER-8): `windows.<name>`.
     Window { name: &'a str },
+    /// A block, `output` or `submission`, whose fields compose as a class's
+    /// (LAYER-5).
+    Block { field: &'static str },
 }
 
 /// The fields of a keyed member whose value a layer may restate, by
@@ -93,9 +100,16 @@ fn restatements(document: &Document, file: &Path) -> Option<Vec<Departure>> {
     let layer = &own.document;
     let mut found = Vec::new();
     for site in sites(layer) {
-        let Some(back) = left_out(layer, &inherited, &composed, site) else {
+        let Some(mut back) = left_out(layer, &inherited, &composed, site) else {
             continue;
         };
+        if let Site::Block { field } = site {
+            let required = required(&view, field);
+            back.retain(|key| !required.contains(key));
+            if back.is_empty() {
+                continue;
+            }
+        }
         let Some((key, value)) = written(document, site) else {
             continue;
         };
@@ -118,44 +132,20 @@ fn restatements(document: &Document, file: &Path) -> Option<Vec<Departure>> {
 /// to the collections composed here, with the view of the version the chain
 /// needs (P-VER-1).
 fn layers(file: &Path, entry: Values) -> Option<(SchemaStructure, Vec<NormalizedDocument>)> {
-    let (mut resources, name) = crate::file_configuration::resources(file.to_str()?).ok()?;
-    let source = Resolver::inspect(
-        &mut resources,
-        Name::Entry {
-            declaring: None,
-            written: &name,
-        },
-    )
-    .ok()?;
-    let captured = crate::shipped_schema::capture_versioned(FileType::Spec).ok()?;
-    let schema = captured.structure();
-    // Each parent is read through the local file resolver from the layer
-    // that names it (LAYER-2), captured by the spelling that located it, and
-    // decoded with the shared YAML reader. Why a layer cannot be read does
-    // not matter here: the chain is then not read at all.
-    let chain = graph::traverse_versioned(
-        schema,
-        LANGUAGE_VERSION,
-        source,
-        entry,
-        None,
-        &mut AliasCache::new(&mut resources),
-        &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
-    )
-    .ok()?
-    .chain;
-    let layers = chain
-        .layers
-        .iter()
-        .map(|layer| {
-            let normalized = schema
-                .at_version(layer.version)
-                .normalize_versioned_layer(&layer.document)
-                .ok()?;
-            reduced(&normalized)
-        })
-        .collect::<Option<Vec<_>>>()?;
-    Some((schema.at_version(chain.version), layers))
+    super::layers::read(file, entry, |schema, chain, _| {
+        let layers = chain
+            .layers
+            .iter()
+            .map(|layer| {
+                let normalized = schema
+                    .at_version(layer.version)
+                    .normalize_versioned_layer(&layer.document)
+                    .ok()?;
+                reduced(&normalized)
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some((schema.at_version(chain.version), layers))
+    })
 }
 
 /// `layer` holding only the collections composed here and the `clear` paths
@@ -178,7 +168,7 @@ fn reduced(layer: &NormalizedDocument) -> Option<NormalizedDocument> {
         let N::Text(name) = &values.nodes()[key] else {
             continue;
         };
-        let value = if COLLECTIONS.contains(&name.as_str()) {
+        let value = if composed_here(name) {
             copied.copy(value)
         } else if name == "clear" {
             let N::Sequence(paths) = &values.nodes()[value] else {
@@ -211,7 +201,32 @@ fn names_collection(path: &str) -> bool {
         && root
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-');
-    !bare || COLLECTIONS.contains(&root)
+    !bare || composed_here(root)
+}
+
+/// The required fields of the class the root field `block` holds, which a
+/// layer writes to replace and never clears (LAYER-9).
+fn required(view: &SchemaStructure, block: &str) -> Vec<String> {
+    let class = view
+        .root_class()
+        .fields
+        .iter()
+        .find(|field| field.name == block)
+        .and_then(
+            |field| match view.descriptors()[field.descriptor].descriptor.members() {
+                [member] => member.node_text(member.root()),
+                _ => None,
+            },
+        )
+        .and_then(|name| view.class_named(name));
+    class.map_or_else(Vec::new, |class| {
+        class
+            .fields
+            .iter()
+            .filter(|field| view.descriptors()[field.descriptor].descriptor.required())
+            .map(|field| field.name.clone())
+            .collect()
+    })
 }
 
 /// A rebuilt layer: each node copied keeps the origin of the node it copies.
@@ -274,6 +289,14 @@ fn sites(layer: &Values) -> Vec<Site<'_>> {
                 .map(|name| Site::Window { name }),
         );
     }
+    for field in BLOCKS {
+        if matches!(
+            layer.field(root, field).map(|node| &layer.nodes()[node]),
+            Some(N::Mapping(_))
+        ) {
+            sites.push(Site::Block { field });
+        }
+    }
     for (collection, fields) in MEMBER_FIELDS {
         let Some(N::Sequence(members)) = layer
             .field(root, collection)
@@ -323,6 +346,7 @@ fn locate(values: &Values, site: Site<'_>) -> Option<usize> {
             values.field(member, field)
         }
         Site::Window { name } => values.field(values.field(root, "windows")?, name),
+        Site::Block { field } => values.field(root, field),
     }
 }
 
@@ -398,11 +422,12 @@ fn written(document: &Document, site: Site<'_>) -> Option<(usize, usize)> {
             at(member, field)
         }
         Site::Window { name } => at(document.member(document.root, "windows"), name),
+        Site::Block { field } => at(document.root, field),
     }
 }
 
 /// `items` joined as prose: `a`, `a and b`, `a, b and c`.
-fn prose(items: &[String]) -> String {
+pub(super) fn prose(items: &[String]) -> String {
     match items {
         [] => String::new(),
         [only] => only.clone(),
@@ -413,7 +438,8 @@ fn prose(items: &[String]) -> String {
 /// The finding's message: the entries that come back, and the `clear` paths
 /// that drop them. A named window is a keyed member, which `clear` never
 /// names, so each left-out setting is cleared by its own path (LAYER-8,
-/// LAYER-9).
+/// LAYER-9), and so is each left-out field of a block, since `output` is
+/// required and never cleared.
 fn message(site: Site<'_>, path: &str, back: &[String], from: &str) -> String {
     let quoted = |text: &str| format!("`{text}`");
     let names = prose(&back.iter().map(|key| quoted(key)).collect::<Vec<_>>());
@@ -423,7 +449,7 @@ fn message(site: Site<'_>, path: &str, back: &[String], from: &str) -> String {
         ("come", "them")
     };
     let clear = match site {
-        Site::Window { .. } => {
+        Site::Window { .. } | Site::Block { .. } => {
             let paths = back
                 .iter()
                 .map(|key| quoted(&format!("{path}.{key}")))

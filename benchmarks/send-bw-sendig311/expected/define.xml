@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="TOX01.send.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.TOX01">
+    <GlobalVariables>
+      <StudyName>TOX01</StudyName>
+      <StudyDescription>Four-week oral toxicity study in rats</StudyDescription>
+      <ProtocolName>TOX01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.TOX01.send" Name="TOX01 send metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.SENDIG" Name="SENDIG" Type="IG" Version="3.1.1" Status="Final"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.BW" Name="BW" Domain="BW" Purpose="Tabulation" SASDatasetName="BW" Repeating="Yes" IsReferenceData="No" def:Structure="One record per test per observation time per subject" def:ArchiveLocationID="LF.BW" def:StandardOID="STD.SENDIG">
+        <Description>
+          <TranslatedText xml:lang="en">Body Weight</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.BW.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.BW.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.BW.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
+        <ItemRef ItemOID="IT.BW.BWSEQ" OrderNumber="4" Mandatory="Yes" KeySequence="3" Role="Identifier" MethodOID="MT.BW.BWSEQ"/>
+        <ItemRef ItemOID="IT.BW.BWTESTCD" OrderNumber="5" Mandatory="Yes" Role="Topic"/>
+        <ItemRef ItemOID="IT.BW.BWTEST" OrderNumber="6" Mandatory="Yes" Role="Synonym Qualifier"/>
+        <ItemRef ItemOID="IT.BW.BWORRES" OrderNumber="7" Mandatory="No" Role="Result Qualifier"/>
+        <ItemRef ItemOID="IT.BW.BWORRESU" OrderNumber="8" Mandatory="No" Role="Variable Qualifier"/>
+        <ItemRef ItemOID="IT.BW.BWSTRESC" OrderNumber="9" Mandatory="No" Role="Result Qualifier" MethodOID="MT.BW.BWSTRESC"/>
+        <ItemRef ItemOID="IT.BW.BWSTRESN" OrderNumber="10" Mandatory="No" Role="Result Qualifier" MethodOID="MT.BW.BWSTRESN"/>
+        <ItemRef ItemOID="IT.BW.BWSTRESU" OrderNumber="11" Mandatory="No" Role="Variable Qualifier" MethodOID="MT.BW.BWSTRESU"/>
+        <ItemRef ItemOID="IT.BW.BWDTC" OrderNumber="12" Mandatory="No" Role="Timing"/>
+        <def:Class Name="FINDINGS"/>
+        <def:leaf ID="LF.BW" xlink:href="bw.xpt">
+          <def:title>bw.xpt</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.BW.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.STUDYID" Name="STUDYID" DataType="text" Length="5" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.USUBJID" Name="USUBJID" DataType="text" Length="10" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWSEQ" Name="BWSEQ" DataType="integer" Length="8" SASFieldName="BWSEQ">
+        <Description>
+          <TranslatedText xml:lang="en">Sequence Number</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWTESTCD" Name="BWTESTCD" DataType="text" Length="6" SASFieldName="BWTESTCD">
+        <Description>
+          <TranslatedText xml:lang="en">Test Short Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWTEST" Name="BWTEST" DataType="text" Length="20" SASFieldName="BWTEST">
+        <Description>
+          <TranslatedText xml:lang="en">Test Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWORRES" Name="BWORRES" DataType="text" Length="5" SASFieldName="BWORRES">
+        <Description>
+          <TranslatedText xml:lang="en">Result or Findings as Collected</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWORRESU" Name="BWORRESU" DataType="text" Length="1" SASFieldName="BWORRESU">
+        <Description>
+          <TranslatedText xml:lang="en">Unit of the Original Result</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWSTRESC" Name="BWSTRESC" DataType="text" Length="5" SASFieldName="BWSTRESC">
+        <Description>
+          <TranslatedText xml:lang="en">Standardized Result in Character Format</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWSTRESN" Name="BWSTRESN" DataType="float" Length="8" SignificantDigits="1" SASFieldName="BWSTRESN">
+        <Description>
+          <TranslatedText xml:lang="en">Standardized Result in Numeric Format</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWSTRESU" Name="BWSTRESU" DataType="text" Length="1" SASFieldName="BWSTRESU">
+        <Description>
+          <TranslatedText xml:lang="en">Unit of the Standardized Result</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.BWDTC" Name="BWDTC" DataType="date" SASFieldName="BWDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Date/Time Animal Weighed</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected"/>
+      </ItemDef>
+      <MethodDef OID="MT.BW.BWSEQ" Name="BW.BWSEQ" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Number each animal's weighings in date order.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.BW.BWSTRESC" Name="BW.BWSTRESC" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">The standardized numeric result written as text.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.BW.BWSTRESN" Name="BW.BWSTRESN" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">The collected result read as a number.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.BW.BWSTRESU" Name="BW.BWSTRESU" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">The collected unit, since no result is converted.</TranslatedText>
+        </Description>
+      </MethodDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

@@ -508,14 +508,8 @@ fn order<T: TableAccess + ?Sized>(
         }
         keyed.push((member, values));
     }
-    keyed.sort_by(|(_, left), (_, right)| {
-        terms
-            .iter()
-            .zip(left.iter().zip(right))
-            .map(|(term, (left, right))| super::relations::compare(*left, *right, term))
-            .find(|order| order.is_ne())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    super::relations::sort(&mut keyed, terms, |(_, values), term| values[term])
+        .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
     Ok(keyed.into_iter().map(|(member, _)| member).collect())
 }
 
@@ -575,6 +569,10 @@ fn fold<E>(
                 identity,
             }))
         }
+        AggregateReductionError::Limit(limit) => Err(Box::new(ExecutionError::text(
+            limit,
+            bound.expression().spec_path(),
+        ))),
         AggregateReductionError::MultipleRecords { count } => {
             let template = cx.frame.template(row);
             let template_node = template.map(|template| {

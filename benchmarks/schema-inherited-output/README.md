@@ -24,8 +24,8 @@ in the specification dropdown.
 - `AGE` and `AGEU` carry each subject's collected age and its units
   from demographics, as the shared level declares them.
 
-**Note:** `output` is inherited whole. A study that writes its own
-`output` replaces all of it, variable list included, and an inherited
-`output.path` names a file beside the level that wrote it. Here both
-levels share one directory, so the study publishes `adsl.csv` beside
-itself.
+**Note:** the study writes no `output`, so it inherits all of it. A
+study that writes one part of `output`, such as its own variable list,
+keeps every part it leaves out, and an inherited `output.path` names a
+file beside the level that wrote it. Here both levels share one
+directory, so the study publishes `adsl.csv` beside itself.

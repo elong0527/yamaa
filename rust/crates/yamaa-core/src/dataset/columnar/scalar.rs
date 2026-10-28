@@ -298,7 +298,9 @@ pub(super) fn str_template<E>(
         let value = operation.materialize(&parts[position]).map_err(|error| {
             Box::new(match error {
                 crate::text_template::MaterializeError::Shape => ExecutionError::SchemaMismatch,
-                crate::text_template::MaterializeError::Size => ExecutionError::Capacity,
+                crate::text_template::MaterializeError::Limit(limit) => {
+                    ExecutionError::text(limit, operation.path())
+                }
                 crate::text_template::MaterializeError::Allocation => ExecutionError::Allocation,
             })
         })?;
@@ -371,7 +373,7 @@ pub(super) fn str_replace<E>(
             Ok(Step::Matched { subject, spans }) => {
                 let text = operation.render(subject, &spans).map_err(|error| {
                     Box::new(match error {
-                        RenderError::Size => ExecutionError::Capacity,
+                        RenderError::Limit(limit) => ExecutionError::text(limit, operation.path()),
                         RenderError::Allocation => ExecutionError::Allocation,
                     })
                 })?;
@@ -522,14 +524,15 @@ pub(super) fn pad<E>(
     let prepared = operation.prepare_text(value).map_err(|error| {
         run.retained_diagnostic(cx, error.into_diagnostic(path.into()), true, row)
     })?;
-    // This can be intermediate text; the saved-file byte boundary belongs to the writer.
+    // The bound holds for intermediate text too; a saved file's own byte
+    // boundary belongs to its writer.
     prepared
         .render()
-        .map_err(|_| Box::new(ExecutionError::Allocation))
+        .map_err(|limit| Box::new(ExecutionError::text(limit, path)))
 }
 
 /// Fixed-decimal text: a missing source is counted under `missing`, and
-/// text that cannot be held fails the run as padding's does.
+/// text longer than a text value may hold fails the run as padding's does.
 pub(super) fn str_decimal<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -556,7 +559,9 @@ pub(super) fn str_decimal<E>(
             Err(Error::Diagnostic(diagnostic)) => {
                 return Err(run.retained_diagnostic(cx, diagnostic, false, row))
             }
-            Err(Error::Allocation) => return Err(Box::new(ExecutionError::Allocation)),
+            Err(Error::Limit(limit)) => {
+                return Err(Box::new(ExecutionError::text(limit, operation.path())))
+            }
         }
     }
     Ok(values)

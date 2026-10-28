@@ -32,6 +32,13 @@ impl Limits {
     pub const PARTITION_KEYS: usize = 2;
     /// The compiled size, in bytes, of one regular expression's program.
     pub const REGEX_SIZE: usize = 10 * 1024 * 1024;
+    /// The bytes of one text value that a verb which can grow text builds:
+    /// `str_pad`, `str_decimal`, `str_template`, `str_replace` and
+    /// `STR_JOIN` (#4103). 1 MiB is the largest power of two whose full
+    /// Parquet page, the 1,024 values of a row group each after its 4-byte
+    /// length, stays within the page's i32 size (#4075), and about 32 times
+    /// the longest SAS character value, 32,767 bytes.
+    pub const TEXT_BYTES: usize = 1024 * 1024;
     pub const FINDINGS: usize = 10_000;
 
     pub const COLUMNS: usize = 1024;
@@ -63,6 +70,12 @@ impl Limits {
             current.checked_add(additional),
             Self::OUTPUT_BYTES,
         )
+    }
+
+    /// Admit one text value before it is built; `None` is a length beyond
+    /// the platform's, refused without a size.
+    pub fn text_bytes(actual: Option<usize>) -> Result<(), LimitExceeded> {
+        check("text_bytes", actual, Self::TEXT_BYTES)
     }
 
     /// Admit one decoded or materialized table, including a proposed next shape.
@@ -138,6 +151,9 @@ mod tests {
             ("spec_bytes", Limits::SPEC_BYTES, Limits::spec_bytes),
             ("source_bytes", Limits::SOURCE_BYTES, Limits::source_bytes),
             ("output_bytes", Limits::OUTPUT_BYTES, Limits::output_bytes),
+            ("text_bytes", Limits::TEXT_BYTES, |actual| {
+                Limits::text_bytes(Some(actual))
+            }),
             ("columns", Limits::COLUMNS, Limits::columns),
             ("keys", Limits::KEYS, Limits::keys),
             ("inputs", Limits::INPUTS, Limits::inputs),

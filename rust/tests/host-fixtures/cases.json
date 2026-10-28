@@ -6189,6 +6189,13 @@
       },
       "readable_csv": "V\n1\n2\n"
     },
+    "parquet-writer-defaults": {
+      "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.parquet}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NS, type: datetime, derivation: SRC.NS}\n  - {name: MS, type: datetime, derivation: SRC.MS}\n  - {name: F32, type: float, derivation: SRC.F32}\noutput: {path: output.csv, columns: [ID, NS, MS, F32]}\n",
+      "writer_defaults_parquet": {
+        "hex": "504152311504152015244c15041500120000103c010000000000000002000000000000001500151215162c15041510150615061c180802000000000000001808010000000000000016002808020000000000000018080100000000000000111100000009200200000004010103021504151015144c15021500120000081c00409be8d430a6171500151215162c15041510150615061c180800409be8d430a617180800409be8d430a6171602280800409be8d430a617180800409be8d430a617111100000009200200000003010102001504151015144c15021500120000081c18fcffffffffffff1500151215162c15041510150615061c180818fcffffffffffff180818fcffffffffffff1602280818fcffffffffffff180818fcffffffffffff1111000000092002000000030201020015041508150c4c15021500120000040ccdcccc3d1500151215162c15041510150615061c1804cdcccc3d1804cdcccc3d16022804cdcccc3d1804cdcccc3d111100000009200200000003010102001504195c35001806736368656d611508001504250218024944001504250218024e536c8c121c3c00000000001504250218024d5325124c8c121c1c0000000000150825021803463332001604191c194c26001c1504193500061019180249441502160416cc0116d401264826081c180802000000000000001808010000000000000016002808020000000000000018080100000000000000111100192c15041500150200150015101502003c29061926000400000026001c150419350006101918024e531502160416bc0116c401268c0226dc011c180800409be8d430a617180800409be8d430a6171602280800409be8d430a617180800409be8d430a617111100192c15041500150200150015101502003c29061926020200000026001c150419350006101918024d531502160416bc0116c40126d00326a0031c180818fcffffffffffff180818fcffffffffffff1602280818fcffffffffffff180818fcffffffffffff111100192c15041500150200150015101502003c29061926020200000026001c1508193500061019180346333215021604169401169c01268c0526e4041c1804cdcccc3d1804cdcccc3d16022804cdcccc3d1804cdcccc3d111100192c15041500150200150015101502003c29061926020200000016d8051604260816f80500191c180c4152524f573a736368656d6118ec022f2f2f2f2f77674241414151414141414141414b41417741426741464141674143674141414141424241414d4141414143414149414141414241414941414141424141414141514141414367414141415841414141444141414141454141414167502f2f2f77414141514d514141414146414141414151414141414141414141417741414145597a4d6743752f2f2f2f41414142414b6a2f2f2f38414141454b4541414141425141414141454141414141414141414149414141424e5577414131762f2f2f774141415144512f2f2f2f4141414243684141414141634141414142414141414141414141414341414141546c4d41414141414267414941415941426741414141414141774151414251414341414741416341444141414142414145414141414141414151495141414141484141414141514141414141414141414167414141456c4541414149414177414341414841416741414141414141414251414141414141414141413d001820706172717565742d6370702d6172726f772076657273696f6e2032362e302e30194c1c00001c00001c00001c0000009703000050415231"
+      },
+      "saved_csv": "ID,NS,MS,F32\n1,2024-01-01T10:00:00,,0.10000000149011612\n2,,1969-12-31T23:59:59,\n"
+    },
     "plan-reuse": {
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: '1 + VALUE / ZERO'}\noutput: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
       "studies": {
@@ -6334,6 +6341,58 @@
             "finding": "partial_restatement",
             "spec_path": "rows.scores.derivations",
             "message": "`NOTE` comes back from the parent; list `rows.scores.derivations` in `clear` to replace the mapping, or write only what this layer changes"
+          },
+          {
+            "line": "8",
+            "column": "7",
+            "finding": "restated_inherited_value",
+            "spec_path": "rows.scores.derivations.USUBJID",
+            "message": "`rows.scores.derivations.USUBJID` writes the value it inherits from parent.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "9",
+            "column": "7",
+            "finding": "restated_inherited_value",
+            "spec_path": "rows.scores.derivations.VISIT",
+            "message": "`rows.scores.derivations.VISIT` writes the value it inherits from parent.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "10",
+            "column": "7",
+            "finding": "restated_inherited_value",
+            "spec_path": "rows.scores.derivations.AVAL",
+            "message": "`rows.scores.derivations.AVAL` writes the value it inherits from parent.yaml; remove it to keep inheriting"
+          }
+        ]
+      },
+      "restated_inherited_value": {
+        "files": {
+          "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID, AGE]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM.AGE\n",
+          "adtte_v1.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADTTE\nkeys: [USUBJID, PARAMCD]\ninput:\n  ADSL: {path: adsl.csv, schema: adsl.yaml}\n\noutput:\n  path: adtte.csv\n  columns: [USUBJID, AGE, PARAMCD, PARAM, CNSR]\n\ncolumns:\n  - copy: {dataset: ADSL, columns: [USUBJID, AGE]}\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: \"'TTDE'\"\n\n  - name: PARAM\n    type: str\n    label: Parameter Name\n    derivation: \"'Time to Dermatologic Event'\"\n\n  - name: CNSR\n    type: int\n    label: Censor\n    derivation: 1\n",
+          "adtte_v2.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adtte_v1.yaml\nclear:\n  - columns.PARAM.derivation\n\ncolumns:\n  - name: PARAMCD\n    derivation: \"'TTDE'\"\n\n  - name: PARAM\n    label: Parameter\n    derivation: \"'Time to Dermatologic Event'\"\n\n  - name: CNSR\n    label: Censor\n\n  - name: AGE\n    label: Age\n"
+        },
+        "file_name": "adtte_v2.yaml",
+        "rows": [
+          {
+            "line": "9",
+            "column": "5",
+            "finding": "restated_inherited_value",
+            "spec_path": "columns.PARAMCD.derivation",
+            "message": "`columns.PARAMCD.derivation` writes the value it inherits from adtte_v1.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "16",
+            "column": "5",
+            "finding": "restated_inherited_value",
+            "spec_path": "columns.CNSR.label",
+            "message": "`columns.CNSR.label` writes the value it inherits from adtte_v1.yaml; remove it to keep inheriting"
+          },
+          {
+            "line": "19",
+            "column": "5",
+            "finding": "restated_inherited_value",
+            "spec_path": "columns.AGE.label",
+            "message": "`columns.AGE.label` writes the value it inherits from adtte_v1.yaml; remove it to keep inheriting"
           }
         ]
       }
@@ -6769,19 +6828,20 @@
           }
         },
         {
-          "name": "a_1_0_root_replacement_hides_parent_fields",
+          "name": "a_1_0_report_cleared_below_a_later_output_locates_at_the_clear_entry",
           "files": {
             "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
-            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
+            "cleared.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\nclear: [output.report]\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: cleared.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
             "raw.csv": "ID\nS1\n"
           },
           "call": {"operation": "check", "path": "child.yaml"},
           "issue": {
             "condition": "missing_report",
             "spec_path": "output.report",
-            "file": "child.yaml",
+            "file": "cleared.yaml",
             "line": 4,
-            "column": 1
+            "column": 9
           }
         },
         {
@@ -7266,11 +7326,42 @@
           "ADURN",
           "ASEVN"
         ],
-        "declaring_sources": {
-          "/columns/0/label": "ae.yaml",
-          "/columns/4/label": "duration.yaml",
-          "/columns/5/label": "severity.yaml",
-          "/domain": "adae.yaml"
+        "origins": {
+          "/columns/0/label": {
+            "declaring_source": "ae.yaml",
+            "line": 7,
+            "column": 39,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/4/label": {
+            "declaring_source": "duration.yaml",
+            "line": 6,
+            "column": 12,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/4/derivation/value": {
+            "declaring_source": "duration.yaml",
+            "line": 7,
+            "column": 17,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/columns/5/label": {
+            "declaring_source": "severity.yaml",
+            "line": 6,
+            "column": 12,
+            "source_kind": "authored",
+            "generated": false
+          },
+          "/domain": {
+            "declaring_source": "adae.yaml",
+            "line": 5,
+            "column": 9,
+            "source_kind": "authored",
+            "generated": false
+          }
         },
         "absent_fields": [
           "parent",
