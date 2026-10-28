@@ -43,7 +43,10 @@ pub enum EnvironmentFailure<E, D, X> {
 }
 
 pub(crate) type EnvironmentPreparation<R, D> = Result<
-    crate::project_preparation::PreparedEnvironment<<D as crate::decoder::Decoder>::Admitted>,
+    crate::project_preparation::PreparedEnvironment<
+        <D as crate::decoder::Decoder>::Admitted,
+        <D as crate::decoder::Decoder>::Raw,
+    >,
     EnvironmentFailure<
         <R as crate::resolver::Resolver>::Error,
         <D as crate::decoder::Decoder>::Admitted,

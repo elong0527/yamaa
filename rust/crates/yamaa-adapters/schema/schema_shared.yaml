@@ -30,6 +30,11 @@ project_path:
     kind: path
     description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
 
+spec_path:
+    type: str
+    min_length: 1
+    description: Dotted path of a value in the resolved specification or the composed project, naming a keyed member by its identity and quoting any other segment that is not a name (LAYER-9, PROJECT-16).
+
 path_base:
     type: str
     values: [declaring, entry]

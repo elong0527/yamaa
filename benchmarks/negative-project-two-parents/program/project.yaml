@@ -1,0 +1,7 @@
+yamaa: "1.0"
+type: project
+study:
+  id: CATH
+  name: CATH
+  description: Example study resubmitting subject-level analysis data
+  protocol_name: CATH-01

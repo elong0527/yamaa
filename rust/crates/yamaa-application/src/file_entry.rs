@@ -211,6 +211,7 @@ fn changed(
                 written,
                 host: environment.environment().host(),
                 root,
+                parents: environment.parents(),
                 project,
                 lock: environment.lock(),
                 captures: environment.captures(),

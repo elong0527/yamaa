@@ -1,6 +1,6 @@
 //! Captured YAML codec and compatibility results for engine project preparation.
 use crate::document::{self, Closures};
-use crate::specification_source::{CapturedDocument, Error, Source};
+use crate::specification_source::{CapturedDocument, CapturedParent, Error, Source};
 pub use application::{DecodeTarget, Kind, LockCapture, Origin, SourceOrigins};
 use yamaa_core::language::{FileType, LANGUAGE_VERSION};
 use yamaa_core::project_preparation as application;
@@ -35,6 +35,7 @@ pub struct PreparedEnvironment {
     pub project: ast::Project,
     pub origins: SourceOrigins,
     pub root: CapturedDocument,
+    pub parents: Vec<CapturedParent>,
     pub captures: Vec<DocumentCapture>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -48,6 +49,7 @@ pub struct OwnedEnvironment {
     /// The project file path as preparation was given it.
     written: Option<String>,
     root: Option<CapturedDocument>,
+    parents: Vec<CapturedParent>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
@@ -63,6 +65,7 @@ pub struct CapturedEnvironment {
     origins: SourceOrigins,
     written: Option<String>,
     root: Option<CapturedDocument>,
+    parents: Vec<CapturedParent>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
 }
@@ -83,6 +86,9 @@ impl CapturedEnvironment {
     }
     pub fn root_optional(&self) -> Option<&CapturedDocument> {
         self.root.as_ref()
+    }
+    pub fn parents(&self) -> &[CapturedParent] {
+        &self.parents
     }
     /// The project file path as preparation was given it.
     pub fn written(&self) -> Option<&str> {
@@ -116,6 +122,7 @@ impl PreparedEnvironment {
             origins: self.origins,
             written: None,
             root: Some(self.root),
+            parents: self.parents,
             captures: self.captures,
             lock: self.lock,
             environment: self.environment.into_execution(),
@@ -131,6 +138,7 @@ impl OwnedEnvironment {
             origins: SourceOrigins::default(),
             written: None,
             root: None,
+            parents: Vec::new(),
             captures: Vec::new(),
             lock: None,
             environment: yamaa_core::build::without_environment(host),
@@ -181,6 +189,7 @@ impl OwnedEnvironment {
                 origins: self.origins,
                 written: self.written,
                 root: self.root,
+                parents: self.parents,
                 captures: self.captures,
                 lock: self.lock,
             },
@@ -199,6 +208,9 @@ impl OwnedEnvironment {
     }
     pub fn root_optional(&self) -> Option<&CapturedDocument> {
         self.root.as_ref()
+    }
+    pub fn parents(&self) -> &[CapturedParent] {
+        &self.parents
     }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures
@@ -223,6 +235,10 @@ pub enum Failure<E> {
         findings: Vec<project_function_document::Finding>,
     },
     Rejected(Box<RejectedEnvironment<E>>),
+    /// The project file names a `parent`, and its layers do not compose
+    /// (PROJECT-16): refused as a specification's layers are, with the
+    /// project closure and the project file as the entry.
+    Layers(Box<crate::specification_source::InheritanceError<E>>),
 }
 
 /// Decode `source`, a file a project names, and admit it as `target` against
@@ -243,7 +259,15 @@ pub(crate) fn admit(
 ) -> Result<CapturedDocument, Error> {
     let document = match target {
         DecodeTarget::Project => {
-            document::decode(source, FileType::Project, Some(LANGUAGE_VERSION), closures)?
+            let document =
+                document::decode(source, FileType::Project, Some(LANGUAGE_VERSION), closures)?;
+            // A project file that names a parent is a layer of its chain,
+            // which composes it (PROJECT-16).
+            if yamaa_core::inheritance::reads_as_layer(FileType::Project, &document.raw().document)
+            {
+                return Ok(document.admit_layer()?.into_captured());
+            }
+            document
         }
         DecodeTarget::FunctionFile => {
             document::decode_referenced(source, FileType::Function, LANGUAGE_VERSION, closures)?
@@ -273,13 +297,19 @@ pub fn prepare<P: yamaa_core::resolver::Resolver>(
 
 /// Mechanical ownership transfer from the same engine environment preparation.
 pub fn adapt_preparation<E>(
-    result: application::PreparationResult<E, CapturedDocument, Error>,
+    result: application::PreparationResult<
+        E,
+        CapturedDocument,
+        Error,
+        crate::yaml_decode::DecodedYaml,
+    >,
 ) -> Result<PreparedEnvironment, Failure<E>> {
     match result {
         Ok(prepared) => Ok(PreparedEnvironment {
             project: prepared.project,
             origins: prepared.origins,
             root: prepared.root,
+            parents: prepared.parents,
             captures: prepared.captures,
             lock: prepared.lock,
             environment: prepared.environment,
@@ -300,6 +330,49 @@ pub fn adapt_preparation<E>(
                 Failure::RootScalar { root, findings }
             }
             application::Failure::Rejected(rejected) => Failure::Rejected(rejected),
+            application::Failure::Layers { root, failure } => {
+                Failure::Layers(Box::new(layers_failure(&root, *failure)))
+            }
         }),
+    }
+}
+
+/// The refusal of a project file, admitted as `root`, whose layers do not
+/// compose, as the refusal of a specification's layers (PROJECT-16).
+fn layers_failure<E>(
+    root: &CapturedDocument,
+    failure: yamaa_core::project_layers::Failure<E, Error>,
+) -> crate::specification_source::InheritanceError<E> {
+    use crate::document::SpecificationError as V;
+    use yamaa_core::project_layers::Failure as F;
+    use yamaa_core::schema::NormalizationError;
+    let error = match failure {
+        F::Traversal(error) => V::Traversal(error),
+        F::Clear {
+            source,
+            document,
+            findings,
+        } => V::Clear {
+            source,
+            document,
+            findings,
+        },
+        F::Path(error) => V::Path(crate::specification_source::SourceFailure::Host(error)),
+        F::Normalize {
+            document: Some(document),
+            error: NormalizationError::Invalid(found),
+        } => V::Entry(document::findings(
+            root.schema(),
+            root.source().clone(),
+            document,
+            found,
+        )),
+        F::Normalize { error, .. } => V::Entry(Error::Normalize(error)),
+        F::Finding(finding) => V::Finding(finding),
+    };
+    crate::specification_source::InheritanceError::Versioned {
+        schema: std::sync::Arc::clone(root.schema()),
+        entry: root.source().identity.clone(),
+        error: Box::new(error),
     }
 }

@@ -1,0 +1,14 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+# The second package replaces the study's discontinuation reasons with its
+# own, and is submitted by the sponsor, not the vendor the study names.
+yamaa: "1.0"
+type: project
+parent: study/project.yaml
+clear:
+- adam.originator
+codelists:
+- study/codelists.yaml
+- codelists.yaml
+
+adam:
+  define: define.xml

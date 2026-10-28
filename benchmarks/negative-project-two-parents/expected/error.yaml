@@ -1,0 +1,11 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - parent
+rule: SCHEMA-12
+context:
+  expected: path
+  actual: sequence
+  hint: 'write at most one parent per file; replace parents: [organization.yaml, compound.yaml]
+    with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml;
+    organization.yaml has no parent'

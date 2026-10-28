@@ -4,7 +4,9 @@
 //! a file: every fact comes from what preparation already holds.
 use crate::{
     project_source::{DocumentCapture, LockCapture, Origin},
-    specification_source::{CapturedDocument, LinkedSpecification, PreparedDocument},
+    specification_source::{
+        CapturedDocument, CapturedParent, LinkedSpecification, PreparedDocument,
+    },
 };
 use yamaa_core::{
     ast::{self, CodelistSource},
@@ -22,6 +24,7 @@ pub(crate) struct Environment<'a> {
     /// which holds no lock.
     pub(crate) host: Option<Language>,
     pub(crate) root: &'a CapturedDocument,
+    pub(crate) parents: &'a [CapturedParent],
     pub(crate) project: &'a ast::Project,
     pub(crate) lock: Option<&'a LockCapture>,
     pub(crate) captures: &'a [DocumentCapture],
@@ -125,6 +128,21 @@ pub(crate) fn environment(
 ) -> Option<Diagnostic> {
     if environment.root.source().identity == identity {
         return Some(failure.field_diagnostic("environment", environment.written));
+    }
+    let mut declaring = environment.root.source().identity.as_str();
+    let mut document = &environment.root.raw().document;
+    for parent in environment.parents {
+        if parent.source().identity == identity {
+            let node = document.field(document.root(), "parent")?;
+            let yamaa_core::schema::DocumentNode::Text(written) = &document.nodes()[node] else {
+                return None;
+            };
+            return Some(yamaa_core::inheritance::parent_diagnostic(
+                failure, declaring, written,
+            ));
+        }
+        declaring = &parent.source().identity;
+        document = &parent.raw().document;
     }
     let project = environment.project;
     if environment

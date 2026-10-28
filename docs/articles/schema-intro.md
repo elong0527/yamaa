@@ -239,6 +239,11 @@ characters than letters, digits, `_` and `-` quoted in brackets, as in
 path that names nothing the layer inherits, a required or identity field,
 `yamaa`, `type` or a whole member fails as `invalid_clear`.
 
+A project file layers the same way: it names one `parent` project file and
+may `clear` what it inherits, `study`, `environments` and each section
+composing field by field, and it includes no fragment
+([PROJECT-16](../../rules/profiles/project.md#project-16)).
+
 ## Column order
 
 A single file keeps its columns in the order they are written, and that order
@@ -355,7 +360,7 @@ fields:
 
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
-| A project's root | | `yamaa`, `type` | `functions` | `environments`, `codelists`, `study`, `sdtm`, `adam`, `send` |
+| A project's root | | `yamaa`, `type`, `clear` | `parent`, `functions` | `environments`, `codelists`, `study`, `sdtm`, `adam`, `send` |
 | `environments` | | | | `python`, `r` |
 | `environments.python`, `environments.r` | | | `lock` | |
 | `study` | `id` | `name`, `description`, `protocol_name` | | |

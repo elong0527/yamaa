@@ -1,0 +1,11 @@
+yamaa: "1.0"
+type: project
+# The defect: the package names two parents, the study's project and the
+# program's, but a project inherits from one.
+parent:
+- study/project.yaml
+- program/project.yaml
+
+adam:
+  specs:
+  - spec.yaml

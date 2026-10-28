@@ -1,0 +1,12 @@
+yamaa: "1.0"
+type: codelists
+
+# This package decodes each reason as its coded value.
+codelists:
+  - id: DCSREAS
+    name: Reason for Discontinuation from Study
+    items:
+      - {value: ADVERSE EVENT, decode: ADVERSE EVENT}
+      - {value: COMPLETED, decode: COMPLETED}
+      - {value: LOST TO FOLLOW-UP, decode: LOST TO FOLLOW-UP}
+      - {value: WITHDRAWAL BY SUBJECT, decode: WITHDRAWAL BY SUBJECT}

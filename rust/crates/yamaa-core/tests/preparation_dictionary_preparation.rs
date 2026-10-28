@@ -1774,7 +1774,8 @@ mod preparation {
                         source: "f".into(),
                         entry: "entry".into(),
                         mismatch: Box::new(HeaderMismatch::FileType {
-                            file_type: "project".into()
+                            file_type: "project".into(),
+                            expected: yamaa_core::language::FileType::Spec,
                         }),
                         named: Named::Include(1),
                         declaring: Some(declaring.into()),
@@ -1941,7 +1942,8 @@ mod preparation {
                     source: "b".into(),
                     entry: "entry".into(),
                     mismatch: Box::new(HeaderMismatch::FileType {
-                        file_type: "project".into()
+                        file_type: "project".into(),
+                        expected: yamaa_core::language::FileType::Spec,
                     }),
                     named: Named::CallerParent,
                     declaring: None,
