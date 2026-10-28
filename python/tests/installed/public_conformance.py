@@ -107,17 +107,32 @@ def domain_of(path):
 
 
 def stage_lock(case, project, lock):
-    """Supply the packaging lock a project names for Python in
-    `environments.python.lock`, relative to the project file."""
-    document = read_yaml(case / project)
-    linked = (document.get("environments") or {}).get("python")
-    written = linked.get("lock") if isinstance(linked, dict) else None
-    if written is None:
-        return
-    target = (case / project).parent / PurePosixPath(written)
-    if not target.exists():
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(lock, target)
+    """Supply each layer's declared Python lock beside its declaring file.
+
+    Stage declared inputs without composing the project: the engine decides
+    which lock survives replacement or clear, and reports invalid parents.
+    """
+    path, seen = case / project, set()
+    while path.resolve() not in seen:
+        seen.add(path.resolve())
+        try:
+            document = read_yaml(path)
+        except (OSError, ValueError):
+            return  # Leave missing or malformed parent diagnostics to the engine.
+        if not isinstance(document, dict):
+            return
+        environments = document.get("environments")
+        linked = environments.get("python") if isinstance(environments, dict) else None
+        written = linked.get("lock") if isinstance(linked, dict) else None
+        if isinstance(written, str):
+            target = path.parent / PurePosixPath(written)
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(lock, target)
+        parent = document.get("parent")
+        if not isinstance(parent, str):
+            return
+        path = path.parent / PurePosixPath(parent)
 
 
 def relative(paths, case):
