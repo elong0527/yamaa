@@ -83,11 +83,11 @@ rows:
       TSVAL:
         mapping:
           source: PROTOCOL.Randomized
-          dict: {Yes: Y, No: N}
+          dict: {'Yes': Y, 'No': N}
       TSVALCD:
         mapping:
           source: PROTOCOL.Randomized
-          dict: {Yes: C49488, No: C49487}
+          dict: {'Yes': C49488, 'No': C49487}
       TSVCDREF: "'CDISC'"
 
   - id: planned-enrollment
