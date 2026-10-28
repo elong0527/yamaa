@@ -1151,11 +1151,12 @@ class PublicationBoundary(unittest.TestCase):
                 self.assertEqual(arguments[:3], ["release", "create", identity.tag])
                 self.assertEqual(arguments[arguments.index("--title") + 1], title)
                 self.assertEqual("--prerelease" in arguments, prerelease)
-                # Every declared asset is uploaded, in declaration order.
+                # Every qualified file keeps its name and receives its declared
+                # title as a GitHub display label, in declaration order.
                 self.assertEqual(
                     arguments[-len(ASSETS) :],
                     [
-                        str(artifacts / example_name(asset, identity))
+                        f"{artifacts / example_name(asset, identity)}#{asset.title}"
                         for asset in ASSETS
                     ],
                 )
@@ -1324,6 +1325,18 @@ class PublicationBoundary(unittest.TestCase):
             (ROOT / f"docs/releases/{IDENTITY.version}.md")
             .read_text(encoding="utf-8")
             .rstrip("\n")
+        )
+        heading, _, body = notes.partition("\n\n")
+        notes = (
+            heading
+            + "\n\n"
+            + release.download_chooser(
+                IDENTITY,
+                REPOSITORY["full_name"],
+                release_assets.match(assets, ASSETS, IDENTITY),
+            )
+            + "\n\n"
+            + body
         )
         if IDENTITY.candidate is not None:
             introduction = release.candidate_introduction(
@@ -1863,6 +1876,7 @@ class CandidateReleaseBody(unittest.TestCase):
                 REPOSITORY["full_name"],
                 native_run(),
                 native_artifacts(),
+                [(asset, Path(example_name(asset, identity))) for asset in ASSETS],
             )
 
     def test_a_candidate_says_what_it_is_where_feedback_goes_and_what_changed(self):
@@ -1882,10 +1896,14 @@ class CandidateReleaseBody(unittest.TestCase):
         ]:
             with self.subTest(text=text):
                 self.assertIn(text, body)
-        # Then the notes of the final release so far, then the evidence.
-        introduction, rest = body.split("\n\n# yamaa 1.0.0\n\nThe notes so far.", 1)
+        # The candidate warning stays ahead of the download chooser; the
+        # committed notes and qualification evidence follow it.
+        introduction, rest = body.split("\n\n# yamaa 1.0.0\n\n", 1)
         self.assertTrue(introduction.startswith("**This is release candidate 2"))
-        self.assertTrue(rest.startswith("\n\n## Qualified native artifacts\n\n"))
+        self.assertTrue(rest.startswith("## Choose your download\n\n"))
+        self.assertIn(
+            "\n\nThe notes so far.\n\n## Qualified native artifacts\n\n", rest
+        )
 
     def test_the_first_candidate_has_no_previous_candidate(self):
         body = self.notes(Identity("1.0.0", 1))
@@ -1896,9 +1914,12 @@ class CandidateReleaseBody(unittest.TestCase):
         )
         self.assertNotIn("/compare/", body)
 
-    def test_a_final_release_body_is_its_notes_and_evidence(self):
+    def test_a_final_release_body_has_downloads_before_its_notes_and_evidence(self):
         body = self.notes(Identity("1.0.0"), tags=["yamaa-v1.0.0-rc.1"])
-        self.assertTrue(body.startswith("# yamaa 1.0.0\n\nThe notes so far.\n\n"))
+        self.assertTrue(body.startswith("# yamaa 1.0.0\n\n## Choose your download\n\n"))
+        self.assertIn(
+            "\n\nThe notes so far.\n\n## Qualified native artifacts\n\n", body
+        )
         self.assertNotIn("release candidate", body)
 
     def test_empty_candidate_notes_are_refused(self):
@@ -1915,7 +1936,9 @@ class CandidateReleaseBody(unittest.TestCase):
                     native_artifacts(),
                 )
 
-    def test_a_body_github_would_refuse_fails_before_any_download(self):
+    def test_oversized_notes_or_download_chooser_never_write_publication_inputs(self):
+        # The selection seam checks the notes before downloading and the complete
+        # body before writing the files that authorize publication.
         name = REPOSITORY["full_name"]
         replies = {
             f"repos/{name}": dict(REPOSITORY),
@@ -1928,21 +1951,141 @@ class CandidateReleaseBody(unittest.TestCase):
                 {"artifacts": native_artifacts()}
             ],
         }
-        with tempfile.TemporaryDirectory() as directory:
-            destination = Path(directory) / "selected"
+        notes = release.release_notes(
+            ROOT, IDENTITY, name, native_run(), native_artifacts()
+        )
+        for label, limit, downloads in [
+            ("notes", 100, 0),
+            ("chooser", len(notes), len(native_artifacts())),
+        ]:
             with (
-                patch.object(release, "RELEASE_BODY_LIMIT", 100),
-                patch.object(release, "tagged_revision", return_value=REVISION),
-                patch.object(release, "qualified_run", return_value=7),
-                patch.object(
-                    release, "gh_json", side_effect=lambda *args: replies[args[-1]]
-                ),
-                patch.object(release, "download_artifact") as download,
-                self.assertRaisesRegex(ValueError, "GitHub accepts at most 100"),
+                self.subTest(label=label),
+                tempfile.TemporaryDirectory() as directory,
             ):
-                release.select_release(ROOT, name, TAG, destination)
-            download.assert_not_called()
-            self.assertFalse(destination.exists())
+                destination = Path(directory) / "selected"
+                assets = [
+                    destination / example_name(asset, IDENTITY) for asset in ASSETS
+                ]
+                with (
+                    patch.object(release, "RELEASE_BODY_LIMIT", limit),
+                    patch.object(release, "tagged_revision", return_value=REVISION),
+                    patch.object(release, "qualified_run", return_value=7),
+                    patch.object(
+                        release, "gh_json", side_effect=lambda *args: replies[args[-1]]
+                    ),
+                    patch.object(release, "download_artifact") as download,
+                    patch.object(release, "downloaded_assets", return_value=assets),
+                    self.assertRaisesRegex(ValueError, "GitHub accepts at most"),
+                ):
+                    release.select_release(ROOT, name, TAG, destination)
+                self.assertEqual(
+                    (
+                        download.call_count,
+                        list(destination.glob("*.txt")),
+                        list(destination.glob("*.md")),
+                    ),
+                    (downloads, [], []),
+                    label,
+                )
+
+
+class ReleaseDownloadChooser(unittest.TestCase):
+    def test_downloads_group_actual_file_names_and_pin_the_release_and_python_version(
+        self,
+    ):
+        # The Markdown rendering seam uses qualified file names, including a
+        # wheel's actual platform version, rather than declaration placeholders.
+        for identity, python, cargo, pre in [
+            (Identity("1.0.0"), "1.0.0", "1.0.0", ""),
+            (Identity("1.0.0", 2), "1.0.0rc2", "1.0.0-rc.2", "--pre "),
+        ]:
+            with self.subTest(identity=identity):
+                rows = [
+                    ("r-source", "R source package", "yamaa_1.0.0.tar.gz"),
+                    (
+                        "cli",
+                        "Command-line binary for Linux x86_64",
+                        f"yamaa-{cargo}-x86_64-unknown-linux-musl.zip",
+                    ),
+                    ("sdist", "Python source archive", f"yamaa-{python}.tar.gz"),
+                    (
+                        "conformance",
+                        "Grammars and expression evaluation set",
+                        f"yamaa-{cargo}-conformance.zip",
+                    ),
+                    (
+                        "r-binary",
+                        "R binary package for Windows x64, R 4.6",
+                        "yamaa_1.0.0-4.6.zip",
+                    ),
+                    (
+                        "wheel",
+                        "Python wheel for macOS arm64",
+                        f"yamaa-{python}-cp312-abi3-macosx_14_0_arm64.whl",
+                    ),
+                ]
+                pairs = [
+                    (
+                        release_assets.Asset(kind, title, name, "artifact", "job"),
+                        Path("/qualified") / name,
+                    )
+                    for kind, title, name in rows
+                ]
+                site = "https://github.com/elong0527/yamaa"
+                download = f"{site}/releases/download/yamaa-v{cargo}"
+                self.assertEqual(
+                    release.download_chooser(identity, "elong0527/yamaa", pairs),
+                    "## Choose your download\n\n"
+                    "### Python\n\n"
+                    f"Install from PyPI with `python -m pip install {pre}"
+                    f"yamaa=={python}`. pip selects a compatible wheel. "
+                    "Building the source package requires Rust and a C compiler.\n\n"
+                    f"- [Python source archive]({download}/yamaa-{python}.tar.gz)\n"
+                    f"- [Python wheel for macOS arm64]({download}/"
+                    f"yamaa-{python}-cp312-abi3-macosx_14_0_arm64.whl)\n\n"
+                    "### R\n\n"
+                    "Choose a binary for your operating system and R series; binaries "
+                    "need no Rust or Rtools. The source package requires compilation. "
+                    f"See the [R installation instructions]({site}/blob/yamaa-v{cargo}/"
+                    "R/yamaa/README.md#installation).\n\n"
+                    f"- [R source package]({download}/yamaa_1.0.0.tar.gz)\n"
+                    "- [R binary package for Windows x64, R 4.6]"
+                    f"({download}/yamaa_1.0.0-4.6.zip)\n\n"
+                    "### CLI\n\n"
+                    "Unzip the archive for your operating system and architecture, then "
+                    "run `yamaa` (`yamaa.exe` on Windows). No Python, R or Rust "
+                    "installation is needed.\n\n"
+                    f"- [Command-line binary for Linux x86_64]({download}/"
+                    f"yamaa-{cargo}-x86_64-unknown-linux-musl.zip)\n\n"
+                    "### Developer resources\n\n"
+                    "Grammars and conformance cases for language implementers.\n\n"
+                    f"- [Grammars and expression evaluation set]({download}/"
+                    f"yamaa-{cargo}-conformance.zip)",
+                )
+
+    def test_every_declared_asset_has_exactly_one_download_with_its_display_label(self):
+        # The complete matrix must remain covered when a platform or asset is added.
+        pairs = [(asset, Path(example_name(asset, IDENTITY))) for asset in ASSETS]
+        chooser = release.download_chooser(IDENTITY, REPOSITORY["full_name"], pairs)
+        self.assertCountEqual(
+            re.findall(r"^- \[([^\]]+)\]\(([^)]+)\)$", chooser, re.MULTILINE),
+            [
+                (
+                    asset.title,
+                    f"https://github.com/elong0527/yamaa/releases/download/"
+                    f"{IDENTITY.tag}/{example_name(asset, IDENTITY)}",
+                )
+                for asset in ASSETS
+            ],
+        )
+
+    def test_an_asset_without_a_download_group_is_refused(self):
+        # A new kind must be assigned a group before it can be published.
+        asset = release_assets.Asset("unknown", "New asset", "new.zip", "build", "job")
+        with self.assertRaisesRegex(ValueError, "no download group"):
+            release.download_chooser(
+                IDENTITY, "elong0527/yamaa", [(asset, Path("new.zip"))]
+            )
 
 
 class ReleaseAssetDeclaration(unittest.TestCase):

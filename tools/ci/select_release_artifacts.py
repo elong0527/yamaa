@@ -33,6 +33,14 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def require_release_body(notes):
+    require(
+        len(notes) <= RELEASE_BODY_LIMIT,
+        f"the release body has {len(notes):,} characters; GitHub accepts at most "
+        f"{RELEASE_BODY_LIMIT:,}",
+    )
+
+
 def positive_integer(value):
     return type(value) is int and value > 0
 
@@ -712,16 +720,15 @@ def select_release(root, repository_name, tag, destination, run_id=None):
     )
     selected = select_artifacts(artifacts, coverage, run, repository, jobs)
     notes = release_notes(root, identity, repository_name, run, selected)
-    require(
-        len(notes) <= RELEASE_BODY_LIMIT,
-        f"the release body has {len(notes):,} characters; GitHub accepts at most "
-        f"{RELEASE_BODY_LIMIT:,}",
-    )
+    require_release_body(notes)
     destination.mkdir(parents=True, exist_ok=False)
     for artifact in selected:
         download_artifact(repository_name, artifact, destination)
     declared = release_assets.declared(coverage)
     assets = downloaded_assets(destination, selected, identity, root, declared)
+    pairs = release_assets.match(assets, declared, identity)
+    notes = release_notes(root, identity, repository_name, run, selected, pairs)
+    require_release_body(notes)
     (destination / "source-revision.txt").write_text(revision + "\n", encoding="utf-8")
     (destination / "asset-paths.txt").write_text(
         "".join(f"{path.resolve()}\n" for path in assets), encoding="utf-8"
@@ -730,14 +737,74 @@ def select_release(root, repository_name, tag, destination, run_id=None):
     return assets
 
 
-def release_notes(root, identity, repository, run, selected):
+def download_chooser(identity, repository, pairs):
+    """Group the selected file names into downloads for each kind of user."""
+    site = f"https://github.com/{repository}"
+    groups = (
+        (
+            "Python",
+            release_assets.PYTHON_KINDS,
+            "Install from PyPI with "
+            f"`python -m pip install {'--pre ' if identity.candidate is not None else ''}"
+            f"yamaa=={identity.python}`. pip selects a compatible wheel. "
+            "Building the source package requires Rust and a C compiler.",
+        ),
+        (
+            "R",
+            {"r-source", "r-binary"},
+            "Choose a binary for your operating system and R series; binaries "
+            "need no Rust or Rtools. The source package requires compilation. "
+            f"See the [R installation instructions]({site}/blob/{identity.tag}/"
+            "R/yamaa/README.md#installation).",
+        ),
+        (
+            "CLI",
+            {"cli"},
+            "Unzip the archive for your operating system and architecture, then "
+            "run `yamaa` (`yamaa.exe` on Windows). No Python, R or Rust "
+            "installation is needed.",
+        ),
+        (
+            "Developer resources",
+            {"conformance"},
+            "Grammars and conformance cases for language implementers.",
+        ),
+    )
+    kinds = set().union(*(kinds for _, kinds, _ in groups))
+    require(
+        all(asset.kind in kinds for asset, _ in pairs),
+        "a release asset has no download group",
+    )
+    lines = ["## Choose your download"]
+    for heading, kinds, guidance in groups:
+        lines += ["", f"### {heading}", "", guidance, ""]
+        lines += [
+            f"- [{asset.title}]({site}/releases/download/{identity.tag}/{path.name})"
+            for asset, path in pairs
+            if asset.kind in kinds
+        ]
+    return "\n".join(lines)
+
+
+def release_notes(root, identity, repository, run, selected, pairs=None):
     """Compose the release body from the committed notes and the native run.
 
     A candidate's body first says that it is a candidate, where feedback goes
-    and what changed since the previous candidate.
+    and what changed since the previous candidate. Qualified asset/path pairs
+    add the download chooser; before downloading, the notes alone are checked
+    against the body limit.
     """
     notes = (root / f"docs/releases/{identity.version}.md").read_text(encoding="utf-8")
     notes = notes.rstrip("\n")
+    if pairs is not None:
+        heading, _, body = notes.partition("\n\n")
+        notes = (
+            heading
+            + "\n\n"
+            + download_chooser(identity, repository, pairs)
+            + "\n\n"
+            + body
+        )
     if identity.candidate is not None:
         notes = candidate_introduction(root, identity, repository) + "\n\n" + notes
     attempt = f"{run['html_url']}/attempts/{run['run_attempt']}"
