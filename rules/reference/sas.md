@@ -61,11 +61,12 @@ numeric field to `int`, `date` or `datetime`. Any other physical/type pair
 fails ingestion.
 
 Fails: `source_sas_invalid`, `unknown_field`.
-Evidence: `schema-source-xpt`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit`, `rust/tests/host-fixtures/sas-cases.json::character-cannot-be-int`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::malformed_truncated_encoding_and_unknown_fields_fail_before_execution`.
+Evidence: `schema-source-xpt`, `negative-xpt-character-as-int`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit`, `rust/tests/host-fixtures/sas-cases.json::character-cannot-be-int`, `rust/tests/host-fixtures/sas-cases.json::numeric-cannot-be-str`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::malformed_truncated_encoding_and_unknown_fields_fail_before_execution`.
 
-A disallowed physical/type pair fails with `source_sas_invalid`
+A disallowed physical/type pair fails with `source_sas_invalid`, cause
+`field_type`, at `input.<dataset>.types.<field>`, naming the field
 ([SAS-7](#sas-7)). A `types` entry naming an unknown field still
-fails with `unknown_field`. A producing-specification link keeps its sole type
+fails with `unknown_field` at the same entry. A producing-specification link keeps its sole type
 authority under [INPUT-6](../inputs.md#input-6).
 
 <a id="sas-4"></a>
@@ -146,15 +147,31 @@ limit.
 ### SAS-7. A SAS or Transport file that cannot be decoded fails ingestion with one closed cause
 
 `source_sas_invalid` reports in the `ingest` phase at `input.<dataset>.path`,
-with the dataset, the path and a closed `cause`: `framing`, `members`,
-`version`, `encoding`, `compression`, `header`, `field_name`, `field_type`,
-`record_order`, `deleted_records`, `truncated` or `malformed`. Undecodable text
-fails without replacement characters. Unsupported versions, unsupported
-compression signatures, malformed compressed data, duplicate or empty field
-names and incomplete physical framing fail before derivation.
+or at the `types` entry for cause `field_type`, with the dataset, the path and
+a closed `cause`: `framing`, `members`, `version`, `encoding`, `compression`,
+`header`, `field_name`, `field_type`, `record_order`, `deleted_records`,
+`truncated` or `malformed`. A cause that one field locates names the `field`,
+and a value's also its `record`. Undecodable text fails without replacement
+characters. Unsupported versions, unsupported compression signatures,
+malformed compressed data, duplicate or empty field names and incomplete
+physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_sas_transport_file_that_breaks_its_framing_is_invalid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_malformed_sas_dataset_is_invalid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_sas_dataset_with_records_deleted_in_place_is_invalid_and_says_how_to_rewrite_it`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::compressed_records_after_a_changed_row_length_are_refused_before_they_are_written`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::column_subheaders_shorter_than_their_fixed_part_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::stored_record_counts_beyond_32_bits_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_must_be_decimal_digits_between_blanks`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_sas_transport_file_that_breaks_its_framing_is_invalid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_malformed_sas_dataset_is_invalid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_sas_dataset_with_records_deleted_in_place_is_invalid_and_says_how_to_rewrite_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_repeated_sas_field_name_names_the_name`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::an_empty_sas_field_name_names_its_position`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_sas_field_name_that_does_not_decode_names_its_position`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_types_entry_a_sas_field_cannot_take_is_refused_at_the_entry`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_sas_value_that_does_not_decode_names_its_field_and_record`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_refusal_a_field_locates_names_the_field_and_a_value_also_its_record`, `rust/tests/host-fixtures/sas-cases.json::cp1252-is-not-utf8`, `negative-xpt-character-as-int`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::compressed_records_after_a_changed_row_length_are_refused_before_they_are_written`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::column_subheaders_shorter_than_their_fixed_part_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::stored_record_counts_beyond_32_bits_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_must_be_decimal_digits_between_blanks`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+
+| Cause | Context beyond the dataset, path and cause |
+|---|---|
+| `field_name` | `field`: an empty name's position, or the repeated name |
+| `field_type` | `field`, at `input.<dataset>.types.<field>` ([SAS-3](#sas-3)) |
+| `encoding` | for a field name that does not decode, `field`, its position; for a value that does not decode or holds a NUL byte ([SAS-5](#sas-5)), `field` and `record` |
+| `deleted_records` | `hint` |
+| any other | none |
+
+A field's position counts the stored fields from one, and a value's `record`
+counts from one the records the input yields ([SAS-8](#sas-8)), as its
+generated ordinal does ([INPUT-3](../inputs.md#input-3)). A NUL byte in a
+field's name, label or format, or in the dataset's own name or label, fails as
+`encoding` and names no field.
 
 Cause `deleted_records` reports records deleted in place that cannot be
 reconciled with the dataset's count of them ([SAS-8](#sas-8)). That finding's

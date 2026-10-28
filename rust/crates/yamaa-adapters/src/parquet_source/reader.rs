@@ -125,6 +125,10 @@ const ARRAYS: u8 = 15;
 /// Each partition's record batch.
 const BATCH: u8 = 16;
 
+/// The counts of one second of the table's datetimes, which an Arrow
+/// timestamp of microseconds holds (`TimestampMicrosecondArray`).
+const MICROS: i64 = super::format::TimeUnit::Micros.per_second();
+
 /// A held file read by partition (#3792): what its footer and pages admit,
 /// and what decodes one partition's row groups at a time, each partition
 /// once for its checks and again whenever a run reads it (#3830).
@@ -564,7 +568,7 @@ impl Runs {
     /// one partition.
     fn ordinary(
         &self,
-        raw: Vec<Column>,
+        mut raw: Vec<Column>,
         schema: &TableSchema,
         records: usize,
         before: usize,
@@ -572,21 +576,30 @@ impl Runs {
         let leaves = &self.footer.schema.leaves;
         for (index, field) in schema.columns().iter().enumerate() {
             let at = |error| ((TEMPORAL, index, 0), Error::Profile(error));
-            match (field.kind, raw.get(index)) {
+            match (field.kind, raw.get_mut(index)) {
                 (ColumnType::Date, Some(Column::Int32(values))) => {
                     for (row, value) in values.iter().enumerate() {
                         if let Some(value) = value {
                             let row = before + row + 1;
-                            profile::temporal(field.kind, i64::from(*value), &field.name, row)
+                            profile::temporal(field.kind, i64::from(*value), 1, &field.name, row)
                                 .map_err(at)?;
                         }
                     }
                 }
+                // A datetime counts its timestamp's unit. Each stored count
+                // is checked as stored, then, a whole second in range,
+                // counted again in the table's microseconds, which holds
+                // that second exactly (PARQUET-9).
                 (ColumnType::DateTime, Some(Column::Int64(values))) => {
-                    for (row, value) in values.iter().enumerate() {
+                    let Some(second) = leaves.get(index).and_then(profile::per_second) else {
+                        return Err(((TEMPORAL, index, 0), Error::Malformed));
+                    };
+                    for (row, value) in values.iter_mut().enumerate() {
                         if let Some(value) = value {
                             let row = before + row + 1;
-                            profile::temporal(field.kind, *value, &field.name, row).map_err(at)?;
+                            profile::temporal(field.kind, *value, second, &field.name, row)
+                                .map_err(at)?;
+                            *value = *value / second * MICROS;
                         }
                     }
                 }
@@ -708,6 +721,15 @@ fn column_array(
         (ColumnType::Float, Column::Double(values)) => {
             Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
                 v.and_then(yamaa_core::value::FiniteFloat::new)
+                    .map(yamaa_core::value::FiniteFloat::get)
+            })))
+        }
+        // A single-precision value widens exactly to binary64, and a
+        // non-finite one is missing, as a binary64 one is (PARQUET-8).
+        (ColumnType::Float, Column::Float(values)) => {
+            Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
+                v.map(f64::from)
+                    .and_then(yamaa_core::value::FiniteFloat::new)
                     .map(yamaa_core::value::FiniteFloat::get)
             })))
         }
