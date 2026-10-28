@@ -11,17 +11,28 @@ The estimates have already been calculated from plasma concentrations.
 
 - `PPSEQ` numbers parameters within each subject by reference dose time,
   analyte and standard parameter code.
-- `PPTESTCD` and `PPTEST` identify the software's `Cmax`, `Tmax` and
-  `AUClast` as `CMAX` (Max Conc), `TMAX` (Time of CMAX Observation) and
-  `AUCLST` (AUC to Last Nonzero Conc).
-- `PPCAT` carries the analyte name.
-- `PPORRES` and `PPSTRESC` retain the estimate as text, including its
-  reported decimal places; `PPSTRESN` holds the same value as a number.
-- `PPORRESU` and `PPSTRESU` retain the analysis units: `ng/mL` for maximum
+- `PPTESTCD` identifies the software's `Cmax`, `Tmax` and `AUClast` as
+  `CMAX`, `TMAX` and `AUCLST`; it is missing when the parameter is absent.
+- `PPTEST` names those parameters as Max Conc, Time of CMAX Observation and
+  AUC to Last Nonzero Conc; it is missing when the parameter code is absent.
+- `PPCAT` carries the analyte name, or is missing when none is supplied.
+- `PPORRES` retains the estimate as text, including its reported decimal
+  places; it is missing when the estimate is absent.
+- `PPORRESU` retains the supplied analysis unit: `ng/mL` for maximum
   concentration, `h` for its time and `h*ng/mL` for the area under the
-  concentration-time curve (AUC).
-- `PPSPEC` is `PLASMA`. `PPRFTDTC` identifies the reference dose date and
-  time supplied by the analysis software.
+  concentration-time curve (AUC). It is missing when the unit is absent,
+  independently of whether an estimate is supplied.
+- `PPSTRESC` retains the estimate as text with its reported decimal places;
+  it is missing when the estimate is absent, regardless of the unit.
+- `PPSTRESN` holds the estimate as a number; it is missing when the estimate
+  is absent, regardless of the unit.
+- `PPSTRESU` retains the supplied analysis unit without conversion; it is
+  missing when the unit is absent, regardless of the estimate.
+- `PPSPEC` is always `PLASMA`.
+- `PPRFTDTC` identifies the reference dose date and time supplied by the
+  analysis software, or is missing when none is supplied.
 
 **Note:** this step publishes the supplied estimates; it does not
-recalculate them from a concentration profile or change their units.
+recalculate them from a concentration profile or change their units. An
+unsupported parameter name or an estimate that is not numeric stops
+publication.
