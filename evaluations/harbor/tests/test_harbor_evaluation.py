@@ -1062,38 +1062,45 @@ def _held_out_case(
     agent: str,
     reference: str | None,
     benchmark_name: str = "adam-adsl-age-group",
+    language: str = "python",
+    challenge_required: bool = False,
 ) -> dict:
-    """Grade, with the verifier's reruns, a Python-track submission of
+    """Grade, with the verifier's reruns, a submission of
     `benchmark_name` whose script is `agent` ("reference" or "hardcode")
     against `reference` ("reference", "hardcode", or None). The changed-input
-    challenge is off, so the held-out rerun is checked on its own."""
+    challenge defaults off, so the held-out rerun is checked on its own."""
     benchmark = ROOT / "benchmarks" / benchmark_name
-    contract = build.contract_for(benchmark, "python")
-    contract["challenge_required"] = False
+    contract = build.contract_for(benchmark, language)
+    contract["challenge_required"] = challenge_required
+    script = contract["script"]
     app = tmp_path / "app"
     shutil.copytree(benchmark / "input", app / "input")
     (app / "output").mkdir()
     golden = [benchmark / "expected" / o["file"] for o in contract["outputs"]]
     texts = {
-        "reference": (build.SOLUTIONS / benchmark.name / "result.py").read_text(),
-        "hardcode": build.oracle_script("python", golden),
+        "reference": (build.SOLUTIONS / benchmark.name / script).read_text(),
     }
+    if "hardcode" in (agent, reference):
+        texts["hardcode"] = build.oracle_script(language, golden)
 
     def at_app(text: str) -> str:
         """Embed the temporary app path in a script without native backslashes."""
         return text.replace("/app/", f"{app.as_posix()}/")
 
-    (app / "output" / "result.py").write_text(at_app(texts[agent]))
+    (app / "output" / script).write_text(at_app(texts[agent]))
     reference_path = None
     if reference:
-        reference_path = tmp_path / "reference" / "result.py"
+        reference_path = tmp_path / "reference" / script
         reference_path.parent.mkdir()
         reference_path.write_text(at_app(texts[reference]))
 
     def run(command, cwd, timeout):
-        return grade.run_script([sys.executable, *command[1:]], cwd, timeout)
+        if language == "python":
+            command = [sys.executable, *command[1:]]
+        return grade.run_script(command, cwd, timeout)
 
-    assert run([None, str(app / "output" / "result.py")], app, 60)[0] == 0
+    interpreter = grade.INTERPRETERS[language]
+    assert run([interpreter, str(app / "output" / script)], app, 60)[0] == 0
     before = {p.name: p.read_bytes() for p in (app / "input").iterdir()}
     result = grade.grade(
         contract,
@@ -1106,7 +1113,7 @@ def _held_out_case(
     )
     after = {p.name: p.read_bytes() for p in (app / "input").iterdir()}
     assert before == after, "the held-out rerun restores the inputs"
-    assert (app / "output" / "result.py").is_file()
+    assert (app / "output" / script).is_file()
     return result
 
 

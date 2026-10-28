@@ -104,6 +104,42 @@ def test_reference_derives_declared_measurement_inputs(tmp_path):
     )
 
 
+@pytest.mark.parametrize("language", ["python", "r", "opensas"])
+@pytest.mark.parametrize(
+    "benchmark,file,columns",
+    [
+        (
+            "sdtm-pc-pk-concentrations",
+            "lab_transfer.csv",
+            {"Result": 4, "Collected": 5},
+        ),
+    ],
+)
+def test_vendor_transfer_reference_passes_full_verifier(
+    tmp_path, language, benchmark, file, columns
+):
+    # Seam: the verifier orchestrates clean, held-out and changed-input
+    # executions; an original-data comparison alone never reaches the alias.
+    if language == "r" and not _r_has():
+        pytest.skip("R is not installed")
+    if language == "opensas" and not shutil.which("opensas"):
+        pytest.skip("opensas is not installed")
+    result = _held_out_case(
+        tmp_path,
+        "reference",
+        "reference",
+        benchmark,
+        language=language,
+        challenge_required=True,
+    )
+    assert (
+        result["passed"],
+        result["held_out"]["checked"],
+        result["challenge"]["checked"],
+        result["challenge"]["value_changes"],
+    ) == (True, True, True, [{"file": file, "columns": columns}]), result
+
+
 def test_a_value_keyed_lookup_fails_declared_measurement_challenge(tmp_path):
     # The lookup answers each visit's MAP from the original SYSBP/DIABP value
     # pair. It reproduces the golden on the original inputs, but the declared
