@@ -1,5 +1,5 @@
 {
-  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL. In `pairs` the pair relation P pairs the records of L and R on K and exposes ID and RID, which a row template driving on it reads (LOOKUP-27).",
+  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection, and an order term whose field holds types that do not compare (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2, VALUE-22); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL. In `pairs` the pair relation P pairs the records of L and R on K and exposes ID and RID, which a row template driving on it reads (LOOKUP-27).",
   "documents": {
     "value": {
       "yamaa": "1.0",
@@ -525,6 +525,26 @@
       },
       "among": true,
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-26", "spec_paths": ["intermediates.SEL.nearest.to"], "context": {"intermediate": "SEL", "expected": "datetime", "actual": "date"}}]
+    },
+    {
+      "case": "a_lookup_order_term_whose_derived_type_holds_text_and_an_int_is_refused",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"SORTV": {"value": {"case": [{"when": "DONOR.V IS NULL", "then": "'NONE'"}, {"otherwise": "DONOR.V"}]}}}}, {"set": ["intermediates", "0", "order_by"], "to": ["DONOR.SORTV"]}, {"set": ["intermediates", "0", "keep"], "to": "last"}],
+        "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "VALUE-22", "spec_paths": ["intermediates.SEL.order_by[0]"], "context": {"identifier": "DONOR.SORTV", "intermediate": "SEL", "actual": "str or int"}}]
+    },
+    {
+      "case": "a_window_order_term_whose_derived_type_holds_a_date_and_a_datetime_is_refused",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"SORTV": {"value": {"case": [{"when": "DONOR.V IS NULL", "then": "DATE '2024-01-01'"}, {"otherwise": "DONOR.DT"}]}}, "RANKV": {"value": {"row_number": {"window": {"order_by": ["SORTV"]}}}}}}],
+        "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "VALUE-22", "spec_paths": ["intermediates.SEL.derivations.RANKV.row_number.window.order_by[0]"], "context": {"identifier": "SORTV", "operation": "row_number", "actual": "date or datetime"}}]
     },
     {
       "case": "a_source_filter_reads_driver_fields_qualified",
