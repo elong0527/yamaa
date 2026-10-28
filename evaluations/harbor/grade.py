@@ -50,6 +50,7 @@ from decimal import (
     Rounded,
     localcontext,
 )
+from itertools import cycle
 from pathlib import Path
 
 NULL_TOKENS = frozenset({"", "NA", "NaN", "nan", ".", "NULL", "None"})
@@ -65,7 +66,9 @@ HOLDOUT_SUBJECT = "USUBJID"
 HOLDOUT_INPUT_SUBJECTS = ("USUBJID", "SubjectKey", "SUBJID", "PATNUM", "Subject")
 HOLDOUT_EVERY = 3
 CHALLENGE_SEED = 20261001
-_DECLARED_MEASUREMENTS: dict[str, frozenset] | None = None
+_DECLARED_INPUT_CHANGES: (
+    dict[str, tuple[frozenset[str], dict[str, dict[str, list[str]]]]] | None
+) = None
 # How each track's script is run, and what counts as reaching for the other
 # language: running one of its programs in a shell call, or a bridge in the
 # script. Only a call counts: the program's name in a grep pattern, a quoted
@@ -1001,38 +1004,70 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
     return changed
 
 
-def _declared_measurements() -> dict[str, frozenset]:
-    """Extra per-benchmark measurement columns declared in measurements.json.
+def _declared_input_changes() -> dict[
+    str, tuple[frozenset[str], dict[str, dict[str, list[str]]]]
+]:
+    """Read per-benchmark scaling and text substitutions from one declaration.
 
-    That file maps a benchmark to input columns the changed-input challenge
-    may scale in addition to the built-in set, for benchmarks whose analysis
-    values, doses or ODM item values are measurements but are not covered by
-    the built-in column names. It sits next to this grader both in the
-    repository and in a built verifier. Loading fails closed: a missing or
-    malformed file must never silently turn the declared scaling off.
+    A list names measurement columns. A profile may additionally name exact
+    text substitutions, cycling through each source value's replacements.
+    An empty replacement exercises a missing unit alongside changed units.
+    The same file is staged beside the grader in every built verifier.
+    Missing or malformed declarations fail closed.
     """
-    global _DECLARED_MEASUREMENTS
-    if _DECLARED_MEASUREMENTS is None:
+    global _DECLARED_INPUT_CHANGES
+    if _DECLARED_INPUT_CHANGES is None:
         path = Path(__file__).with_name("measurements.json")
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise RuntimeError(
-                f"cannot load declared measurements from {path}"
+                f"cannot load declared input changes from {path}"
             ) from exc
         if not isinstance(data, dict):
-            raise ValueError(f"{path} must map benchmarks to column lists")
+            raise ValueError(f"{path} must map benchmarks to input changes")
         declared = {}
-        for benchmark, columns in data.items():
+        for benchmark, profile in data.items():
+            if isinstance(profile, list):
+                columns, substitutions = profile, {}
+            elif isinstance(profile, dict) and profile.keys() <= {
+                "measurements",
+                "substitutions",
+            }:
+                columns = profile.get("measurements", [])
+                substitutions = profile.get("substitutions", {})
+            else:
+                raise ValueError(f"{path}: {benchmark} has an invalid profile")
             if not isinstance(columns, list) or not all(
                 isinstance(column, str) for column in columns
             ):
                 raise ValueError(
                     f"{path}: {benchmark} must map to a list of column names"
                 )
-            declared[benchmark] = frozenset(column.upper() for column in columns)
-        _DECLARED_MEASUREMENTS = declared
-    return _DECLARED_MEASUREMENTS
+            if not isinstance(substitutions, dict) or not all(
+                isinstance(column, str)
+                and isinstance(values, dict)
+                and values
+                and all(
+                    isinstance(before, str)
+                    and before
+                    and isinstance(replacements, list)
+                    and replacements
+                    and all(
+                        isinstance(after, str) and before != after
+                        for after in replacements
+                    )
+                    for before, replacements in values.items()
+                )
+                for column, values in substitutions.items()
+            ):
+                raise ValueError(f"{path}: {benchmark} has invalid substitutions")
+            declared[benchmark] = (
+                frozenset(column.upper() for column in columns),
+                {column.upper(): values for column, values in substitutions.items()},
+            )
+        _DECLARED_INPUT_CHANGES = declared
+    return _DECLARED_INPUT_CHANGES
 
 
 def _perturb_values(
@@ -1046,9 +1081,9 @@ def _perturb_values(
     change. Identifiers, missing values and categorical codes stay intact.
     The reference computes the answers; changes are recorded for replay.
 
-    A benchmark may declare extra measurement columns in measurements.json
-    (analysis values, doses, ODM item values); only those columns are scaled
-    beyond the built-in set, and only for that benchmark.
+    A benchmark may declare extra measurement columns and exact text
+    substitutions in measurements.json. These changes apply only to that
+    benchmark; text substitutions can change a supplied unit or leave it blank.
     """
     date_shift = randomizer.randint(1, 7)
     age_shift = randomizer.choice((1, 2, 3))
@@ -1067,7 +1102,14 @@ def _perturb_values(
         "VSORRES",
         "VSSTRESN",
     }
-    scalable = measurements | _declared_measurements().get(benchmark, frozenset())
+    declared, substitutions = _declared_input_changes().get(
+        benchmark, (frozenset(), {})
+    )
+    replacements = {
+        column: {before: cycle(values) for before, values in sources.items()}
+        for column, sources in substitutions.items()
+    }
+    scalable = measurements | declared
     # A stored age group may be sponsor-defined. Without its rule, leave ages
     # unchanged across every joined input rather than create inconsistent groups.
     grouped_ages = any(
@@ -1081,6 +1123,9 @@ def _perturb_values(
     def change(column: str, value: object, kind=None) -> object:
         if value is None or value == "":
             return value
+        name = column.upper()
+        if isinstance(value, str) and value in replacements.get(name, {}):
+            return next(replacements[name][value])
         if isinstance(value, (date, datetime)):
             return value + timedelta(days=date_shift)
         if isinstance(value, str):
@@ -1099,7 +1144,6 @@ def _perturb_values(
                     return shifted.isoformat()
             except ValueError:
                 pass
-        name = column.upper()
         if grouped_ages and name in {"AGE", "AGE_YEARS"}:
             return value
         if name not in scalable and name not in {"AGE", "AGE_YEARS"}:

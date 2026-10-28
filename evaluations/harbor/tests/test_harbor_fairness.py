@@ -372,10 +372,31 @@ def test_declared_measurement_columns_scale_only_for_their_benchmark(tmp_path):
             assert float(after["AVAL"]) != float(before["AVAL"])
 
 
-def test_declared_measurements_name_columns_the_inputs_carry():
-    declared = grade._declared_measurements()
+def test_pc_unit_challenge_contains_changed_and_missing_units(tmp_path):
+    # Seam: the perturbation profile must create both unit cases before the
+    # verifier compares independently executed reference and submitted output.
+    import random
+
+    benchmark = "sdtm-pc-pk-concentrations"
+    shutil.copytree(build.BENCHMARKS / benchmark / "input", tmp_path / "input")
+    changes = grade._perturb_values(tmp_path / "input", random.Random(1), benchmark)
+    _, rows = grade.read_rows(tmp_path / "input/lab_transfer.csv")
+    assert {"changes": changes, "units": [row["Unit"] for row in rows]} == {
+        "changes": [
+            {
+                "file": "lab_transfer.csv",
+                "columns": {"Result": 4, "Unit": 5, "Collected": 5},
+            }
+        ],
+        "units": ["ug/mL", "", "ug/mL", "", "ug/mL"],
+    }
+
+
+def test_declared_input_changes_name_columns_the_inputs_carry():
+    declared = grade._declared_input_changes()
     assert declared
-    for benchmark, columns in declared.items():
+    for benchmark, (measurements, substitutions) in declared.items():
+        columns = measurements | substitutions.keys()
         input_dir = build.BENCHMARKS / benchmark / "input"
         assert input_dir.is_dir(), benchmark
         carried = set()

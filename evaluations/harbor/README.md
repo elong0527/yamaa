@@ -18,7 +18,7 @@ live on Harbor Hub or in the chosen output directory.
 | `Dockerfile`, `install-r-packages.R`, `images.py` | language images and their runtime checks |
 | `build.py` | tasks, dataset pages, and model job configurations |
 | `grade.py`, `sandbox.py` | grading and isolated program reruns |
-| `measurements.json` | authored measurement columns used by changed-input checks |
+| `measurements.json` | authored scaling columns and text substitutions for changed-input checks |
 | `leaderboards/config.yaml` | shared Hub schemas, columns, ranking and minimum attempts |
 | `leaderboards/task-populations.json` | frozen benchmark populations for versioned boards |
 | `leaderboard.py`, `hub.py`, `run.py` | result aggregation and private Hub publication |
@@ -129,9 +129,11 @@ A passing result must match every requested dataset and reproduce it from
 a clean output directory. The verifier also reruns both the reference and
 agent program after dropping selected subjects and after changing supported
 identifiers, ages, measurements and complete dates. `measurements.json`
-adds benchmark-specific numeric measurements; categorical codes and counts
-are not measurements. Partial dates remain unchanged. These checks exercise
-supported counterfactuals and do not prove generalization to every input.
+adds benchmark-specific numeric measurements and exact text substitutions.
+Substitutions cycle through their declared replacements, including empty
+units; categorical codes and counts are not measurements. Partial dates
+remain unchanged. These checks exercise supported counterfactuals and do not
+prove generalization to every input.
 
 Reruns execute as an unprivileged user with no access to expected files or
 references. Inputs are restored between runs, outputs are removed, and
