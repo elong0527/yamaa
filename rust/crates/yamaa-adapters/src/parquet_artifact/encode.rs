@@ -45,6 +45,13 @@ fn page_size<E>(body: usize) -> Result<i32, Error<E>> {
     })
 }
 
+/// A plain string's length as the four bytes that precede it, or the page's
+/// refusal of a value longer than a u32 counts: that value alone makes its
+/// page one no i32 counts, so it is refused as that page is (#4075).
+fn value_length<E>(value: usize) -> Result<u32, Error<E>> {
+    u32::try_from(value).or_else(|_| page_size(value).map(|size| size as u32))
+}
+
 /// The footer's length as the four bytes that end it, or the refusal of
 /// metadata longer than a u32 counts, which the 1.0 writer wrapped: each
 /// row group repeats every field's name, so long names over many row groups
@@ -371,7 +378,7 @@ impl Pending {
         }
         match (self.kind, value) {
             (ColumnType::Str, ValueRef::Str(value)) => {
-                let length = u32::try_from(value.len()).map_err(|_| Error::ValueType)?;
+                let length = value_length(value.len())?;
                 self.values.extend(length.to_le_bytes());
                 self.values.extend(value.as_bytes());
             }
@@ -684,10 +691,12 @@ mod tests {
         );
     }
 
-    /// Seam: the size checks of a page and a footer, at lengths no test
-    /// could build. A page header counts its body in a Thrift i32 and the
-    /// file's tail counts the footer in four unsigned bytes, so each admits
-    /// its field's largest value and refuses the next byte (#4075).
+    /// Seam: the size checks of a page, a footer and a string value, at
+    /// lengths no test could build. A page header counts its body in a
+    /// Thrift i32 and the file's tail counts the footer in four unsigned
+    /// bytes, so each admits its field's largest value and refuses the next
+    /// byte; a string past its four length bytes is refused as its page
+    /// (#4075).
     #[test]
     fn a_page_or_footer_its_size_field_cannot_count_is_refused() {
         use std::convert::Infallible;
@@ -697,6 +706,8 @@ mod tests {
                 page_size::<Infallible>(2_147_483_648),
                 footer_length::<Infallible>(4_294_967_295),
                 footer_length::<Infallible>(4_294_967_296),
+                value_length::<Infallible>(4_294_967_295),
+                value_length::<Infallible>(4_294_967_296),
             ),
             (
                 Ok(2_147_483_647),
@@ -711,8 +722,14 @@ mod tests {
                     limit: 4_294_967_295,
                     actual: Some(4_294_967_296),
                 }),
+                Ok(4_294_967_295),
+                Err(Error::Limit {
+                    resource: "parquet_page_bytes",
+                    limit: 2_147_483_647,
+                    actual: Some(4_294_967_296),
+                }),
             ),
-            "a page and a footer at their size fields' largest value and one byte past it"
+            "a page, a footer and a string value at their size fields' largest value and one byte past it"
         );
     }
 }
