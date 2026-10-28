@@ -80,10 +80,16 @@ impl DatasetJsonCause<'_> {
 /// A classified failure borrows the original error, declaration and codec spelling.
 #[derive(Clone, Copy, Debug)]
 pub enum SourceFinding<'a> {
+    /// A SAS or Transport input the reader cannot decode (SAS-7), with the
+    /// field that locates it: its name, or the position of a field whose
+    /// name is empty or does not decode; and the `record` of a value that
+    /// does not decode.
     Sas {
         dataset: &'a str,
         path: &'a str,
         cause: &'a str,
+        field: Option<&'a Field>,
+        record: Option<usize>,
     },
     /// A Dataset-JSON input the profile cannot read (DSJSON-5).
     DatasetJson {
@@ -142,6 +148,13 @@ const SAS_DELETED_RECORDS_HINT: &str = "rewrite the SAS dataset first, for examp
 fn text(value: &str) -> V {
     V::String(value.into())
 }
+/// A field named by its name, or by its position when it has none.
+fn field(value: &Field) -> V {
+    match value {
+        Field::Index(index) => V::from(*index),
+        Field::Name(name) => text(name),
+    }
+}
 fn kind(value: ColumnType) -> &'static str {
     match value {
         ColumnType::Str => "str",
@@ -194,13 +207,32 @@ impl SourceFinding<'_> {
         };
         let mut context = Context::from([("dataset".into(), text(dataset))]);
         let spec_path = match self {
-            Self::Sas { path, cause, .. } => {
+            Self::Sas {
+                path,
+                cause,
+                field: located,
+                record,
+                ..
+            } => {
                 context.insert("path".into(), text(path));
                 context.insert("cause".into(), text(cause));
+                if let Some(located) = located {
+                    context.insert("field".into(), field(located));
+                }
+                if let Some(record) = record {
+                    context.insert("record".into(), V::from(record));
+                }
                 if cause == "deleted_records" {
                     context.insert("hint".into(), text(SAS_DELETED_RECORDS_HINT));
                 }
-                format!("input.{dataset}.path")
+                // A `types` entry the field's storage does not admit fails
+                // at the entry, as an unknown field does (SAS-3).
+                match (cause, located) {
+                    ("field_type", Some(Field::Name(name))) => {
+                        format!("input.{dataset}.types.{name}")
+                    }
+                    _ => format!("input.{dataset}.path"),
+                }
             }
             Self::DatasetJson { path, cause, .. } => {
                 context.insert("path".into(), text(path));
@@ -215,14 +247,8 @@ impl SourceFinding<'_> {
                             context.insert("field".into(), V::from(field));
                         }
                     }
-                    DatasetJsonCause::FieldName { field } => {
-                        context.insert(
-                            "field".into(),
-                            match field {
-                                Field::Index(index) => V::from(*index),
-                                Field::Name(name) => text(name),
-                            },
-                        );
+                    DatasetJsonCause::FieldName { field: named } => {
+                        context.insert("field".into(), field(named));
                     }
                     DatasetJsonCause::DataType { field, data_type } => {
                         context.insert("field".into(), text(field));
@@ -291,13 +317,7 @@ impl SourceFinding<'_> {
             } => {
                 context.insert("path".into(), text(path));
                 context.insert("record".into(), V::from(record));
-                context.insert(
-                    "field".into(),
-                    match field {
-                        Field::Index(index) => V::from(*index),
-                        Field::Name(name) => text(name),
-                    },
-                );
+                context.insert("field".into(), self::field(field));
                 // Whether the input declares the mark tells a mark it does
                 // not declare from a declared one that is absent (CSV-10).
                 if let ProfileCause::ByteOrderMark { declared } = cause {

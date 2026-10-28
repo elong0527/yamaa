@@ -1,0 +1,199 @@
+yamaa: '1.0'
+type: spec
+model: SEND
+domain: BW
+keys:
+- STUDYID
+- USUBJID
+- BWSEQ
+input:
+  WEIGHING:
+    path: input/body_weights.csv
+    types:
+      WEIGHDT: date
+
+output:
+  path: bw.csv
+  columns:
+  - DOMAIN
+  - STUDYID
+  - USUBJID
+  - BWSEQ
+  - BWTESTCD
+  - BWTEST
+  - BWORRES
+  - BWORRESU
+  - BWSTRESC
+  - BWSTRESN
+  - BWSTRESU
+  - BWDTC
+  order_by:
+  - STUDYID
+  - USUBJID
+  - BWSEQ
+
+columns:
+- name: DOMAIN
+  type: str
+  label: Domain Abbreviation
+  derivation: '''BW'''
+  submission:
+    core: Req
+    role: Identifier
+    length: 2
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: WEIGHING.STUDYID
+  submission:
+    core: Req
+    role: Identifier
+    length: 20
+    origins:
+    - type: Protocol
+      source: Sponsor
+
+- name: USUBJID
+  type: str
+  label: Unique Subject Identifier
+  derivation: WEIGHING.USUBJID
+  submission:
+    core: Req
+    role: Identifier
+    length: 40
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: BWSEQ
+  type: int
+  label: Sequence Number
+  derivation:
+    row_number:
+      window:
+        group_by: [STUDYID, USUBJID]
+        order_by: [WEIGHING.WEIGHDT]
+  submission:
+    core: Req
+    role: Identifier
+    length: 8
+    origins:
+    - type: Derived
+      source: Sponsor
+    method: Number each animal's weighings in date order.
+
+- name: BWTESTCD
+  type: str
+  label: Test Short Name
+  derivation:
+    mapping:
+      source: WEIGHING.OCCASION
+      dict:
+        ROUTINE: BW
+        TERMINAL: TERMBW
+  submission:
+    core: Req
+    role: Topic
+    length: 8
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: BWTEST
+  type: str
+  label: Test Name
+  derivation:
+    mapping:
+      source: BWTESTCD
+      dict:
+        BW: Body Weight
+        TERMBW: Terminal Body Weight
+  submission:
+    core: Req
+    role: Synonym Qualifier
+    length: 40
+    origins:
+    - type: Assigned
+      source: Sponsor
+
+- name: BWORRES
+  type: str
+  label: Result or Findings as Collected
+  derivation: WEIGHING.WEIGHT
+  submission:
+    core: Exp
+    role: Result Qualifier
+    length: 20
+    origins:
+    - type: Collected
+
+- name: BWORRESU
+  type: str
+  label: Unit of the Original Result
+  derivation: WEIGHING.UNIT
+  submission:
+    core: Exp
+    role: Variable Qualifier
+    length: 10
+    origins:
+    - type: Collected
+
+- name: BWSTRESN
+  type: float
+  label: Standardized Result in Numeric Format
+  derivation: BWORRES
+  submission:
+    core: Exp
+    role: Result Qualifier
+    length: 8
+    significant_digits: 1
+    origins:
+    - type: Derived
+      source: Sponsor
+    method: The collected result read as a number.
+
+- name: BWSTRESC
+  type: str
+  label: Standardized Result in Character Format
+  derivation: BWSTRESN
+  submission:
+    core: Exp
+    role: Result Qualifier
+    length: 20
+    origins:
+    - type: Derived
+      source: Sponsor
+    method: The standardized numeric result written as text.
+
+- name: BWSTRESU
+  type: str
+  label: Unit of the Standardized Result
+  derivation: BWORRESU
+  submission:
+    core: Exp
+    role: Variable Qualifier
+    length: 10
+    origins:
+    - type: Derived
+      source: Sponsor
+    method: The collected unit, since no result is converted.
+
+- name: BWDTC
+  type: date
+  label: Date/Time Animal Weighed
+  derivation: WEIGHING.WEIGHDT
+  submission:
+    core: Exp
+    role: Timing
+    origins:
+    - type: Collected
+
+submission:
+  label: Body Weight
+  class: FINDINGS
+  structure: One record per test per observation time per subject
+  repeating: true

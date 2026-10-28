@@ -1,0 +1,18 @@
+yamaa: '1.0'
+type: project
+study:
+  id: TOX01
+  name: TOX01
+  description: Four-week oral toxicity study in rats
+  protocol_name: TOX01
+
+send:
+  specs:
+  - spec.yaml
+  standards:
+  - name: SENDIG
+    version: '3.1.1'
+    status: Final
+  define: define.xml
+  transport: xpt
+  source_system_version: '1.0'

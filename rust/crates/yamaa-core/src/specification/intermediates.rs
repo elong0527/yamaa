@@ -167,16 +167,35 @@ fn bind_filter(
     Ok(filter)
 }
 
-/// A lookup's `order_by`, each term a field of its relation.
+/// A lookup's `order_by`, each term a field of its relation whose values
+/// all compare (VALUE-22): a field whose type, `field_type`'s, holds two
+/// types that do not compare under VALUE-19, such as an untyped derivation
+/// choosing between text and a number, is refused before any record is
+/// read.
 fn bind_order(
     item: &Declaration,
     resolve: ResolveRef<'_>,
+    field_type: &dyn Fn(usize) -> crate::result_type::ResultType,
     failed: &mut bool,
     findings: &mut Vec<BindFinding>,
 ) -> Vec<OrderTerm> {
     let mut order_by = Vec::new();
     for (index, (name, descending, nulls_first)) in item.order.iter().enumerate() {
-        if let Some(column) = resolve(name, &format!("{}.order_by[{index}]", item.path), findings) {
+        let path = format!("{}.order_by[{index}]", item.path);
+        if let Some(column) = resolve(name, &path, findings) {
+            // The finding refuses the plan; the lookup keeps its fields, so a
+            // read of one is not unknown as well.
+            let kind = field_type(column);
+            if kind.unordered() {
+                findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                    crate::diagnostic::lookup::order_term_type(
+                        &path,
+                        crate::diagnostic::lookup::Owner::Intermediate(&item.name),
+                        name,
+                        kind,
+                    ),
+                )));
+            }
             order_by.push(OrderTerm {
                 column,
                 descending: *descending,
@@ -609,7 +628,12 @@ fn bind_one(
         None => None,
     };
     let filter = bind_filter(item, &donor, inputs, &pairs, &mut failed, findings)?;
-    let order_by = bind_order(item, &resolve, &mut failed, findings);
+    // A derived field's type may be decided per value (EXPR-14).
+    let field_type = |column| match &derivations {
+        Some(derived) => derived.column_type(column),
+        None => crate::result_type::ResultType::declared(donor_kind(column)),
+    };
+    let order_by = bind_order(item, &resolve, &field_type, &mut failed, findings);
     let before = findings.len();
     let columns = intermediate_range::bind_columns(
         &item.columns,

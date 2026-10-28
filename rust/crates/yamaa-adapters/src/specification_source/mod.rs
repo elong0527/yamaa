@@ -492,18 +492,8 @@ impl PreparedDocument {
         match materialized {
             Ok(None) => Ok(self),
             Ok(Some(materialized)) => {
-                let Self {
-                    source,
-                    raw,
-                    parents,
-                    specification,
-                    ..
-                } = &mut self;
-                specification.lower_materialized(
-                    &materialized.document,
-                    &materialized.sources,
-                    |layer| crate::document::layer_locations(source, raw, parents, layer),
-                );
+                self.specification
+                    .lower_materialized(&materialized.document, &materialized.sources);
                 self.dictionaries = materialized.captures;
                 Ok(self)
             }

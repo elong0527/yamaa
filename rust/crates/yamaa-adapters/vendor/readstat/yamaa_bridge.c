@@ -13,6 +13,7 @@
 static YAMAA_THREAD_LOCAL size_t rows_limit, columns_limit, cells_limit, bytes_limit;
 static YAMAA_THREAD_LOCAL int limit_hit, number_exact, refusal_resource, refusal_known;
 static YAMAA_THREAD_LOCAL int deleted_records_hit;
+static YAMAA_THREAD_LOCAL int refused_row, refused_column;
 static YAMAA_THREAD_LOCAL size_t refusal_limit, refusal_actual;
 static int refuse(int resource, size_t limit, size_t actual, int known) {
     if (!limit_hit) {
@@ -47,6 +48,18 @@ int yamaa_readstat_admit_bytes(uint64_t bytes) {
 readstat_error_t yamaa_readstat_deleted_records(void) {
     deleted_records_hit = 1;
     return READSTAT_ERROR_PARSE;
+}
+/* A value whose text does not convert, a NUL byte in it; locate the stop by
+ * the value's record and field, each from zero. */
+readstat_error_t yamaa_readstat_refuse_value(int row, int column, readstat_error_t error) {
+    if (error == READSTAT_ERROR_CONVERT_BAD_STRING) {
+        refused_row = row; refused_column = column;
+    }
+    return error;
+}
+/* The located value of the last parse on this thread, or -1 for each. */
+void yamaa_readstat_refused_value(int *row, int *column) {
+    *row = refused_row; *column = refused_column;
 }
 typedef int (*yamaa_metadata)(int64_t rows, int columns, int version,
         const char *encoding, void *user);
@@ -128,6 +141,7 @@ int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
     rows_limit = rows; columns_limit = columns; cells_limit = cells;
     bytes_limit = source_bytes;
     limit_hit = 0; deleted_records_hit = 0;
+    refused_row = -1; refused_column = -1;
     readstat_parser_t *parser = readstat_parser_init();
     if (!parser) return -6;
     readstat_set_io_ctx(parser, &ctx);

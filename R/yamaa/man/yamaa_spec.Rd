@@ -95,6 +95,15 @@ A failure raises a condition of class \code{yamaa_error} whose \code{issues}
 data frame says why; for a refused \code{$save()}, its \code{paths} lists
 the files written before the refusal.
 
+Each row of an \code{issues} data frame is one problem, and its
+\code{context} column holds the problem's facts as canonical JSON text, one
+object per row. \code{jsonlite::fromJSON()} parses it into a named list, so
+\code{lapply(issues$context, jsonlite::fromJSON, bigint_as_char = TRUE)}
+gives one list per issue, keeping an integer beyond 2^53 as text;
+jsonlite is a suggested package, which you install yourself. The column is
+text so that the package needs no JSON library, and because an R double
+cannot hold every integer that a context may hold.
+
 \code{format()} returns the lines that the engine renders for an object, the
 same words that Python and the command line print, and \code{print()} writes
 them and returns the object invisibly. A specification prints
