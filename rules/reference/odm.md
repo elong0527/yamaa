@@ -142,4 +142,5 @@ caller's resolver serves is held whole, at most 10,737,418,240 bytes.
 
 An archive is not an input in 1.0: `.tar` selects no profile
 ([INPUT-1](../inputs.md#input-1)), `read_odm` keeps reading archives, and
-`transactions: replay` and `archive_member` stay reserved.
+`archive_member` stays reserved. Transactional content is refused, never
+replayed into a snapshot.
