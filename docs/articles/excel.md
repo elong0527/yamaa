@@ -207,19 +207,6 @@ yamaa check ae-duration.yaml --parent adce-template.yaml
 In R and Python, `check(parent = )` does the same
 ([Check a specification without data](api.md#check-a-specification-without-data)).
 
-**From a 0.4.0 `parents:` list.** A 0.4.0 fragment often named the template
-as its own parent, so that it could be checked on its own, and the study's
-file listed both, as `parents: [adae-template.yaml, ae-duration.yaml]`.
-Rewrite the pair by hand in two steps: remove `parent` from the fragment, and
-in the study's file write `parent: adae-template.yaml` and list the fragment
-under `include`, keeping the order the list gave the fragments. Check the
-fragment with the template as its parent, as above, where it was checked on
-its own. A fragment that still names a parent fails as `prohibited_construct`
-at that `parent`, and a `parent` given to its check is refused.
-The `hint` that a `parents:` key or a list written at `parent` reports shows
-how to write a chain of templates, one `parent` per file; fragments go under
-`include`.
-
 ### 2.2 Variable level
 
 | Excel column | yamaa | Notes |
@@ -227,7 +214,7 @@ how to write a chain of templates, one `parent` per file; fragments go under
 | `Variable Name` | `column.name` | |
 | `Variable Label` | `column.label` | |
 | `Type` (Char / Num) | `column.type` | Closed set of five: `str` `int` `float` `date` `datetime` |
-| `Length` | a `max_length` verification plus `submission.length` | It is a constraint, so it becomes an executed one. `submission.length` is what define.xml shows; on a `str` column with a `max_length` verification it is derived from `max` and need not be declared separately |
+| `Length` | a `max_length` verification plus `submission.length` | It is a constraint, so it becomes an executed one. `submission.length` is the bound every value must meet; on a `str` column with a `max_length` verification it is derived from `max` and need not be declared separately. define.xml shows it only when the section writes no transport: with a transport, a text column's length is the longest value the section publishes, and a text column may omit `length` when every section listing its specification writes one (SUB-7, SUB-24) |
 | Significant digits / display format | `submission.significant_digits` / `submission.display_format` | Presentation metadata, not the stored value; emitted as SignificantDigits / def:DisplayFormat in define.xml (Types and conversion) |
 | `Controlled Terms or Format` | `mapping` / `intermediates` / `allowed_values`, plus `submission.codelist` | Translation and enforcement separate here too; `submission.codelist` names a codelist that a codelist source of the project declares |
 | `Origin` | `submission.origins` | One entry per origin, each with its `type`; SDTM also names the `source` responsible, SEND may, and ADaM derives it (SUB-15). The rows below give the derivation each type pairs with |
@@ -537,8 +524,6 @@ What changed:
 
 ### Example 3: Predecessor and the declared-key join
 
-*Source: [`adam-adae-onset-emergence`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-onset-emergence)*
-
 Excel:
 
 | Variable | Origin | Comment |
@@ -556,7 +541,7 @@ model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
+  AE: input/ae.csv               # <- AESTDTC stays text, as collected
   ADSL:
     path: input/adsl.csv
     types: {TRTSDTM: datetime, TRTEDTM: datetime}
@@ -589,10 +574,15 @@ columns:
     label: Serious Event
     derivation: AE.AESER
 
+  # A date alone takes midnight; a start without its day gives none.
   - name: ASTDTM
     type: datetime
     label: Analysis Start Date/Time
-    derivation: AE.AESTDTC
+    derivation:
+      impute:
+        type: datetime
+        source: AE.AESTDTC
+        time: first
 
   - name: TRTSDTM
     type: datetime
@@ -655,8 +645,18 @@ What changed:
   beside its `path`), the three Predecessor columns become one copy entry,
   `copy: {dataset: ADSL, columns: [TRTSDTM, TRTEDTM, EOTSTT]}`. Each copied
   column takes its type, label and Predecessor origin from the producer, so
-  none of it is written twice. This benchmark reads an ADSL fixture that no
-  spec produces, so it reads the columns one by one.
+  none of it is written twice. Here ADSL is a file that no spec produces, so
+  the columns are read one by one.
+- AESTDTC is read as text, as a CSV field is unless its input types it, and
+  `impute` makes the analysis datetime in a derivation. An SDTM `--DTC` may
+  hold a date alone or a partial date such as `2025-03`, and typing it
+  `datetime` at ingest would fail the whole input on the first such value
+  (`field_parse_failed`, INPUT-7). Here a date alone takes midnight under
+  `time: first`, and a start without its day gives a missing ASTDTM, which
+  the flag below treats as a missing onset. A study that completes partial
+  starts declares a `day` rule and a treatment-start bound, as
+  [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates)
+  does.
 - "TRTEDTM + 30 days" becomes a `shift` of `TRTEDTM` by an elapsed amount
   in days, where a day is 24 hours. A missing `TRTEDTM` gives a missing
   window end, as for an untreated subject. The 30 and the 90 are written
@@ -683,7 +683,7 @@ benchmark for the full side-by-side:
 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `aggregate`-with-`filter` / `row_number` as columns |
 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"`, matching each row on the input's declared `key`; a CSV field entering arithmetic must declare its type |
 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `impute` with a treatment-start bound beside `imputation_flag` reading the completed date; a missing start gives no date and `invalid` answers non-date text |
-| [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `submission` vs `verifications`: Length becomes both `submission.length` (for define.xml) and a `max_length` check |
+| [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `submission` vs `verifications`: Length becomes both `submission.length` and a `max_length` check |
 | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) | Coding against MedDRA with a named intermediate matched on its own `key`; several columns read the one record it selects |
 | [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance) | Corporate, compound and study layers chained by `parent:` -- real layering instead of copying the template |
 | [`schema-inheritance-clear`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance-clear) | A study layer removes one inherited `mapping` entry by naming its path in `clear:` |

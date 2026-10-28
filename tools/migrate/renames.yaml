@@ -12,7 +12,7 @@
 # reason, and lists the fields 1.0 adds. Phase 2's internal converter (D35)
 # was driven by it and wrote the repository's 0.5 files in 1.0; once none
 # was left, #3443 deleted the converter. The table stays as the record of
-# the rename, which the 1.0.0 release notes link, and changes only to
+# the rename, which the 0.6.0 release notes link, and changes only to
 # correct that record. tools/tests/test_schema_v1.py compares each entry's
 # 1.0 spelling, type, requirement, default and kind with the 1.0 schema.
 #

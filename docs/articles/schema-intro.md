@@ -333,20 +333,20 @@ and `row_count`, and a named intermediate's `unique`.
 | `assert` | `when`, `require` | | | |
 | `row_count` | `filter`, `when` | `group_by` | | `min`, `max`, `min_fraction`, `max_fraction` |
 
-**Submission metadata**, which has no expression, name or path fields:
+**Submission metadata**, which has no expression or name fields:
 
-| Where | `identifier` | `value` | `structure` |
-|---|---|---|---|
-| The root's `submission` | `domain`, `standard` | `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | |
-| A column's `submission` | `codelist` | `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | `origins`, `value_level` |
-| A `value_level` entry | `id`, `codelist` | `where`, `label`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | `origins` |
-| A `where` condition written in full | | `comparator`, `values` | |
-| An `origins` entry | `documents` | `type`, `source`, `description` | |
-| A `method` written in full | `documents` | `name`, `type`, `description` | `expression` |
-| `method.expression` | | `context`, `code` | |
-| A `comment` written in full | `documents` | `text` | |
-| A document reference written in full | `document` | | `pages` |
-| `pages` | | `type`, `refs`, `title` | |
+| Where | `identifier` | `value` | `path` | `structure` |
+|---|---|---|---|---|
+| The root's `submission` | `domain`, `standard` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
+| A column's `submission` | `codelist` | `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
+| A `value_level` entry | `id`, `codelist` | `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
+| A `where` condition written in full | | `comparator`, `values` | | |
+| An `origins` entry | `documents` | `type`, `source`, `description` | | |
+| A `method` written in full | `documents` | `name`, `type`, `description` | | `expression` |
+| `method.expression` | | `context`, `code` | | |
+| A `comment` written in full | `documents` | `text` | | |
+| A document reference written in full | `document` | | | `pages` |
+| `pages` | | `type`, `refs`, `title` | | |
 
 **Project, codelists and function files**, which have no expression or name
 fields:
@@ -357,7 +357,7 @@ fields:
 | `environments` | | | | `python`, `r` |
 | `environments.python`, `environments.r` | | | `lock` | |
 | `study` | `id` | `name`, `description`, `protocol_name` | | |
-| A section, `sdtm`, `adam` or `send` | | `transport`, `context`, `xml_lang`, `file_oid`, `originator`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version` |
+| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `file_oid`, `originator`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version` |
 | A `standards` entry | | `name`, `version`, `status` | | |
 | A `documents` entry | `id` | `kind`, `title` | `link` | |
 | `metadata_version` | `id` | `name`, `description` | | |

@@ -25,6 +25,8 @@ under, `PARAMCD`, rather than by its `format_name`, and build the dataset
 from that project file, which declares the codes and their decodes once:
 
 ```yaml
+yamaa: "1.0"
+type: project
 codelists:
   - codelists:
       - id: PARAMCD
@@ -33,6 +35,8 @@ codelists:
         items:
           - {value: ALT, decode: Alanine Aminotransferase (U/L)}
           - {value: AST, decode: Aspartate Aminotransferase (U/L)}
+adam:
+  specs: [spec.yaml]
 ```
 
 ```yaml
