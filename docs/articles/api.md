@@ -310,7 +310,10 @@ a plan an earlier `run()` of the object kept starts at `input`. A check is
 one `preparation` of each specification it checks, and a submission one
 `composition` of each section. The function runs on the thread that called
 the method, so it can show progress, and it may call yamaa itself, on the
-same object too.
+same object too. In Python, a call releases the global interpreter lock while
+the engine works and takes it again to call the function or a project
+function, so other threads run meanwhile: two threads can run two
+specifications at once.
 
 A `progress` function that signals an error in R or raises in Python is
 called no more: the method finishes its work, and its result then fails with

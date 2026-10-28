@@ -8,10 +8,21 @@ and the issue rows of a run whose callback raised. A raising callback fails
 the run, which saves nothing; an interrupt it raises cancels the call, as a
 project function's does; and a callback may run the same specification again
 through the same object.
+
+A run lets other threads run while the engine works (#4072): a second
+thread finds the study's run over a large input in the engine, between its
+first and its last event, while that thread holds the interpreter lock; it
+then runs the study itself, which finds the large run still there, or sends
+an interrupt, which cancels the large run. The large run's events are the
+truth's, with its one partition holding every record, since the engine
+partitions at 624,640 records.
 """
 
+import _thread
 import os
+import signal
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -21,6 +32,43 @@ import yamaa
 
 TRUTH = load_truth(__file__, "progress")
 EVENT_KEYS = ["name", "phase", "kind", "outcome", "number", "rows"]
+# The records of the large input, whose phases each run long in the engine
+# between two events.
+LARGE_ROWS = 50_000
+# Joining the second thread ends within this many seconds, failing the test
+# instead of hanging it.
+TIMEOUT = 60
+
+
+def in_the_engine(heard, total, ended, then):
+    """A thread that runs Python until it finds the run that appends its
+    `total` events to `heard` in the engine, and then calls `then`.
+
+    The run appends with `list.append`, a C function, so no callback of it
+    runs Python code at which the interpreter could hand its lock to this
+    thread. This thread reads the count while it holds the lock, which a
+    callback needs; a count between the first event and the last therefore
+    means the run is in the engine, neither in a callback nor returned, and
+    a run that held the lock in the engine is never found there. The thread
+    gives up once `ended` is set. Its record says whether it found the run,
+    and what `then` returned or raised.
+    """
+    record = []
+
+    def watch():
+        while not 0 < len(heard) < total:
+            if ended.is_set():
+                record.append("never in the engine")
+                return
+        record.append("in the engine")
+        try:
+            record.append(then())
+        except Exception as error:
+            record.append(repr(error))
+
+    thread = threading.Thread(target=watch)
+    thread.start()
+    return thread, record
 
 
 class Progress(unittest.TestCase):
@@ -102,6 +150,89 @@ class Progress(unittest.TestCase):
 
         self.assertEqual(spec.run(progress=again).status, "succeeded")
         self.assertEqual(inner, ["succeeded"])
+
+    def large(self):
+        """The truth's specification over LARGE_ROWS records, in a directory of
+        its own, and the events its run reports."""
+        root = self.root / "large"
+        root.mkdir()
+        spec = root / "spec.yaml"
+        spec.write_text(TRUTH["specification_yaml"], encoding="utf-8")
+        (root / "input.csv").write_text(
+            "ID\n" + "".join(f"{number}\n" for number in range(1, LARGE_ROWS + 1)),
+            encoding="utf-8",
+        )
+        events = [
+            event | {"rows": LARGE_ROWS} if event["kind"] == "partition" else event
+            for event in self.events(os.fspath(spec))
+        ]
+        return spec, events
+
+    def test_a_second_thread_runs_a_specification_while_a_run_is_in_the_engine(
+        self,
+    ):
+        # The binding's release of the interpreter lock, which no fixture
+        # reader reaches: the second thread finds the large run in the
+        # engine (see in_the_engine), then runs the study, whose first event
+        # finds the large run still there, so both runs are in the engine at
+        # once.
+        spec, expected = self.large()
+        heard, beside = [], []
+
+        def run_the_study():
+            reached = []
+
+            def progress(event):
+                beside.append(event)
+                reached.append(len(heard))
+
+            status = yamaa.spec(self.spec).run(progress=progress).status
+            return status, 0 < reached[0] < len(expected)
+
+        ended = threading.Event()
+        thread, record = in_the_engine(heard, len(expected), ended, run_the_study)
+        try:
+            status = yamaa.spec(spec).run(progress=heard.append).status
+        finally:
+            ended.set()
+            thread.join(TIMEOUT)
+        self.assertEqual(
+            (status, heard, thread.is_alive(), record, beside),
+            (
+                "succeeded",
+                expected,
+                False,
+                ["in the engine", ("succeeded", True)],
+                self.events(os.fspath(self.spec)),
+            ),
+            "the large run, and the second thread's run of the study",
+        )
+
+    def test_an_interrupt_from_another_thread_cancels_a_run_in_the_engine(self):
+        # The binding's interrupt probe while the engine runs without the
+        # interpreter lock, which no fixture reader reaches. The second thread
+        # finds the large run in the engine (see in_the_engine) and trips
+        # SIGINT for this thread with interrupt_main; the run finds it when
+        # the engine next looks for an interrupt, or as the call returns.
+        previous = signal.signal(signal.SIGINT, signal.default_int_handler)
+        self.addCleanup(signal.signal, signal.SIGINT, previous)
+        spec, expected = self.large()
+        heard = []
+        ended = threading.Event()
+        thread, record = in_the_engine(
+            heard, len(expected), ended, _thread.interrupt_main
+        )
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                yamaa.spec(spec).run(progress=heard.append)
+        finally:
+            ended.set()
+            thread.join(TIMEOUT)
+        self.assertEqual(
+            (thread.is_alive(), record),
+            (False, ["in the engine", None]),
+            "an interrupt sent while the large run is in the engine",
+        )
 
     def test_a_progress_that_is_not_callable_is_refused(self):
         with self.assertRaises(TypeError):
