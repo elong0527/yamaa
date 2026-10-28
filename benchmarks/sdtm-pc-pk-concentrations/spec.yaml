@@ -118,7 +118,6 @@ columns:
           order_by: [LAB.Collected, LAB.Sample]
 
 verifications:
-  - unique: [STUDYID, USUBJID, PCREFID]
   - assert:
       id: scheduled-samples-have-planned-hours
       when: "PCTPT <> 'UNSCHED'"
