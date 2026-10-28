@@ -23,6 +23,16 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "parquet_columns" => parquet_columns(input),
         "parquet_value" => parquet_value(input),
         "sas_source" => sas_source(input),
+        "sas_encoding_mismatch" => {
+            let input = input.closed(&["dataset", "path", "declared_encoding", "stored_encoding"]);
+            vec![SourceFinding::SasEncodingMismatch {
+                dataset: text(input, "dataset"),
+                path: text(input, "path"),
+                declared: text(input, "declared_encoding"),
+                stored: text(input, "stored_encoding"),
+            }
+            .diagnostic()]
+        }
         "yaml_source" => yaml_source(input),
         _ => return None,
     })
