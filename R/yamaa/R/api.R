@@ -9,9 +9,17 @@
 # `run()`, and made again when the object was restored from `saveRDS`, an
 # `.RData` file or another R process.
 
+# A reply's value, or its refusal signalled. An interrupt the call kept is
+# signalled again as R's own: an interrupt handler takes it, and unhandled it
+# returns to the top level as Ctrl+C does. stop() would end it as an error,
+# which an error handler takes (#4070).
 .reply <- function(reply) {
   error <- reply$error
   if (!is.null(error)) {
+    if (inherits(error$condition, "interrupt")) {
+      signalCondition(error$condition)
+      invokeRestart("abort")
+    }
     if (!is.null(error$condition)) stop(error$condition)
     stop(structure(
       list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),

@@ -551,6 +551,38 @@ qualify_callbacks <- function() {
 }
 qualify_callbacks()
 
+# An interrupt a call kept reaches R as an interrupt, never as an error
+# (#4070): an interrupt handler hears it once, an error handler never takes
+# it, and unhandled it ends at R's top level, as Ctrl+C does. The seam is the
+# reply envelope that every public call ends in. An error handler takes the
+# interrupt only where no interrupt handler exits first, and the runs above
+# can show that only by aborting this script, so `.reply()` is fed the reply
+# and `withRestarts(abort = )` stands in for the top level. The interrupt of
+# R's SIGINT carries no message; a project function's may carry one.
+qualify_interrupt_reply <- function() {
+  interrupts <- list(
+    "R's interrupt" = structure(list(), class = c("interrupt", "condition")),
+    "a classed interrupt with a message" = structure(
+      list(message = host_truth[["interrupt_message"]], call = NULL),
+      class = c("public_contract_interrupt", "interrupt", "condition")))
+  for (label in names(interrupts)) {
+    interrupt <- interrupts[[label]]
+    heard <- list()
+    outcome <- withRestarts(withCallingHandlers(
+      tryCatch({
+        yamaa:::.reply(list(value = NULL, error = list(condition = interrupt)))
+        "returned"
+      }, error = function(error) "caught as an error"),
+      interrupt = function(condition) heard[[length(heard) + 1L]] <<- condition),
+    abort = function() "aborted")
+    expect_identical(list(outcome = outcome, heard = heard),
+      list(outcome = "aborted", heard = list(interrupt)),
+      paste(label, "in a reply passes an error handler and aborts"))
+  }
+  cat("an interrupt in a reply reaches R as an interrupt\n")
+}
+qualify_interrupt_reply()
+
 qualify_project_run_members <- function() {
   root <- tempfile("yamaa-project-run-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
