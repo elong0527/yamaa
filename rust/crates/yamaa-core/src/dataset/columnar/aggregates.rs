@@ -569,6 +569,10 @@ fn fold<E>(
                 identity,
             }))
         }
+        AggregateReductionError::Limit(limit) => Err(Box::new(ExecutionError::text(
+            limit,
+            bound.expression().spec_path(),
+        ))),
         AggregateReductionError::MultipleRecords { count } => {
             let template = cx.frame.template(row);
             let template_node = template.map(|template| {

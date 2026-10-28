@@ -1404,8 +1404,8 @@ its metadata-only authority. Reduce the refused size and rerun the operation.
 
 The shared Rust engine behind every Python, R and command-line call uses one
 fixed policy in `yamaa_core::limits::Limits`.
-Admission checks the physical file, table geometry, declaration shape or compiled
-regex at its owning boundary. There are no caller-selected profiles or
+Admission checks the physical file, table geometry, declaration shape, compiled
+regex or built text value at its owning boundary. There are no caller-selected profiles or
 cumulative byte, copy, traversal or work pools.
 
 `read_odm()` and `yamaa read-odm` keep their own archive-member,
@@ -1427,6 +1427,7 @@ as `failed` and includes the refusal's `issues`.
 | Operands in one source selection | 64 |
 | Links followed in one composition, each `parent` and each `include` entry | 8,192 |
 | Compiled program of one regular expression | 10 MiB |
+| One text value that `str_pad`, `str_decimal`, `str_template`, `str_replace` or `STR_JOIN` builds | 1 MiB |
 | Findings in the final public issue collection | 10,000 |
 | YAML nesting depth | 64 |
 | Semantic expression and context nesting depth | 128 |
@@ -1464,6 +1465,10 @@ check the saved file size before extending it. Table admission checks rows,
 columns and their product before constructing or growing the corresponding
 geometry. A regular expression is refused when it compiles, never while it
 matches: matching takes time linear in the subject, so there is no step budget.
+A text value is refused before it is built past the limit, as `text_bytes`
+at the operation that builds it. Only the results of these verbs are counted:
+text read from a source or copied by another operation is not, and each
+writer keeps its own saved-file bound.
 
 Semantic admission and retained observations stay complete. The final public
 issue collection keeps its first 10,000 findings in their existing order. Source

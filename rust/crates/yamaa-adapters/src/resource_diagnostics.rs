@@ -48,6 +48,7 @@ pub fn resource_name(resource: Resource) -> &'static str {
         Resource::OutputRows => "output_rows",
         Resource::OutputCells => "output_cells",
         Resource::OutputColumns => "output_columns",
+        Resource::TextBytes => "text_bytes",
     }
 }
 fn input_paths(sources: &[SourceDeclaration]) -> Vec<String> {
@@ -202,6 +203,7 @@ pub fn outcome(
             | "output_columns"
             | "table_rows"
             | "table_cells"
+            | "text_bytes"
     ) {
         return None;
     }

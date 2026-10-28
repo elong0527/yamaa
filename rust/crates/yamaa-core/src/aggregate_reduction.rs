@@ -3,6 +3,7 @@
 use crate::{
     conversion::{convert, ConversionError},
     expression::Reducer,
+    limits::{LimitExceeded, Limits},
     numeric::{
         binary, math, sqrt, ArithmeticError, ArithmeticErrorKind, BinaryOperator, MathFunction,
         Number,
@@ -11,6 +12,7 @@ use crate::{
     table::ValueRef,
     value::{compare_present_refs, ColumnType, Value, ValueType},
 };
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -32,6 +34,10 @@ pub enum AggregateReductionError {
         argument: usize,
         error: ConversionError,
     },
+    /// A `STR_JOIN` text that would grow longer than `Limits::TEXT_BYTES`,
+    /// refused at the value that would cross it, without its whole length.
+    #[error("aggregate reduction: {0}")]
+    Limit(LimitExceeded),
 }
 
 /// The fields of an aggregate a reducer reads besides its argument
@@ -314,32 +320,52 @@ fn geometric_mean(
 /// text of VALUE-8, the canonical text of VALUE-17, or text as it is), with
 /// the separator between two of them. With `distinct`, each text is written
 /// once, where it first occurs. A group with no present value joins to
-/// missing, never to the empty string (FORMULA-24).
-fn join(
-    values: &[ValueRef<'_>],
+/// missing, never to the empty string (FORMULA-24). The join grows one
+/// written text at a time and is refused at the first text that would make
+/// it longer than `Limits::TEXT_BYTES`, without reading the rest of the group
+/// or counting its whole length; `distinct` keeps only the texts written.
+fn join<'a>(
+    values: &[ValueRef<'a>],
     fields: ReductionFields<'_>,
 ) -> Result<Value, AggregateReductionError> {
     let mut joined: Option<String> = None;
-    let mut seen = HashSet::new();
+    let mut seen: HashSet<Cow<'a, str>> = HashSet::new();
     for (argument, value) in values.iter().copied().enumerate() {
         let text = match value {
             ValueRef::Missing => continue,
-            ValueRef::Str(text) => text.to_owned(),
+            ValueRef::Str(text) => Cow::Borrowed(text),
             other => match convert(&owned(other), ColumnType::Str) {
-                Ok(Value::Str(text)) => text,
+                Ok(Value::Str(text)) => Cow::Owned(text),
                 Ok(_) => unreachable!("a value converts to str as text"),
                 Err(error) => return Err(AggregateReductionError::Text { argument, error }),
             },
         };
-        if fields.distinct && !seen.insert(text.clone()) {
+        if fields.distinct && seen.contains(text.as_ref()) {
             continue;
         }
+        let length = match &joined {
+            None => Some(text.len()),
+            Some(joined) => joined
+                .len()
+                .checked_add(fields.separator.len())
+                .and_then(|length| length.checked_add(text.len())),
+        };
+        // The group is not read further, so the whole length is not counted.
+        Limits::text_bytes(length).map_err(|limit| {
+            AggregateReductionError::Limit(LimitExceeded {
+                actual: None,
+                ..limit
+            })
+        })?;
         match joined.as_mut() {
-            None => joined = Some(text),
+            None => joined = Some(text.as_ref().to_owned()),
             Some(joined) => {
                 joined.push_str(fields.separator);
                 joined.push_str(&text);
             }
+        }
+        if fields.distinct {
+            seen.insert(text);
         }
     }
     Ok(joined.map_or(Value::Missing, Value::Str))
