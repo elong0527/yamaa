@@ -1,0 +1,11 @@
+yamaa: "1.0"
+type: project
+# The study's codelists, which every submission package of the study shares,
+# then this package's own.
+codelists:
+- study/codelists.yaml
+- codelists.yaml
+
+adam:
+  specs:
+  - spec.yaml

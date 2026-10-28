@@ -6,7 +6,7 @@ name: PyPI install
 # upload"). Each job installs the release from the index as a user does and
 # runs the installed package's selftest. Nothing is checked out, so no
 # repository file can reach the fresh virtual environment that it installs
-# into.
+# into. Dispatch: gh workflow run pypi-install.yml -f version=X.Y.Z
 on:
   workflow_dispatch:
     inputs:

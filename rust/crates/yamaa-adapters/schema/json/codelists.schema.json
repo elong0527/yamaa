@@ -16,7 +16,7 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Name of the codelist, unique within the document.",
+          "description": "Name of the codelist, unique among the project's composed codelists (CT-1).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },

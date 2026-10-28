@@ -743,7 +743,7 @@ flushed and closed, and atomically moved onto the target. A failure leaves the
 previous file and no residue.
 
 Fails: `value_not_permitted`, `publication_failed`.
-Evidence: `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_creation_time_outside_the_schema_facet_is_a_schema_violation`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
+Evidence: `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_creation_time_outside_the_schema_facet_is_a_schema_violation`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`.
 
 Conformance to this profile is not a substitute for schema validation: an
 implementation that produces a schema-invalid document has a defect regardless
@@ -752,19 +752,25 @@ of which rule it satisfied. A schema-invalid document fails with
 failure at any point publishes nothing. A failed publication fails under
 [OUTPUT-8](../output.md#output-8) with `publication_failed`.
 
+A declaration the selected release cannot represent fails under this rule
+too, before any document is generated: a Define-XML 2.0 document refuses the
+facts [DEFINE-29](#define-29) lists with `value_not_permitted`, its `detail`
+`schema_violation: Define-XML 2.0 representation` and its `value` naming the
+fact, at the path of the declaration that states it.
+
 ## Scope
 
 <a id="define-26"></a>
 
-### DEFINE-26. Constructs outside the profile have no schema field and are never generated
+### DEFINE-26. Constructs outside the profile cannot be declared and are never generated
 
-The constructs listed below are outside this profile. None has a field in the
-schema that [Submission metadata](submission.md),
-[Controlled terminology](terminology.md) and the project schema close,
-so a specification that tries to declare one is rejected as an unknown field.
-An `Alias` carrying a transport name longer than eight characters is not
-generated, and a `FormalExpression` is generated only from a declared
-`method.expression`, never from a derivation.
+The constructs listed below are outside this profile and are never generated.
+None has a field or a value in the schema that
+[Submission metadata](submission.md), [Controlled terminology](terminology.md)
+and the project schema close, so a specification that tries to declare one
+fails schema validation. An `Alias` carrying a transport name longer than
+eight characters is not generated, and a `FormalExpression` is generated only
+from a declared `method.expression`, never from a derivation.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_text_fields_preserve_exact_occurrences_without_fabricated_causes`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`.
 
@@ -775,6 +781,26 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
   non-standard variable belongs in under `Submission`
 - A comment on a standard, codelist, or metadata version: a shared comment
   identifier space
+- `def:HasNoData` on an `ItemRef`: a column with no data. Only an output
+  dataset's `ItemGroupDef` carries it, from `has_no_data`
+  ([SUB-4](submission.md#sub-4))
+- A value-level definition selected by several where clauses, joined by OR,
+  or by a range comparison: each entry has one `def:WhereClauseRef` and one
+  `def:WhereClauseDef`, whose `RangeCheck` elements compare by `EQ`, `IN`,
+  `NE` or `NOTIN` only, never `LT`, `LE`, `GT` or `GE`
+  ([DEFINE-27](#define-27))
+- `FirstPage` and `LastPage` on a `def:PDFPageRef`: a page range. A page
+  reference carries `PageRefs`, `Type` and an optional `Title` only
+- Several `FormalExpression` elements on one `MethodDef`: a method declares
+  at most one `expression` ([SUB-21](submission.md#sub-21))
+- A pooled method or comment, one definition several elements reference: a
+  method or comment is declared on the element it describes, and no other
+  element can cite it. Each column or value-level entry with a method has its
+  own `MethodDef`, and each output dataset, column or entry with a comment
+  its own `def:CommentDef`, even when their declarations are identical
+- `RoleCodeListOID` on an `ItemRef`: a codelist of roles. An `ItemRef`
+  carries a `Role` from the closed role list ([SUB-9](submission.md#sub-9))
+  and no codelist for it
 
 The long transport-name `Alias` and `FormalExpression` have a declaration but
 no generation, and each is stated rather than silently dropped. For a name
@@ -864,13 +890,13 @@ from `2.1.0` through `2.1.11`; omission retains 2.1.11 and its existing bytes.
 The document preserves the selected release in `def:DefineVersion`. All 2.1
 releases use the v2.1 namespace and the maintained 2.1 enumeration schema,
 as [CDISC recommends](https://www.cdisc.org/standards/data-exchange/define-xml/define-xml-v2-1)
-when it updates that schema's controlled terminology.
-Unpublished versions and incomplete version strings are refused.
-A 2.0 document uses only facts that version
-can represent and requires one Final implementation guide. Declarations
-requiring 2.1 constructs fail before publication.
+when it updates that schema's controlled terminology. Unpublished versions
+and incomplete version strings are refused by the project schema. A 2.0
+document uses only facts that version can represent and requires one Final
+implementation guide.
+Declarations requiring 2.1 constructs fail before publication, under
+[DEFINE-25](#define-25).
 
-Fails: `value_not_permitted`.
 Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
@@ -890,6 +916,11 @@ explicit origin source is representable only when it is the older type's
 implicit source: Investigator for Collected, Sponsor for Derived, Assigned,
 Protocol or Other. This version choice does not change derivations, ordinary
 metadata validation or the transport encoders.
+
+Each refusal is a schema violation of the selected release and reports
+[DEFINE-25](#define-25), as that rule states. A `define_version` outside the
+admitted releases fails as a value the project schema does not permit
+([SCHEMA-12](../reference/schema-language.md#schema-12)).
 
 <a id="define-30"></a>
 

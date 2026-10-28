@@ -1,7 +1,7 @@
 # YAML derivation specification
 
 This folder defines the language-agnostic specification for ODM-to-SDTM and
-SDTM-to-ADaM derivations. The design is under active development.
+SDTM-to-ADaM derivations.
 
 ## Start here
 
