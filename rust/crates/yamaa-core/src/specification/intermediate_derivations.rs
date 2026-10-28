@@ -109,9 +109,10 @@ pub(super) fn prepare(
     }
     Ok(result)
 }
-/// The donor layout, each derived field's record type where it has one, and
-/// each derivation's expression result type for its conversion check.
-type FieldKinds = (TableSchema, Vec<Option<ColumnType>>, Vec<ResultType>);
+/// The donor layout, each derived field's result type, which may be decided
+/// per value (EXPR-14), and each derivation's expression result type for its
+/// conversion check.
+type FieldKinds = (TableSchema, Vec<ResultType>, Vec<ResultType>);
 
 /// A lookup's derivations as they bind: the lookup's name, its derivations
 /// in written order, and the records they extend: the dataset's name (`SELF`
@@ -236,11 +237,7 @@ fn resolve_field_kinds(
     if findings.len() != before {
         return Ok(None);
     }
-    Ok(Some((
-        output,
-        field_types.iter().map(|kind| kind.column_type()).collect(),
-        operation_types,
-    )))
+    Ok(Some((output, field_types, operation_types)))
 }
 
 fn collect_current_fields(cx: intermediates::Context<'_>, lookup: Lookup<'_>) -> Vec<CurrentField> {
@@ -299,18 +296,14 @@ fn build_catalog_context(
     lookup: Lookup<'_>,
     current: &[CurrentField],
     output: &TableSchema,
-    result_kinds: &[Option<ColumnType>],
+    record_types: &[ResultType],
 ) -> Result<(Option<usize>, Vec<SecondarySource>, TableSchema, Catalog), BindError> {
     let binder::Inputs {
         sources,
         schemas,
         driver,
     } = inputs;
-    let Lookup {
-        dataset,
-        stored_kinds,
-        ..
-    } = lookup;
+    let Lookup { dataset, .. } = lookup;
     let donor = sources.iter().position(|source| source.name == dataset);
     if donor.is_none() && dataset != "SELF" {
         return Err(BindError::Internal);
@@ -324,12 +317,11 @@ fn build_catalog_context(
             schema: schemas[index].layout().clone(),
         })
         .collect::<Vec<_>>();
-    // The record's kinds: each stored field's, each derived field's, then
-    // each current read's.
-    let mut source_kinds = stored_kinds
+    // The record's kinds: each stored field's, each derived field's one
+    // type, then each current read's.
+    let mut source_kinds = record_types
         .iter()
-        .chain(result_kinds)
-        .copied()
+        .map(|kind| kind.column_type())
         .collect::<Vec<_>>();
     let mut source_fields = output.columns().to_vec();
     for (index, field) in current.iter().enumerate() {
@@ -408,7 +400,7 @@ fn build_catalog_context(
     let catalog = Catalog::compile(&outputs, &datasets)
         .map_err(BindError::Catalog)?
         .with_record_derivation()
-        .with_record_kinds(stored_kinds.iter().chain(result_kinds).copied().collect());
+        .with_record_types(record_types.to_vec());
     Ok((donor, secondary, source, catalog))
 }
 
@@ -556,14 +548,22 @@ pub(super) fn bind(
         return Ok(None);
     }
     let before = findings.len();
-    let Some((output, result_kinds, operation_types)) =
+    let Some((output, field_types, operation_types)) =
         resolve_field_kinds(cx, lookup, pending_schema, before, findings)?
     else {
         return Ok(None);
     };
+    // Each field's result type: each stored field's kind, then each
+    // derived field's type.
+    let record_types = lookup
+        .stored_kinds
+        .iter()
+        .map(|&kind| ResultType::declared(kind))
+        .chain(field_types)
+        .collect::<Vec<_>>();
     let current = collect_current_fields(cx, lookup);
     let (donor, secondary, source, catalog) =
-        build_catalog_context(cx.inputs, lookup, &current, &output, &result_kinds)?;
+        build_catalog_context(cx.inputs, lookup, &current, &output, &record_types)?;
     let plan = DonorPlan {
         donor,
         name: dataset,
@@ -666,12 +666,7 @@ pub(super) fn bind(
         output,
         rows,
         assignments,
-        lookup
-            .stored_kinds
-            .iter()
-            .copied()
-            .chain(result_kinds)
-            .collect(),
+        record_types,
     )
     .with_conversion_handlers(handlers);
     *pending_schema = None;

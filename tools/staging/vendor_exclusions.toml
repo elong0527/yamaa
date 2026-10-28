@@ -102,4 +102,5 @@
 "zerocopy-0.8.63" = ["tests"]
 "zerocopy-derive-0.8.63" = ["tests"]
 "zmij-1.0.23" = [".github", "benches", "tests"]
-"zstd-0.13.3" = ["examples", "tests"]
+"zstd-0.14.3" = ["examples", "tests"]
+"zstd-safe-8.2.0" = ["tests"]
