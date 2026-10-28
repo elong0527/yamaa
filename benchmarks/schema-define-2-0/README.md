@@ -3,9 +3,9 @@
 **Goal:** carry the demographics identifiers and collected values with
 Define-XML 2.0.0 metadata and a SAS transport file.
 
-**Input:** demographic capture records exported from an electronic case
-report form, with subject identifiers, reference start dates, sites, ages,
-sex, race and country.
+**Input:** `project.yaml` selects Define-XML 2.0.0 and composes `spec.yaml`,
+which maps demographic capture records from `input/dm_raw.csv` into the
+demographics table and supplies its submission metadata.
 
 **Variables:**
 
