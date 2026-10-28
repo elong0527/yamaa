@@ -93,11 +93,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 667
-  changes: 98
+  entries: 668
+  changes: 99
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 52
+    new, decided: 53
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7637,6 +7637,19 @@ entries:
     required beside QUANTILE and refused beside any other expression as unpaired_fields, and a value outside
     0 through 1 fails as invalid_field_type (FORMULA-18). No 0.5 file declares it, so the converter wrote
     none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.record_between_class.closed
+  file_type: spec
+  path: intermediates[].between.closed
+  today: null
+  kind: new
+  proposed: 'between: {value: VARIABLE, lower: IDENTIFIER, upper: IDENTIFIER, closed: both|left|right|neither}'
+  decision: decided (owner on #4090)
+  reason: 'An addition to the approved table under D27: the owner decided on 2026-10-28 that every
+    between form may state which endpoints it includes. The default, both, keeps the existing
+    inclusive comparison; left includes only the lower endpoint, right only the upper, and neither
+    excludes both (LOOKUP-9). No 0.5 file declares it, so the converter wrote none.'
   field_kind: value
   convert: {action: none}
 - id: new.spec.expressions.decode

@@ -18,7 +18,7 @@ use crate::ast::{
     WindowFunction,
 };
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
-use crate::expression_table::{Form, OperandForm, Verb, Written};
+use crate::expression_table::{Closed, Form, OperandForm, Verb, Written};
 use crate::schema::DocumentNode as N;
 
 /// The kind of expression field a 1.0 reference is written in, which
@@ -279,7 +279,7 @@ impl<'d> Lower<'d> {
         ))
     }
 
-    /// A record range: `{value, lower, upper}`.
+    /// A record range: `{value, lower, upper, closed}`.
     pub(super) fn between(&mut self, node: usize, meta: Meta) -> Between {
         let part = |lower: &mut Self, name: &'static str| {
             lower.field(node, name).map(|value| {
@@ -291,10 +291,16 @@ impl<'d> Lower<'d> {
             .unwrap_or_else(|| self.push(ExprKind::Unsupported("between".into()), meta));
         let lower = part(self, "lower");
         let upper = part(self, "upper");
+        let closed = self
+            .field(node, "closed")
+            .and_then(|value| self.text(value))
+            .and_then(Closed::from_name)
+            .unwrap_or(Closed::Both);
         Between {
             value,
             lower,
             upper,
+            closed,
             meta,
         }
     }

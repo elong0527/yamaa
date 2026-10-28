@@ -440,6 +440,16 @@ EXPECTED = {
     "new.spec.aggregate_class.quantile": [
         Field("aggregate_class", "quantile", "float")
     ],
+    # #4090: every lookup range uses the same endpoint policy (LOOKUP-9).
+    "new.spec.record_between_class.closed": [
+        Field(
+            "record_between_class",
+            "closed",
+            "str",
+            default="both",
+            values=("both", "left", "right", "neither"),
+        )
+    ],
     # #4089: decode replaces a coded value with its item's decode in a
     # codelist the project file declares (EXPR-15).
     "new.spec.expressions.decode": [

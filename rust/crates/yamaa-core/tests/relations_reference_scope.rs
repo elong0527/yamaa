@@ -349,6 +349,7 @@ mod relations {
                 None,
                 lower.then(|| bound(0, None)),
                 upper.then(|| bound(1, None)),
+                yamaa_core::expression_table::Closed::Both,
             )
             .unwrap()
         }
@@ -381,7 +382,8 @@ mod relations {
                     },
                     None,
                     None,
-                    None
+                    None,
+                    yamaa_core::expression_table::Closed::Both
                 ),
                 Err(RelationRangeError::NoBounds)
             );
@@ -521,7 +523,8 @@ mod relations {
                     },
                     Some(ValueType::Date),
                     Some(bound(0, Some(ValueType::Int))),
-                    Some(bound(1, Some(ValueType::Int)))
+                    Some(bound(1, Some(ValueType::Int))),
+                    yamaa_core::expression_table::Closed::Both
                 ),
                 Err(RelationRangeError::Incomparable(RelationRangeTypes {
                     value: ValueType::Date,

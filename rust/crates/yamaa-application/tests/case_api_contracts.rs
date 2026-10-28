@@ -265,7 +265,7 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
             );
         }
     }
-    assert_eq!((count, first_issues, parity, saves), (129, 4, 44, 43));
+    assert_eq!((count, first_issues, parity, saves), (136, 4, 47, 45));
 }
 
 /// Seam: the R-host calls of the tests that moved into `case_item_order.json`

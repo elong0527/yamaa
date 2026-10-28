@@ -167,11 +167,16 @@ record_between_class:
     - lower:
         type: identifier
         required: false
-        description: Donor-record field whose value is an inclusive lower bound; omit for no lower bound (LOOKUP-9).
+        description: Donor-record field whose value is the lower bound; omit for no lower bound (LOOKUP-9).
     - upper:
         type: identifier
         required: false
-        description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
+        description: Donor-record field whose value is the upper bound; omit for no upper bound (LOOKUP-9).
+    - closed:
+        type: str
+        default: both
+        values: [both, left, right, neither]
+        description: Which stated endpoints are included (LOOKUP-9).
 
 nearest_class:
     - source:

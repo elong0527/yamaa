@@ -1,0 +1,7 @@
+STUDYID,RANGE,WIN,LOW,HIGH
+S,A,1,1,8
+S,B,1,8,8
+S,C,1,8,1
+S,D,1,,8
+S,E,1,1,
+S,F,1,,

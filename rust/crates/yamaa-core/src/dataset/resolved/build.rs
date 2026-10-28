@@ -2174,6 +2174,7 @@ fn range_node(
         current: current_read(cx, range.current())?,
         lower: range.lower().map(|bound| field(bound.column)).transpose()?,
         upper: range.upper().map(|bound| field(bound.column)).transpose()?,
+        closed: range.closed(),
     })
 }
 

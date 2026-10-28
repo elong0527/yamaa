@@ -3023,15 +3023,28 @@
         },
         "lower": {
           "$ref": "#/$defs/identifier",
-          "description": "Donor-record field whose value is an inclusive lower bound; omit for no lower bound (LOOKUP-9).",
+          "description": "Donor-record field whose value is the lower bound; omit for no lower bound (LOOKUP-9).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
         "upper": {
           "$ref": "#/$defs/identifier",
-          "description": "Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).",
+          "description": "Donor-record field whose value is the upper bound; omit for no upper bound (LOOKUP-9).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
+        },
+        "closed": {
+          "type": "string",
+          "enum": [
+            "both",
+            "left",
+            "right",
+            "neither"
+          ],
+          "default": "both",
+          "description": "Which stated endpoints are included (LOOKUP-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         }
       },
       "additionalProperties": false
@@ -5544,15 +5557,28 @@
         },
         "lower": {
           "$ref": "#/$defs/identifier",
-          "description": "Donor-record field whose value is an inclusive lower bound; omit for no lower bound (LOOKUP-9).",
+          "description": "Donor-record field whose value is the lower bound; omit for no lower bound (LOOKUP-9).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
         "upper": {
           "$ref": "#/$defs/identifier",
-          "description": "Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).",
+          "description": "Donor-record field whose value is the upper bound; omit for no upper bound (LOOKUP-9).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
+        },
+        "closed": {
+          "type": "string",
+          "enum": [
+            "both",
+            "left",
+            "right",
+            "neither"
+          ],
+          "default": "both",
+          "description": "Which stated endpoints are included (LOOKUP-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         }
       },
       "required": [

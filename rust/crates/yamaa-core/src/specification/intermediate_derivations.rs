@@ -901,6 +901,7 @@ fn rebase_range(
         kind,
         range.lower().cloned(),
         range.upper().cloned(),
+        range.closed(),
     ) {
         Ok(range) => Ok(Some(range)),
         Err(crate::dataset::RelationRangeError::Incomparable(types)) => {
