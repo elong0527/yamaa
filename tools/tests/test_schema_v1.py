@@ -433,6 +433,15 @@ EXPECTED = {
     "new.spec.aggregate_class.quantile": [
         Field("aggregate_class", "quantile", "float")
     ],
+    # #4089: decode replaces a coded value with its item's decode in a
+    # codelist the project file declares (EXPR-15).
+    "new.spec.expressions.decode": [
+        Keyword("expressions", "decode", "[]"),
+        Field("expressions.decode", "source", "filtered_source", True, kind="name"),
+        Field("expressions.decode", "codelist", "identifier", True, kind="identifier"),
+        Field("expressions.decode", "missing", "substitute_value", kind="value"),
+        Field("expressions.decode", "unmapped", "substitute_value", kind="value"),
+    ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],

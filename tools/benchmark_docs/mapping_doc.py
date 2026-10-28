@@ -521,13 +521,6 @@ def describe_source(src, ctx=None, depth=0):
 
 
 def describe_mapping(mapping, ctx=None, depth=0):
-    src = mapping.get("source", {})
-    if isinstance(src, str):
-        var, filt = src, None
-    else:
-        var = src.get("variable")
-        filt = src.get("filter")
-    where = " where " + str(filt) if filt else ""
     dictionary = mapping.get("dict", {})
     if isinstance(dictionary, str):
         # A dictionary kept in a project file is named rather than inlined.
@@ -538,15 +531,44 @@ def describe_mapping(mapping, ctx=None, depth=0):
             '"' + str(k) + '" ' + ARROW + " " + literal_text(v)
             for k, v in dictionary.items()
         )
-    absent = describe_mapping_handler(mapping, "missing")
-    unlisted = describe_mapping_handler(mapping, "unmapped")
-    if absent == unlisted:
-        tail = "; missing or unlisted values " + absent
-    else:
-        tail = "; missing values " + absent + "; unlisted values " + unlisted
+    tail = mapped_answers(mapping)
     if not mapping.get("case_sensitive", True):
         tail += "; matching ignores letter case"
-    return "Recode " + describe_variable(var, ctx, depth) + where + rule + tail + "."
+    return "Recode " + mapped_source(mapping, ctx, depth) + rule + tail + "."
+
+
+def describe_decode(decode, ctx=None, depth=0):
+    """The decode a codelist's item gives each coded value (EXPR-15)."""
+    return (
+        "Decode "
+        + mapped_source(decode, ctx, depth)
+        + " through codelist "
+        + str(decode.get("codelist"))
+        + mapped_answers(decode)
+        + "."
+    )
+
+
+def mapped_source(node, ctx=None, depth=0):
+    """The variable a `mapping` or a `decode` reads, with its filter."""
+    src = node.get("source", {})
+    if isinstance(src, str):
+        var, filt = src, None
+    else:
+        var = src.get("variable")
+        filt = src.get("filter")
+    where = " where " + str(filt) if filt else ""
+    return describe_variable(var, ctx, depth) + where
+
+
+def mapped_answers(node):
+    """What a missing and an unlisted value of a `mapping` or a `decode`
+    yield, as one clause when they agree."""
+    absent = describe_mapping_handler(node, "missing")
+    unlisted = describe_mapping_handler(node, "unmapped")
+    if absent == unlisted:
+        return "; missing or unlisted values " + absent
+    return "; missing values " + absent + "; unlisted values " + unlisted
 
 
 def describe_mapping_handler(mapping, handler):
@@ -1293,6 +1315,7 @@ DERIVATION_DESCRIBERS = {
     "literal": lambda n, c, d: describe_literal(n),
     "source": describe_source,
     "mapping": describe_mapping,
+    "decode": describe_decode,
     "case": describe_case,
     "flag": describe_flag,
     "first_available": describe_first_available,

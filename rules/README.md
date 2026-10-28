@@ -132,7 +132,7 @@ profiles in `rules/profiles/`.
 | [Dataset-JSON source profiles](reference/dataset-json.md) | DSJSON | Read a Dataset-JSON 1.1 file in either representation, typing each field by its column's dataType and narrowing only by declaration. |
 | [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, canonical shorthand expansion, and the one spelling of a written value. |
 | [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
-| [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and enforce the items each binding lists. |
+| [Controlled terminology](profiles/terminology.md) | CT | Declare codelists, compose them by `id` across their sources, and enforce the items each binding lists. |
 | [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 | [SAS Transport](profiles/xpt.md) | XPT | Write a dataset as one deterministic SAS Transport version 5 file in the public record layout. |

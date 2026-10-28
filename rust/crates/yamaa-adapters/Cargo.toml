@@ -49,17 +49,20 @@ arrow-buffer = { version = "=55.2.0", default-features = false, optional = true 
 arrow-ipc = { version = "=55.2.0", default-features = false, optional = true }
 flatbuffers = { version = "=25.12.19", default-features = false, optional = true }
 # Direct page admission bounds decompression before the general source reader.
-# These storage dependencies stay at the adapter boundary. base64, lz4_flex and
-# zstd stay in the 0.22, 0.11 and 0.13 series that Parquet 55.2.0 requires, so
-# the differential harness's oracle builds one copy of each with the engine
-# (#3696). flate2 decompresses with its zlib-rs backend, as it did while
+# These storage dependencies stay at the adapter boundary. base64 and lz4_flex
+# stay in the 0.22 and 0.11 series that Parquet 55.2.0 requires, so the
+# differential harness's oracle builds one copy of each with the engine
+# (#3696). zstd 0.14.3, with zstd-safe 8.2.0, fixes RUSTSEC-2026-0391 and
+# RUSTSEC-2026-0395 to 0406, so the oracle's zstd 0.13 is a second copy that
+# only tests compile; both zstd-safe copies link the one zstd-sys (#4066).
+# flate2 decompresses with its zlib-rs backend, as it did while
 # Parquet 55, which selects it, was in the engine's build (#3878).
 bytes = { version = "1.12.1", optional = true }
 base64 = { version = "0.22.1", optional = true }
 brotli = { version = "8.0.4", default-features = false, features = ["std"], optional = true }
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend", "zlib-rs"], optional = true }
 lz4_flex = { version = "0.11.6", optional = true }
-zstd = { version = "0.13.3", default-features = false, optional = true }
+zstd = { version = "0.14.3", default-features = false, optional = true }
 snap = { version = "1.1.2", optional = true }
 # ODM XML tokenizing only; the adapter adds namespace, reference and
 # well-formedness checks. Default features off: no encoding_rs or serde.
