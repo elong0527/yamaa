@@ -427,10 +427,10 @@ fn admit_xport(bytes: &[u8]) -> Result<(), Error> {
 }
 
 pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Error> {
-    if !matches!(
+    if !(matches!(
         source.encoding.as_deref(),
         Some("utf-8" | "windows-1252" | "iso-8859-1" | "ascii")
-    ) && !(source.profile == SourceProfile::Sas7bdat && source.encoding.is_none())
+    ) || source.profile == SourceProfile::Sas7bdat && source.encoding.is_none())
     {
         return Err(Error::Invalid("encoding"));
     }
