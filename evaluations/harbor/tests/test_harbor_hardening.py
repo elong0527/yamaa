@@ -146,6 +146,54 @@ with open('/app/output/advs.csv', 'w', newline='') as h:
     assert result["checked"] and not result["passed"], result
 
 
+@pytest.mark.parametrize("fixed_tmax", [False, True], ids=["derived", "fixed-tmax"])
+def test_nca_transfer_reruns_require_supplied_estimates(tmp_path, fixed_tmax):
+    # Exercise the verifier orchestration: a fixture-specific TMAX still passes
+    # subject removal, but must fail when the supplied estimates change.
+    benchmark = ROOT / "benchmarks" / "sdtm-pp-pk-parameters"
+    app = _app(tmp_path, benchmark)
+    contract = build.contract_for(benchmark, "python")
+    text = (build.SOLUTIONS / benchmark.name / contract["script"]).read_text()
+    text = text.replace("/app/", f"{app.as_posix()}/")
+    reference = tmp_path / "reference.py"
+    reference.write_text(text)
+    if fixed_tmax:
+        text = text.replace(
+            'estimate = row["Estimate"]',
+            'estimate = "1.00" if row["Parameter"] == "Tmax" else row["Estimate"]',
+        )
+    submitted = app / "output" / contract["script"]
+    submitted.write_text(text)
+    run = _run("python")
+    assert run([sys.executable, str(submitted)], app, 60)[0] == 0
+    result = grade.grade(
+        contract,
+        benchmark / "expected",
+        app / "output",
+        tmp_path / "trajectory.json",
+        rerun=True,
+        reference=reference,
+        run=run,
+    )
+    assert {
+        "original": all(output["passed"] for output in result["outputs"]),
+        "rerun": result["rerun"]["passed"],
+        "held_out": (result["held_out"]["checked"], result["held_out"]["passed"]),
+        "challenge": (result["challenge"]["checked"], result["challenge"]["passed"]),
+        "value_changes": result["challenge"]["value_changes"],
+        "passed": result["passed"],
+    } == {
+        "original": True,
+        "rerun": True,
+        "held_out": (True, True),
+        "challenge": (True, not fixed_tmax),
+        "value_changes": [
+            {"file": "nca_transfer.csv", "columns": {"Estimate": 6, "ReferenceDose": 6}}
+        ],
+        "passed": not fixed_tmax,
+    }, result
+
+
 def test_a_subject_keyed_task_requires_the_changed_input_challenge(tmp_path):
     assert build.contract_for(AGE_GROUP, "r")["challenge_required"]
     task = build.build_task(AGE_GROUP, tmp_path, None, "test", "r")

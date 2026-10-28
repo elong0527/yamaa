@@ -1,0 +1,99 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: PP
+keys: [STUDYID, USUBJID, PPSEQ]
+input:
+  NCA:
+    path: input/nca_transfer.csv
+    types: {ReferenceDose: datetime}
+
+output:
+  path: pp.csv
+  columns: [DOMAIN, STUDYID, USUBJID, PPSEQ, PPTESTCD, PPTEST, PPCAT,
+            PPORRES, PPORRESU, PPSTRESC, PPSTRESN, PPSTRESU, PPSPEC, PPRFTDTC]
+  order_by: [STUDYID, USUBJID, PPSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'PP'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: NCA.Protocol
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: NCA.Subject
+
+  - name: PPTESTCD
+    type: str
+    label: PK Parameter Short Name
+    derivation:
+      mapping:
+        source: NCA.Parameter
+        dict: {Cmax: CMAX, Tmax: TMAX, AUClast: AUCLST}
+
+  - name: PPTEST
+    type: str
+    label: PK Parameter Name
+    derivation:
+      mapping:
+        source: PPTESTCD
+        dict:
+          CMAX: Max Conc
+          TMAX: Time of CMAX Observation
+          AUCLST: AUC to Last Nonzero Conc
+
+  - name: PPCAT
+    type: str
+    label: Category for PK Parameters
+    derivation: NCA.Analyte
+
+  - name: PPORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: NCA.Estimate
+
+  - name: PPORRESU
+    type: str
+    label: Original Units
+    derivation: NCA.Unit
+
+  - name: PPSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: PPORRES
+
+  - name: PPSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation: PPORRES
+
+  - name: PPSTRESU
+    type: str
+    label: Standard Units
+    derivation: PPORRESU
+
+  - name: PPSPEC
+    type: str
+    label: Specimen Material Type
+    derivation: "'PLASMA'"
+
+  - name: PPRFTDTC
+    type: datetime
+    label: Date/Time of Reference Point
+    derivation: NCA.ReferenceDose
+
+  - name: PPSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [NCA.Protocol, NCA.Subject]
+          order_by: [NCA.ReferenceDose, NCA.Analyte, NCA.Parameter]

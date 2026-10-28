@@ -59,10 +59,10 @@ MAX_REPORTED = 200
 RERUN_TIMEOUT_SEC = 300.0
 # The held-out rerun drops every third subject from the inputs, by the first
 # of these columns they carry: USUBJID, or the raw subject id an SDTM task
-# builds USUBJID from (ODM SubjectKey, SUBJID, PATNUM). An output row belongs
-# to a dropped subject when its USUBJID is that id or ends in "-<id>".
+# builds USUBJID from (ODM SubjectKey, SUBJID, PATNUM, Subject). An output row
+# belongs to a dropped subject when its USUBJID is that id or ends in "-<id>".
 HOLDOUT_SUBJECT = "USUBJID"
-HOLDOUT_INPUT_SUBJECTS = ("USUBJID", "SubjectKey", "SUBJID", "PATNUM")
+HOLDOUT_INPUT_SUBJECTS = ("USUBJID", "SubjectKey", "SUBJID", "PATNUM", "Subject")
 HOLDOUT_EVERY = 3
 CHALLENGE_SEED = 20261001
 _DECLARED_MEASUREMENTS: dict[str, frozenset] | None = None
