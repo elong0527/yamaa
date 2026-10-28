@@ -1079,41 +1079,18 @@ mod project {
                 } else {
                     assert_eq!(rejected.captures.len(), 129);
                     let issues = admission(&rejected).unwrap();
-                    let mut wanted = vec![];
-                    for index in 0..129 {
-                        if index > 0 {
-                            wanted.push((
-                                index,
-                                "duplicate_define_identifier",
-                                Some("id"),
-                                "codelists[0].id",
-                            ));
-                            wanted.push((
-                                index,
-                                "duplicate_define_identifier",
-                                Some("name"),
-                                "codelists[0].name",
-                            ));
-                        }
-                        wanted.push((
-                            index,
-                            "codelist_shape_invalid",
-                            None,
-                            "codelists[0].items[0].value",
-                        ));
-                    }
-                    assert_eq!(issues.len(), 129 + 2 * 128);
-                    for (issue, (index, condition, field, path)) in issues.iter().zip(wanted) {
+                    // Each later listing replaces the earlier list of its id
+                    // (CT-1), and every listing is still checked on its own.
+                    assert_eq!(issues.len(), 129);
+                    for (index, issue) in issues.iter().enumerate() {
                         let context = context(issue);
-                        assert_eq!(issue.condition(), condition);
-                        assert_eq!(issue.spec_paths, [path]);
-                        assert_eq!(context["field"].as_str(), field);
+                        assert_eq!(issue.condition(), "codelist_shape_invalid");
+                        assert_eq!(issue.spec_paths, ["codelists[0].items[0].value"]);
+                        assert_eq!(context["field"].as_str(), None);
                         assert_eq!(context["environment_path"], format!("codelists[{index}]"));
                         assert_eq!(context["source"], "held/ct.yaml");
                         assert_eq!(context["entry"], PROJECT);
-                        if field.is_none() {
-                            assert_eq!(context["value"], true);
-                        }
+                        assert_eq!(context["value"], true);
                     }
                 }
                 assert_eq!(port.reads, 130);

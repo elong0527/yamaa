@@ -1,0 +1,16 @@
+yamaa: "1.0"
+type: codelists
+
+codelists:
+  - id: DCSREAS
+    name: Reason for Discontinuation
+    items:
+      - {value: ADVERSE EVENT, decode: Adverse Event}
+      - {value: COMPLETED, decode: Completed}
+      - {value: WITHDRAWAL BY SUBJECT, decode: Withdrawal by Subject}
+
+  - id: TRT01P
+    name: Planned Treatment for Period 01
+    items:
+      - {value: PLACEBO, decode: Placebo}
+      - {value: VITAMIN D3, decode: Vitamin D3 5000 IU daily}

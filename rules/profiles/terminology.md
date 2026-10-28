@@ -2,10 +2,11 @@
 
 This file is a profile: it is optional, and it applies to a build whose
 project file declares `codelists` and to the specifications that bind them
-through `submission.codelist`. A codelist is declared once in the project file,
-every binding names it, and a binding enforces the items its list declares. A
-build whose project declares no codelists is unaffected, except for a column
-that declares `inventory_vocabulary` under [CT-11](#ct-11). A specification
+through `submission.codelist`. A codelist is declared in a source the project
+file lists, a later source may replace it by `id`, every binding names it, and
+a binding enforces the items its list declares. A build whose project declares
+no codelists is unaffected, except for a column that declares
+`inventory_vocabulary` under [CT-11](#ct-11). A specification
 checked or run without a project file that binds a codelist or declares an
 inventory vocabulary fails under [CT-13](#ct-13).
 
@@ -13,28 +14,45 @@ inventory vocabulary fails under [CT-13](#ct-13).
 
 <a id="ct-1"></a>
 
-### CT-1. A codelist is declared once in a project codelist source, and a column binds it by `id`
+### CT-1. A project's codelists compose by `id` across its sources, and a column binds one by `id`
 
-A domain-build codelist is declared once in a project codelist source and
-carries an `id` that is unique across all captured sources. A column names that
-`id` through `submission.codelist`, and columns share one codelist statement.
-`name` is the codelist's human-readable name and is unique across all project
-codelist sources. A duplicate codelist `id` or `name`, or a binding naming no
-codelist its project file declares, fails validation, and so does any binding
-checked or run without a project file ([CT-13](#ct-13)).
+A domain-build codelist is declared in a project codelist source and carries
+an `id`. Sources compose in listed order: a later source's codelist replaces
+every earlier codelist of its `id` whole, `name` and items included. A column
+names a composed codelist's `id` through `submission.codelist`. `name` is the
+human-readable name. An `id` repeated within one source, a `name` repeated
+among the composed codelists, or a binding naming no codelist its project file
+declares fails validation, as does any binding checked or run without a
+project file ([CT-13](#ct-13)).
 
 Fails: `duplicate_define_identifier`, `unknown_codelist`, `project_binding_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::global_duplicates_across_sources_have_no_override`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`.
+Evidence: `sdtm-dm-metadata`, `schema-codelist-replacement`, `negative-codelist-name-reused`, `rust/crates/yamaa-core/tests/project_execution.rs::a_later_source_replaces_an_earlier_codelist_of_its_id_whole`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
-is what a reader sees. [Submission metadata](submission.md)'s `codelist` names
-a codelist the project file declares; this profile owns that object, the
-values a binding enforces, and the redundancy of an `allowed_values`
-verification beside it. A duplicate `id` or `name` fails with
-`duplicate_define_identifier`. A binding naming no declared codelist fails with
-`unknown_codelist`, reporting the column and the identifier. A specification
-checked or run without a project file declares no codelist, so each binding
-fails with `project_binding_missing` instead ([CT-13](#ct-13)).
+is what a reader sees. Columns that name one `id` share one codelist
+statement. [Submission metadata](submission.md)'s `codelist` names a codelist
+the project file declares; this profile owns that object, the values a
+binding enforces, and the redundancy of an `allowed_values` verification
+beside it. An `id` a source declares twice fails with
+`duplicate_define_identifier` at the later `id`, and a `name` the composed
+codelists repeat at the later `name`, both reporting the identifier. A binding
+naming no declared codelist fails with `unknown_codelist`, reporting the
+column and the identifier. A specification checked or run without a project
+file declares no codelist, so each binding fails with
+`project_binding_missing` instead ([CT-13](#ct-13)).
+
+Replacement lets the packages of one study share a codelist source and declare
+only the codelists a package changes: the package's project file lists the
+shared source, then its own source declaring the replacing codelists. A
+replacing codelist is its own declaration alone, and nothing of the codelist
+it replaces is merged into it. The composed codelists are each source's
+codelists that no later source replaces, in source and list order, so a
+replacing codelist keeps its place in its own source, is drawn from that
+source's `standard` ([CT-2](#ct-2)) and is listed there in a document
+([CT-10](#ct-10)). A replaced codelist is still checked on its own, under
+[CT-3](#ct-3) to [CT-6](#ct-6) and [CT-12](#ct-12). A replacing codelist may
+keep or change the `name` of the codelist it replaces, while a later codelist
+that takes a kept codelist's `name` under another `id` fails.
 
 <a id="ct-2"></a>
 

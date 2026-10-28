@@ -16,7 +16,7 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Name of the codelist, unique within the document.",
+          "description": "Name of the codelist, unique among the project's composed codelists (CT-1).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -394,7 +394,7 @@
           "items": {
             "$ref": "#/$defs/codelist_source"
           },
-          "description": "Codelist sources supplying study terminology (CT-1).",
+          "description": "Codelist sources supplying study terminology, in order; a later source's codelist replaces an earlier one of its id (CT-1).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "list[codelist_source]"
         },
