@@ -641,10 +641,12 @@ and once in a save, after every file is staged and before the first commit
 (D74). A cancelled operation fails as `FailureKind::Cancelled`, with no
 result and no issue: a cancelled run keeps nothing it built, and a cancelled
 save removes what it staged and fails with `cannot save <subject>: operation
-cancelled`. A save writes either nothing or everything it planned, and
-nothing is rolled back once committed. A project function that raises the
-host's interrupt, as `ProjectFunctions::is_interrupt` classifies it, cancels
-the call the same way.
+cancelled`. A cancellation therefore never stops a save partway, but a save is
+not atomic across its files: each file replaces its target atomically, and a
+file that cannot replace its target stops the save there, keeping the files
+already replaced, since nothing is rolled back once committed (OUTPUT-10,
+JSON-14, PROJECT-12). A project function that raises the host's interrupt, as
+`ProjectFunctions::is_interrupt` classifies it, cancels the call the same way.
 
 Each host call makes its token with `with_probe`: the probe asks the
 interpreter whether an interrupt is pending, keeps that interrupt and answers
