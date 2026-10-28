@@ -1,7 +1,8 @@
 # Submit sponsor-defined examination records
 
 **Goal:** carry examination sequence (`ZESEQ`) and name (`ZETERM`) in a
-sponsor-defined domain, with its submission metadata and transport file.
+sponsor-defined domain (`DOMAIN` is `ZE`), with submission metadata and a
+transport file.
 
 **Input:** `project.yaml` composes `spec.yaml` into a Define-XML 2.1
 submission with a transport. The specification marks the examination domain
