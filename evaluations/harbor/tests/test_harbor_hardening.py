@@ -104,19 +104,22 @@ def test_reference_derives_declared_measurement_inputs(tmp_path):
     )
 
 
-@pytest.mark.parametrize("language", ["python", "r", "opensas"])
+@pytest.mark.parametrize(
+    "language,fixed_units",
+    [("python", False), ("r", False), ("opensas", False), ("python", True)],
+)
 @pytest.mark.parametrize(
     "benchmark,file,columns",
     [
         (
             "sdtm-pc-pk-concentrations",
             "lab_transfer.csv",
-            {"Result": 4, "Collected": 5},
+            {"Result": 4, "Unit": 5, "Collected": 5},
         ),
     ],
 )
 def test_vendor_transfer_reference_passes_full_verifier(
-    tmp_path, language, benchmark, file, columns
+    tmp_path, language, fixed_units, benchmark, file, columns
 ):
     # Seam: the verifier orchestrates clean, held-out and changed-input
     # executions; an original-data comparison alone never reaches the alias.
@@ -124,6 +127,20 @@ def test_vendor_transfer_reference_passes_full_verifier(
         pytest.skip("R is not installed")
     if language == "opensas" and not shutil.which("opensas"):
         pytest.skip("opensas is not installed")
+    submitted = None
+    if fixed_units:
+        submitted = (build.SOLUTIONS / benchmark / "result.py").read_text()
+        submitted += """
+import csv
+with open("/app/output/pc.csv", newline="") as handle:
+    records = list(csv.DictReader(handle))
+for row in records:
+    row["PCORRESU"] = row["PCSTRESU"] = "ng/mL"
+with open("/app/output/pc.csv", "w", newline="") as handle:
+    writer = csv.DictWriter(handle, fieldnames=list(records[0]))
+    writer.writeheader()
+    writer.writerows(records)
+"""
     result = _held_out_case(
         tmp_path,
         "reference",
@@ -131,13 +148,23 @@ def test_vendor_transfer_reference_passes_full_verifier(
         benchmark,
         language=language,
         challenge_required=True,
+        submitted_script=submitted,
     )
-    assert (
-        result["passed"],
-        result["held_out"]["checked"],
-        result["challenge"]["checked"],
-        result["challenge"]["value_changes"],
-    ) == (True, True, True, [{"file": file, "columns": columns}]), result
+    assert {
+        "original": all(output["passed"] for output in result["outputs"]),
+        "rerun": result["rerun"]["passed"],
+        "held_out": (result["held_out"]["checked"], result["held_out"]["passed"]),
+        "challenge": (result["challenge"]["checked"], result["challenge"]["passed"]),
+        "value_changes": result["challenge"]["value_changes"],
+        "passed": result["passed"],
+    } == {
+        "original": True,
+        "rerun": True,
+        "held_out": (True, True),
+        "challenge": (True, not fixed_units),
+        "value_changes": [{"file": file, "columns": columns}],
+        "passed": not fixed_units,
+    }, result
 
 
 def test_a_value_keyed_lookup_fails_declared_measurement_challenge(tmp_path):

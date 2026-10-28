@@ -1,91 +1,50 @@
-"""Convert the laboratory transfer to the SDTM PC domain."""
-
-import csv
-from datetime import datetime
-from decimal import Decimal
 from pathlib import Path
 
-INPUT = Path("/app/input")
-OUTPUT = Path("/app/output")
-COLUMNS = [
-    "DOMAIN",
-    "STUDYID",
-    "USUBJID",
-    "PCSEQ",
-    "PCREFID",
-    "PCTESTCD",
-    "PCTEST",
-    "PCORRES",
-    "PCORRESU",
-    "PCSTRESC",
-    "PCSTRESN",
-    "PCSTRESU",
-    "PCSPEC",
-    "PCDTC",
-    "PCTPT",
-    "PCTPTNUM",
-]
-
-
-def nominal_hours(label):
-    if label == "PRE":
-        return "0"
-    if label == "UNSCHED":
-        return ""
-    if label.endswith("H"):
-        return str(Decimal(label[:-1]))
-    raise ValueError(f"Unexpected nominal label: {label!r}")
+import pandas as pd
 
 
 def main():
-    with (INPUT / "lab_transfer.csv").open(newline="", encoding="utf-8-sig") as handle:
-        source = list(csv.DictReader(handle))
-    source.sort(
-        key=lambda r: (
-            r["Protocol"],
-            r["Subject"],
-            datetime.fromisoformat(r["Collected"]),
-            r["Sample"],
-        )
+    source = pd.read_csv(
+        "/app/input/lab_transfer.csv", dtype=str, keep_default_na=False
     )
-    sequence = {}
-    records = []
-    for row in source:
-        key = (row["Protocol"], row["Subject"])
-        sequence[key] = sequence.get(key, 0) + 1
-        result = row["Result"]
-        if result != "BLQ":
-            Decimal(result)  # Validate numeric content without rounding it.
-        records.append(
-            dict(
-                zip(
-                    COLUMNS,
-                    [
-                        "PC",
-                        row["Protocol"],
-                        row["Subject"],
-                        sequence[key],
-                        row["Sample"],
-                        "ZX201",
-                        "ZX-201",
-                        result,
-                        "ng/mL",
-                        result,
-                        "" if result == "BLQ" else result,
-                        "ng/mL",
-                        "PLASMA",
-                        row["Collected"],
-                        row["Nominal"],
-                        nominal_hours(row["Nominal"]),
-                    ],
-                )
-            )
-        )
-    OUTPUT.mkdir(exist_ok=True)
-    with (OUTPUT / "pc.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
-        writer.writeheader()
-        writer.writerows(records)
+    source["_collection_time"] = pd.to_datetime(
+        source["Collected"], errors="raise", utc=True
+    )
+    source = source.sort_values(
+        ["Protocol", "Subject", "_collection_time", "Sample"], kind="stable"
+    )
+    result = pd.DataFrame(index=source.index)
+    result["DOMAIN"] = "PC"
+    result["STUDYID"] = source["Protocol"]
+    result["USUBJID"] = source["Subject"]
+    result["PCSEQ"] = source.groupby(["Protocol", "Subject"], sort=False).cumcount() + 1
+    result["PCREFID"] = source["Sample"]
+    result["PCTESTCD"] = "ZX201"
+    result["PCTEST"] = "ZX-201"
+    result["PCORRES"] = source["Result"]
+    result["PCORRESU"] = source["Unit"]
+    result["PCSTRESC"] = source["Result"]
+    # Preserve the reported numeric precision in the CSV, with BLQ left empty.
+    result["PCSTRESN"] = source["Result"].where(source["Result"].ne("BLQ"), "")
+    result["PCSTRESU"] = source["Unit"]
+    result["PCSPEC"] = "PLASMA"
+    result["PCDTC"] = source["Collected"]
+    result["PCTPT"] = source["Nominal"]
+
+    def planned_hours(label):
+        if label == "PRE":
+            return "0"
+        if label == "UNSCHED":
+            return ""
+        if label.endswith("H"):
+            hours = label[:-1]
+            float(hours)
+            return hours
+        raise ValueError(f"Unexpected nominal label: {label}")
+
+    result["PCTPTNUM"] = source["Nominal"].map(planned_hours)
+    Path("/app/output").mkdir(exist_ok=True)
+    result.to_csv("/app/output/pc.csv", index=False)
 
 
 if __name__ == "__main__":
