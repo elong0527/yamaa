@@ -82,6 +82,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("text_pad.json"),
     fixture!("text_replace.json"),
     fixture!("typed_csv_sources.json"),
+    fixture!("unique_key_equality.json"),
     fixture!("value_semantics.json"),
     fixture!("verification.json"),
     fixture!("window_drivers.json"),
