@@ -209,10 +209,10 @@ with open('/app/output/advs.csv', 'w', newline='') as h:
     assert result["checked"] and not result["passed"], result
 
 
-@pytest.mark.parametrize("fixed_tmax", [False, True], ids=["derived", "fixed-tmax"])
-def test_nca_transfer_reruns_require_supplied_estimates(tmp_path, fixed_tmax):
-    # Exercise the verifier orchestration: a fixture-specific TMAX still passes
-    # subject removal, but must fail when the supplied estimates change.
+@pytest.mark.parametrize("fixed", [None, "tmax", "units"])
+def test_nca_transfer_reruns_require_supplied_estimates_and_units(tmp_path, fixed):
+    # Seam: original and held-out results cannot expose fixture-fixed values;
+    # changed supplied estimates and units must reject those submissions.
     benchmark = ROOT / "benchmarks" / "sdtm-pp-pk-parameters"
     app = _app(tmp_path, benchmark)
     contract = build.contract_for(benchmark, "python")
@@ -220,11 +220,24 @@ def test_nca_transfer_reruns_require_supplied_estimates(tmp_path, fixed_tmax):
     text = text.replace("/app/", f"{app.as_posix()}/")
     reference = tmp_path / "reference.py"
     reference.write_text(text)
-    if fixed_tmax:
-        text = text.replace(
-            'estimate = row["Estimate"]',
-            'estimate = "1.00" if row["Parameter"] == "Tmax" else row["Estimate"]',
-        )
+    if fixed is not None:
+        output = app / "output" / contract["outputs"][0]["file"]
+        text += f"""
+import csv
+with open({str(output)!r}, newline="") as handle:
+    records = list(csv.DictReader(handle))
+for row in records:
+    if {fixed!r} == "tmax" and row["PPTESTCD"] == "TMAX":
+        row["PPORRES"] = row["PPSTRESC"] = "1.00"
+        row["PPSTRESN"] = "1"
+    if {fixed!r} == "units":
+        unit = {{"CMAX": "ng/mL", "TMAX": "h", "AUCLST": "h*ng/mL"}}[row["PPTESTCD"]]
+        row["PPORRESU"] = row["PPSTRESU"] = unit
+with open({str(output)!r}, "w", newline="") as handle:
+    writer = csv.DictWriter(handle, fieldnames=list(records[0]))
+    writer.writeheader()
+    writer.writerows(records)
+"""
     submitted = app / "output" / contract["script"]
     submitted.write_text(text)
     run = _run("python")
@@ -249,11 +262,14 @@ def test_nca_transfer_reruns_require_supplied_estimates(tmp_path, fixed_tmax):
         "original": True,
         "rerun": True,
         "held_out": (True, True),
-        "challenge": (True, not fixed_tmax),
+        "challenge": (True, fixed is None),
         "value_changes": [
-            {"file": "nca_transfer.csv", "columns": {"Estimate": 6, "ReferenceDose": 6}}
+            {
+                "file": "nca_transfer.csv",
+                "columns": {"Estimate": 6, "Unit": 6, "ReferenceDose": 6},
+            }
         ],
-        "passed": not fixed_tmax,
+        "passed": fixed is None,
     }, result
 
 
