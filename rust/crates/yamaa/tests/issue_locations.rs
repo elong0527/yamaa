@@ -685,10 +685,10 @@ fn a_parent_the_reader_refuses_locates_its_issue_in_that_parent() {
 
 /// Every negative benchmark whose failure belongs to its submission locates
 /// its first issue, as the memory route checks for every other negative. A
-/// submission composed here reads no saved artifact, so a case whose authored
-/// failure is in its transport files stops earlier, at the artifact it
-/// misses: such a path names a written artifact, not a node any file writes,
-/// and has no location.
+/// dataset-level submission issue names the composed dataset metadata rather
+/// than a positioned project node. A submission composed here also reads no
+/// saved artifact, so transport failures stop earlier at the missing artifact,
+/// which likewise has no authored location.
 #[test]
 fn every_submission_negative_locates_its_first_issue() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
@@ -739,6 +739,7 @@ fn every_submission_negative_locates_its_first_issue() {
     assert_eq!(
         unlocated,
         [
+            "negative-define-2-0-non-standard",
             "negative-transport-date-before-1582",
             "negative-transport-empty-dataset",
             "negative-transport-empty-string",
