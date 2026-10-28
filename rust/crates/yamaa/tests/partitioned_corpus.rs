@@ -27,11 +27,13 @@
 //! and saves exactly its expected files, each equal byte for byte. A negative
 //! benchmark's first issue, its entries' or else its submission's, holds
 //! every field its `expected/error.yaml` states, context included, and every
-//! issue equals the whole-table run's over the same staged files. A Parquet
+//! issue equals the whole-table run's, its staged path aside. A Parquet
 //! file has no byte guarantee (PARQUET-4), so it equals the whole-table run's
 //! file instead, which the hosts' conformance checks compare with the
-//! expected file's content. A submission composes from the saved artifacts,
-//! so partitions reach a Define or transport file only through the builds.
+//! expected file's content. Each engine builds in a staged copy of its own,
+//! so a later entry and the submission read the artifacts that engine's
+//! builds saved; a submission composes from them, so partitions reach a
+//! Define or transport file only through the builds.
 //!
 //! Each build is also read as a stream on the same engine (#3697, step
 //! 4), whose batches then hold one record each: a positive build's
@@ -466,11 +468,13 @@ fn partitioned_run(
     (run, partitions, false)
 }
 
-/// One engine's builds of a case, entry by entry, then its submission: the
-/// issues of each, in that order, the bytes of each file their saves wrote,
-/// by file name, whether the partitions admitted every build, and what a
-/// save or a stream showed wrong.
+/// One engine's builds of a case, entry by entry, then its submission, in a
+/// staged copy of its own, so each build and the submission read only the
+/// artifacts this chain saved: the issues of each, in that order, the bytes
+/// of each file their saves wrote, by file name, whether the partitions
+/// admitted every build, and what a save or a stream showed wrong.
 struct Chain {
+    staged: Scratch,
     partitions: Option<Partitions>,
     issues: Vec<Vec<Diagnostic>>,
     saved: BTreeMap<String, Vec<u8>>,
@@ -479,31 +483,73 @@ struct Chain {
 }
 
 impl Chain {
-    fn new(partitions: Option<Partitions>) -> Self {
-        Self {
+    /// A chain of `case` on `partitions`, or the whole table, in a fresh
+    /// staged copy; none where this platform cannot stage the case.
+    fn new(case: &Case, partitions: Option<Partitions>) -> Option<Self> {
+        let staged = Scratch::new("partitioned-corpus");
+        stage(&case.path, &staged).then(|| Self {
+            staged,
             partitions,
             issues: Vec::new(),
             saved: BTreeMap::new(),
             admitted: true,
             problems: Vec::new(),
+        })
+    }
+
+    /// Build `entry` in the chain's staged copy on the chain's engine: the
+    /// run, the entry's staged paths and the partitions it ran on.
+    fn build(
+        &mut self,
+        entry: &Entry,
+        token: &CancellationToken,
+    ) -> (yamaa::Run, Staged, Option<Partitions>) {
+        let entry = Staged::new(&self.staged, entry);
+        match self.partitions {
+            Some(partitions) => {
+                let (run, partitions, admitted) = partitioned_run(&entry, partitions, token);
+                self.admitted &= admitted;
+                (run, entry, Some(partitions))
+            }
+            None => {
+                let run = request(&engine(None), &entry, token).run().unwrap();
+                (run, entry, None)
+            }
         }
     }
 
-    /// Build `entry` on the chain's engine: the run, and the partitions it
-    /// ran on.
-    fn build(
-        &mut self,
-        entry: &Staged,
-        token: &CancellationToken,
-    ) -> (yamaa::Run, Option<Partitions>) {
-        match self.partitions {
-            Some(partitions) => {
-                let (run, partitions, admitted) = partitioned_run(entry, partitions, token);
-                self.admitted &= admitted;
-                (run, Some(partitions))
+    /// The issues as values, the chain's staged path written `<staged>`
+    /// wherever a location, message or context holds it, so chains staged
+    /// apart compare.
+    fn issue_values(&self) -> Vec<Vec<ContextValue>> {
+        fn unstaged(value: ContextValue, staged: &str) -> ContextValue {
+            match value {
+                ContextValue::Text(text) => ContextValue::Text(text.replace(staged, "<staged>")),
+                ContextValue::List(items) => ContextValue::List(
+                    items
+                        .into_iter()
+                        .map(|item| unstaged(item, staged))
+                        .collect(),
+                ),
+                ContextValue::Map(fields) => ContextValue::Map(
+                    fields
+                        .into_iter()
+                        .map(|(key, item)| (key, unstaged(item, staged)))
+                        .collect(),
+                ),
+                other => other,
             }
-            None => (request(&engine(None), entry, token).run().unwrap(), None),
         }
+        let staged = self.staged.to_str().unwrap();
+        self.issues
+            .iter()
+            .map(|issues| {
+                issues
+                    .iter()
+                    .map(|issue| unstaged(issue.to_value(), staged))
+                    .collect()
+            })
+            .collect()
     }
 
     /// Keep `run`'s issues, and save its output when it built one, as the
@@ -532,10 +578,10 @@ impl Chain {
         }
     }
 
-    /// Compose the submission `define` declares over the artifacts saved in
-    /// `staged`, keep its issues, and save it when it reports none.
-    fn submit(&mut self, staged: &Path, define: &Define, token: &CancellationToken) {
-        let project = staged.join(&define.project);
+    /// Compose the submission `define` declares over the artifacts this
+    /// chain saved, keep its issues, and save it when it reports none.
+    fn submit(&mut self, define: &Define, token: &CancellationToken) {
+        let project = self.staged.join(&define.project);
         let options = SubmissionOptions::new(yamaa::VERSION).with_created(define.created.as_str());
         let submission = engine(self.partitions)
             .project(project.to_str().unwrap())
@@ -556,8 +602,8 @@ impl Chain {
     }
 }
 
-/// A case's chains over one staged copy: on one-record partitions, whose
-/// problems hold what each build's stream showed, on key-bounded
+/// A case's chains, each in its own staged copy: on one-record partitions,
+/// whose problems hold what each build's stream showed, on key-bounded
 /// partitions, and over the whole table when the comparison needs it.
 struct Chains {
     one: Chain,
@@ -566,42 +612,35 @@ struct Chains {
 }
 
 /// Run `case` on each chain, or none where this platform cannot stage it.
-/// Every run of an entry, and its stream, comes before its saves write
-/// their files.
+/// In each chain, every entry's run, and its stream, comes before its save
+/// writes its files, and the next entry and the submission read the
+/// artifacts that chain saved.
 fn reproduce(case: &Case, token: &CancellationToken) -> Option<Chains> {
-    let scratch = Scratch::new("partitioned-corpus");
-    if !stage(&case.path, &scratch) {
-        return None;
-    }
     let keyed = Partitions::by_keys(NonZeroUsize::new(2).unwrap(), NonZeroUsize::MIN);
     let mut chains = Chains {
-        one: Chain::new(Some(Partitions::new(NonZeroUsize::MIN))),
-        keyed: Chain::new(Some(keyed)),
-        whole: case.needs_whole_table().then(|| Chain::new(None)),
+        one: Chain::new(case, Some(Partitions::new(NonZeroUsize::MIN)))?,
+        keyed: Chain::new(case, Some(keyed))?,
+        whole: match case.needs_whole_table() {
+            true => Some(Chain::new(case, None)?),
+            false => None,
+        },
     };
+    let Chains { one, keyed, whole } = &mut chains;
     for entry in &case.entries {
-        let entry = Staged::new(&scratch, entry);
-        let (run, partitions) = chains.one.build(&entry, token);
-        let (keyed_run, _) = chains.keyed.build(&entry, token);
-        let streamed = request(&engine(partitions), &entry, token)
+        let (run, staged, partitions) = one.build(entry, token);
+        let streamed = request(&engine(partitions), &staged, token)
             .stream()
             .unwrap();
-        let streaming = stream_problems(&run, streamed);
-        chains.one.problems.extend(streaming);
-        let whole_run = chains
-            .whole
-            .as_mut()
-            .map(|whole| whole.build(&entry, token).0);
-        chains.one.keep(run, token);
-        chains.keyed.keep(keyed_run, token);
-        if let (Some(whole), Some(run)) = (chains.whole.as_mut(), whole_run) {
-            whole.keep(run, token);
+        one.problems.extend(stream_problems(&run, streamed));
+        one.keep(run, token);
+        for chain in [&mut *keyed].into_iter().chain(whole.as_mut()) {
+            let (run, ..) = chain.build(entry, token);
+            chain.keep(run, token);
         }
     }
     if let Some(define) = &case.define {
-        let Chains { one, keyed, whole } = &mut chains;
         for chain in [one, keyed].into_iter().chain(whole.as_mut()) {
-            chain.submit(&scratch, define, token);
+            chain.submit(define, token);
         }
     }
     Some(chains)
@@ -626,13 +665,14 @@ fn states(stated: &ContextValue, reported: &ContextValue) -> bool {
 
 /// What differs between `chain` and what `case` states: a negative
 /// benchmark's first issue, and every issue, context included, against the
-/// whole-table run's over the same staged files; a positive benchmark's
-/// issues, none; and the files the chain saved, exactly the expected files.
+/// whole-table run's over its own copy of the same files; a positive
+/// benchmark's issues, none; and the files the chain saved, exactly the
+/// expected files.
 /// A negative benchmark without a submission states its issue alone: its
 /// builds save nothing, and, as for its corpus readers, no other expected
 /// file is compared.
-fn problems(case: &Case, chain: Chain, whole: Option<&Chain>) -> Vec<String> {
-    let mut problems = chain.problems;
+fn problems(case: &Case, chain: &Chain, whole: Option<&Chain>) -> Vec<String> {
+    let mut problems = chain.problems.clone();
     let first = chain.issues.iter().flatten().next();
     let stated = case.stated_issue();
     let compared = stated.is_none() || case.define.is_some();
@@ -642,7 +682,7 @@ fn problems(case: &Case, chain: Chain, whole: Option<&Chain>) -> Vec<String> {
                 let first = first.map(Diagnostic::to_value);
                 problems.push(format!("first issue {first:?}, stated {stated:?}"));
             }
-            if whole.is_some_and(|whole| whole.issues != chain.issues) {
+            if whole.is_some_and(|whole| whole.issue_values() != chain.issue_values()) {
                 problems.push("issues differ from the whole-table run's".into());
             }
         }
@@ -697,9 +737,9 @@ fn partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_funct
         if keyed.admitted {
             key_admitted.push(case.name.clone());
         }
-        let mut found = problems(&case, one, whole.as_ref());
+        let mut found = problems(&case, &one, whole.as_ref());
         found.extend(
-            problems(&case, keyed, whole.as_ref())
+            problems(&case, &keyed, whole.as_ref())
                 .into_iter()
                 .map(|problem| format!("key-bounded partitions: {problem}")),
         );
