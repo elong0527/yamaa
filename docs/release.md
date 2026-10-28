@@ -385,6 +385,15 @@ after the frozen ones. A file that uses a feature added in 1.N declares
 release may also raise a platform floor, such as the minimum Python, R or
 Rust, and its release notes announce it; a patch release never does.
 
+**A new conformance check is opt-in.** A 1.x release adds a CDISC
+conformance check only through a new optional field, which a file sets to
+ask for it. A new check is never a new refusal, nor a new row in the run
+report, for a file that an earlier 1.x release admitted, so the checks that
+refuse a file without such a field are exactly those of 0.7.0. A warning is
+no way around this: every condition has error severity (#3030 D28), a run
+report's rows are part of its frozen bytes, and a new condition comes only
+with a new feature, here the new field (#4064 D298).
+
 **What a patch release may change.** Defect fixes, documentation, packaging
 and platform support, and message text. A change that a repository such as
 CRAN asks for after a release moves every host to the same patch version
