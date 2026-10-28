@@ -3,6 +3,7 @@ use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     expression::SourceSpan,
+    limits::{LimitExceeded, Limits},
     table::ValueRef,
     value::Value,
 };
@@ -32,8 +33,9 @@ pub enum AdmissionError {
 pub enum MaterializeError {
     #[error("text template shape")]
     Shape,
-    #[error("text template output exceeds addressable size")]
-    Size,
+    /// A result longer than `Limits::TEXT_BYTES` (TEXT-4).
+    #[error("text template: {0}")]
+    Limit(LimitExceeded),
     #[error("text template output allocation failed")]
     Allocation,
 }
@@ -209,12 +211,13 @@ impl StringTemplate {
         ))
     }
     /// Values are in occurrence order, deliberately allowing repeated independent reads.
-    pub fn output_bytes(&self, values: &[Value]) -> Result<usize, MaterializeError> {
+    /// The total is none beyond the platform's lengths.
+    pub fn output_bytes(&self, values: &[Value]) -> Result<Option<usize>, MaterializeError> {
         if self.deferred.is_some() {
             return Err(MaterializeError::Shape);
         }
         let mut occurrence = 0;
-        let mut total = 0usize;
+        let mut total = Some(0usize);
         for part in &self.parts {
             let text = match part {
                 Part::Placeholder(_) => {
@@ -226,18 +229,19 @@ impl StringTemplate {
                 }
                 _ => self.literal(part).ok_or(MaterializeError::Shape)?,
             };
-            total = total
-                .checked_add(text.len())
-                .ok_or(MaterializeError::Size)?;
+            total = total.and_then(|total| total.checked_add(text.len()));
         }
         if occurrence != values.len() {
             return Err(MaterializeError::Shape);
         }
         Ok(total)
     }
-    /// Complete UTF-8 byte admission precedes the sole output allocation and copy.
+    /// Complete UTF-8 byte admission, which refuses a result longer than
+    /// `Limits::TEXT_BYTES`, precedes the sole output allocation and copy.
     pub fn materialize(&self, values: &[Value]) -> Result<String, MaterializeError> {
         let total = self.output_bytes(values)?;
+        Limits::text_bytes(total).map_err(MaterializeError::Limit)?;
+        let total = total.expect("an admitted length");
         let mut result = String::new();
         result
             .try_reserve_exact(total)

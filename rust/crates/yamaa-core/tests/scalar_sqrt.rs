@@ -950,11 +950,12 @@ mod scalar {
     }
     mod text_pad {
         use yamaa_core::{
+            limits::{LimitExceeded, Limits},
             temporal::{Date, DateTime, Precision},
-            text_pad::{DeclarationError, OutputError, StringPad},
+            text_pad::{DeclarationError, StringPad},
             value::{FiniteFloat, Value},
         };
-        fn pad(value: &Value, width: &str) -> Result<Value, OutputError> {
+        fn pad(value: &Value, width: &str) -> Result<Value, LimitExceeded> {
             StringPad::new("SRC.X", "columns.Y.derivation.str_pad", width)
                 .unwrap()
                 .prepare_text(value)
@@ -1017,7 +1018,11 @@ mod scalar {
             );
             assert_eq!(
                 pad(&Value::Str("".into()), &"9".repeat(81)),
-                Err(OutputError { required: None })
+                Err(LimitExceeded {
+                    resource: "text_bytes",
+                    limit: Limits::TEXT_BYTES,
+                    actual: None,
+                })
             );
         }
         /// Seam: a generated 100,000-character value padded unchanged.
@@ -1527,7 +1532,7 @@ mod scalar {
                 Value::Str("".into()),
             ];
             let expected = "\u{03a9}:e\u{0301}\u{1f642}\0/";
-            assert_eq!(op.output_bytes(&values).unwrap(), expected.len());
+            assert_eq!(op.output_bytes(&values).unwrap(), Some(expected.len()));
             assert_eq!(op.materialize(&values).unwrap(), expected);
             assert_eq!(
                 op.materialize(&[Value::Int(7), Value::Str("".into())]),

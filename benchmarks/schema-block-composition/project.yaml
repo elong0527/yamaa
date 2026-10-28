@@ -1,0 +1,22 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: PKG01
+  name: PKG01
+  description: Example study resubmitting its demographics dataset
+  protocol_name: PKG-01
+
+sdtm:
+  specs:
+    - spec_resubmission.yaml
+  standards:
+    - name: SDTMIG
+      version: "3.4"
+      status: Final
+  # The received metadata is reproduced as Define-XML 2.0, which is not a
+  # submission of the current data.
+  define: define.xml
+  define_version: "2.0.0"
+  context: Other
+  source_system_version: "1.0"

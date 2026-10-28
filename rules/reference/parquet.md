@@ -68,9 +68,18 @@ every `DOUBLE` bit-identical. An implementation writes uncompressed pages and
 adds no key-value metadata of its own beyond what the format requires.
 Conforming parquet artifacts are not required to have identical bytes.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-adapters/src/parquet_artifact/encode.rs::a_page_or_footer_its_size_field_cannot_count_is_refused`.
 
 An artifact that must be byte-identical uses the `csv` profile.
+
+A page header counts its page's bytes in a signed 32-bit integer, and the
+four bytes before the closing magic count the footer's bytes unsigned. The
+writer stores one column's values of 1,024 consecutive rows as one page and
+names every field in the footer once per row group, so a page holds at most
+2,147,483,647 bytes and the footer at most 4,294,967,295. An output whose page
+or footer would pass its count is refused as that limit, `parquet_page_bytes`
+or `parquet_footer_bytes`, and no file is saved, as an output over the output
+byte limit is refused as `output_bytes`.
 
 ## Reading
 

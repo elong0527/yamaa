@@ -6,7 +6,7 @@ use crate::json::Value as Json;
 use crate::{
     csv_precision::fixed_point,
     diagnostic::{ConditionCode as C, Diagnostic},
-    limits::Limits,
+    limits::{LimitExceeded, Limits},
     table::ValueRef,
     text_pad::StringPad,
     value::{FiniteFloat, Value},
@@ -31,9 +31,8 @@ pub struct StringDecimal {
     path: String,
     /// `decimals`, or none beyond the platform's lengths.
     decimals: Option<usize>,
-    /// The padding to `width`, and the width, or none beyond the platform's
-    /// lengths.
-    pad: Option<(StringPad, Option<usize>)>,
+    /// The padding to `width`.
+    pad: Option<StringPad>,
     missing: Option<Value>,
 }
 
@@ -50,10 +49,9 @@ pub enum Error {
     /// A source that is not a number.
     #[error("text decimal diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
-    /// Text longer than one saved file may hold, or than the platform can
-    /// allocate.
-    #[error("text decimal allocation")]
-    Allocation,
+    /// Text longer than `Limits::TEXT_BYTES`.
+    #[error("text decimal: {0}")]
+    Limit(LimitExceeded),
 }
 
 /// The sign of a canonical integer as the decoder writes it: `0`, digits
@@ -124,10 +122,7 @@ impl StringDecimal {
             return Err(Admission::Findings(findings));
         }
         let pad = width
-            .map(|width| {
-                let pad = StringPad::new(&source, &path, width).map_err(|_| Admission::Shape)?;
-                Ok((pad, width.parse().ok()))
-            })
+            .map(|width| StringPad::new(&source, &path, width).map_err(|_| Admission::Shape))
             .transpose()?;
         Ok(Self {
             decimals: decimals.parse().ok(),
@@ -166,9 +161,9 @@ impl StringDecimal {
     }
     /// Missing precedes the source's type. An `int` widens to the nearest
     /// binary64 (VALUE-8) before the one rounding, as a numeric operand of a
-    /// `float` result does. Text longer than one saved file may hold is
-    /// refused before it is built, whether its decimals or its width would
-    /// make it so.
+    /// `float` result does. Text longer than `Limits::TEXT_BYTES` is refused
+    /// before it is built, whether its decimals or its width would make it
+    /// so; the writing of the decimals does not count a length it refuses.
     pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
         let number = match value {
             ValueRef::Missing => return Ok(Step::Recovered),
@@ -181,21 +176,19 @@ impl StringDecimal {
             ValueRef::Date(_) => return Err(self.refusal("date")),
             ValueRef::DateTime(_) => return Err(self.refusal("datetime")),
         };
-        let decimals = self.decimals.ok_or(Error::Allocation)?;
-        let text = Value::Str(
-            fixed_point(number, decimals, Limits::OUTPUT_BYTES).map_err(|_| Error::Allocation)?,
-        );
-        let Some((pad, width)) = &self.pad else {
+        let uncounted =
+            || Error::Limit(Limits::text_bytes(None).expect_err("no uncounted text is admitted"));
+        let decimals = self.decimals.ok_or_else(uncounted)?;
+        let text =
+            Value::Str(fixed_point(number, decimals, Limits::TEXT_BYTES).map_err(|_| uncounted())?);
+        let Some(pad) = &self.pad else {
             return Ok(Step::Value(text));
         };
-        if width.is_none_or(|width| width > Limits::OUTPUT_BYTES) {
-            return Err(Error::Allocation);
-        }
         pad.prepare_text(&text)
-            .map_err(|_| Error::Allocation)?
+            .expect("text needs no conversion")
             .render()
             .map(Step::Value)
-            .map_err(|_| Error::Allocation)
+            .map_err(Error::Limit)
     }
     fn refusal(&self, actual: &str) -> Error {
         Error::Diagnostic(Self::input_diagnostic(&self.source, &self.path, actual))

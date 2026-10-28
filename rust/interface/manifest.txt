@@ -46,6 +46,7 @@ values.lint_finding.scalar_as_text
 values.lint_finding.unused_input_key
 values.lint_finding.equality_filter
 values.lint_finding.partial_restatement
+values.lint_finding.restated_inherited_value
 values.file_type.spec
 values.file_type.project
 values.file_type.codelists

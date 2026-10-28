@@ -22,6 +22,7 @@ mod issue_locations;
 mod language_header;
 mod lint;
 mod lint_inheritance;
+mod lint_restated;
 mod memory;
 mod memory_route;
 mod odm_input;

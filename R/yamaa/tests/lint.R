@@ -1,5 +1,6 @@
 # Installed yamaa_lint: the P-LINT-2 table, fixes, a partial restatement of an
-# inherited mapping, which reads the parent layer, and refusals. The lint's
+# inherited mapping and values restated as they are inherited, which read the
+# parent layer, and refusals. The lint's
 # complete suite is native (the adapters' and the facade's lint tests); Python
 # reads the same truth.
 library(yamaa)
@@ -52,18 +53,21 @@ expect_identical(read_text(path), truth[["fixed_yaml"]], "fix writes the proved 
 check_table(yamaa_lint(path), truth[["fixed_rows"]], "lint after fix")
 cat("fix rewrites the file and lists what remains\n")
 
-# A layer that restates its parent's row template without one derivation: the
-# finding reads the parent, and fix leaves the file as written.
-restatement <- truth[["partial_restatement"]]
-for (name in names(restatement[["files"]])) write_text(file.path(work, name), restatement[["files"]][[name]])
-child <- file.path(work, restatement[["file_name"]])
-for (fix in c(FALSE, TRUE)) {
-  label <- paste("partial restatement, fix =", fix)
-  check_table(yamaa_lint(child, fix = fix), restatement[["rows"]], label, restatement[["file_name"]])
-  expect_identical(read_text(child), restatement[["files"]][[restatement[["file_name"]]]],
-    paste(label, "leaves the file as written"))
+# A layer that restates its parent's row template without one derivation, and
+# one that writes values as it inherits them: the findings read the parent,
+# and fix leaves the file as written.
+for (key in c("partial_restatement", "restated_inherited_value")) {
+  restatement <- truth[[key]]
+  for (name in names(restatement[["files"]])) write_text(file.path(work, name), restatement[["files"]][[name]])
+  child <- file.path(work, restatement[["file_name"]])
+  for (fix in c(FALSE, TRUE)) {
+    label <- paste(key, "fix =", fix)
+    check_table(yamaa_lint(child, fix = fix), restatement[["rows"]], label, restatement[["file_name"]])
+    expect_identical(read_text(child), restatement[["files"]][[restatement[["file_name"]]]],
+      paste(label, "leaves the file as written"))
+  }
 }
-cat("a partial restatement is reported and fix leaves it\n")
+cat("a layer is compared with its parent and fix leaves it\n")
 
 write_text(path, truth[["specification_yaml"]])
 for (refusal in truth[["refusals"]]) {

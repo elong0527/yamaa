@@ -8,8 +8,9 @@
 # names that parent and includes it, and each refused parent raises its text
 # and rows (#3694). The resolve case compares the layers the entry composes, in
 # contribution order, the parent and include resources, the resolved columns,
-# the layer each named value comes from, and the fields the resolved
-# specification never holds (LAYER-14). Python's installed_include_fragments.py
+# the origin of each named value, its layer and the line and column it was
+# written at, and the fields the resolved specification never holds
+# (LAYER-14). Python's installed_include_fragments.py
 # checks the same truth.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
@@ -97,11 +98,18 @@ expect_identical(
 specification <- entry$specification
 expect_identical(vapply(specification$columns, function(column) column$name, ""),
   unlist(resolved$columns), "the resolved columns in dependency order")
+# An origin is compared whole, its fields by name; resolve() gives its line
+# and column as doubles, as every JSON number.
+by_name <- function(origin) origin[order(names(origin))]
 expect_identical(
-  lapply(names(resolved$declaring_sources), function(pointer)
-    entry$origins[[pointer]]$declaring_source),
-  lapply(unname(resolved$declaring_sources), located),
-  "the layer each named value comes from")
+  lapply(names(resolved$origins), function(pointer) by_name(entry$origins[[pointer]])),
+  lapply(unname(resolved$origins), function(origin) {
+    origin$declaring_source <- located(origin$declaring_source)
+    origin$line <- as.double(origin$line)
+    origin$column <- as.double(origin$column)
+    by_name(origin)
+  }),
+  "the origin of each named value: its layer, line and column")
 for (field in unlist(resolved$absent_fields)) {
   stopifnot_case(paste("the resolved specification holds no", field),
     "the field is absent" = !(field %in% names(specification)))
