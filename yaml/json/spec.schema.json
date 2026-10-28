@@ -2006,6 +2006,36 @@
           },
           "additionalProperties": false
         },
+        "decode": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/fragment.filtered_source",
+              "description": "Variable holding the coded value, or a filtered source carrying it (EXPR-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "filtered_source"
+            },
+            "codelist": {
+              "$ref": "#/$defs/identifier",
+              "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
+              "x-yamaa-kind": "identifier",
+              "x-yamaa-type": "identifier"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            },
+            "unmapped": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is present but no item of the codelist lists it; without it, such a source fails (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
         "cut": {
           "type": "object",
           "properties": {
@@ -4322,6 +4352,40 @@
           "required": [
             "source",
             "dict"
+          ],
+          "additionalProperties": false
+        },
+        "decode": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/filtered_source",
+              "description": "Variable holding the coded value, or a filtered source carrying it (EXPR-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "filtered_source"
+            },
+            "codelist": {
+              "$ref": "#/$defs/identifier",
+              "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
+              "x-yamaa-kind": "identifier",
+              "x-yamaa-type": "identifier"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            },
+            "unmapped": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is present but no item of the codelist lists it; without it, such a source fails (EXPR-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "codelist"
           ],
           "additionalProperties": false
         },

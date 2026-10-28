@@ -681,7 +681,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         relations::check_unobserved_filter_types(plan)?;
         checks::verify_output(self, &frame, secondary, records, observer)?;
         self.poll(super::resolved::Step::Order)?;
-        let order = checks::output_order(plan, &frame);
+        let order = checks::output_order(plan, &frame)?;
         let rows = order.len();
         // The frame becomes the dataset a column at a time, so the run never
         // holds its candidates and its output whole at once (#3870).

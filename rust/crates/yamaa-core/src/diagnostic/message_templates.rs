@@ -18,6 +18,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("codelist_partial_item_field", "codelist {codelist} declares {field} for some of its items but not all"),
     ("codelist_shape_invalid", "codelist {codelist} has an item list or item value its declaration does not admit"),
     ("codelist_type_mismatch", "column {column} binds codelist {codelist}, whose data type {codelist_data_type} its type {column_type} does not admit"),
+    ("codelist_without_decodes", "the decode at {spec_path} reads codelist {codelist}, which declares no decode"),
     ("conflicting_absence_policy", "the lookup of {dataset} declares an answer for absence together with require_match: true"),
     ("conflicting_origins", "column {column} declares a {origin_type} origin that conflicts with another of its origins"),
     ("conflicting_row_construction", "a root filter cannot be declared together with the rows {rows}"),

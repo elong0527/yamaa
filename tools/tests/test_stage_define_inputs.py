@@ -83,6 +83,15 @@ class DefineStage(unittest.TestCase):
             benchmarks = destination / "benchmarks"
             manifest = json.loads((benchmarks / "manifest.json").read_bytes())
             cases = {case["name"]: case for case in manifest["cases"]}
+            # A project's codelist files are staged at their paths from it.
+            for listed in ("codelists.yaml", "study/codelists.yaml"):
+                self.assertEqual(
+                    (benchmarks / "schema-codelist-replacement" / listed).read_bytes(),
+                    (
+                        ROOT / "benchmarks/schema-codelist-replacement" / listed
+                    ).read_bytes(),
+                    listed,
+                )
             self.assertEqual(cases["sdtm-dm-xpt"]["expected"], ["define.xml", "dm.xpt"])
             self.assertEqual(
                 cases["schema-transport-dataset-ndjson"]["expected"],

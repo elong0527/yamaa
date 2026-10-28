@@ -1,0 +1,11 @@
+phase: validation
+condition: duplicate_define_identifier
+spec_paths:
+  - codelists[0].name
+rule: CT-1
+context:
+  codelist: DCSREASP
+  field: name
+  name: Reason for Discontinuation
+  identifier: Reason for Discontinuation
+  environment_path: codelists[1]

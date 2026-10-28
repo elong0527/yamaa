@@ -983,9 +983,14 @@ class PublicDefine(unittest.TestCase):
                 directory = Path(
                     tempfile.mkdtemp(prefix=case["name"] + "-", dir=self.base)
                 )
-                for path in source.iterdir():
-                    if path.is_file():
-                        shutil.copy2(path, directory / path.name)
+                # The staged case, codelist files in their directories
+                # included, without its expected truth.
+                shutil.copytree(
+                    source,
+                    directory,
+                    ignore=shutil.ignore_patterns("expected"),
+                    dirs_exist_ok=True,
+                )
                 for name in case["published"]:
                     shutil.copy2(source / "expected" / name, directory / name)
                 result = yamaa.project(directory / case["project"]).submission(

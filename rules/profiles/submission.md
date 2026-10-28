@@ -267,13 +267,13 @@ reporting the column.
 ### SUB-8. A `str` column's length is a bound its completed values must meet, stated once
 
 A `length` on a `str` column is enforced: the column's completed values must
-contain at most `length` [Values](../values.md) scalar values, as
-[Verification](../verification.md)'s `max_length` requires. On a `str` column
-with a `max_length` verification, `length` is derived from the verification's
-`max` and need not be declared; declaring both is accepted when equal and
-rejected when different. A `length` on another column type is carried
-unchecked, and a declared bound is the document's `Length` only when no
-transport is requested ([SUB-24](#sub-24)).
+contain at most `length` Unicode scalar values
+([VALUE-11](../values.md#value-11)), as [Verification](../verification.md)'s
+`max_length` requires. On a `str` column with a `max_length` verification,
+`length` is derived from the verification's `max` and need not be declared;
+declaring both is accepted when equal and rejected when different. A `length`
+on another column type is carried unchecked, and a declared bound is the
+document's `Length` only when no transport is requested ([SUB-24](#sub-24)).
 
 Fails: `declared_length_conflict`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_declared_length_counts_unicode_scalar_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_entry_length_above_the_columns_max_length_conflicts_with_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_submission_length_above_the_columns_max_length_conflicts_with_it`.
@@ -283,7 +283,13 @@ state one bound, and the bound is checked once either way. A `length` and a
 `max_length` verification declaring different bounds on the same column fail
 validation with `declared_length_conflict`, reporting the column and both
 bounds. A `str` column with neither declaration, where [SUB-7](#sub-7) requires
-a length, fails as [SUB-7](#sub-7) states.
+a length, fails as [SUB-7](#sub-7) states. Where [SUB-7](#sub-7) admits
+neither, as for a `text` column under a transport, the column has no bound,
+only the published length [SUB-24](#sub-24) measures.
+
+The bound counts scalar values and the published length counts bytes, so for
+text outside ASCII a published length can exceed the declared `length` that
+every value meets ([SUB-24](#sub-24)).
 
 <a id="sub-26"></a>
 
@@ -811,7 +817,7 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-application
 |---|---|---|
 | a bare read: a `source`, an `odm` read or an `ONLY` pivot, directly or through a plain lookup | every type | none |
 | a literal | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
-| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_substr`, `str_replace`, `str_extract`, `str_template`, `to_date`, `date_text`, `dtc` or `duration_text`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
+| a recode: `mapping`, `decode`, `case`, `first_available`, `str_case`, `str_pad`, `str_substr`, `str_replace`, `str_extract`, `str_template`, `to_date`, `date_text`, `dtc` or `duration_text`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
 | anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
 
 An `ONLY` pivot is an `aggregate` whose `expr` is exactly `ONLY(<variable>)`,
@@ -1072,6 +1078,16 @@ contributes no value, and a missing value occupies no bytes. An `int` or
 `length` ([SUB-7](#sub-7)) has no bound, only its published length. Without a
 transport no artifact is read, and the declared `length` is the document's
 `Length`.
+
+The published length counts UTF-8 bytes, and the bound [SUB-8](#sub-8)
+enforces counts Unicode scalar values, so the two counts of a value differ
+only for text outside ASCII. Under `transport: xpt`, and under any transport
+with `context: Submission`, every published text value is printable ASCII
+([XPT-7](xpt.md#xpt-7)), one byte to each scalar value. Under
+`context: Other` a Dataset-JSON file carries any text, and a column's document
+`Length` and Dataset-JSON `length` can exceed its declared `length` while
+every value meets that bound: three ASCII letters and `U+00E9` are four scalar
+values within a `length` of 4, and five bytes of published length.
 
 <a id="sub-25"></a>
 

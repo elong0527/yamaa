@@ -591,11 +591,11 @@ fn catalog_fields(fields: &[Field], offset: usize) -> Vec<(&str, usize, Option<C
 }
 
 /// The catalog a donor plan over a joined record binds in: its fields as
-/// `output`, each of `kinds` where it has one type, and each side's name
-/// reading its own fields of the one record.
+/// `output`, each of `record_types` its field's result type, and each side's
+/// name reading its own fields of the one record.
 fn joined_catalog(
     output: &TableSchema,
-    kinds: &[Option<ColumnType>],
+    record_types: &[ResultType],
     sides: &[reference_binding::JoinedSide<'_>],
 ) -> Result<Catalog, BindError> {
     let outputs = output
@@ -609,7 +609,7 @@ fn joined_catalog(
     Ok(Catalog::compile_joined(&outputs, sides)
         .map_err(BindError::Catalog)?
         .with_record_derivation()
-        .with_record_kinds(kinds.to_vec()))
+        .with_record_types(record_types.to_vec()))
 }
 
 /// What the entries of one donor plan over a joined record bind in: the
@@ -674,7 +674,7 @@ type Plan = (IntermediateDerivations, Vec<ResultType>);
 fn donor_plan(
     width: usize,
     output: TableSchema,
-    kinds: Vec<Option<ColumnType>>,
+    record_types: Vec<ResultType>,
     assignments: Vec<Assignment>,
     handlers: Vec<crate::dataset::ConversionHandler>,
     typed_columns: Vec<usize>,
@@ -699,7 +699,7 @@ fn donor_plan(
         output,
         rows,
         assignments,
-        kinds,
+        record_types,
     )
     .with_conversion_handlers(handlers);
     IntermediateDerivations {
@@ -750,13 +750,13 @@ fn bind_values(
         kind: kind.layout(),
     }));
     let output = TableSchema::new(columns).map_err(|_| BindError::Internal)?;
-    let kinds: Vec<Option<ColumnType>> = fields
+    let record_types: Vec<ResultType> = fields
         .iter()
-        .map(|field| field.kind)
-        .chain(types.iter().map(|kind| kind.column_type()))
+        .map(|field| ResultType::declared(field.kind))
+        .chain(types.iter().copied())
         .collect();
     let side = catalog_fields(fields, 0);
-    let catalog = joined_catalog(&output, &kinds, &[(left, &side)])?;
+    let catalog = joined_catalog(&output, &record_types, &[(left, &side)])?;
     let entries = Entries {
         catalog: &catalog,
         output: &output,
@@ -779,7 +779,14 @@ fn bind_values(
         return Ok(None);
     }
     Ok(Some((
-        donor_plan(width, output, kinds, assignments, Vec::new(), Vec::new()),
+        donor_plan(
+            width,
+            output,
+            record_types,
+            assignments,
+            Vec::new(),
+            Vec::new(),
+        ),
         types,
     )))
 }
@@ -875,18 +882,18 @@ fn bind_derivations(
         operation_types.push(operation);
     }
     let output = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
-    let kinds: Vec<Option<ColumnType>> = joined
+    let record_types: Vec<ResultType> = joined
         .left_fields
         .iter()
         .chain(joined.right_fields)
-        .map(|field| field.kind)
-        .chain(field_types.iter().map(|kind| kind.column_type()))
+        .map(|field| ResultType::declared(field.kind))
+        .chain(field_types.iter().copied())
         .collect();
     let left = catalog_fields(joined.left_fields, 0);
     let right = catalog_fields(joined.right_fields, joined.left_fields.len());
     let catalog = joined_catalog(
         &output,
-        &kinds,
+        &record_types,
         &[(joined.left, &left), (joined.right, &right)],
     )?;
     let entries = Entries {
@@ -940,7 +947,14 @@ fn bind_derivations(
         .filter_map(|(index, derivation)| derivation.typed().map(|_| width + index))
         .collect();
     Ok(Some((
-        donor_plan(width, output, kinds, assignments, handlers, typed_columns),
+        donor_plan(
+            width,
+            output,
+            record_types,
+            assignments,
+            handlers,
+            typed_columns,
+        ),
         field_types,
     )))
 }
