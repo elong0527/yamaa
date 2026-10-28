@@ -106,7 +106,13 @@ def test_reference_derives_declared_measurement_inputs(tmp_path):
 
 @pytest.mark.parametrize(
     "language,fixed_units",
-    [("python", False), ("r", False), ("opensas", False), ("python", True)],
+    [
+        ("python", None),
+        ("r", None),
+        ("opensas", None),
+        ("python", "all"),
+        ("python", "missing"),
+    ],
 )
 @pytest.mark.parametrize(
     "benchmark,file,columns",
@@ -135,12 +141,13 @@ import csv
 with open("/app/output/pc.csv", newline="") as handle:
     records = list(csv.DictReader(handle))
 for row in records:
-    row["PCORRESU"] = row["PCSTRESU"] = "ng/mL"
+    if FIXED_ALL or not row["PCORRESU"]:
+        row["PCORRESU"] = row["PCSTRESU"] = "ng/mL"
 with open("/app/output/pc.csv", "w", newline="") as handle:
     writer = csv.DictWriter(handle, fieldnames=list(records[0]))
     writer.writeheader()
     writer.writerows(records)
-"""
+""".replace("FIXED_ALL", repr(fixed_units == "all"))
     result = _held_out_case(
         tmp_path,
         "reference",

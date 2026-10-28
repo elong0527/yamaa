@@ -50,6 +50,7 @@ from decimal import (
     Rounded,
     localcontext,
 )
+from itertools import cycle
 from pathlib import Path
 
 NULL_TOKENS = frozenset({"", "NA", "NaN", "nan", ".", "NULL", "None"})
@@ -66,7 +67,7 @@ HOLDOUT_INPUT_SUBJECTS = ("USUBJID", "SubjectKey", "SUBJID", "PATNUM", "Subject"
 HOLDOUT_EVERY = 3
 CHALLENGE_SEED = 20261001
 _DECLARED_INPUT_CHANGES: (
-    dict[str, tuple[frozenset[str], dict[str, dict[str, str]]]] | None
+    dict[str, tuple[frozenset[str], dict[str, dict[str, list[str]]]]] | None
 ) = None
 # How each track's script is run, and what counts as reaching for the other
 # language: running one of its programs in a shell call, or a bridge in the
@@ -1004,12 +1005,13 @@ def _rename_subjects(source: Path, target: Path, offset: int, suffix: str) -> bo
 
 
 def _declared_input_changes() -> dict[
-    str, tuple[frozenset[str], dict[str, dict[str, str]]]
+    str, tuple[frozenset[str], dict[str, dict[str, list[str]]]]
 ]:
     """Read per-benchmark scaling and text substitutions from one declaration.
 
     A list names measurement columns. A profile may additionally name exact
-    text substitutions, including an empty replacement for a missing unit.
+    text substitutions, cycling through each source value's replacements.
+    An empty replacement exercises a missing unit alongside changed units.
     The same file is staged beside the grader in every built verifier.
     Missing or malformed declarations fail closed.
     """
@@ -1049,9 +1051,13 @@ def _declared_input_changes() -> dict[
                 and all(
                     isinstance(before, str)
                     and before
-                    and isinstance(after, str)
-                    and before != after
-                    for before, after in values.items()
+                    and isinstance(replacements, list)
+                    and replacements
+                    and all(
+                        isinstance(after, str) and before != after
+                        for after in replacements
+                    )
+                    for before, replacements in values.items()
                 )
                 for column, values in substitutions.items()
             ):
@@ -1099,6 +1105,10 @@ def _perturb_values(
     declared, substitutions = _declared_input_changes().get(
         benchmark, (frozenset(), {})
     )
+    replacements = {
+        column: {before: cycle(values) for before, values in sources.items()}
+        for column, sources in substitutions.items()
+    }
     scalable = measurements | declared
     # A stored age group may be sponsor-defined. Without its rule, leave ages
     # unchanged across every joined input rather than create inconsistent groups.
@@ -1114,8 +1124,8 @@ def _perturb_values(
         if value is None or value == "":
             return value
         name = column.upper()
-        if isinstance(value, str) and value in substitutions.get(name, {}):
-            return substitutions[name][value]
+        if isinstance(value, str) and value in replacements.get(name, {}):
+            return next(replacements[name][value])
         if isinstance(value, (date, datetime)):
             return value + timedelta(days=date_shift)
         if isinstance(value, str):
