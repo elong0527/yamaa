@@ -98,18 +98,19 @@ expect_identical(
 specification <- entry$specification
 expect_identical(vapply(specification$columns, function(column) column$name, ""),
   unlist(resolved$columns), "the resolved columns in dependency order")
-# An origin is compared whole, its fields by name; resolve() gives its line
-# and column as doubles, as every JSON number.
+# An origin is compared whole, its fields by name; resolve() gives all four
+# coordinates as doubles, as every JSON number.
 by_name <- function(origin) origin[order(names(origin))]
 expect_identical(
   lapply(names(resolved$origins), function(pointer) by_name(entry$origins[[pointer]])),
   lapply(unname(resolved$origins), function(origin) {
     origin$declaring_source <- located(origin$declaring_source)
-    origin$line <- as.double(origin$line)
-    origin$column <- as.double(origin$column)
+    for (field in c("line", "column", "end_line", "end_column")) {
+      origin[[field]] <- as.double(origin[[field]])
+    }
     by_name(origin)
   }),
-  "the origin of each named value: its layer, line and column")
+  "the origin of each named value: its layer, start and end")
 for (field in unlist(resolved$absent_fields)) {
   stopifnot_case(paste("the resolved specification holds no", field),
     "the field is absent" = !(field %in% names(specification)))
