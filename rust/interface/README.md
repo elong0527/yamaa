@@ -112,7 +112,7 @@ result and lazy objects, S3 methods and private accessors) and
 `python/src/yamaa/_support.py` holds path conversion, lazy-object pickling and
 the version lookup, and `R/yamaa/R/api.R`
 holds the reply and argument conversions, the host-function capabilities and
-the locked-object helpers. Docstrings come from `doc`;
+the locked-object and table-memo helpers. Docstrings come from `doc`;
 R's help pages stay handwritten under `R/yamaa/man/`.
 
 Generated code only delegates, and the delegation is declared, never written:
@@ -149,6 +149,13 @@ An R object keeps each held value
 that an S3 method or a private accessor reaches in a hidden binding: its
 handle in `.handle`, and any other value under its own name with a leading
 dot, such as a lazy object's `.path` or a project-run member's `.name`.
+In R, a result's `property` that returns `table`, `optional_table` or
+`run_output` keeps the data frame its first read converted and answers later
+reads with it, until a `method` of the result, such as `save()`, runs; a NULL
+and a streamed run's output stream are read again on each read (#4071). A
+result and each member its `index` makes share that memo, which the result
+keeps in `.memo`, and the helpers in `api.R` drop it from an object restored
+from `saveRDS`.
 
 Every result, a class that holds a handle, also has R `names()` and `length()`
 S3 methods, which nothing declares (D44): the generator derives them. A result

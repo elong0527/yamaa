@@ -257,8 +257,11 @@ result, so it saves nothing, and asking for its result reports `cannot read
 <dataset>: operation cancelled`. Through another library's reader, Ctrl+C, or
 a project function's `KeyboardInterrupt` in Python and interrupt in R, ends
 the stream with that library's error. A run whose project functions run in
-the host is built only on the thread that called `run()`; read on another
-thread, its stream fails with `host_thread`.
+the host is built only on the thread that called `run()`. Read on another
+thread, its stream refuses the read with that library's error, whose message
+is `cannot read <dataset>: a run that can call project functions is built only
+on the thread that started it [host_thread]`. The refusal holds no issue and
+fails nothing: the thread that called `run()` can still read the stream.
 
 === "R"
 
@@ -458,9 +461,9 @@ issue count, and a submission counts its define.xml and transport files.
 In R, every result also has S3 methods: `print()` writes the lines and
 returns the result invisibly, `format()` returns them, `names()` lists the
 result's fields and methods, starting with `status`, as `names(run)` gives
-`"status" "output" "issues" "report" "save"`, and `length()` counts them. A
-project run's `names()` are its specifications, as `$names` gives them. In
-Python, `repr()` and `str()` return the printed text.
+`"status" "output" "issues" "report" "timings" "save"`, and `length()` counts
+them. A project run's `names()` are its specifications, as `$names` gives
+them. In Python, `repr()` and `str()` return the printed text.
 
 The labels of each printed line, their order and separators, the layout of
 the `first issue:` line and of a project run's member lines, and a table
@@ -562,6 +565,7 @@ adam:
   standards:
     - {name: ADaMIG, version: "1.3", status: Final}
   define: adam/define.xml
+  transport: dataset_json
 ```
 
 * `functions` lists the function files that declare the project functions
@@ -581,9 +585,10 @@ adam:
 * `codelists`, not used here, lists the codelists files the specifications
   bind ([Codelists and terminology](terminology.md)).
 * `study`, and each section's `standards` and `define`, are the metadata
-  define.xml needs; `transport` adds one Dataset-JSON (`dataset_json`, or
-  `dataset_ndjson` for its newline-delimited form) or SAS Transport (`xpt`)
-  file for each dataset
+  define.xml needs, and `transport` writes one Dataset-JSON (`dataset_json`,
+  or `dataset_ndjson` for its newline-delimited form) or SAS Transport
+  (`xpt`) file for each dataset. Under `context: Submission`, the default, a
+  section that composes define.xml must name its `transport`
   ([Create define.xml](#create-definexml-and-submission-datasets)).
 
 A function file declares one project function: its parameters, what it
@@ -775,11 +780,13 @@ dataset's `submission` metadata, and each of its output columns a `label` and
 lists them), as the
 [sdtm-dm-metadata](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-metadata.html)
 benchmark does; the short `sdtm/dm.yaml` above declares too little, and its
-submission fails with `submission_metadata_missing`. With
-`transport: dataset_json`, `transport: dataset_ndjson` or `transport: xpt` in
-a section, it also writes each saved dataset as one Dataset-JSON file, in its
-single-object or its newline-delimited form, or one SAS Transport version 5
-file next to define.xml.
+submission fails with `submission_metadata_missing`. Each section also names
+its `transport`, `dataset_json`, `dataset_ndjson` or `xpt`, and the submission
+writes each saved dataset as one Dataset-JSON file, in its single-object or
+its newline-delimited form, or one SAS Transport version 5 file next to
+define.xml. A section without `transport` fails with `missing_required_field`
+at it, unless it sets `context: Other` for a document that is not a
+submission, which then writes define.xml alone.
 Its `save()` writes each section's transport files, then its define.xml, and
 returns the paths it wrote. Its `created` is the creation time that the
 documents carry: the `created` you gave, or else the time the submission read
@@ -816,7 +823,7 @@ project function calls, before each section of a submission, and once in a
 save, after it has prepared every file and before it writes the first. The
 call returns no result and keeps nothing it built. Python raises the
 `KeyboardInterrupt` itself, and R signals its interrupt condition, as any
-interrupted R code does. A save writes every file it planned or none: one
+interrupted R code does. An interrupt never stops a save partway: one
 stopped this way writes nothing and leaves the result unsaved, so you can
 call `save()` again. A project function that raises `KeyboardInterrupt` or
 `SystemExit` in Python ends the whole call the same way. A run read as a
@@ -1177,7 +1184,7 @@ exits 1, since R and Python return the same issue.
 
 Press Ctrl+C, and `check`, `run` and `submission` stop at the engine's next
 checkpoint, as a call in R or Python does ([Interrupts](#interrupts)): the
-command prints nothing, and a save writes every file it planned or none. The
+command prints nothing, and an interrupt never stops a save partway. The
 other commands stop at once, so an interrupted `lint --fix`, which replaces
 each file whole, can leave some files fixed and others not. Either way, the
 process then ends as an interrupted program does, with none of the statuses

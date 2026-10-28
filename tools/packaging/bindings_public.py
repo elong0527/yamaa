@@ -15,7 +15,7 @@ with their members, the refusal error and the type tokens. From it
 Generated code only delegates. The handwritten rest stays where it was:
 Python's path conversion, lazy-object pickling and version lookup in
 ``python/src/yamaa/_support.py``; R's reply and argument
-conversions, host-function capabilities, locked-object
+conversions, host-function capabilities, locked-object and table-memo
 helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
 
 A class with ``hosts: [python]`` is a native class of ``yamaa._native`` that
@@ -130,6 +130,11 @@ _PROTOCOLS = {"__contains__", "__iter__", "__len__"}
 _R_LISTED = {"property", "method"}
 # The R generics every result has, listing and counting its names (D44).
 _R_NAMES = ("names", "length")
+# The return types of a table: a result's property of one keeps the data frame
+# it read, so a later read converts nothing until a method of the result runs
+# (#4071). R's helper keeps only a data frame: the NULL of a failed run and a
+# streamed run's output stream are read again each time.
+_R_KEPT = {"table", "optional_table", "run_output"}
 # The member kinds of a Python-only class: a property is a native getter, a
 # protocol or printing member a native special method spelled by `python`.
 _NATIVE_KINDS = {"property", "method", "protocol", "printing"}
@@ -1261,12 +1266,20 @@ class Public:
             if hold in bound
         ]
 
+    def _r_indexed(self, name):
+        """Whether a result has an `index` member, whose objects share its memo."""
+        return any(m["kind"] == "index" for m in self.classes[name]["members"])
+
     def _r_constructor(self, name):
         cls = self.classes[name]
         holds = [hold for hold, _ in self.holds(name)]
         handle = self._handle(name)
-        lines = [f".{_snake(name)} <- function({', '.join(holds)}) {{"]
-        lines += [f"  force({hold})" for hold in holds]
+        # A result's tables are kept in the memo of its handle, which a member
+        # made by its index shares (#4071).
+        params = [*holds, "memo = .memo()"] if handle else holds
+        forced = [*holds, "memo"] if handle else holds
+        lines = [f".{_snake(name)} <- function({', '.join(params)}) {{"]
+        lines += [f"  force({value})" for value in forced]
         if self.plans(name):
             lines.append("  plans <- NULL")
         lines.append("  object <- new.env(parent = emptyenv())")
@@ -1274,6 +1287,8 @@ class Public:
             f"  object${self._r_binding(name, hold)} <- {hold}"
             for hold in self._r_hidden(name)
         ]
+        if handle and self._r_indexed(name):
+            lines.append("  object$.memo <- memo")
         for member in cls["members"]:
             lines += self._r_member(name, member, handle)
         lines += [f'  .object(object, "{cls["r"]}")', "}"]
@@ -1285,9 +1300,16 @@ class Public:
         if kind not in {"property", "method"}:
             return []
         call, plans = self._r_call(member, name, what, handle=handle)
+        if handle and kind == "method":
+            # A result's method, such as save(), can change what its handle
+            # answers, so the memo starts again however the call ends.
+            call = _Call(".changing", ["memo", call])
         result = self._r_result(member, call, name, what, handle)
         if kind == "property":
-            prefix = f'  .read_only(object, "{member["name"]}", '
+            if handle and member["returns"] in _R_KEPT:
+                prefix = f'  .kept(object, "{member["name"]}", memo, '
+            else:
+                prefix = f'  .read_only(object, "{member["name"]}", '
             return _r_closure(prefix, "", result, "  ", ")")
         prefix = f"  object${member['name']} <- "
         signature = self._r_signature(member)
@@ -1315,6 +1337,9 @@ class Public:
                 made = self._r_construct(
                     member["returns"], None, name, member["args"], what, "native", {key}
                 )
+                # The member reads its container's handle, so it shares the
+                # container's memo, which the container's save() starts again.
+                made.arguments.append('get(".memo", envir = x, inherits = FALSE)')
                 names_member = next(m for m in cls["members"] if m["name"] == "names")
                 names, _ = self._r_call(names_member, name, what, handle="native")
                 token = _argument(member["args"][key], key)[0]

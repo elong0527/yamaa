@@ -15,15 +15,16 @@ Derive ADaM datasets from SDTM with one specification per output dataset. The
   `project.run("adam")` or `yamaa run project.yaml --section adam`, not one
   call per dataset; see the
   [R, Python and command-line API](api.md#project-execution)
-- keep study-owned orchestration and comparison code beside the study
-- verify equivalence of all data with a tolerance at 1e-10.
-- Equivalence means 100% of columns and 100% of cells match, with zero validation issues.
-- Keep comparison separate from study orchestration. Report matched and total
-  columns and cells per dataset, and exit nonzero on any mismatch.
-- Always verify the derivation against the latest yamaa repo before declaring equivalence.
+- keep study-owned orchestration and comparison code beside the study, and
+  the comparison separate from the orchestration
+- when the specs replace existing derivation programs, build with the yamaa
+  version the study pins and compare each dataset with the one those programs
+  produce, within the numeric tolerance the study states: report matched and
+  total columns and cells per dataset, and count any mismatch or validation
+  issue as a failure
 
-The original pilot source code may be read to understand intent, but
-the yamaa spec must be built as a robust and succinct yamaa spec.
+Existing programs show what each dataset means; write the spec from that
+intent rather than translating each program step by step.
 
 ## 1. Prerequisites
 
@@ -158,11 +159,11 @@ adam:
 Do not work around a missing language or runtime capability by committing
 multiple YAML files for one output dataset. Instead:
 
-1. Reduce the blocker to the smallest single-spec example and verify it against
-   the latest yamaa revision.
-2. If it still fails, prepare a yamaa GitHub issue with the `pilot-dry-run`
-   label, a public or invented reproduction, the diagnostic or timeout, and
-   the required before/after behavior. Follow the
+1. Reduce the blocker to the smallest single-spec example and check it with
+   the latest yamaa release.
+2. If it still fails, open a yamaa GitHub issue with the bug report or change
+   request form, a public or invented reproduction, the diagnostic or
+   timeout, and the required before/after behavior. Follow the
    [private-study feedback process](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#reporting-findings-from-private-studies)
    before publishing study-derived findings.
 3. Leave the output dataset out of the study run until that issue is resolved;

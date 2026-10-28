@@ -97,7 +97,7 @@ Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_resul
 | Expression | Class | Result type |
 | --- | --- | --- |
 | `str_pad`, `str_substr`, `str_decimal`, `str_extract`, `str_replace`, `str_template`, `str_case` | fixed | `str` |
-| `cut`, `precision`, `imputation_flag`, `baseline_flag`, `odm`, `dtc`, `date_text` | fixed | `str` |
+| `cut`, `decode`, `precision`, `imputation_flag`, `baseline_flag`, `odm`, `dtc`, `date_text` | fixed | `str` |
 | `row_number`, `rank`, `study_day`, `to_epoch_day`, `time_of_day`, `str_length` | fixed | `int` |
 | `round_half_away_from_zero`, `duration_value` | fixed | `float` |
 | `duration_text` | fixed | `str` |
@@ -351,6 +351,45 @@ Keys that collide after the fold fail validation with `ambiguous_dictionary`,
 reporting the folded key and the original entries. A non-ASCII value can match
 only the same non-ASCII scalar sequence, apart from ASCII letters that also
 occur in that sequence.
+
+<a id="expr-15"></a>
+
+### EXPR-15. decode replaces a coded source with its item's decode in a codelist the project file declares
+
+`decode` looks up `source` among the items of `codelist`, a codelist the
+project file declares ([CT-1](profiles/terminology.md#ct-1)), and returns the
+`decode` of the item whose `value` equals it. A missing source returns
+`missing`, or missing when it is omitted. A present source that no item lists
+returns `unmapped`, and fails without it. A codelist the project file does not
+declare, or one that declares no decode, fails validation before any input is
+read, and so does a specification checked or run without its project file
+([CT-13](profiles/terminology.md#ct-13)).
+
+Fails: `incompatible_input_type`, `unknown_codelist`, `codelist_without_decodes`.
+
+The source may be a filtered source carrying the variable with its range,
+filter, selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Its type
+is the one the codelist's `data_type` is held in, as
+[CT-8](profiles/terminology.md#ct-8) states for a bound column: `str` for a
+`text` codelist, `int` for an `integer` one and `float` for a `float` one; a
+source of any other type fails as `incompatible_input_type` when it binds. A
+present value matches the item whose `value` it equals by [Values](values.md)
+equality, without folding case, an `extended` item
+([CT-6](profiles/terminology.md#ct-6)) as any other, and the result is that
+item's `decode` text, so a `decode` is a `str` ([EXPR-14](#expr-14)).
+
+A codelist declares `decode` for every item or for none
+([CT-5](profiles/terminology.md#ct-5)). A `decode` whose codelist declares
+none, or is `external`, fails validation with `codelist_without_decodes` at
+its `codelist`, naming the codelist. One whose codelist the project file does
+not declare fails with `unknown_codelist`, as a column binding does under
+CT-1, and one checked or run without a project file fails with
+`project_binding_missing` at its `codelist` under CT-13.
+
+A missing source and an answered unlisted value are counted under `missing`
+and `unmapped` ([COLUMN-14](columns.md#column-14)), and a present value no
+item lists fails without `unmapped` as `unmapped_value`
+([COLUMN-10](columns.md#column-10)), as a `mapping` does.
 
 <a id="expr-13"></a>
 
