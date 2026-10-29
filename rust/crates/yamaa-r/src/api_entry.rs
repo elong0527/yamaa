@@ -4,7 +4,7 @@
 //! messages stay in Rust.
 //!
 //! Every function replies `list(value, error)`. `error` is `NULL` on success,
-//! otherwise `list(message, issues, paths)`, where `issues` is the issues data
+//! otherwise `list(message, issues, paths, state)`, where `issues` is the issues data
 //! frame (empty when the refusal carries none) and `paths` the files a refused
 //! save wrote before it stopped. Every function replies behind the interface
 //! gate, so it refuses until the handshake succeeds (`crate::interface`).
@@ -37,6 +37,8 @@ pub(crate) enum Refusal {
     Failure(Failure),
     /// The binding refused, with no issues.
     Message(String),
+    /// A handle or operation state refused the call.
+    State(String),
 }
 
 impl From<String> for Refusal {
@@ -56,7 +58,7 @@ impl From<&str> for Refusal {
 impl From<Failure> for Refusal {
     fn from(failure: Failure) -> Self {
         match failure.kind {
-            FailureKind::Cancelled => Self::Message("the call was cancelled".to_owned()),
+            FailureKind::Cancelled => Self::State("the call was cancelled".to_owned()),
             _ => Self::Failure(failure),
         }
     }
@@ -66,56 +68,53 @@ impl From<Failure> for Refusal {
 /// failure's text, `cannot read <subject>: ...`, with no issues, as the
 /// binding's other refusals.
 fn streamed(failure: Failure) -> Refusal {
-    Refusal::Message(failure.message)
+    Refusal::Failure(failure)
 }
 
 /// The refusal `error` as the reply's error. A refusal of this binding itself
-/// wrote nothing and carries the table of no issues, or `NULL` before the
-/// handshake, when the gate is still closed (D258).
-fn refused(error: Refusal, open: bool) -> List {
-    let (message, issues, paths) = match error {
-        Refusal::Failure(failure) => (failure.message, Some(failure.issues), failure.paths),
-        Refusal::Message(message) => {
-            let issues = open.then(|| yamaa::diagnostic::issues(&[]));
-            (message, issues, Vec::new())
+/// wrote nothing and carries an empty issues frame even before negotiation
+/// and after a conversion failure (#4077, reversing D258).
+fn refused(error: Refusal) -> List {
+    let (message, issues, paths, state) = match error {
+        Refusal::Failure(failure) => {
+            let state = matches!(
+                failure.kind,
+                FailureKind::Stream { .. } | FailureKind::Cancelled
+            );
+            (failure.message, failure.issues, failure.paths, state)
         }
+        Refusal::State(message) => (message, yamaa::diagnostic::issues(&[]), Vec::new(), true),
+        Refusal::Message(message) => (message, yamaa::diagnostic::issues(&[]), Vec::new(), false),
     };
-    let paths = Strings::from_values(&paths);
-    match issues.as_ref().map(crate::public_table::frame).transpose() {
-        Ok(issues) => list!(
-            value = NULL,
-            error = list!(
-                message = message,
-                issues = issues.unwrap_or_else(|| NULL.into_robj()),
-                paths = paths
-            )
+    let (message, issues) = match crate::public_table::frame(&issues) {
+        Ok(issues) => (message, issues),
+        Err(conversion) => (
+            format!("{message}; {conversion}"),
+            crate::public_table::frame(&yamaa::diagnostic::issues(&[]))
+                .expect("the fixed empty issues schema fits an R data frame"),
         ),
-        Err(conversion) => list!(
-            value = NULL,
-            error = list!(
-                message = format!("{message}; {conversion}"),
-                issues = NULL,
-                paths = paths
-            )
-        ),
-    }
+    };
+    list!(
+        value = NULL,
+        error = list!(
+            message = message,
+            issues = issues,
+            paths = Strings::from_values(&paths),
+            state = state
+        )
+    )
 }
 
-/// Reply with `run`'s value or refusal, behind the interface gate: until the
-/// handshake succeeds, the reply refuses with no issues.
+/// Reply with a value or a refusal, including issues even before negotiation.
 pub(crate) fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
-    let gate = crate::interface::gate();
-    let open = gate.is_ok();
-    answer(open, || {
-        gate?;
+    answer(|| {
+        crate::interface::gate()?;
         run()
     })
 }
 
-/// Reply with `run`'s value or refusal, containing a panic and keeping an
-/// interrupt the call observed; once the gate is `open`, a refusal carries
-/// the table of no issues. Only the handshake replies without the gate.
-pub(crate) fn answer(open: bool, run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
+/// Contain panics and retain interrupts; every ordinary refusal carries a frame.
+pub(crate) fn answer(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
     let scope = crate::interrupt::Scope::new();
     let result = catch_unwind(AssertUnwindSafe(run));
     if let Some(condition) = scope.take() {
@@ -123,8 +122,8 @@ pub(crate) fn answer(open: bool, run: impl FnOnce() -> std::result::Result<Robj,
     }
     match result {
         Ok(Ok(value)) => list!(value = value, error = NULL),
-        Ok(Err(error)) => refused(error, open),
-        Err(_) => refused("internal host boundary failure".into(), open),
+        Ok(Err(error)) => refused(error),
+        Err(_) => refused("internal host boundary failure".into()),
     }
 }
 
@@ -293,11 +292,11 @@ fn store(value: Value) -> std::result::Result<Robj, Refusal> {
 /// The value of `kind` an R external pointer holds; `what` names the kind in
 /// a refusal.
 fn held(robj: &Robj, kind: HandleKind, what: &str) -> std::result::Result<Rc<Value>, Refusal> {
-    let identity = address(robj)?;
+    let identity = address(robj).map_err(Refusal::State)?;
     HANDLES
         .with(|handles| handles.borrow().get(&identity).and_then(Weak::upgrade))
         .filter(|value| value.kind() == kind)
-        .ok_or_else(|| format!("unknown {what} handle").into())
+        .ok_or_else(|| Refusal::State(format!("unknown {what} handle")))
 }
 
 /// A result, unless another call holds it (D258): `noun` names its kind in
@@ -308,7 +307,7 @@ fn locked<'a, T>(
 ) -> std::result::Result<MutexGuard<'a, T>, Refusal> {
     value
         .try_lock()
-        .map_err(|_| format!("{noun} handle is in use or poisoned").into())
+        .map_err(|_| Refusal::State(format!("{noun} handle is in use or poisoned")))
 }
 
 /// Read the run an R external pointer holds with `read`. A streamed run
@@ -322,7 +321,7 @@ fn read_run<T>(
     match &*value {
         Value::Run(run) => read(&*locked(run, "run")?),
         Value::Streamed(run) => read(&*run.run().map_err(streamed)?),
-        _ => Err("unknown run handle".into()),
+        _ => Err(Refusal::State("unknown run handle".into())),
     }
 }
 
@@ -333,7 +332,7 @@ fn read_check<T>(
 ) -> std::result::Result<T, Refusal> {
     match &*held(handle, HandleKind::Check, "check")? {
         Value::Check(check) => Ok(read(&*locked(check, "check")?)),
-        _ => Err("unknown check handle".into()),
+        _ => Err(Refusal::State("unknown check handle".into())),
     }
 }
 
@@ -344,7 +343,7 @@ fn read_project_run<T>(
 ) -> std::result::Result<T, Refusal> {
     match &*held(handle, HandleKind::ProjectRun, "project run")? {
         Value::ProjectRun(runs) => read(&*locked(runs, "project run")?),
-        _ => Err("unknown project run handle".into()),
+        _ => Err(Refusal::State("unknown project run handle".into())),
     }
 }
 
@@ -364,7 +363,7 @@ fn read_submission<T>(
 ) -> std::result::Result<T, Refusal> {
     match &*held(handle, HandleKind::Submission, "submission")? {
         Value::Submission(submission) => Ok(read(&*locked(submission, "submission")?)),
-        _ => Err("unknown submission handle".into()),
+        _ => Err(Refusal::State("unknown submission handle".into())),
     }
 }
 
@@ -375,7 +374,7 @@ fn read_selftest<T>(
 ) -> std::result::Result<T, Refusal> {
     match &*held(handle, HandleKind::SelfTest, "selftest")? {
         Value::SelfTest(selftest) => read(selftest),
-        _ => Err("unknown selftest handle".into()),
+        _ => Err(Refusal::State("unknown selftest handle".into())),
     }
 }
 
@@ -672,7 +671,7 @@ fn run_output(handle: Robj) -> List {
         let run = match &*value {
             Value::Run(run) => return table(locked(run, "run")?.output()),
             Value::Streamed(run) => run,
-            _ => return Err("unknown run handle".into()),
+            _ => return Err(Refusal::State("unknown run handle".into())),
         };
         let output = match run.progress() {
             // A cancelled run's result refuses as cancelled.
@@ -718,7 +717,7 @@ fn run_save(handle: Robj) -> List {
         save(|token| match &*value {
             Value::Run(run) => Ok(locked(run, "run")?.save(token)?),
             Value::Streamed(run) => Ok(run.run().map_err(streamed)?.save(token)?),
-            _ => Err("unknown run handle".into()),
+            _ => Err(Refusal::State("unknown run handle".into())),
         })
     })
 }
@@ -873,7 +872,7 @@ fn project_run_save(handle: Robj) -> List {
         let value = held(&handle, HandleKind::ProjectRun, "project run")?;
         save(|token| match &*value {
             Value::ProjectRun(runs) => Ok(locked(runs, "project run")?.save(token)?),
-            _ => Err("unknown project run handle".into()),
+            _ => Err(Refusal::State("unknown project run handle".into())),
         })
     })
 }
@@ -945,7 +944,7 @@ fn submission_save(handle: Robj) -> List {
         let value = held(&handle, HandleKind::Submission, "submission")?;
         save(|token| match &*value {
             Value::Submission(submission) => Ok(locked(submission, "submission")?.save(token)?),
-            _ => Err("unknown submission handle".into()),
+            _ => Err(Refusal::State("unknown submission handle".into())),
         })
     })
 }
@@ -1017,6 +1016,11 @@ fn info(version: Raw) -> List {
 #[extendr]
 fn selftest_summary(handle: Robj) -> List {
     reply(|| read_selftest(&handle, |selftest| Ok(lines(&selftest.summary()))))
+}
+
+#[extendr]
+fn empty_issues() -> List {
+    reply(|| Ok(crate::public_table::frame(&yamaa::diagnostic::issues(&[]))?))
 }
 
 include!("generated/api_entry.rs");

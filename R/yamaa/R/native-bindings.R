@@ -189,6 +189,10 @@
   .Call(wrap__conditions)
 }
 
+.native_empty_issues <- function() {
+  .Call(wrap__empty_issues)
+}
+
 .native_info <- function(version) {
   .Call(wrap__info, version)
 }
@@ -224,7 +228,7 @@
 # The interface handshake (rust/interface/README.md): .onLoad sends this
 # request before any other native call, and a refusal stops the load.
 .interface_request <- list(
-  version = 2L,
+  version = 3L,
   required = c("structured_records", "arrow_c_stream", "plan_reuse"),
   optional = c("format_yaml", "format_parquet", "format_readstat", "format_odm")
 )

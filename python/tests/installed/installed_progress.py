@@ -235,7 +235,7 @@ class Progress(unittest.TestCase):
         )
 
     def test_a_progress_that_is_not_callable_is_refused(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(yamaa.Error):
             yamaa.spec(self.spec).run(progress="not callable")
 
 

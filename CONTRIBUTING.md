@@ -16,8 +16,8 @@ machine with at least 4 cores, 8 GB of memory and 32 GB of storage. The
 latest `tidyverse` image and adds Node.js LTS, Rust and uv through its
 container features; its [setup script](.devcontainer/setup.sh) then
 installs the latest stable Python through uv, the latest opensas Linux
-release and OpenCode, runs `make setup` and installs the R package from
-the same checkout into `~/R/library`. Setup compiles both
+release and the latest OpenCode v2, runs `make setup` and installs the R
+package from the same checkout into `~/R/library`. Setup compiles both
 bindings and can take several minutes; wait for **yamaa Codespace is ready**
 in the creation log. VS Code and new terminals use `python/.venv`. Then,
 from the repository root:

@@ -192,9 +192,9 @@ stopifnot("selecting from an absent project signals yamaa_error"=inherits(unread
 expect_identical(conditionMessage(unread),paste0("cannot select TEST: ",
   "absent-project.yaml does not exist [resource_path_missing, FILE-7]"),"selecting from an absent project")
 expect_identical(unread$issues,refused$issues,"the selection carries the project's issue")
-# Argument mistakes are ordinary errors, never yamaa_error.
+# Argument mistakes signal yamaa_error.
 argument <- tryCatch(yamaa_spec(NULL)$run(),error=identity)
-stopifnot("an argument mistake is an ordinary error"=inherits(argument,"error") && !inherits(argument,"yamaa_error"))
+stopifnot("an argument mistake is a package error"=inherits(argument,"error") && inherits(argument,"yamaa_error"))
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and project refusal passed\n")
 

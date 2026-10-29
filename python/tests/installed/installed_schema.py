@@ -61,9 +61,9 @@ class Schema(unittest.TestCase):
                 self.assertEqual(issue["context"], refusal["context"])
                 self.assertEqual(issue["spec_paths"], [])
 
-    def test_an_argument_that_is_not_text_is_a_type_error(self):
+    def test_an_argument_that_is_not_text_is_a_package_error(self):
         for value in (None, 1, b"spec", ["spec"]):
-            with self.subTest(value=value), self.assertRaises(TypeError):
+            with self.subTest(value=value), self.assertRaises(yamaa.Error):
                 yamaa.schema(value)
 
 
