@@ -13,10 +13,11 @@ header before changing what it checks.
 [Open a yamaa Codespace](https://codespaces.new/elong0527/yamaa) on a
 machine with at least 4 cores, 8 GB of memory and 32 GB of storage. The
 [dev container](.devcontainer/devcontainer.json) starts from Rocker's
-latest `tidyverse` image, and its [setup script](.devcontainer/setup.sh)
+latest `tidyverse` image and adds Node.js LTS, Rust and uv through its
+container features; its [setup script](.devcontainer/setup.sh) then
 installs the latest stable Python through uv, the latest opensas Linux
-release, OpenCode, Node.js LTS and Rust, then runs `make setup` and installs
-the R package from the same checkout into `~/R/library`. Setup compiles both
+release and OpenCode, runs `make setup` and installs the R package from
+the same checkout into `~/R/library`. Setup compiles both
 bindings and can take several minutes; wait for **yamaa Codespace is ready**
 in the creation log. VS Code and new terminals use `python/.venv`. Then,
 from the repository root:
@@ -530,8 +531,15 @@ it reads, and keep confidential material local.
    Confirm it on current main and the affected hosts.
 3. Draft the matching form from `.github/ISSUE_TEMPLATE/` outside a pushed
    checkout, with only public references and the synthetic run's output.
-4. Read the draft for participant or study identity, unpublished material,
-   internal paths or URLs and credentials; no screenshots or opaque
+4. Check the whole draft for disclosure, title, body, code blocks, file
+   names and links included: read it for participant or study identity,
+   unpublished material, internal paths or URLs and credentials, and scan
+   it mechanically against the reviewer's sensitive terms (sponsor,
+   compound, protocol, study identifiers, internal domains), kept in a
+   local file that is never committed or posted. Every hit is removed or
+   is a public link. The
+   [reviewer feedback recipe](automation/reviewer_feedback.md) is the
+   canonical procedure, with the scan commands. No screenshots or opaque
    attachments.
 5. Show the exact draft to your reviewer for accuracy and organizational
    approval before posting. Apply the same process to replies.
