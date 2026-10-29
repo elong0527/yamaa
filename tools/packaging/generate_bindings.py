@@ -707,7 +707,10 @@ def _method_names(block):
         elif depth == 0:
             match = pattern.match(block, i)
             if match:
-                names.append(match.group(1))
+                # PyO3 installs these as C GC slots, not Python attributes.
+                # Every Python-callable method still belongs in bindings.yaml.
+                if match.group(1) not in {"__traverse__", "__clear__"}:
+                    names.append(match.group(1))
                 i = match.end()
                 continue
         i += 1
