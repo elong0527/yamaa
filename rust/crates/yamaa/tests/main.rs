@@ -24,6 +24,7 @@ mod lint;
 mod lint_inheritance;
 mod lint_restated;
 mod memory;
+mod memory_inputs;
 mod memory_route;
 mod odm_input;
 mod partitioned_confinement;

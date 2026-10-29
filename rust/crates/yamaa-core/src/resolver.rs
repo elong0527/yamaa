@@ -60,6 +60,8 @@ pub enum Origin {
     /// Bytes the caller already built and holds, such as an artifact an
     /// earlier specification of a project run produced.
     Generated,
+    /// A caller-owned frame supplied for one declared input alias.
+    Memory,
 }
 
 /// What a capture read.

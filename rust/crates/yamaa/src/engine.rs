@@ -322,10 +322,11 @@ impl EngineOptions {
 
 /// One build or check request: the entry path or resolver reference plus an
 /// optional project file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Request<'a> {
     pub(crate) specification: &'a str,
     pub(crate) environment: Option<&'a str>,
+    pub(crate) inputs: Option<&'a std::collections::BTreeMap<String, crate::InputFrame>>,
 }
 
 impl<'a> Request<'a> {
@@ -334,6 +335,7 @@ impl<'a> Request<'a> {
         Self {
             specification,
             environment: None,
+            inputs: None,
         }
     }
 
@@ -404,7 +406,15 @@ impl Engine {
     ) -> Result<Build, Cancelled> {
         let (plan, compiled) = self.plan_reusing(plans, request, identity.as_ref(), observed);
         // A compilation has just captured the files it holds.
-        let build = plan.run_through(&self.shared, held, observed, token);
+        let build = plan.run_through(
+            &self.shared,
+            crate::internal::RunInputs {
+                held,
+                frames: request.inputs.cloned().unwrap_or_default(),
+            },
+            observed,
+            token,
+        );
         if compiled {
             self.keep(plans, request, identity, &plan);
         }

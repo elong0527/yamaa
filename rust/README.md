@@ -303,9 +303,10 @@ impl Engine {
 }
 
 #[non_exhaustive]
-pub struct SpecRequest<'a> { /* engine, path, project, plans, token */ }
+pub struct SpecRequest<'a> { /* engine, path, project, plans, token, inputs */ }
 
 impl<'a> SpecRequest<'a> {
+    pub fn inputs(self, inputs: impl IntoIterator<Item = (String, InputFrame)>) -> Self;
     pub fn project(mut self, project: &'a str) -> Self;       // none: alone
     pub fn reusing(mut self, plans: &'a Plans) -> Self;       // none: an empty holder
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;  // none: never
@@ -390,6 +391,14 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   cancellation fails either: a cancelled call fails as
   `FailureKind::Cancelled`, with no result and no issue, as every cancellable
   operation does.
+- `SpecRequest::inputs` overlays immutable `InputFrame` values by declared
+  alias, including aliases inherited from a parent. Unspecified inputs,
+  metadata and save targets use the configured resolver. Declared input types
+  still apply; an unknown alias fails the run with `value_not_permitted` at
+  `inputs.<alias>` before study access. The report input path is
+  `memory:<alias>` and its byte count is null. Reused plans retain no frames;
+  a deferred stream owns its overrides until it runs. Checks and resolution
+  ignore overrides. Project runs and the command line keep file inputs.
 - `SpecRequest::check_on(parent)` checks a fragment on the specification
   `parent` names, a caller path read as the request's own path is: the
   fragment composes as it would in a file that names `parent` as its parent,

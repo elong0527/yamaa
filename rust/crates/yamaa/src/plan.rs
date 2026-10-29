@@ -97,7 +97,7 @@ impl Plan {
     pub(crate) fn run_through(
         &self,
         shared: &EngineShared,
-        held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+        inputs: crate::internal::RunInputs,
         observed: &crate::progress::Observed<'_>,
         token: &CancellationToken,
     ) -> Build {
@@ -105,7 +105,7 @@ impl Plan {
             shared,
             &self.compiled.specification,
             &self.compiled.state,
-            held,
+            inputs,
             observed,
             token,
         )
@@ -122,11 +122,13 @@ impl Plan {
         observed: &crate::progress::Observed<'_>,
         token: &CancellationToken,
         rows: std::num::NonZeroUsize,
+        inputs: crate::internal::RunInputs,
     ) -> (Build, Option<crate::internal::PublicBatches>) {
         crate::internal::run_streamed(
             shared,
             &self.compiled.specification,
             &self.compiled.state,
+            inputs,
             observed,
             token,
             rows,

@@ -38,6 +38,30 @@ write_text <- function(path, text) {
   writeBin(charToRaw(enc2utf8(text)), path)
 }
 read_text <- function(path) rawToChar(readBin(path, "raw", n = file.info(path)$size))
+qualify_memory_file_fallback <- function() {
+  memory <- read_host_fixture(host_fixture_root, "memory-inputs")
+  case <- file.path(root, "memory-file-fallback")
+  dir.create(case)
+  for (name in names(memory$files)) write_text(file.path(case, name), memory$files[[name]])
+  spec <- yamaa_spec(file.path(case, memory$entry))
+  aliases <- unlist(memory$unknown$context$allowed, use.names = FALSE)
+  expected_inputs <- setNames(rep(list(memory$file_details), length(aliases)), aliases)
+  for (plan in c("compiled", "reused")) {
+    run <- spec$run()
+    run$save()
+    inputs <- run$report
+    inputs <- inputs[inputs$KIND == "input", , drop = FALSE]
+    details <- setNames(lapply(inputs$DETAILS, jsonlite::fromJSON, simplifyVector = FALSE), inputs$NAME)
+    details <- details[sort(names(details))]
+    expect_identical(
+      list(status = run$status, plan = plan_of(run), csv = read_text(file.path(case, "out.csv")), inputs = details),
+      list(status = "succeeded", plan = plan, csv = memory$file_csv, inputs = expected_inputs),
+      paste("alias override fixture retains file inputs with", plan, "plans")
+    )
+  }
+  cat("alias override fixture preserves file fallback, report provenance and plan reuse\n")
+}
+qualify_memory_file_fallback()
 refused <- function(code) inherits(tryCatch({ force(code); NULL }, yamaa_error = identity), "yamaa_error")
 # Issue rows compare with the shared parity truth through issue_truth()
 # (assert.R): a truth row names its file relative to the study's directory,

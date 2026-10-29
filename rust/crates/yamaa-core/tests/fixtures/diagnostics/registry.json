@@ -2,6 +2,46 @@
   "about": "The causes the registry walk reaches through one core entry point each, with no specification: an application's refusals (OUTPUT-8, FUNC-3 and the engine's own), a resource path that an input or a save target refuses (FILE-5, FILE-7, FILE-8, FILE-10), numeric evaluation (FORMULA-9, FORMULA-12, FORMULA-15, VALUE-5), value conversion (VALUE-3, VALUE-7, VALUE-15), the column checks of a verification (CHECK-5 to CHECK-9, SUB-11, SUB-13, SUB-26, CT-7), an invalid pattern (TEXT-6), rounding (FORMULA-16) and the extremes of sources that cannot be compared (VALUE-19). A numeric evaluation that fails names the failed node by its bytes in the expression, past any group around it, and by the operand steps that reach it; numeric text that VALUE-6 does not admit fails conversion to `int` and to `float` alike. A case whose walk compared a record in part names those fields, or those keys of its context, in compares.",
   "cases": [
     {
+      "case": "an_input_override_names_a_declared_alias",
+      "operation": "input_override",
+      "input": {
+        "alias": "SRC",
+        "allowed": [
+          "SRC",
+          "AUX"
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_unknown_input_override_names_the_available_aliases",
+      "operation": "input_override",
+      "input": {
+        "alias": "TYPO",
+        "allowed": [
+          "SRC",
+          "AUX"
+        ]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "SCHEMA-12",
+          "spec_paths": [
+            "inputs.TYPO"
+          ],
+          "context": {
+            "allowed": [
+              "AUX",
+              "SRC"
+            ],
+            "value": "TYPO"
+          }
+        }
+      ]
+    },
+    {
       "case": "a_failed_publication_names_its_target_at_the_output_path",
       "operation": "application_issue",
       "input": {"issue": "publication_failed", "target": "generated/producer.csv"},

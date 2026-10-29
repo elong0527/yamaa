@@ -46,14 +46,16 @@ impl HeldReport {
 /// read from the attempt; reporting never captures or decodes a source again.
 #[derive(Debug, Default)]
 pub(crate) struct RunFacts {
-    /// `(name, records, bytes)` for each source the attempt entered.
-    inputs: Vec<(String, Option<usize>, Option<usize>)>,
+    /// `(name, records, bytes, memory)` for each source the attempt entered.
+    inputs: Vec<(String, Option<usize>, Option<usize>, bool)>,
+    overridden: std::collections::BTreeSet<String>,
     templates: Vec<TemplateRows>,
 }
 impl RunFacts {
     pub(crate) fn captured<T: TableAccess>(
         sources: &[yamaa_core::specification_run::CapturedSource<T>],
         templates: &[TemplateRows],
+        overridden: &[&str],
     ) -> Self {
         Self {
             inputs: sources
@@ -63,10 +65,12 @@ impl RunFacts {
                         source.read.source.name.clone(),
                         source.table.as_ref().map(TableAccess::row_count),
                         source.snapshot.as_ref().map(|bytes| bytes.len()),
+                        source.read.origin == Some(yamaa_core::resolver::Origin::Memory),
                     )
                 })
                 .collect(),
             templates: templates.to_vec(),
+            overridden: overridden.iter().map(|alias| (*alias).to_owned()).collect(),
         }
     }
 }
@@ -392,18 +396,24 @@ fn facts(
         .sources()
         .iter()
         .map(|source| {
-            let (records, bytes) = observed
+            let (records, bytes, memory) = observed
                 .inputs
                 .iter()
-                .find(|(name, _, _)| name == &source.name)
-                .map_or((None, None), |&(_, records, bytes)| (records, bytes));
+                .find(|(name, _, _, _)| name == &source.name)
+                .map_or((None, None, false), |&(_, records, bytes, memory)| {
+                    (records, bytes, memory)
+                });
+            let memory = memory || observed.overridden.contains(&source.name);
             Ok(core::Input {
                 name: source.name.clone(),
-                path: run
-                    .document()
-                    .written_source_path(&source.name)
-                    .ok_or(Error::InvalidObservation)?
-                    .into(),
+                path: if memory {
+                    format!("memory:{}", source.name)
+                } else {
+                    run.document()
+                        .written_source_path(&source.name)
+                        .ok_or(Error::InvalidObservation)?
+                        .into()
+                },
                 profile: profile(source.profile),
                 // The producing specification as written, for an input that
                 // declares a producer link; a null schema declares none.
