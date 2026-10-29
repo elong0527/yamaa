@@ -63,7 +63,7 @@ format.yamaa_run <- function(x, ...) {
 
 .run_observations <- function(run, include_measurements = FALSE) {
   native <- get(".handle", envir = run, inherits = FALSE)
-  .reply(.native_run_observations(native, include_measurements))
+  .reply(.native_run_observations(native, .flag(include_measurements, "include_measurements")))
 }
 
 .member_run <- function(native, name, memo = .memo()) {
@@ -181,7 +181,13 @@ format.yamaa_submission <- function(x, ...) {
   object$run <- function(stream = FALSE, progress = NULL) {
     plans <<- .reply(.native_plans(plans))
     .run(.reply(.native_spec_run(
-      path, project, .version(), .capabilities(), plans, stream, .progress(progress, "progress")
+      path,
+      project,
+      .version(),
+      .capabilities(),
+      plans,
+      .flag(stream, "stream"),
+      .progress(progress, "progress")
     )))
   }
   .object(object, "yamaa_spec")
@@ -282,7 +288,9 @@ yamaa_read_odm <- function(source, archive_member = NULL, max_archive_members = 
   ))
 }
 
-yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.paths(paths, "paths"), fix))
+yamaa_lint <- function(paths, fix = FALSE) {
+  .reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix")))
+}
 
 yamaa_schema <- function(file_type) .reply(.native_schema(.text(file_type, "file_type")))
 

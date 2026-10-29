@@ -56,7 +56,7 @@ class RenderingTests(unittest.TestCase):
     def test_python_delegates_each_member_to_its_operation(self):
         text = self.public.render_python([])
         for expected in (
-            "            _native._spec_run(self._path, self._project, self._plans, stream, progress)\n",
+            '            _native._spec_run(\n                self._path,\n                self._project,\n                self._plans,\n                _flag(stream, "stream"),\n                progress,\n            )\n',
             'return Spec(_native._project_spec(self._path, _text(name, "name")), self._path)',
             "return self._native.output(self._name)",
             "        return self._native.save()\n",
@@ -291,9 +291,11 @@ class RenderingTests(unittest.TestCase):
     def test_a_path_list_converts_each_path_in_both_hosts(self):
         python = self.public.render_python([])
         self.assertIn("def lint(paths, fix: bool = False) -> Table:", python)
-        self.assertIn("return _native._lint(_fspaths(paths), fix)", python)
         self.assertIn(
-            'yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.paths(paths, "paths"), fix))',
+            'return _native._lint(_fspaths(paths), _flag(fix, "fix"))', python
+        )
+        self.assertIn(
+            'yamaa_lint <- function(paths, fix = FALSE) {\n  .reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix")))\n}',
             self.public.render_r([]),
         )
 
@@ -308,7 +310,7 @@ class RenderingTests(unittest.TestCase):
             'yamaa_project <- function(path) .project(.path(path, "path"))',
             '    .path(source, "source"),\n'
             '    .optional_text(archive_member, "archive_member"),\n',
-            '.reply(.native_lint(.paths(paths, "paths"), fix))',
+            '.reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix")))',
             '      path, project, .optional_path(parent, "parent"), .version(), '
             '.progress(progress, "progress")\n',
             '    .spec(.text(.reply(.native_project_spec(path, .text(name, "name"), '
@@ -334,7 +336,7 @@ class RenderingTests(unittest.TestCase):
             "def schema(file_type: str) -> str:\n"
             '    """The JSON Schema of a file type, spec, project, codelists or '
             'function, as canonical JSON text."""\n'
-            "    return _native._schema(file_type)\n",
+            '    return _native._schema(_text(file_type, "file_type"))\n',
             python,
         )
         self.assertIn(
@@ -370,6 +372,7 @@ class RenderingTests(unittest.TestCase):
 
         expected = [
             "__version__",
+            "_flag",
             "_fspath",
             "_fspaths",
             "_Lazy",
@@ -387,7 +390,8 @@ class RenderingTests(unittest.TestCase):
         with patch.object(public, "_PY_WIDTH", 60):
             narrow = public.Public(self.definition).render_python([])
         self.assertIn(
-            "from yamaa._support import (\n    __version__,\n    _fspath,\n", narrow
+            "from yamaa._support import (\n    __version__,\n    _flag,\n    _fspath,\n",
+            narrow,
         )
 
     def test_a_removed_function_leaves_both_hosts_and_the_namespace(self):

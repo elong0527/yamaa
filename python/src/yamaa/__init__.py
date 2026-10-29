@@ -81,6 +81,7 @@ _negotiate(_native)
 from yamaa._native import Error, StateError, Table  # noqa: E402
 from yamaa._support import (  # noqa: E402
     __version__,
+    _flag,
     _fspath,
     _fspaths,
     _Lazy,
@@ -327,7 +328,13 @@ class Spec(_Lazy):
     def run(self, *, stream: bool = False, progress=None) -> Run:
         """Build the dataset in memory, or with stream as its output is read; `progress` is called with each progress event."""
         return Run(
-            _native._spec_run(self._path, self._project, self._plans, stream, progress)
+            _native._spec_run(
+                self._path,
+                self._project,
+                self._plans,
+                _flag(stream, "stream"),
+                progress,
+            )
         )
 
     def __repr__(self) -> str:
@@ -432,12 +439,12 @@ def read_odm(
 
 def lint(paths, fix: bool = False) -> Table:
     """Lint yamaa files, first applying the proved fixes when fix is true."""
-    return _native._lint(_fspaths(paths), fix)
+    return _native._lint(_fspaths(paths), _flag(fix, "fix"))
 
 
 def schema(file_type: str) -> str:
     """The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text."""
-    return _native._schema(file_type)
+    return _native._schema(_text(file_type, "file_type"))
 
 
 def conditions() -> Table:

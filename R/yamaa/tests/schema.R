@@ -51,7 +51,7 @@ cat("any other text signals yamaa_error naming the condition\n")
 
 for (file_type in list(NA_character_, c("spec", "project"), character(), 1, NULL)) {
   error <- tryCatch(yamaa_schema(file_type), error = identity)
-  stopifnot_case(paste("the argument", deparse(file_type)), "the mistake is an ordinary error" =
-    inherits(error, "error") && !inherits(error, "yamaa_error"))
+  stopifnot_case(paste("the argument", deparse(file_type)), "the mistake is a package error" =
+    inherits(error, "error") && inherits(error, "yamaa_error"))
 }
 cat("file_type must be one non-missing character string\n")

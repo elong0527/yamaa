@@ -190,6 +190,7 @@ qualify_signatures <- function() {
       argument_failure(yamaa_project(value))
       argument_failure(yamaa_read_odm(value))
     }
+    argument_failure(yamaa_schema(value))
     argument_failure(project$spec(value))
     if (!is.null(value)) {
       argument_failure(project$run(value))
@@ -197,6 +198,10 @@ qualify_signatures <- function() {
       argument_failure(project$submission(created = value))
       argument_failure(yamaa_read_odm(file.path(root, "absent.xml"), archive_member = value))
     }
+  }
+  for (value in list(NULL, 7L, NA, character(), list())) {
+    argument_failure(spec$run(stream = value))
+    argument_failure(yamaa_lint(file.path(root, "absent.yaml"), fix = value))
   }
   byte_path <- rawToChar(as.raw(233L)); Encoding(byte_path) <- "bytes"
   argument_failure(yamaa_spec(byte_path))

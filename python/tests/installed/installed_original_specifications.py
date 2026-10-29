@@ -2354,7 +2354,7 @@ columns:
         with self.assertRaises(yamaa.Error):
             result.save()
         for function in (yamaa.spec, yamaa.project):
-            with self.assertRaises(TypeError):
+            with self.assertRaises(yamaa.Error):
                 function(None)
 
     def test_public_self_donors_use_only_completed_templates_and_preserve_full_phase_refusal(

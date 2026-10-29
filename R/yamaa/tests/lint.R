@@ -85,8 +85,8 @@ cat("refusals signal yamaa_error naming the condition\n")
 
 for (paths in list(character(), NA_character_, 1)) {
   error <- tryCatch(yamaa_lint(paths), error = identity)
-  stopifnot_case(paste("paths", deparse(paths)), "the mistake is an ordinary error" =
-    inherits(error, "error") && !inherits(error, "yamaa_error"))
+  stopifnot_case(paste("paths", deparse(paths)), "the mistake is a package error" =
+    inherits(error, "error") && inherits(error, "yamaa_error"))
 }
 cat("paths must be a non-empty character vector\n")
 unlink(work, recursive = TRUE)

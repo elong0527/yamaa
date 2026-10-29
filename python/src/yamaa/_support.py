@@ -45,6 +45,12 @@ def _optional_text(value, what):
     return None if value is None else _text(value, what)
 
 
+def _flag(value, what):
+    if not isinstance(value, bool):
+        raise _native.Error(f"{what} must be a Boolean", _native._empty_issues(), [])
+    return value
+
+
 def _fspaths(paths) -> list[str]:
     """One path or a list of paths, each as a string."""
     if isinstance(paths, (str, PathLike)):
