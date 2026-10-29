@@ -901,24 +901,6 @@ def _render_r_wrappers(definition):
 # --- Rendering -------------------------------------------------------------------
 
 
-def _split_rendered_args(args):
-    parts = []
-    depth = 0
-    current = []
-    for char in args:
-        if char in "[(":
-            depth += 1
-        elif char in "])":
-            depth -= 1
-        if char == "," and depth == 0:
-            parts.append("".join(current).strip())
-            current = []
-        else:
-            current.append(char)
-    parts.append("".join(current).strip())
-    return parts
-
-
 def _stub_def(name, args, returns, indent):
     """Render one stub definition the way ruff format lays it out (88 cols)."""
     single = f"{indent}def {name}({args}) -> {returns}: ..."
@@ -932,7 +914,7 @@ def _stub_def(name, args, returns, indent):
             f"{indent}) -> {returns}: ...",
         ]
     lines = [f"{indent}def {name}("]
-    lines += [f"{inner}{part}," for part in _split_rendered_args(args)]
+    lines += [f"{inner}{part}," for part in bindings_public._split_rendered_args(args)]
     lines.append(f"{indent}) -> {returns}: ...")
     return lines
 

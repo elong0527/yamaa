@@ -35,6 +35,14 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "function_file_scalars" => function_file_scalars(input),
         "incomparable_sources" => incomparable_sources(input),
         "input_resource" => input_resource(input),
+        "input_frame" => {
+            input.closed(&["alias", "code", "value"]);
+            vec![yamaa_core::diagnostic::input_frame(
+                text(input, "alias"),
+                text(input, "code"),
+                text(input, "value"),
+            )]
+        }
         "input_override" => {
             input.closed(&["alias", "allowed"]);
             let allowed = input

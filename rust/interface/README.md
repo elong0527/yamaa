@@ -50,7 +50,7 @@ symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
 the edge, and the `boundary` import's version role to
 `yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
-The boundary version, now 6 for retained progress causes, is the single source for both hosts:
+The boundary version, now 7 for Python input frames, is the single source for both hosts:
 the generator writes it into each host's request, and neither keeps a
 separately maintained copy. `format_version` versions the IDL grammar only.
 
@@ -64,6 +64,9 @@ YAML tags, mapping keys that are not text (only the command line's exit
 statuses are integers), unknown type tokens, duplicate exports, invalid Rust
 paths, unresolved imports and operation references to absent exports.
 Argument mapping order is positional order; sequence order is emission order.
+An optional public argument with a `None` default is emitted only on the hosts
+its type projects; adding its other host projection later makes that argument
+available there without a second declaration.
 Strings contain identifiers, types and prose, never executable generator
 snippets. The R group's `module` supplies the implementation path for its
 functions; the root `yamaa` group's function is defined in the crate root. The
