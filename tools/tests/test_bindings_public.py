@@ -23,6 +23,29 @@ class RenderingTests(unittest.TestCase):
         self.definition = generator._load_definition()
         self.public = public.Public(self.definition)
 
+    def test_an_optional_argument_follows_its_hosts_type_projection(self):
+        run = member(self.definition, "Spec", "run")
+        python = ast.parse(self.public.render_python([]))
+        spec = next(
+            node
+            for node in python.body
+            if isinstance(node, ast.ClassDef) and node.name == "Spec"
+        )
+        method = next(
+            node
+            for node in spec.body
+            if isinstance(node, ast.FunctionDef) and node.name == "run"
+        )
+        self.assertIn("inputs", [arg.arg for arg in method.args.kwonlyargs])
+        self.assertEqual(
+            self.public._r_signature(run), "stream = FALSE, progress = NULL"
+        )
+        self.public.public["types"]["input_frames"]["r"] = "named list or NULL"
+        self.assertEqual(
+            self.public._r_signature(run),
+            "stream = FALSE, progress = NULL, inputs = NULL",
+        )
+
     def test_python_exports_the_declared_names(self):
         names = [
             "Error",
@@ -56,7 +79,7 @@ class RenderingTests(unittest.TestCase):
     def test_python_delegates_each_member_to_its_operation(self):
         text = self.public.render_python([])
         for expected in (
-            '            _native._spec_run(\n                self._path,\n                self._project,\n                self._plans,\n                _flag(stream, "stream"),\n                progress,\n            )\n',
+            '            _native._spec_run(\n                self._path,\n                self._project,\n                self._plans,\n                _flag(stream, "stream"),\n                progress,\n                inputs,\n            )\n',
             'return Spec(_native._project_spec(self._path, _text(name, "name")), self._path)',
             "return self._native.output(self._name)",
             "        return self._native.save()\n",

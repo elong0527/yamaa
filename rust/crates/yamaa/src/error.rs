@@ -196,6 +196,21 @@ pub struct TableError {
 }
 
 impl TableError {
+    /// Attach a frame import failure to the specification operation and its
+    /// input alias. Both hosts use this diagnostic projection: a validation
+    /// `value_not_permitted` at `inputs.<alias>`, retaining the stable table
+    /// code and complete import message, with no files written.
+    pub fn at_input(self, specification: &str, alias: &str) -> Failure {
+        Failure::from_issues(
+            Action::Read(specification),
+            &[yamaa_core::diagnostic::input_frame(
+                alias,
+                self.code,
+                &self.message,
+            )],
+        )
+    }
+
     /// Return the stable table failure code.
     pub fn code(&self) -> &'static str {
         self.code

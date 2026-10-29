@@ -54,6 +54,7 @@ _PY_ANNOTATION = {
     "optional_text": "str | None",
     # A progress callback, which the native call checks (#3762).
     "progress": None,
+    "input_frames": "dict[str, object] | None",
     "count": "int",
     "flag": "bool",
     "names": "list[str]",
@@ -95,6 +96,7 @@ _ARGUMENT_TOKENS = {
     "text",
     "optional_text",
     "progress",
+    "input_frames",
     "count",
     "flag",
     "file_type",
@@ -104,6 +106,7 @@ _DEFAULTS = {
     "optional_path": {"None"},
     "optional_text": {"None"},
     "progress": {"None"},
+    "input_frames": {"None"},
     "schema_request": {"None"},
     "flag": {"false", "true"},
     "count": None,  # a nonnegative integer
@@ -435,7 +438,12 @@ class Public:
             if not _NAME.fullmatch(argument):
                 raise ValueError(f"{what} has an invalid argument name: {argument!r}")
             token, default = _argument(spec, f"{what}.{argument}")
-            self._token(token, f"{what}.{argument}", python_only)
+            host_optional = (
+                default == "None"
+                and token in self.public["types"]
+                and "r" not in self.public["types"][token]
+            )
+            self._token(token, f"{what}.{argument}", python_only or host_optional)
             if default is None and defaults:
                 raise ValueError(
                     f"{what}.{argument} without a default follows one with"
@@ -1168,6 +1176,14 @@ class Public:
 
     # --- R -------------------------------------------------------------------------
 
+    def _r_args(self, entry):
+        """Optional arguments are emitted only for their type's host projection."""
+        return {
+            name: spec
+            for name, spec in entry.get("args", {}).items()
+            if "r" in self.public["types"][_argument(spec, name)[0]]
+        }
+
     def _r_argument(self, name, token):
         helper = _R_ARGUMENT.get(token)
         return _Call(helper, [name, f'"{name}"']) if helper else name
@@ -1177,8 +1193,7 @@ class Public:
         _, reference = self._operation(entry["calls"], what)
         target = self.r_functions[reference]
         args = {
-            name: _argument(spec, what)[0]
-            for name, spec in entry.get("args", {}).items()
+            name: _argument(spec, what)[0] for name, spec in self._r_args(entry).items()
         }
         values, used, plans = [], set(), False
         for native in target["args"]:
@@ -1249,7 +1264,7 @@ class Public:
         returns = entry["returns"]
         if returns in self.classes:
             return self._r_construct(
-                returns, call, class_name, entry.get("args", {}), what, handle
+                returns, call, class_name, self._r_args(entry), what, handle
             )
         # A method that writes returns its result invisibly, as `save()` does.
         if returns in {"nothing", "paths_written"}:
@@ -1258,7 +1273,7 @@ class Public:
 
     def _r_signature(self, entry):
         parts = []
-        for name, spec in entry.get("args", {}).items():
+        for name, spec in self._r_args(entry).items():
             _, default = _argument(spec, name)
             parts.append(
                 name
@@ -1270,7 +1285,7 @@ class Public:
     def _r_bound(self, entry, class_name):
         """The held values that the R call of `entry` takes."""
         _, reference = self._operation(entry["calls"], class_name)
-        args = entry.get("args", {})
+        args = self._r_args(entry)
         bound = set()
         for native in self.r_functions[reference]["args"]:
             if native in args or native in {"version", "capabilities", "plans"}:
@@ -1408,19 +1423,25 @@ class Public:
         for member in cls["members"]:
             what = f"public.classes.{name}.{member['name']}"
             if member["kind"] == "index":
-                (key,) = member["args"]
+                (key,) = self._r_args(member)
                 refusal, _ = self._r_call(
                     member, name, what, handle="native", converted={key}
                 )
                 made = self._r_construct(
-                    member["returns"], None, name, member["args"], what, "native", {key}
+                    member["returns"],
+                    None,
+                    name,
+                    self._r_args(member),
+                    what,
+                    "native",
+                    {key},
                 )
                 # The member reads its container's handle, so it shares the
                 # container's memo, which the container's save() starts again.
                 made.arguments.append('get(".memo", envir = x, inherits = FALSE)')
                 names_member = next(m for m in cls["members"] if m["name"] == "names")
                 names, _ = self._r_call(names_member, name, what, handle="native")
-                token = _argument(member["args"][key], key)[0]
+                token = _argument(self._r_args(member)[key], key)[0]
                 helper = _R_ARGUMENT.get(token)
                 converted = f'{helper}(i, "{key}")' if helper else "i"
                 lines += [
@@ -1466,7 +1487,7 @@ class Public:
 
     def _r_function(self, function):
         what = f"public.functions.{function['name']}"
-        args = dict(function.get("args", {}))
+        args = dict(self._r_args(function))
         if "calls" in function:
             call, _ = self._r_call(function, None, what)
             result = self._r_result(function, call, None, what)
@@ -1615,6 +1636,24 @@ class Public:
 # --- Formatting ----------------------------------------------------------------------
 
 
+def _split_rendered_args(args):
+    parts = []
+    depth = 0
+    current = []
+    for char in args:
+        if char in "[(":
+            depth += 1
+        elif char in "])":
+            depth -= 1
+        if char == "," and depth == 0:
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    parts.append("".join(current).strip())
+    return parts
+
+
 def _py_def(name, params, returns, indent):
     """A `def` line laid out as ruff format lays it out."""
     tail = f" -> {returns}:" if returns else ":"
@@ -1626,7 +1665,7 @@ def _py_def(name, params, returns, indent):
         return [f"{indent}def {name}(", inner + params, f"{indent}){tail}"]
     return [
         f"{indent}def {name}(",
-        *(f"{inner}{part}," for part in params.split(", ")),
+        *(f"{inner}{part}," for part in _split_rendered_args(params)),
         f"{indent}){tail}",
     ]
 

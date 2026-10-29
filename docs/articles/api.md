@@ -236,6 +236,27 @@ so an integer column with a missing value keeps its exact integers.
     frame = dm.to_polars()       # or dm.to_pandas(), dm.to_arrow()
     ```
 
+## Supply in-memory inputs
+
+Python can replace declared input files by alias for one run:
+
+```python
+run = yamaa.spec("adam/adsl.yaml").run(inputs={"DM": frame})
+```
+
+`frame` exports the Arrow PyCapsule stream protocol, as PyArrow and Polars
+frames do; a pandas data frame is converted through PyArrow, with its index
+excluded. Values are copied into an owned snapshot during the call, including
+for a deferred stream. Aliases may come from a parent layer. Other inputs,
+metadata and save targets keep reading and writing their files. Declared input
+`types` still apply, and the report identifies these inputs as `memory:<alias>`
+with no byte count. An unknown alias fails the run before study data is read.
+
+Frames admit UTF-8 strings, 64-bit integers and floats, date32, and zone-free
+second timestamps. Convert other physical types preserving their values before
+exporting; an unsupported type raises `yamaa.Error` with an input diagnostic.
+Project runs, R runs and the command line continue reading files.
+
 ## Read an output as a stream
 
 `run(stream = TRUE)` in R and `run(stream=True)` in Python build a dataset as

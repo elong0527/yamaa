@@ -30,3 +30,17 @@ pub fn input_override(alias: &str, allowed: &[&str]) -> Option<Diagnostic> {
         operand_route: None,
     })
 }
+
+/// A host stream that the shared Arrow admission refused.
+pub fn input_frame(alias: &str, code: &str, value: &str) -> Diagnostic {
+    Diagnostic {
+        code: ConditionCode::InputFrameValue,
+        spec_paths: vec![format!("inputs.{alias}")],
+        context: Context::from([
+            ("code".into(), Value::String(code.into())),
+            ("value".into(), Value::String(value.into())),
+        ]),
+        source_span: None,
+        operand_route: None,
+    }
+}

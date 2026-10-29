@@ -340,6 +340,7 @@ yamaa::error::FailureKind::Table: Table(Box<TableError>)
 yamaa::error::FailureKind::Unavailable: Unavailable { feature: &'static str }
 yamaa::error::TableError: impl TableError
 yamaa::error::TableError: pub struct TableError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::error::TableError::at_input: pub fn at_input(self, specification: &str, alias: &str) -> Failure
 yamaa::error::TableError::code: pub fn code(&self) -> &'static str
 yamaa::error::TableError::message: pub fn message(&self) -> &str
 yamaa::file_type::Engine: impl Engine

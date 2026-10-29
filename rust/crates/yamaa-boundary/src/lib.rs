@@ -40,7 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 /// The boundary version, which the generated layers of both hosts request.
 /// It moves with any change to what crosses the boundary that an older side
 /// would misread.
-pub const BOUNDARY_VERSION: u32 = 6;
+pub const BOUNDARY_VERSION: u32 = 7;
 
 /// The capability identifiers that every engine of this boundary version
 /// supports, in order.

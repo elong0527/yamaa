@@ -406,7 +406,7 @@ pub fn _plans() -> PyResult<Plans> {
 /// A run of one specification: built now, or with `stream` built as its
 /// output is read (#3697), polling a token of its own from then on.
 #[pyfunction]
-#[pyo3(signature=(specification, project=None, plans=None, stream=false, progress=None))]
+#[pyo3(signature=(specification, project=None, plans=None, stream=false, progress=None, inputs=None))]
 pub fn _spec_run(
     py: Python<'_>,
     specification: &str,
@@ -414,7 +414,10 @@ pub fn _spec_run(
     plans: Option<PyRef<'_, Plans>>,
     stream: bool,
     progress: Option<Bound<'_, PyAny>>,
+    inputs: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Run> {
+    gate()?;
+    let inputs = crate::input_frames::import(specification, inputs)?;
     let plans = plans.as_deref().map(|plans| &plans.plans);
     if stream {
         gate()?;
@@ -424,7 +427,9 @@ pub fn _spec_run(
         let run = crate::interrupt::run(py, |_| {
             py.detach(|| {
                 let engine = engine(&version, true, progress.as_ref());
-                let request = spec_request(&engine, specification, project).cancel_with(&token);
+                let request = spec_request(&engine, specification, project)
+                    .cancel_with(&token)
+                    .inputs(inputs);
                 let run = match plans {
                     Some(plans) => request.reusing(plans),
                     None => request,
@@ -441,7 +446,9 @@ pub fn _spec_run(
         return Ok(Run::new(Held::Streamed(Arc::new(run)), causes));
     }
     let (run, causes) = called(py, (true, progress), |engine, token| {
-        let request = spec_request(engine, specification, project).cancel_with(token);
+        let request = spec_request(engine, specification, project)
+            .cancel_with(token)
+            .inputs(inputs);
         Ok(match plans {
             Some(plans) => request.reusing(plans),
             None => request,

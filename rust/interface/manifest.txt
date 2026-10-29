@@ -302,6 +302,7 @@ public.types.optional_path: python str or os.PathLike or None, unannotated; r ch
 public.types.text: python str; r character(1)
 public.types.optional_text: python str | None; r character(1) or NULL
 public.types.progress: python a callable of one dict, keys in records.progress_event order, or None; r a function of one named list, names in records.progress_event order, or NULL
+public.types.input_frames: python dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow
 public.types.count: python int; r numeric(1), a whole number
 public.types.flag: python bool; r logical(1)
 public.types.names: python list[str]; r character()
@@ -395,6 +396,7 @@ public.classes.Spec.resolve: method; returns tree; raises refusal
 public.classes.Spec.run: method; returns Run; raises refusal
 public.classes.Spec.run.args[0]: stream: flag = false; keyword-only
 public.classes.Spec.run.args[1]: progress: progress = None; keyword-only
+public.classes.Spec.run.args[2]: inputs: input_frames = None; keyword-only
 public.classes.Spec.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Project: python yamaa.Project; r yamaa_project
 public.classes.Project.spec: method; returns Spec; raises refusal
