@@ -134,6 +134,55 @@ class ReadOdm(unittest.TestCase):
                 }
                 self.assertEqual(json.loads(row["context"]), context)
 
+    def test_invalid_limits_refuse_at_the_argument_before_reading_the_source(self):
+        truth = TRUTH["invalid_limits"]
+        source = self.root / "unread.xml"
+        for argument, minimum in truth["arguments"].items():
+            for case in truth["values"]:
+                with self.subTest(argument=argument, value=case["name"]):
+                    value = case["value"]
+                    shown = value if isinstance(value, str) else json.dumps(value)
+
+                    def fill(text):
+                        return (
+                            text.replace("{argument}", argument)
+                            .replace("{value}", shown)
+                            .replace("{source}", str(source))
+                        )
+
+                    expected = {
+                        name: fill(item)
+                        if isinstance(item, str)
+                        else [fill(part) for part in item]
+                        if isinstance(item, list)
+                        else item
+                        for name, item in truth["issue"].items()
+                    }
+                    expected["context"] = json.dumps(
+                        {"minimum": minimum, "value": value},
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    with self.assertRaises(yamaa.Error) as caught:
+                        yamaa.read_odm(source, **{argument: value})
+                    error = caught.exception
+                    self.assertEqual(
+                        (
+                            type(error),
+                            str(error),
+                            error.issues.column_names,
+                            error.issues.to_pylist(),
+                            error.paths,
+                        ),
+                        (
+                            yamaa.Error,
+                            fill(truth["error"]),
+                            ISSUE_COLUMNS,
+                            [expected],
+                            [],
+                        ),
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

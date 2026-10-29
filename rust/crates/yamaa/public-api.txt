@@ -568,6 +568,7 @@ yamaa::odm::OdmOptions: impl Default for OdmOptions
 yamaa::odm::OdmOptions: impl OdmOptions
 yamaa::odm::OdmOptions: pub struct OdmOptions [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::odm::OdmOptions::archive_member: pub archive_member: Option<String>
+yamaa::odm::OdmOptions::from_host_limits: pub fn from_host_limits(source: &str, max_archive_members: ContextValue, max_expanded_bytes: ContextValue, max_xml_depth: ContextValue) -> Result<Self, Failure>
 yamaa::odm::OdmOptions::max_archive_members: pub max_archive_members: usize
 yamaa::odm::OdmOptions::max_expanded_bytes: pub max_expanded_bytes: u64
 yamaa::odm::OdmOptions::max_xml_depth: pub max_xml_depth: usize

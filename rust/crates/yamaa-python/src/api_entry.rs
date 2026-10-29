@@ -502,26 +502,51 @@ pub fn _spec_resolve<'py>(
 }
 
 #[pyfunction]
-#[pyo3(signature=(source, archive_member=None, max_archive_members=10_000, max_expanded_bytes=268_435_456, max_xml_depth=64))]
+#[pyo3(signature=(source, archive_member, max_archive_members, max_expanded_bytes, max_xml_depth))]
 pub fn _read_odm(
     py: Python<'_>,
     source: &str,
     archive_member: Option<String>,
-    max_archive_members: usize,
-    max_expanded_bytes: usize,
-    max_xml_depth: usize,
+    max_archive_members: &Bound<'_, PyAny>,
+    max_expanded_bytes: &Bound<'_, PyAny>,
+    max_xml_depth: &Bound<'_, PyAny>,
 ) -> PyResult<Table> {
-    // The shared option validation refuses limits below its minimums, so
-    // every host reports the same refusal.
-    let mut options = yamaa::OdmOptions::new()
-        .with_max_archive_members(max_archive_members)
-        .with_max_expanded_bytes(u64::try_from(max_expanded_bytes).unwrap_or(u64::MAX))
-        .with_max_xml_depth(max_xml_depth);
-    if let Some(member) = archive_member {
-        options = options.with_archive_member(member);
-    }
-    let items = plain(py, |engine| Ok(engine.read_odm(source, &options)?))?;
+    gate()?;
+    let members = odm_limit_value(max_archive_members)?;
+    let bytes = odm_limit_value(max_expanded_bytes)?;
+    let depth = odm_limit_value(max_xml_depth)?;
+    let items = plain(py, |engine| {
+        let mut options = yamaa::OdmOptions::from_host_limits(source, members, bytes, depth)?;
+        if let Some(member) = archive_member {
+            options = options.with_archive_member(member);
+        }
+        Ok(engine.read_odm(source, &options)?)
+    })?;
     Ok(Table::from(&items))
+}
+
+/// Preserve the kind and exact integer spelling until shared admission.
+fn odm_limit_value(value: &Bound<'_, PyAny>) -> PyResult<yamaa::ContextValue> {
+    use pyo3::types::{PyBool, PyFloat, PyInt, PyString};
+    use yamaa::ContextValue as V;
+    Ok(if value.is_none() {
+        V::Null
+    } else if value.is_instance_of::<PyBool>() {
+        V::Bool(value.extract()?)
+    } else if value.is_instance_of::<PyInt>() {
+        value.extract::<i64>().map_or_else(
+            |_| value.str().map(|text| V::Wide(text.to_string())),
+            |value| Ok(V::Int(value)),
+        )?
+    } else if value.is_instance_of::<PyFloat>() {
+        V::Float(value.extract()?)
+    } else if value.is_instance_of::<PyString>() {
+        V::Text(value.extract()?)
+    } else if let Ok(integer) = value.extract::<i64>() {
+        V::Int(integer)
+    } else {
+        V::Text("non-numeric value".into())
+    })
 }
 
 /// The lint table of every file `paths` names, fixing them first when `fix`

@@ -918,6 +918,8 @@ file, and one without clinical data such as a define.xml, are refused with
 their issue, and audit records, signatures and annotations are skipped
 ([ODM-1](../../rules/reference/odm.md#odm-1)).
 
+ODM limits must be non-missing whole numbers, with at least one member or byte and at least eight levels. Negative, fractional or Boolean limits refuse as `value_not_permitted` at their argument, carrying the supplied value in the issues table.
+
 `read_odm()` reads the same table in R or Python. Use it for an export inside
 a TAR archive, which an input does not open, or to look at the items
 yourself.

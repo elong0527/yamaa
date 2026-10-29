@@ -25,7 +25,7 @@
 
 use std::path::Path;
 
-use crate::diagnostic::Report;
+use crate::diagnostic::{context_value_to_core, ContextValue, Report};
 use crate::engine::Engine;
 use crate::error::{Failure, FailureKind, TableError};
 use crate::table::Table;
@@ -62,6 +62,88 @@ impl Default for OdmOptions {
 }
 
 impl OdmOptions {
+    /// Admit host limit values before reading `source`. Whole numbers within
+    /// each limit's range are accepted; Boolean, missing, fractional, negative
+    /// and unrepresentable values refuse as `value_not_permitted` at the
+    /// argument, with the original value in its diagnostic context. Validation
+    /// follows the reader's order: bytes, members, then depth.
+    pub fn from_host_limits(
+        source: &str,
+        max_archive_members: ContextValue,
+        max_expanded_bytes: ContextValue,
+        max_xml_depth: ContextValue,
+    ) -> Result<Self, Failure> {
+        fn admit(
+            source: &str,
+            name: &str,
+            minimum: u64,
+            maximum: u64,
+            value: ContextValue,
+        ) -> Result<u64, Failure> {
+            // R's ordinary numeric literals are doubles. A whole value has
+            // the same diagnostic spelling as the integer Python supplied.
+            let value = match value {
+                ContextValue::Float(value) if value.is_finite() && value.fract() == 0.0 => {
+                    if value >= i64::MIN as f64 && value < i64::MAX as f64 {
+                        ContextValue::Int(value as i64)
+                    } else if value >= 0.0 && value < u64::MAX as f64 {
+                        ContextValue::Wide((value as u64).to_string())
+                    } else {
+                        ContextValue::Float(value)
+                    }
+                }
+                value => value,
+            };
+            let number = match &value {
+                ContextValue::Int(value) => u64::try_from(*value).ok(),
+                ContextValue::Wide(value) => value.parse::<u64>().ok(),
+                ContextValue::Float(value)
+                    if value.is_finite()
+                        && value.fract() == 0.0
+                        && *value >= 0.0
+                        && *value < u64::MAX as f64 =>
+                {
+                    Some(*value as u64)
+                }
+                _ => None,
+            };
+            if let Some(number) = number.filter(|number| (minimum..=maximum).contains(number)) {
+                return Ok(number);
+            }
+            let issue = yamaa_core::diagnostic::invalid_odm_limit(
+                name,
+                minimum,
+                context_value_to_core(&value),
+            );
+            Err(Failure::from_issues(Action::Read(source), &[issue]))
+        }
+        let bytes = admit(
+            source,
+            "max_expanded_bytes",
+            yamaa_core::odm_items::Options::MIN_EXPANDED_BYTES,
+            u64::MAX,
+            max_expanded_bytes,
+        )?;
+        let members = admit(
+            source,
+            "max_archive_members",
+            yamaa_core::odm_items::Options::MIN_ARCHIVE_MEMBERS,
+            usize::MAX as u64,
+            max_archive_members,
+        )?;
+        let depth = admit(
+            source,
+            "max_xml_depth",
+            yamaa_core::odm_items::Options::MIN_XML_DEPTH as u64,
+            usize::MAX as u64,
+            max_xml_depth,
+        )?;
+        Ok(Self::new()
+            .with_max_expanded_bytes(bytes)
+            .with_max_archive_members(members as usize)
+            .with_max_xml_depth(depth as usize))
+    }
+
     /// The default bounds, selecting the only XML member of a TAR input.
     pub fn new() -> Self {
         let defaults = yamaa_core::odm_items::Options::default();

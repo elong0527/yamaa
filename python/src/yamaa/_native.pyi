@@ -112,10 +112,10 @@ def _project_submission(
 ) -> _Submission: ...
 def _read_odm(
     source: str,
-    archive_member: str | None = None,
-    max_archive_members: int = 10000,
-    max_expanded_bytes: int = 268435456,
-    max_xml_depth: int = 64,
+    archive_member: str | None,
+    max_archive_members: object,
+    max_expanded_bytes: object,
+    max_xml_depth: object,
 ) -> Table: ...
 def _lint(paths: list[str], fix: bool = False) -> Table: ...
 def _schema(file_type: str) -> str: ...

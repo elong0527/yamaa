@@ -592,23 +592,45 @@ fn spec_resolve(specification: Raw, project: Robj, version: Raw) -> List {
 fn read_odm(
     source: Raw,
     archive_member: Robj,
-    max_archive_members: usize,
-    max_expanded_bytes: usize,
-    max_xml_depth: usize,
+    max_archive_members: Robj,
+    max_expanded_bytes: Robj,
+    max_xml_depth: Robj,
 ) -> List {
     reply(|| {
-        let mut options = yamaa::OdmOptions::new()
-            .with_max_archive_members(max_archive_members)
-            .with_max_expanded_bytes(u64::try_from(max_expanded_bytes).unwrap_or(u64::MAX))
-            .with_max_xml_depth(max_xml_depth);
+        let source = text(&source)?;
+        let mut options = yamaa::OdmOptions::from_host_limits(
+            &source,
+            odm_limit_value(&max_archive_members),
+            odm_limit_value(&max_expanded_bytes),
+            odm_limit_value(&max_xml_depth),
+        )?;
         if let Some(member) = optional_text(&archive_member)? {
             options = options.with_archive_member(member);
         }
-        let source = text(&source)?;
         // The read needs no host capability, so the engine names no R version.
         let items = engine("", None, None).read_odm(&source, &options)?;
         table(Some(&items))
     })
+}
+
+/// Preserve R scalar kinds; NA and NULL are missing rather than integers.
+fn odm_limit_value(value: &Robj) -> yamaa::ContextValue {
+    use yamaa::ContextValue as V;
+    if value.is_null() || value.is_na() {
+        V::Null
+    } else if value.len() != 1 || value.is_object() {
+        V::Text("non-numeric value".into())
+    } else if let Some(value) = value.as_bool() {
+        V::Bool(value)
+    } else if let Some(value) = value.as_integer() {
+        V::Int(i64::from(value))
+    } else if let Some(value) = value.as_real() {
+        V::Float(value)
+    } else if let Some(value) = value.as_str() {
+        V::Text(value.into())
+    } else {
+        V::Text("non-numeric value".into())
+    }
 }
 
 /// Each element of a list of raw UTF-8 vectors as text.

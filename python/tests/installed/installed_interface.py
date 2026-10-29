@@ -204,7 +204,7 @@ CALLS = {
     "_project_check": ["missing.yaml"],
     "_project_run": ["missing.yaml"],
     "_project_submission": ["missing.yaml"],
-    "_read_odm": ["missing.xml"],
+    "_read_odm": ["missing.xml", None, 10000, 268435456, 64],
     "_lint": [["missing.yaml"]],
     "_schema": ["spec"],
     "_conditions": [],

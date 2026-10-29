@@ -50,7 +50,7 @@ symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
 the edge, and the `boundary` import's version role to
 `yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
-The boundary version, now 3 for native refusal classes, is the single source for both hosts:
+The boundary version, now 4 for native ODM limit admission, is the single source for both hosts:
 the generator writes it into each host's request, and neither keeps a
 separately maintained copy. `format_version` versions the IDL grammar only.
 

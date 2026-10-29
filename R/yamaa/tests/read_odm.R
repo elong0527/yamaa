@@ -91,4 +91,32 @@ for (refusal in truth[["refusals"]]) {
     lapply(expected[["context"]], given), paste(label, "has the authored context"))
 }
 cat("refusals signal yamaa_error carrying their issue\n")
+
+limits <- truth$invalid_limits
+for (argument in names(limits$arguments)) {
+  for (case in limits$values) {
+    source <- file.path(work, "unread.xml")
+    value <- case$value
+    shown <- if (is.character(value)) value else as.character(jsonlite::toJSON(value, auto_unbox = TRUE, null = "null"))
+    fill <- function(text) gsub("{source}", source,
+      gsub("{value}", shown, gsub("{argument}", argument, text, fixed = TRUE), fixed = TRUE), fixed = TRUE)
+    expected <- limits$issue
+    expected$message <- fill(expected$message)
+    expected$spec_paths <- list(argument)
+    expected$context <- as.character(jsonlite::toJSON(list(minimum = limits$arguments[[argument]], value = value),
+      auto_unbox = TRUE, null = "null"))
+    # R's NA variants and NULL all project the shared missing scalar.
+    values <- if (is.null(value)) list(NULL, NA, NA_integer_, NA_real_) else list(value)
+    for (given in values) {
+      options <- setNames(list(given), argument)
+      error <- tryCatch(do.call(yamaa_read_odm, c(list(source), options)), error = identity)
+      label <- paste("invalid limit", argument, case$name)
+      expect_identical(list(class = class(error), message = conditionMessage(error), call = conditionCall(error),
+        columns = names(error$issues), issues = issue_columns_of(error$issues), paths = error$paths),
+        list(class = c("yamaa_error", "error", "condition"), message = fill(limits$error), call = NULL,
+          columns = issue_columns, issues = issue_truth(list(expected), work), paths = character()), label)
+    }
+  }
+}
+cat("invalid limits refuse at their argument before the source is read\n")
 unlink(work, recursive = TRUE)
