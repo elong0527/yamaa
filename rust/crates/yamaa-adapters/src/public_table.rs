@@ -851,6 +851,68 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "arrow")]
+    fn result_imports_share_float_and_temporal_boundary_admission() {
+        // The result importer must uphold the scalar invariants its preview
+        // and host conversions rely on, including inside diagnostic lists.
+        use crate::arrow_bridge::import_result_stream;
+        let table = |column| PublicTable::new(vec![("value".into(), column)]).unwrap();
+        let floats = table(PublicColumn::Float(
+            [
+                Some(f64::NAN),
+                Some(f64::INFINITY),
+                Some(f64::NEG_INFINITY),
+                Some(-0.0),
+                None,
+            ]
+            .into_iter()
+            .collect(),
+        ));
+        let expected = table(PublicColumn::Float(
+            [None, None, None, Some(-0.0), None].into_iter().collect(),
+        ));
+        assert_eq!(import_result_stream(floats.stream()), Ok(expected));
+        // Epoch limits derived from 0001-01-01 and 9999-12-31, inclusive;
+        // the last datetime is the last second of that last day.
+        for column in [
+            PublicColumn::Date(
+                [Some(-719_162), Some(2_932_896), None]
+                    .into_iter()
+                    .collect(),
+            ),
+            PublicColumn::DateTime(
+                [Some(-62_135_596_800), Some(253_402_300_799), None]
+                    .into_iter()
+                    .collect(),
+            ),
+        ] {
+            let expected = table(column);
+            assert_eq!(import_result_stream(expected.stream()), Ok(expected));
+        }
+        for column in [
+            PublicColumn::Date([Some(-719_163)].into_iter().collect()),
+            PublicColumn::Date([Some(2_932_897)].into_iter().collect()),
+            PublicColumn::DateTime([Some(-62_135_596_801)].into_iter().collect()),
+            PublicColumn::DateTime([Some(253_402_300_800)].into_iter().collect()),
+        ] {
+            assert_eq!(
+                import_result_stream(table(column).stream()),
+                Err(TableError::InvalidTable)
+            );
+        }
+        let mut nested = List::new(PublicColumn::Date(Values::default()));
+        nested.items_mut().extend(
+            &PublicColumn::Date([Some(-719_163)].into_iter().collect()),
+            0..1,
+        );
+        nested.close(true);
+        assert_eq!(
+            import_result_stream(table(PublicColumn::List(Box::new(nested))).stream()),
+            Err(TableError::InvalidTable)
+        );
+    }
+
+    #[test]
     fn engine_built_tables_admit_list_columns_and_count_rows_across_batches() {
         let mut columns = issues(5);
         let table = PublicTable::chunked(columns.clone(), vec![2, 0, 3]).unwrap();

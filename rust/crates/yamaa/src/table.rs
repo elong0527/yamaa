@@ -61,7 +61,9 @@ impl Table {
     /// columns. The stream must satisfy Arrow's producer contract and contain
     /// only the public result types: Utf8, Int64, Float64, Date32, zone-free
     /// second timestamps and lists of these. Unlike `InputFrame::import`,
-    /// this does not interpret the values as specification input.
+    /// this does not interpret the values as specification input. Nonfinite
+    /// floats become missing; dates and datetimes outside years 1 to 9999
+    /// are refused.
     #[cfg(feature = "arrow")]
     pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError> {
         yamaa_adapters::arrow_bridge::import_result_stream(stream)

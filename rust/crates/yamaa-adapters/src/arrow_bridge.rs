@@ -27,7 +27,7 @@ use yamaa_core::{
     limits::Limits,
     table::{Column as Declared, TableSchema},
     temporal::Precision,
-    value::ColumnType,
+    value::{ColumnType, FiniteFloat},
 };
 
 /// A public table's Arrow form: its schema and record batches.
@@ -162,7 +162,9 @@ pub fn export_stream(schema: SchemaRef, batches: Vec<RecordBatch>) -> FFI_ArrowA
 
 /// Import the public result form, including diagnostic list columns. Unlike
 /// an input frame this preserves public epoch values without interpreting them
-/// as specification columns. Used to restore a host's serialized result table.
+/// as specification columns. Nonfinite floats are missing, and temporal
+/// values outside years 1 to 9999 are refused, as at the input boundary.
+/// Used to restore a host's serialized result table.
 pub fn import_result_stream(
     stream: FFI_ArrowArrayStream,
 ) -> Result<PublicTable, crate::public_table::TableError> {
@@ -207,14 +209,36 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
     fn cast<T: 'static>(array: &dyn Array) -> Result<&T, Error> {
         array.as_any().downcast_ref().ok_or(Error::InvalidTable)
     }
+    fn temporal<T: Copy + Default, V>(
+        values: impl Iterator<Item = Option<T>>,
+        admit: impl Fn(T) -> Option<V>,
+    ) -> Result<crate::columns::Values<T>, Error> {
+        values
+            .map(|value| {
+                value
+                    .map(|value| admit(value).map(|_| value).ok_or(Error::InvalidTable))
+                    .transpose()
+            })
+            .collect()
+    }
     Ok(match array.data_type() {
         DataType::Utf8 => PublicColumn::Str(cast::<StringArray>(array)?.iter().collect()),
         DataType::Int64 => PublicColumn::Int(cast::<Int64Array>(array)?.iter().collect()),
-        DataType::Float64 => PublicColumn::Float(cast::<Float64Array>(array)?.iter().collect()),
-        DataType::Date32 => PublicColumn::Date(cast::<Date32Array>(array)?.iter().collect()),
-        DataType::Timestamp(TimeUnit::Second, None) => {
-            PublicColumn::DateTime(cast::<TimestampSecondArray>(array)?.iter().collect())
+        DataType::Float64 => PublicColumn::Float(
+            cast::<Float64Array>(array)?
+                .iter()
+                .map(|value| value.and_then(FiniteFloat::new).map(FiniteFloat::get))
+                .collect(),
+        ),
+        DataType::Date32 => {
+            PublicColumn::Date(temporal(cast::<Date32Array>(array)?.iter(), |days| {
+                date_from_days(i64::from(days), Precision::Day)
+            })?)
         }
+        DataType::Timestamp(TimeUnit::Second, None) => PublicColumn::DateTime(temporal(
+            cast::<TimestampSecondArray>(array)?.iter(),
+            |seconds| datetime_from_seconds(seconds, Precision::Second),
+        )?),
         DataType::List(field) => {
             let array = cast::<ListArray>(array)?;
             let empty = arrow_array::new_empty_array(field.data_type());
@@ -346,8 +370,12 @@ fn append(
         Column::Float(floats) => {
             let array = cast::<Float64Array>(array, batch, column)?;
             for row in 0..array.len() {
-                let value = array.value(row);
-                floats.push((present(row) && value.is_finite()).then_some(value));
+                floats.push(
+                    present(row)
+                        .then(|| array.value(row))
+                        .and_then(FiniteFloat::new)
+                        .map(FiniteFloat::get),
+                );
             }
         }
         Column::Date(dates) => {
