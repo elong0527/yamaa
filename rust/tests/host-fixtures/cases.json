@@ -57,6 +57,11 @@
         }
       ],
       "file_csv": "ID,VALUE,EXTRA\n1,7,7\n",
+      "file_details": {
+        "bytes": 13,
+        "path": "data.csv",
+        "profile": "csv"
+      },
       "memory_details": {
         "bytes": null,
         "path": "memory:SRC",

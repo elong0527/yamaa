@@ -22,6 +22,7 @@ from host_fixtures import load as load_truth
 import yamaa
 
 TRUTH = load_truth(__file__, "plan-reuse")
+MEMORY_INPUTS = load_truth(__file__, "memory-inputs")
 STUDIES = Path(__file__).parent / "project-original"
 
 
@@ -55,6 +56,38 @@ class PlanReuse(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(text.encode("utf-8"))
         return path
+
+    def test_alias_override_fixture_keeps_file_fallback_with_reused_plans(self):
+        for name, contents in MEMORY_INPUTS["files"].items():
+            self.write(name, contents)
+        spec = yamaa.spec(self.root / MEMORY_INPUTS["entry"])
+        expected_inputs = {
+            alias: MEMORY_INPUTS["file_details"]
+            for alias in MEMORY_INPUTS["unknown"]["context"]["allowed"]
+        }
+        for plan in ("compiled", "reused"):
+            with self.subTest(plan=plan):
+                run = spec.run()
+                run.save()
+                inputs = {
+                    row["NAME"]: json.loads(row["DETAILS"])
+                    for row in run.report.to_pylist()
+                    if row["KIND"] == "input"
+                }
+                self.assertEqual(
+                    (
+                        run.status,
+                        plan_of(run),
+                        (self.root / "out.csv").read_bytes(),
+                        inputs,
+                    ),
+                    (
+                        "succeeded",
+                        plan,
+                        MEMORY_INPUTS["file_csv"].encode("utf-8"),
+                        expected_inputs,
+                    ),
+                )
 
     def run_study(self, spec, study):
         """Run `spec` on one study's input; check its saved output or issues."""
