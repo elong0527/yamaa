@@ -2,6 +2,10 @@
   "version": "1",
   "families": {
     "memory-inputs": {
+      "report_refusals": [
+        {"name": "missing fallback before capture", "fallback_hex": null},
+        {"name": "invalid UTF-8 fallback during capture", "fallback_hex": "ff"}
+      ],
       "unsupported_type": {
         "phase": "validation",
         "condition": "value_not_permitted",
@@ -68,6 +72,11 @@
         }
       ],
       "file_csv": "ID,VALUE,EXTRA\n1,7,7\n",
+      "file_details": {
+        "bytes": 13,
+        "path": "data.csv",
+        "profile": "csv"
+      },
       "memory_details": {
         "bytes": null,
         "path": "memory:SRC",

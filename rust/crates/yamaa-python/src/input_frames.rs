@@ -45,9 +45,7 @@ fn import_one(
 ) -> PyResult<yamaa::InputFrame> {
     let py = frame.py();
     let converted;
-    let frame = if frame.hasattr("__arrow_c_stream__")? {
-        frame
-    } else if frame.hasattr("__dataframe__")? {
+    let frame = if is_pandas_frame(frame)? {
         // pandas uses PyArrow's preserving conversion; index values are not
         // study columns. Other frames can export the capsule protocol directly.
         let kwargs = PyDict::new(py);
@@ -56,6 +54,8 @@ fn import_one(
             .getattr("Table")?
             .call_method("from_pandas", (frame,), Some(&kwargs))?;
         &converted
+    } else if frame.hasattr("__arrow_c_stream__")? {
+        frame
     } else {
         return Err(crate::errors::message(
             py,
@@ -81,4 +81,17 @@ fn import_one(
     let stream = unsafe { yamaa::FFI_ArrowArrayStream::from_raw(pointer.as_ptr()) };
     yamaa::InputFrame::import(stream)
         .map_err(|error| crate::errors::failure(py, error.at_input(specification, alias)))
+}
+
+/// pandas also exports Arrow streams, but their default conversion includes
+/// non-RangeIndex values. Check the loaded class first, including subclasses,
+/// without requiring pandas for other stream providers.
+fn is_pandas_frame(frame: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let modules = PyModule::import(frame.py(), "sys")?
+        .getattr("modules")?
+        .cast_into::<PyDict>()?;
+    match modules.get_item("pandas")? {
+        Some(pandas) => frame.is_instance(&pandas.getattr("DataFrame")?),
+        None => Ok(false),
+    }
 }

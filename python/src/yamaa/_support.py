@@ -66,6 +66,16 @@ def _optional_fspath(path) -> str | None:
     return None if path is None else _fspath(path)
 
 
+class _ProgressCauses:
+    """Keep original tracebacks in Python's cyclic-GC ownership graph."""
+
+    __slots__ = ("callback", "errors", "__weakref__")
+
+    def __init__(self, callback):
+        self.callback = callback
+        self.errors = []
+
+
 class _Lazy:
     """A lazy object's native plans holder stays in its process: a copy, a
     pickle or another process starts with an empty one and compiles again."""

@@ -651,9 +651,15 @@ fn result<E>(
             Classification::Opaque => None,
         })
         .collect::<Vec<_>>();
-    let result =
-        specification_report::build_result_with(prepared.run(), attempt, identity, &facts, view)
-            .map_err(|refusal| refusal.issues())?;
+    let result = specification_report::build_result_with(
+        prepared.run(),
+        attempt,
+        identity,
+        &facts,
+        view,
+        &run.input_aliases().collect::<Vec<_>>(),
+    )
+    .map_err(|refusal| refusal.issues())?;
     Ok(Domain::new(result, prepared, run))
 }
 

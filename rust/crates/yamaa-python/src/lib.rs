@@ -10,6 +10,7 @@ mod function_callback;
 mod input_frames;
 mod interface;
 mod interrupt;
+mod progress;
 mod project_activation;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
