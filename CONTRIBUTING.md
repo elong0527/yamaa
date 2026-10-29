@@ -464,7 +464,9 @@ release.
 
 **R package checks.** Every R check, in CI's `r` job, native
 qualification, `R-CMD-check` and the release lane, runs
-`R CMD check --as-cran` through `tools/commands/check_r.py`, whose
+`R CMD check --as-cran` through `tools/commands/check_r.py`, except
+native qualification's valgrind job: its `--valgrind` runs CRAN's valgrind
+check without `--as-cran`, which would turn `--extra-arch` off. The
 docstring states the rules: it fails on any NOTE, WARNING or ERROR that
 `R/yamaa/cran-comments.md` does not explain, on any sanitizer report, and
 under `--valgrind` on any memcheck error. To accept a new note, explain it
