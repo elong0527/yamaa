@@ -25,7 +25,10 @@ curl --fail --location --retry 3 \
   "https://github.com/kirha-ai/opensas/releases/latest/download/$opensas_asset" \
   --output "$scratch/opensas"
 install -m 0755 "$scratch/opensas" "$HOME/.local/bin/opensas"
-npm install --global --prefix "$HOME/.local" opencode-ai@latest
+# OpenCode v2 moved to @opencode/cli. Remove v1 so its opencode link does not
+# conflict when setup is rerun in an existing Codespace.
+npm uninstall --global --prefix "$HOME/.local" opencode-ai
+npm install --global --prefix "$HOME/.local" @opencode/cli@2
 
 printf '\nBuilding the Python package and installing repository tools...\n'
 # The owned setup command installs yamaa and Polars along with the locked
