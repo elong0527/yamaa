@@ -37,7 +37,7 @@ _INTERFACE_FIELDS = (
     "missing_features",
 )
 _INTERFACE_REQUEST = {
-    "version": 5,
+    "version": 6,
     "required": ["structured_records", "arrow_c_stream", "plan_reuse"],
     "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],
 }
@@ -116,7 +116,8 @@ setattr(Error, "__init__", _error_init)
 
 
 def _error_reduce(self):
-    return type(self), (str(self), self.issues, self.paths), self.__dict__
+    state = {**self.__dict__, "__cause__": self.__cause__}
+    return type(self), (str(self), self.issues, self.paths), state
 
 
 setattr(Error, "__reduce__", _error_reduce)

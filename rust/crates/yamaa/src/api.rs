@@ -112,6 +112,7 @@ impl Check {
                 }],
                 issues: progress_failure(reporter, Step::Check),
                 locator: Arc::new(Locator::none()),
+                progress_cause: reporter.cause(),
             },
             subject: subject.to_owned(),
         }
@@ -243,7 +244,7 @@ impl Run {
 /// `step`, or none (#3762).
 fn progress_failure(reporter: &Reporter, step: Step) -> Vec<Diagnostic> {
     match reporter.failed() {
-        true => vec![Reporter::failure(step)],
+        true => vec![reporter.failure(step)],
         false => Vec::new(),
     }
 }
@@ -463,6 +464,7 @@ impl Engine {
             members,
             issues: Vec::new(),
             locator: Arc::new(Locator::none()),
+            progress_cause: reporter.cause(),
         })
     }
 }
@@ -718,10 +720,7 @@ impl<'a> SpecRequest<'a> {
             .expect("a graph of one member builds it");
         match member.work {
             Work::Built(mut run) => {
-                let failure = progress_failure(&reporter, Step::Build);
-                if !failure.is_empty() {
-                    run.build.fail(failure);
-                }
+                run.build.fail_progress(&reporter, Step::Build);
                 Ok(*run)
             }
             Work::Checked(..) | Work::Composed(..) => unreachable!("a graph builds its members"),
@@ -1334,6 +1333,7 @@ impl<'a> ProjectRequest<'a> {
                 members,
                 issues,
                 locator: Arc::clone(read.locator()),
+                progress_cause: reporter.cause(),
             },
             subject: project.to_owned(),
         })
@@ -1429,6 +1429,7 @@ impl<'a> ProjectRequest<'a> {
         // A failed progress callback refuses the whole run, so its save
         // writes nothing (#3762).
         outcome.issues = progress_failure(&reporter, Step::Build);
+        outcome.progress_cause = reporter.cause();
         Ok(ProjectRun { outcome, subject })
     }
 
@@ -1514,6 +1515,7 @@ impl<'a> ProjectRequest<'a> {
             // save writes nothing (#3762).
             issues: progress_failure(&reporter, Step::Define),
             locator: Arc::clone(read.locator()),
+            progress_cause: reporter.cause(),
         })
     }
 }

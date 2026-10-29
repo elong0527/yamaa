@@ -182,9 +182,14 @@ fn served() -> Arc<MemoryResolver> {
 }
 
 /// The one issue of an operation whose progress callback failed at `step`.
-fn progress_failure(step: &str) -> String {
+fn progress_failure(step: &str, panics: bool) -> String {
+    let (class, message) = if panics {
+        ("panic", "the progress callback panics")
+    } else {
+        ("protocol", "host protocol violation")
+    };
     format!(
-        "Error engine engine_rejected None [] {{\"code\":\"host_progress_failure\",\"step\":\"{step}\"}} None None"
+        "Error engine engine_rejected None [] {{\"code\":\"host_progress_failure\",\"host_error\":\"{class}\",\"host_message\":\"{message}\",\"step\":\"{step}\"}} None None"
     )
 }
 
@@ -221,7 +226,12 @@ fn a_callback_that_panics_or_fails_fails_the_run_which_saves_nothing() {
                 run.report().is_none(),
                 crate::support::issues(&run.diagnostics()),
             ),
-            (Status::Failed, true, true, progress_failure("build")),
+            (
+                Status::Failed,
+                true,
+                true,
+                progress_failure("build", panics)
+            ),
             "{label}: the run"
         );
         let refused = run.save(&CancellationToken::new()).unwrap_err();
@@ -237,7 +247,7 @@ fn a_callback_that_panics_or_fails_fails_the_run_which_saves_nothing() {
         let check = engine.spec("spec.yaml").check().unwrap();
         assert_eq!(
             (check.status(), crate::support::issues(&check.diagnostics())),
-            (Status::Failed, progress_failure("check")),
+            (Status::Failed, progress_failure("check", panics)),
             "{label}: the check"
         );
     }

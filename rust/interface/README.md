@@ -50,7 +50,7 @@ symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
 the edge, and the `boundary` import's version role to
 `yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
-The boundary version, now 5 for native lint results, is the single source for both hosts:
+The boundary version, now 6 for retained progress causes, is the single source for both hosts:
 the generator writes it into each host's request, and neither keeps a
 separately maintained copy. `format_version` versions the IDL grammar only.
 
@@ -116,7 +116,11 @@ the locked-object and table-memo helpers. Docstrings come from `doc`;
 R's help pages stay handwritten under `R/yamaa/man/`. The refusal's Python
 `native` names its PyO3-created exception, and `state` names its native subclass.
 `picklable: true` generates its reconstruction arguments from its declared
-attributes, preserving its instance state as well. R constructs the same
+attributes, preserving its instance state as well. `chained: true` also
+retains Python's `__cause__` when the refusal is pickled. The cause and any
+added instance state must themselves be picklable: an unpicklable cause raises
+its normal pickle error and stays attached to the original refusal. R's `parent` field
+keeps the original callback condition. R constructs the same
 condition fields and state subclass from its declaration. Every refusal carries
 an issues table, including before negotiation and after an R table-conversion
 failure (D258 reversed by #4077). Table pickling is native

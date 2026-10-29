@@ -3,7 +3,7 @@
 
 .refusal <- function(error) {
   structure(
-    list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
+    list(message = error$message, call = NULL, issues = error$issues, paths = error$paths, parent = error$parent),
     class = c(if (isTRUE(error$state)) "yamaa_state_error", "yamaa_error", "error", "condition")
   )
 }

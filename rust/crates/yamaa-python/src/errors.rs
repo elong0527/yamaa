@@ -43,11 +43,20 @@ pub(crate) fn message(py: Python<'_>, state: bool, message: impl Into<String>) -
 }
 
 pub(crate) fn failure(py: Python<'_>, failure: yamaa::Failure) -> PyErr {
+    let cause = failure.cause.as_ref().and_then(|payload| {
+        crate::progress::cause(py, payload)
+            .or_else(|| payload.with::<Py<PyAny>, _>(|value| value.clone_ref(py)))
+    });
     let state = matches!(
         failure.kind,
         yamaa::FailureKind::Stream { .. } | yamaa::FailureKind::Cancelled
     );
-    make(py, state, failure.message, &failure.issues, failure.paths).unwrap_or_else(|error| error)
+    let error = make(py, state, failure.message, &failure.issues, failure.paths)
+        .unwrap_or_else(|error| error);
+    if let Some(cause) = cause {
+        error.set_cause(py, Some(PyErr::from_value(cause.into_bound(py))));
+    }
+    error
 }
 
 #[pyfunction]

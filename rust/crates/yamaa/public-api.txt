@@ -323,6 +323,7 @@ yamaa::error::Failure: impl Failure
 yamaa::error::Failure: impl std::error::Error for Failure
 yamaa::error::Failure: impl std::fmt::Display for Failure
 yamaa::error::Failure: pub struct Failure [derive(Clone, Debug)] [non_exhaustive]
+yamaa::error::Failure::cause: pub cause: Option<yamaa::host::functions::HostPayload>
 yamaa::error::Failure::diagnostics: pub diagnostics: Vec<Diagnostic>
 yamaa::error::Failure::issues: pub issues: Table
 yamaa::error::Failure::kind: pub kind: FailureKind
@@ -678,6 +679,7 @@ yamaa::stream::Batches: impl Drop for Batches
 yamaa::stream::Batches: impl Iterator for Batches
 yamaa::stream::Batches: pub struct Batches
 yamaa::stream::Batches::into_stream: pub fn into_stream(self) -> FFI_ArrowArrayStream
+yamaa::stream::Batches::into_stream_with_lifetime: pub fn into_stream_with_lifetime(self, lifetime: impl Send + 'static) -> FFI_ArrowArrayStream
 yamaa::stream::Batches::schema: pub fn schema(&self) -> SchemaRef
 yamaa::stream::RunGuard: impl Deref for RunGuard<'_>
 yamaa::stream::RunGuard: impl DerefMut for RunGuard<'_>

@@ -8550,6 +8550,11 @@
           "outcome": {"accepted": false, "requested_version": 4, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
         },
         {
+          "case": "boundary five is a mismatch after progress refusals retain their cause",
+          "request": {"version": 5, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 5, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
           "case": "a request for the next version is a mismatch",
           "request": {"version": "{next_version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
           "outcome": {"accepted": false, "requested_version": "{next_version}", "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
@@ -8683,6 +8688,7 @@
       "host_thread": "cannot read TEST: a run that can call project functions is built only on the thread that started it [host_thread]"
     },
     "progress": {
+      "callback_failure": {"class": "ProgressFailure", "message": "the callback raises"},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: report.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
       "input_csv": "ID\n1\n2\n",
       "events": [
@@ -8715,8 +8721,8 @@
           "file": null,
           "line": null,
           "column": null,
-          "message": "the engine refused the operation in its build step: host_progress_failure",
-          "context": "{\"code\":\"host_progress_failure\",\"step\":\"build\"}",
+          "message": "the engine refused the operation in its build step: host_progress_failure (ProgressFailure: the callback raises)",
+          "context": "{\"code\":\"host_progress_failure\",\"host_error\":\"ProgressFailure\",\"host_message\":\"the callback raises\",\"step\":\"build\"}",
           "source_span": null,
           "operand_route": null
         }

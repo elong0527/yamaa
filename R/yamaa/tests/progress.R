@@ -64,9 +64,11 @@ for (case in list(
 cat("a run and a check give the timings of the phases they ran\n")
 
 calls <- 0L
+original <- structure(list(message = truth$callback_failure$message, call = NULL, identity = new.env()),
+  class = c(truth$callback_failure$class, "error", "condition"))
 failed <- spec$run(progress = function(event) {
   calls <<- calls + 1L
-  stop("the callback signals an error")
+  stop(original)
 })
 expect_identical(calls, 1L, "a failing callback is called once, then no more")
 expect_identical(list(failed$status, failed$output), list("failed", NULL), "a run whose callback failed")
@@ -75,6 +77,8 @@ expect_identical(issue_columns_of(failed$issues), issue_truth(truth$failed_run_i
 refused <- tryCatch({ failed$save(); NULL }, yamaa_error = function(condition) condition)
 stopifnot("the save of a run whose callback failed is refused" = !is.null(refused))
 expect_identical(refused$paths, character(), "the refused save wrote no path")
+# The native payload retains arbitrary condition fields and environment identity.
+expect_identical(refused$parent, original, "the refusal chains the original callback condition")
 expect_identical(sort(list.files(root)), c("input.csv", "spec.yaml"), "nothing is written")
 cat("a callback that signals an error fails the run, which saves nothing\n")
 

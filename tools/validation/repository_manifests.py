@@ -239,10 +239,34 @@ def registry_errors(registry) -> list[str]:
         if not isinstance(registration, dict):
             errors.append(f"ERROR: {path}: expected a mapping")
             continue
-        for field in sorted(set(registration) - {"phases", "message", "renamed_from"}):
+        for field in sorted(
+            set(registration)
+            - {"phases", "message", "message_variants", "renamed_from"}
+        ):
             errors.append(f"ERROR: {path}.{field}: unknown field")
         for problem in message_errors(registration.get("message")):
             errors.append(f"ERROR: {path}.message: {problem}")
+        variants = registration.get("message_variants", [])
+        if not isinstance(variants, list):
+            errors.append(f"ERROR: {path}.message_variants: expected a list")
+        else:
+            seen = set()
+            for index, variant in enumerate(variants):
+                vpath = f"{path}.message_variants[{index}]"
+                if not isinstance(variant, dict) or set(variant) != {"when", "message"}:
+                    errors.append(f"ERROR: {vpath}: expected when and message")
+                    continue
+                key = variant["when"]
+                if (
+                    not isinstance(key, str)
+                    or not SNAKE_CASE.fullmatch(key)
+                    or key in seen
+                ):
+                    errors.append(f"ERROR: {vpath}.when: expected a unique context key")
+                else:
+                    seen.add(key)
+                for problem in message_errors(variant["message"]):
+                    errors.append(f"ERROR: {vpath}.message: {problem}")
         phases = registration.get("phases")
         if not (
             isinstance(phases, list)

@@ -18,8 +18,10 @@
 //! function's failure is: the engine calls it no more in that operation,
 //! finishes the work in hand, and then fails the result with one issue,
 //! `engine_rejected` with the code `host_progress_failure`, at the step of
-//! the operation (`build` for a run, `check` for a check, `define` for a
-//! submission). A failed run keeps no output and saves nothing, a project
+//! the operation, with `host_error` and `host_message` naming the failure.
+//! The result retains the original host exception for a refused save to chain.
+//! The step is `build` for a run, `check` for a check, `define` for a
+//! submission. A failed run keeps no output and saves nothing, a project
 //! run builds no later specification, a submission composes no later
 //! section, and either refuses its save, writing nothing.
 //!
@@ -31,8 +33,7 @@
 //! saved run report, dataset, Dataset-JSON or Define-XML holds them (P10).
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use yamaa_application::application_measurements::Measurements;
@@ -42,7 +43,7 @@ use yamaa_core::dataset::ExecutionPhase;
 use yamaa_core::diagnostic::Diagnostic;
 
 use crate::api::Status;
-use crate::host::functions::FunctionError;
+use crate::host::functions::{FunctionError, HostPayload};
 use crate::table::Table;
 
 /// A phase of an operation, as a progress event names it and a result's
@@ -371,7 +372,35 @@ impl Measured {
 pub(crate) struct Reporter {
     callback: Option<ProgressCallback>,
     origin: Instant,
-    failed: AtomicBool,
+    failure: Mutex<Option<CallbackFailure>>,
+}
+
+#[derive(Clone)]
+struct CallbackFailure {
+    class: String,
+    message: String,
+    payload: Option<HostPayload>,
+}
+
+impl From<FunctionError> for CallbackFailure {
+    fn from(error: FunctionError) -> Self {
+        let (class, message) = match &error {
+            FunctionError::Exception { class, message, .. } => (class.clone(), message.clone()),
+            _ => (error.code().to_owned(), error.message()),
+        };
+        let payload = match error {
+            FunctionError::Exception { payload, .. }
+            | FunctionError::Representation { payload, .. }
+            | FunctionError::Interrupted { payload }
+            | FunctionError::SdkBoundary { payload } => payload,
+            _ => None,
+        };
+        Self {
+            class,
+            message,
+            payload,
+        }
+    }
 }
 
 impl Reporter {
@@ -380,7 +409,7 @@ impl Reporter {
         Self {
             callback,
             origin: Instant::now(),
-            failed: AtomicBool::new(false),
+            failure: Mutex::new(None),
         }
     }
 
@@ -408,16 +437,29 @@ impl Reporter {
 
     /// Whether the callback panicked or returned an error.
     pub(crate) fn failed(&self) -> bool {
-        self.failed.load(Ordering::SeqCst)
+        self.failure
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .is_some()
     }
 
     /// The issue that fails the result of an operation whose callback
     /// failed, at the operation's `step`.
-    pub(crate) fn failure(step: Step) -> Diagnostic {
-        yamaa_core::application_issue::rejected(
-            step,
-            yamaa_core::application_issue::Fault::HostProgressFailure,
-        )
+    pub(crate) fn failure(&self, step: Step) -> Diagnostic {
+        let failure = self
+            .failure
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let failure = failure.as_ref().expect("a failed callback has its failure");
+        yamaa_core::application_issue::progress_failure(step, &failure.class, &failure.message)
+    }
+
+    pub(crate) fn cause(&self) -> Option<HostPayload> {
+        self.failure
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .as_ref()
+            .and_then(|failure| failure.payload.clone())
     }
 
     /// Report one event, unless there is no callback or it has failed; a
@@ -431,8 +473,25 @@ impl Reporter {
         }
         let event = event();
         let delivered = catch_unwind(AssertUnwindSafe(|| callback(&event)));
-        if !matches!(delivered, Ok(Ok(()))) {
-            self.failed.store(true, Ordering::SeqCst);
+        let failure = match delivered {
+            Ok(Ok(())) => return,
+            Ok(Err(error)) => error.into(),
+            Err(panic) => CallbackFailure {
+                class: "panic".into(),
+                message: panic
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| panic.downcast_ref::<&str>().map(|text| (*text).to_owned()))
+                    .unwrap_or_else(|| "the progress callback panicked".into()),
+                payload: None,
+            },
+        };
+        let mut held = self
+            .failure
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if held.is_none() {
+            *held = Some(failure);
         }
     }
 

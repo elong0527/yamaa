@@ -75,16 +75,44 @@ fn streamed(failure: Failure) -> Refusal {
 /// wrote nothing and carries an empty issues frame even before negotiation
 /// and after a conversion failure (#4077, reversing D258).
 fn refused(error: Refusal) -> List {
-    let (message, issues, paths, state) = match error {
+    let (message, issues, paths, state, parent) = match error {
         Refusal::Failure(failure) => {
+            let parent = failure
+                .cause
+                .as_ref()
+                .and_then(|payload| {
+                    payload.with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
+                        condition.get().cloned()
+                    })
+                })
+                .flatten()
+                .unwrap_or_else(|| NULL.into_robj());
             let state = matches!(
                 failure.kind,
                 FailureKind::Stream { .. } | FailureKind::Cancelled
             );
-            (failure.message, failure.issues, failure.paths, state)
+            (
+                failure.message,
+                failure.issues,
+                failure.paths,
+                state,
+                parent,
+            )
         }
-        Refusal::State(message) => (message, yamaa::diagnostic::issues(&[]), Vec::new(), true),
-        Refusal::Message(message) => (message, yamaa::diagnostic::issues(&[]), Vec::new(), false),
+        Refusal::State(message) => (
+            message,
+            yamaa::diagnostic::issues(&[]),
+            Vec::new(),
+            true,
+            NULL.into_robj(),
+        ),
+        Refusal::Message(message) => (
+            message,
+            yamaa::diagnostic::issues(&[]),
+            Vec::new(),
+            false,
+            NULL.into_robj(),
+        ),
     };
     let (message, issues) = match crate::public_table::frame(&issues) {
         Ok(issues) => (message, issues),
@@ -100,7 +128,8 @@ fn refused(error: Refusal) -> List {
             message = message,
             issues = issues,
             paths = Strings::from_values(&paths),
-            state = state
+            state = state,
+            parent = parent
         )
     )
 }

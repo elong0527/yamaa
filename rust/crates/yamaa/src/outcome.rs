@@ -40,6 +40,7 @@ pub(crate) struct Outcome {
     pub(crate) members: Vec<Member>,
     pub(crate) issues: Vec<Diagnostic>,
     pub(crate) locator: Arc<Locator>,
+    pub(crate) progress_cause: Option<crate::host::functions::HostPayload>,
 }
 
 /// One member of an outcome: a specification checked or built, or one
@@ -202,6 +203,7 @@ impl Outcome {
             members: Vec::new(),
             issues,
             locator,
+            progress_cause: None,
         }
     }
 
@@ -253,6 +255,7 @@ impl Outcome {
             subject,
             token,
         )
+        .map_err(|failure| failure.with_cause(self.progress_cause.clone()))
     }
 }
 

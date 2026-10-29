@@ -313,6 +313,7 @@ public.types.optional_table: python yamaa.Table | None; r data.frame or NULL
 public.types.run_output: python yamaa.Table | None; with stream=True a yamaa.Table whose Arrow stream produces the output as it is read, once; r data.frame or NULL; with stream = TRUE an Arrow C stream that produces the output as it is read: an external pointer of class nanoarrow_array_stream, or NULL
 public.types.status: python str, one of values.status; r character(1), one of values.status
 public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
+public.types.host_condition: python BaseException | None; r condition or NULL
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
 public.types.pickle: python tuple[object, tuple[bytes]]
@@ -431,7 +432,7 @@ public.classes.Table.to_pylist: method; returns rows; raises refusal
 public.classes.Table.to_arrow: method; returns arrow_table; raises refusal; imports pyarrow
 public.classes.Table.to_polars: method; returns polars_frame; raises refusal; imports polars
 public.classes.Table.to_pandas: method; returns pandas_frame; raises refusal; imports pandas, pyarrow
-public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
+public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written, parent: host_condition
 public.errors.refusal.state: python yamaa.StateError; r yamaa_state_error
 public.errors.refusal.python.picklable: true
 public.python.exports.Error

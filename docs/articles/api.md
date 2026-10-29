@@ -190,7 +190,10 @@ whose original diagnostics could not be converted to a data frame.
 
 Python `yamaa.Table` and `yamaa.Error` objects can be pickled and sent between
 processes. Tables keep their column types, missing values and list columns;
-errors keep their message, issues and written paths. Pickling an unread streamed
+errors keep their message, issues, written paths and chained cause. As with
+ordinary Python exceptions, the cause and any added state must be picklable.
+An unpicklable callback exception raises its normal pickle error when the
+refusal is pickled; the original cause stays attached. Pickling an unread streamed
 output reads it whole, as `to_pylist()` does. An output stream already taken by
 a reader keeps its usual refusal on a whole-table read.
 
@@ -329,7 +332,10 @@ specifications at once.
 
 A `progress` function that signals an error in R or raises in Python is
 called no more: the method finishes its work, and its result then fails with
-one issue, `engine_rejected` with the code `host_progress_failure`. A failed
+one issue, `engine_rejected` with the code `host_progress_failure`. Its
+context includes `host_error` and `host_message`, and its message names the
+exception. A refused save chains the original exception as Python's
+`__cause__` or R's `parent` condition. A failed
 run keeps no output and saves nothing; a project run builds no later
 specification, and a submission composes no later section, and either
 refuses its save. An interrupt in the function cancels the call, as Ctrl+C
