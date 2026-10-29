@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import datetime
 import gc
 import importlib.util
 import inspect
 import json
 import math
+import multiprocessing
 import os
+import pickle
 import shutil
 import tempfile
 import unittest
@@ -59,6 +62,11 @@ REMOVED = (
     "ResolvedSpecificationError",
     "resources",
 )
+
+
+def refuse_in_worker(path):
+    """The process transport must retain an engine refusal and its tables."""
+    yamaa.spec(path).run().save()
 
 
 def paths_of(*paths):
@@ -130,6 +138,39 @@ def arguments(function):
 
 
 class PublicContract(unittest.TestCase):
+    def test_error_pickles_and_crosses_a_spawn_worker(self):
+        # Exception reconstruction and process transport are Python-only seams.
+        with tempfile.TemporaryDirectory(prefix="yamaa-pickle-") as directory:
+            path = str(Path(directory) / "absent.yaml")
+            with self.assertRaises(yamaa.Error) as raised:
+                refuse_in_worker(path)
+            original = raised.exception
+            original.add_note("worker context")
+            original.detail = {"job": 7}
+            expected = (str(original), original.issues.to_pylist(), original.paths)
+            for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+                with self.subTest(protocol=protocol):
+                    restored = pickle.loads(pickle.dumps(original, protocol=protocol))
+                    self.assertEqual(
+                        (
+                            str(restored),
+                            restored.issues.to_pylist(),
+                            restored.paths,
+                            restored.__notes__,
+                            restored.detail,
+                        ),
+                        (*expected, ["worker context"], {"job": 7}),
+                    )
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=1, mp_context=multiprocessing.get_context("spawn")
+            ) as pool:
+                with self.assertRaises(yamaa.Error) as worker:
+                    pool.submit(refuse_in_worker, path).result(timeout=30)
+            error = worker.exception
+            self.assertEqual(
+                (str(error), error.issues.to_pylist(), error.paths), expected
+            )
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="yamaa-public-contract-")
         self.addCleanup(temporary.cleanup)
@@ -226,6 +267,7 @@ class PublicContract(unittest.TestCase):
                 "_spec_resolve",
                 "_spec_run",
                 "_spec_summary",
+                "_table_from_pickle",
             ],
         )
         # A final release's Python and Cargo spellings agree; a release

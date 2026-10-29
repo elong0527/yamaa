@@ -50,7 +50,7 @@ symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
 the edge, and the `boundary` import's version role to
 `yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
-The boundary version, which starts at 1, is the single source for both hosts:
+The boundary version, now 2 for native table pickling, is the single source for both hosts:
 the generator writes it into each host's request, and neither keeps a
 separately maintained copy. `format_version` versions the IDL grammar only.
 
@@ -113,7 +113,10 @@ result and lazy objects, S3 methods and private accessors) and
 the version lookup, and `R/yamaa/R/api.R`
 holds the reply and argument conversions, the host-function capabilities and
 the locked-object and table-memo helpers. Docstrings come from `doc`;
-R's help pages stay handwritten under `R/yamaa/man/`.
+R's help pages stay handwritten under `R/yamaa/man/`. The refusal's Python
+`picklable: true` generates its reconstruction arguments from its declared
+attributes, preserving its instance state as well. Table pickling is native
+and preserves its Arrow schema and batches without a Python table library.
 
 Generated code only delegates, and the delegation is declared, never written:
 

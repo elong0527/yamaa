@@ -18,6 +18,7 @@ import _thread
 import datetime as dt
 import gc
 import operator
+import pickle
 import signal
 import tempfile
 import threading
@@ -149,12 +150,26 @@ class Streaming(unittest.TestCase):
             ("succeeded", 5, expected_rows(), expected_rows()),
         )
 
+    def test_pickling_an_unread_output_materializes_it_and_keeps_its_types(self):
+        # Python serialization must drive the same whole-read stream transition.
+        run = yamaa.spec(self.study() / "spec.yaml").run(stream=True)
+        output = run.output
+        restored = pickle.loads(pickle.dumps(output))
+        self.assertEqual(
+            (restored.to_pylist(), restored.to_arrow().schema, run.status),
+            (expected_rows(), output.to_arrow().schema, "succeeded"),
+        )
+
     def test_a_streamed_output_is_read_once(self):
         run = yamaa.spec(self.study() / "spec.yaml").run(stream=True)
         output = run.output
         pa.table(output)
         refusals = []
-        for read in (lambda: len(output), output.to_pylist):
+        for read in (
+            lambda: len(output),
+            output.to_pylist,
+            lambda: pickle.dumps(output),
+        ):
             with self.assertRaises(RuntimeError) as raised:
                 read()
             refusals.append(str(raised.exception))
@@ -165,6 +180,7 @@ class Streaming(unittest.TestCase):
             (refusals, run.status),
             (
                 [
+                    TRUTH["stream_taken"],
                     TRUTH["stream_taken"],
                     TRUTH["stream_taken"],
                     EXPORTED + TRUTH["stream_taken"],

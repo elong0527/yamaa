@@ -182,6 +182,12 @@ origins.
 
 ## Tables
 
+Python `yamaa.Table` and `yamaa.Error` objects can be pickled and sent between
+processes. Tables keep their column types, missing values and list columns;
+errors keep their message, issues and written paths. Pickling an unread streamed
+output reads it whole, as `to_pylist()` does. An output stream already taken by
+a reader keeps its usual refusal on a whole-table read.
+
 Every table that yamaa returns is a data frame in R, except the output of a
 run read as a stream ([Read an output as a stream](#read-an-output-as-a-stream)).
 In Python it is a `yamaa.Table`, which needs no other package: printing it

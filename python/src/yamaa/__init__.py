@@ -37,7 +37,7 @@ _INTERFACE_FIELDS = (
     "missing_features",
 )
 _INTERFACE_REQUEST = {
-    "version": 1,
+    "version": 2,
     "required": ["structured_records", "arrow_c_stream", "plan_reuse"],
     "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],
 }
@@ -109,6 +109,9 @@ class Error(Exception):
         super().__init__(message)
         self.issues = issues
         self.paths = paths
+
+    def __reduce__(self):
+        return type(self), (str(self), self.issues, self.paths), self.__dict__
 
 
 def _call(function, *args):

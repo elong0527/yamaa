@@ -315,6 +315,7 @@ public.types.status: python str, one of values.status; r character(1), one of va
 public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
+public.types.pickle: python tuple[object, tuple[bytes]]
 public.types.rows: python list[dict[str, object]], one dict per row, keyed by the column names in order
 public.types.arrow_capsule: python PyCapsule named arrow_array_stream, a fresh Arrow C stream
 public.types.schema_request: python object or None; anything but None is refused
@@ -417,6 +418,7 @@ public.classes.Table: python yamaa.Table
 public.classes.Table.num_rows: property; returns count
 public.classes.Table.column_names: property; returns names
 public.classes.Table.length: protocol; python __len__; returns count
+public.classes.Table.pickle: protocol; python __reduce__; returns pickle
 public.classes.Table.preview: printing; python __repr__
 public.classes.Table.arrow_stream: protocol; python __arrow_c_stream__; returns arrow_capsule
 public.classes.Table.arrow_stream.args[0]: requested_schema: schema_request = None
@@ -425,6 +427,7 @@ public.classes.Table.to_arrow: method; returns arrow_table; imports pyarrow
 public.classes.Table.to_polars: method; returns polars_frame; imports polars
 public.classes.Table.to_pandas: method; returns pandas_frame; imports pandas, pyarrow
 public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
+public.errors.refusal.python.picklable: true
 public.python.exports.Error
 public.python.exports.Table
 public.python.exports.__version__

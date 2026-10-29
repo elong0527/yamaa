@@ -12,7 +12,7 @@
 use pyo3::{
     exceptions::{PyModuleNotFoundError, PyNotImplementedError, PyTypeError, PyValueError},
     prelude::*,
-    types::{PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
+    types::{PyBytes, PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
     IntoPyObjectExt,
 };
 use std::sync::Arc;
@@ -101,6 +101,27 @@ impl Table {
             },
         };
         fields.iter().map(|field| field.name().clone()).collect()
+    }
+
+    /// Pickle a materialized table. An unread streamed output is read whole,
+    /// as by to_pylist(); a taken stream keeps its existing refusal.
+    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let table = self.whole(py)?;
+        let mut bytes = Vec::new();
+        {
+            let mut writer = arrow_ipc::writer::StreamWriter::try_new(&mut bytes, table.schema())
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            for batch in table.batches() {
+                writer
+                    .write(batch)
+                    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            }
+            writer
+                .finish()
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        }
+        let restore = PyModule::import(py, "yamaa._native")?.getattr("_table_from_pickle")?;
+        (restore, (PyBytes::new(py, &bytes),)).into_bound_py_any(py)
     }
 
     /// The number of rows.
@@ -309,4 +330,19 @@ fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, Py
             "unsupported Arrow column type {other}"
         ))),
     }
+}
+
+/// The reconstruction callable stored in a Table pickle: no file or host
+/// library participates, and the imported table owns its restored values.
+#[pyfunction]
+pub fn _table_from_pickle(data: &Bound<'_, PyAny>) -> PyResult<Table> {
+    crate::interface::gate()?;
+    let data = data.cast::<PyBytes>()?.as_bytes();
+    let reader =
+        arrow_ipc::reader::StreamReader::try_new(std::io::Cursor::new(data.to_vec()), None)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let stream = yamaa::FFI_ArrowArrayStream::new(Box::new(reader));
+    let table = yamaa::Table::import(stream)
+        .map_err(|error| PyValueError::new_err(error.message().to_owned()))?;
+    Ok(Table::from(&table))
 }

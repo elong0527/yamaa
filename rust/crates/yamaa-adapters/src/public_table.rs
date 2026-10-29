@@ -50,7 +50,7 @@ impl fmt::Display for TableError {
 
 impl std::error::Error for TableError {}
 
-fn limit(error: yamaa_core::limits::LimitExceeded) -> TableError {
+pub(crate) fn limit(error: yamaa_core::limits::LimitExceeded) -> TableError {
     TableError::Limit {
         resource: error.resource,
         limit: error.limit,
@@ -139,7 +139,7 @@ impl PublicColumn {
     }
 
     /// Append the rows `rows` of `other`, a column of the same type.
-    fn extend(&mut self, other: &Self, rows: Range<usize>) {
+    pub(crate) fn extend(&mut self, other: &Self, rows: Range<usize>) {
         fn values<T: Copy + Default>(into: &mut Values<T>, from: &Values<T>, rows: Range<usize>) {
             for row in rows {
                 into.push(from.get(row));
@@ -810,6 +810,133 @@ mod tests {
                 ))),
             ),
         ]
+    }
+
+    #[test]
+    #[cfg(feature = "arrow")]
+    fn importing_public_results_preserves_batches_nested_lists_and_empty_schemas() {
+        // The result importer is distinct from specification input admission:
+        // public diagnostics can carry lists and zero-column row geometry.
+        use crate::arrow_bridge::import_result_stream;
+        let mut lists = List::new(PublicColumn::List(Box::new(List::int([]))));
+        if let PublicColumn::List(inner) = lists.items_mut() {
+            inner.items_mut().extend(
+                &PublicColumn::Int([Some(1), None].into_iter().collect()),
+                0..2,
+            );
+            inner.close(true);
+            inner.close(false);
+        }
+        lists.close(true);
+        lists.close(false);
+        lists.close(true);
+        let cases = [
+            PublicTable::chunked(issues(5), vec![2, 0, 3]).unwrap(),
+            PublicTable::new(vec![("nested".into(), PublicColumn::List(Box::new(lists)))]).unwrap(),
+            PublicTable::chunked(
+                vec![("typed_empty".into(), PublicColumn::Date(Values::default()))],
+                vec![],
+            )
+            .unwrap(),
+            PublicTable::chunked(Vec::new(), vec![2, 0, 3]).unwrap(),
+        ];
+        for (case, table) in cases.iter().enumerate() {
+            assert_eq!(
+                import_result_stream(table.stream()).unwrap(),
+                *table,
+                "case {case}"
+            );
+        }
+        assert!(import_result_stream(crate::arrow_bridge::FFI_ArrowArrayStream::empty()).is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "arrow")]
+    fn result_imports_share_float_and_temporal_boundary_admission() {
+        // The result importer must uphold the scalar invariants its preview
+        // and host conversions rely on, including inside diagnostic lists.
+        use crate::arrow_bridge::import_result_stream;
+        let table = |column| PublicTable::new(vec![("value".into(), column)]).unwrap();
+        let floats = table(PublicColumn::Float(
+            [
+                Some(f64::NAN),
+                Some(f64::INFINITY),
+                Some(f64::NEG_INFINITY),
+                Some(-0.0),
+                None,
+            ]
+            .into_iter()
+            .collect(),
+        ));
+        let expected = table(PublicColumn::Float(
+            [None, None, None, Some(-0.0), None].into_iter().collect(),
+        ));
+        assert_eq!(import_result_stream(floats.stream()), Ok(expected));
+        // Epoch limits derived from 0001-01-01 and 9999-12-31, inclusive;
+        // the last datetime is the last second of that last day.
+        for column in [
+            PublicColumn::Date(
+                [Some(-719_162), Some(2_932_896), None]
+                    .into_iter()
+                    .collect(),
+            ),
+            PublicColumn::DateTime(
+                [Some(-62_135_596_800), Some(253_402_300_799), None]
+                    .into_iter()
+                    .collect(),
+            ),
+        ] {
+            let expected = table(column);
+            assert_eq!(import_result_stream(expected.stream()), Ok(expected));
+        }
+        for column in [
+            PublicColumn::Date([Some(-719_163)].into_iter().collect()),
+            PublicColumn::Date([Some(2_932_897)].into_iter().collect()),
+            PublicColumn::DateTime([Some(-62_135_596_801)].into_iter().collect()),
+            PublicColumn::DateTime([Some(253_402_300_800)].into_iter().collect()),
+        ] {
+            assert_eq!(
+                import_result_stream(table(column).stream()),
+                Err(TableError::InvalidTable)
+            );
+        }
+        let mut nested = List::new(PublicColumn::Date(Values::default()));
+        nested.items_mut().extend(
+            &PublicColumn::Date([Some(-719_163)].into_iter().collect()),
+            0..1,
+        );
+        nested.close(true);
+        assert_eq!(
+            import_result_stream(table(PublicColumn::List(Box::new(nested))).stream()),
+            Err(TableError::InvalidTable)
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "arrow")]
+    fn result_imports_refuse_empty_and_duplicate_column_names_even_without_rows() {
+        // Foreign result schemas must retain every column when projected to a
+        // host dictionary; the owned public constructor otherwise trusts names.
+        use crate::arrow_bridge::import_result_stream;
+        for names in [vec![""], vec!["same", "same"]] {
+            for rows in [0, 1] {
+                let columns = names
+                    .iter()
+                    .map(|name| {
+                        (
+                            (*name).to_owned(),
+                            PublicColumn::Int(std::iter::repeat_n(Some(1), rows).collect()),
+                        )
+                    })
+                    .collect();
+                let table = PublicTable::chunked(columns, vec![rows]).unwrap();
+                assert_eq!(
+                    import_result_stream(table.stream()),
+                    Err(TableError::InvalidTable),
+                    "names {names:?}, rows {rows}"
+                );
+            }
+        }
     }
 
     #[test]

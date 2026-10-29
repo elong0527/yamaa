@@ -71,16 +71,23 @@ pub enum SchemaError {
 impl TableSchema {
     /// Validate names once, preserving the supplied column declaration order.
     pub fn new(columns: Vec<Column>) -> Result<Self, SchemaError> {
-        let mut names = BTreeSet::new();
-        for (column, item) in columns.iter().enumerate() {
-            if item.name.is_empty() {
+        Self::validate_names(columns.iter().map(|column| column.name.as_str()))?;
+        Ok(Self(columns))
+    }
+
+    /// Admit the column names shared by specification and public result
+    /// schemas, independently of either schema's column type vocabulary.
+    pub fn validate_names<'a>(names: impl IntoIterator<Item = &'a str>) -> Result<(), SchemaError> {
+        let mut seen = BTreeSet::new();
+        for (column, name) in names.into_iter().enumerate() {
+            if name.is_empty() {
                 return Err(SchemaError::EmptyName { column });
             }
-            if !names.insert(item.name.as_str()) {
+            if !seen.insert(name) {
                 return Err(SchemaError::DuplicateName { column });
             }
         }
-        Ok(Self(columns))
+        Ok(())
     }
 
     /// Expose the immutable ordered schema, including when the table has no rows.

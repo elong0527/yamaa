@@ -57,6 +57,20 @@ impl Table {
         &self.inner
     }
 
+    /// Restore a public result table from its Arrow C stream, including list
+    /// columns. The stream must satisfy Arrow's producer contract and contain
+    /// only the public result types: Utf8, Int64, Float64, Date32, zone-free
+    /// second timestamps and lists of these. Unlike `InputFrame::import`,
+    /// this does not interpret the values as specification input. Nonfinite
+    /// floats become missing; dates and datetimes outside years 1 to 9999
+    /// are refused. Column names must be nonempty and unique.
+    #[cfg(feature = "arrow")]
+    pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError> {
+        yamaa_adapters::arrow_bridge::import_result_stream(stream)
+            .map(Self::from_public)
+            .map_err(TableError::from_public)
+    }
+
     /// Borrow the public Arrow fields in declaration order.
     #[cfg(feature = "arrow")]
     pub fn columns(&self) -> &Fields {

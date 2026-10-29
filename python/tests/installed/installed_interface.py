@@ -190,6 +190,7 @@ print(json.dumps(phases))
 
 # Each native function but the handshake, with arguments of its types.
 CALLS = {
+    "_table_from_pickle": [None],
     "_plans": [],
     "_spec_check": ["missing.yaml"],
     "_spec_summary": ["missing.yaml"],
@@ -245,7 +246,7 @@ class Interface(unittest.TestCase):
         """Import a copy of the installed package's Python modules over the
         stub native module `native`, in a fresh interpreter."""
         package = self.root / "packages" / "yamaa"
-        package.mkdir(parents=True)
+        package.mkdir(parents=True, exist_ok=True)
         for module in Path(yamaa.__file__).parent.glob("*.py"):
             shutil.copy2(module, package / module.name)
         (package / "_native.py").write_text(native, encoding="utf-8")
@@ -315,23 +316,30 @@ class Interface(unittest.TestCase):
         )
 
     def test_a_refused_handshake_stops_import_before_any_other_native_call(self):
-        fields = {
-            "accepted": False,
-            "requested_version": VERSION,
-            "supported_version": VERSION + 1,
-            "reason": "version_mismatch",
-            "missing_features": [],
-        }
-        self.assertEqual(
-            self.import_over(NEXT_VERSION),
-            {
-                "error": "InterfaceError",
-                "import_error": True,
-                "message": message(fields),
-                "fields": fields,
-                "calls": ["_interface_handshake"],
-            },
-        )
+        # Import over both an older module without table pickling and a newer
+        # module: neither may be used after a refused negotiation.
+        for offset in (-1, 1):
+            with self.subTest(supported_version=VERSION + offset):
+                fields = {
+                    "accepted": False,
+                    "requested_version": VERSION,
+                    "supported_version": VERSION + offset,
+                    "reason": "version_mismatch",
+                    "missing_features": [],
+                }
+                native = NEXT_VERSION.replace(
+                    'request["version"] + 1', f'request["version"] + {offset}'
+                )
+                self.assertEqual(
+                    self.import_over(native),
+                    {
+                        "error": "InterfaceError",
+                        "import_error": True,
+                        "message": message(fields),
+                        "fields": fields,
+                        "calls": ["_interface_handshake"],
+                    },
+                )
 
     def test_every_native_function_refuses_before_negotiation(self):
         requests = {
