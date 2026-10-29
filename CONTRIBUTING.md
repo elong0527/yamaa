@@ -22,8 +22,7 @@ The [dev container](.devcontainer/devcontainer.json) uses Rocker's latest
 `tidyverse` image for the latest released R and a pre-installed tidyverse.
 Its [setup script](.devcontainer/setup.sh) installs the latest stable Python
 through uv, the latest opensas Linux release, and the latest OpenCode v2 through
-its `@opencode/cli@2` npm package. Setup removes the old `opencode-ai` package
-when rebuilding an existing Codespace. Node.js LTS and Rust are included for those
+its `@opencode/cli@2` npm package. Node.js LTS and Rust are included for those
 tools and for building yamaa.
 
 Setup runs `make setup` to install the Python yamaa package, Polars and the
