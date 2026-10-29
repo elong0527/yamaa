@@ -248,6 +248,31 @@ format.yamaa_project <- function(x, ...) {
   .reply(.native_project_summary(path))
 }
 
+.lint <- function(native, memo = .memo()) {
+  force(native)
+  force(memo)
+  object <- new.env(parent = emptyenv())
+  object$.handle <- native
+  .read_only(object, "status", function() .reply(.native_lint_status(native)))
+  .kept(object, "findings", memo, function() .reply(.native_lint_findings(native)))
+  .read_only(object, "paths", function() invisible(.reply(.native_lint_paths(native))))
+  .object(object, "yamaa_lint_result")
+}
+
+names.yamaa_lint_result <- function(x) c("status", "findings", "paths")
+
+length.yamaa_lint_result <- function(x) 3L
+
+print.yamaa_lint_result <- function(x, ...) {
+  cat(format(x), sep = "\n")
+  invisible(x)
+}
+
+format.yamaa_lint_result <- function(x, ...) {
+  native <- get(".handle", envir = x, inherits = FALSE)
+  .reply(.native_lint_summary(native))
+}
+
 .self_test <- function(native, memo = .memo()) {
   force(native)
   force(memo)
@@ -289,7 +314,7 @@ yamaa_read_odm <- function(source, archive_member = NULL, max_archive_members = 
 }
 
 yamaa_lint <- function(paths, fix = FALSE) {
-  .reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix")))
+  .lint(.reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix"))))
 }
 
 yamaa_schema <- function(file_type) .reply(.native_schema(.text(file_type, "file_type")))

@@ -36,6 +36,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(api_entry::_project_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_submission, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_read_odm, module)?)?;
+    module.add_class::<api_entry::Lint>()?;
     module.add_function(wrap_pyfunction!(api_entry::_lint, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_schema, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_conditions, module)?)?;

@@ -37,7 +37,7 @@ _INTERFACE_FIELDS = (
     "missing_features",
 )
 _INTERFACE_REQUEST = {
-    "version": 4,
+    "version": 5,
     "required": ["structured_records", "arrow_c_stream", "plan_reuse"],
     "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],
 }
@@ -384,6 +384,28 @@ class Project(_Lazy):
         return _native._project_summary(self._path)
 
 
+class Lint:
+    """The lint findings that remain and the paths a fix rewrote; printing gives the engine summary."""
+
+    def __init__(self, native):
+        self._native = native
+
+    @property
+    def status(self) -> str:
+        return self._native.status()
+
+    @property
+    def findings(self) -> Table:
+        return self._native.findings()
+
+    @property
+    def paths(self) -> list[str]:
+        return self._native.paths()
+
+    def __repr__(self) -> str:
+        return self._native.summary()
+
+
 class SelfTest:
     """The selftest cases run through this installation's engine; printing it gives the report."""
 
@@ -437,9 +459,9 @@ def read_odm(
     )
 
 
-def lint(paths, fix: bool = False) -> Table:
+def lint(paths, fix: bool = False) -> Lint:
     """Lint yamaa files, first applying the proved fixes when fix is true."""
-    return _native._lint(_fspaths(paths), _flag(fix, "fix"))
+    return Lint(_native._lint(_fspaths(paths), _flag(fix, "fix")))
 
 
 def schema(file_type: str) -> str:

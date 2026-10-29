@@ -233,6 +233,7 @@ enum Value {
     Streamed(yamaa::Streamed),
     ProjectRun(Mutex<yamaa::ProjectRun>),
     Submission(Mutex<yamaa::Submission>),
+    Lint(yamaa::Lint),
     SelfTest(yamaa::SelfTest),
     Plans(yamaa::Plans),
 }
@@ -244,6 +245,7 @@ impl Value {
             Value::Run(_) | Value::Streamed(_) => HandleKind::Run,
             Value::ProjectRun(_) => HandleKind::ProjectRun,
             Value::Submission(_) => HandleKind::Submission,
+            Value::Lint(_) => HandleKind::Lint,
             Value::SelfTest(_) => HandleKind::SelfTest,
             Value::Plans(_) => HandleKind::Plans,
         }
@@ -648,11 +650,45 @@ fn texts(value: &Robj) -> std::result::Result<Vec<String>, Refusal> {
         .collect()
 }
 
-/// The lint table of every file `paths` names, fixing them first when `fix`
+/// The lint result of every file `paths` names, fixing them first when `fix`
 /// is true; a file that cannot be read or admitted refuses with its issues.
 #[extendr]
 fn lint(paths: Robj, fix: bool) -> List {
-    reply(|| table(Some(&yamaa::lint(&texts(&paths)?, fix)?.table())))
+    reply(|| store(Value::Lint(yamaa::lint(&texts(&paths)?, fix)?)))
+}
+
+fn read_lint<T>(
+    handle: &Robj,
+    read: impl FnOnce(&yamaa::Lint) -> std::result::Result<T, Refusal>,
+) -> std::result::Result<T, Refusal> {
+    match &*held(handle, HandleKind::Lint, "lint")? {
+        Value::Lint(result) => read(result),
+        _ => Err(Refusal::State("unknown lint handle".into())),
+    }
+}
+
+#[extendr]
+fn lint_status(handle: Robj) -> List {
+    reply(|| read_lint(&handle, |result| Ok(r!(result.status().as_str()))))
+}
+
+#[extendr]
+fn lint_findings(handle: Robj) -> List {
+    reply(|| read_lint(&handle, |result| table(Some(&result.table()))))
+}
+
+#[extendr]
+fn lint_paths(handle: Robj) -> List {
+    reply(|| {
+        read_lint(&handle, |result| {
+            Ok(Strings::from_values(result.rewritten()).into_robj())
+        })
+    })
+}
+
+#[extendr]
+fn lint_summary(handle: Robj) -> List {
+    reply(|| read_lint(&handle, |result| Ok(r!(result.summary()))))
 }
 
 /// The JSON Schema of a file type as canonical JSON text, one character

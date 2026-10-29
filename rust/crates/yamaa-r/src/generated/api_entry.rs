@@ -46,6 +46,10 @@ extendr_module! {
     fn submission_save;
     fn submission_summary;
     fn lint;
+    fn lint_status;
+    fn lint_findings;
+    fn lint_paths;
+    fn lint_summary;
     fn schema;
     fn conditions;
     fn empty_issues;

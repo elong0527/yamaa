@@ -72,7 +72,7 @@ intent rather than translating each program step by step.
   [style guide](style.md).
   Run `yamaa.lint("<spec>.yaml", fix=True)` (`yamaa_lint("<spec>.yaml", fix = TRUE)`
   in R, `yamaa lint --fix <spec>.yaml` on the command line) with the pinned
-  yamaa, then correct the findings it still returns.
+  yamaa, then correct the rows in the result's `findings` table.
 - **Output naming.** Every spec's `output.path` is `adam/<ds>-yamaa.parquet`
   (e.g. `adam/adsl-yamaa.parquet`).
 

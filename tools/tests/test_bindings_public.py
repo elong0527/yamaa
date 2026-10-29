@@ -50,7 +50,7 @@ class RenderingTests(unittest.TestCase):
         self.assertEqual(
             classes,
             ["Check", "Run", "MemberRun", "ProjectRun", "Submission"]
-            + ["Spec", "Project", "SelfTest"],
+            + ["Spec", "Project", "Lint", "SelfTest"],
         )
 
     def test_python_delegates_each_member_to_its_operation(self):
@@ -111,6 +111,10 @@ class RenderingTests(unittest.TestCase):
                 "S3method(format, yamaa_spec)",
                 "S3method(print, yamaa_project)",
                 "S3method(format, yamaa_project)",
+                "S3method(names, yamaa_lint_result)",
+                "S3method(length, yamaa_lint_result)",
+                "S3method(print, yamaa_lint_result)",
+                "S3method(format, yamaa_lint_result)",
                 "S3method(names, yamaa_selftest)",
                 "S3method(length, yamaa_selftest)",
                 "S3method(print, yamaa_selftest)",
@@ -129,7 +133,7 @@ class RenderingTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
         # Every result prints, so every result keeps its handle for format().
-        self.assertEqual(text.count("object$.handle <- native"), 6)
+        self.assertEqual(text.count("object$.handle <- native"), 7)
 
     def test_a_printing_member_returns_the_text_rust_renders(self):
         python = self.public.render_python([])
@@ -290,12 +294,12 @@ class RenderingTests(unittest.TestCase):
 
     def test_a_path_list_converts_each_path_in_both_hosts(self):
         python = self.public.render_python([])
-        self.assertIn("def lint(paths, fix: bool = False) -> Table:", python)
+        self.assertIn("def lint(paths, fix: bool = False) -> Lint:", python)
         self.assertIn(
-            'return _native._lint(_fspaths(paths), _flag(fix, "fix"))', python
+            'return Lint(_native._lint(_fspaths(paths), _flag(fix, "fix")))', python
         )
         self.assertIn(
-            'yamaa_lint <- function(paths, fix = FALSE) {\n  .reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix")))\n}',
+            'yamaa_lint <- function(paths, fix = FALSE) {\n  .lint(.reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix"))))\n}',
             self.public.render_r([]),
         )
 

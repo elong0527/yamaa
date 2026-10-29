@@ -173,7 +173,8 @@ check_gate <- function() {
     "project_run_status", "project_run_names", "project_run_issues", "project_run_report",
     "project_run_timings", "project_run_save", "project_run_summary", "submission_status",
     "submission_created", "submission_issues", "submission_timings", "submission_save",
-    "submission_summary", "selftest_status", "selftest_cases", "selftest_info", "selftest_summary")
+    "submission_summary", "lint_status", "lint_findings", "lint_paths", "lint_summary",
+    "selftest_status", "selftest_cases", "selftest_info", "selftest_summary")
   members <- c("project_run_member_status", "project_run_output", "project_run_member_issues",
     "project_run_member_report", "project_run_member_timings", "project_run_member_summary")
   arguments <- c(

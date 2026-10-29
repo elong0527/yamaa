@@ -271,6 +271,7 @@ class PublicContract(unittest.TestCase):
                 "Table",
                 "_CORE_VERSION",
                 "_Check",
+                "_Lint",
                 "_Plans",
                 "_ProjectRun",
                 "_Run",

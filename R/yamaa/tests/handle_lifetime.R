@@ -60,6 +60,7 @@ check_dropping <- function() {
     list(label = "a run", kind = "run", make = function() spec$run()),
     list(label = "a project run", kind = "project_run", make = function() project$run()),
     list(label = "a submission", kind = "submission", make = function() project$submission()),
+    list(label = "a lint result", kind = "lint", make = function() yamaa_lint(file.path(root, "spec.yaml"))),
     list(label = "a selftest", kind = "selftest", make = function() yamaa_selftest()))
   for (case in cases) {
     before <- live()

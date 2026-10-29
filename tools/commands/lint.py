@@ -21,21 +21,20 @@ def main(argv=None):
     )
     arguments = parser.parse_args(argv)
     try:
-        findings = yamaa.lint(arguments.paths, fix=arguments.fix)
+        result = yamaa.lint(arguments.paths, fix=arguments.fix)
     except yamaa.Error as error:
         print(error, file=sys.stderr)
         for issue in error.issues.to_pylist():
             print(f"  {issue['condition']}: {issue['context']}", file=sys.stderr)
         return 2
-    rows = findings.to_pylist()
+    rows = result.findings.to_pylist()
     for row in rows:
         print(
             f"{row['file']}:{row['line']}:{row['column']}: "
             f"{row['finding']} {row['message']}"
         )
-    files = len({row["file"] for row in rows})
-    print(f"{len(rows)} lint finding(s) in {files} file(s)", file=sys.stderr)
-    return 1 if rows else 0
+    print(result, file=sys.stderr)
+    return 1 if result.status == "failed" else 0
 
 
 if __name__ == "__main__":

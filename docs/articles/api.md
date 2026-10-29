@@ -939,7 +939,7 @@ yourself.
 ## Lint specifications
 
 `lint()` checks yamaa files against the [style guide](style.md) and returns
-one row per finding: the file, the line and column where the departure
+a result. Its `findings` table has one row per finding: the file, the line and column where the departure
 starts, the finding, its spec path and a message. A directory names the
 yamaa files beneath it, of every file type. With `fix`, it first applies
 the proved fixes, replacing a file only when it reads as the same values
@@ -949,16 +949,18 @@ rewrite a finding names, and returns what remains.
 === "R"
 
     ```r
-    findings <- yamaa_lint(c("project.yaml", "sdtm/", "adam/"))
+    result <- yamaa_lint(c("project.yaml", "sdtm/", "adam/"))
     remaining <- yamaa_lint("sdtm/dm.yaml", fix = TRUE)
     ```
 
 === "Python"
 
     ```python
-    findings = yamaa.lint(["project.yaml", "sdtm/", "adam/"])
+    result = yamaa.lint(["project.yaml", "sdtm/", "adam/"])
     remaining = yamaa.lint("sdtm/dm.yaml", fix=True)
     ```
+
+The result has `status`, `findings` and `paths`. Read `result.findings` in Python or `result$findings` in R; `paths` lists the files a fix rewrote. Status is `failed` while any finding remains, and printing the result gives the engine summary.
 
 ## JSON Schema of a file type
 
