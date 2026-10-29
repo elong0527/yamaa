@@ -5,7 +5,7 @@ upstream commit `104ba03a8da116eb8c094abc18bc2530b733eda9` from
 <https://github.com/WizardMac/ReadStat>, with the later upstream fixes listed
 under [Upstream changes after 1.1.9](#upstream-changes-after-119), ported by
 hand. Upstream `dev` was last reviewed through commit
-`4fbf1d8e516513dc06c7a73aab03b3daced87d4f` (2026-10-20), the review baseline:
+`1434a0770a51b4fdb2c09515ea33c38f4fa51be8` (2026-10-29), the review baseline:
 every upstream commit up to it that changes a vendored file is listed there.
 The upstream license is in `LICENSE`.
 SAS writer/header-construction helpers are omitted from the shared upstream
@@ -135,6 +135,7 @@ reviews the commits after the baseline and moves it.
 | `b2d5407d`, `bb29605a`, `95aee731` | The release field accepts revision tags `J` and `TK` for SAS 8 and 9, any tag for other majors such as SAS 7, and the alternative magic number whose first 28 bytes are zero. | Ported |
 | `d6ffcec1`, `73756b20` | Encoding code 136 names CP932 and code 38 names ISO-8859-10. | Ported. The name is recorded metadata only; the declared encoding decodes text. |
 | `fdf4e1e0`, `5c446781`, `4010db5e`, `6f2bcc65`, `6443b805`, `1badba77`, `fa08c079` | Display format digits, widths and informats are read into each variable's format strings, in SAS datasets and version 8 transport files. | Not ported: the bridge passes on only names, widths and storage types, and display formats never select types, so these change no result. Reading informat text references would also refuse a file whose unused informat reference is out of range. |
+| `1434a077` | SAS7BDAT display formats are rebuilt with a final period and malformed format widths or digits are refused; XPT format names grow to 32 characters for the SAS writer. | Not ported: the bridge passes on only names, widths and storage types, and display formats never select types. The format parser and SAS writer are not built; adding format refusals would reject unused metadata. |
 | `d0e36ecb` | A transport file's format string keeps the period after its width when the format has no decimals, so `DATE9.` is no longer read as `DATE9`. | Not ported: the bridge passes on only names, widths and storage types, and display formats never select types, so this changes no result. |
 | `38d4418e` | Header timestamps subtract their recorded time-zone offsets. | Not ported: the bridge does not pass header timestamps on. |
 | `a1496e2c` | An unspecified encoding (code 0) is reported as none, and text converts from Windows-1252 by default. | Not ported: an unknown encoding is recorded as empty text, and the declared encoding always decodes text. |

@@ -44,7 +44,7 @@ body:
       description: 'Paste what `yamaa --version` prints, or what `yamaa.info()` (Python) or `yamaa_info()` (R) returns. Name the commit if you built from a checkout.'
       render: text
       placeholder: |
-        yamaa 0.6.2
+        yamaa 0.7.0
         language versions: 1.0
         features: odm, parquet, readstat, yaml
         host: python
