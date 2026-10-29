@@ -1,18 +1,16 @@
-## Resubmission
+## Update from 0.6.2
 
-This is a new submission, resubmitted a second time. The incoming pretests of
-0.6.0 and 0.6.1 both failed to install the package on Windows:
+This update adds in-memory data-frame inputs, codelist decoding, project
+inheritance and additional Define-XML support, and fixes input handling and
+host error reporting. The Windows build fixes from 0.6.2 are retained.
 
-- 0.6.0: `src/Makevars.win` gave Cargo R's `CC` as the linker, which ends in
-  a space there, so Cargo found no linker `gcc ` for the build scripts. 0.6.1
-  gives Cargo the first word of `CC`, and our Windows checks now build with a
-  Rust toolchain for the GNU host, `x86_64-pc-windows-gnu`, as CRAN's Windows
-  machines do.
-- 0.6.1: the Rust 1.86 to 1.95 standard library for that target carries an
-  empty `*.rcgu.dwo` member in each archive, and the Rust static library
-  bundles them. `src/Makevars.win` removes the static library's export
-  directives with objcopy, which refuses a member without sections. In 0.6.2
-  it deletes those empty members first.
+## Submission timing
+
+The 0.7.0 release is published on GitHub and PyPI independently of CRAN.
+Its CRAN submission waits until CRAN has accepted 0.6.2 and the interval
+between updates has passed. Before submission, the maintainer checks the
+unchanged release source archive with win-builder (R-devel) and the macOS
+builder, and records their results with the release qualification.
 
 ## Test environments
 
@@ -22,10 +20,13 @@ This is a new submission, resubmitted a second time. The incoming pretests of
 
 ## R CMD check results
 
-0 errors | 0 warnings | up to 2 notes
+The release checks require 0 errors and 0 warnings, allowing only the two
+notes explained below. The maintainer records the final results with the
+release qualification before submission.
 
-- `checking CRAN incoming feasibility ... NOTE`: new submission. SDTM and
-  ADaM are standard abbreviations in clinical trials, expanded in DESCRIPTION.
+- `checking CRAN incoming feasibility ... NOTE`: SDTM and ADaM are standard
+  abbreviations in clinical trials, expanded in DESCRIPTION. A check against
+  an index that has not yet recorded 0.6.2 may also report a new submission.
   The tarball is about 9.4 MB, most of it the vendored Rust crates that the
   build compiles offline.
 - `checking installed package size ... NOTE`: the installation is about
@@ -45,4 +46,4 @@ credit the bundled components and their copyright holders.
 
 ## Reverse dependencies
 
-None; this is a new package.
+The maintainer rechecks reverse dependencies before submission.

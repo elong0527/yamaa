@@ -147,8 +147,11 @@ install.packages("yamaa_<version>-4.5.tgz", repos = NULL)  # R 4.5
 install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
-Once CRAN accepts 0.6.2, `install.packages("yamaa")` installs it from there
-too. Then load the package and run the example above:
+Until CRAN publishes 0.7.0, install it from the GitHub release. Its CRAN
+submission waits until CRAN has accepted 0.6.2 and the interval between
+updates has passed (#4064 D297). `install.packages("yamaa")` installs the
+version CRAN currently serves. Then load the package and run the example
+above:
 
 ```r
 library(yamaa)
