@@ -116,6 +116,8 @@ _PY_ARGUMENT = {
     "optional_path": "_optional_fspath",
     "text": "_text",
     "optional_text": "_optional_text",
+    "file_type": "_text",
+    "flag": "_flag",
 }
 _R_ARGUMENT = {
     "path": ".path",
@@ -125,6 +127,7 @@ _R_ARGUMENT = {
     "optional_text": ".optional_text",
     "file_type": ".text",
     "progress": ".progress",
+    "flag": ".flag",
 }
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
@@ -789,7 +792,7 @@ class Public:
             _Call(
                 helper,
                 [name, f'"{name}"']
-                if helper in {"_text", "_optional_text"}
+                if helper in {"_text", "_optional_text", "_flag"}
                 else [name],
             )
             if helper
@@ -1090,6 +1093,7 @@ class Public:
         helpers = [
             name
             for name in (
+                "_flag",
                 "_fspath",
                 "_fspaths",
                 "_Lazy",

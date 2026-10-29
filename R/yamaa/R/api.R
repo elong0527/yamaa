@@ -53,6 +53,13 @@
 
 .optional_text <- function(value, what) if (is.null(value)) NULL else .text(value, what)
 
+.flag <- function(value, what) {
+  if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+    .refuse_argument(sprintf("`%s` must be one non-missing logical value", what))
+  }
+  unname(value)
+}
+
 # A path argument (#4091) is the text of a character string: its names and
 # class, such as an fs::path() or glue::glue() value carries, are dropped,
 # and a leading `~` expands as base R's file functions expand it. Only a path

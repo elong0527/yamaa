@@ -354,7 +354,12 @@ class PublicContract(unittest.TestCase):
 
         for value in (None, 7, True, [], object()):
             with self.subTest(value=type(value).__name__):
-                for function in (yamaa.spec, yamaa.project, yamaa.read_odm):
+                for function in (
+                    yamaa.spec,
+                    yamaa.project,
+                    yamaa.read_odm,
+                    yamaa.schema,
+                ):
                     with self.assertRaises(yamaa.Error):
                         function(value)
                 with self.assertRaises(yamaa.Error):
@@ -368,6 +373,16 @@ class PublicContract(unittest.TestCase):
                     ):
                         with self.assertRaises(yamaa.Error):
                             call()
+        for value in (None, 7, [], object()):
+            for call in (
+                lambda: spec.run(stream=value),
+                lambda: yamaa.lint(self.spec, fix=value),
+            ):
+                with (
+                    self.subTest(flag=type(value).__name__),
+                    self.assertRaises(yamaa.Error),
+                ):
+                    call()
         # The removed options are gone, not ignored.
         for option in ("environment", "resolver"):
             with self.subTest(option=option):
