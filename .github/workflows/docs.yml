@@ -36,7 +36,7 @@ jobs:
         run: |
           quarto render docs/slides/yamaa-pilot7-2026-09-25/index.qmd
           quarto render docs/slides/yamaa-njsug-2026-10-09/index.qmd
-          quarto render docs/slides/yamaa-asa-boston-20261112/index.qmd
+          quarto render docs/slides/yamaa-asa-boston-2026-11-12/index.qmd
       - name: Build the strict site from current sources
         run: |
           uv sync --project python --locked --group tooling --no-install-package yamaa
