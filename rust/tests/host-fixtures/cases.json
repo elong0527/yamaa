@@ -8509,6 +8509,11 @@
           "outcome": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_parquet", "format_yaml"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]}
         },
         {
+          "case": "boundary one is a mismatch after table pickling advances the boundary",
+          "request": {"version": 1, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 1, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
           "case": "a request for the next version is a mismatch",
           "request": {"version": "{next_version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
           "outcome": {"accepted": false, "requested_version": "{next_version}", "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}

@@ -21,9 +21,10 @@ class HandshakeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             boundary = Path(directory) / "lib.rs"
             boundary.write_text(
-                source.replace(
-                    "pub const BOUNDARY_VERSION: u32 = 1;",
+                re.sub(
+                    r"pub const BOUNDARY_VERSION: u32 = [0-9]+;",
                     "pub const BOUNDARY_VERSION: u32 = 7;",
+                    source,
                 ),
                 encoding="utf-8",
             )
