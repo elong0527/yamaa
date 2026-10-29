@@ -21,8 +21,8 @@ benchmarks, schemas, rules and both host packages.
 The [dev container](.devcontainer/devcontainer.json) uses Rocker's latest
 `tidyverse` image for the latest released R and a pre-installed tidyverse.
 Its [setup script](.devcontainer/setup.sh) installs the latest stable Python
-through uv, the latest opensas Linux release, and the latest OpenCode through
-its `opencode-ai` npm package. Node.js LTS and Rust are included for those
+through uv, the latest opensas Linux release, and the latest OpenCode v2 through
+its `@opencode/cli@2` npm package. Node.js LTS and Rust are included for those
 tools and for building yamaa.
 
 Setup runs `make setup` to install the Python yamaa package, Polars and the
@@ -53,8 +53,8 @@ this recreates the Python environment. After changing the container
 configuration, use **Codespaces: Rebuild Container** in the command palette.
 To refresh the base image to the newest R release, use **Codespaces: Full
 Rebuild Container**. The lock file continues to select yamaa's development
-dependencies; the R image, Python, opensas and OpenCode follow their latest
-stable releases when freshly installed.
+dependencies; the R image, Python and opensas follow their latest stable
+releases when freshly installed, and OpenCode follows the latest v2 release.
 
 ## Where changes belong
 
