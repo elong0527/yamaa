@@ -535,7 +535,11 @@ fn odm_limit_value(value: &Bound<'_, PyAny>) -> PyResult<yamaa::ContextValue> {
         V::Bool(value.extract()?)
     } else if value.is_instance_of::<PyInt>() {
         value.extract::<i64>().map_or_else(
-            |_| value.str().map(|text| V::Wide(text.to_string())),
+            |_| {
+                value
+                    .extract::<num_bigint::BigInt>()
+                    .map(|integer| V::Wide(integer.to_string()))
+            },
             |value| Ok(V::Int(value)),
         )?
     } else if value.is_instance_of::<PyFloat>() {

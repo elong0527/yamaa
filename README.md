@@ -9,6 +9,7 @@
 [![Define-XML 2.0.0+](https://img.shields.io/badge/Define--XML-2.0.0%2B-blue)](https://www.cdisc.org/standards/data-exchange/define-xml)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/elong0527/yamaa)
 [![SDTMIG: 3.3+](https://img.shields.io/badge/SDTMIG-3.3%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported SDTMIG: 3.3; see the qualified version list and generation/export coverage")
 [![ADaMIG: 1.1+](https://img.shields.io/badge/ADaMIG-1.1%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported ADaMIG: 1.1; see the qualified version list and generation/export coverage")
 
