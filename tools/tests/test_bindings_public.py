@@ -26,6 +26,7 @@ class RenderingTests(unittest.TestCase):
     def test_python_exports_the_declared_names(self):
         names = [
             "Error",
+            "StateError",
             "Table",
             "__version__",
             "conditions",
@@ -48,20 +49,20 @@ class RenderingTests(unittest.TestCase):
         classes = [node.name for node in module.body if isinstance(node, ast.ClassDef)]
         self.assertEqual(
             classes,
-            ["Error", "Check", "Run", "MemberRun", "ProjectRun", "Submission"]
+            ["Check", "Run", "MemberRun", "ProjectRun", "Submission"]
             + ["Spec", "Project", "SelfTest"],
         )
 
     def test_python_delegates_each_member_to_its_operation(self):
         text = self.public.render_python([])
         for expected in (
-            "                self._plans,\n                stream,\n                progress,\n",
-            "return Spec(_call(_native._project_spec, self._path, name), self._path)",
-            "return _call(self._native.output, self._name)",
-            "        return _call(self._native.save)\n",
-            "            _call(self._native.member_issues, name)  # raises",
+            "            _native._spec_run(self._path, self._project, self._plans, stream, progress)\n",
+            'return Spec(_native._project_spec(self._path, _text(name, "name")), self._path)',
+            "return self._native.output(self._name)",
+            "        return self._native.save()\n",
+            '            self._native.member_issues(\n                _text(name, "name")\n            )  # raises',
             "        return MemberRun(self._native, name)",
-            "        return Check(_call(_native._project_check, self._path, progress))",
+            "        return Check(_native._project_check(self._path, progress))",
             "class Spec(_Lazy):",
             "    def __init__(self, path, project=None):",
             "    def __init__(self, native, name: str):",
@@ -290,7 +291,7 @@ class RenderingTests(unittest.TestCase):
     def test_a_path_list_converts_each_path_in_both_hosts(self):
         python = self.public.render_python([])
         self.assertIn("def lint(paths, fix: bool = False) -> Table:", python)
-        self.assertIn("return _call(_native._lint, _fspaths(paths), fix)", python)
+        self.assertIn("return _native._lint(_fspaths(paths), fix)", python)
         self.assertIn(
             'yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.paths(paths, "paths"), fix))',
             self.public.render_r([]),
@@ -333,7 +334,7 @@ class RenderingTests(unittest.TestCase):
             "def schema(file_type: str) -> str:\n"
             '    """The JSON Schema of a file type, spec, project, codelists or '
             'function, as canonical JSON text."""\n'
-            "    return _call(_native._schema, file_type)\n",
+            "    return _native._schema(file_type)\n",
             python,
         )
         self.assertIn(
@@ -344,33 +345,44 @@ class RenderingTests(unittest.TestCase):
     def test_a_long_export_list_is_split_one_name_per_line(self):
         text = self.public.render_python([])
         self.assertIn(
-            '__all__ = [\n    "Error",\n    "Table",\n    "__version__",\n', text
+            '__all__ = [\n    "Error",\n    "StateError",\n    "Table",\n    "__version__",\n',
+            text,
         )
         self.assertIn('    "spec",\n]\n', text)
         candidate = copy.deepcopy(self.definition)
-        for name in ("lint", "schema", "conditions", "info"):
+        for name in ("lint", "schema", "conditions", "info", "selftest"):
             candidate["public"]["functions"].remove(function(candidate, name))
         short = public.Public(candidate).render_python([])
         self.assertIn(
-            '__all__ = ["Error", "Table", "__version__", "project", "read_odm", '
-            '"selftest", "spec"]\n',
+            '__all__ = ["Error", "StateError", "Table", "__version__", "project", '
+            '"read_odm", "spec"]\n',
             short,
         )
 
     def test_the_helper_import_names_the_helpers_used_and_wraps_when_long(self):
-        text = self.public.render_python([])
-        self.assertIn(
-            "from yamaa._support import __version__, _fspath, _fspaths, _Lazy, "
-            "_optional_fspath\n",
-            text,
-        )
-        # lint() alone converts a list of paths.
+        def imported(text):
+            [node] = [
+                node
+                for node in ast.parse(text).body
+                if isinstance(node, ast.ImportFrom) and node.module == "yamaa._support"
+            ]
+            return [item.name for item in node.names]
+
+        expected = [
+            "__version__",
+            "_fspath",
+            "_fspaths",
+            "_Lazy",
+            "_optional_fspath",
+            "_optional_text",
+            "_text",
+        ]
+        self.assertEqual(imported(self.public.render_python([])), expected)
         candidate = copy.deepcopy(self.definition)
         candidate["public"]["functions"].remove(function(candidate, "lint"))
-        short = public.Public(candidate).render_python([])
-        self.assertIn(
-            "from yamaa._support import __version__, _fspath, _Lazy, _optional_fspath\n",
-            short,
+        self.assertEqual(
+            imported(public.Public(candidate).render_python([])),
+            [name for name in expected if name != "_fspaths"],
         )
         with patch.object(public, "_PY_WIDTH", 60):
             narrow = public.Public(self.definition).render_python([])
@@ -388,7 +400,7 @@ class RenderingTests(unittest.TestCase):
         self.assertNotIn("export(yamaa_read_odm)", rendered.render_namespace([]))
         self.assertNotIn("read_odm", rendered.python_names())
 
-    def test_raises_decides_whether_a_call_maps_the_native_refusal(self):
+    def test_declared_refusals_use_the_same_native_call_without_remapping(self):
         candidate = copy.deepcopy(self.definition)
         member(candidate, "Spec", "check").pop("raises")
         text = public.Public(candidate).render_python([])
@@ -404,7 +416,8 @@ class RenderingTests(unittest.TestCase):
     def test_a_python_only_class_is_the_native_class_exported_as_it_is(self):
         python = self.public.render_python([])
         self.assertIn(
-            "from yamaa import _native\nfrom yamaa._native import Table\n", python
+            "from yamaa import _native\nfrom yamaa._native import Error, StateError, Table\n",
+            python,
         )
         self.assertNotIn("class Table", python)
         self.assertNotIn("Table", self.public.render_r([]))
@@ -419,12 +432,10 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("    def issues(self) -> Table:\n", python)
         self.assertIn("    def output(self) -> Table | None:\n", python)
         self.assertIn(
-            "    def __init__(self, message: str, issues: Table, paths: list[str]):",
+            "def _error_init(self, message: str, issues: Table, paths: list[str]):",
             python,
         )
-        self.assertIn(
-            'str(error), getattr(error, "issues"), getattr(error, "paths")', python
-        )
+        self.assertIn('setattr(Error, "__reduce__", _error_reduce)', python)
 
     def test_generated_python_is_valid_and_ascii(self):
         text = self.public.render_python(generator._PYI_HEADER)
@@ -758,12 +769,12 @@ class ManifestTests(unittest.TestCase):
             "public.r.exports.yamaa_read_odm",
             "public.r.s3methods.yamaa_project_run.[[",
             "public.classes.SelfTest.info: property; returns info; record info",
-            "public.classes.SelfTest.summary: printing; python __repr__; r print, format",
+            "public.classes.SelfTest.summary: printing; python __repr__; r print, format; raises refusal",
             "public.r.s3methods.yamaa_selftest.print",
             "public.r.s3methods.yamaa_selftest.format",
             "public.classes.Check.status: property; returns status",
             "public.classes.MemberRun.status: property; returns status; raises refusal",
-            "public.classes.Spec.summary: printing; python __repr__; r print, format",
+            "public.classes.Spec.summary: printing; python __repr__; r print, format; raises refusal",
             "public.r.s3methods.yamaa_spec.format",
             "public.classes.ProjectRun.length: protocol; python __len__",
             "public.r.s3methods.yamaa_check.names: status, issues, timings",
@@ -772,13 +783,13 @@ class ManifestTests(unittest.TestCase):
             "public.types.polars_frame: python polars.DataFrame",
             "public.value_types.date: python Arrow Date32, datetime.date; r Date",
             "public.classes.Table: python yamaa.Table",
-            "public.classes.Table.num_rows: property; returns count",
-            "public.classes.Table.length: protocol; python __len__; returns count",
-            "public.classes.Table.preview: printing; python __repr__",
+            "public.classes.Table.num_rows: property; returns count; raises refusal",
+            "public.classes.Table.length: protocol; python __len__; returns count; raises refusal",
+            "public.classes.Table.preview: printing; python __repr__; raises refusal",
             "public.classes.Table.arrow_stream.args[0]: "
             "requested_schema: schema_request = None",
-            "public.classes.Table.to_pylist: method; returns rows",
-            "public.classes.Table.to_pandas: method; returns pandas_frame; "
+            "public.classes.Table.to_pylist: method; returns rows; raises refusal",
+            "public.classes.Table.to_pandas: method; returns pandas_frame; raises refusal; "
             "imports pandas, pyarrow",
             "public.python.exports.Table",
         ):

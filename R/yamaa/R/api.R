@@ -34,19 +34,21 @@
       invokeRestart(ends[[1L]])
     }
     if (!is.null(error$condition)) stop(error$condition)
-    stop(structure(
-      list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
-      class = c("yamaa_error", "error", "condition")
-    ))
+    stop(.refusal(error))
   }
   reply$value
 }
 
+.refuse_argument <- function(message) {
+  stop(.refusal(list(message = message,
+    issues = .reply(.native_empty_issues()), paths = character(), state = FALSE)))
+}
+
 .text <- function(value, what) {
   if (!is.character(value) || length(value) != 1L || is.na(value)) {
-    stop(sprintf("`%s` must be one non-missing character string", what), call. = FALSE)
+    .refuse_argument(sprintf("`%s` must be one non-missing character string", what))
   }
-  .utf8_raw(value)
+  tryCatch(.utf8_raw(value), error = function(error) .refuse_argument(conditionMessage(error)))
 }
 
 .optional_text <- function(value, what) if (is.null(value)) NULL else .text(value, what)
@@ -57,18 +59,20 @@
 # expands; a name, a section or a TAR member name is text, which .text()
 # takes as written.
 .path <- function(value, what) {
-  if (is.character(value)) value <- path.expand(as.character(unname(value)))
+  if (is.character(value)) value <- .expanded_paths(value)
   .text(value, what)
 }
+
+.expanded_paths <- function(value) tryCatch(path.expand(as.character(unname(value))),
+  error = function(error) .refuse_argument(conditionMessage(error)))
 
 .optional_path <- function(value, what) if (is.null(value)) NULL else .path(value, what)
 
 .paths <- function(value, what) {
   if (!is.character(value) || length(value) == 0L || anyNA(value)) {
-    stop(sprintf("`%s` must be a non-empty character vector without missing values", what),
-      call. = FALSE)
+    .refuse_argument(sprintf("`%s` must be a non-empty character vector without missing values", what))
   }
-  lapply(path.expand(as.character(unname(value))), .utf8_raw)
+  lapply(.expanded_paths(value), function(value) .text(value, what))
 }
 
 .version <- function() charToRaw(as.character(getRversion()))
@@ -137,7 +141,7 @@
 .progress <- function(progress, what) {
   if (is.null(progress)) return(NULL)
   if (!is.function(progress)) {
-    stop(sprintf("`%s` must be a function or NULL", what), call. = FALSE)
+    .refuse_argument(sprintf("`%s` must be a function or NULL", what))
   }
   force(progress)
   function(event) tryCatch({

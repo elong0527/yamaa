@@ -4,11 +4,10 @@
 //!
 //! The generated `yamaa/__init__.py` calls `_interface_handshake` right after
 //! importing this module, before any other native call. Until a negotiation
-//! is accepted, every other module function refuses with a `RuntimeError`;
+//! is accepted, every other module function refuses with a `StateError`;
 //! a result handle only comes from such a function, so its methods need no
 //! gate of their own.
 use pyo3::{
-    exceptions::PyRuntimeError,
     prelude::*,
     types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple},
 };
@@ -24,7 +23,7 @@ pub(crate) static CENSUS: Census = Census::new();
 /// binding's ordinary boundary refusal, as a busy handle is refused.
 pub(crate) fn gate() -> PyResult<()> {
     GATE.pass()
-        .map_err(|closed| PyRuntimeError::new_err(closed.to_string()))
+        .map_err(|closed| Python::attach(|py| crate::errors::message(py, true, closed.to_string())))
 }
 
 /// Answer an interface request: the accepted record, or the refusal

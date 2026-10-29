@@ -48,6 +48,7 @@ extendr_module! {
     fn lint;
     fn schema;
     fn conditions;
+    fn empty_issues;
     fn info;
     fn selftest;
     fn selftest_status;

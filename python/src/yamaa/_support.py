@@ -11,7 +11,7 @@ standard library.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _distribution_version
 from os import PathLike
-from os import fspath as _fspath
+from os import fspath as _os_fspath
 
 from yamaa import _native
 
@@ -24,11 +24,35 @@ __all__ = [
 ]
 
 
+def _fspath(path) -> str:
+    """A host argument refusal has the native refusal class and an issues table."""
+    try:
+        result = _os_fspath(path)
+        if not isinstance(result, str):
+            raise TypeError("paths must be text, not bytes")
+        return result
+    except TypeError as error:
+        raise _native.Error(str(error), _native._empty_issues(), []) from None
+
+
+def _text(value, what):
+    if not isinstance(value, str):
+        raise _native.Error(f"{what} must be text", _native._empty_issues(), [])
+    return value
+
+
+def _optional_text(value, what):
+    return None if value is None else _text(value, what)
+
+
 def _fspaths(paths) -> list[str]:
     """One path or a list of paths, each as a string."""
     if isinstance(paths, (str, PathLike)):
         return [_fspath(paths)]
-    return [_fspath(path) for path in paths]
+    try:
+        return [_fspath(path) for path in paths]
+    except TypeError as error:
+        raise _native.Error(str(error), _native._empty_issues(), []) from None
 
 
 def _optional_fspath(path) -> str | None:

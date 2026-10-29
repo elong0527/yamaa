@@ -5,8 +5,8 @@
 //! The generated `.onLoad` calls `interface_handshake` before any other
 //! routine. Every other routine replies through `api_entry::reply`, which
 //! passes the gate first, so until a negotiation is accepted each one
-//! refuses with no issues.
-use crate::api_entry::{answer, reply};
+//! refuses with an empty issues frame.
+use crate::api_entry::{answer, reply, Refusal};
 use crate::function_callback::text_at;
 use extendr_api::prelude::*;
 use yamaa_boundary::{Census, EngineFacts, Gate, Outcome, Value, DEPTH};
@@ -18,8 +18,9 @@ static GATE: Gate = Gate::new();
 pub(crate) static CENSUS: Census = Census::new();
 
 /// Refuse a native routine until the interface handshake succeeds.
-pub(crate) fn gate() -> std::result::Result<(), String> {
-    GATE.pass().map_err(|closed| closed.to_string())
+pub(crate) fn gate() -> std::result::Result<(), Refusal> {
+    GATE.pass()
+        .map_err(|closed| Refusal::State(closed.to_string()))
 }
 
 /// A boundary version as R holds it: an integer, or a double beyond R's
@@ -33,7 +34,7 @@ fn version(version: u32) -> Robj {
 /// the gate; a later call answers its request and changes nothing.
 #[extendr]
 fn interface_handshake(request: Robj) -> List {
-    answer(false, || {
+    answer(|| {
         // The engine information names no host version, which nothing here
         // reads.
         let info = yamaa::info(yamaa::Host::R, None);

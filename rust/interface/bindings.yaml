@@ -496,14 +496,14 @@ public:
           returns: status
           calls: check_status
           doc: "`failed` when the check found an issue, and `succeeded` otherwise."
-        - {name: issues, kind: property, returns: table, table: issues, calls: check_issues}
+        - {name: issues, kind: property, returns: table, table: issues, calls: check_issues, raises: refusal}
         - name: timings
           kind: property
           returns: table
           table: timings
           calls: check_timings
           doc: The time each specification's preparation took.
-        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: check_summary}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: check_summary, raises: refusal}
     Run:
       python: yamaa.Run
       r: yamaa_run
@@ -544,7 +544,7 @@ public:
           raises: refusal
           calls: run_save
           doc: Write the declared report file, then the output dataset; return the paths written.
-        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: run_summary}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: run_summary, raises: refusal}
         # Installed-run evidence for qualification suites: R's
         # `.run_observations(run)`; Python reads `run._native.observations()`.
         - name: observations
@@ -617,8 +617,8 @@ public:
         - {name: iterate, kind: protocol, python: __iter__, doc: "The names, as `names` lists them."}
         # D44: len() counts the names, as R's length() does.
         - {name: length, kind: protocol, python: __len__, doc: "The number of names."}
-        - {name: issues, kind: property, returns: table, table: issues, calls: project_run_issues}
-        - {name: report, kind: property, returns: table, table: report, calls: project_run_report}
+        - {name: issues, kind: property, returns: table, table: issues, calls: project_run_issues, raises: refusal}
+        - {name: report, kind: property, returns: table, table: report, calls: project_run_report, raises: refusal}
         - name: timings
           kind: property
           returns: table
@@ -631,7 +631,7 @@ public:
           raises: refusal
           calls: project_run_save
           doc: Write each report file, then each output unless a run failed; return the paths written.
-        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: project_run_summary}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: project_run_summary, raises: refusal}
     Submission:
       python: yamaa.Submission
       r: yamaa_submission
@@ -649,7 +649,7 @@ public:
           returns: text
           calls: submission_created
           doc: The ISO 8601 creation time the documents carry, as given or as read once for every section.
-        - {name: issues, kind: property, returns: table, table: issues, calls: submission_issues}
+        - {name: issues, kind: property, returns: table, table: issues, calls: submission_issues, raises: refusal}
         - name: timings
           kind: property
           returns: table
@@ -662,7 +662,7 @@ public:
           raises: refusal
           calls: submission_save
           doc: Write each section's transport files, then its define.xml; return the paths written.
-        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: submission_summary}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: submission_summary, raises: refusal}
     # A lazy object prints the path it holds, as given (D37): it has read
     # nothing to say more about.
     Spec:
@@ -699,7 +699,7 @@ public:
           doc: >-
             Build the dataset in memory, or with stream as its output is read;
             `progress` is called with each progress event.
-        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: spec_summary}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: spec_summary, raises: refusal}
     Project:
       python: yamaa.Project
       r: yamaa_project
@@ -742,7 +742,7 @@ public:
           returns: Submission
           raises: refusal
           calls: project_submission
-        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: project_summary}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: project_summary, raises: refusal}
     # The installation self-test (D28, D119). Its printed text is the report:
     # the summary line, the first failure, the adapters no case covered and
     # the information line, rendered in Rust.
@@ -769,7 +769,7 @@ public:
           record: info
           calls: selftest_info
           doc: The engine, language versions, features, host and platform that ran the cases.
-        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: selftest_summary}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: selftest_summary, raises: refusal}
     # Every table a Python call returns (D11, D43): the native class Table of
     # yamaa._native, which the public module exports as it is, so each member
     # is a native method that host_only names. R's tables are data frames
@@ -780,30 +780,34 @@ public:
       python: yamaa.Table
       hosts: [python]
       members:
-        - {name: num_rows, kind: property, returns: count}
+        - {name: num_rows, raises: refusal, kind: property, returns: count}
         - {name: column_names, kind: property, returns: names}
-        - {name: length, kind: protocol, python: __len__, returns: count}
-        - {name: pickle, kind: protocol, python: __reduce__, returns: pickle}
-        - {name: preview, kind: printing, python: __repr__}
+        - {name: length, raises: refusal, kind: protocol, python: __len__, returns: count}
+        - {name: pickle, raises: refusal, kind: protocol, python: __reduce__, returns: pickle}
+        - {name: preview, raises: refusal, kind: printing, python: __repr__}
         - name: arrow_stream
           kind: protocol
           python: __arrow_c_stream__
+          raises: refusal
           args: {requested_schema: schema_request = None}
           returns: arrow_capsule
-        - {name: to_pylist, kind: method, returns: rows}
-        - {name: to_arrow, kind: method, returns: arrow_table, imports: [pyarrow]}
-        - {name: to_polars, kind: method, returns: polars_frame, imports: [polars]}
-        - {name: to_pandas, kind: method, returns: pandas_frame, imports: [pandas, pyarrow]}
+        - {name: to_pylist, raises: refusal, kind: method, returns: rows}
+        - {name: to_arrow, raises: refusal, kind: method, returns: arrow_table, imports: [pyarrow]}
+        - {name: to_polars, raises: refusal, kind: method, returns: polars_frame, imports: [polars]}
+        - {name: to_pandas, raises: refusal, kind: method, returns: pandas_frame, imports: [pandas, pyarrow]}
 
   errors:
     refusal:
       python:
         class: yamaa.Error
+        native: Error
+        state: yamaa.StateError
         base: Exception
         attributes: {issues: table, paths: paths_written}
         picklable: true
       r:
         class: [yamaa_error, error, condition]
+        state: yamaa_state_error
         fields: {message: text, call: "NULL", issues: table, paths: paths_written}
       table: issues
       doc: >-
@@ -1074,9 +1078,18 @@ python:
       args: {data: host_object}
       returns: Table
     - kind: exception
-      name: _Error
-      rust: api_entry::_Error
+      name: Error
+      rust: errors::Error
       base: Exception
+    - kind: exception
+      name: StateError
+      rust: errors::StateError
+      base: Error
+    - kind: function
+      name: _empty_issues
+      rust: errors::_empty_issues
+      args: {}
+      returns: Table
     - kind: class
       name: _Check
       rust: api_entry::Check
@@ -1337,6 +1350,7 @@ r:
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
         - {name: schema, args: {file_type: raw}, returns: r_reply}
         - {name: conditions, args: {}, returns: r_reply}
+        - {name: empty_issues, args: {}, returns: r_reply}
         - {name: info, args: {version: raw}, returns: r_reply}
         - {name: selftest, args: {version: raw}, returns: r_reply}
         - {name: selftest_status, args: {handle: robj}, returns: r_reply}
@@ -1399,6 +1413,7 @@ operations:
   lint: {python: [_lint], r: [lint]}
   schema: {python: [_schema], r: [schema]}
   conditions: {python: [_conditions], r: [conditions]}
+  empty_issues: {python: [_empty_issues], r: [empty_issues]}
   info: {python: [_info], r: [info]}
   selftest: {python: [_selftest], r: [selftest]}
   selftest_status: {python: [_SelfTest.status], r: [selftest_status]}

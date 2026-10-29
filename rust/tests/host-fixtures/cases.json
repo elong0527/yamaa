@@ -4812,6 +4812,7 @@
       }
     },
     "public-contract": {
+      "unrepresentable_refusal": {"yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: \"bad\\0\"\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n", "message": "cannot save {path}: {path}:3:1: model has the value bad\\x00, which is not permitted [value_not_permitted, SCHEMA-12]; text containing NUL cannot be held by an R character vector", "r_class": ["yamaa_error", "error", "condition"]},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
       "issue_columns": [
         "severity",
@@ -8478,6 +8479,7 @@
       }
     },
     "interface": {
+      "refusal": {"python": "StateError", "r": ["yamaa_state_error", "yamaa_error", "error", "condition"]},
       "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"]},
       "accepted": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]},
       "messages": {
@@ -8512,6 +8514,11 @@
           "case": "boundary one is a mismatch after table pickling advances the boundary",
           "request": {"version": 1, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
           "outcome": {"accepted": false, "requested_version": 1, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "boundary two is a mismatch after native refusals advance the boundary",
+          "request": {"version": 2, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 2, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
         },
         {
           "case": "a request for the next version is a mismatch",
@@ -8624,6 +8631,7 @@
       }
     },
     "streaming": {
+      "refusal": {"python": "StateError", "r": ["yamaa_state_error", "yamaa_error", "error", "condition"]},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float, D: date, T: datetime}}}\noutput: {path: output.csv, columns: [ID, NAME, V, D, T], order_by: [{variable: ID, direction: desc}]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n  - {name: V, type: float, label: Value, derivation: SRC.V}\n  - {name: D, type: date, label: Day, derivation: SRC.D}\n  - {name: T, type: datetime, label: Time, derivation: SRC.T}\n",
       "input_csv": "ID,NAME,V,D,T\n1,alpha,1.5,2024-01-01,2024-01-01T08:30:00\n2,beta,,2024-02-29,\n3,gamma,2.25,,2024-03-01T00:00:00\n4,,-0.5,2023-12-31,2023-12-31T23:59:59\n5,epsilon,10,2024-03-01,2024-03-01T12:00:05\n",
       "rows": [

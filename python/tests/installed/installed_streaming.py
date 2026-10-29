@@ -170,7 +170,7 @@ class Streaming(unittest.TestCase):
             output.to_pylist,
             lambda: pickle.dumps(output),
         ):
-            with self.assertRaises(RuntimeError) as raised:
+            with self.assertRaises(yamaa.StateError) as raised:
                 read()
             refusals.append(str(raised.exception))
         with self.assertRaises(pa.ArrowInvalid) as raised:
@@ -198,7 +198,7 @@ class Streaming(unittest.TestCase):
         gc.collect()
         refusals = []
         for read in (lambda: run.status, lambda: run.output, run.save):
-            with self.assertRaises(RuntimeError) as raised:
+            with self.assertRaises(yamaa.StateError) as raised:
                 read()
             refusals.append(str(raised.exception))
         self.assertEqual(
@@ -247,7 +247,7 @@ class Streaming(unittest.TestCase):
                             [_thread.interrupt_main, reader.read_next_batch],
                         )
                     )
-                with self.assertRaises(RuntimeError) as refused:
+                with self.assertRaises(yamaa.StateError) as refused:
                     run.status
                 self.assertEqual(
                     (
@@ -271,7 +271,7 @@ class Streaming(unittest.TestCase):
             self.assertRaises(pa.ArrowInvalid) as raised,
         ):
             reader.read_next_batch()
-        with self.assertRaises(RuntimeError) as refused:
+        with self.assertRaises(yamaa.StateError) as refused:
             run.status
         self.assertEqual(
             (

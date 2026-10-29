@@ -117,11 +117,12 @@ unknown_section <- function(error, key)
 # which Python compares too.
 nothing_to_save <- function(error, key)
   one_truth_row(error, host_truth[["nothing_to_save_issues"]][[key]])
-# Argument mistakes are ordinary errors, never yamaa_error.
-argument_failure <- function(code) {
+# Host argument refusals use yamaa_error and always carry issues.
+argument_failure <- function(code, package = TRUE) {
   seen <- tryCatch({ force(code); NULL }, error = identity)
   stopifnot("an argument mistake is an error" = inherits(seen, "error"),
-    "an argument mistake is not yamaa_error" = !inherits(seen, "yamaa_error"),
+    "the argument refusal class matches its boundary" = identical(inherits(seen, "yamaa_error"), package),
+    "a package refusal has an issues frame" = !package || is.data.frame(seen$issues),
     "an argument mistake has a message" = is.character(conditionMessage(seen)))
 }
 members <- function(object) sort(ls(object), method = "radix")
@@ -202,12 +203,12 @@ qualify_signatures <- function() {
   # The removed options are gone, not ignored.
   for (option in c("environment", "resolver")) {
     arguments <- setNames(list(NULL), option)
-    argument_failure(do.call(yamaa_spec, c(list(file.path(root, "absent.yaml")), arguments)))
+    argument_failure(do.call(yamaa_spec, c(list(file.path(root, "absent.yaml")), arguments)), FALSE)
     for (method in list(spec$check, spec$resolve, spec$run, project$check)) {
-      argument_failure(do.call(method, arguments))
+      argument_failure(do.call(method, arguments), FALSE)
     }
   }
-  argument_failure(run$save(file.path(root, "other.csv")))
+  argument_failure(run$save(file.path(root, "other.csv")), FALSE)
   expect_identical(list.files(root), character(), "argument mistakes write nothing")
   cat("public exports, signatures, members, locked results and argument errors passed\n")
 }
@@ -1104,3 +1105,20 @@ qualify_resolved_origins <- function() {
   cat("resolved original origins retain inherited defaults, shorthand and named-window definitions\n")
 }
 qualify_resolved_origins()
+
+# The public error-envelope seam must survive a diagnostic that R cannot hold.
+qualify_unrepresentable_refusal <- function() {
+  root <- tempfile("yamaa-unrepresentable-refusal-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  path <- file.path(normalizePath(root, winslash = "/"), "bad.yaml")
+  case <- host_truth$unrepresentable_refusal
+  writeBin(charToRaw(case$yaml), path)
+  seen <- tryCatch(yamaa_spec(path)$run()$save(), yamaa_error = identity)
+  expect_identical(list(class = class(seen), message = conditionMessage(seen), call = conditionCall(seen),
+    frame = is.data.frame(seen$issues), columns = names(seen$issues), rows = nrow(seen$issues), paths = seen$paths),
+    list(class = fixture_strings(case$r_class), message = gsub("{path}", path, case$message, fixed = TRUE),
+      call = NULL, frame = TRUE, columns = fixture_strings(host_truth$issue_columns), rows = 0L, paths = character()),
+    "a refused issues conversion still carries an empty issues frame")
+}
+qualify_unrepresentable_refusal()

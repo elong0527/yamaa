@@ -10,7 +10,7 @@
 //! stream (#3697): its Arrow stream produces the output as it is read, and
 //! its other members read the output whole.
 use pyo3::{
-    exceptions::{PyModuleNotFoundError, PyNotImplementedError, PyTypeError, PyValueError},
+    exceptions::{PyModuleNotFoundError, PyTypeError, PyValueError},
     prelude::*,
     types::{PyBytes, PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
     IntoPyObjectExt,
@@ -36,7 +36,7 @@ use yamaa_boundary::{HandleKind, Live};
 /// library that reads its Arrow stream drives the run, one batch per pull,
 /// and every other member reads the output whole, running the run whole if
 /// nobody has started to read it. Once its stream has been read, the output
-/// is not kept, and reading it again raises `RuntimeError`.
+/// is not kept, and reading it again raises `yamaa.StateError`.
 #[pyclass(frozen, module = "yamaa", name = "Table")]
 pub struct Table {
     held: Held,
@@ -71,7 +71,7 @@ impl Table {
     /// The whole table: the held one, or a streamed run's output read whole,
     /// detached from the interpreter (#4072) inside a native call that raises
     /// an interrupt again (D46). A streamed run's refusal is a
-    /// `RuntimeError`, as a busy handle's is.
+    /// `yamaa.StateError`, as a busy handle's is.
     fn whole(&self, py: Python<'_>) -> PyResult<yamaa::Table> {
         crate::interrupt::run(py, |_| match &self.held {
             Held::Table(table) => Ok(table.clone()),
@@ -109,16 +109,17 @@ impl Table {
         let table = self.whole(py)?;
         let mut bytes = Vec::new();
         {
-            let mut writer = arrow_ipc::writer::StreamWriter::try_new(&mut bytes, table.schema())
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            let mut writer =
+                arrow_ipc::writer::StreamWriter::try_new(&mut bytes, table.schema())
+                    .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
             for batch in table.batches() {
                 writer
                     .write(batch)
-                    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+                    .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
             }
             writer
                 .finish()
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+                .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
         }
         let restore = PyModule::import(py, "yamaa._native")?.getattr("_table_from_pickle")?;
         (restore, (PyBytes::new(py, &bytes),)).into_bound_py_any(py)
@@ -147,7 +148,9 @@ impl Table {
         requested_schema: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyCapsule>> {
         if requested_schema.is_some_and(|schema| !schema.is_none()) {
-            return Err(PyNotImplementedError::new_err(
+            return Err(crate::errors::message(
+                py,
+                false,
                 "Arrow schema conversion is not supported; import the preserved schema first",
             ));
         }
@@ -337,12 +340,16 @@ fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, Py
 #[pyfunction]
 pub fn _table_from_pickle(data: &Bound<'_, PyAny>) -> PyResult<Table> {
     crate::interface::gate()?;
-    let data = data.cast::<PyBytes>()?.as_bytes();
+    let py = data.py();
+    let data = data
+        .cast::<PyBytes>()
+        .map_err(|error| crate::errors::message(py, false, error.to_string()))?
+        .as_bytes();
     let reader =
         arrow_ipc::reader::StreamReader::try_new(std::io::Cursor::new(data.to_vec()), None)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
     let stream = yamaa::FFI_ArrowArrayStream::new(Box::new(reader));
     let table = yamaa::Table::import(stream)
-        .map_err(|error| PyValueError::new_err(error.message().to_owned()))?;
+        .map_err(|error| crate::errors::message(py, false, error.message()))?;
     Ok(Table::from(&table))
 }
