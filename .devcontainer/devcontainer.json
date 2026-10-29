@@ -1,0 +1,45 @@
+{
+  "name": "yamaa",
+  "image": "rocker/tidyverse:latest",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "username": "rstudio"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {},
+    "ghcr.io/devcontainers-extra/features/uv:1": {}
+  },
+  "remoteUser": "rstudio",
+  "overrideCommand": true,
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/python/.venv/bin:/home/rstudio/.local/bin:${containerEnv:PATH}",
+    "R_LIBS_USER": "/home/rstudio/R/library",
+    "CARGO_BUILD_JOBS": "2"
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "waitFor": "postCreateCommand",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "REditorSupport.r",
+        "rust-lang.rust-analyzer",
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/python/.venv/bin/python",
+        "r.rterm.linux": "/usr/local/bin/R",
+        "rust-analyzer.linkedProjects": ["rust/Cargo.toml"]
+      }
+    }
+  }
+}
