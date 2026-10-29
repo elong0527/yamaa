@@ -251,6 +251,17 @@ class MemoryInputs(unittest.TestCase):
             self.spec.run(inputs={"SRC": empty, "AUX": empty}), TRUTH["empty_csv"]
         )
 
+    def test_zero_column_frames_keep_their_rows_for_eager_and_deferred_runs(self):
+        truth = TRUTH["zero_columns"]
+        path = self.root / "zero-columns.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        for case in truth["cases"]:
+            empty = pa.table({"discard": range(case["rows"])}).drop(["discard"])
+            for stream in (False, True):
+                with self.subTest(rows=case["rows"], stream=stream):
+                    run = yamaa.spec(path).run(stream=stream, inputs={"SRC": empty})
+                    self.assert_saved(run, case["csv"])
+
     def test_invalid_host_shapes_raise_the_native_refusal_class(self):
         for value in ([], {1: pa.table({"ID": [1]})}, {"SRC": object()}):
             with self.subTest(value=type(value).__name__):

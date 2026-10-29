@@ -2,6 +2,19 @@
   "version": "1",
   "families": {
     "memory-inputs": {
+      "zero_columns": {
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput: {SRC: {path: missing.csv, ordinal: ID}}\noutput: {path: out.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n",
+        "cases": [
+          {
+            "rows": 0,
+            "csv": "ID\n"
+          },
+          {
+            "rows": 3,
+            "csv": "ID\n1\n2\n3\n"
+          }
+        ]
+      },
       "r_host_refusals": [
         {
           "kind": "date",

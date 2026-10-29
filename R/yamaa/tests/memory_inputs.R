@@ -82,6 +82,15 @@ qualify_memory_inputs <- function() {
   empty <- frame_of(list(rows = list()))
   assert_saved(spec$run(inputs = list(SRC = empty, AUX = empty)), root,
     truth$empty_csv, "empty frames retain their schema")
+  zero_path <- file.path(root, "zero-columns.yaml")
+  write_text(zero_path, truth$zero_columns$specification)
+  for (case in truth$zero_columns$cases) {
+    frame <- data.frame(row.names = seq_len(case$rows))
+    for (stream in c(FALSE, TRUE)) {
+      assert_saved(yamaa_spec(zero_path)$run(stream = stream, inputs = list(SRC = frame)),
+        root, case$csv, "zero-column frames retain their row count")
+    }
+  }
   unlink(file.path(root, "data.csv"))
   assert_saved(spec$run(inputs = list(SRC = frame_of(truth$cases[[1L]]), AUX = frame_of(truth$cases[[2L]]))),
     root, truth$all_memory_csv, "aliases sharing a missing path are independent")

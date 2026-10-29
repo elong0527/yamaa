@@ -1,6 +1,6 @@
 //! Data frames to owned Arrow frames; all R text arrives as raw UTF-8.
 use crate::api_entry::Refusal;
-use arrow_array::{BooleanArray, RecordBatchIterator};
+use arrow_array::{BooleanArray, RecordBatchIterator, StructArray};
 use extendr_api::prelude::*;
 use std::{collections::BTreeMap, result::Result, sync::Arc};
 use yamaa::{Array, Date32Array, Float64Array, Int64Array, StringArray, TimestampSecondArray};
@@ -38,17 +38,28 @@ pub(crate) fn import(
         if alias.is_empty() || frames.contains_key(&alias) {
             return Err("input aliases must be unique nonempty names".into());
         }
-        let frame = list(&item(&entry, 1)?, Some(2))?;
+        let frame = list(&item(&entry, 1)?, Some(3))?;
         let names = list(&item(&frame, 0)?, None)?;
         let values = list(&item(&frame, 1)?, Some(names.len()))?;
-        let mut columns: Vec<(String, Arc<dyn Array>)> = Vec::with_capacity(names.len());
+        let rows = item(&frame, 2)?
+            .as_real()
+            .filter(|rows| {
+                rows.is_finite() && *rows >= 0.0 && rows.fract() == 0.0 && *rows < usize::MAX as f64
+            })
+            .ok_or("invalid input frame row count")? as usize;
+        let mut fields = Vec::with_capacity(names.len());
+        let mut columns = Vec::with_capacity(names.len());
         for column in 0..names.len() {
-            columns.push((
+            let values = array(&item(&values, column)?)?;
+            fields.push(yamaa::Field::new(
                 text(&item(&names, column)?)?,
-                array(&item(&values, column)?)?,
+                values.data_type().clone(),
+                true,
             ));
+            columns.push(values);
         }
-        let batch = yamaa::RecordBatch::try_from_iter(columns)
+        let batch = StructArray::try_new_with_length(fields.into(), columns, None, rows)
+            .map(yamaa::RecordBatch::from)
             .map_err(|_| "input columns must have the same number of rows")?;
         let schema = batch.schema();
         let stream = yamaa::FFI_ArrowArrayStream::new(Box::new(RecordBatchIterator::new(

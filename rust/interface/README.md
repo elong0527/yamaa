@@ -67,7 +67,7 @@ Argument mapping order is positional order; sequence order is emission order.
 The R native `runtime` role groups the raw R version and existing capability
 list in that order; `.runtime()` supplies this context so a run endpoint stays
 within the seven-argument ceiling. R input frames cross as alias bytes and a
-frame of column-name bytes and typed vectors; text vectors use lists of raw
+frame of column-name bytes, typed vectors and the explicit row count; text vectors use lists of raw
 UTF-8 values or NULL, with no unchecked R string borrowed in Rust.
 An optional public argument with a `None` default is emitted only on the hosts
 its type projects; adding its other host projection later makes that argument

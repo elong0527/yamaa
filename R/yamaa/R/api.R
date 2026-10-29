@@ -121,7 +121,7 @@
         }))
       } else list(charToRaw("native"), value)
     })
-    list(.text(aliases[[index]], "input alias"), list(names, columns))
+    list(.text(aliases[[index]], "input alias"), list(names, columns, as.double(nrow(frame))))
   })
 }
 
