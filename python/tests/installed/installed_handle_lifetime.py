@@ -63,6 +63,7 @@ class HandleLifetime(unittest.TestCase):
             ("a run", spec.run, "run"),
             ("a project run", project.run, "project_run"),
             ("a submission", project.submission, "submission"),
+            ("a lint result", lambda: yamaa.lint(self.root / "spec.yaml"), "lint"),
             ("a selftest", yamaa.selftest, "selftest"),
             ("a table", lambda: run.output, "table"),
         ]

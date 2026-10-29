@@ -548,6 +548,7 @@ yamaa::lint::Lint: pub struct Lint [derive(Clone, Debug, Eq, PartialEq)] [non_ex
 yamaa::lint::Lint::files: pub fn files(&self) -> usize
 yamaa::lint::Lint::findings: pub fn findings(&self) -> &[LintFinding]
 yamaa::lint::Lint::rewritten: pub fn rewritten(&self) -> &[String]
+yamaa::lint::Lint::status: pub fn status(&self) -> Status
 yamaa::lint::Lint::summary: pub fn summary(&self) -> String
 yamaa::lint::Lint::table: pub fn table(&self) -> Table
 yamaa::lint::LintFinding: impl LintFinding

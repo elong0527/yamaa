@@ -795,11 +795,7 @@ fn lint(call: &Call) -> Result<Printed, Execution> {
     Ok(match yamaa::lint(&paths, call.has("--fix")) {
         Ok(lint) => {
             let findings = lint.findings();
-            let status = if findings.is_empty() {
-                Status::Succeeded
-            } else {
-                Status::Failed
-            };
+            let status = lint.status();
             let mut lines = findings.iter().map(LintFinding::text).collect::<Vec<_>>();
             lines.push(lint.summary());
             document.insert("status".into(), text(status.as_str()));

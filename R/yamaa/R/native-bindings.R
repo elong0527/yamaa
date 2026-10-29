@@ -181,6 +181,22 @@
   .Call(wrap__lint, paths, fix)
 }
 
+.native_lint_status <- function(handle) {
+  .Call(wrap__lint_status, handle)
+}
+
+.native_lint_findings <- function(handle) {
+  .Call(wrap__lint_findings, handle)
+}
+
+.native_lint_paths <- function(handle) {
+  .Call(wrap__lint_paths, handle)
+}
+
+.native_lint_summary <- function(handle) {
+  .Call(wrap__lint_summary, handle)
+}
+
 .native_schema <- function(file_type) {
   .Call(wrap__schema, file_type)
 }
@@ -228,7 +244,7 @@
 # The interface handshake (rust/interface/README.md): .onLoad sends this
 # request before any other native call, and a refusal stops the load.
 .interface_request <- list(
-  version = 4L,
+  version = 5L,
   required = c("structured_records", "arrow_c_stream", "plan_reuse"),
   optional = c("format_yaml", "format_parquet", "format_readstat", "format_odm")
 )

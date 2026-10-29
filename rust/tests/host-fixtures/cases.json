@@ -6259,6 +6259,13 @@
       "function_output_csv": "ID,RATIO,RATIO_DEFAULT,RATIO_PCT,RATIO_ADJ_MISSING,RATIO_MISSING\nR1,2.5,2.5,250,2.5,\nR2,0.33,0.3,33.3,0.8300000000000001,\nR3,3.5,3.5,350,3.75,\nR4,0,0,0,0,\nR5,2.25,2.2,225,1.75,\nR6,,,,,\nR7,,,,,\n"
     },
     "lint": {
+      "result": {
+        "members": ["status", "findings", "paths"],
+        "r_class": "yamaa_lint_result",
+        "before": {"status": "failed", "summary": "5 lint findings in 1 of 1 file", "rewritten": false},
+        "fixed": {"status": "failed", "summary": "2 lint findings in 1 of 1 file; fixed 1 file", "rewritten": true},
+        "clean": {"status": "succeeded", "summary": "0 lint findings in 0 of 1 file", "rewritten": false}
+      },
       "columns": [
         "file",
         "line",
@@ -8538,6 +8545,11 @@
           "outcome": {"accepted": false, "requested_version": 3, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
         },
         {
+          "case": "boundary four is a mismatch after lint returns a native result",
+          "request": {"version": 4, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 4, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
           "case": "a request for the next version is a mismatch",
           "request": {"version": "{next_version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
           "outcome": {"accepted": false, "requested_version": "{next_version}", "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
@@ -8638,7 +8650,7 @@
           "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
         }
       ],
-      "census_kinds": ["check", "run", "project_run", "submission", "selftest", "plans", "table"],
+      "census_kinds": ["check", "run", "project_run", "submission", "lint", "selftest", "plans", "table"],
       "lifetime": {
         "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, NAME: str}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\noutput: {path: output.csv, columns: [ID, NAME]}\n",
         "input_csv": "ID,NAME\n1,alpha\n2,beta\n",

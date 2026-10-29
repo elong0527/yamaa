@@ -15,14 +15,14 @@ it names:
 === "R"
 
     ```r
-    findings <- yamaa_lint(c("sdtm/dm.yaml", "adam/"))
+    result <- yamaa_lint(c("sdtm/dm.yaml", "adam/"))
     remaining <- yamaa_lint("sdtm/dm.yaml", fix = TRUE)
     ```
 
 === "Python"
 
     ```python
-    findings = yamaa.lint(["sdtm/dm.yaml", "adam/"])
+    result = yamaa.lint(["sdtm/dm.yaml", "adam/"])
     remaining = yamaa.lint("sdtm/dm.yaml", fix=True)
     ```
 
@@ -34,7 +34,7 @@ it names:
     ```
 
 The check reads each file as its author wrote it, before any inherited layer
-is resolved, and returns a table with one row per finding: the file's absolute
+is resolved. The result has `status`, `findings` and `paths`; `status` is `failed` while findings remain, and `paths` lists the files a fix rewrote, as the command line JSON does. Printing the result gives the engine summary. Its `findings` table has one row per finding: the file's absolute
 path with forward slashes, the one-based line and column where the departure
 starts, the finding, its spec path and a message. Only
 [`partial_restatement`](#authoring-findings) and

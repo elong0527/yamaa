@@ -38,7 +38,8 @@ class Lint(unittest.TestCase):
         self.path = self.root / TRUTH["file_name"]
         self.path.write_bytes(TRUTH["specification_yaml"].encode("utf-8"))
 
-    def check_table(self, table, rows, path=None):
+    def check_table(self, result, rows, path=None):
+        table = result.findings
         self.assertIsInstance(table, yamaa.Table)
         self.assertEqual(table.column_names, TRUTH["columns"])
         table = table.to_polars()
@@ -50,15 +51,46 @@ class Lint(unittest.TestCase):
         self.assertEqual(table["file"].to_list(), [absolute] * len(rows))
         self.assertEqual(table.drop("file").to_dicts(), expected(rows))
 
+    def check_result(self, result, key):
+        expected = TRUTH["result"][key]
+        paths = (
+            [str(self.path.resolve()).replace(os.sep, "/")]
+            if expected["rewritten"]
+            else []
+        )
+        self.assertEqual(
+            (
+                type(result),
+                sorted(name for name in dir(result) if not name.startswith("_")),
+                result.status,
+                result.paths,
+                repr(result),
+            ),
+            (
+                yamaa.Lint,
+                sorted(TRUTH["result"]["members"]),
+                expected["status"],
+                paths,
+                expected["summary"],
+            ),
+        )
+
     def test_findings_come_as_the_six_column_table(self):
-        self.check_table(yamaa.lint(self.path), TRUTH["rows"])
+        result = yamaa.lint(self.path)
+        self.check_result(result, "before")
+        self.check_table(result, TRUTH["rows"])
         self.check_table(yamaa.lint([str(self.path)], fix=False), TRUTH["rows"])
         self.assertEqual(
             self.path.read_bytes().decode("utf-8"), TRUTH["specification_yaml"]
         )
 
     def test_fix_rewrites_the_file_and_lists_what_remains(self):
-        self.check_table(yamaa.lint([self.path], fix=True), TRUTH["fixed_rows"])
+        before = yamaa.lint(self.path)
+        fixed = yamaa.lint([self.path], fix=True)
+        self.check_result(fixed, "fixed")
+        self.check_table(fixed, TRUTH["fixed_rows"])
+        self.check_result(before, "before")
+        self.check_table(before, TRUTH["rows"])
         self.assertEqual(self.path.read_bytes().decode("utf-8"), TRUTH["fixed_yaml"])
         self.check_table(yamaa.lint(self.path), TRUTH["fixed_rows"])
 
@@ -78,7 +110,9 @@ class Lint(unittest.TestCase):
 
     def test_a_clean_table_keeps_its_columns(self):
         self.path.write_bytes(b"")
-        table = yamaa.lint(self.path)
+        result = yamaa.lint(self.path)
+        self.check_result(result, "clean")
+        table = result.findings
         self.assertEqual(table.column_names, TRUTH["columns"])
         self.assertEqual(table.num_rows, 0)
 

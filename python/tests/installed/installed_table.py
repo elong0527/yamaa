@@ -264,7 +264,7 @@ class Table(unittest.TestCase):
             "Submission.issues": submission.issues,
             "SelfTest.cases": yamaa.selftest().cases,
             "read_odm()": yamaa.read_odm(self.root / "items.xml"),
-            "lint()": yamaa.lint(self.root / "spec.yaml"),
+            "Lint.findings": yamaa.lint(self.root / "spec.yaml").findings,
             "Error.issues": refused.exception.issues,
         }
         for name, table in tables.items():

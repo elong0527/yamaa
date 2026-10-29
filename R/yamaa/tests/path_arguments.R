@@ -105,7 +105,7 @@ check_path_arguments <- function() {
       Value = c("35", "F"))),
     list(label = "yamaa_lint(paths)", files = c("dm.yaml", "age.yaml", "project.yaml"),
       call = function(paths) {
-        findings <- yamaa_lint(paths)
+        findings <- yamaa_lint(paths)$findings
         list(columns = names(findings), rows = nrow(findings))
       }, expected = list(columns = c("file", "line", "column", "finding", "spec_path", "message"),
         rows = 0L)))

@@ -24,7 +24,11 @@ A comment \code{# yamaa-lint: allow <finding> -- <reason>} directly above a
 field or an entry suppresses the named findings within it.
 }
 \value{
-A data frame with one row per finding that remains and the columns
+A read-only \code{yamaa_lint_result} with \code{status}, \code{findings} and
+\code{paths}. Status is \code{failed} while a finding remains, and
+\code{succeeded} otherwise. The paths are the absolute file names a fix
+rewrote, as the command line JSON reports them. Printing gives the engine
+summary. The findings data frame has one row per remaining finding and the columns
 \code{file} (the absolute path, with forward slashes), \code{line},
 \code{column}, \code{finding}, \code{spec_path} and \code{message}. A file
 that cannot be read or parsed, or a directory that cannot be listed, raises a
@@ -45,10 +49,10 @@ columns:
 output: {path: dm.csv, columns: [USUBJID, AGE]}
 ', spec)
 
-findings <- yamaa_lint(study)
-findings[, c("line", "finding", "message")]
+result <- yamaa_lint(study)
+result$findings[, c("line", "finding", "message")]
 remaining <- yamaa_lint(spec, fix = TRUE)
-remaining[, c("line", "finding", "message")]
+remaining$findings[, c("line", "finding", "message")]
 
 unlink(study, recursive = TRUE)
 }

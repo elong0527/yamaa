@@ -549,12 +549,39 @@ fn odm_limit_value(value: &Bound<'_, PyAny>) -> PyResult<yamaa::ContextValue> {
     })
 }
 
-/// The lint table of every file `paths` names, fixing them first when `fix`
+/// The lint result of every file `paths` names, fixing them first when `fix`
 /// is true; a file that cannot be read or admitted raises `Error`.
 #[pyfunction]
 #[pyo3(signature=(paths, fix=false))]
-pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
-    plain(py, |_| Ok(Table::from(&yamaa::lint(&paths, fix)?.table())))
+pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Lint> {
+    let result = plain(py, |_| Ok(yamaa::lint(&paths, fix)?))?;
+    Ok(Lint {
+        result,
+        _live: CENSUS.hold(HandleKind::Lint),
+    })
+}
+
+/// Immutable lint findings and rewritten paths, held after the files change.
+#[pyclass(frozen, module = "yamaa._native", name = "_Lint")]
+pub struct Lint {
+    result: yamaa::Lint,
+    _live: Live,
+}
+
+#[pymethods]
+impl Lint {
+    fn status(&self) -> &'static str {
+        self.result.status().as_str()
+    }
+    fn findings(&self) -> Table {
+        Table::from(&self.result.table())
+    }
+    fn paths(&self) -> Vec<String> {
+        self.result.rewritten().to_vec()
+    }
+    fn summary(&self) -> String {
+        self.result.summary()
+    }
 }
 
 /// The JSON Schema of a file type as canonical JSON text (#3030 D149); a

@@ -40,7 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 /// The boundary version, which the generated layers of both hosts request.
 /// It moves with any change to what crosses the boundary that an older side
 /// would misread.
-pub const BOUNDARY_VERSION: u32 = 4;
+pub const BOUNDARY_VERSION: u32 = 5;
 
 /// The capability identifiers that every engine of this boundary version
 /// supports, in order.
@@ -396,6 +396,8 @@ pub enum HandleKind {
     ProjectRun,
     /// A submission.
     Submission,
+    /// A lint result.
+    Lint,
     /// A selftest.
     SelfTest,
     /// The compiled plans that one lazy object keeps.
@@ -406,11 +408,12 @@ pub enum HandleKind {
 
 impl HandleKind {
     /// Every kind, in the census's order.
-    pub const ALL: [HandleKind; 7] = [
+    pub const ALL: [HandleKind; 8] = [
         HandleKind::Check,
         HandleKind::Run,
         HandleKind::ProjectRun,
         HandleKind::Submission,
+        HandleKind::Lint,
         HandleKind::SelfTest,
         HandleKind::Plans,
         HandleKind::Table,
@@ -423,6 +426,7 @@ impl HandleKind {
             HandleKind::Run => "run",
             HandleKind::ProjectRun => "project_run",
             HandleKind::Submission => "submission",
+            HandleKind::Lint => "lint",
             HandleKind::SelfTest => "selftest",
             HandleKind::Plans => "plans",
             HandleKind::Table => "table",

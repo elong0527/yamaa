@@ -50,7 +50,7 @@ symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
 the edge, and the `boundary` import's version role to
 `yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
-The boundary version, now 4 for native ODM limit admission, is the single source for both hosts:
+The boundary version, now 5 for native lint results, is the single source for both hosts:
 the generator writes it into each host's request, and neither keeps a
 separately maintained copy. `format_version` versions the IDL grammar only.
 
@@ -379,7 +379,7 @@ are exempt. The generator checks that every registered native function
 reaches the gate, so a new export cannot skip it.
 
 Each binding counts its live handles by kind (`check`, `run`,
-`project_run`, `submission`, `selftest`, `plans` and `table`, which only
+`project_run`, `submission`, `lint`, `selftest`, `plans` and `table`, which only
 Python hands out; R copies each table into host values) in a census
 that the private accessors `_native._live_handles()` and
 `.native_live_handles()` read for the handle lifetime suites.

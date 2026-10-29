@@ -338,7 +338,7 @@ public.functions.read_odm.args[1]: archive_member: optional_text = None; keyword
 public.functions.read_odm.args[2]: max_archive_members: count = 10000; keyword-only
 public.functions.read_odm.args[3]: max_expanded_bytes: count = 268435456; keyword-only
 public.functions.read_odm.args[4]: max_xml_depth: count = 64; keyword-only
-public.functions.lint: python yamaa.lint; r yamaa_lint; returns table; table lint; raises refusal
+public.functions.lint: python yamaa.lint; r yamaa_lint; returns Lint; raises refusal
 public.functions.lint.args[0]: paths: path_list
 public.functions.lint.args[1]: fix: flag = false
 public.functions.schema: python yamaa.schema; r yamaa_schema; returns json_text; raises refusal
@@ -409,6 +409,11 @@ public.classes.Project.submission.args[0]: section: optional_text = None
 public.classes.Project.submission.args[1]: created: optional_text = None; keyword-only
 public.classes.Project.submission.args[2]: progress: progress = None; keyword-only
 public.classes.Project.summary: printing; python __repr__; r print, format; raises refusal
+public.classes.Lint: python yamaa.Lint; r yamaa_lint_result
+public.classes.Lint.status: property; returns status; raises refusal
+public.classes.Lint.findings: property; returns table; table lint; raises refusal
+public.classes.Lint.paths: property; returns paths_written; raises refusal
+public.classes.Lint.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.SelfTest: python yamaa.SelfTest; r yamaa_selftest
 public.classes.SelfTest.status: property; returns status
 public.classes.SelfTest.cases: property; returns table; table selftest_cases
@@ -474,6 +479,10 @@ public.r.s3methods.yamaa_spec.print
 public.r.s3methods.yamaa_spec.format
 public.r.s3methods.yamaa_project.print
 public.r.s3methods.yamaa_project.format
+public.r.s3methods.yamaa_lint_result.names: status, findings, paths
+public.r.s3methods.yamaa_lint_result.length
+public.r.s3methods.yamaa_lint_result.print
+public.r.s3methods.yamaa_lint_result.format
 public.r.s3methods.yamaa_selftest.names: status, cases, info
 public.r.s3methods.yamaa_selftest.length
 public.r.s3methods.yamaa_selftest.print
