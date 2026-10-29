@@ -329,7 +329,10 @@ specifications at once.
 
 A `progress` function that signals an error in R or raises in Python is
 called no more: the method finishes its work, and its result then fails with
-one issue, `engine_rejected` with the code `host_progress_failure`. A failed
+one issue, `engine_rejected` with the code `host_progress_failure`. Its
+context includes `host_error` and `host_message`, and its message names the
+exception. A refused save chains the original exception as Python's
+`__cause__` or R's `parent` condition. A failed
 run keeps no output and saves nothing; a project run builds no later
 specification, and a submission composes no later section, and either
 refuses its save. An interrupt in the function cancels the call, as Ctrl+C

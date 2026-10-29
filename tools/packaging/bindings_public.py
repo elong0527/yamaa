@@ -67,6 +67,7 @@ _PY_ANNOTATION = {
     "status": "str",
     "file_type": "str",
     "info": "dict",
+    "host_condition": "BaseException | None",
     "nothing": "None",
     # Tokens with only a Python projection, which only the members of a
     # Python-only class use; the generator writes no annotation with them.
@@ -363,7 +364,7 @@ class Public:
             error["python"],
             "public.errors.refusal.python",
             {"class", "base", "attributes", "native", "state"},
-            {"picklable"},
+            {"picklable", "chained"},
         )
         if not re.fullmatch(r"yamaa\.[A-Z][A-Za-z]*", str(python["class"])):
             raise ValueError("public.errors.refusal.python.class must be yamaa.<Name>")
@@ -371,6 +372,8 @@ class Public:
             raise ValueError("the refusal must derive from Exception")
         if "picklable" in python and python["picklable"] is not True:
             raise ValueError("the refusal picklable flag must be true")
+        if "chained" in python and python["chained"] is not True:
+            raise ValueError("the refusal chained flag must be true")
         attributes = python["attributes"]
         if not isinstance(attributes, dict) or not attributes:
             raise ValueError(
@@ -1058,11 +1061,18 @@ class Public:
         arguments = ", ".join(["str(self)", *[f"self.{name}" for name in attributes]])
         body += ["", "", f'setattr({refusal}, "__init__", _error_init)']
         if error["python"].get("picklable"):
+            chained = error["python"].get("chained")
+            state = "state" if chained else "self.__dict__"
             body += [
                 "",
                 "",
                 "def _error_reduce(self):",
-                f"    return type(self), ({arguments}), self.__dict__",
+                *(
+                    ['    state = {**self.__dict__, "__cause__": self.__cause__}']
+                    if chained
+                    else []
+                ),
+                f"    return type(self), ({arguments}), {state}",
                 "",
                 "",
                 f'setattr({refusal}, "__reduce__", _error_reduce)',

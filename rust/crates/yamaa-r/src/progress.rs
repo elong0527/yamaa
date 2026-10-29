@@ -3,7 +3,8 @@
 //! The R layer wraps the user's function, so it replies with a closed
 //! envelope, `list(status, payload)`, and no R error longjmps across Rust:
 //! status 0 when the function returned, 1 when it signalled an error, whose
-//! condition is the payload, and 3 for an interrupt, which cancels the call
+//! condition and raw UTF-8 class and message form the payload, and 3 for
+//! an interrupt, which cancels the call
 //! as a project function's interrupt does. Each event reaches the function
 //! as one named list in the order of `records.progress_event`: `name`,
 //! `phase`, `kind`, `outcome`, `number` and `rows`, the last three `NULL`
@@ -11,7 +12,7 @@
 //! library pulls there, is not reported.
 use extendr_api::prelude::*;
 use std::sync::Arc;
-use yamaa::host::functions::FunctionError;
+use yamaa::host::functions::{FunctionError, HostPayload};
 use yamaa::ProgressEvent;
 
 use crate::thread_bound::ThreadBound;
@@ -69,11 +70,30 @@ impl Progress {
             .ok_or(FunctionError::Protocol)?;
         match status {
             0 => Ok(()),
-            1 => Err(FunctionError::Exception {
-                class: "R condition".into(),
-                message: String::new(),
-                payload: None,
-            }),
+            1 => {
+                let payload = reply
+                    .elt(1)
+                    .ok()
+                    .and_then(|payload| payload.as_list())
+                    .filter(|payload| payload.len() == 3)
+                    .ok_or(FunctionError::Protocol)?;
+                let condition = payload.elt(0).map_err(|_| FunctionError::Protocol)?;
+                let class = crate::function_callback::detail(
+                    &payload.elt(1).map_err(|_| FunctionError::Protocol)?,
+                    "R condition",
+                )
+                .map_err(|_| FunctionError::Protocol)?;
+                let message = crate::function_callback::detail(
+                    &payload.elt(2).map_err(|_| FunctionError::Protocol)?,
+                    "unavailable R condition message",
+                )
+                .map_err(|_| FunctionError::Protocol)?;
+                Err(FunctionError::Exception {
+                    class,
+                    message,
+                    payload: Some(HostPayload::new(ThreadBound::new(condition))),
+                })
+            }
             3 => {
                 if let Ok(condition) = reply.elt(1) {
                     crate::interrupt::remember(condition);

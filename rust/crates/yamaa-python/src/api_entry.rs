@@ -256,7 +256,7 @@ fn project_request<'a>(
 /// A run built whole, or a streamed run (#3697), whose result is known once
 /// it ran whole.
 enum Held {
-    Built(Mutex<yamaa::Run>),
+    Built(Box<Mutex<yamaa::Run>>),
     Streamed(Arc<yamaa::Streamed>),
 }
 
@@ -485,7 +485,7 @@ pub fn _spec_run(
         }
         .run()?)
     })?;
-    Ok(Run::new(Held::Built(Mutex::new(run))))
+    Ok(Run::new(Held::Built(Box::new(Mutex::new(run)))))
 }
 
 #[pyfunction]

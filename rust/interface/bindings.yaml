@@ -385,6 +385,7 @@ public:
       r: "data.frame or NULL; with stream = TRUE an Arrow C stream that produces the output as it is read: an external pointer of class nanoarrow_array_stream, or NULL"
     status: {python: "str, one of values.status", r: "character(1), one of values.status"}
     file_type: {python: "str, one of values.file_type", r: "character(1), one of values.file_type"}
+    host_condition: {python: "BaseException | None", r: "condition or NULL"}
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
     nothing: {python: None, r: "NULL, invisibly"}
     # Python-only projections, which only yamaa.Table's members use.
@@ -815,10 +816,11 @@ public:
         base: Exception
         attributes: {issues: table, paths: paths_written}
         picklable: true
+        chained: true
       r:
         class: [yamaa_error, error, condition]
         state: yamaa_state_error
-        fields: {message: text, call: "NULL", issues: table, paths: paths_written}
+        fields: {message: text, call: "NULL", issues: table, paths: paths_written, parent: host_condition}
       table: issues
       doc: >-
         A yamaa operation could not complete; `issues` says why, and `paths`

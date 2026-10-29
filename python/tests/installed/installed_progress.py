@@ -20,6 +20,7 @@ partitions at 624,640 records.
 
 import _thread
 import os
+import pickle
 import signal
 import tempfile
 import threading
@@ -31,6 +32,12 @@ from host_fixtures import load as load_truth
 import yamaa
 
 TRUTH = load_truth(__file__, "progress")
+
+
+class ProgressFailure(ValueError):
+    pass
+
+
 EVENT_KEYS = ["name", "phase", "kind", "outcome", "number", "rows"]
 # The records of the large input, whose phases each run long in the engine
 # between two events.
@@ -118,10 +125,11 @@ class Progress(unittest.TestCase):
 
     def test_a_raising_callback_fails_the_run_which_saves_nothing(self):
         calls = []
+        original = ProgressFailure(TRUTH["callback_failure"]["message"])
 
         def raising(event):
             calls.append(event)
-            raise ValueError("the callback raises")
+            raise original
 
         run = yamaa.spec(self.spec).run(progress=raising)
         self.assertEqual(len(calls), 1, "called once, then no more")
@@ -130,6 +138,12 @@ class Progress(unittest.TestCase):
         with self.assertRaises(yamaa.Error) as refused:
             run.save()
         self.assertEqual(refused.exception.paths, [])
+        self.assertIs(refused.exception.__cause__, original)
+        restored = pickle.loads(pickle.dumps(refused.exception))
+        self.assertEqual(
+            (type(restored.__cause__), str(restored.__cause__)),
+            (ProgressFailure, str(original)),
+        )
         written = sorted(path.name for path in self.root.iterdir())
         self.assertEqual(written, ["input.csv", "spec.yaml"], "nothing is written")
 

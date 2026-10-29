@@ -158,9 +158,7 @@ impl Pending {
         self.measured.measurements().complete(build.accepted());
         // A failed progress callback fails the run, which keeps no output.
         if self.reporter.failed() {
-            build.fail(vec![Reporter::failure(
-                yamaa_core::application_issue::Step::Build,
-            )]);
+            build.fail_progress(&self.reporter, yamaa_core::application_issue::Step::Build);
             return Some((
                 Run {
                     build: build.with_subject(subject),
@@ -285,6 +283,7 @@ impl Shared {
     /// explain, which ends its stream.
     fn failure(&self, run: &Run) -> Failure {
         Failure::rejected(Action::Read(&self.subject), run.build.report())
+            .with_cause(self.reporter.cause())
     }
 
     /// The refusal that ends the stream once the progress callback failed
@@ -293,10 +292,11 @@ impl Shared {
         self.reporter.failed().then(|| {
             Failure::from_issues(
                 Action::Read(&self.subject),
-                &[Reporter::failure(
-                    yamaa_core::application_issue::Step::Build,
-                )],
+                &[self
+                    .reporter
+                    .failure(yamaa_core::application_issue::Step::Build)],
             )
+            .with_cause(self.reporter.cause())
         })
     }
 
@@ -378,9 +378,7 @@ impl Streamed {
                 plan.run_through(&shared, None, &reporter.resume(measured.clone()), token);
             measured.measurements().complete(false);
             if reporter.failed() {
-                build.fail(vec![Reporter::failure(
-                    yamaa_core::application_issue::Step::Build,
-                )]);
+                build.fail_progress(&reporter, yamaa_core::application_issue::Step::Build);
             }
             let build = build.with_subject(&subject);
             State::Ended {

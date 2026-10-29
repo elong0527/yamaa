@@ -170,6 +170,19 @@ pub fn unsupported(operation: &str, path: Option<&str>) -> Diagnostic {
 
 /// An engine fault: the step that refused and its closed code. No rule
 /// is fabricated.
+pub fn progress_failure(step: Step, host_error: &str, host_message: &str) -> Diagnostic {
+    let mut issue = rejected(step, Fault::HostProgressFailure);
+    issue
+        .context
+        .insert("host_error".into(), JsonValue::String(host_error.into()));
+    issue.context.insert(
+        "host_message".into(),
+        JsonValue::String(host_message.into()),
+    );
+    issue
+}
+
+/// An engine fault: the step that refused and its closed code. No rule is fabricated.
 pub fn rejected(step: Step, fault: Fault) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::ApplicationRejected,
