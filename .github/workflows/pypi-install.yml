@@ -1,5 +1,6 @@
 name: PyPI install
 
+# Manual dispatch requires this workflow file on the default branch.
 # Release verification, not a development check: after each PyPI upload the
 # owner dispatches it with the release's Python version, X.Y.Z or X.Y.ZrcN,
 # once tools/ci/check_pypi_release.py has passed (docs/release.md, "PyPI
