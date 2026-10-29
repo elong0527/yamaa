@@ -37,6 +37,7 @@ class makes it from the call's result and the values it holds. README.md lists
 the member kinds and these rules.
 """
 
+import json
 import re
 
 _PY_WIDTH = 88
@@ -113,6 +114,10 @@ _PY_ARGUMENT = {
     "path": "_fspath",
     "path_list": "_fspaths",
     "optional_path": "_optional_fspath",
+    "text": "_text",
+    "optional_text": "_optional_text",
+    "file_type": "_text",
+    "flag": "_flag",
 }
 _R_ARGUMENT = {
     "path": ".path",
@@ -122,6 +127,7 @@ _R_ARGUMENT = {
     "optional_text": ".optional_text",
     "file_type": ".text",
     "progress": ".progress",
+    "flag": ".flag",
 }
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
@@ -356,7 +362,7 @@ class Public:
         python = _keys(
             error["python"],
             "public.errors.refusal.python",
-            {"class", "base", "attributes"},
+            {"class", "base", "attributes", "native", "state"},
             {"picklable"},
         )
         if not re.fullmatch(r"yamaa\.[A-Z][A-Za-z]*", str(python["class"])):
@@ -376,7 +382,7 @@ class Public:
             self._token(token, f"public.errors.refusal.python.{attribute}")
             if _PY_ANNOTATION[token] in {None, "None"}:
                 raise ValueError(f"the refusal's {attribute} needs a value type")
-        r = _keys(error["r"], "public.errors.refusal.r", {"class", "fields"})
+        r = _keys(error["r"], "public.errors.refusal.r", {"class", "fields", "state"})
         classes = r["class"]
         if (
             not isinstance(classes, list)
@@ -395,8 +401,27 @@ class Public:
             raise ValueError("the refusal names an undeclared table")
         if "doc" in error:
             _doc(error["doc"], "public.errors.refusal.doc")
-        if len(self.py_exceptions) != 1:
-            raise ValueError("the refusal needs exactly one native Python exception")
+        native = python["native"]
+        state = python["state"].removeprefix("yamaa.")
+        if (
+            python["class"] != f"yamaa.{native}"
+            or python["state"] != f"yamaa.{state}"
+            or not _CLASS.fullmatch(state)
+        ):
+            raise ValueError(
+                "the refusal and state classes must name native Python exceptions"
+            )
+        if set(self.py_exceptions) != {native, state}:
+            raise ValueError(
+                "the refusal needs its native Python exception and state subclass"
+            )
+        declared = {
+            entry["name"]: entry for entry in self.definition["python"]["exports"]
+        }
+        if declared[native]["base"] != "Exception" or declared[state]["base"] != native:
+            raise ValueError("the native state exception must derive from the refusal")
+        if not _R_NAME.fullmatch(str(r["state"])):
+            raise ValueError("the R state class must be a condition class name")
 
     def _validate_signature(self, entry, what, python_only=False):
         args = entry.get("args", {})
@@ -540,7 +565,8 @@ class Public:
                 any(
                     member.get(host) != spelling for host, spelling in _PRINTING.items()
                 )
-                or set(member) - {"name", "kind", "python", "r", "calls", "doc"}
+                or set(member)
+                - {"name", "kind", "python", "r", "calls", "doc", "raises"}
                 or "calls" not in member
             ):
                 raise ValueError(
@@ -607,7 +633,7 @@ class Public:
                 member,
                 mwhat,
                 {"name", "kind"},
-                {"python", "args", "returns", "imports"},
+                {"python", "args", "returns", "imports", "raises"},
             )
             if not isinstance(member["name"], str) or not _NAME.fullmatch(
                 member["name"]
@@ -616,6 +642,10 @@ class Public:
             if member["name"] in names:
                 raise ValueError(f"{what} declares {member['name']} twice")
             names.add(member["name"])
+            if "raises" in member and member["raises"] not in self.errors:
+                raise ValueError(
+                    f"{mwhat} raises an undeclared error: {member['raises']!r}"
+                )
             kind = member["kind"]
             if kind not in _NATIVE_KINDS:
                 raise ValueError(f"{mwhat} has an unknown kind: {kind!r}")
@@ -758,7 +788,16 @@ class Public:
 
     def _py_argument(self, name, token):
         helper = _PY_ARGUMENT.get(token)
-        return _Call(helper, [name]) if helper else name
+        return (
+            _Call(
+                helper,
+                [name, f'"{name}"']
+                if helper in {"_text", "_optional_text", "_flag"}
+                else [name],
+            )
+            if helper
+            else name
+        )
 
     def _py_context(self, role, hold, class_name, args):
         """The Python value that fills `role` (or `hold`) in this context."""
@@ -810,8 +849,6 @@ class Public:
             raise ValueError(
                 f"{what}: {sorted(set(args) - used)} fill no Python argument"
             )
-        if entry.get("raises"):
-            return _Call("_call", [callable_, *values]), target
         return _Call(callable_, values), target
 
     def _py_construct(self, target, first, class_name, args, what):
@@ -935,7 +972,11 @@ class Public:
                 + doc
                 + [
                     f"        if {key} not in {self._names_call(name)}:",
-                    f"            {refusal}  # raises the engine's refusal",
+                    *_py_lines(
+                        refusal,
+                        "            ",
+                        suffix="  # raises the engine's refusal",
+                    ),
                     *_py_lines(made, "        ", "return "),
                 ]
             )
@@ -989,13 +1030,16 @@ class Public:
         return header + doc + _py_lines(result, "    ", "return ")
 
     def python_names(self):
-        refusal = self.errors["refusal"]["python"]["class"].removeprefix("yamaa.")
-        names = [refusal, self.public["python"]["version"], *self._native_exports()]
+        names = [self.public["python"]["version"], *self._native_exports()]
         return sorted(names + [function["name"] for function in self.functions])
 
     def _native_exports(self):
         """The Python-only classes, which the public module imports as they are."""
-        return [name for name in self.classes if self.python_only(name)]
+        return [
+            self.errors["refusal"]["python"]["native"],
+            self.errors["refusal"]["python"]["state"].removeprefix("yamaa."),
+            *[name for name in self.classes if self.python_only(name)],
+        ]
 
     def render_python(self, header, handshake=()):
         """The public module. `handshake`, the lines that negotiate the
@@ -1004,52 +1048,59 @@ class Public:
         error = self.errors["refusal"]
         refusal = error["python"]["class"].removeprefix("yamaa.")
         attributes = error["python"]["attributes"]
-        body = [f"class {refusal}({error['python']['base']}):"]
-        if "doc" in error:
-            body += [f'    """{error["doc"]}"""', ""]
         signature = ", ".join(
             ["self", "message: str"]
             + [f"{name}: {_PY_ANNOTATION[token]}" for name, token in attributes.items()]
         )
-        body += _py_def("__init__", signature, None, "    ")
-        body.append("        super().__init__(message)")
-        body += [f"        self.{name} = {name}" for name in attributes]
+        body = _py_def("_error_init", signature, None, "")
+        body.append("    Exception.__init__(self, message)")
+        body += [f"    self.{name} = {name}" for name in attributes]
+        arguments = ", ".join(["str(self)", *[f"self.{name}" for name in attributes]])
+        body += ["", "", f'setattr({refusal}, "__init__", _error_init)']
         if error["python"].get("picklable"):
-            arguments = ", ".join(
-                ["str(self)", *[f"self.{name}" for name in attributes]]
-            )
             body += [
                 "",
-                "    def __reduce__(self):",
-                f"        return type(self), ({arguments}), self.__dict__",
+                "",
+                "def _error_reduce(self):",
+                f"    return type(self), ({arguments}), self.__dict__",
+                "",
+                "",
+                f'setattr({refusal}, "__reduce__", _error_reduce)',
             ]
-        mapped = [f'getattr(error, "{name}")' for name in attributes]
-        body += [
-            "",
-            "",
-            "def _call(function, *args):",
-            "    try:",
-            "        return function(*args)",
-            f"    except _native.{self.py_exceptions[0]} as error:",
-            "        # The binding sets the refusal's attributes on the native",
-            "        # exception, so they are read as dynamic attributes.",
-            *_py_lines(
-                _Call(refusal, ["str(error)", *mapped]),
-                "        ",
-                "raise ",
-                " from None",
-            ),
-        ]
         for name in self.delegating_classes():
             body += ["", "", *self._py_class(name)]
         for function in self.functions:
             body += ["", "", *self._py_function(function)]
+        if "doc" in error:
+            body += [
+                "",
+                "",
+                *_py_lines(
+                    _Call(
+                        "setattr",
+                        [
+                            refusal,
+                            '"__doc__"',
+                            json.dumps(error["doc"], ensure_ascii=True),
+                        ],
+                    ),
+                    "",
+                ),
+            ]
         text = "\n".join(body)
         # Import exactly the handwritten helpers the generated code uses, in
         # the order ruff's import sorting gives them.
         helpers = [
             name
-            for name in ("_fspath", "_fspaths", "_Lazy", "_optional_fspath")
+            for name in (
+                "_flag",
+                "_fspath",
+                "_fspaths",
+                "_Lazy",
+                "_optional_fspath",
+                "_optional_text",
+                "_text",
+            )
             if re.search(rf"(?<![\w.]){name}\b", text)
         ]
         imported = ["__version__", *helpers]
@@ -1416,7 +1467,22 @@ class Public:
         )
 
     def render_r(self, header):
-        lines = list(header)
+        error = self.errors["refusal"]["r"]
+        fields = ", ".join(
+            f"{name} = " + ("NULL" if token == "NULL" else f"error${name}")
+            for name, token in error["fields"].items()
+        )
+        classes = ", ".join(f'"{name}"' for name in error["class"])
+        lines = [
+            *header,
+            "",
+            ".refusal <- function(error) {",
+            "  structure(",
+            f"    list({fields}),",
+            f'    class = c(if (isTRUE(error$state)) "{error["state"]}", {classes})',
+            "  )",
+            "}",
+        ]
         for name in self.delegating_classes():
             lines += ["", *self._r_constructor(name), *self._r_extras(name)]
         for function in self.functions:
@@ -1496,6 +1562,8 @@ class Public:
                         facts.append(f"{host} {spelling}")
                 if "returns" in member:
                     facts += self._result_facts(member)
+                elif "raises" in member:
+                    facts.append(f"raises {member['raises']}")
                 lines.append(f"{prefix}.{member['name']}: {'; '.join(facts)}")
                 lines += self._argument_lines(f"{prefix}.{member['name']}", member)
         error = self.errors["refusal"]
@@ -1507,6 +1575,9 @@ class Public:
         lines.append(
             f"public.errors.refusal: python {python['class']}({python['base']}) with "
             f"{attributes}; r {', '.join(r['class'])} with {fields}"
+        )
+        lines.append(
+            f"public.errors.refusal.state: python {python['state']}; r {r['state']}"
         )
         if python.get("picklable"):
             lines.append("public.errors.refusal.python.picklable: true")

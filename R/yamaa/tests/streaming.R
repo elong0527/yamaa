@@ -66,7 +66,15 @@ expected <- function() {
 # Read a run's output stream to its end with arrow.
 read_stream <- function(stream) as.data.frame(arrow::RecordBatchReader$import_from_c(stream)$read_table())
 # The message of the yamaa_error `code` signals.
-refusal <- function(code) tryCatch({ code; NA_character_ }, yamaa_error = conditionMessage)
+refusal <- function(code) {
+  seen <- tryCatch({ code; NULL }, yamaa_error = identity)
+  if (is.null(seen)) return(NA_character_)
+  expect_identical(
+    list(class = class(seen), frame = is.data.frame(seen$issues), rows = nrow(seen$issues), paths = seen$paths),
+    list(class = fixture_strings(truth$refusal$r), frame = TRUE, rows = 0L, paths = character()),
+    "streaming state refusals carry an empty issues frame")
+  conditionMessage(seen)
+}
 
 check_rows <- function() {
   root <- study()

@@ -173,7 +173,8 @@ def outcome(name):
     try:
         getattr(native, name)(*calls[name])
     except Exception as error:
-        return [type(error).__name__, str(error)]
+        return [type(error).__name__, str(error), isinstance(error, native.Error),
+                error.issues.column_names, error.issues.to_pylist(), error.paths]
     return ["returned", None]
 
 phases = {"functions": sorted(
@@ -192,6 +193,7 @@ print(json.dumps(phases))
 CALLS = {
     "_table_from_pickle": [None],
     "_plans": [],
+    "_empty_issues": [],
     "_spec_check": ["missing.yaml"],
     "_spec_summary": ["missing.yaml"],
     "_spec_run": ["missing.yaml"],
@@ -354,7 +356,14 @@ class Interface(unittest.TestCase):
             json.dumps(requests),
             cwd=self.root,
         )
-        refusal = ["RuntimeError", TRUTH["gate_message"]]
+        refusal = [
+            TRUTH["refusal"]["python"],
+            TRUTH["gate_message"],
+            True,
+            load_truth(__file__, "public-contract")["issue_columns"],
+            [],
+            [],
+        ]
         gated = {
             name: result
             for name, result in phases["after an acceptance"].items()

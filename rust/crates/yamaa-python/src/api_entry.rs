@@ -11,7 +11,7 @@
 //! detached from the interpreter, so that other threads run meanwhile
 //! (#4072): its progress callback, project functions and interrupt probe
 //! attach again, and its refusal is raised once it has attached.
-use pyo3::{exceptions::PyException, exceptions::PyRuntimeError, prelude::*, types::PyDict};
+use pyo3::{prelude::*, types::PyDict};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa::host::functions::FunctionError;
@@ -25,15 +25,13 @@ use crate::arrow_bridge::Table;
 use crate::interface::{gate, CENSUS};
 use crate::project_activation::Port;
 
-pyo3::create_exception!(yamaa, _Error, PyException);
-
 /// Why a call answered no value.
 pub(crate) enum Refused {
     /// The engine refused the operation: D39's text, the issues that explain
     /// it and the files a refused save wrote.
     Engine(Failure),
     /// The binding refused the call, for this reason.
-    Boundary(String),
+    State(String),
     /// The call was cancelled: the interrupt it kept is raised instead.
     Cancelled,
 }
@@ -53,28 +51,17 @@ impl From<Failure> for Refused {
 /// is the failure's, `cannot read <subject>: ...`: a binding refusal, as a
 /// busy handle's is.
 pub(crate) fn streamed(failure: Failure) -> Refused {
-    Refused::Boundary(failure.message)
+    Refused::Engine(failure)
 }
 
-/// Raise `_Error` carrying the issues that explain it as an `issues` table,
+/// Raise `Error` carrying the issues that explain it as an `issues` table,
 /// and the files a refused save wrote before it stopped as `paths`; a
-/// binding refusal is a `RuntimeError`, as a busy handle's is.
+/// binding refusal is a StateError, carrying an empty issues table.
 pub(crate) fn raise(py: Python<'_>, refusal: Refused) -> PyErr {
     match refusal {
-        Refused::Engine(failure) => {
-            let error = _Error::new_err(failure.message);
-            let value = error.value(py);
-            match value
-                .setattr("issues", Table::from(&failure.issues))
-                .and_then(|()| value.setattr("paths", failure.paths))
-            {
-                Ok(()) => error,
-                Err(setattr) => setattr,
-            }
-        }
-        Refused::Boundary(message) => PyRuntimeError::new_err(message),
-        // The interrupt the call kept is raised in preference to this.
-        Refused::Cancelled => PyRuntimeError::new_err("the call was cancelled"),
+        Refused::Engine(failure) => crate::errors::failure(py, failure),
+        Refused::State(message) => crate::errors::message(py, true, message),
+        Refused::Cancelled => crate::errors::message(py, true, "the call was cancelled"),
     }
 }
 
@@ -133,7 +120,9 @@ impl Progress {
             return Ok(None);
         };
         if !callable.is_callable() {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
+            return Err(crate::errors::message(
+                callable.py(),
+                false,
                 "progress must be a callable or None",
             ));
         }
@@ -226,7 +215,7 @@ fn read<T: Send>(py: Python<'_>, read: impl Send + FnOnce() -> Result<T, Refused
 fn locked<'a, T>(value: &'a Mutex<T>, noun: &str) -> Result<MutexGuard<'a, T>, Refused> {
     value
         .try_lock()
-        .map_err(|_| Refused::Boundary(format!("{noun} handle is in use or poisoned")))
+        .map_err(|_| Refused::State(format!("{noun} handle is in use or poisoned")))
 }
 
 /// Save a result with `save`, a cancellable call.
@@ -536,7 +525,7 @@ pub fn _read_odm(
 }
 
 /// The lint table of every file `paths` names, fixing them first when `fix`
-/// is true; a file that cannot be read or admitted raises `_Error`.
+/// is true; a file that cannot be read or admitted raises `Error`.
 #[pyfunction]
 #[pyo3(signature=(paths, fix=false))]
 pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
@@ -544,7 +533,7 @@ pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
 }
 
 /// The JSON Schema of a file type as canonical JSON text (#3030 D149); a
-/// type the facade does not know raises `_Error`.
+/// type the facade does not know raises `Error`.
 #[pyfunction]
 pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {
     plain(py, |_| Ok(yamaa::schema(file_type)?))

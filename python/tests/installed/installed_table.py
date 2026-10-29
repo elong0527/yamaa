@@ -317,7 +317,7 @@ class Table(unittest.TestCase):
         self.assertIsNot(first, table.__arrow_c_stream__(None))
         del first
         gc.collect()
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(yamaa.Error):
             table.__arrow_c_stream__(
                 pa.schema([("ID", pa.int32())]).__arrow_c_schema__()
             )

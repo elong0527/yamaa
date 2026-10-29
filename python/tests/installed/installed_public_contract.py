@@ -138,6 +138,30 @@ def arguments(function):
 
 
 class PublicContract(unittest.TestCase):
+    def test_state_error_pickle_preserves_the_native_subclass(self):
+        # Native exception inheritance and reconstruction are Python-only seams.
+        issues = yamaa._native._empty_issues()
+        original = yamaa.StateError("the handle is busy", issues, [])
+        for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+            with self.subTest(protocol=protocol):
+                restored = pickle.loads(pickle.dumps(original, protocol=protocol))
+                self.assertEqual(
+                    (
+                        type(restored),
+                        restored.args,
+                        restored.issues.column_names,
+                        restored.issues.num_rows,
+                        restored.paths,
+                    ),
+                    (
+                        yamaa.StateError,
+                        ("the handle is busy",),
+                        issues.column_names,
+                        0,
+                        [],
+                    ),
+                )
+
     def test_error_pickles_and_crosses_a_spawn_worker(self):
         # Exception reconstruction and process transport are Python-only seams.
         with tempfile.TemporaryDirectory(prefix="yamaa-pickle-") as directory:
@@ -218,6 +242,7 @@ class PublicContract(unittest.TestCase):
             yamaa.__all__,
             [
                 "Error",
+                "StateError",
                 "Table",
                 "__version__",
                 "conditions",
@@ -231,6 +256,8 @@ class PublicContract(unittest.TestCase):
             ],
         )
         self.assertTrue(issubclass(yamaa.Error, Exception))
+        self.assertIs(yamaa.Error, _native.Error)
+        self.assertTrue(issubclass(yamaa.StateError, yamaa.Error))
         for name in REMOVED:
             with self.subTest(name=name):
                 self.assertFalse(hasattr(yamaa, name))
@@ -239,16 +266,18 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(
             sorted(name for name in dir(_native) if not name.startswith("__")),
             [
+                "Error",
+                "StateError",
                 "Table",
                 "_CORE_VERSION",
                 "_Check",
-                "_Error",
                 "_Plans",
                 "_ProjectRun",
                 "_Run",
                 "_SelfTest",
                 "_Submission",
                 "_conditions",
+                "_empty_issues",
                 "_info",
                 "_interface_handshake",
                 "_lint",
@@ -325,10 +354,15 @@ class PublicContract(unittest.TestCase):
 
         for value in (None, 7, True, [], object()):
             with self.subTest(value=type(value).__name__):
-                for function in (yamaa.spec, yamaa.project, yamaa.read_odm):
-                    with self.assertRaises(TypeError):
+                for function in (
+                    yamaa.spec,
+                    yamaa.project,
+                    yamaa.read_odm,
+                    yamaa.schema,
+                ):
+                    with self.assertRaises(yamaa.Error):
                         function(value)
-                with self.assertRaises(TypeError):
+                with self.assertRaises(yamaa.Error):
                     project.spec(value)
                 if value is not None:
                     for call in (
@@ -337,8 +371,18 @@ class PublicContract(unittest.TestCase):
                         lambda: project.submission(created=value),
                         lambda: yamaa.read_odm(self.spec, archive_member=value),
                     ):
-                        with self.assertRaises(TypeError):
+                        with self.assertRaises(yamaa.Error):
                             call()
+        for value in (None, 7, [], object()):
+            for call in (
+                lambda: spec.run(stream=value),
+                lambda: yamaa.lint(self.spec, fix=value),
+            ):
+                with (
+                    self.subTest(flag=type(value).__name__),
+                    self.assertRaises(yamaa.Error),
+                ):
+                    call()
         # The removed options are gone, not ignored.
         for option in ("environment", "resolver"):
             with self.subTest(option=option):

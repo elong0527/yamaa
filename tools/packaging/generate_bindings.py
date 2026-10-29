@@ -330,7 +330,14 @@ def _validate_python(definition):
                         f"method {name}.{method.get('name')} must be a plain "
                         "method or a getter without arguments"
                     )
-        if kind == "exception" and export.get("base") != "Exception":
+        if kind == "exception" and export.get("base") not in {
+            "Exception",
+            *[
+                item["name"]
+                for item in python["exports"]
+                if item["kind"] == "exception"
+            ],
+        }:
             raise ValueError(f"Python exception {name} must derive from Exception")
     if len(names) != len(set(names)):
         raise ValueError("duplicate Python exports in bindings.yaml")
@@ -944,7 +951,26 @@ def _render_pyi(definition):
             rendered = _python_type(_type_node(export["type"]), definition, classes)
             items.append((kind, f"{name}: {rendered}"))
         elif kind == "exception":
-            items.append((kind, f"class {name}({export['base']}): ..."))
+            error = definition["public"]["errors"]["refusal"]["python"]
+            if name == error["native"]:
+                attributes = error["attributes"]
+                lines = [f"class {name}({export['base']}):"]
+                lines += [
+                    f"    {key}: {bindings_public._PY_ANNOTATION[token]}"
+                    for key, token in attributes.items()
+                ]
+                args = ", ".join(
+                    ["self", "message: str"]
+                    + [
+                        f"{key}: {bindings_public._PY_ANNOTATION[token]}"
+                        for key, token in attributes.items()
+                    ]
+                )
+                lines += _stub_def("__init__", args, "None", "    ")
+                lines += _stub_def("__reduce__", "self", "tuple", "    ")
+                items.append((kind, "\n".join(lines)))
+            else:
+                items.append((kind, f"class {name}({export['base']}): ..."))
         elif kind == "function":
             args = _python_args(export.get("args"), definition, classes)
             returns = _python_type(_type_node(export["returns"]), definition, classes)
