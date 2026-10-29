@@ -40,7 +40,8 @@ expect_identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
       "[[.yamaa_project_run", "print.yamaa_project_run", "format.yamaa_project_run",
       "names.yamaa_submission", "length.yamaa_submission", "print.yamaa_submission",
       "format.yamaa_submission", "print.yamaa_spec", "format.yamaa_spec", "print.yamaa_project",
-      "format.yamaa_project", "names.yamaa_selftest", "length.yamaa_selftest",
+      "format.yamaa_project", "names.yamaa_lint_result", "length.yamaa_lint_result",
+      "print.yamaa_lint_result", "format.yamaa_lint_result", "names.yamaa_selftest", "length.yamaa_selftest",
       "print.yamaa_selftest", "format.yamaa_selftest"),
   "the registered S3 methods")
 for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_specification",
@@ -117,11 +118,12 @@ unknown_section <- function(error, key)
 # which Python compares too.
 nothing_to_save <- function(error, key)
   one_truth_row(error, host_truth[["nothing_to_save_issues"]][[key]])
-# Argument mistakes are ordinary errors, never yamaa_error.
-argument_failure <- function(code) {
+# Host argument refusals use yamaa_error and always carry issues.
+argument_failure <- function(code, package = TRUE) {
   seen <- tryCatch({ force(code); NULL }, error = identity)
   stopifnot("an argument mistake is an error" = inherits(seen, "error"),
-    "an argument mistake is not yamaa_error" = !inherits(seen, "yamaa_error"),
+    "the argument refusal class matches its boundary" = identical(inherits(seen, "yamaa_error"), package),
+    "a package refusal has an issues frame" = !package || is.data.frame(seen$issues),
     "an argument mistake has a message" = is.character(conditionMessage(seen)))
 }
 members <- function(object) sort(ls(object), method = "radix")
@@ -189,6 +191,7 @@ qualify_signatures <- function() {
       argument_failure(yamaa_project(value))
       argument_failure(yamaa_read_odm(value))
     }
+    argument_failure(yamaa_schema(value))
     argument_failure(project$spec(value))
     if (!is.null(value)) {
       argument_failure(project$run(value))
@@ -197,17 +200,21 @@ qualify_signatures <- function() {
       argument_failure(yamaa_read_odm(file.path(root, "absent.xml"), archive_member = value))
     }
   }
+  for (value in list(NULL, 7L, NA, character(), list())) {
+    argument_failure(spec$run(stream = value))
+    argument_failure(yamaa_lint(file.path(root, "absent.yaml"), fix = value))
+  }
   byte_path <- rawToChar(as.raw(233L)); Encoding(byte_path) <- "bytes"
   argument_failure(yamaa_spec(byte_path))
   # The removed options are gone, not ignored.
   for (option in c("environment", "resolver")) {
     arguments <- setNames(list(NULL), option)
-    argument_failure(do.call(yamaa_spec, c(list(file.path(root, "absent.yaml")), arguments)))
+    argument_failure(do.call(yamaa_spec, c(list(file.path(root, "absent.yaml")), arguments)), FALSE)
     for (method in list(spec$check, spec$resolve, spec$run, project$check)) {
-      argument_failure(do.call(method, arguments))
+      argument_failure(do.call(method, arguments), FALSE)
     }
   }
-  argument_failure(run$save(file.path(root, "other.csv")))
+  argument_failure(run$save(file.path(root, "other.csv")), FALSE)
   expect_identical(list.files(root), character(), "argument mistakes write nothing")
   cat("public exports, signatures, members, locked results and argument errors passed\n")
 }
@@ -1104,3 +1111,20 @@ qualify_resolved_origins <- function() {
   cat("resolved original origins retain inherited defaults, shorthand and named-window definitions\n")
 }
 qualify_resolved_origins()
+
+# The public error-envelope seam must survive a diagnostic that R cannot hold.
+qualify_unrepresentable_refusal <- function() {
+  root <- tempfile("yamaa-unrepresentable-refusal-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  path <- file.path(normalizePath(root, winslash = "/"), "bad.yaml")
+  case <- host_truth$unrepresentable_refusal
+  writeBin(charToRaw(case$yaml), path)
+  seen <- tryCatch(yamaa_spec(path)$run()$save(), yamaa_error = identity)
+  expect_identical(list(class = class(seen), message = conditionMessage(seen), call = conditionCall(seen),
+    frame = is.data.frame(seen$issues), columns = names(seen$issues), rows = nrow(seen$issues), paths = seen$paths),
+    list(class = fixture_strings(case$r_class), message = gsub("{path}", path, case$message, fixed = TRUE),
+      call = NULL, frame = TRUE, columns = fixture_strings(host_truth$issue_columns), rows = 0L, paths = character()),
+    "a refused issues conversion still carries an empty issues frame")
+}
+qualify_unrepresentable_refusal()

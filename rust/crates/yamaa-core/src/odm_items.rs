@@ -103,22 +103,24 @@ impl Options {
     pub const DEFAULT_MAX_ARCHIVE_MEMBERS: usize = 10_000;
     pub const DEFAULT_MAX_EXPANDED_BYTES: u64 = 256 * 1024 * 1024;
     pub const DEFAULT_MAX_XML_DEPTH: usize = 64;
+    pub const MIN_ARCHIVE_MEMBERS: u64 = 1;
+    pub const MIN_EXPANDED_BYTES: u64 = 1;
     /// The smallest depth that admits the clinical hierarchy below `ODM`.
     pub const MIN_XML_DEPTH: usize = 8;
 
     /// Refuse a bound that no document could satisfy, in a fixed order.
     pub fn validate(&self) -> Result<(), Error> {
-        if self.max_expanded_bytes < 1 {
+        if self.max_expanded_bytes < Self::MIN_EXPANDED_BYTES {
             return Err(Error::Option {
                 option: "max_expanded_bytes",
-                minimum: 1,
+                minimum: Self::MIN_EXPANDED_BYTES,
                 value: self.max_expanded_bytes,
             });
         }
-        if self.max_archive_members < 1 {
+        if (self.max_archive_members as u64) < Self::MIN_ARCHIVE_MEMBERS {
             return Err(Error::Option {
                 option: "max_archive_members",
-                minimum: 1,
+                minimum: Self::MIN_ARCHIVE_MEMBERS,
                 value: self.max_archive_members as u64,
             });
         }

@@ -26,7 +26,8 @@ write_text(path, truth[["specification_yaml"]])
 
 # Integer columns are decimal text in the truth and doubles in R; the file
 # column is the absolute path, with forward slashes, of the file named.
-check_table <- function(frame, rows, label, file_name = truth[["file_name"]]) {
+check_table <- function(result, rows, label, file_name = truth[["file_name"]]) {
+  frame <- result$findings
   stopifnot_case(label, "the findings are a data frame" = is.data.frame(frame))
   expect_identical(names(frame), columns, paste(label, "has the lint columns"))
   expect_identical(unname(vapply(frame, typeof, "")), ifelse(columns %in% integers, "double", "character"),
@@ -43,12 +44,27 @@ check_table <- function(frame, rows, label, file_name = truth[["file_name"]]) {
   }
 }
 
-check_table(yamaa_lint(path), truth[["rows"]], "lint")
+check_result <- function(result, key) {
+  expected <- truth$result[[key]]
+  paths <- if (isTRUE(expected$rewritten)) normalizePath(path, winslash = "/") else character()
+  expect_identical(list(class = class(result), members = names(result), length = length(result),
+    status = result$status, paths = result$paths, summary = format(result)),
+    list(class = truth$result$r_class, members = fixture_strings(truth$result$members), length = 3L,
+      status = expected$status, paths = paths, summary = expected$summary), paste("lint result", key))
+}
+result <- yamaa_lint(path)
+check_result(result, "before")
+check_table(result, truth[["rows"]], "lint")
 check_table(yamaa_lint(c(path), fix = FALSE), truth[["rows"]], "lint without fix")
 expect_identical(read_text(path), truth[["specification_yaml"]], "lint without fix writes nothing")
 cat("findings come as the six-column table\n")
 
-check_table(yamaa_lint(path, fix = TRUE), truth[["fixed_rows"]], "lint with fix")
+before <- yamaa_lint(path)
+fixed <- yamaa_lint(path, fix = TRUE)
+check_result(fixed, "fixed")
+check_table(fixed, truth[["fixed_rows"]], "lint with fix")
+check_result(before, "before")
+check_table(before, truth[["rows"]], "lint before the fix keeps its findings")
 expect_identical(read_text(path), truth[["fixed_yaml"]], "fix writes the proved fixes")
 check_table(yamaa_lint(path), truth[["fixed_rows"]], "lint after fix")
 cat("fix rewrites the file and lists what remains\n")
@@ -85,8 +101,10 @@ cat("refusals signal yamaa_error naming the condition\n")
 
 for (paths in list(character(), NA_character_, 1)) {
   error <- tryCatch(yamaa_lint(paths), error = identity)
-  stopifnot_case(paste("paths", deparse(paths)), "the mistake is an ordinary error" =
-    inherits(error, "error") && !inherits(error, "yamaa_error"))
+  stopifnot_case(paste("paths", deparse(paths)), "the mistake is a package error" =
+    inherits(error, "error") && inherits(error, "yamaa_error"))
 }
 cat("paths must be a non-empty character vector\n")
+write_text(path, "")
+check_result(yamaa_lint(path), "clean")
 unlink(work, recursive = TRUE)

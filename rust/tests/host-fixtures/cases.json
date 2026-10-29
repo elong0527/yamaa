@@ -4812,6 +4812,7 @@
       }
     },
     "public-contract": {
+      "unrepresentable_refusal": {"yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: \"bad\\0\"\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n", "message": "cannot save {path}: {path}:3:1: model has the value bad\\x00, which is not permitted [value_not_permitted, SCHEMA-12]; text containing NUL cannot be held by an R character vector", "r_class": ["yamaa_error", "error", "condition"]},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
       "issue_columns": [
         "severity",
@@ -5712,6 +5713,18 @@
       ]
     },
     "read-odm": {
+      "invalid_limits": {
+        "arguments": {"max_archive_members": 1, "max_expanded_bytes": 1, "max_xml_depth": 8},
+        "values": [
+          {"name": "negative", "value": -1},
+          {"name": "fraction", "value": 1.5},
+          {"name": "boolean", "value": true},
+          {"name": "missing", "value": null},
+          {"name": "text", "value": "12"}
+        ],
+        "issue": {"severity": "error", "phase": "validation", "condition": "value_not_permitted", "rule": "ODM-1", "spec_paths": ["{argument}"], "line": null, "column": null, "file": null, "message": "{argument} has the value {value}, which is not permitted", "source_span": null, "operand_route": null},
+        "error": "cannot read {source}: {argument} has the value {value}, which is not permitted [value_not_permitted, ODM-1]"
+      },
       "columns": [
         "ODMVersion",
         "FileOID",
@@ -6246,6 +6259,13 @@
       "function_output_csv": "ID,RATIO,RATIO_DEFAULT,RATIO_PCT,RATIO_ADJ_MISSING,RATIO_MISSING\nR1,2.5,2.5,250,2.5,\nR2,0.33,0.3,33.3,0.8300000000000001,\nR3,3.5,3.5,350,3.75,\nR4,0,0,0,0,\nR5,2.25,2.2,225,1.75,\nR6,,,,,\nR7,,,,,\n"
     },
     "lint": {
+      "result": {
+        "members": ["status", "findings", "paths"],
+        "r_class": "yamaa_lint_result",
+        "before": {"status": "failed", "summary": "5 lint findings in 1 of 1 file", "rewritten": false},
+        "fixed": {"status": "failed", "summary": "2 lint findings in 1 of 1 file; fixed 1 file", "rewritten": true},
+        "clean": {"status": "succeeded", "summary": "0 lint findings in 0 of 1 file", "rewritten": false}
+      },
       "columns": [
         "file",
         "line",
@@ -8478,6 +8498,7 @@
       }
     },
     "interface": {
+      "refusal": {"python": "StateError", "r": ["yamaa_state_error", "yamaa_error", "error", "condition"]},
       "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"]},
       "accepted": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]},
       "messages": {
@@ -8512,6 +8533,26 @@
           "case": "boundary one is a mismatch after table pickling advances the boundary",
           "request": {"version": 1, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
           "outcome": {"accepted": false, "requested_version": 1, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "boundary two is a mismatch after native refusals advance the boundary",
+          "request": {"version": 2, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 2, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "boundary three is a mismatch after native ODM limit admission changes",
+          "request": {"version": 3, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 3, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "boundary four is a mismatch after lint returns a native result",
+          "request": {"version": 4, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 4, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "boundary five is a mismatch after progress refusals retain their cause",
+          "request": {"version": 5, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 5, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
         },
         {
           "case": "a request for the next version is a mismatch",
@@ -8614,7 +8655,7 @@
           "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
         }
       ],
-      "census_kinds": ["check", "run", "project_run", "submission", "selftest", "plans", "table"],
+      "census_kinds": ["check", "run", "project_run", "submission", "lint", "selftest", "plans", "table"],
       "lifetime": {
         "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, NAME: str}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\noutput: {path: output.csv, columns: [ID, NAME]}\n",
         "input_csv": "ID,NAME\n1,alpha\n2,beta\n",
@@ -8624,6 +8665,7 @@
       }
     },
     "streaming": {
+      "refusal": {"python": "StateError", "r": ["yamaa_state_error", "yamaa_error", "error", "condition"]},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float, D: date, T: datetime}}}\noutput: {path: output.csv, columns: [ID, NAME, V, D, T], order_by: [{variable: ID, direction: desc}]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n  - {name: V, type: float, label: Value, derivation: SRC.V}\n  - {name: D, type: date, label: Day, derivation: SRC.D}\n  - {name: T, type: datetime, label: Time, derivation: SRC.T}\n",
       "input_csv": "ID,NAME,V,D,T\n1,alpha,1.5,2024-01-01,2024-01-01T08:30:00\n2,beta,,2024-02-29,\n3,gamma,2.25,,2024-03-01T00:00:00\n4,,-0.5,2023-12-31,2023-12-31T23:59:59\n5,epsilon,10,2024-03-01,2024-03-01T12:00:05\n",
       "rows": [
@@ -8646,6 +8688,7 @@
       "host_thread": "cannot read TEST: a run that can call project functions is built only on the thread that started it [host_thread]"
     },
     "progress": {
+      "callback_failure": {"class": "ProgressFailure", "message": "the callback raises"},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: report.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
       "input_csv": "ID\n1\n2\n",
       "events": [
@@ -8678,8 +8721,8 @@
           "file": null,
           "line": null,
           "column": null,
-          "message": "the engine refused the operation in its build step: host_progress_failure",
-          "context": "{\"code\":\"host_progress_failure\",\"step\":\"build\"}",
+          "message": "the engine refused the operation in its build step: host_progress_failure (ProgressFailure: the callback raises)",
+          "context": "{\"code\":\"host_progress_failure\",\"host_error\":\"ProgressFailure\",\"host_message\":\"the callback raises\",\"step\":\"build\"}",
           "source_span": null,
           "operand_route": null
         }

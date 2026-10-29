@@ -15,6 +15,10 @@ version: "1.0"
 # each key its message names. Messages are not frozen: programs match on
 # condition and rule, never on message.
 #
+# `message_variants` optionally lists messages selected when a named context
+# key is present, in declaration order. The first matching `when` replaces
+# the default message; each variant declares its `when` key and `message`.
+#
 # A condition's history goes with it, from the `conditions` section of
 # tools/migrate/renames.yaml for 0.6.0: `renamed_from` gives the name it had
 # before a release renamed it, and `retired` below lists each condition a
@@ -148,6 +152,9 @@ conditions:
   engine_rejected:
     phases: [engine]
     message: "the engine refused the operation in its {step} step: {code}"
+    message_variants:
+      - when: host_error
+        message: "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"
   field_parse_failed:
     phases: [ingest]
     message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"

@@ -56,7 +56,12 @@ impl Diagnostic {
 }
 
 fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPlaceholder> {
-    let template = diagnostic.code.template();
+    let template = super::message_templates::VARIANTS
+        .iter()
+        .find(|(condition, key, _)| {
+            *condition == diagnostic.definition().condition && diagnostic.context.contains_key(*key)
+        })
+        .map_or_else(|| diagnostic.code.template(), |(_, _, template)| *template);
     let mut out = String::with_capacity(template.len() + 32);
     let mut rest = template;
     while let Some(at) = rest.find(['{', '}']) {

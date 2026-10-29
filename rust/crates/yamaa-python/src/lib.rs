@@ -5,6 +5,7 @@ use pyo3::prelude::*;
 mod api_entry;
 mod arrow_bridge;
 mod context_values;
+mod errors;
 mod function_callback;
 mod interface;
 mod interrupt;
@@ -14,7 +15,9 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<arrow_bridge::Table>()?;
     module.add_function(wrap_pyfunction!(arrow_bridge::_table_from_pickle, module)?)?;
-    module.add("_Error", module.py().get_type::<api_entry::_Error>())?;
+    module.add("Error", module.py().get_type::<errors::Error>())?;
+    module.add("StateError", module.py().get_type::<errors::StateError>())?;
+    module.add_function(wrap_pyfunction!(errors::_empty_issues, module)?)?;
     module.add_class::<api_entry::Check>()?;
     module.add_class::<api_entry::Run>()?;
     module.add_class::<api_entry::ProjectRun>()?;
@@ -33,6 +36,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(api_entry::_project_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_submission, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_read_odm, module)?)?;
+    module.add_class::<api_entry::Lint>()?;
     module.add_function(wrap_pyfunction!(api_entry::_lint, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_schema, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_conditions, module)?)?;

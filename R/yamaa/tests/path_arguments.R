@@ -105,7 +105,7 @@ check_path_arguments <- function() {
       Value = c("35", "F"))),
     list(label = "yamaa_lint(paths)", files = c("dm.yaml", "age.yaml", "project.yaml"),
       call = function(paths) {
-        findings <- yamaa_lint(paths)
+        findings <- yamaa_lint(paths)$findings
         list(columns = names(findings), rows = nrow(findings))
       }, expected = list(columns = c("file", "line", "column", "finding", "spec_path", "message"),
         rows = 0L)))
@@ -120,7 +120,7 @@ check_path_arguments <- function() {
   }
   cat("a named, fs_path or glue string and a `~` path name their file in every path argument\n")
 
-  # A value that is no path is refused with an ordinary error naming its
+  # A value that is no path is refused with a package error naming its
   # argument, in the words of api.R's conversions: one path takes one
   # non-missing string, and yamaa_lint() a non-empty vector of them.
   one <- function(what) sprintf("`%s` must be one non-missing character string", what)
@@ -147,7 +147,7 @@ check_path_arguments <- function() {
         list(class = class(error), message = conditionMessage(error), call = conditionCall(error))
       })
       expect_identical(outcome,
-        list(class = c("simpleError", "error", "condition"), message = refusal$message, call = NULL),
+        list(class = c("yamaa_error", "error", "condition"), message = refusal$message, call = NULL),
         sprintf("%s refuses %s naming its argument", refusal$label, value))
     }
   }

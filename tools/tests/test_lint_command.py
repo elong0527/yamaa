@@ -50,7 +50,7 @@ class LintCommand(unittest.TestCase):
             broken.write_text("a: [\n")
             status, stdout, stderr = self.run_command(clean)
             self.assertEqual((status, stdout), (0, ""))
-            self.assertIn("0 lint finding(s) in 0 file(s)", stderr)
+            self.assertIn("0 lint findings in 0 of 1 file", stderr)
             status, stdout, _ = self.run_command(clean, packed)
             self.assertEqual(status, 1)
             absolute = os.path.abspath(packed).replace(os.sep, "/")

@@ -530,6 +530,7 @@ pub(crate) struct Build {
     /// their original host objects, for as long as it lives, as the host
     /// interface's ownership rules ask; nothing reads them once built.
     _failures: Vec<FunctionError>,
+    progress_cause: Option<crate::host::functions::HostPayload>,
     /// Whether a project function raised the host's interrupt (D46).
     interrupted: bool,
     /// What the build's printed text and refusals name (P-PRINT-1): a
@@ -568,6 +569,7 @@ impl Build {
             streamed: None,
             run_report: None,
             _failures: failures,
+            progress_cause: None,
             interrupted,
             subject: String::new(),
             locator,
@@ -760,6 +762,7 @@ impl Build {
     /// one save every result shares; see [`crate::Run::save`].
     pub(crate) fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure> {
         let subject = self.subject.clone();
+        let cause = self.progress_cause.clone();
         crate::outcome::save(
             &[],
             &Locator::none(),
@@ -771,6 +774,18 @@ impl Build {
             &subject,
             token,
         )
+        .map_err(|failure| failure.with_cause(cause))
+    }
+
+    pub(crate) fn fail_progress(
+        &mut self,
+        reporter: &crate::progress::Reporter,
+        step: yamaa_core::application_issue::Step,
+    ) {
+        if reporter.failed() {
+            self.progress_cause = reporter.cause();
+            self.fail(vec![reporter.failure(step)]);
+        }
     }
 
     /// The build's observations as JSON; none when it never ran.

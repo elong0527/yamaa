@@ -313,6 +313,7 @@ public.types.optional_table: python yamaa.Table | None; r data.frame or NULL
 public.types.run_output: python yamaa.Table | None; with stream=True a yamaa.Table whose Arrow stream produces the output as it is read, once; r data.frame or NULL; with stream = TRUE an Arrow C stream that produces the output as it is read: an external pointer of class nanoarrow_array_stream, or NULL
 public.types.status: python str, one of values.status; r character(1), one of values.status
 public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
+public.types.host_condition: python BaseException | None; r condition or NULL
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
 public.types.pickle: python tuple[object, tuple[bytes]]
@@ -338,7 +339,7 @@ public.functions.read_odm.args[1]: archive_member: optional_text = None; keyword
 public.functions.read_odm.args[2]: max_archive_members: count = 10000; keyword-only
 public.functions.read_odm.args[3]: max_expanded_bytes: count = 268435456; keyword-only
 public.functions.read_odm.args[4]: max_xml_depth: count = 64; keyword-only
-public.functions.lint: python yamaa.lint; r yamaa_lint; returns table; table lint; raises refusal
+public.functions.lint: python yamaa.lint; r yamaa_lint; returns Lint; raises refusal
 public.functions.lint.args[0]: paths: path_list
 public.functions.lint.args[1]: fix: flag = false
 public.functions.schema: python yamaa.schema; r yamaa_schema; returns json_text; raises refusal
@@ -348,9 +349,9 @@ public.functions.info: python yamaa.info; r yamaa_info; returns info; record inf
 public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
 public.classes.Check: python yamaa.Check; r yamaa_check
 public.classes.Check.status: property; returns status
-public.classes.Check.issues: property; returns table; table issues
+public.classes.Check.issues: property; returns table; table issues; raises refusal
 public.classes.Check.timings: property; returns table; table timings
-public.classes.Check.summary: printing; python __repr__; r print, format
+public.classes.Check.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Run: python yamaa.Run; r yamaa_run
 public.classes.Run.status: property; returns status
 public.classes.Run.output: property; returns run_output
@@ -358,7 +359,7 @@ public.classes.Run.issues: property; returns table; table issues
 public.classes.Run.report: property; returns optional_table; table report
 public.classes.Run.timings: property; returns table; table timings
 public.classes.Run.save: method; returns paths_written; raises refusal
-public.classes.Run.summary: printing; python __repr__; r print, format
+public.classes.Run.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.MemberRun: python yamaa.MemberRun; r yamaa_member_run
 public.classes.MemberRun.status: property; returns status; raises refusal
 public.classes.MemberRun.output: property; returns optional_table; raises refusal
@@ -374,18 +375,18 @@ public.classes.ProjectRun.member.args[0]: name: text
 public.classes.ProjectRun.contains: protocol; python __contains__
 public.classes.ProjectRun.iterate: protocol; python __iter__
 public.classes.ProjectRun.length: protocol; python __len__
-public.classes.ProjectRun.issues: property; returns table; table issues
-public.classes.ProjectRun.report: property; returns table; table report
+public.classes.ProjectRun.issues: property; returns table; table issues; raises refusal
+public.classes.ProjectRun.report: property; returns table; table report; raises refusal
 public.classes.ProjectRun.timings: property; returns table; table timings
 public.classes.ProjectRun.save: method; returns paths_written; raises refusal
-public.classes.ProjectRun.summary: printing; python __repr__; r print, format
+public.classes.ProjectRun.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Submission: python yamaa.Submission; r yamaa_submission
 public.classes.Submission.status: property; returns status
 public.classes.Submission.created: property; returns text
-public.classes.Submission.issues: property; returns table; table issues
+public.classes.Submission.issues: property; returns table; table issues; raises refusal
 public.classes.Submission.timings: property; returns table; table timings
 public.classes.Submission.save: method; returns paths_written; raises refusal
-public.classes.Submission.summary: printing; python __repr__; r print, format
+public.classes.Submission.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Spec: python yamaa.Spec; r yamaa_spec
 public.classes.Spec.check: method; returns Check; raises refusal
 public.classes.Spec.check.args[0]: parent: optional_path = None
@@ -394,7 +395,7 @@ public.classes.Spec.resolve: method; returns tree; raises refusal
 public.classes.Spec.run: method; returns Run; raises refusal
 public.classes.Spec.run.args[0]: stream: flag = false; keyword-only
 public.classes.Spec.run.args[1]: progress: progress = None; keyword-only
-public.classes.Spec.summary: printing; python __repr__; r print, format
+public.classes.Spec.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Project: python yamaa.Project; r yamaa_project
 public.classes.Project.spec: method; returns Spec; raises refusal
 public.classes.Project.spec.args[0]: name: text
@@ -408,27 +409,34 @@ public.classes.Project.submission: method; returns Submission; raises refusal
 public.classes.Project.submission.args[0]: section: optional_text = None
 public.classes.Project.submission.args[1]: created: optional_text = None; keyword-only
 public.classes.Project.submission.args[2]: progress: progress = None; keyword-only
-public.classes.Project.summary: printing; python __repr__; r print, format
+public.classes.Project.summary: printing; python __repr__; r print, format; raises refusal
+public.classes.Lint: python yamaa.Lint; r yamaa_lint_result
+public.classes.Lint.status: property; returns status; raises refusal
+public.classes.Lint.findings: property; returns table; table lint; raises refusal
+public.classes.Lint.paths: property; returns paths_written; raises refusal
+public.classes.Lint.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.SelfTest: python yamaa.SelfTest; r yamaa_selftest
 public.classes.SelfTest.status: property; returns status
 public.classes.SelfTest.cases: property; returns table; table selftest_cases
 public.classes.SelfTest.info: property; returns info; record info
-public.classes.SelfTest.summary: printing; python __repr__; r print, format
+public.classes.SelfTest.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Table: python yamaa.Table
-public.classes.Table.num_rows: property; returns count
+public.classes.Table.num_rows: property; returns count; raises refusal
 public.classes.Table.column_names: property; returns names
-public.classes.Table.length: protocol; python __len__; returns count
-public.classes.Table.pickle: protocol; python __reduce__; returns pickle
-public.classes.Table.preview: printing; python __repr__
-public.classes.Table.arrow_stream: protocol; python __arrow_c_stream__; returns arrow_capsule
+public.classes.Table.length: protocol; python __len__; returns count; raises refusal
+public.classes.Table.pickle: protocol; python __reduce__; returns pickle; raises refusal
+public.classes.Table.preview: printing; python __repr__; raises refusal
+public.classes.Table.arrow_stream: protocol; python __arrow_c_stream__; returns arrow_capsule; raises refusal
 public.classes.Table.arrow_stream.args[0]: requested_schema: schema_request = None
-public.classes.Table.to_pylist: method; returns rows
-public.classes.Table.to_arrow: method; returns arrow_table; imports pyarrow
-public.classes.Table.to_polars: method; returns polars_frame; imports polars
-public.classes.Table.to_pandas: method; returns pandas_frame; imports pandas, pyarrow
-public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
+public.classes.Table.to_pylist: method; returns rows; raises refusal
+public.classes.Table.to_arrow: method; returns arrow_table; raises refusal; imports pyarrow
+public.classes.Table.to_polars: method; returns polars_frame; raises refusal; imports polars
+public.classes.Table.to_pandas: method; returns pandas_frame; raises refusal; imports pandas, pyarrow
+public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written, parent: host_condition
+public.errors.refusal.state: python yamaa.StateError; r yamaa_state_error
 public.errors.refusal.python.picklable: true
 public.python.exports.Error
+public.python.exports.StateError
 public.python.exports.Table
 public.python.exports.__version__
 public.python.exports.conditions
@@ -472,6 +480,10 @@ public.r.s3methods.yamaa_spec.print
 public.r.s3methods.yamaa_spec.format
 public.r.s3methods.yamaa_project.print
 public.r.s3methods.yamaa_project.format
+public.r.s3methods.yamaa_lint_result.names: status, findings, paths
+public.r.s3methods.yamaa_lint_result.length
+public.r.s3methods.yamaa_lint_result.print
+public.r.s3methods.yamaa_lint_result.format
 public.r.s3methods.yamaa_selftest.names: status, cases, info
 public.r.s3methods.yamaa_selftest.length
 public.r.s3methods.yamaa_selftest.print

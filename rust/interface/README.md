@@ -50,7 +50,7 @@ symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
 the edge, and the `boundary` import's version role to
 `yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
-The boundary version, now 2 for native table pickling, is the single source for both hosts:
+The boundary version, now 6 for retained progress causes, is the single source for both hosts:
 the generator writes it into each host's request, and neither keeps a
 separately maintained copy. `format_version` versions the IDL grammar only.
 
@@ -104,8 +104,8 @@ projection of each type token (a token named for a vocabulary, `status` or
 `classes` the result and lazy classes in definition order (a class is defined
 before any class that returns it), its `errors` the refusal and its `python`
 block the module docstring and version name. From it the generator writes the
-public module `python/src/yamaa/__init__.py` (`__all__`, the error class and
-its native mapping, and the delegating classes and functions), and R's
+public module `python/src/yamaa/__init__.py` (`__all__`, native error imports
+and their declared constructor and pickle methods, and the delegating classes and functions), and R's
 `R/yamaa/R/public-bindings.R` (the exported functions, the constructors of the
 result and lazy objects, S3 methods and private accessors) and
 `R/yamaa/NAMESPACE`. The handwritten rest stays beside them:
@@ -114,8 +114,14 @@ the version lookup, and `R/yamaa/R/api.R`
 holds the reply and argument conversions, the host-function capabilities and
 the locked-object and table-memo helpers. Docstrings come from `doc`;
 R's help pages stay handwritten under `R/yamaa/man/`. The refusal's Python
+`native` names its PyO3-created exception, and `state` names its native subclass.
 `picklable: true` generates its reconstruction arguments from its declared
-attributes, preserving its instance state as well. Table pickling is native
+attributes, preserving its instance state as well. `chained: true` also
+retains Python's `__cause__` when the refusal is pickled; R's `parent` field
+keeps the original callback condition. R constructs the same
+condition fields and state subclass from its declaration. Every refusal carries
+an issues table, including before negotiation and after an R table-conversion
+failure (D258 reversed by #4077). Table pickling is native
 and preserves its Arrow schema and batches without a Python table library.
 
 Generated code only delegates, and the delegation is declared, never written:
@@ -133,8 +139,8 @@ Generated code only delegates, and the delegation is declared, never written:
   nothing fills, is a generation error.
 - A member that returns a class makes it from the call's result and the values
   it holds; a handle passed to a class must be the native type its members
-  call. `raises: refusal` maps the native exception to `yamaa.Error`, which R's
-  reply conversion signals as `yamaa_error`. In R, a member that returns
+  call. `raises: refusal` declares the native `yamaa.Error` hierarchy, which R's
+  reply conversion signals as the `yamaa_error` hierarchy. In R, a member that returns
   `nothing` or `paths_written`, as `save()` does, returns it invisibly.
 
 Member kinds are `property` (a read-only view, an active binding in R),
@@ -367,15 +373,15 @@ it was. Every other native call passes the gate first: a Python function calls
 routine replies through `reply()`, which passes it. A result handle only comes from a gated
 call, so its methods need no gate of their own. Before negotiation, which
 only loading `_native` or the R library by hand allows, a call gets the
-binding's ordinary boundary refusal: a `RuntimeError` in Python, as a busy
-handle gets, and a refusal with no issues in R. The handshake itself, the
+binding's state refusal: `yamaa.StateError` in Python and
+`yamaa_state_error` in R, both carrying an empty issues table. The handshake itself, the
 release paths, the informational `_CORE_VERSION` and `core_version()`, and
 extendr's own routines that describe each module and write its R wrappers,
 are exempt. The generator checks that every registered native function
 reaches the gate, so a new export cannot skip it.
 
 Each binding counts its live handles by kind (`check`, `run`,
-`project_run`, `submission`, `selftest`, `plans` and `table`, which only
+`project_run`, `submission`, `lint`, `selftest`, `plans` and `table`, which only
 Python hands out; R copies each table into host values) in a census
 that the private accessors `_native._live_handles()` and
 `.native_live_handles()` read for the handle lifetime suites.

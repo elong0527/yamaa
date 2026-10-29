@@ -34,22 +34,31 @@
       invokeRestart(ends[[1L]])
     }
     if (!is.null(error$condition)) stop(error$condition)
-    stop(structure(
-      list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
-      class = c("yamaa_error", "error", "condition")
-    ))
+    stop(.refusal(error))
   }
   reply$value
 }
 
+.refuse_argument <- function(message) {
+  stop(.refusal(list(message = message,
+    issues = .reply(.native_empty_issues()), paths = character(), state = FALSE)))
+}
+
 .text <- function(value, what) {
   if (!is.character(value) || length(value) != 1L || is.na(value)) {
-    stop(sprintf("`%s` must be one non-missing character string", what), call. = FALSE)
+    .refuse_argument(sprintf("`%s` must be one non-missing character string", what))
   }
-  .utf8_raw(value)
+  tryCatch(.utf8_raw(value), error = function(error) .refuse_argument(conditionMessage(error)))
 }
 
 .optional_text <- function(value, what) if (is.null(value)) NULL else .text(value, what)
+
+.flag <- function(value, what) {
+  if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+    .refuse_argument(sprintf("`%s` must be one non-missing logical value", what))
+  }
+  unname(value)
+}
 
 # A path argument (#4091) is the text of a character string: its names and
 # class, such as an fs::path() or glue::glue() value carries, are dropped,
@@ -57,18 +66,20 @@
 # expands; a name, a section or a TAR member name is text, which .text()
 # takes as written.
 .path <- function(value, what) {
-  if (is.character(value)) value <- path.expand(as.character(unname(value)))
+  if (is.character(value)) value <- .expanded_paths(value)
   .text(value, what)
 }
+
+.expanded_paths <- function(value) tryCatch(path.expand(as.character(unname(value))),
+  error = function(error) .refuse_argument(conditionMessage(error)))
 
 .optional_path <- function(value, what) if (is.null(value)) NULL else .path(value, what)
 
 .paths <- function(value, what) {
   if (!is.character(value) || length(value) == 0L || anyNA(value)) {
-    stop(sprintf("`%s` must be a non-empty character vector without missing values", what),
-      call. = FALSE)
+    .refuse_argument(sprintf("`%s` must be a non-empty character vector without missing values", what))
   }
-  lapply(path.expand(as.character(unname(value))), .utf8_raw)
+  lapply(.expanded_paths(value), function(value) .text(value, what))
 }
 
 .version <- function() charToRaw(as.character(getRversion()))
@@ -131,18 +142,19 @@
 
 # A progress callback (#3762): `NULL`, or the user's function wrapped so it
 # replies with a closed envelope and no R error crosses Rust: list(0L, NULL)
-# when it returned, list(1L, condition) when it signalled an error, which
-# fails the result, and list(3L, condition) for an interrupt, which cancels
+# when it returned, list(1L, list(condition, class, message)) for an error, which
+# fails the result and preserves its condition and raw UTF-8 details;
+# list(3L, condition) for an interrupt, which cancels
 # the call. Rust gives it one named list per progress event.
 .progress <- function(progress, what) {
   if (is.null(progress)) return(NULL)
   if (!is.function(progress)) {
-    stop(sprintf("`%s` must be a function or NULL", what), call. = FALSE)
+    .refuse_argument(sprintf("`%s` must be a function or NULL", what))
   }
   force(progress)
   function(event) tryCatch({
     progress(event)
     list(0L, NULL)
   }, interrupt = function(condition) list(3L, condition),
-  error = function(condition) list(1L, condition))
+  error = function(condition) list(1L, c(list(condition), .project_condition_details(condition))))
 }

@@ -33,6 +33,7 @@
 //! as YAML, or a directory that cannot be listed, refuses the whole call with
 //! the issue that says why, before any file is written.
 
+use crate::api::Status;
 use crate::diagnostic::{ContextValue, Report};
 use crate::error::Failure;
 use crate::table::Table;
@@ -45,8 +46,8 @@ pub const LINT_COLUMNS: [&str; 6] = ["file", "line", "column", "finding", "spec_
 pub const LINT_FINDINGS: [&str; 16] = yamaa_adapters::lint::FINDINGS;
 
 /// What [`lint`] found: the findings that remain, in table order, with the
-/// number of files it read and the files a fix rewrote. The hosts return its
-/// [`table`](Lint::table) (D40); the command line prints each finding's
+/// number of files it read and the files a fix rewrote. The hosts expose its
+/// status, [`table`](Lint::table) and rewritten paths; the command line prints each finding's
 /// [`text`](LintFinding::text), then the [`summary`](Lint::summary).
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -115,6 +116,15 @@ impl LintFinding {
 }
 
 impl Lint {
+    /// Failed while any finding remains, succeeded otherwise.
+    pub fn status(&self) -> Status {
+        if self.findings.is_empty() {
+            Status::Succeeded
+        } else {
+            Status::Failed
+        }
+    }
+
     /// The findings that remain, in table order.
     pub fn findings(&self) -> &[LintFinding] {
         &self.findings

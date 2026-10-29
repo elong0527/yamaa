@@ -23,6 +23,9 @@ yamaa_read_odm(source, archive_member = NULL, max_archive_members = 10000,
 \value{
 A data frame with one row per clinical item. A refusal raises a condition of
 class \code{yamaa_error}.
+Limits must be non-missing whole numbers: at least one member or byte, and
+at least eight levels. A negative, fractional or logical limit raises
+\code{value_not_permitted} at its argument, with an issues data frame.
 }
 \examples{
 odm <- tempfile(fileext = ".xml")

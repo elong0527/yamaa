@@ -95,6 +95,17 @@ def render(document=None) -> str:
         f"    ({literal(condition)}, {literal(message)}),"
         for condition, message in templates(document)
     ]
+    lines += [
+        "];",
+        "",
+        "#[rustfmt::skip]",
+        "pub(super) const VARIANTS: &[(&str, &str, &str)] = &[",
+    ]
+    for condition, entry in sorted((document or registry())["conditions"].items()):
+        for variant in entry.get("message_variants", []):
+            lines.append(
+                f"    ({literal(condition)}, {literal(variant['when'])}, {literal(variant['message'])}),"
+            )
     return "\n".join([*lines, "];", ""])
 
 

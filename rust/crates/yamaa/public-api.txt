@@ -323,6 +323,7 @@ yamaa::error::Failure: impl Failure
 yamaa::error::Failure: impl std::error::Error for Failure
 yamaa::error::Failure: impl std::fmt::Display for Failure
 yamaa::error::Failure: pub struct Failure [derive(Clone, Debug)] [non_exhaustive]
+yamaa::error::Failure::cause: pub cause: Option<yamaa::host::functions::HostPayload>
 yamaa::error::Failure::diagnostics: pub diagnostics: Vec<Diagnostic>
 yamaa::error::Failure::issues: pub issues: Table
 yamaa::error::Failure::kind: pub kind: FailureKind
@@ -548,6 +549,7 @@ yamaa::lint::Lint: pub struct Lint [derive(Clone, Debug, Eq, PartialEq)] [non_ex
 yamaa::lint::Lint::files: pub fn files(&self) -> usize
 yamaa::lint::Lint::findings: pub fn findings(&self) -> &[LintFinding]
 yamaa::lint::Lint::rewritten: pub fn rewritten(&self) -> &[String]
+yamaa::lint::Lint::status: pub fn status(&self) -> Status
 yamaa::lint::Lint::summary: pub fn summary(&self) -> String
 yamaa::lint::Lint::table: pub fn table(&self) -> Table
 yamaa::lint::LintFinding: impl LintFinding
@@ -568,6 +570,7 @@ yamaa::odm::OdmOptions: impl Default for OdmOptions
 yamaa::odm::OdmOptions: impl OdmOptions
 yamaa::odm::OdmOptions: pub struct OdmOptions [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::odm::OdmOptions::archive_member: pub archive_member: Option<String>
+yamaa::odm::OdmOptions::from_host_limits: pub fn from_host_limits(source: &str, max_archive_members: ContextValue, max_expanded_bytes: ContextValue, max_xml_depth: ContextValue) -> Result<Self, Failure>
 yamaa::odm::OdmOptions::max_archive_members: pub max_archive_members: usize
 yamaa::odm::OdmOptions::max_expanded_bytes: pub max_expanded_bytes: u64
 yamaa::odm::OdmOptions::max_xml_depth: pub max_xml_depth: usize

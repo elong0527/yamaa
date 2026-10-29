@@ -225,3 +225,8 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("xpt_value_out_of_range", "column {column} of {dataset} holds {value}, which an XPT file cannot carry: {detail}"),
     ("zero_offset", "row_value takes a nonzero offset, not {offset}"),
 ];
+
+#[rustfmt::skip]
+pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
+    ("engine_rejected", "host_error", "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"),
+];

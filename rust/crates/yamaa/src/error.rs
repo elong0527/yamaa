@@ -52,6 +52,9 @@ pub struct Failure {
     /// run's report, in publication order and spelled as `save` returns
     /// them; empty for any other refusal.
     pub paths: Vec<String>,
+    /// The original progress callback exception, when the host supplied one.
+    /// Bindings chain this opaque payload onto the refusal without rerendering it.
+    pub cause: Option<crate::host::functions::HostPayload>,
 }
 
 /// What refused a facade operation, the kind of a [`Failure`]: its issues,
@@ -124,6 +127,7 @@ impl Failure {
             issues: report.table(),
             diagnostics: report.diagnostics.clone(),
             paths: Vec::new(),
+            cause: None,
         }
     }
 
@@ -146,6 +150,13 @@ impl Failure {
     /// The same refusal, after a save wrote `paths`.
     pub(crate) fn with_paths(mut self, paths: Vec<String>) -> Self {
         self.paths = paths;
+        self
+    }
+
+    pub(crate) fn with_cause(mut self, cause: Option<crate::host::functions::HostPayload>) -> Self {
+        if cause.is_some() {
+            self.cause = cause;
+        }
         self
     }
 

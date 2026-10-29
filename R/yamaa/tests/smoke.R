@@ -22,7 +22,7 @@ smoke_project <- function() {
   specification <- project$spec("TEST")
   stopifnot("the project checks" = nrow(project$check()$issues) == 0L,
     "the specification checks" = nrow(specification$check()$issues) == 0L,
-    "lint returns findings" = is.data.frame(yamaa_lint(study)))
+    "lint returns findings" = is.data.frame(yamaa_lint(study)$findings))
 
   events <- character()
   runs <- project$run(progress = function(event) events <<- c(events, event$kind))

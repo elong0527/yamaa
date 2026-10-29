@@ -173,7 +173,8 @@ check_gate <- function() {
     "project_run_status", "project_run_names", "project_run_issues", "project_run_report",
     "project_run_timings", "project_run_save", "project_run_summary", "submission_status",
     "submission_created", "submission_issues", "submission_timings", "submission_save",
-    "submission_summary", "selftest_status", "selftest_cases", "selftest_info", "selftest_summary")
+    "submission_summary", "lint_status", "lint_findings", "lint_paths", "lint_summary",
+    "selftest_status", "selftest_cases", "selftest_info", "selftest_summary")
   members <- c("project_run_member_status", "project_run_output", "project_run_member_issues",
     "project_run_member_report", "project_run_member_timings", "project_run_member_summary")
   arguments <- c(
@@ -192,6 +193,7 @@ check_gate <- function() {
       project_run = list(path, NULL, r_version, list(), NULL, NULL),
       project_submission = list(path, NULL, NULL, r_version, NULL),
       lint = list(list(path), FALSE),
+      empty_issues = list(),
       schema = list(charToRaw("spec")),
       conditions = list(),
       info = list(r_version),
@@ -209,9 +211,11 @@ check_gate <- function() {
     "input <- readRDS(arguments[[2L]])",
     "answer <- function(name, values) {",
     "  reply <- do.call(.Call, c(list(routines[[paste0(\"wrap__\", name)]]), values))",
-    "  if (is.null(reply$error)) NA_character_ else reply$error$message",
+    "  if (is.null(reply$error)) NULL else list(message = reply$error$message,",
+    "    frame = is.data.frame(reply$error$issues), columns = names(reply$error$issues),",
+    "    rows = nrow(reply$error$issues), paths = reply$error$paths, state = reply$error$state)",
     "}",
-    "phase <- function() vapply(names(input$arguments), function(name) answer(name, input$arguments[[name]]), \"\")",
+    "phase <- function() setNames(lapply(names(input$arguments), function(name) answer(name, input$arguments[[name]])), names(input$arguments))",
     "phases <- list(routines = sort(names(routines)), before = phase())",
     "invisible(answer(\"interface_handshake\", list(input$refused)))",
     "phases$refused <- phase()",
@@ -233,11 +237,14 @@ check_gate <- function() {
   phases <- readRDS(output)
   machinery <- "^wrap__(get_[a-z_]+_metadata|make_[a-z_]+_wrappers)$"
   names <- sort(names(arguments))
-  gated <- setNames(rep(truth$gate_message, length(names)), names)
+  refusal <- list(message = truth$gate_message, frame = TRUE,
+    columns = fixture_strings(read_host_fixture(host_fixture_root, "public-contract")$issue_columns),
+    rows = 0L, paths = character(), state = TRUE)
+  gated <- setNames(rep(list(refusal), length(names)), names)
   expect_identical(
     list(routines = grep(machinery, phases$routines, value = TRUE, invert = TRUE),
       before = phases$before[names], refused = phases$refused[names],
-      accepted = names(which(phases$accepted == truth$gate_message))),
+      accepted = names(which(vapply(phases$accepted, identical, logical(1L), refusal)))),
     list(routines = sort(paste0("wrap__", c(names, "interface_handshake", "core_version"))),
       before = gated, refused = gated, accepted = character()),
     "every native routine refuses before negotiation")

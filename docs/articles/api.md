@@ -180,6 +180,12 @@ origins.
     paths = run.save()    # save run report and dataset
     ```
 
+Python operation refusals use the native `yamaa.Error` class. Handle and state
+refusals use its `yamaa.StateError` subclass; R uses `yamaa_error` and its
+`yamaa_state_error` subclass. Each carries `issues` and `paths`, with an empty
+issues table when no diagnostic explains the refusal, including an R refusal
+whose original diagnostics could not be converted to a data frame.
+
 ## Tables
 
 Python `yamaa.Table` and `yamaa.Error` objects can be pickled and sent between
@@ -256,7 +262,7 @@ table it keeps, which can be read as often as you like. In Python, `len()`,
 output read it whole in the same way.
 
 A stream is read once. Reading it again, or asking for the result while a
-reader has not reached its end, raises `RuntimeError` in Python and signals
+reader has not reached its end, raises `yamaa.StateError` in Python and signals
 `yamaa_error` in R. Stopping before the last batch, by dropping the reader or
 with Ctrl+C, cancels the run: nothing more is built, and the run has no
 result, so it saves nothing, and asking for its result reports `cannot read
@@ -323,7 +329,10 @@ specifications at once.
 
 A `progress` function that signals an error in R or raises in Python is
 called no more: the method finishes its work, and its result then fails with
-one issue, `engine_rejected` with the code `host_progress_failure`. A failed
+one issue, `engine_rejected` with the code `host_progress_failure`. Its
+context includes `host_error` and `host_message`, and its message names the
+exception. A refused save chains the original exception as Python's
+`__cause__` or R's `parent` condition. A failed
 run keeps no output and saves nothing; a project run builds no later
 specification, and a submission composes no later section, and either
 refuses its save. An interrupt in the function cancels the call, as Ctrl+C
@@ -912,6 +921,8 @@ file, and one without clinical data such as a define.xml, are refused with
 their issue, and audit records, signatures and annotations are skipped
 ([ODM-1](../../rules/reference/odm.md#odm-1)).
 
+ODM limits must be non-missing whole numbers, with at least one member or byte and at least eight levels. Negative, fractional or Boolean limits refuse as `value_not_permitted` at their argument, carrying the supplied value in the issues table.
+
 `read_odm()` reads the same table in R or Python. Use it for an export inside
 a TAR archive, which an input does not open, or to look at the items
 yourself.
@@ -931,7 +942,7 @@ yourself.
 ## Lint specifications
 
 `lint()` checks yamaa files against the [style guide](style.md) and returns
-one row per finding: the file, the line and column where the departure
+a result. Its `findings` table has one row per finding: the file, the line and column where the departure
 starts, the finding, its spec path and a message. A directory names the
 yamaa files beneath it, of every file type. With `fix`, it first applies
 the proved fixes, replacing a file only when it reads as the same values
@@ -941,16 +952,18 @@ rewrite a finding names, and returns what remains.
 === "R"
 
     ```r
-    findings <- yamaa_lint(c("project.yaml", "sdtm/", "adam/"))
+    result <- yamaa_lint(c("project.yaml", "sdtm/", "adam/"))
     remaining <- yamaa_lint("sdtm/dm.yaml", fix = TRUE)
     ```
 
 === "Python"
 
     ```python
-    findings = yamaa.lint(["project.yaml", "sdtm/", "adam/"])
+    result = yamaa.lint(["project.yaml", "sdtm/", "adam/"])
     remaining = yamaa.lint("sdtm/dm.yaml", fix=True)
     ```
+
+The result has `status`, `findings` and `paths`. Read `result.findings` in Python or `result$findings` in R; `paths` lists the files a fix rewrote. Status is `failed` while any finding remains, and printing the result gives the engine summary.
 
 ## JSON Schema of a file type
 
