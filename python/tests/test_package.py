@@ -30,6 +30,7 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
     assert yamaa.__version__ == version("yamaa")
     assert yamaa.__all__ == [
         "Error",
+        "StateError",
         "Table",
         "__version__",
         "conditions",
