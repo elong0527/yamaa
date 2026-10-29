@@ -29,7 +29,9 @@ pub(crate) fn import(
             .extract::<String>()
             .map_err(|_| crate::errors::message(py, false, "input aliases must be text"))?;
         let result = import_one(specification, &alias, &frame).map_err(|error| {
-            if error.is_instance_of::<crate::errors::Error>(py) {
+            if !error.is_instance_of::<pyo3::exceptions::PyException>(py)
+                || error.is_instance_of::<crate::errors::Error>(py)
+            {
                 return error;
             }
             let refusal = crate::errors::message(py, false, error.to_string());

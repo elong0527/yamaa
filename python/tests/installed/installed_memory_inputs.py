@@ -194,6 +194,24 @@ class MemoryInputs(unittest.TestCase):
         )
         self.assertIs(caught.exception.__cause__, original)
 
+    def test_provider_control_flow_exceptions_escape_unchanged(self):
+        # Provider control flow must cross the host boundary by identity.
+        for original in (
+            KeyboardInterrupt(),
+            SystemExit(7),
+            GeneratorExit(),
+            BaseException(),
+        ):
+            with self.subTest(kind=type(original).__name__):
+
+                class InterruptingProvider:
+                    def __arrow_c_stream__(self, requested_schema=None):
+                        raise original
+
+                with self.assertRaises(type(original)) as caught:
+                    self.spec.run(inputs={"SRC": InterruptingProvider()})
+                self.assertIs(caught.exception, original)
+
     def test_invalid_host_shapes_raise_the_native_refusal_class(self):
         for value in ([], {1: pa.table({"ID": [1]})}, {"SRC": object()}):
             with self.subTest(value=type(value).__name__):
