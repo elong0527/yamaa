@@ -113,7 +113,10 @@ result and lazy objects, S3 methods and private accessors) and
 the version lookup, and `R/yamaa/R/api.R`
 holds the reply and argument conversions, the host-function capabilities and
 the locked-object and table-memo helpers. Docstrings come from `doc`;
-R's help pages stay handwritten under `R/yamaa/man/`.
+R's help pages stay handwritten under `R/yamaa/man/`. The refusal's Python
+`picklable: true` generates its reconstruction arguments from its declared
+attributes, preserving its instance state as well. Table pickling is native
+and preserves its Arrow schema and batches without a Python table library.
 
 Generated code only delegates, and the delegation is declared, never written:
 

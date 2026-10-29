@@ -716,6 +716,7 @@ yamaa::table::Table: impl Table
 yamaa::table::Table: pub struct Table [derive(Clone, Debug)] [non_exhaustive]
 yamaa::table::Table::batches: pub fn batches(&self) -> &[RecordBatch] [cfg(feature = "arrow")]
 yamaa::table::Table::columns: pub fn columns(&self) -> &Fields [cfg(feature = "arrow")]
+yamaa::table::Table::import: pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError> [cfg(feature = "arrow")]
 yamaa::table::Table::preview: pub fn preview(&self) -> String
 yamaa::table::Table::rows: pub fn rows(&self) -> usize
 yamaa::table::Table::schema: pub fn schema(&self) -> &SchemaRef [cfg(feature = "arrow")]

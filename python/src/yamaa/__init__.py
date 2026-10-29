@@ -110,6 +110,9 @@ class Error(Exception):
         self.issues = issues
         self.paths = paths
 
+    def __reduce__(self):
+        return type(self), (str(self), self.issues, self.paths), self.__dict__
+
 
 def _call(function, *args):
     try:

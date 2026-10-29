@@ -13,6 +13,7 @@ import datetime
 import gc
 import importlib.abc
 import math
+import pickle
 import subprocess
 import sys
 import tempfile
@@ -184,6 +185,34 @@ class Table(unittest.TestCase):
         self.assertIsNone(run.output)
         return run.issues
 
+    def test_pickle_preserves_values_schema_lists_and_empty_tables(self):
+        # Pickle is a Python transport seam over tables the existing cases own.
+        run = self.run_spec()
+        for label, table in (
+            ("output", run.output),
+            ("empty issues", run.issues),
+            ("list columns", yamaa.conditions()),
+        ):
+            for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+                with self.subTest(case=label, protocol=protocol):
+                    restored = pickle.loads(pickle.dumps(table, protocol=protocol))
+                    self.assertEqual(
+                        (
+                            type(restored),
+                            restored.to_pylist(),
+                            repr(restored),
+                            restored.to_arrow().schema,
+                            restored.to_arrow().to_batches(),
+                        ),
+                        (
+                            yamaa.Table,
+                            table.to_pylist(),
+                            repr(table),
+                            table.to_arrow().schema,
+                            table.to_arrow().to_batches(),
+                        ),
+                    )
+
     def test_the_native_class_is_exported_as_it_is_and_cannot_be_made(self):
         self.assertIs(yamaa.Table, _native.Table)
         self.assertIn("Table", yamaa.__all__)
@@ -335,7 +364,7 @@ class Table(unittest.TestCase):
         # The ODM reader returns its items in batches of 65,536 rows.
         path = self.root / "items.xml"
         path.write_text(odm(65_537), encoding="utf-8")
-        table = yamaa.read_odm(path)
+        table = pickle.loads(pickle.dumps(yamaa.read_odm(path)))
         self.assertEqual((table.num_rows, len(table)), (65_537, 65_537))
         self.assertEqual(len(pa.table(table).to_batches()), 2)
         rows = table.to_pylist()
@@ -439,6 +468,7 @@ class Table(unittest.TestCase):
         script = textwrap.dedent(
             """
             import importlib.abc
+            import pickle
             import sys
             from pathlib import Path
 
@@ -455,6 +485,7 @@ class Table(unittest.TestCase):
 
             root = Path(sys.argv[1])
             table = yamaa.spec(root / "spec.yaml").run().output
+            table = pickle.loads(pickle.dumps(table))
             rows = table.to_pylist()
             assert rows[2]["I"] == 2**63 - 1, rows
             assert (table.num_rows, len(table), table.column_names[0]) == (3, 3, "ID")

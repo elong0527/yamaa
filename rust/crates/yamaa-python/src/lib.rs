@@ -13,6 +13,7 @@ mod project_activation;
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<arrow_bridge::Table>()?;
+    module.add_function(wrap_pyfunction!(arrow_bridge::_table_from_pickle, module)?)?;
     module.add("_Error", module.py().get_type::<api_entry::_Error>())?;
     module.add_class::<api_entry::Check>()?;
     module.add_class::<api_entry::Run>()?;

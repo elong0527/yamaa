@@ -26,6 +26,8 @@ extension-module = ["pyo3/extension-module"]
 yamaa = { path = "../yamaa" }
 # The interface handshake, the gate and the handle census.
 yamaa-boundary = { path = "../yamaa-boundary" }
+# Pickle preserves public table schemas and batches without a Python library.
+arrow-ipc = { version = "=55.2.0", default-features = false }
 # PyO3 0.28 needs Rust 1.83; the workspace builds from 1.82.
 pyo3 = { version = ">=0.27.2, <0.28", features = ["abi3-py312"] }
 

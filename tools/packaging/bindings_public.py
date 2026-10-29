@@ -69,6 +69,7 @@ _PY_ANNOTATION = {
     "nothing": "None",
     # Tokens with only a Python projection, which only the members of a
     # Python-only class use; the generator writes no annotation with them.
+    "pickle": "tuple[object, tuple[bytes]]",
     "rows": "list[dict[str, object]]",
     "arrow_capsule": "object",
     "schema_request": "object | None",
@@ -356,11 +357,14 @@ class Public:
             error["python"],
             "public.errors.refusal.python",
             {"class", "base", "attributes"},
+            {"picklable"},
         )
         if not re.fullmatch(r"yamaa\.[A-Z][A-Za-z]*", str(python["class"])):
             raise ValueError("public.errors.refusal.python.class must be yamaa.<Name>")
         if python["base"] != "Exception":
             raise ValueError("the refusal must derive from Exception")
+        if "picklable" in python and python["picklable"] is not True:
+            raise ValueError("the refusal picklable flag must be true")
         attributes = python["attributes"]
         if not isinstance(attributes, dict) or not attributes:
             raise ValueError(
@@ -1010,6 +1014,15 @@ class Public:
         body += _py_def("__init__", signature, None, "    ")
         body.append("        super().__init__(message)")
         body += [f"        self.{name} = {name}" for name in attributes]
+        if error["python"].get("picklable"):
+            arguments = ", ".join(
+                ["str(self)", *[f"self.{name}" for name in attributes]]
+            )
+            body += [
+                "",
+                "    def __reduce__(self):",
+                f"        return type(self), ({arguments}), self.__dict__",
+            ]
         mapped = [f'getattr(error, "{name}")' for name in attributes]
         body += [
             "",
@@ -1495,6 +1508,8 @@ class Public:
             f"public.errors.refusal: python {python['class']}({python['base']}) with "
             f"{attributes}; r {', '.join(r['class'])} with {fields}"
         )
+        if python.get("picklable"):
+            lines.append("public.errors.refusal.python.picklable: true")
         lines += [f"public.python.exports.{name}" for name in self.python_names()]
         lines += [f"public.r.exports.{function['r']}" for function in self.functions]
         for name, cls in self.delegating_classes().items():

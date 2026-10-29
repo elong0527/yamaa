@@ -190,6 +190,7 @@ print(json.dumps(phases))
 
 # Each native function but the handshake, with arguments of its types.
 CALLS = {
+    "_table_from_pickle": [None],
     "_plans": [],
     "_spec_check": ["missing.yaml"],
     "_spec_summary": ["missing.yaml"],

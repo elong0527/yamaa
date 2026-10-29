@@ -50,7 +50,7 @@ impl fmt::Display for TableError {
 
 impl std::error::Error for TableError {}
 
-fn limit(error: yamaa_core::limits::LimitExceeded) -> TableError {
+pub(crate) fn limit(error: yamaa_core::limits::LimitExceeded) -> TableError {
     TableError::Limit {
         resource: error.resource,
         limit: error.limit,
@@ -139,7 +139,7 @@ impl PublicColumn {
     }
 
     /// Append the rows `rows` of `other`, a column of the same type.
-    fn extend(&mut self, other: &Self, rows: Range<usize>) {
+    pub(crate) fn extend(&mut self, other: &Self, rows: Range<usize>) {
         fn values<T: Copy + Default>(into: &mut Values<T>, from: &Values<T>, rows: Range<usize>) {
             for row in rows {
                 into.push(from.get(row));
@@ -810,6 +810,44 @@ mod tests {
                 ))),
             ),
         ]
+    }
+
+    #[test]
+    #[cfg(feature = "arrow")]
+    fn importing_public_results_preserves_batches_nested_lists_and_empty_schemas() {
+        // The result importer is distinct from specification input admission:
+        // public diagnostics can carry lists and zero-column row geometry.
+        use crate::arrow_bridge::import_result_stream;
+        let mut lists = List::new(PublicColumn::List(Box::new(List::int([]))));
+        if let PublicColumn::List(inner) = lists.items_mut() {
+            inner.items_mut().extend(
+                &PublicColumn::Int([Some(1), None].into_iter().collect()),
+                0..2,
+            );
+            inner.close(true);
+            inner.close(false);
+        }
+        lists.close(true);
+        lists.close(false);
+        lists.close(true);
+        let cases = [
+            PublicTable::chunked(issues(5), vec![2, 0, 3]).unwrap(),
+            PublicTable::new(vec![("nested".into(), PublicColumn::List(Box::new(lists)))]).unwrap(),
+            PublicTable::chunked(
+                vec![("typed_empty".into(), PublicColumn::Date(Values::default()))],
+                vec![],
+            )
+            .unwrap(),
+            PublicTable::chunked(Vec::new(), vec![2, 0, 3]).unwrap(),
+        ];
+        for (case, table) in cases.iter().enumerate() {
+            assert_eq!(
+                import_result_stream(table.stream()).unwrap(),
+                *table,
+                "case {case}"
+            );
+        }
+        assert!(import_result_stream(crate::arrow_bridge::FFI_ArrowArrayStream::empty()).is_err());
     }
 
     #[test]

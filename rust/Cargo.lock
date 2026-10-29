@@ -1401,6 +1401,7 @@ dependencies = [
 name = "yamaa-python"
 version = "0.6.2"
 dependencies = [
+ "arrow-ipc",
  "pyo3",
  "pyo3-build-config",
  "yamaa",

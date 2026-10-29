@@ -17,8 +17,8 @@ use crate::storage_api::StreamReader;
 pub use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{
     Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    RecordBatch, RecordBatchIterator, RecordBatchOptions, StringArray, StringViewArray,
-    TimestampSecondArray,
+    RecordBatch, RecordBatchIterator, RecordBatchOptions, RecordBatchReader, StringArray,
+    StringViewArray, TimestampSecondArray,
 };
 use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
@@ -158,6 +158,78 @@ pub fn export_stream(schema: SchemaRef, batches: Vec<RecordBatch>) -> FFI_ArrowA
         batches.into_iter().map(Ok),
         schema,
     )))
+}
+
+/// Import the public result form, including diagnostic list columns. Unlike
+/// an input frame this preserves public epoch values without interpreting them
+/// as specification columns. Used to restore a host's serialized result table.
+pub fn import_result_stream(
+    stream: FFI_ArrowArrayStream,
+) -> Result<PublicTable, crate::public_table::TableError> {
+    use crate::public_table::TableError as Error;
+    let reader = ArrowArrayStreamReader::try_new(stream).map_err(|_| Error::InvalidTable)?;
+    let schema = reader.schema();
+    let mut tables = Vec::new();
+    let mut rows = 0usize;
+    for batch in reader {
+        let batch = batch.map_err(|_| Error::InvalidTable)?;
+        rows = rows
+            .checked_add(batch.num_rows())
+            .ok_or(Error::InvalidTable)?;
+        Limits::table(rows, schema.fields().len()).map_err(crate::public_table::limit)?;
+        if batch.schema() != schema {
+            return Err(Error::InvalidTable);
+        }
+        tables.push(result_batch(&batch, vec![batch.num_rows()])?);
+    }
+    if tables.is_empty() {
+        tables.push(result_batch(&RecordBatch::new_empty(schema), Vec::new())?);
+    }
+    PublicTable::stack(&tables.iter().collect::<Vec<_>>())
+}
+
+fn result_batch(
+    batch: &RecordBatch,
+    chunks: Vec<usize>,
+) -> Result<PublicTable, crate::public_table::TableError> {
+    let columns = batch
+        .schema()
+        .fields()
+        .iter()
+        .zip(batch.columns())
+        .map(|(field, array)| Ok((field.name().clone(), result_column(array.as_ref())?)))
+        .collect::<Result<Vec<_>, _>>()?;
+    PublicTable::chunked(columns, chunks)
+}
+
+fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table::TableError> {
+    use crate::public_table::{List, TableError as Error};
+    fn cast<T: 'static>(array: &dyn Array) -> Result<&T, Error> {
+        array.as_any().downcast_ref().ok_or(Error::InvalidTable)
+    }
+    Ok(match array.data_type() {
+        DataType::Utf8 => PublicColumn::Str(cast::<StringArray>(array)?.iter().collect()),
+        DataType::Int64 => PublicColumn::Int(cast::<Int64Array>(array)?.iter().collect()),
+        DataType::Float64 => PublicColumn::Float(cast::<Float64Array>(array)?.iter().collect()),
+        DataType::Date32 => PublicColumn::Date(cast::<Date32Array>(array)?.iter().collect()),
+        DataType::Timestamp(TimeUnit::Second, None) => {
+            PublicColumn::DateTime(cast::<TimestampSecondArray>(array)?.iter().collect())
+        }
+        DataType::List(field) => {
+            let array = cast::<ListArray>(array)?;
+            let empty = arrow_array::new_empty_array(field.data_type());
+            let mut lists = List::new(result_column(empty.as_ref())?);
+            for row in 0..array.len() {
+                if !array.is_null(row) {
+                    let items = result_column(array.value(row).as_ref())?;
+                    lists.items_mut().extend(&items, 0..items.len());
+                }
+                lists.close(!array.is_null(row));
+            }
+            PublicColumn::List(Box::new(lists))
+        }
+        _ => return Err(Error::InvalidTable),
+    })
 }
 
 /// Consume a standard stream of public Arrow types into the engine's column

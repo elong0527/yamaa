@@ -388,6 +388,7 @@ public:
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
     nothing: {python: None, r: "NULL, invisibly"}
     # Python-only projections, which only yamaa.Table's members use.
+    pickle: {python: "tuple[object, tuple[bytes]]"}
     rows: {python: "list[dict[str, object]], one dict per row, keyed by the column names in order"}
     arrow_capsule: {python: "PyCapsule named arrow_array_stream, a fresh Arrow C stream"}
     schema_request: {python: "object or None; anything but None is refused"}
@@ -782,6 +783,7 @@ public:
         - {name: num_rows, kind: property, returns: count}
         - {name: column_names, kind: property, returns: names}
         - {name: length, kind: protocol, python: __len__, returns: count}
+        - {name: pickle, kind: protocol, python: __reduce__, returns: pickle}
         - {name: preview, kind: printing, python: __repr__}
         - name: arrow_stream
           kind: protocol
@@ -799,6 +801,7 @@ public:
         class: yamaa.Error
         base: Exception
         attributes: {issues: table, paths: paths_written}
+        picklable: true
       r:
         class: [yamaa_error, error, condition]
         fields: {message: text, call: "NULL", issues: table, paths: paths_written}
@@ -1056,6 +1059,7 @@ python:
         - {name: num_rows, kind: getter, args: {}, returns: index}
         - {name: column_names, kind: getter, args: {}, returns: "list<text>"}
         - {name: __len__, args: {}, returns: index}
+        - {name: __reduce__, args: {}, returns: "tuple<host_object, tuple<bytes>>"}
         - {name: __repr__, args: {}, returns: text}
         - name: __arrow_c_stream__
           args: {requested_schema: "optional<host_object> = None"}
@@ -1064,6 +1068,11 @@ python:
         - {name: to_arrow, args: {}, returns: host_object}
         - {name: to_polars, args: {}, returns: host_object}
         - {name: to_pandas, args: {}, returns: host_object}
+    - kind: function
+      name: _table_from_pickle
+      rust: arrow_bridge::_table_from_pickle
+      args: {data: host_object}
+      returns: Table
     - kind: exception
       name: _Error
       rust: api_entry::_Error
@@ -1406,6 +1415,8 @@ host_only:
     - Table.num_rows
     - Table.column_names
     - Table.__len__
+    - Table.__reduce__
+    - _table_from_pickle
     - Table.__repr__
     - Table.__arrow_c_stream__
     - Table.to_pylist
