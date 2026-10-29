@@ -23,6 +23,9 @@ pub use aggregate::{AggregateContextCause, AggregateFinding};
 mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
+mod input_override;
+pub use input_override::input_override;
+
 mod odm_read;
 pub use odm_read::{invalid_odm_limit, OdmReadFinding};
 
@@ -299,6 +302,7 @@ conditions! {
     CopyUnknownColumn => ("validation", "unknown_field", Some("SPEC-9")),
     CopyProducerCycle => ("validation", "producer_workflow_cycle", Some("SPEC-9")),
     SchemaUnknownWindow => ("validation", "unknown_window", Some("WINDOW-1")),
+    InputOverrideAlias => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorValueNotPermitted => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorPatternMismatch => ("validation", "pattern_mismatch", Some("SCHEMA-12")),
     SchemaDescriptorMinimumLength => ("validation", "minimum_length", Some("SCHEMA-12")),

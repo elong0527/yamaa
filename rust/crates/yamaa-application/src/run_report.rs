@@ -46,8 +46,8 @@ impl HeldReport {
 /// read from the attempt; reporting never captures or decodes a source again.
 #[derive(Debug, Default)]
 pub(crate) struct RunFacts {
-    /// `(name, records, bytes)` for each source the attempt entered.
-    inputs: Vec<(String, Option<usize>, Option<usize>)>,
+    /// `(name, records, bytes, memory)` for each source the attempt entered.
+    inputs: Vec<(String, Option<usize>, Option<usize>, bool)>,
     templates: Vec<TemplateRows>,
 }
 impl RunFacts {
@@ -63,6 +63,7 @@ impl RunFacts {
                         source.read.source.name.clone(),
                         source.table.as_ref().map(TableAccess::row_count),
                         source.snapshot.as_ref().map(|bytes| bytes.len()),
+                        source.read.origin == Some(yamaa_core::resolver::Origin::Memory),
                     )
                 })
                 .collect(),
@@ -392,18 +393,23 @@ fn facts(
         .sources()
         .iter()
         .map(|source| {
-            let (records, bytes) = observed
+            let (records, bytes, memory) = observed
                 .inputs
                 .iter()
-                .find(|(name, _, _)| name == &source.name)
-                .map_or((None, None), |&(_, records, bytes)| (records, bytes));
+                .find(|(name, _, _, _)| name == &source.name)
+                .map_or((None, None, false), |&(_, records, bytes, memory)| {
+                    (records, bytes, memory)
+                });
             Ok(core::Input {
                 name: source.name.clone(),
-                path: run
-                    .document()
-                    .written_source_path(&source.name)
-                    .ok_or(Error::InvalidObservation)?
-                    .into(),
+                path: if memory {
+                    format!("memory:{}", source.name)
+                } else {
+                    run.document()
+                        .written_source_path(&source.name)
+                        .ok_or(Error::InvalidObservation)?
+                        .into()
+                },
                 profile: profile(source.profile),
                 // The producing specification as written, for an input that
                 // declares a producer link; a null schema declares none.

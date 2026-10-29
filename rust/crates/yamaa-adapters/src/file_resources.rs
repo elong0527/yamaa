@@ -185,19 +185,22 @@ pub fn linked_inputs(
         .collect()
 }
 
-/// A run's study port that serves held producer artifacts to linked inputs
-/// and reads every other input through the run's resources.
+/// A run's study port: alias frames first, then held producer artifacts for
+/// linked inputs, and every other request through the run's resources.
 pub struct HeldPort<'a> {
     resources: &'a mut Resources,
     held: Option<Arc<HeldArtifacts>>,
     inputs: &'a [LinkedInput],
+    frames: std::collections::BTreeMap<String, Arc<crate::column_table::ColumnTable>>,
 }
 impl<'a> HeldPort<'a> {
     pub fn new(run: &'a mut RunScope, inputs: &'a [LinkedInput]) -> Self {
         let held = run.held();
+        let frames = run.frames.clone();
         Self {
             resources: run.resources_mut(),
             held,
+            frames,
             inputs,
         }
     }
@@ -216,12 +219,19 @@ impl<'a> HeldPort<'a> {
             .map(|bytes| (input.location.clone(), bytes))
     }
 }
-/// The resolver port of one run: a linked input whose producer the run holds
-/// reads the held artifact, and every other request reads the run's scope.
+/// The resolver port of one run: an alias override replaces that input;
+/// otherwise a linked input reads a held artifact and other requests use the
+/// configured resource scope.
 impl yamaa_core::resolver::Resolver for HeldPort<'_> {
     type Error = Error;
     fn inspect(&mut self, name: Name<'_>) -> Result<Located, Error> {
         if let Name::Input(source) = name {
+            if self.frames.contains_key(&source.name) {
+                return Ok(Located {
+                    identity: format!("memory:{}", source.name),
+                    display_path: format!("memory:{}", source.name),
+                });
+            }
             if let Some((location, _)) = self.held(source) {
                 return Ok(Located {
                     identity: location,
@@ -233,6 +243,14 @@ impl yamaa_core::resolver::Resolver for HeldPort<'_> {
     }
     fn capture(&mut self, name: Name<'_>) -> Result<Captured, Error> {
         if let Name::Input(source) = name {
+            if let Some(table) = self.frames.get(&source.name) {
+                return Ok(Captured {
+                    bytes: Arc::from([]),
+                    created: false,
+                    origin: Origin::Memory,
+                    table: Some(table.clone()),
+                });
+            }
             if let Some((_, bytes)) = self.held(source) {
                 return Ok(Captured {
                     bytes,
@@ -275,8 +293,18 @@ pub struct RunScope {
     /// Artifacts a project run already built, offered to this run's saved
     /// producer links.
     held: Option<Arc<HeldArtifacts>>,
+    frames: std::collections::BTreeMap<String, Arc<crate::column_table::ColumnTable>>,
 }
 impl RunScope {
+    /// Supply immutable frames for this run only, keyed by declared alias.
+    pub fn with_inputs(
+        mut self,
+        frames: std::collections::BTreeMap<String, Arc<crate::column_table::ColumnTable>>,
+    ) -> Self {
+        self.frames = frames;
+        self
+    }
+
     /// Offer artifacts the caller already built to this run's saved links.
     /// Links without a held artifact read the saved file their path names.
     pub fn hold(&mut self, held: Arc<HeldArtifacts>) {
@@ -364,6 +392,7 @@ impl Resources {
                 },
                 compiled: Vec::new(),
                 held: None,
+                frames: Default::default(),
             },
             Some(resolver) => {
                 let entry = self
@@ -381,6 +410,7 @@ impl Resources {
                     },
                     compiled: self.retain_sources(),
                     held: None,
+                    frames: Default::default(),
                 }
             }
         }

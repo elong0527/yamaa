@@ -35,6 +35,18 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "function_file_scalars" => function_file_scalars(input),
         "incomparable_sources" => incomparable_sources(input),
         "input_resource" => input_resource(input),
+        "input_override" => {
+            input.closed(&["alias", "allowed"]);
+            let allowed = input
+                .field("allowed")
+                .items()
+                .iter()
+                .map(Json::text)
+                .collect::<Vec<_>>();
+            yamaa_core::diagnostic::input_override(text(input, "alias"), &allowed)
+                .into_iter()
+                .collect()
+        }
         "invalid_packaging_lock" => invalid_packaging_lock(input),
         "matches_pattern" => matches_pattern(input),
         "not_missing" => not_missing(input),

@@ -376,6 +376,7 @@ impl Engine {
         SpecRequest {
             engine: self,
             path: Cow::Borrowed(path),
+            inputs: BTreeMap::new(),
             project: None,
             plans: None,
             token: None,
@@ -490,12 +491,29 @@ pub struct SpecRequest<'a> {
     /// The specification's path: as given, or the listed specification's
     /// path resolved against the project file.
     path: Cow<'a, str>,
+    inputs: BTreeMap<String, crate::InputFrame>,
     project: Option<&'a str>,
     plans: Option<&'a Plans>,
     token: Option<&'a CancellationToken>,
 }
 
 impl<'a> SpecRequest<'a> {
+    /// Replace declared study inputs by alias for this request's runs and
+    /// streams. Unspecified aliases use their configured file or resolver;
+    /// metadata and save targets keep that same authority. Declared input
+    /// types still apply. Each call replaces the whole override map.
+    ///
+    /// Frames are immutable owned snapshots, shared cheaply by clones. A
+    /// reused plan retains none of them. An unknown alias fails the run with
+    /// `value_not_permitted` at `inputs.<alias>`, before any study input is
+    /// read. Reports label an overridden input's path `memory:<alias>`.
+    /// Checks and resolution read metadata alone and ignore these frames.
+    /// Project runs do not accept overrides.
+    pub fn inputs(mut self, inputs: impl IntoIterator<Item = (String, crate::InputFrame)>) -> Self {
+        self.inputs = inputs.into_iter().collect();
+        self
+    }
+
     /// The same request, read with the project file `project`: its
     /// codelists, functions and environment.
     pub fn project(mut self, project: &'a str) -> Self {
@@ -535,7 +553,9 @@ impl<'a> SpecRequest<'a> {
 
     /// The request as compilation and the check read it.
     fn request(&self) -> Request<'_> {
-        request(&self.path, self.project)
+        let mut request = request(&self.path, self.project);
+        request.inputs = Some(&self.inputs);
+        request
     }
 
     /// The token the operations poll: the request's, or else one that
@@ -805,6 +825,7 @@ impl<'a> SpecRequest<'a> {
             &self.path,
             (measured, reporter),
             &token,
+            self.inputs.clone(),
         ))
     }
 
@@ -1231,6 +1252,7 @@ impl<'a> ProjectRequest<'a> {
             Ok(listed) => Ok(SpecRequest {
                 engine: self.engine,
                 path: Cow::Owned(listed.path().to_owned()),
+                inputs: BTreeMap::new(),
                 project: Some(self.path),
                 plans: None,
                 token: self.token,

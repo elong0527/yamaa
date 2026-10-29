@@ -1,6 +1,81 @@
 {
   "version": "1",
   "families": {
+    "memory-inputs": {
+      "missing_type": {
+        "declaration_from": "SRC: {path: data.csv, types: {ID: int, VALUE: int}}",
+        "declaration_to": "SRC: {path: data.csv, types: {ID: int, VALUE: int, ABSENT: int}}",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "rule": "INPUT-6",
+        "spec_path": [
+          "input.SRC.types.ABSENT"
+        ],
+        "context": {
+          "dataset": "SRC",
+          "field": "ABSENT",
+          "identifier": "ABSENT"
+        },
+        "message": "ABSENT is not a known field or reference at input.SRC.types.ABSENT"
+      },
+      "all_memory_csv": "ID,VALUE,EXTRA\n1,42,99\n",
+      "files": {
+        "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {ID: int, VALUE: int}}\n  AUX: {path: data.csv, types: {ID: int, VALUE: int}}\noutput: {path: out.csv, columns: [ID, VALUE, EXTRA]}\nintermediates:\n  - {id: A, dataset: AUX, key: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\n  - {name: EXTRA, type: int, derivation: A.VALUE}\n",
+        "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+        "data.csv": "ID,VALUE\n1,7\n"
+      },
+      "entry": "spec.yaml",
+      "alias": "SRC",
+      "columns": [
+        "ID",
+        "VALUE"
+      ],
+      "cases": [
+        {
+          "name": "first",
+          "rows": [
+            [
+              1,
+              42
+            ]
+          ],
+          "csv": "ID,VALUE,EXTRA\n1,42,7\n"
+        },
+        {
+          "name": "fresh",
+          "rows": [
+            [
+              1,
+              99
+            ]
+          ],
+          "csv": "ID,VALUE,EXTRA\n1,99,7\n"
+        }
+      ],
+      "file_csv": "ID,VALUE,EXTRA\n1,7,7\n",
+      "memory_details": {
+        "bytes": null,
+        "path": "memory:SRC",
+        "profile": "csv"
+      },
+      "unknown": {
+        "alias": "TYPO",
+        "phase": "validation",
+        "condition": "value_not_permitted",
+        "rule": "SCHEMA-12",
+        "spec_path": [
+          "inputs.TYPO"
+        ],
+        "context": {
+          "allowed": [
+            "AUX",
+            "SRC"
+          ],
+          "value": "TYPO"
+        },
+        "message": "inputs.TYPO has the value TYPO, which is not permitted"
+      }
+    },
     "original-specifications": {
       "original_case_names": [
         "negative-zero-division",

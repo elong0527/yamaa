@@ -122,6 +122,7 @@ fn progress_code(state: &State) -> u8 {
 
 /// What a run needs to be built.
 struct Pending {
+    inputs: crate::internal::RunInputs,
     shared: Arc<EngineShared>,
     plan: Plan,
     /// The measurements its compilation started, which its build continues.
@@ -144,11 +145,13 @@ impl Pending {
         }
         let observed = self.reporter.resume(self.measured.clone());
         let (mut build, batches) = match rows {
-            Some(rows) => self
-                .plan
-                .stream_through(&self.shared, &observed, token, rows),
+            Some(rows) => {
+                self.plan
+                    .stream_through(&self.shared, &observed, token, rows, self.inputs)
+            }
             None => (
-                self.plan.run_through(&self.shared, None, &observed, token),
+                self.plan
+                    .run_through(&self.shared, self.inputs, &observed, token),
                 None,
             ),
         };
@@ -358,6 +361,7 @@ impl Streamed {
         specification: &str,
         (measured, reporter): (Measured, Arc<Reporter>),
         token: &CancellationToken,
+        frames: std::collections::BTreeMap<String, crate::InputFrame>,
     ) -> Self {
         let shared = engine.shared_owned();
         let subject = plan.name().unwrap_or(specification).to_owned();
@@ -368,14 +372,19 @@ impl Streamed {
             .map_or(NonZeroUsize::MAX, |partitioning| partitioning.rows);
         let state = if plan.report().is_empty() {
             State::Unread(Box::new(Pending {
+                inputs: crate::internal::RunInputs { held: None, frames },
                 shared,
                 plan,
                 measured,
                 reporter: Arc::clone(&reporter),
             }))
         } else {
-            let mut build =
-                plan.run_through(&shared, None, &reporter.resume(measured.clone()), token);
+            let mut build = plan.run_through(
+                &shared,
+                Default::default(),
+                &reporter.resume(measured.clone()),
+                token,
+            );
             measured.measurements().complete(false);
             if reporter.failed() {
                 build.fail_progress(&reporter, yamaa_core::application_issue::Step::Build);

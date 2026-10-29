@@ -431,6 +431,13 @@ pub(crate) fn compile(
     }
 }
 
+/// Study values supplied to one attempt, never stored in its compiled plan.
+#[derive(Default)]
+pub(crate) struct RunInputs {
+    pub(crate) held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+    pub(crate) frames: std::collections::BTreeMap<String, crate::InputFrame>,
+}
+
 /// The Build and Finished half: one run of a compiled request in its own
 /// resource scope, whose phase and stage events reach `observed`, whose
 /// measurements the build keeps. A refused compilation's run returns its held refusal and performs
@@ -443,11 +450,20 @@ pub(crate) fn run(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
-    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+    inputs: RunInputs,
     observed: &Observed<'_>,
     token: &CancellationToken,
 ) -> Build {
-    run_with(shared, specification, compiled, held, observed, token, None).0
+    run_with(
+        shared,
+        specification,
+        compiled,
+        inputs,
+        observed,
+        token,
+        None,
+    )
+    .0
 }
 
 /// One run of a compiled request whose output is read as a stream (#3697):
@@ -459,6 +475,7 @@ pub(crate) fn run_streamed(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
+    inputs: RunInputs,
     observed: &Observed<'_>,
     token: &CancellationToken,
     rows: std::num::NonZeroUsize,
@@ -467,7 +484,7 @@ pub(crate) fn run_streamed(
         shared,
         specification,
         compiled,
-        None,
+        inputs,
         observed,
         token,
         Some(rows),
@@ -485,7 +502,7 @@ fn run_with(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
-    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+    inputs: RunInputs,
     observed: &Observed<'_>,
     token: &CancellationToken,
     rows: Option<std::num::NonZeroUsize>,
@@ -513,7 +530,7 @@ fn run_with(
             shared,
             specification,
             prepared,
-            held,
+            inputs,
             scope,
             view,
         ))
@@ -568,12 +585,32 @@ fn run_member(
     shared: &EngineShared,
     specification: &str,
     prepared: &yamaa_application::file_preparation::FileSpecification,
-    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+    inputs: RunInputs,
     scope: yamaa_core::application_observer::Scope<'_>,
     view: HostView,
 ) -> Ran {
-    let mut run_scope = prepared.run_scope(None);
-    if let Some(held) = held {
+    let aliases = prepared
+        .run()
+        .compiled()
+        .sources()
+        .iter()
+        .map(|source| source.name.as_str())
+        .collect::<Vec<_>>();
+    let issues = inputs
+        .frames
+        .keys()
+        .filter_map(|alias| yamaa_core::diagnostic::input_override(alias, &aliases))
+        .collect::<Vec<_>>();
+    if !issues.is_empty() {
+        return (Err(issues), Vec::new(), None);
+    }
+    let frames = inputs
+        .frames
+        .into_iter()
+        .map(|(alias, frame)| (alias, frame.into_adapter()))
+        .collect();
+    let mut run_scope = prepared.run_scope(None).with_inputs(frames);
+    if let Some(held) = inputs.held {
         run_scope.hold(held);
     }
     let identity = shared.identity("domain", specification);

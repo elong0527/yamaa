@@ -165,6 +165,7 @@ yamaa::api::SpecRequest: pub struct SpecRequest<'a> [derive(Clone)] [non_exhaust
 yamaa::api::SpecRequest::cancel_with: pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self
 yamaa::api::SpecRequest::check: pub fn check(&self) -> Result<Check, Failure>
 yamaa::api::SpecRequest::check_on: pub fn check_on(&self, parent: &str) -> Result<Check, Failure>
+yamaa::api::SpecRequest::inputs: pub fn inputs(mut self, inputs: impl IntoIterator<Item = (String, yamaa::InputFrame)>) -> Self
 yamaa::api::SpecRequest::path: pub fn path(&self) -> &str
 yamaa::api::SpecRequest::project: pub fn project(mut self, project: &'a str) -> Self
 yamaa::api::SpecRequest::resolve: pub fn resolve(&self) -> Result<ContextValue, Failure>
