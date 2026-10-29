@@ -24,7 +24,7 @@ mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
 mod odm_read;
-pub use odm_read::OdmReadFinding;
+pub use odm_read::{invalid_odm_limit, OdmReadFinding};
 
 mod inheritance;
 pub use inheritance::InheritanceFinding;

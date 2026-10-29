@@ -226,7 +226,7 @@ impl ContextValue {
     }
 }
 
-fn context_value_to_core(value: &ContextValue) -> yamaa_core::json::Value {
+pub(crate) fn context_value_to_core(value: &ContextValue) -> yamaa_core::json::Value {
     use yamaa_core::json::{Number, Value};
     match value {
         ContextValue::Null => Value::Null,

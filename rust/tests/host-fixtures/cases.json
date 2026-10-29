@@ -5713,6 +5713,18 @@
       ]
     },
     "read-odm": {
+      "invalid_limits": {
+        "arguments": {"max_archive_members": 1, "max_expanded_bytes": 1, "max_xml_depth": 8},
+        "values": [
+          {"name": "negative", "value": -1},
+          {"name": "fraction", "value": 1.5},
+          {"name": "boolean", "value": true},
+          {"name": "missing", "value": null},
+          {"name": "text", "value": "12"}
+        ],
+        "issue": {"severity": "error", "phase": "validation", "condition": "value_not_permitted", "rule": "ODM-1", "spec_paths": ["{argument}"], "line": null, "column": null, "file": null, "message": "{argument} has the value {value}, which is not permitted", "source_span": null, "operand_route": null},
+        "error": "cannot read {source}: {argument} has the value {value}, which is not permitted [value_not_permitted, ODM-1]"
+      },
       "columns": [
         "ODMVersion",
         "FileOID",
@@ -8519,6 +8531,11 @@
           "case": "boundary two is a mismatch after native refusals advance the boundary",
           "request": {"version": 2, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
           "outcome": {"accepted": false, "requested_version": 2, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "boundary three is a mismatch after native ODM limit admission changes",
+          "request": {"version": 3, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 3, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
         },
         {
           "case": "a request for the next version is a mismatch",

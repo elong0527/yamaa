@@ -29,6 +29,20 @@ fn text(value: &str) -> V {
     V::String(value.into())
 }
 
+/// An ODM limit that cannot be admitted, reported at its argument.
+pub fn invalid_odm_limit(option: &str, minimum: u64, value: V) -> Diagnostic {
+    Diagnostic {
+        code: C::OdmSourceOptionInvalid,
+        spec_paths: vec![option.into()],
+        context: Context::from([
+            ("minimum".into(), V::from(minimum)),
+            ("value".into(), value),
+        ]),
+        source_span: None,
+        operand_route: None,
+    }
+}
+
 impl OdmReadFinding<'_> {
     /// The registered cause of the refusal, or `None` for the opaque
     /// refusal of a source the host cannot read.
@@ -67,16 +81,7 @@ impl OdmReadFinding<'_> {
             value,
         } = self.refusal
         {
-            return Diagnostic {
-                code,
-                spec_paths: vec![(*option).into()],
-                context: Context::from([
-                    ("minimum".into(), V::from(*minimum)),
-                    ("value".into(), V::from(*value)),
-                ]),
-                source_span: None,
-                operand_route: None,
-            };
+            return invalid_odm_limit(option, *minimum, V::from(*value));
         }
         let mut context = Context::from([("path".into(), text(self.path))]);
         let mut fact = |key: &str, value: V| {

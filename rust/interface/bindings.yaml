@@ -1232,10 +1232,10 @@ python:
       rust: api_entry::_read_odm
       args:
         source: text
-        archive_member: "optional<text> = None"
-        max_archive_members: "index = 10000"
-        max_expanded_bytes: "index = 268435456"
-        max_xml_depth: "index = 64"
+        archive_member: "optional<text>"
+        max_archive_members: host_object
+        max_expanded_bytes: host_object
+        max_xml_depth: host_object
       returns: Table
     - kind: function
       name: _lint
@@ -1308,7 +1308,7 @@ r:
           returns: r_reply
         - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
         - name: read_odm
-          args: {source: raw, archive_member: robj, max_archive_members: index, max_expanded_bytes: index, max_xml_depth: index}
+          args: {source: raw, archive_member: robj, max_archive_members: robj, max_expanded_bytes: robj, max_xml_depth: robj}
           returns: r_reply
         - {name: run_status, args: {handle: robj}, returns: r_reply}
         - {name: run_output, args: {handle: robj}, returns: r_reply}
