@@ -171,6 +171,8 @@ pub fn import_result_stream(
     use crate::public_table::TableError as Error;
     let reader = ArrowArrayStreamReader::try_new(stream).map_err(|_| Error::InvalidTable)?;
     let schema = reader.schema();
+    TableSchema::validate_names(schema.fields().iter().map(|field| field.name().as_str()))
+        .map_err(|_| Error::InvalidTable)?;
     let mut tables = Vec::new();
     let mut rows = 0usize;
     for batch in reader {

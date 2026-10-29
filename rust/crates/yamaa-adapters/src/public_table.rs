@@ -913,6 +913,33 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "arrow")]
+    fn result_imports_refuse_empty_and_duplicate_column_names_even_without_rows() {
+        // Foreign result schemas must retain every column when projected to a
+        // host dictionary; the owned public constructor otherwise trusts names.
+        use crate::arrow_bridge::import_result_stream;
+        for names in [vec![""], vec!["same", "same"]] {
+            for rows in [0, 1] {
+                let columns = names
+                    .iter()
+                    .map(|name| {
+                        (
+                            (*name).to_owned(),
+                            PublicColumn::Int(std::iter::repeat_n(Some(1), rows).collect()),
+                        )
+                    })
+                    .collect();
+                let table = PublicTable::chunked(columns, vec![rows]).unwrap();
+                assert_eq!(
+                    import_result_stream(table.stream()),
+                    Err(TableError::InvalidTable),
+                    "names {names:?}, rows {rows}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn engine_built_tables_admit_list_columns_and_count_rows_across_batches() {
         let mut columns = issues(5);
         let table = PublicTable::chunked(columns.clone(), vec![2, 0, 3]).unwrap();
