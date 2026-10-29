@@ -190,7 +190,10 @@ whose original diagnostics could not be converted to a data frame.
 
 Python `yamaa.Table` and `yamaa.Error` objects can be pickled and sent between
 processes. Tables keep their column types, missing values and list columns;
-errors keep their message, issues and written paths. Pickling an unread streamed
+errors keep their message, issues, written paths and chained cause. As with
+ordinary Python exceptions, the cause and any added state must be picklable.
+An unpicklable callback exception raises its normal pickle error when the
+refusal is pickled; the original cause stays attached. Pickling an unread streamed
 output reads it whole, as `to_pylist()` does. An output stream already taken by
 a reader keeps its usual refusal on a whole-table read.
 

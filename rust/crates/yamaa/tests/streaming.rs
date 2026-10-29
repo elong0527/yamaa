@@ -398,6 +398,31 @@ fn a_reader_exported_as_a_c_stream_pulls_as_the_reader_does() {
     );
 }
 
+/// The C ownership seam: moving a stream into a foreign reader transfers
+/// its external owner too, and either release path drops it exactly once.
+#[test]
+fn an_exported_reader_retains_its_external_owner_until_release() {
+    for imported in [false, true] {
+        let streamed = engine(resolver(true), Some(2))
+            .spec("spec.yaml")
+            .stream()
+            .unwrap();
+        let owner = Arc::new(());
+        let watched = Arc::downgrade(&owner);
+        let stream = streamed.reader().into_stream_with_lifetime(owner);
+        assert!(watched.upgrade().is_some());
+        if imported {
+            let mut reader = ArrowArrayStreamReader::try_new(stream).unwrap();
+            assert_eq!(reader.next().unwrap().unwrap().num_rows(), 2);
+            assert!(watched.upgrade().is_some());
+            drop(reader);
+        } else {
+            drop(stream);
+        }
+        assert!(watched.upgrade().is_none());
+    }
+}
+
 /// A reader released after it handed out the last batch, before its
 /// end-of-stream pull, has read the whole output: the run keeps its result
 /// and saves.

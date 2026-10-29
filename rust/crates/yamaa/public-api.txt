@@ -680,6 +680,7 @@ yamaa::stream::Batches: impl Drop for Batches
 yamaa::stream::Batches: impl Iterator for Batches
 yamaa::stream::Batches: pub struct Batches
 yamaa::stream::Batches::into_stream: pub fn into_stream(self) -> FFI_ArrowArrayStream
+yamaa::stream::Batches::into_stream_with_lifetime: pub fn into_stream_with_lifetime(self, lifetime: impl Send + 'static) -> FFI_ArrowArrayStream
 yamaa::stream::Batches::schema: pub fn schema(&self) -> SchemaRef
 yamaa::stream::RunGuard: impl Deref for RunGuard<'_>
 yamaa::stream::RunGuard: impl DerefMut for RunGuard<'_>

@@ -147,6 +147,36 @@ class Progress(unittest.TestCase):
         written = sorted(path.name for path in self.root.iterdir())
         self.assertEqual(written, ["input.csv", "spec.yaml"], "nothing is written")
 
+    def test_an_unpicklable_callback_cause_keeps_its_normal_pickle_error(self):
+        # Python exception serialization is a host-only seam: preserve the
+        # original cause and the same pickle failure its own state raises.
+        class LocalFailure(ValueError):
+            pass
+
+        locked = ValueError("callback holds a lock")
+        locked.lock = threading.Lock()
+        for label, original in (
+            ("local exception class", LocalFailure("local callback")),
+            ("unpicklable instance state", locked),
+        ):
+            with self.subTest(case=label):
+                with self.assertRaises(
+                    (AttributeError, TypeError, pickle.PicklingError)
+                ) as direct:
+                    pickle.dumps(original)
+
+                def raising(event):
+                    raise original
+
+                run = yamaa.spec(self.spec).run(progress=raising)
+                with self.assertRaises(yamaa.Error) as refused:
+                    run.save()
+                self.assertIs(refused.exception.__cause__, original)
+                with self.assertRaises(type(direct.exception)) as chained:
+                    pickle.dumps(refused.exception)
+                self.assertEqual(str(chained.exception), str(direct.exception), label)
+                self.assertIs(refused.exception.__cause__, original)
+
     def test_an_interrupt_in_the_callback_cancels_the_call(self):
         def interrupting(event):
             raise KeyboardInterrupt

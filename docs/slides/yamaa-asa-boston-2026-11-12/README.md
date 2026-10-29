@@ -19,7 +19,7 @@ quarto preview index.qmd
 
 The documentation deployment workflow renders this deck with the other
 presentations. The folder README is excluded from MkDocs to reserve
-`slides/yamaa-asa-boston-20261112/index.html` for the deck.
+`slides/yamaa-asa-boston-2026-11-12/index.html` for the deck.
 
 ## Course premise
 

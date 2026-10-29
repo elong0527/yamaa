@@ -14,7 +14,6 @@
 use pyo3::{prelude::*, types::PyDict};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, MutexGuard};
-use yamaa::host::functions::FunctionError;
 use yamaa::{
     CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
     ProjectRequest, SpecRequest, SubmissionOptions,
@@ -23,6 +22,7 @@ use yamaa_boundary::{HandleKind, Live};
 
 use crate::arrow_bridge::Table;
 use crate::interface::{gate, CENSUS};
+use crate::progress::{Causes, Progress};
 use crate::project_activation::Port;
 
 /// Why a call answered no value.
@@ -101,58 +101,6 @@ fn engine(version: &str, functions: bool, progress: Option<&Progress>) -> yamaa:
     })
 }
 
-/// A progress callback (#3762): a Python callable, called with one dict per
-/// event, keyed as `records.progress_event` orders them, on the thread that
-/// made the call. An event on another thread, such as a batch another
-/// library pulls, is not reported. An exception it raises fails the result;
-/// an interrupt cancels the call, as a project function's does.
-#[derive(Clone)]
-pub(crate) struct Progress {
-    callable: Arc<Py<PyAny>>,
-    owner: std::thread::ThreadId,
-}
-
-impl Progress {
-    /// The callback `callable`, or none; anything else that is not callable
-    /// refuses the call.
-    fn of(callable: Option<Bound<'_, PyAny>>) -> PyResult<Option<Self>> {
-        let Some(callable) = callable else {
-            return Ok(None);
-        };
-        if !callable.is_callable() {
-            return Err(crate::errors::message(
-                callable.py(),
-                false,
-                "progress must be a callable or None",
-            ));
-        }
-        Ok(Some(Self {
-            callable: Arc::new(callable.unbind()),
-            owner: std::thread::current().id(),
-        }))
-    }
-
-    fn call(&self, event: &yamaa::ProgressEvent) -> Result<(), FunctionError> {
-        if std::thread::current().id() != self.owner {
-            return Ok(());
-        }
-        Python::attach(|py| {
-            let fields = PyDict::new(py);
-            let answer = fields
-                .set_item("name", &event.name)
-                .and_then(|()| fields.set_item("phase", event.phase.as_str()))
-                .and_then(|()| fields.set_item("kind", event.kind.as_str()))
-                .and_then(|()| fields.set_item("outcome", event.outcome.map(yamaa::Status::as_str)))
-                .and_then(|()| fields.set_item("number", event.number))
-                .and_then(|()| fields.set_item("rows", event.rows))
-                .and_then(|()| self.callable.call1(py, (fields,)));
-            answer
-                .map(drop)
-                .map_err(|error| crate::function_callback::host_error(py, error))
-        })
-    }
-}
-
 /// Run `run` detached from the interpreter, with the interpreter's
 /// interrupts behind its token. Once it returns the token is polled once
 /// more, so an interrupt that arrived as it returned still cancels it
@@ -181,13 +129,15 @@ fn called<T: Send>(
     py: Python<'_>,
     (functions, progress): (bool, Option<Bound<'_, PyAny>>),
     run: impl Send + FnOnce(&yamaa::Engine, &CancellationToken) -> Result<T, Refused>,
-) -> PyResult<T> {
+) -> PyResult<(T, Causes)> {
     gate()?;
     let version = runtime(py);
-    let progress = Progress::of(progress)?;
-    cancellable(py, |token| {
+    let (progress, causes) = Progress::of(progress)?;
+    let value = cancellable(py, |token| {
         run(&engine(&version, functions, progress.as_ref()), token)
-    })
+    })?;
+    causes.finished(py)?;
+    Ok((value, causes))
 }
 
 /// Run a call of the engine that reads files and calls no project function,
@@ -263,13 +213,15 @@ enum Held {
 #[pyclass(frozen, module = "yamaa._native", name = "_Run")]
 pub struct Run {
     held: Held,
+    causes: Causes,
     _live: Live,
 }
 
 impl Run {
-    fn new(held: Held) -> Self {
+    fn new(held: Held, causes: Causes) -> Self {
         Self {
             held,
+            causes,
             _live: CENSUS.hold(HandleKind::Run),
         }
     }
@@ -291,6 +243,10 @@ impl Run {
 
 #[pymethods]
 impl Run {
+    fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
+        self.causes.traverse(visit)
+    }
+
     fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
         self.result(py, |run| run.status().as_str())
     }
@@ -300,6 +256,7 @@ impl Run {
         let Held::Streamed(run) = &self.held else {
             return self.result(py, |run| run.output().map(Table::from));
         };
+        let causes = self.causes.clone_ref(py);
         read(py, || {
             if let yamaa::StreamProgress::Cancelled | yamaa::StreamProgress::Ended = run.progress()
             {
@@ -309,7 +266,7 @@ impl Run {
                     return Ok(built.output().map(Table::from));
                 }
             }
-            Ok(Some(Table::stream(Arc::clone(run))))
+            Ok(Some(Table::stream(Arc::clone(run), causes)))
         })
     }
     fn issues(&self, py: Python<'_>) -> PyResult<Table> {
@@ -348,13 +305,15 @@ impl Run {
 #[pyclass(frozen, module = "yamaa._native", name = "_Check")]
 pub struct Check {
     check: Mutex<yamaa::Check>,
+    causes: Causes,
     _live: Live,
 }
 
 impl Check {
-    fn new(check: yamaa::Check) -> Self {
+    fn new(check: yamaa::Check, causes: Causes) -> Self {
         Self {
             check: Mutex::new(check),
+            causes,
             _live: CENSUS.hold(HandleKind::Check),
         }
     }
@@ -370,6 +329,10 @@ impl Check {
 
 #[pymethods]
 impl Check {
+    fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
+        self.causes.traverse(visit)
+    }
+
     fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
         self.result(py, |check| check.status().as_str())
     }
@@ -396,14 +359,14 @@ pub fn _spec_check(
     parent: Option<&str>,
     progress: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Check> {
-    let check = called(py, (true, progress), |engine, token| {
+    let (check, causes) = called(py, (true, progress), |engine, token| {
         let request = spec_request(engine, specification, project).cancel_with(token);
         Ok(match parent {
             Some(parent) => request.check_on(parent)?,
             None => request.check()?,
         })
     })?;
-    Ok(Check::new(check))
+    Ok(Check::new(check, causes))
 }
 
 /// The printed text of a lazy specification object, which has read nothing
@@ -456,7 +419,7 @@ pub fn _spec_run(
     if stream {
         gate()?;
         let version = runtime(py);
-        let progress = Progress::of(progress)?;
+        let (progress, causes) = Progress::of(progress)?;
         let token = crate::interrupt::stream_token();
         let run = crate::interrupt::run(py, |_| {
             py.detach(|| {
@@ -475,9 +438,9 @@ pub fn _spec_run(
             })
             .map_err(|refusal| raise(py, refusal))
         })?;
-        return Ok(Run::new(Held::Streamed(Arc::new(run))));
+        return Ok(Run::new(Held::Streamed(Arc::new(run)), causes));
     }
-    let run = called(py, (true, progress), |engine, token| {
+    let (run, causes) = called(py, (true, progress), |engine, token| {
         let request = spec_request(engine, specification, project).cancel_with(token);
         Ok(match plans {
             Some(plans) => request.reusing(plans),
@@ -485,7 +448,7 @@ pub fn _spec_run(
         }
         .run()?)
     })?;
-    Ok(Run::new(Held::Built(Box::new(Mutex::new(run)))))
+    Ok(Run::new(Held::Built(Box::new(Mutex::new(run))), causes))
 }
 
 #[pyfunction]
@@ -535,7 +498,11 @@ fn odm_limit_value(value: &Bound<'_, PyAny>) -> PyResult<yamaa::ContextValue> {
         V::Bool(value.extract()?)
     } else if value.is_instance_of::<PyInt>() {
         value.extract::<i64>().map_or_else(
-            |_| value.str().map(|text| V::Wide(text.to_string())),
+            |_| {
+                value
+                    .extract::<num_bigint::BigInt>()
+                    .map(|integer| V::Wide(integer.to_string()))
+            },
             |value| Ok(V::Int(value)),
         )?
     } else if value.is_instance_of::<PyFloat>() {
@@ -676,6 +643,7 @@ pub fn _selftest(py: Python<'_>) -> PyResult<SelfTest> {
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]
 pub struct ProjectRun {
     runs: Mutex<yamaa::ProjectRun>,
+    causes: Causes,
     _live: Live,
 }
 
@@ -701,6 +669,10 @@ impl ProjectRun {
 
 #[pymethods]
 impl ProjectRun {
+    fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
+        self.causes.traverse(visit)
+    }
+
     fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
         self.result(py, |runs| Ok(runs.status().as_str()))
     }
@@ -749,6 +721,7 @@ impl ProjectRun {
 #[pyclass(frozen, module = "yamaa._native", name = "_Submission")]
 pub struct Submission {
     submission: Mutex<yamaa::Submission>,
+    causes: Causes,
     _live: Live,
 }
 
@@ -764,6 +737,10 @@ impl Submission {
 
 #[pymethods]
 impl Submission {
+    fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
+        self.causes.traverse(visit)
+    }
+
     fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
         self.result(py, |submission| submission.status().as_str())
     }
@@ -808,10 +785,10 @@ pub fn _project_check(
     project: &str,
     progress: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Check> {
-    let check = called(py, (true, progress), |engine, token| {
+    let (check, causes) = called(py, (true, progress), |engine, token| {
         Ok(engine.project(project).cancel_with(token).check()?)
     })?;
-    Ok(Check::new(check))
+    Ok(Check::new(check, causes))
 }
 
 #[pyfunction]
@@ -824,7 +801,7 @@ pub fn _project_run(
     progress: Option<Bound<'_, PyAny>>,
 ) -> PyResult<ProjectRun> {
     let plans = plans.as_deref().map(|plans| &plans.plans);
-    let runs = called(py, (true, progress), |engine, token| {
+    let (runs, causes) = called(py, (true, progress), |engine, token| {
         let request = project_request(engine, project, section).cancel_with(token);
         // Only an unknown section refuses the call with issues.
         Ok(match plans {
@@ -835,6 +812,7 @@ pub fn _project_run(
     })?;
     Ok(ProjectRun {
         runs: Mutex::new(runs),
+        causes,
         _live: CENSUS.hold(HandleKind::ProjectRun),
     })
 }
@@ -850,13 +828,14 @@ pub fn _project_submission(
 ) -> PyResult<Submission> {
     let mut options = SubmissionOptions::new(yamaa::VERSION);
     options.created = created.map(str::to_owned);
-    let submission = called(py, (true, progress), |engine, token| {
+    let (submission, causes) = called(py, (true, progress), |engine, token| {
         Ok(project_request(engine, project, section)
             .cancel_with(token)
             .submission(&options)?)
     })?;
     Ok(Submission {
         submission: Mutex::new(submission),
+        causes,
         _live: CENSUS.hold(HandleKind::Submission),
     })
 }

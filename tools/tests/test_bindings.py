@@ -19,6 +19,35 @@ def load_edited(edit):
 
 
 class BindingsTests(unittest.TestCase):
+    def test_gc_slots_are_not_python_callable_methods(self):
+        # PyO3's C-only GC slots have no Python attribute; ordinary methods,
+        # including undeclared ones, remain subject to IDL reconciliation.
+        definition = {
+            "python": {
+                "exports": [
+                    {
+                        "name": "Sample",
+                        "kind": "class",
+                        "rust": "sample::Sample",
+                        "methods": [{"name": "declared"}],
+                    }
+                ]
+            }
+        }
+        source = (
+            '#[pyclass(name = "Sample")] pub struct Sample {} '
+            "#[pymethods] impl Sample { fn __traverse__(&self) {} "
+            "fn __clear__(&mut self) {} fn declared(&self) {} %s }"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "sample.rs"
+            with mock.patch.object(generator, "RUST_TARGET", target):
+                target.write_text(source % "")
+                generator._reconcile(definition)
+                target.write_text(source % "fn undeclared(&self) {}")
+                with self.assertRaisesRegex(ValueError, "methods for Sample differ"):
+                    generator._reconcile(definition)
+
     def test_generated_outputs_match_shared_definition(self):
         rendered = generator.render_all()
         for target, text in rendered.items():
