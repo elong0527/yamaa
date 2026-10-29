@@ -10,6 +10,52 @@ interfaces and their callers together instead of keeping compatibility
 aliases. From 1.0.0, the [stability contract](docs/release.md#stability-contract)
 applies.
 
+## GitHub Codespaces
+
+[Open a yamaa Codespace](https://codespaces.new/elong0527/yamaa) to work in
+VS Code in your browser. Select the branch you want and a machine with at
+least 4 cores, 8 GB of memory and 32 GB of storage, then create the Codespace.
+GitHub clones the whole repository into the workspace, including the
+benchmarks, schemas, rules and both host packages.
+
+The [dev container](.devcontainer/devcontainer.json) uses Rocker's latest
+`tidyverse` image for the latest released R and a pre-installed tidyverse.
+Its [setup script](.devcontainer/setup.sh) installs the latest stable Python
+through uv, the latest opensas Linux release, and the latest OpenCode v2 through
+its `@opencode/cli@2` npm package. Node.js LTS and Rust are included for those
+tools and for building yamaa.
+
+Setup runs `make setup` to install the Python yamaa package, Polars and the
+locked development dependencies into `python/.venv`. It stages and installs
+the R yamaa package from the same checkout into `~/R/library`, using the
+repository's Rust toolchain. Both packages therefore match the selected
+branch. Initial setup compiles both bindings and can take several minutes;
+wait for **yamaa Codespace is ready** in the creation log. Setup checks both
+packages with their bundled self-tests and runs an opensas smoke program.
+
+The VS Code Python interpreter and new terminals use `python/.venv`. Start
+with these commands from the repository root:
+
+```sh
+python -c 'import polars, yamaa; print(yamaa.selftest())'
+Rscript -e 'library(tidyverse); library(yamaa); print(yamaa_selftest())'
+opensas path/to/program.sas
+opencode
+```
+
+Configure a model provider inside OpenCode before using it; provider
+credentials are not included in the image. Store any API keys in your
+personal Codespaces secrets rather than in the repository.
+
+After changing Python or Rust sources, run `make setup` again to rebuild the
+Python package. To rebuild both packages, rerun `bash .devcontainer/setup.sh`;
+this recreates the Python environment. After changing the container
+configuration, use **Codespaces: Rebuild Container** in the command palette.
+To refresh the base image to the newest R release, use **Codespaces: Full
+Rebuild Container**. The lock file continues to select yamaa's development
+dependencies; the R image, Python and opensas follow their latest stable
+releases when freshly installed, and OpenCode follows the latest v2 release.
+
 ## Where changes belong
 
 | Area | Responsibility |

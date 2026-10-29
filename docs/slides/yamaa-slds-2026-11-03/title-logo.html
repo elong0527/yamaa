@@ -1,0 +1,21 @@
+<!-- Title-slide logo for the yamaa-njsug-2026-10-09 deck.
+  Kept as a static <img> so `embed-resources: true` inlines it into the
+  self-contained HTML; the script moves it into #title-slide right after
+  the subtitle at runtime. -->
+<img id="title-logo" class="title-logo" src="../../assets/logo.jpeg" alt="yamaa logo" />
+<script>
+(function () {
+  function placeLogo() {
+    var logo = document.getElementById("title-logo");
+    var subtitle = document.querySelector("#title-slide .subtitle");
+    if (logo && subtitle && logo.previousElementSibling !== subtitle) {
+      subtitle.insertAdjacentElement("afterend", logo);
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", placeLogo);
+  } else {
+    placeLogo();
+  }
+})();
+</script>
