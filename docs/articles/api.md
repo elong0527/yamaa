@@ -190,7 +190,10 @@ whose original diagnostics could not be converted to a data frame.
 
 Python `yamaa.Table` and `yamaa.Error` objects can be pickled and sent between
 processes. Tables keep their column types, missing values and list columns;
-errors keep their message, issues and written paths. Pickling an unread streamed
+errors keep their message, issues, written paths and chained cause. As with
+ordinary Python exceptions, the cause and any added state must be picklable.
+An unpicklable callback exception raises its normal pickle error when the
+refusal is pickled; the original cause stays attached. Pickling an unread streamed
 output reads it whole, as `to_pylist()` does. An output stream already taken by
 a reader keeps its usual refusal on a whole-table read.
 
@@ -233,7 +236,7 @@ so an integer column with a missing value keeps its exact integers.
     frame = dm.to_polars()       # or dm.to_pandas(), dm.to_arrow()
     ```
 
-## Read an output as a stream
+## Supply in-memory inputs
 
 Python can replace declared input files by alias for one run:
 
@@ -263,6 +266,8 @@ numeric vectors become floats, `Date` values become whole days and `POSIXct`
 values become whole UTC seconds. Missing values stay missing. Fractional dates
 or timestamps are refused. No R Arrow package is needed for input conversion.
 Project runs and the command line continue reading files.
+
+## Read an output as a stream
 
 `run(stream = TRUE)` in R and `run(stream=True)` in Python build a dataset as
 its output is read. The output's whole table, which a run without `stream`

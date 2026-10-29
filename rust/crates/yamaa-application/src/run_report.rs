@@ -48,12 +48,14 @@ impl HeldReport {
 pub(crate) struct RunFacts {
     /// `(name, records, bytes, memory)` for each source the attempt entered.
     inputs: Vec<(String, Option<usize>, Option<usize>, bool)>,
+    overridden: std::collections::BTreeSet<String>,
     templates: Vec<TemplateRows>,
 }
 impl RunFacts {
     pub(crate) fn captured<T: TableAccess>(
         sources: &[yamaa_core::specification_run::CapturedSource<T>],
         templates: &[TemplateRows],
+        overridden: &[&str],
     ) -> Self {
         Self {
             inputs: sources
@@ -68,6 +70,7 @@ impl RunFacts {
                 })
                 .collect(),
             templates: templates.to_vec(),
+            overridden: overridden.iter().map(|alias| (*alias).to_owned()).collect(),
         }
     }
 }
@@ -400,6 +403,7 @@ fn facts(
                 .map_or((None, None, false), |&(_, records, bytes, memory)| {
                     (records, bytes, memory)
                 });
+            let memory = memory || observed.overridden.contains(&source.name);
             Ok(core::Input {
                 name: source.name.clone(),
                 path: if memory {

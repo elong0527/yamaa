@@ -125,7 +125,9 @@ R's help pages stay handwritten under `R/yamaa/man/`. The refusal's Python
 `native` names its PyO3-created exception, and `state` names its native subclass.
 `picklable: true` generates its reconstruction arguments from its declared
 attributes, preserving its instance state as well. `chained: true` also
-retains Python's `__cause__` when the refusal is pickled; R's `parent` field
+retains Python's `__cause__` when the refusal is pickled. The cause and any
+added instance state must themselves be picklable: an unpicklable cause raises
+its normal pickle error and stays attached to the original refusal. R's `parent` field
 keeps the original callback condition. R constructs the same
 condition fields and state subclass from its declaration. Every refusal carries
 an issues table, including before negotiation and after an R table-conversion

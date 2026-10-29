@@ -67,6 +67,10 @@
         "csv": "ID,TEXT,VALUE,DAY,WHEN\n1,\"caf\u00e9, \u03b1\",2.5,2000-01-02,2000-01-02T03:04:05\n2,,,,\n"
       },
       "empty_csv": "ID,VALUE,EXTRA\n",
+      "report_refusals": [
+        {"name": "missing fallback before capture", "fallback_hex": null},
+        {"name": "invalid UTF-8 fallback during capture", "fallback_hex": "ff"}
+      ],
       "unsupported_type": {
         "phase": "validation",
         "condition": "value_not_permitted",
@@ -133,6 +137,11 @@
         }
       ],
       "file_csv": "ID,VALUE,EXTRA\n1,7,7\n",
+      "file_details": {
+        "bytes": 13,
+        "path": "data.csv",
+        "profile": "csv"
+      },
       "memory_details": {
         "bytes": null,
         "path": "memory:SRC",

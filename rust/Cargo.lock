@@ -802,6 +802,8 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
+ "num-bigint",
+ "num-traits",
  "once_cell",
  "portable-atomic",
  "pyo3-build-config",
@@ -1402,6 +1404,7 @@ name = "yamaa-python"
 version = "0.6.2"
 dependencies = [
  "arrow-ipc",
+ "num-bigint",
  "pyo3",
  "pyo3-build-config",
  "yamaa",

@@ -154,6 +154,38 @@ fn unknown_alias_is_a_complete_authored_refusal_before_study_access() {
         .unwrap();
     assert_issue(&run, expected);
 }
+
+#[test]
+fn failed_attempts_keep_override_provenance_before_capture() {
+    for case in TRUTH["report_refusals"].as_array().unwrap() {
+        let (root, path) = study();
+        match case["fallback_hex"].as_str() {
+            None => std::fs::remove_file(root.join("data.csv")).unwrap(),
+            Some(hex) => {
+                let bytes = (0..hex.len())
+                    .step_by(2)
+                    .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+                    .collect::<Vec<_>>();
+                std::fs::write(root.join("data.csv"), bytes).unwrap();
+            }
+        }
+        let engine = Engine::new(EngineOptions::neutral(
+            "memory-input-test".into(),
+            "0".into(),
+        ));
+        let run = engine
+            .spec(&path)
+            .inputs([("SRC".into(), frame(&TRUTH["cases"][0]["rows"]))])
+            .run()
+            .unwrap();
+        assert_eq!(
+            (run.status(), memory_details(&run)),
+            (Status::Failed, TRUTH["memory_details"].clone()),
+            "{}",
+            text(&case["name"])
+        );
+    }
+}
 #[test]
 fn overrides_keep_the_custom_resolver_for_other_inputs_and_publication() {
     // Seam: an alias overlay must preserve an embedder's resource authority.

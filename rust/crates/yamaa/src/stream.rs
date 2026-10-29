@@ -577,7 +577,16 @@ impl Batches {
     /// error whose message is D39's text of reading the run, such as
     /// `cannot read TEST: operation cancelled`, or the run's first issue.
     pub fn into_stream(self) -> FFI_ArrowArrayStream {
-        FFI_ArrowArrayStream::new(Box::new(Exported(self)))
+        self.into_stream_with_lifetime(())
+    }
+
+    /// Retain an external owner until the foreign consumer releases its reader.
+    /// Host bindings use this for GC-visible callbacks and original causes.
+    pub fn into_stream_with_lifetime(self, lifetime: impl Send + 'static) -> FFI_ArrowArrayStream {
+        FFI_ArrowArrayStream::new(Box::new(Exported {
+            batches: self,
+            _lifetime: lifetime,
+        }))
     }
 
     /// One pull that starts the stream, or continues the one this reader
@@ -761,9 +770,12 @@ impl Drop for Batches {
 }
 
 /// A reader exported as an Arrow C stream.
-struct Exported(Batches);
+struct Exported<T> {
+    batches: Batches,
+    _lifetime: T,
+}
 
-impl Iterator for Exported {
+impl<T> Iterator for Exported<T> {
     type Item = Result<RecordBatch, ArrowError>;
 
     /// One pull from the Arrow crate's `extern "C"` `get_next`. A panic
@@ -772,11 +784,11 @@ impl Iterator for Exported {
     /// (#2870, section 3.4); the run, which the pull left without a result,
     /// is then cancelled.
     fn next(&mut self) -> Option<Self::Item> {
-        let shared = Arc::clone(&self.0.shared);
-        let next = match catch_unwind(AssertUnwindSafe(|| self.0.next())) {
+        let shared = Arc::clone(&self.batches.shared);
+        let next = match catch_unwind(AssertUnwindSafe(|| self.batches.next())) {
             Ok(next) => next?,
             Err(_) => {
-                self.0.mode = Mode::Done;
+                self.batches.mode = Mode::Done;
                 Err(shared.refusal(FailureKind::Internal {
                     code: "stream_panic",
                 }))
@@ -786,8 +798,8 @@ impl Iterator for Exported {
     }
 }
 
-impl RecordBatchReader for Exported {
+impl<T> RecordBatchReader for Exported<T> {
     fn schema(&self) -> SchemaRef {
-        self.0.schema()
+        self.batches.schema()
     }
 }

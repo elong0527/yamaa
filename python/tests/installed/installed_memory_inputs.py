@@ -14,6 +14,11 @@ from host_fixtures import load as load_truth
 import yamaa
 
 TRUTH = load_truth(__file__, "memory-inputs")
+KINDS = ("arrow", "polars", "pandas", "pandas-subclass", "protocol")
+
+
+class PandasSubclass(pd.DataFrame):
+    """A pandas frame remains index-free when its concrete class is external."""
 
 
 class ArrowProvider:
@@ -28,10 +33,13 @@ class ArrowProvider:
 
 def frame(case, kind):
     columns = dict(zip(TRUTH["columns"], zip(*case["rows"])))
-    if kind == "pandas":
-        result = pd.DataFrame(columns)
+    if kind in {"pandas", "pandas-subclass"}:
+        cls = PandasSubclass if kind == "pandas-subclass" else pd.DataFrame
+        result = cls(columns)
         # A pandas index is not an input column.
-        result.index.name = "UNWANTED_INDEX"
+        # ABSENT is deliberately declared in the missing-type control. Its
+        # index values must not satisfy a study-column declaration.
+        result.index = pd.Index(list(range(100, 100 + len(result))), name="ABSENT")
         return result
     table = pa.table(columns)
     if kind == "polars":
@@ -87,7 +95,7 @@ class MemoryInputs(unittest.TestCase):
         self.assertEqual(observed, [wanted])
 
     def test_library_frames_and_protocol_objects_override_inherited_aliases(self):
-        for kind in ("arrow", "polars", "pandas", "protocol"):
+        for kind in KINDS:
             for case in TRUTH["cases"]:
                 with self.subTest(kind=kind, case=case["name"]):
                     original = frame(case, kind)
@@ -105,6 +113,22 @@ class MemoryInputs(unittest.TestCase):
             }
         )
         self.assert_saved(run, TRUTH["all_memory_csv"])
+
+    def test_a_provider_cannot_change_the_input_entries_being_imported(self):
+        # Python providers can mutate their caller's dictionary during export.
+        (self.root / "data.csv").unlink()
+        inputs = {}
+
+        class MutatingProvider(ArrowProvider):
+            def __arrow_c_stream__(self, requested_schema=None):
+                inputs.clear()
+                return super().__arrow_c_stream__(requested_schema)
+
+        inputs.update(
+            SRC=MutatingProvider(frame(TRUTH["cases"][0], "arrow")),
+            AUX=frame(TRUTH["cases"][1], "arrow"),
+        )
+        self.assert_saved(self.spec.run(inputs=inputs), TRUTH["all_memory_csv"])
 
     def test_a_deferred_run_keeps_owned_values_after_the_frame_changes(self):
         case = TRUTH["cases"][0]
@@ -133,8 +157,10 @@ class MemoryInputs(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        run = self.spec.run(inputs={"SRC": frame(TRUTH["cases"][0], "arrow")})
-        self.assert_issue(run.issues.to_pylist(), expected)
+        for kind in KINDS:
+            with self.subTest(kind=kind):
+                run = self.spec.run(inputs={"SRC": frame(TRUTH["cases"][0], kind)})
+                self.assert_issue(run.issues.to_pylist(), expected)
 
     def test_unsupported_physical_types_have_an_authored_input_diagnostic(self):
         for values in (pa.array([True]), pa.array([42], type=pa.int32())):
@@ -148,6 +174,44 @@ class MemoryInputs(unittest.TestCase):
                     caught.exception.issues.to_pylist(), TRUTH["unsupported_type"]
                 )
                 self.assertEqual(caught.exception.paths, [])
+
+    def test_protocol_errors_keep_the_original_cause(self):
+        # Host protocol exceptions cannot be represented by shared frame data.
+        original = ValueError("provider failed")
+
+        class FailingProvider:
+            def __arrow_c_stream__(self, requested_schema=None):
+                raise original
+
+        with self.assertRaises(yamaa.Error) as caught:
+            self.spec.run(inputs={"SRC": FailingProvider()})
+        self.assertEqual(
+            (
+                type(caught.exception),
+                caught.exception.issues.to_pylist(),
+                caught.exception.paths,
+            ),
+            (yamaa.Error, [], []),
+        )
+        self.assertIs(caught.exception.__cause__, original)
+
+    def test_provider_control_flow_exceptions_escape_unchanged(self):
+        # Provider control flow must cross the host boundary by identity.
+        for original in (
+            KeyboardInterrupt(),
+            SystemExit(7),
+            GeneratorExit(),
+            BaseException(),
+        ):
+            with self.subTest(kind=type(original).__name__):
+
+                class InterruptingProvider:
+                    def __arrow_c_stream__(self, requested_schema=None):
+                        raise original
+
+                with self.assertRaises(type(original)) as caught:
+                    self.spec.run(inputs={"SRC": InterruptingProvider()})
+                self.assertIs(caught.exception, original)
 
     def test_all_admitted_scalar_kinds_and_nulls_share_the_authored_csv(self):
         case = TRUTH["typed"]

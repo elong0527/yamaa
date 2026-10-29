@@ -87,6 +87,87 @@ class HandleLifetime(unittest.TestCase):
             (held, rows, live()), (plus(before, table=2), LIFETIME["rows"], before)
         )
 
+    def test_callback_tracebacks_do_not_keep_unreachable_results_alive(self):
+        # Python GC ownership: a retained traceback points to this nested
+        # caller's result and plans, a cycle no shared fixture can observe.
+        def exercise(kind):
+            spec = yamaa.spec(self.root / "spec.yaml")
+            project = yamaa.project(self.root / "project.yaml")
+            original = ValueError("callback lifetime")
+
+            def raising(event):
+                raise original
+
+            operations = {
+                "check": spec.check,
+                "run": spec.run,
+                "project check": project.check,
+                "project run": project.run,
+                "submission": lambda **kw: project.submission("adam", **kw),
+                "streamed run": lambda **kw: spec.run(stream=True, **kw),
+            }
+            result = operations[kind](progress=raising)
+            self.assertEqual(result.status, "failed", kind)
+            self.assertFalse(hasattr(result._native, "__traverse__"))
+            self.assertTrue(gc.is_tracked(result._native))
+            if hasattr(result, "save"):
+                with self.assertRaises(yamaa.Error) as refused:
+                    result.save()
+                self.assertIs(refused.exception.__cause__, original)
+                self.assertIsNotNone(original.__traceback__)
+
+        for kind in (
+            "check",
+            "run",
+            "project check",
+            "project run",
+            "submission",
+            "streamed run",
+        ):
+            with self.subTest(case=kind):
+                before = live()
+                exercise(kind)
+                self.assertEqual(live(), before, kind)
+
+    def test_a_streamed_table_keeps_its_callback_until_collection(self):
+        # The table owns a deferred callback after its Run wrapper is gone;
+        # a failure's traceback must still be visible to cyclic GC.
+        def exercise():
+            def raising(event):
+                raise ValueError("streamed table lifetime")
+
+            run = yamaa.spec(self.root / "spec.yaml").run(stream=True, progress=raising)
+            table = run.output
+            del run
+            try:
+                table.to_pylist()
+            except yamaa.Error as error:
+                self.assertIsInstance(error.__cause__, ValueError)
+                self.assertEqual(str(error.__cause__), "streamed table lifetime")
+            else:
+                self.fail("the deferred callback must still run")
+
+        before = live()
+        exercise()
+        self.assertEqual(live(), before)
+
+    def test_a_foreign_reader_keeps_its_callback_after_python_results_are_dropped(self):
+        # An Arrow reader is an external owner until it releases its stream.
+        import pyarrow as pa
+
+        before = live()
+        heard = []
+        run = yamaa.spec(self.root / "spec.yaml").run(
+            stream=True, progress=heard.append
+        )
+        reader = pa.RecordBatchReader.from_stream(run.output)
+        del run
+        self.assertEqual(live(), before)
+        self.assertEqual(reader.read_all().to_pylist(), LIFETIME["rows"])
+        self.assertTrue(heard, "the foreign reader retains its progress callback")
+        del reader
+        self.assertEqual(live(), before)
+
     def test_a_cancelled_run_and_save_leave_no_native_handle(self):
         case = function_study(__file__, self.root / "functions")
         spec = yamaa.project(case / "project.yaml").spec("TEST")

@@ -40,6 +40,7 @@ use yamaa_boundary::{HandleKind, Live};
 #[pyclass(frozen, module = "yamaa", name = "Table")]
 pub struct Table {
     held: Held,
+    causes: crate::progress::Causes,
     _live: Live,
 }
 
@@ -57,13 +58,16 @@ impl From<&yamaa::Table> for Table {
 
 impl Table {
     /// The output of a streamed run (#3697).
-    pub(crate) fn stream(streamed: Arc<yamaa::Streamed>) -> Self {
-        Self::held(Held::Stream(streamed))
+    pub(crate) fn stream(streamed: Arc<yamaa::Streamed>, causes: crate::progress::Causes) -> Self {
+        let mut table = Self::held(Held::Stream(streamed));
+        table.causes = causes;
+        table
     }
 
     fn held(held: Held) -> Self {
         Self {
             held,
+            causes: crate::progress::Causes::default(),
             _live: crate::interface::CENSUS.hold(HandleKind::Table),
         }
     }
@@ -84,6 +88,10 @@ impl Table {
 
 #[pymethods]
 impl Table {
+    fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
+        self.causes.traverse(visit)
+    }
+
     /// The number of rows.
     #[getter]
     fn num_rows(&self, py: Python<'_>) -> PyResult<usize> {
@@ -160,7 +168,9 @@ impl Table {
         // Unconsumed capsules release their reader and buffers on destruction.
         let stream = match &self.held {
             Held::Table(table) => table.stream(),
-            Held::Stream(streamed) => streamed.reader().into_stream(),
+            Held::Stream(streamed) => streamed
+                .reader()
+                .into_stream_with_lifetime(self.causes.clone_ref(py)),
         };
         PyCapsule::new(py, stream, Some(c"arrow_array_stream".into()))
     }
