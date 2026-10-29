@@ -306,7 +306,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(_native._CORE_VERSION, "0.6.2")
 
     def test_signatures_members_and_argument_types(self):
-        expected = TRUTH["arguments"] | TRUTH.get("python_arguments", {})
+        expected = TRUTH["arguments"]
         project = yamaa.project(self.root / "project.yaml")
         spec = yamaa.spec(self.spec)
         callables = {

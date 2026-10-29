@@ -131,6 +131,7 @@ _R_ARGUMENT = {
     "optional_text": ".optional_text",
     "file_type": ".text",
     "progress": ".progress",
+    "input_frames": ".input_frames",
     "flag": ".flag",
 }
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
@@ -1203,6 +1204,8 @@ class Public:
                 values.append(_Call(".version"))
             elif native == "capabilities":
                 values.append(_Call(".capabilities"))
+            elif native == "runtime":
+                values.append(_Call(".runtime"))
             elif native == "plans" and class_name and self.plans(class_name):
                 values.append("plans")
                 plans = True

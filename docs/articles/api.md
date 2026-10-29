@@ -252,7 +252,17 @@ with no byte count. An unknown alias fails the run before study data is read.
 Frames admit UTF-8 strings, 64-bit integers and floats, date32, and zone-free
 second timestamps. Convert other physical types preserving their values before
 exporting; an unsupported type raises `yamaa.Error` with an input diagnostic.
-Project runs, R runs and the command line continue reading files.
+R takes the same alias overrides as a named list of data frames:
+
+```r
+run <- yamaa_spec("adam/adsl.yaml")$run(inputs = list(DM = frame))
+```
+
+R characters and factors become UTF-8 strings, integers become 64-bit integers,
+numeric vectors become floats, `Date` values become whole days and `POSIXct`
+values become whole UTC seconds. Missing values stay missing. Fractional dates
+or timestamps are refused. No R Arrow package is needed for input conversion.
+Project runs and the command line continue reading files.
 
 `run(stream = TRUE)` in R and `run(stream=True)` in Python build a dataset as
 its output is read. The output's whole table, which a run without `stream`

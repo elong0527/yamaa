@@ -13,7 +13,12 @@
 \title{One specification, read only when a method runs}
 \description{
 Holds the path of one specification. Nothing is read until a method runs, and
-each method rereads the files.
+each method rereads the files. The run method accepts \code{inputs = list(DM = df)}
+to replace declared input aliases with data frames. Unspecified inputs keep
+reading files; declared types still apply. Values are copied for eager and
+streamed runs, and reports name memory inputs as \code{memory:<alias>}.
+Characters and factors, integers, numerics, Date and whole-second POSIXct values
+are supported; an R Arrow package is not needed. Project runs keep file inputs.
 }
 \usage{
 yamaa_spec(path)

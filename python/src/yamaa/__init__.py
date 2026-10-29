@@ -37,7 +37,7 @@ _INTERFACE_FIELDS = (
     "missing_features",
 )
 _INTERFACE_REQUEST = {
-    "version": 7,
+    "version": 8,
     "required": ["structured_records", "arrow_c_stream", "plan_reuse"],
     "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],
 }
