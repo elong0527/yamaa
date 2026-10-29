@@ -560,15 +560,29 @@ fn plans_of(holder: &Option<Rc<Value>>) -> Option<&yamaa::Plans> {
 fn spec_run(
     specification: Raw,
     project: Robj,
-    version: Raw,
-    capabilities: List,
+    runtime: List,
     plans: Robj,
     stream: bool,
     progress: Robj,
+    inputs: Robj,
 ) -> List {
     reply(|| {
+        if runtime.len() != 2 {
+            return Err("invalid runtime context".into());
+        }
+        let version = runtime
+            .elt(0)
+            .ok()
+            .and_then(|value| value.as_raw())
+            .ok_or("runtime version must be UTF-8 bytes")?;
+        let capabilities = runtime
+            .elt(1)
+            .ok()
+            .and_then(|value| value.as_list())
+            .ok_or("runtime capabilities must be a list")?;
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
+        let inputs = crate::input_frames::import(&specification, &inputs)?;
         let holder = held_plans(&plans)?;
         let plans = plans_of(&holder);
         if stream {
@@ -579,8 +593,9 @@ fn spec_run(
                 self::progress(&progress)?,
             );
             let token = crate::interrupt::stream_token();
-            let request =
-                spec_request(&engine, &specification, project.as_deref()).cancel_with(&token);
+            let request = spec_request(&engine, &specification, project.as_deref())
+                .cancel_with(&token)
+                .inputs(inputs);
             let run = match plans {
                 Some(plans) => request.reusing(plans),
                 None => request,
@@ -595,8 +610,9 @@ fn spec_run(
             &version,
             (Some(capabilities), &progress),
             |engine, token| {
-                let request =
-                    spec_request(engine, &specification, project.as_deref()).cancel_with(token);
+                let request = spec_request(engine, &specification, project.as_deref())
+                    .cancel_with(token)
+                    .inputs(inputs);
                 match plans {
                     Some(plans) => request.reusing(plans),
                     None => request,

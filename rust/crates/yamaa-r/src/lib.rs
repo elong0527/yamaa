@@ -5,6 +5,7 @@ mod arrow_stream;
 mod context_values;
 mod function_callback;
 mod handle;
+mod input_frames;
 mod interface;
 mod interrupt;
 mod progress;

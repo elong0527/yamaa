@@ -37,6 +37,7 @@ class RenderingTests(unittest.TestCase):
             if isinstance(node, ast.FunctionDef) and node.name == "run"
         )
         self.assertIn("inputs", [arg.arg for arg in method.args.kwonlyargs])
+        self.public.public["types"]["input_frames"].pop("r")
         self.assertEqual(
             self.public._r_signature(run), "stream = FALSE, progress = NULL"
         )

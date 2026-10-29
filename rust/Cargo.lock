@@ -1415,6 +1415,7 @@ dependencies = [
 name = "yamaa-r"
 version = "0.6.2"
 dependencies = [
+ "arrow-array",
  "extendr-api",
  "yamaa",
  "yamaa-boundary",

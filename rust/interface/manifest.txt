@@ -302,7 +302,7 @@ public.types.optional_path: python str or os.PathLike or None, unannotated; r ch
 public.types.text: python str; r character(1)
 public.types.optional_text: python str | None; r character(1) or NULL
 public.types.progress: python a callable of one dict, keys in records.progress_event order, or None; r a function of one named list, names in records.progress_event order, or NULL
-public.types.input_frames: python dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow
+public.types.input_frames: python dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow; r named list of data.frames or NULL
 public.types.count: python int; r numeric(1), a whole number
 public.types.flag: python bool; r logical(1)
 public.types.names: python list[str]; r character()

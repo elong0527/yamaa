@@ -33,8 +33,8 @@
   .Call(wrap__plans, handle)
 }
 
-.native_spec_run <- function(specification, project, version, capabilities, plans, stream, progress) {
-  .Call(wrap__spec_run, specification, project, version, capabilities, plans, stream, progress)
+.native_spec_run <- function(specification, project, runtime, plans, stream, progress, inputs) {
+  .Call(wrap__spec_run, specification, project, runtime, plans, stream, progress, inputs)
 }
 
 .native_spec_resolve <- function(specification, project, version) {
@@ -244,7 +244,7 @@
 # The interface handshake (rust/interface/README.md): .onLoad sends this
 # request before any other native call, and a refusal stops the load.
 .interface_request <- list(
-  version = 7L,
+  version = 8L,
   required = c("structured_records", "arrow_c_stream", "plan_reuse"),
   optional = c("format_yaml", "format_parquet", "format_readstat", "format_odm")
 )

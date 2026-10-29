@@ -1,5 +1,6 @@
 """Owned Arrow input overrides from the shared memory-inputs truth (#4086)."""
 
+import datetime
 import json
 import tempfile
 import unittest
@@ -211,6 +212,55 @@ class MemoryInputs(unittest.TestCase):
                 with self.assertRaises(type(original)) as caught:
                     self.spec.run(inputs={"SRC": InterruptingProvider()})
                 self.assertIs(caught.exception, original)
+
+    def test_all_admitted_scalar_kinds_and_nulls_share_the_authored_csv(self):
+        case = TRUTH["typed"]
+        arrays = {}
+        for column in case["columns"]:
+            kind = column["kind"]
+            values = column["values"]
+            if kind in {"date", "datetime"}:
+                parser = (
+                    datetime.date.fromisoformat
+                    if kind == "date"
+                    else datetime.datetime.fromisoformat
+                )
+                values = [None if value is None else parser(value) for value in values]
+            arrow_type = {
+                "int": pa.int64(),
+                "str": pa.string(),
+                "float": pa.float64(),
+                "date": pa.date32(),
+                "datetime": pa.timestamp("s"),
+            }[kind]
+            arrays[column["name"]] = pa.array(values, type=arrow_type)
+        path = self.root / "typed.yaml"
+        path.write_text(case["specification"], encoding="utf-8")
+        run = yamaa.spec(path).run(inputs={"SRC": pa.table(arrays)})
+        self.assertEqual((run.status, run.issues.to_pylist()), ("succeeded", []))
+        run.save()
+        self.assertEqual(
+            (self.root / "typed.csv").read_text(encoding="utf-8"), case["csv"]
+        )
+
+    def test_empty_frames_keep_their_declared_schema(self):
+        empty = pa.table(
+            {name: pa.array([], type=pa.int64()) for name in TRUTH["columns"]}
+        )
+        self.assert_saved(
+            self.spec.run(inputs={"SRC": empty, "AUX": empty}), TRUTH["empty_csv"]
+        )
+
+    def test_zero_column_frames_keep_their_rows_for_eager_and_deferred_runs(self):
+        truth = TRUTH["zero_columns"]
+        path = self.root / "zero-columns.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        for case in truth["cases"]:
+            empty = pa.table({"discard": range(case["rows"])}).drop(["discard"])
+            for stream in (False, True):
+                with self.subTest(rows=case["rows"], stream=stream):
+                    run = yamaa.spec(path).run(stream=stream, inputs={"SRC": empty})
+                    self.assert_saved(run, case["csv"])
 
     def test_invalid_host_shapes_raise_the_native_refusal_class(self):
         for value in ([], {1: pa.table({"ID": [1]})}, {"SRC": object()}):

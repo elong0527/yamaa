@@ -24,6 +24,8 @@ yamaa = { path = "../yamaa" }
 # The interface handshake, the gate and the handle census.
 yamaa-boundary = { path = "../yamaa-boundary" }
 extendr-api = "0.9.0"
+# Build Arrow input streams from R vectors, using the facade's Arrow major.
+arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
 
 [lints]
 workspace = true

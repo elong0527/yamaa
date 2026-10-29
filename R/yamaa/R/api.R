@@ -84,9 +84,45 @@
 
 .version <- function() charToRaw(as.character(getRversion()))
 
+# One native runtime context: version and the existing host capabilities.
+.runtime <- function() list(.version(), .capabilities())
+
 .capabilities <- function() {
   capabilities <- .yamaa_locked_host_capabilities()
   list(capabilities$verify, capabilities$resolve, .project_condition_details)
+}
+
+# Frames cross as a closed transport. R only preserves its vector kinds and
+# turns names/text into checked UTF-8 bytes; the native module builds Arrow.
+.input_frames <- function(inputs, what) {
+  if (is.null(inputs)) return(NULL)
+  if (!is.list(inputs) || is.data.frame(inputs)) {
+    .refuse_argument("`inputs` must be a named list of data frames")
+  }
+  aliases <- names(inputs)
+  if (length(inputs) && (is.null(aliases) || anyNA(aliases) ||
+      any(!nzchar(aliases)) || anyDuplicated(aliases))) {
+    .refuse_argument("input aliases must be non-missing unique names")
+  }
+  lapply(seq_along(inputs), function(index) {
+    frame <- inputs[[index]]
+    if (!is.data.frame(frame)) .refuse_argument("each input must be a data frame")
+    names <- lapply(names(frame), .text, what = "input column")
+    columns <- lapply(seq_along(frame), function(column) {
+      value <- frame[[column]]
+      if (!is.null(dim(value)) || length(value) != nrow(frame)) {
+        .refuse_argument("input columns must be vectors with one value per row")
+      }
+      if (is.factor(value)) value <- as.character(value)
+      if (is.character(value)) {
+        value <- unname(value)
+        list(charToRaw("str"), lapply(seq_along(value), function(row) {
+          if (is.na(value[[row]])) NULL else .text(value[[row]], "input value")
+        }))
+      } else list(charToRaw("native"), value)
+    })
+    list(.text(aliases[[index]], "input alias"), list(names, columns, as.double(nrow(frame))))
+  })
 }
 
 # Locked bindings refuse assignment, so a binding only reads.

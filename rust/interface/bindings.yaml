@@ -369,7 +369,7 @@ public:
     progress:
       python: "a callable of one dict, keys in records.progress_event order, or None"
       r: "a function of one named list, names in records.progress_event order, or NULL"
-    input_frames: {python: "dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow"}
+    input_frames: {python: "dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow", r: "named list of data.frames or NULL"}
     count: {python: int, r: "numeric(1), a whole number"}
     flag: {python: bool, r: "logical(1)"}
     names: {python: "list[str]", r: "character()"}
@@ -1323,11 +1323,11 @@ r:
           args:
             specification: raw
             project: robj
-            version: raw
-            capabilities: r_list
+            runtime: r_list
             plans: robj
             stream: bool
             progress: robj
+            inputs: robj
           returns: r_reply
         - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
         - name: read_odm

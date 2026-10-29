@@ -178,16 +178,16 @@ format.yamaa_submission <- function(x, ...) {
     )))
   }
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
-  object$run <- function(stream = FALSE, progress = NULL) {
+  object$run <- function(stream = FALSE, progress = NULL, inputs = NULL) {
     plans <<- .reply(.native_plans(plans))
     .run(.reply(.native_spec_run(
       path,
       project,
-      .version(),
-      .capabilities(),
+      .runtime(),
       plans,
       .flag(stream, "stream"),
-      .progress(progress, "progress")
+      .progress(progress, "progress"),
+      .input_frames(inputs, "inputs")
     )))
   }
   .object(object, "yamaa_spec")
