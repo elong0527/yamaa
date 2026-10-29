@@ -113,6 +113,22 @@ class MemoryInputs(unittest.TestCase):
         )
         self.assert_saved(run, TRUTH["all_memory_csv"])
 
+    def test_a_provider_cannot_change_the_input_entries_being_imported(self):
+        # Python providers can mutate their caller's dictionary during export.
+        (self.root / "data.csv").unlink()
+        inputs = {}
+
+        class MutatingProvider(ArrowProvider):
+            def __arrow_c_stream__(self, requested_schema=None):
+                inputs.clear()
+                return super().__arrow_c_stream__(requested_schema)
+
+        inputs.update(
+            SRC=MutatingProvider(frame(TRUTH["cases"][0], "arrow")),
+            AUX=frame(TRUTH["cases"][1], "arrow"),
+        )
+        self.assert_saved(self.spec.run(inputs=inputs), TRUTH["all_memory_csv"])
+
     def test_a_deferred_run_keeps_owned_values_after_the_frame_changes(self):
         case = TRUTH["cases"][0]
         original = frame(case, "pandas")

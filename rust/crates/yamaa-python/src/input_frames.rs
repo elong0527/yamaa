@@ -20,8 +20,11 @@ pub(crate) fn import(
             "inputs must be a dictionary of input aliases and frames",
         )
     })?;
+    // A provider can mutate the caller's dictionary while exporting its
+    // stream. Retain every entry before invoking Python code.
+    let entries = inputs.iter().collect::<Vec<_>>();
     let mut frames = BTreeMap::new();
-    for (name, frame) in inputs.iter() {
+    for (name, frame) in entries {
         let alias = name
             .extract::<String>()
             .map_err(|_| crate::errors::message(py, false, "input aliases must be text"))?;
