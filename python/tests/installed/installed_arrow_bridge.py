@@ -144,7 +144,7 @@ class ArrowBridge(unittest.TestCase):
             capsule = exporter.__arrow_c_stream__()
             del capsule
             gc.collect()
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(yamaa.Error):
             exporter.__arrow_c_stream__(
                 pa.schema([("I", pa.int32())]).__arrow_c_schema__()
             )

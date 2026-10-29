@@ -68,6 +68,6 @@ def test_any_other_text_raises_the_refusal_with_its_issue(file_type):
 
 
 @pytest.mark.parametrize("value", [None, 1, b"spec", ["spec"]])
-def test_an_argument_that_is_not_text_is_a_type_error(value):
-    with pytest.raises(TypeError):
+def test_an_argument_that_is_not_text_is_a_package_error(value):
+    with pytest.raises(yamaa.Error):
         yamaa.schema(value)
