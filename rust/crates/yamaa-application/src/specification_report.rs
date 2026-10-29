@@ -761,18 +761,21 @@ pub fn build_result<'a, C, E>(
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
 ) -> Result<BuildResult, Refusal<'a, E>> {
-    build_result_with(run, attempt, id, facts, HostView::Table)
+    build_result_with(run, attempt, id, facts, HostView::Table, &[])
 }
 
 /// [`build_result`] with the host view `view`: a [`HostView::Deferred`]
 /// result builds no table, and its report, issues and status are the
 /// [`HostView::Table`] result's.
+/// `overridden` identifies memory inputs even when inspection or an earlier
+/// capture prevented this attempt from entering those sources.
 pub fn build_result_with<'a, C, E>(
     run: &PreparedRun,
     attempt: &'a Attempt<C, E>,
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
     view: HostView,
+    overridden: &[&str],
 ) -> Result<BuildResult, Refusal<'a, E>> {
     let supplied = crate::project_report::supplied(attempt, facts)?;
     let activation = crate::project_report::activation_evidence(run, attempt)?;
@@ -793,6 +796,7 @@ pub fn build_result_with<'a, C, E>(
             .result
             .as_ref()
             .map_or(&[], |dataset| dataset.template_rows.as_slice()),
+        overridden,
     );
     Ok(prepare_result(run, execution, id, report, &facts, view)?)
 }

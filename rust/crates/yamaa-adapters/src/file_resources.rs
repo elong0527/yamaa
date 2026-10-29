@@ -305,6 +305,12 @@ impl RunScope {
         self
     }
 
+    /// Aliases supplied in memory, including inputs an attempt never reaches.
+    /// Reporting reads this provenance without inspecting or capturing data.
+    pub fn input_aliases(&self) -> impl Iterator<Item = &str> {
+        self.frames.keys().map(String::as_str)
+    }
+
     /// Offer artifacts the caller already built to this run's saved links.
     /// Links without a held artifact read the saved file their path names.
     pub fn hold(&mut self, held: Arc<HeldArtifacts>) {

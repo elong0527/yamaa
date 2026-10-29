@@ -2,6 +2,10 @@
   "version": "1",
   "families": {
     "memory-inputs": {
+      "report_refusals": [
+        {"name": "missing fallback before capture", "fallback_hex": null},
+        {"name": "invalid UTF-8 fallback during capture", "fallback_hex": "ff"}
+      ],
       "missing_type": {
         "declaration_from": "SRC: {path: data.csv, types: {ID: int, VALUE: int}}",
         "declaration_to": "SRC: {path: data.csv, types: {ID: int, VALUE: int, ABSENT: int}}",
