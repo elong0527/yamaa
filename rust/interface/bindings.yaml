@@ -369,6 +369,7 @@ public:
     progress:
       python: "a callable of one dict, keys in records.progress_event order, or None"
       r: "a function of one named list, names in records.progress_event order, or NULL"
+    input_frames: {python: "dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow"}
     count: {python: int, r: "numeric(1), a whole number"}
     flag: {python: bool, r: "logical(1)"}
     names: {python: "list[str]", r: "character()"}
@@ -691,8 +692,8 @@ public:
         # #3697: with stream, nothing is read until the output is.
         - name: run
           kind: method
-          args: {stream: flag = false, progress: progress = None}
-          keyword_only: [stream, progress]
+          args: {stream: flag = false, progress: progress = None, inputs: input_frames = None}
+          keyword_only: [stream, progress, inputs]
           returns: Run
           raises: refusal
           calls: spec_run
@@ -1195,6 +1196,7 @@ python:
         plans: "optional<_Plans> = None"
         stream: "bool = false"
         progress: "optional<host_callback> = None"
+        inputs: "optional<host_object> = None"
       returns: _Run
     - kind: function
       name: _spec_resolve

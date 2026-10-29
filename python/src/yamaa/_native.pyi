@@ -90,6 +90,7 @@ def _spec_run(
     plans: _Plans | None = None,
     stream: bool = False,
     progress: object | None = None,
+    inputs: object | None = None,
 ) -> _Run: ...
 def _spec_resolve(
     specification: str, project: str | None = None

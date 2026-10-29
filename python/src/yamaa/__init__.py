@@ -37,7 +37,7 @@ _INTERFACE_FIELDS = (
     "missing_features",
 )
 _INTERFACE_REQUEST = {
-    "version": 6,
+    "version": 7,
     "required": ["structured_records", "arrow_c_stream", "plan_reuse"],
     "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],
 }
@@ -326,7 +326,13 @@ class Spec(_Lazy):
         """The specification after its layers are composed."""
         return _native._spec_resolve(self._path, self._project)
 
-    def run(self, *, stream: bool = False, progress=None) -> Run:
+    def run(
+        self,
+        *,
+        stream: bool = False,
+        progress=None,
+        inputs: dict[str, object] | None = None,
+    ) -> Run:
         """Build the dataset in memory, or with stream as its output is read; `progress` is called with each progress event."""
         return Run(
             _native._spec_run(
@@ -335,6 +341,7 @@ class Spec(_Lazy):
                 self._plans,
                 _flag(stream, "stream"),
                 progress,
+                inputs,
             )
         )
 
