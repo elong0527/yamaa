@@ -1,6 +1,6 @@
 "use strict";
 
-// The panel under the datasets: Comments, then the assessment materials. A
+// The panel under the datasets: Your review, then the assessment materials. A
 // tab shows its pane alone; with "Side by side" on, tabs toggle and up to
 // three panes share the row, in tab order. A pane holding several documents
 // shows the one its picker names. Without this script the tabs and the switch
@@ -75,7 +75,7 @@
     render();
   });
 
-  // A link into the panel (#comments, #code, a code line) opens the tab and
+  // A link into the panel (#your-review, #code, a code line) opens the tab and
   // the document that hold it.
   function reveal() {
     const target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
