@@ -42,9 +42,6 @@ PROMPT_TIERS = (
     ("brief", "Brief", "the opening, columns, and paths only"),
 )
 SOLUTION_FILES = ("result.R", "result.py", "result.sas")
-# The review ask names the README's standard when it is one of these; other
-# README standards (CDISC, TEST) read as "CDISC standards".
-REVIEW_STANDARDS = ("SDTM", "ADaM", "SEND")
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
 # outlive any deployment. Each benchmark maps to one discussion whose title is
@@ -1018,7 +1015,7 @@ def render_benchmark(benchmark, previous=None, next=None):
             output_caption = "Expected artifacts"
 
     # What reviewers are asked to challenge, the task included: a short survey
-    # on the summary and the inputs, then whether the benchmark is ready to
+    # on the use case and the data structures, then whether it is ready to
     # finalize. Everything in the tabs beside Comments is background.
     if is_failure:
         questions = (
@@ -1040,24 +1037,15 @@ def render_benchmark(benchmark, previous=None, next=None):
                 AGREEMENT,
             ),
         )
-        suggestion_hint = (
-            "What would you change? Name the rule, input or message, and what it "
-            "should be."
-        )
     else:
-        standard = metadata["standard"]
-        standard = (
-            f"CDISC {standard}" if standard in REVIEW_STANDARDS else "CDISC standards"
-        )
         questions = (
             (
                 "task",
                 "#readme",
                 "Task",
                 (
-                    "Would a real study need this derivation, specified this way, and "
-                    f"does it follow {standard}: variable names, controlled terms, "
-                    "record structure?"
+                    "Would you agree that the benchmark use case represents real "
+                    "data derivation in clinical trials?"
                 ),
                 AGREEMENT,
             ),
@@ -1066,36 +1054,34 @@ def render_benchmark(benchmark, previous=None, next=None):
                 "#inputs",
                 "Inputs",
                 (
-                    "Do the inputs look like data collected in a real study, and do "
-                    "they include the situations you would expect?"
+                    "Would you agree that the inputs and outputs represent real "
+                    "data structures collected in clinical trials?"
                 ),
                 AGREEMENT,
             ),
-        )
-        suggestion_hint = (
-            "What would you change? Name the variable, row or rule, and what it "
-            "should be. Flag any rule that is ambiguous or that a sponsor would "
-            "handle differently."
         )
     questions += (
         (
             "readiness",
             LIFECYCLE_URL,
             "Overall",
-            "Is this benchmark ready to finalize?",
+            "Would you agree that the benchmark is ready to finalize?",
             READINESS,
         ),
     )
     review_ask = (
         "<p>As a clinical trial statistician or programmer, answer three short "
         'questions in <a href="#your-review">Your review</a>: the task, the '
-        "inputs, and whether this benchmark is ready to finalize. Propose a fix "
-        "with the <strong>Edit</strong> button on any source file, or discuss it "
-        'in <a href="#comments">Comments</a>.</p><p class="review-ask-note">The '
+        "inputs and outputs, and whether this benchmark is ready to finalize. "
+        "Propose a fix with the <strong>Edit</strong> button on any source file, "
+        'or discuss it in <a href="#comments">Comments</a>.</p>'
+        '<p class="review-ask-note">The '
         "other tabs beside Comments are background for assessment, not under "
         "review.</p>"
     )
-    review_form = render_review_form(benchmark.name, questions, suggestion_hint)
+    review_form = render_review_form(
+        benchmark.name, questions, "Suggestions to finalize the benchmark"
+    )
 
     def metric_cell(count, label, cls):
         klass = f' class="{cls}"' if cls else ""

@@ -48,11 +48,13 @@ keep the original source in a collapsed disclosure below the rendered view.
 
 A page asks clinical trial statisticians and programmers to review the
 benchmark itself in a short survey under "Your review", as the Pilot 7
-dashboards do: does the task follow CDISC as a real study would need it, do the
-inputs look like collected trial data, and is the benchmark ready to finalize,
-plus a free-text box for suggestions. The questions and their fixed choices are
-declared once in `generate.py`; `review-form.js` reads them back from the page,
-keeps a draft in the browser, and opens GitHub's new-discussion composer in the
+dashboards do: does the use case represent real data derivation in clinical
+trials, do the inputs and outputs represent real trial data structures, and is
+the benchmark ready to finalize, plus a free-text box for suggestions to
+finalize it. Failure benchmarks ask whether the specification error is realistic
+and whether the inputs trigger the stated failure. The questions and their fixed
+choices are declared once in `generate.py`; `review-form.js` reads them back from
+the page, keeps a draft in the browser, and opens GitHub's new-discussion composer in the
 Comments category with the answers filled in, so the static page holds no
 credentials. The summary, the
 inputs, and the expected output carry an "Under review" chip, and every source
