@@ -1,15 +1,15 @@
 # Issue locations (P-ISSUE-1, D28) through the public R API. Each case of the
 # shared issue-locations truth writes its files, makes one call and compares
 # its first issue's file, line and column with the authored location, one case
-# for each rule of docs/design/interface-1.0/api.md, "Issue locations": a
-# mapping member at its key, an expanded long form at the written node, a
-# layered value in the layer whose value took effect, a refusal at the parent
-# or include entry of a layer above the entry in that layer, a project path in
-# the project file or in the file it lists, a data file's
-# value at its declaration, a file the YAML reader refused at the position it
-# reported, and an issue without a spec path without a location. Python's
-# installed_issue_locations.py and the command line's parity test check the
-# same truth.
+# for each rule of docs/design/interface-1.0/api.md at tag yamaa-v0.6.2,
+# "Issue locations": a mapping member at its key, an expanded long form at the
+# written node, a layered value in the layer whose value took effect, a
+# refusal at the parent or include entry of a layer above the entry in that
+# layer, a project path in the project file or in the file it lists, a data
+# file's value at its declaration, a file the YAML reader refused at the
+# position it reported, and an issue without a spec path without a location.
+# Python's installed_issue_locations.py and the command line's parity test
+# check the same truth.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.

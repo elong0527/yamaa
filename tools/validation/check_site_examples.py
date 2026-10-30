@@ -19,8 +19,8 @@ CONTRIBUTING.md's "Documentation" section states the convention for authors.
 No page the check reads holds a 0.5 example since #3703 rewrote the schema
 introduction, so REFUSE_SCHEMA_VERSION is on: a block that declares
 `schema_version`, the 0.5 header, fails, even one that starts with
-`# fragment`. The design record (`docs/design/`) and the release notes
-(`docs/releases/`) keep their 0.5 examples, and this check reads neither.
+`# fragment`. The release notes (`docs/releases/`) keep their 0.5 examples,
+and this check does not read them.
 """
 
 import argparse

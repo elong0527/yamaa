@@ -197,8 +197,8 @@ class Blocks(unittest.TestCase):
             "python/README.md",
             "R/yamaa/README.md",
         )
-        # The design record and the release notes keep their 0.5 examples.
-        unread = ("docs/design/record.md", "docs/releases/0.7.0.md", "CONTRIBUTING.md")
+        # The release notes keep their 0.5 examples.
+        unread = ("docs/releases/0.7.0.md", "CONTRIBUTING.md")
         for name in read + unread:
             support.write(self.root, name, page(INVALID))
         self.assertEqual(

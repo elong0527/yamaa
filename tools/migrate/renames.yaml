@@ -3,8 +3,9 @@
 # Phase 0 of #3030, item 2. Status: approved. The owner approved the table
 # as a whole on #3030 (D58, 2026-10-19), with the answers to the design
 # document's questions (D59 to D70). The design document
-# docs/design/interface-1.0.md gives the reasons, the measurements and the
-# options not taken; the item ids below (P-...) are its RFC items.
+# docs/design/interface-1.0.md, kept at tag yamaa-v0.6.2, gives the reasons,
+# the measurements and the options not taken; the item ids below (P-...) are
+# its RFC items.
 #
 # What this file is. It maps every field, registry keyword and enumerated
 # value of the 0.5.0 schemas (yaml/schema*.yaml at the yamaa-v0.5.0 tag),
@@ -91,7 +92,7 @@ format: yamaa.rename-table
 format_version: 1
 status: approved
 measured_at: 1758ad145
-design: docs/design/interface-1.0.md
+design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
   entries: 668
   changes: 99

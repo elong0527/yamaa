@@ -36,9 +36,9 @@
 //! - A case that needs a feature this build does not compile is not covered:
 //!   it is `skipped`, never passed (D105, D108).
 //!
-//! The result keeps the shape of `docs/design/interface-1.0/api.md`: a
-//! status, one row per case and the engine [`Info`]. Its printed text names
-//! the adapters that no case covered in this build: those
+//! The result keeps the shape of `docs/design/interface-1.0/api.md` at tag
+//! `yamaa-v0.6.2`: a status, one row per case and the engine [`Info`]. Its
+//! printed text names the adapters that no case covered in this build: those
 //! `benchmarks/selftest.yaml` lists under `uncovered`, and those that only a
 //! skipped case exercises.
 

@@ -88,7 +88,7 @@ mod declaration {
                 project
             };
             let converted =
-                repository("docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml");
+                repository("rust/tests/declaration-examples/adam-adsl-bmi/project.yaml");
             let project = lower(&converted);
             // The project lists its function file and holds the R lock alone.
             let files = project
@@ -124,7 +124,7 @@ mod declaration {
                 );
             }
             let project = lower(&repository(
-                "docs/design/interface-1.0/examples/sdtm-dm-metadata/project.yaml",
+                "rust/tests/declaration-examples/sdtm-dm-metadata/project.yaml",
             ));
             assert!(project.functions.is_none());
             assert!(!project.codelists.is_empty());
@@ -230,7 +230,7 @@ mod declaration {
             let study = Study::new();
             let example = |name: &str| {
                 fs::read(repository(&format!(
-                    "docs/design/interface-1.0/examples/adam-adsl-bmi/{name}"
+                    "rust/tests/declaration-examples/adam-adsl-bmi/{name}"
                 )))
                 .unwrap()
             };

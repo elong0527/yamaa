@@ -1,10 +1,10 @@
 """Compare the frozen interface manifests with the latest release (#3030 D20).
 
 From 1.0.0, every 1.x release keeps the 1.0 interface (#3030 section 2.11,
-P-STAB-1; docs/design/interface-1.0/stability.md). This check, which
-`make check-repository`, `make quick` and CI's repository job run, compares
-each interface manifest of the working tree with the same manifest at a
-baseline release tag, and refuses a breaking change.
+P-STAB-1; docs/design/interface-1.0/stability.md at tag yamaa-v0.6.2). This
+check, which `make check-repository`, `make quick` and CI's repository job
+run, compares each interface manifest of the working tree with the same
+manifest at a baseline release tag, and refuses a breaking change.
 
 Baseline. The release identity comes from tools/packaging/release.toml,
 through tools/packaging/release_identity.py, and its major version M decides:

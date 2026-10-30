@@ -33,7 +33,7 @@ from tools.validation.repository_schema import SchemaSourceError
 from tools.validation.schema_bundle import Bundle, parse_type, type_text
 
 SCHEMAS = ROOT / "yaml"
-EXAMPLES = ROOT / "docs/design/interface-1.0/examples"
+EXAMPLES = ROOT / "rust/tests/declaration-examples"
 ABSENT = object()
 
 

@@ -1,12 +1,12 @@
 """Installed status and printing of every result and lazy object (D36, D37).
 
 Every printed line comes from the shared truth, which R reads too: its lines
-were written from the forms of docs/design/interface-1.0/api.md and the
-message templates of yaml/conditions.yaml before the engine ran. `{path}`
-stands for the path the test gave, and `{root}` for the study directory as
-an issue location names it. Rust renders the text, so `repr()` and
-`str()` return it unchanged; the facade's own tests cover each form further
-(rust/crates/yamaa/tests/printed_text.rs).
+were written from the forms of docs/design/interface-1.0/api.md at tag
+yamaa-v0.6.2 and the message templates of yaml/conditions.yaml before the
+engine ran. `{path}` stands for the path the test gave, and `{root}` for the
+study directory as an issue location names it. Rust renders the text, so
+`repr()` and `str()` return it unchanged; the facade's own tests cover each
+form further (rust/crates/yamaa/tests/printed_text.rs).
 """
 
 import os
