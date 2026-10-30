@@ -739,6 +739,12 @@ class DashboardTests(unittest.TestCase):
             with self.subTest(case=name):
                 page, questions = survey(name)
                 self.assertEqual(questions, expected, name)
+                if name == "negative-ambiguous-type":
+                    self.assertIn(
+                        "Your review</a>: the task, the inputs, and whether this "
+                        "benchmark is ready to finalize.",
+                        page,
+                    )
                 # One free-text box, a script-only form, and GitHub's composer.
                 self.assertEqual(page.count('name="suggestions"'), 1, name)
                 self.assertIn(

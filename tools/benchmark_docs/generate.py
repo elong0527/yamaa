@@ -1069,10 +1069,11 @@ def render_benchmark(benchmark, previous=None, next=None):
             READINESS,
         ),
     )
+    data_scope = "inputs" if is_failure else "inputs and outputs"
     review_ask = (
         "<p>As a clinical trial statistician or programmer, answer three short "
         'questions in <a href="#your-review">Your review</a>: the task, the '
-        "inputs and outputs, and whether this benchmark is ready to finalize. "
+        f"{data_scope}, and whether this benchmark is ready to finalize. "
         "Propose a fix with the <strong>Edit</strong> button on any source file, "
         'or discuss it in <a href="#comments">Comments</a>.</p>'
         '<p class="review-ask-note">The '
