@@ -125,11 +125,16 @@ python -m pip install yamaa                     # the newest release
 python -m pip install --pre yamaa==<candidate>  # a release candidate
 ```
 
-### R:
+### R
 
-from CRAN 
+Install yamaa from the assets of its
+[GitHub release](https://github.com/elong0527/yamaa/releases/latest): a binary
+package for Windows or macOS and your R series, or the source package. The
+[R package page](R/yamaa/README.md#installation) gives every command.
+`install.packages("yamaa")` installs the older version that CRAN serves.
+
 ```r
-install.packages("yamaa")
+install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
 ```r
