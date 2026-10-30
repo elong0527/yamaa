@@ -1,5 +1,6 @@
 import csv
 import functools
+import html
 import re
 import shutil
 import tempfile
@@ -189,7 +190,14 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(
             content.sections,
-            ["readme", "specification", "inputs", "outputs", "discussion"],
+            [
+                "readme",
+                "specification",
+                "inputs",
+                "outputs",
+                "your-review",
+                "discussion",
+            ],
         )
         self.assertEqual(content.downloads, [])
         self.assertEqual(
@@ -463,35 +471,110 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertNotIn("<select", single)
 
-    def test_review_ask_challenges_the_task_inputs_and_result(self):
-        def ask(name):
+    def test_review_survey_asks_three_questions_with_fixed_choices(self):
+        def survey(name):
             page = generate.render_benchmark(generate.BENCHMARKS / name).decode("ascii")
-            return page, page.split('<div class="review-ask-body">', 1)[1].split(
-                "</div>", 1
-            )[0]
+            questions = [
+                (
+                    name_,
+                    target,
+                    label,
+                    html.unescape(prompt),
+                    tuple(re.findall(r'name="[^"]+" value="([^"]+)"', choices)),
+                )
+                for label, target, prompt, choices in re.findall(
+                    r'<fieldset class="review-question" data-label="([^"]+)">'
+                    r'<legend><a href="([^"]+)">.*?<span class="review-prompt">'
+                    r"([^<]+)</span></legend>(.*?)</fieldset>",
+                    page,
+                )
+                for name_ in re.findall(r'name="([^"]+)"', choices)[:1]
+            ]
+            return page, questions
 
-        page, positive = ask(BENCHMARK.name)
-        self.assertIn("As a clinical trial statistician or programmer", positive)
-        self.assertIn(
-            'describe a problem in <a href="#comments">Comments</a>', positive
+        agreement = ("Agree", "Disagree", "Need clarification")
+        readiness = (
+            "readiness",
+            generate.REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle",
+            "Overall",
+            "Is this benchmark ready to finalize?",
+            ("Ready", "Ready after minor fixes", "Needs major changes", "Unsure"),
         )
-        self.assertIn("<strong>Edit</strong> button on any source file", positive)
-        self.assertEqual(
-            re.findall(
-                r'<li><a href="([^"]+)"><strong>([^<]+):</strong></a>', positive
+        inputs = (
+            "inputs",
+            "#inputs",
+            "Inputs",
+            "Do the inputs look like data collected in a real study, and do they "
+            "include the situations you would expect?",
+            agreement,
+        )
+
+        def task(standard):
+            return (
+                "task",
+                "#readme",
+                "Task",
+                "Would a real study need this derivation, specified this way, and "
+                f"does it follow {standard}: variable names, controlled terms, "
+                "record structure?",
+                agreement,
+            )
+
+        cases = (
+            (BENCHMARK.name, [task("CDISC ADaM"), inputs, readiness]),
+            ("sdtm-dm-basic", [task("CDISC SDTM"), inputs, readiness]),
+            ("send-bw-sendig311", [task("CDISC SEND"), inputs, readiness]),
+            # Metadata outside SDTM, ADaM or SEND reads as CDISC standards.
+            ("schema-source-ordinal", [task("CDISC standards"), inputs, readiness]),
+            (
+                "negative-ambiguous-type",
+                [
+                    (
+                        "task",
+                        "#readme",
+                        "Task",
+                        "Is this a specification error a study team could "
+                        "realistically make, and should the build stop on it "
+                        "rather than continue?",
+                        agreement,
+                    ),
+                    (
+                        "inputs",
+                        "#inputs",
+                        "Inputs",
+                        "Do the inputs trigger the failure for the reason the "
+                        "summary gives?",
+                        agreement,
+                    ),
+                    readiness,
+                ],
             ),
-            [
-                ("#readme", "Task"),
-                ("#inputs", "Inputs"),
-                ("#outputs", "Expected output"),
-            ],
         )
-        self.assertIn("Would a real study need this derivation", positive)
-        self.assertIn("Does it follow CDISC ADaM: variable names", positive)
-        self.assertIn(
-            "Would independent QC programming reproduce every value", positive
+        for name, expected in cases:
+            with self.subTest(case=name):
+                page, questions = survey(name)
+                self.assertEqual(questions, expected, name)
+                # One free-text box, a script-only form, and GitHub's composer.
+                self.assertEqual(page.count('name="suggestions"'), 1, name)
+                self.assertIn(
+                    f'<form class="review-form" data-benchmark="{name}" '
+                    'data-review-url="https://github.com/elong0527/yamaa/'
+                    'discussions/new?category=comments" novalidate hidden>',
+                    page,
+                )
+
+        page, _ = survey(BENCHMARK.name)
+        ask = page.split('<div class="review-ask-body">', 1)[1].split("</div>", 1)[0]
+        self.assertEqual(
+            ask,
+            "<p>As a clinical trial statistician or programmer, answer three short "
+            'questions in <a href="#your-review">Your review</a>: the task, the '
+            "inputs, and whether this benchmark is ready to finalize. Propose a fix "
+            "with the <strong>Edit</strong> button on any source file, or discuss "
+            'it in <a href="#comments">Comments</a>.</p><p class="review-ask-note">'
+            "The other tabs beside Comments are background for assessment, not "
+            "under review.</p>",
         )
-        self.assertIn("background for assessment, not under review", positive)
         # The summary is challenged too, so it carries the chip with the data.
         self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 3)
         self.assertIn(
@@ -499,25 +582,6 @@ class DashboardTests(unittest.TestCase):
             '<span class="panel-caption">What this benchmark means</span>',
             page,
         )
-        self.assertIn("Does it follow CDISC SDTM:", ask("sdtm-dm-basic")[1])
-        self.assertIn("Does it follow CDISC SEND:", ask("send-bw-sendig311")[1])
-        # Metadata outside SDTM, ADaM or SEND reads as CDISC standards.
-        self.assertIn(
-            "Does it follow CDISC standards:", ask("schema-source-ordinal")[1]
-        )
-        _, negative = ask("negative-ambiguous-type")
-        self.assertEqual(
-            re.findall(
-                r'<li><a href="([^"]+)"><strong>([^<]+):</strong></a>', negative
-            ),
-            [
-                ("#readme", "Task"),
-                ("#inputs", "Inputs"),
-                ("#expected-failure", "Expected failure"),
-            ],
-        )
-        self.assertIn("should the build stop on it rather than continue?", negative)
-        self.assertNotIn("CDISC", negative)
 
     def test_every_source_shown_has_an_edit_link_to_a_file_that_exists(self):
         """The review ask points at the Edit buttons, so no source may lack one."""
