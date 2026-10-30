@@ -33,9 +33,8 @@ determine gallery categories.
 Pass benchmark names instead of `--all` to regenerate only those pages, and
 `--check` to compare bytes without writing. Pinned dependencies and sorted,
 ASCII, timestamp-free output make generation byte-reproducible. The index test
-checks that repeated rendering is stable. The
-generator only displays expected artifacts, it never executes yamaa; comments
-are giscus threads keyed by directory name, with the category ID in `GISCUS`.
+checks that repeated rendering is stable. The generator only displays expected
+artifacts, it never executes yamaa.
 
 SAS transport (`.xpt`) files have no preview pane; their CSV companions show
 the data for review, and the transport files remain in the benchmark source.
@@ -54,13 +53,13 @@ the benchmark ready to finalize, plus a free-text box for suggestions to
 finalize it. Failure benchmarks ask whether the specification error is realistic
 and whether the inputs trigger the stated failure. The questions and their fixed
 choices are declared once in `generate.py`; `review-form.js` reads them back from
-the page, keeps a draft in the browser, and opens GitHub's new-discussion composer in the
-Comments category with the answers filled in, so the static page holds no
-credentials. The summary, the
-inputs, and the expected output carry an "Under review" chip, and every source
-file has an Edit button for proposing a fix. Everything
-else sits in one tab row under the datasets: Comments first, then the
-assessment materials that are not under review -- the mapping spec generated
-from the YAML, the agent prompt tiers, the yamaa code, and the solution written
-without yamaa. A material a benchmark lacks has no tab. "Side by side" opens up
-to three tabs in columns.
+the page, keeps a draft in the browser, and opens GitHub's new-discussion
+composer in the Comments category with the answers filled in, so the static page
+holds no credentials. The summary, inputs, and expected output carry an "Under review"
+chip, and every source file has an Edit button for proposing a fix. Under the
+datasets, "Human review and assessment" holds the "Your review" survey in its
+first tab, with a link to earlier benchmark discussions, followed by assessment
+materials that are not under review -- the mapping spec generated from the
+YAML, the agent prompt tiers, the yamaa code, and the solution written without
+yamaa. A material a benchmark lacks has no tab. "Side by side" opens up to
+three tabs in columns.

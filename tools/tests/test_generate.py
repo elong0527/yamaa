@@ -9,7 +9,7 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest import mock
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from lxml import html as html_tree
 
@@ -383,7 +383,6 @@ class DashboardTests(unittest.TestCase):
                 "specification",
                 "inputs",
                 "outputs",
-                "your-review",
                 "discussion",
             ],
         )
@@ -391,7 +390,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(
             [tab["id"] for tab in content.tabs],
             [
-                "tab-comments",
+                "tab-your-review",
                 "tab-mapping-spec",
                 "tab-prompt",
                 "tab-code",
@@ -584,34 +583,40 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn('id="section-select"', page)
         self.assertNotIn("Jump to section", page)
 
-    def test_comments_map_to_a_stable_discussion_per_benchmark(self):
-        page = benchmark_page().decode("ascii")
-        self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
-        self.assertIn(
-            'data-mapping="specific" data-term="yaml/examples/adam-adae-death" data-strict="1"',
-            page,
-        )
-        self.assertIn('data-repo="elong0527/yamaa"', page)
-        self.assertIn(
-            'data-theme="https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=3"',
-            page,
-        )
-        other = generate.render_benchmark(generate.BENCHMARKS / "sdtm-dm-basic").decode(
-            "ascii"
-        )
-        self.assertIn('data-term="yaml/examples/sdtm-dm-basic"', other)
-
-    def test_giscus_theme_limits_reactions_to_thumbs_with_counts(self):
-        theme = (generate.ROOT / "docs/assets/giscus-yamaa.css").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn('aria-label*="+1"', theme)
-        self.assertIn('aria-label*="-1"', theme)
-        self.assertIn('content: "0"', theme)
-        self.assertIn("content-visibility: visible !important", theme)
-        self.assertIn("visibility: visible !important", theme)
-        self.assertIn("transform: none !important", theme)
-        self.assertIn(".gsc-social-reaction-summary-item-count", theme)
+    def test_review_survey_is_the_first_human_review_and_assessment_tab(self):
+        for name in (BENCHMARK.name, "sdtm-mh-ongoing-conditions"):
+            with self.subTest(case=name):
+                page = generate.render_benchmark(generate.BENCHMARKS / name).decode(
+                    "ascii"
+                )
+                tree = html_tree.fromstring(page)
+                panel = tree.get_element_by_id("discussion")
+                tablist = panel.xpath('.//*[@role="tablist"]')[0]
+                tab = tablist.xpath('./button[@role="tab"]')[0]
+                pane = tree.get_element_by_id(tab.get("aria-controls"))
+                self.assertEqual(
+                    {
+                        "heading": panel.xpath("./header/h2/text()"),
+                        "tablist": tablist.get("aria-label"),
+                        "tab": (tab.get("id"), tab.text, tab.get("aria-selected")),
+                        "pane": (pane.get("id"), pane.get("aria-labelledby")),
+                        "forms": pane.xpath("./form/@data-benchmark"),
+                        "discussions": parse_qs(
+                            urlsplit(pane.xpath("./div/p/a/@href")[0]).query
+                        ),
+                    },
+                    {
+                        "heading": ["Human review and assessment"],
+                        "tablist": "Human review and assessment",
+                        "tab": ("tab-your-review", "Your review", "true"),
+                        "pane": ("your-review", "tab-your-review"),
+                        "forms": [name],
+                        "discussions": {"discussions_q": [f'"{name}" in:title']},
+                    },
+                    name,
+                )
+                self.assertEqual(len(tree.xpath('//*[@id="your-review"]')), 1, name)
+                self.assertNotIn('src="https://giscus.app/client.js"', page, name)
 
     def test_code_panel_generates_host_calls_and_edits_the_metadata_owner(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-basic"
@@ -765,9 +770,8 @@ class DashboardTests(unittest.TestCase):
             'questions in <a href="#your-review">Your review</a>: the task, the '
             "inputs and outputs, and whether this benchmark is ready to finalize. "
             "Propose a fix with the <strong>Edit</strong> button on any source "
-            'file, or discuss it in <a href="#comments">Comments</a>.</p>'
-            '<p class="review-ask-note">'
-            "The other tabs beside Comments are background for assessment, not "
+            'file, or add a suggestion to your review.</p><p class="review-ask-note">'
+            "The other tabs beside Your review are background for assessment, not "
             "under review.</p>",
         )
         # The summary is challenged too, so it carries the chip with the data.
@@ -810,12 +814,12 @@ class DashboardTests(unittest.TestCase):
                     target = generate.ROOT / unquote(links[0][len(prefix) :])
                     self.assertTrue(target.is_file(), links[0])
 
-    def test_comments_lead_the_tabs_and_the_rest_are_not_under_review(self):
+    def test_survey_leads_the_tabs_and_the_rest_are_not_under_review(self):
         content = DashboardContent(benchmark_page().decode("ascii"))
-        comments, *materials = content.tabs
-        self.assertEqual(comments["aria-controls"], "comments")
-        self.assertEqual(comments["aria-selected"], "true")
-        self.assertIn("review-tab", comments["class"].split())
+        review, *materials = content.tabs
+        self.assertEqual(review["aria-controls"], "your-review")
+        self.assertEqual(review["aria-selected"], "true")
+        self.assertIn("review-tab", review["class"].split())
         for tab in materials:
             self.assertEqual(tab["aria-selected"], "false")
             self.assertEqual(tab["aria-describedby"], "not-under-review")
@@ -899,13 +903,13 @@ class DashboardTests(unittest.TestCase):
             return [tab["id"] for tab in DashboardContent(page).tabs]
 
         self.assertEqual(
-            tab_ids("negative-ambiguous-type"), ["tab-comments", "tab-mapping-spec"]
+            tab_ids("negative-ambiguous-type"), ["tab-your-review", "tab-mapping-spec"]
         )
         # A schema benchmark has no Harbor prompt or solutions, so it
         # carries neither tab and lists no solution files.
         self.assertEqual(
             tab_ids("schema-adsl-age-quality"),
-            ["tab-comments", "tab-mapping-spec", "tab-code"],
+            ["tab-your-review", "tab-mapping-spec", "tab-code"],
         )
         page = generate.render_benchmark(
             generate.BENCHMARKS / "schema-adsl-age-quality"

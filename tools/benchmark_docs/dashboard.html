@@ -64,22 +64,17 @@
       </div>
     </div>
     </div>
-    $review_form
     <section id="discussion" class="panel discussion-panel" aria-labelledby="discussion-heading">
-      <header class="panel-header"><h2 id="discussion-heading">Comments and assessment materials</h2><label class="split-toggle" hidden><input type="checkbox" id="split-toggle" role="switch"><span class="switch-track" aria-hidden="true"></span>Side by side<span class="split-hint">up to 3</span></label></header>
+      <header class="panel-header"><h2 id="discussion-heading">Human review and assessment</h2><label class="split-toggle" hidden><input type="checkbox" id="split-toggle" role="switch"><span class="switch-track" aria-hidden="true"></span>Side by side<span class="split-hint">up to 3</span></label></header>
       <div class="discussion-body">
-        <div class="tab-row" role="tablist" aria-label="Comments and assessment materials" hidden>
-          <button type="button" role="tab" id="tab-comments" aria-controls="comments" aria-selected="true" class="material-tab review-tab">Comments</button>
+        <div class="tab-row" role="tablist" aria-label="Human review and assessment" hidden>
+          <button type="button" role="tab" id="tab-your-review" aria-controls="your-review" aria-selected="true" class="material-tab review-tab">Your review</button>
           <span class="tab-divider" aria-hidden="true"></span><span class="tab-group-label" id="not-under-review">Not under review</span>
           $material_tabs
         </div>
         <div class="pane-grid">
-          <div role="tabpanel" id="comments" class="material-pane" aria-labelledby="tab-comments">
-            <div class="material-toolbar"><h3 class="material-title">Comments</h3><p class="material-provenance">Signed in with GitHub; saved in <a href="$discussions_url">repository Discussions</a></p></div>
-            <div class="comments-body">
-              <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="$giscus_theme" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
-              <noscript><p>Comments need JavaScript. Read or join the discussion in <a href="$discussions_url">GitHub Discussions</a>.</p></noscript>
-            </div>
+          <div role="tabpanel" id="your-review" class="material-pane" aria-labelledby="tab-your-review">
+            $review_form
           </div>
           $material_panes
         </div>
