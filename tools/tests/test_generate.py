@@ -1,7 +1,7 @@
 import csv
 import functools
-import json
 import html
+import json
 import re
 import shutil
 import tempfile
@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import unquote
 
-from lxml import html
+from lxml import html as html_tree
 
 import yaml
 from tools.benchmark_docs import generate
@@ -208,7 +208,7 @@ class DashboardTests(unittest.TestCase):
                 rendered, count, subjects = generate.render_files(
                     [path], "output", benchmark, set(), {}
                 )
-                document = html.fromstring(rendered)
+                document = html_tree.fromstring(rendered)
                 row = document.xpath(
                     f'//table[@class="define-table"]/tbody/tr[td[1]="{variable}"]'
                 )[0]
@@ -229,7 +229,7 @@ class DashboardTests(unittest.TestCase):
         rendered, _, _ = generate.render_files(
             [benchmark / "expected/define.xml"], "output", benchmark, set(), {}
         )
-        document = html.fromstring(rendered)
+        document = html_tree.fromstring(rendered)
         row = document.xpath(
             '//table[caption="ADLB.AVALC value-level metadata"]/tbody/tr'
         )[0]
@@ -271,7 +271,7 @@ class DashboardTests(unittest.TestCase):
                 rendered, _, _ = generate.render_files(
                     [benchmark / "expected/define.xml"], "output", benchmark, set(), {}
                 )
-                document = html.fromstring(rendered)
+                document = html_tree.fromstring(rendered)
                 self.assertEqual(
                     document.xpath('//div[@class="define-document"]/section/p')[
                         0
@@ -284,9 +284,9 @@ class DashboardTests(unittest.TestCase):
         rendered, count, subjects = generate.render_files(
             [path], "output", root, set(), {}
         )
-        document = html.fromstring(rendered)
+        document = html_tree.fromstring(rendered)
         frame = document.xpath("//iframe")[0]
-        preview = html.fromstring(frame.get("srcdoc"))
+        preview = html_tree.fromstring(frame.get("srcdoc"))
         self.assertEqual(
             {
                 "title": frame.get("title"),
@@ -318,7 +318,7 @@ class DashboardTests(unittest.TestCase):
                 rendered, _, _ = generate.render_files(
                     [path], "input", benchmark, set(), {}
                 )
-                document = html.fromstring(rendered)
+                document = html_tree.fromstring(rendered)
                 self.assertEqual(
                     document.xpath("//pre/code")[0].text_content(), path.read_text()
                 )
