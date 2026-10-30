@@ -6,11 +6,10 @@ host error reporting. The Windows build fixes from 0.6.2 are retained.
 
 ## Submission timing
 
-The 0.7.0 release is published on GitHub and PyPI independently of CRAN.
-Its CRAN submission waits until CRAN has accepted 0.6.2 and the interval
-between updates has passed. Before submission, the maintainer checks the
-unchanged release source archive with win-builder (R-devel) and the macOS
-builder, and records their results with the release qualification.
+The 0.7.0 release is published on GitHub and PyPI only, and is not
+submitted to CRAN. Before a later release is submitted, the maintainer
+checks its unchanged release source archive with win-builder (R-devel) and
+the macOS builder, and records their results with the release qualification.
 
 ## Test environments
 
