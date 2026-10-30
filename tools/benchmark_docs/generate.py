@@ -16,7 +16,7 @@ import yaml
 from evaluations.harbor.brief import brief
 from tools.benchmark import LIFECYCLES, load_metadata, specification_name
 from tools.benchmark import entries as benchmark_entries
-from tools.benchmark_docs import mapping_doc
+from tools.benchmark_docs import define_doc, mapping_doc
 from tools.conformance.public_conformance import plan
 from tools.paths import ROOT
 
@@ -306,10 +306,15 @@ def render_files(paths, group, benchmark, derived, labels):
     panes, widths, subjects = [], [], set()
     row_count = 0
     for index, path in enumerate(paths):
+        # Transport bytes are available in the source repository; the CSV
+        # companion is the reviewable data, so do not spend a pane on .xpt.
+        if path.suffix.lower() == ".xpt":
+            continue
         pane_id = f"{group}-file-{index}"
         filename = path.relative_to(benchmark).as_posix()
         count = ""
         table = None
+        is_document = False
         width = 1
         if path.suffix.lower() == ".csv":
             try:
@@ -330,10 +335,34 @@ def render_files(paths, group, benchmark, derived, labels):
                 count = "raw CSV"
         if table is None:
             try:
-                # A SAS transport file can decode as ASCII; it is still binary.
-                if path.suffix.lower() == ".xpt":
-                    raise UnicodeError
-                table = f'<pre class="plain-file"><code>{escape(path.read_text(encoding="utf-8"))}</code></pre>'
+                text = path.read_text(encoding="utf-8")
+                table = f'<pre class="plain-file"><code>{escape(text)}</code></pre>'
+                preview = None
+                if path.suffix.lower() in {".html", ".htm"}:
+                    # Keep reports isolated and self-contained, including when
+                    # a dashboard is opened from disk.
+                    policy = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"
+                    document = (
+                        f'<!doctype html><meta http-equiv="Content-Security-Policy" content="{policy}">'
+                        + text
+                    )
+                    preview = (
+                        f'<iframe class="html-preview" title="Rendered {escape(filename)}" '
+                        f'sandbox="" srcdoc="{escape(document)}"></iframe>'
+                    )
+                    count = "Rendered HTML"
+                elif path.suffix.lower() == ".xml":
+                    preview = define_doc.render_define(text, pane_id)
+                    if preview is not None:
+                        count = "Define-XML"
+                if preview is not None:
+                    is_document = True
+                    table = (
+                        preview
+                        + '<details class="file-source"><summary>Original source</summary>'
+                        + table
+                        + "</details>"
+                    )
             except UnicodeError:
                 table = '<p class="no-rows">Binary fixture; inspect it in the benchmark source.</p>'
             if count == "raw CSV":
@@ -341,7 +370,8 @@ def render_files(paths, group, benchmark, derived, labels):
                     '<p class="no-rows">Showing raw CSV because the source is not a valid rectangular table.</p>'
                     + table
                 )
-        widths.append(f"minmax(0, {width}fr)")
+        if not is_document:
+            widths.append(f"minmax(0, {width}fr)")
         count_html = f'<span class="file-count">{count}</span>' if count else ""
         edit_url = (
             REPOSITORY
@@ -351,16 +381,22 @@ def render_files(paths, group, benchmark, derived, labels):
             + "/".join(quote(part) for part in filename.split("/"))
         )
         panes.append(
-            f'<div id="{pane_id}" class="panel file-pane" role="region" aria-label="{escape(filename)}">'
+            f'<div id="{pane_id}" class="panel file-pane{" document-pane" if is_document else ""}" role="region" aria-label="{escape(filename)}">'
             f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(filename)}</h3>'
             f'<a class="edit-button" href="{edit_url}">Edit</a></span>{count_html}</div>'
             + table
             + "</div>"
         )
-    content = (
-        "".join(panes) or '<p class="no-rows">No fixture files in this directory.</p>'
+    empty = (
+        "No preview available; inspect the fixture files in the benchmark source."
+        if paths
+        else "No fixture files in this directory."
     )
-    content = f'<div class="files-grid" style="--dataset-columns: {" ".join(widths)}">{content}</div>'
+    content = "".join(panes) or f'<p class="no-rows">{empty}</p>'
+    columns = " ".join(widths) or "minmax(0, 1fr)"
+    content = (
+        f'<div class="files-grid" style="--dataset-columns: {columns}">{content}</div>'
+    )
     return content, row_count, subjects
 
 
