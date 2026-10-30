@@ -134,6 +134,24 @@ def condition(reference, definitions):
     return " AND ".join(clauses)
 
 
+def referenced_text(oid, definitions):
+    if not oid:
+        return ""
+    definition = definitions.get(oid)
+    if definition is None:
+        return oid
+    return "\n".join(
+        filter(
+            None,
+            (
+                description(definition),
+                *(value.text for value in definition.findall("{*}FormalExpression")),
+                *documents(definition, definitions),
+            ),
+        )
+    )
+
+
 def item_row(reference, definitions):
     oid = reference.get("ItemOID", "")
     item = definitions.get(oid)
@@ -158,24 +176,7 @@ def item_row(reference, definitions):
     for method_oid in (reference.get("MethodOID"), attribute(item, "CommentOID")):
         if not method_oid:
             continue
-        method = definitions.get(method_oid)
-        methods.append(
-            method_oid
-            if method is None
-            else "\n".join(
-                filter(
-                    None,
-                    (
-                        description(method),
-                        *(
-                            expression.text
-                            for expression in method.findall("{*}FormalExpression")
-                        ),
-                        *documents(method, definitions),
-                    ),
-                )
-            )
-        )
+        methods.append(referenced_text(method_oid, definitions))
     role = reference.get("Role", "")
     if reference.get("KeySequence"):
         role += ("; " if role else "") + "Key " + reference.get("KeySequence")
@@ -216,6 +217,7 @@ def render_metadata(metadata, prefix):
             if class_node is not None
             else attribute(group, "Class")
         )
+        facts.append(referenced_text(attribute(group, "CommentOID"), definitions))
         parts.append("<p>" + html.escape("; ".join(filter(None, facts))) + "</p>")
         references = group.findall("{*}ItemRef")
         parts.append(

@@ -1,0 +1,16 @@
+[
+  {
+    "source": "report.html",
+    "suffixes": [".html", ".HTM", ".HTML"],
+    "expected": {
+      "sandbox": "",
+      "src": null,
+      "row_count": 0,
+      "subjects": [],
+      "headings": ["A & B"],
+      "parent_active_tags": [],
+      "source_open": [],
+      "policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"
+    }
+  }
+]

@@ -46,10 +46,15 @@ render in an isolated frame with inline styles and data images; scripts and
 external resources are disabled. Document previews span the dataset area and
 keep the original source in a collapsed disclosure below the rendered view.
 
-A page asks clinical trial statisticians and programmers to challenge the
-benchmark itself: is the task in the summary one a real study would need, and
-does it follow CDISC; do the inputs look like collected trial data; would
-independent QC programming reproduce the expected output? The summary, the
+A page asks clinical trial statisticians and programmers to review the
+benchmark itself in a short survey under "Your review", as the Pilot 7
+dashboards do: does the task follow CDISC as a real study would need it, do the
+inputs look like collected trial data, and is the benchmark ready to finalize,
+plus a free-text box for suggestions. The questions and their fixed choices are
+declared once in `generate.py`; `review-form.js` reads them back from the page,
+keeps a draft in the browser, and opens GitHub's new-discussion composer in the
+Comments category with the answers filled in, so the static page holds no
+credentials. The summary, the
 inputs, and the expected output carry an "Under review" chip, and every source
 file has an Edit button for proposing a fix. Everything
 else sits in one tab row under the datasets: Comments first, then the

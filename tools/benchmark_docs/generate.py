@@ -59,6 +59,15 @@ GISCUS = {
     "theme": "https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=3",
 }
 COMMENT_TERM_PREFIX = "yaml/examples/"
+# A review is a short survey, as on the Pilot 7 dashboards: fixed choices and
+# one free-text box. Submitting opens GitHub's new-discussion composer with the
+# answers filled in, so the static page holds no credentials; the reviewer
+# still selects Start discussion. Each review is its own discussion beside the
+# benchmark's giscus thread, in the same category.
+REVIEW_URL = REPOSITORY + "/discussions/new?category=comments"
+AGREEMENT = ("Agree", "Disagree", "Need clarification")
+READINESS = ("Ready", "Ready after minor fixes", "Needs major changes", "Unsure")
+LIFECYCLE_URL = REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle"
 # This order is shared by the overview table, jump links and gallery sections.
 # SEND uses the SDTM model, so its nonclinical examples join the tabulation
 # group while retaining their authored standard in the individual dashboards.
@@ -458,6 +467,51 @@ def page_link(name, label, relation):
     if name is None:
         return f'<span class="is-disabled" aria-disabled="true">{label}</span>'
     return f'<a href="{escape(name)}.html" rel="{relation}">{label}</a>'
+
+
+def render_review_form(name, questions, suggestion_hint):
+    """The survey: one fieldset per question, then a free-text box. The script
+    reads the labels, prompts and choices back from these elements to write
+    the discussion body, so each question is declared once."""
+    fieldsets = []
+    for key, target, label, prompt, choices in questions:
+        options = "".join(
+            '<label class="review-choice"><input type="radio" '
+            f'name="{key}" value="{escape(choice)}"> {escape(choice)}</label>'
+            for choice in choices
+        )
+        fieldsets.append(
+            f'<fieldset class="review-question" data-label="{escape(label)}">'
+            f'<legend><a href="{escape(target)}"><strong>{escape(label)}:</strong></a> '
+            f'<span class="review-prompt">{escape(prompt)}</span></legend>'
+            f'<div class="review-choices">{options}</div></fieldset>'
+        )
+    return (
+        '<section id="your-review" class="panel review-panel" '
+        'aria-labelledby="your-review-heading">'
+        '<header class="panel-header"><h2 id="your-review-heading">Your review</h2>'
+        '<span class="panel-caption">Three questions and your suggestions</span>'
+        "</header>"
+        f'<form class="review-form" data-benchmark="{escape(name)}" '
+        f'data-review-url="{escape(REVIEW_URL)}" novalidate hidden>'
+        + "".join(fieldsets)
+        + '<label class="review-suggestions-label" for="review-suggestions">'
+        "Suggestions <small>Optional</small></label>"
+        '<textarea id="review-suggestions" name="suggestions" rows="4" '
+        f'maxlength="10000" placeholder="{escape(suggestion_hint)}"></textarea>'
+        '<p class="review-feedback" role="status" aria-live="polite" hidden></p>'
+        '<div class="review-actions"><p class="review-note">Drafts save '
+        "automatically in this browser. Submitting opens GitHub with your review "
+        "filled in; select <strong>Start discussion</strong> there to publish it "
+        'under your account.</p><button type="submit" class="review-submit">'
+        "Submit review on GitHub</button></div>"
+        '<div class="review-prepared" hidden><label for="review-prepared-text">'
+        'Review text to copy</label><textarea id="review-prepared-text" rows="8" '
+        "readonly></textarea></div></form>"
+        "<noscript><p>The review form needs JavaScript. Leave your review in "
+        f'<a href="{escape(REPOSITORY)}/discussions">GitHub Discussions</a>.</p>'
+        "</noscript></section>"
+    )
 
 
 def plural(count, noun):
@@ -860,7 +914,7 @@ def render_benchmark(benchmark, previous=None, next=None):
     metadata = load_metadata(benchmark)
     lifecycle_state = metadata["lifecycle"]
     lifecycle_url = f"https://img.shields.io/badge/Lifecycle-{lifecycle_state}-{LIFECYCLES[lifecycle_state]}"
-    lifecycle_href = REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle"
+    lifecycle_href = LIFECYCLE_URL
     lifecycle_badge = (
         f'<a class="lifecycle-badge" href="{escape(lifecycle_href)}">'
         f'<img src="{escape(lifecycle_url)}" alt="Lifecycle: {escape(lifecycle_state)}"></a>'
@@ -963,32 +1017,32 @@ def render_benchmark(benchmark, previous=None, next=None):
             metrics.append((len(outputs), "expected files", ""))
             output_caption = "Expected artifacts"
 
-    # What reviewers are asked to challenge, the task included: the summary,
-    # the inputs, and the expected result. Everything in the tabs beside
-    # Comments is background for assessment.
+    # What reviewers are asked to challenge, the task included: a short survey
+    # on the summary and the inputs, then whether the benchmark is ready to
+    # finalize. Everything in the tabs beside Comments is background.
     if is_failure:
         questions = (
             (
+                "task",
                 "#readme",
                 "Task",
                 (
                     "Is this a specification error a study team could realistically "
                     "make, and should the build stop on it rather than continue?"
                 ),
+                AGREEMENT,
             ),
             (
+                "inputs",
                 "#inputs",
                 "Inputs",
-                "Do they trigger the failure for the reason the summary gives?",
+                "Do the inputs trigger the failure for the reason the summary gives?",
+                AGREEMENT,
             ),
-            (
-                "#expected-failure",
-                "Expected failure",
-                (
-                    "Is this the right error, raised at the right point, and would it "
-                    "tell the programmer what to fix?"
-                ),
-            ),
+        )
+        suggestion_hint = (
+            "What would you change? Name the rule, input or message, and what it "
+            "should be."
         )
     else:
         standard = metadata["standard"]
@@ -997,44 +1051,51 @@ def render_benchmark(benchmark, previous=None, next=None):
         )
         questions = (
             (
+                "task",
                 "#readme",
                 "Task",
                 (
-                    "Would a real study need this derivation, specified this way? Does "
-                    f"it follow {standard}: variable names, controlled terms, record "
-                    "structure? Flag any rule that is ambiguous or that a sponsor would "
-                    "handle differently."
+                    "Would a real study need this derivation, specified this way, and "
+                    f"does it follow {standard}: variable names, controlled terms, "
+                    "record structure?"
                 ),
+                AGREEMENT,
             ),
             (
+                "inputs",
                 "#inputs",
                 "Inputs",
                 (
-                    "Do they look like data collected in a real trial, and do they "
-                    "include the situations you would expect to meet in one?"
+                    "Do the inputs look like data collected in a real study, and do "
+                    "they include the situations you would expect?"
                 ),
-            ),
-            (
-                "#outputs",
-                "Expected output",
-                (
-                    "Would independent QC programming reproduce every value from these "
-                    "inputs and rules?"
-                ),
+                AGREEMENT,
             ),
         )
-    review_ask = (
-        "<p>As a clinical trial statistician or programmer, challenge anything in "
-        'this benchmark: describe a problem in <a href="#comments">Comments</a>, '
-        "or propose a fix with the <strong>Edit</strong> button on any source "
-        "file.</p><ol>"
-        + "".join(
-            f'<li><a href="{anchor}"><strong>{label}:</strong></a> {question}</li>'
-            for anchor, label, question in questions
+        suggestion_hint = (
+            "What would you change? Name the variable, row or rule, and what it "
+            "should be. Flag any rule that is ambiguous or that a sponsor would "
+            "handle differently."
         )
-        + '</ol><p class="review-ask-note">The other tabs beside Comments are '
-        "background for assessment, not under review.</p>"
+    questions += (
+        (
+            "readiness",
+            LIFECYCLE_URL,
+            "Overall",
+            "Is this benchmark ready to finalize?",
+            READINESS,
+        ),
     )
+    review_ask = (
+        "<p>As a clinical trial statistician or programmer, answer three short "
+        'questions in <a href="#your-review">Your review</a>: the task, the '
+        "inputs, and whether this benchmark is ready to finalize. Propose a fix "
+        "with the <strong>Edit</strong> button on any source file, or discuss it "
+        'in <a href="#comments">Comments</a>.</p><p class="review-ask-note">The '
+        "other tabs beside Comments are background for assessment, not under "
+        "review.</p>"
+    )
+    review_form = render_review_form(benchmark.name, questions, suggestion_hint)
 
     def metric_cell(count, label, cls):
         klass = f' class="{cls}"' if cls else ""
@@ -1118,6 +1179,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_caption=spec_caption,
         spec_code=spec_code,
         review_ask=review_ask,
+        review_form=review_form,
         material_tabs=material_tabs,
         material_panes=material_panes,
         panel_script=(HERE / "panel-tabs.js").read_text(encoding="utf-8"),
@@ -1130,6 +1192,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         discussions_url=REPOSITORY + "/discussions",
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
+        review_script=(HERE / "review-form.js").read_text(encoding="utf-8"),
     )
     # Stable bytes across machines, locales, time zones, and checkout locations.
     # Character references also keep generated pages compatible with repository ASCII lint.
