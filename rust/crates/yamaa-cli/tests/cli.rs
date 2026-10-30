@@ -1470,8 +1470,7 @@ fn define_fixture() -> PathBuf {
 /// reproduce (`tools/tests/test_migrate.py`). The benchmark itself is 0.5
 /// until the corpus moves to 1.0 (#3030 P2-5 to P2-8).
 fn define_example() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../docs/design/interface-1.0/examples/sdtm-dm-metadata")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/declaration-examples/sdtm-dm-metadata")
 }
 
 /// A copy of that benchmark's inputs, written as 1.0, with its DM dataset

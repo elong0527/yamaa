@@ -1,7 +1,8 @@
 //! Issue locations (P-ISSUE-1, D28): each case of
-//! `docs/design/interface-1.0/api.md`, "Issue locations", through the public
-//! engine. Every expected line and column was counted by hand in the files
-//! below; each test names the text that precedes the column.
+//! `docs/design/interface-1.0/api.md` at tag `yamaa-v0.6.2`, "Issue
+//! locations", through the public engine. Every expected line and column was
+//! counted by hand in the files below; each test names the text that
+//! precedes the column.
 //!
 //! 1. An issue without a spec path has no location, except `invalid_yaml` and
 //!    `non_ascii_source`, which give the file read and the reader's position.

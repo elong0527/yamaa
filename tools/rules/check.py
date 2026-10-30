@@ -116,11 +116,11 @@ CITATION_EXEMPT = {
     "tools/tests/test_rules_model.py": None,
 }
 # REQ-NNNN IDs were retired when rule cards replaced them: none names a rule.
-# Benchmark inputs are data, and these records quote the IDs of their time.
+# Benchmark inputs are data, and these release notes quote the IDs of their
+# time.
 RETIRED_ID = re.compile(r"\bREQ-\d{4,}\b")
 RETIRED_KEPT = (
     "benchmarks/*/input/*",
-    "docs/design/*",
     "docs/releases/0.4.0.md",
     "docs/releases/0.5.0.md",
 )

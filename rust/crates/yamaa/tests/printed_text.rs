@@ -1,10 +1,11 @@
 //! Printed summaries, error text and issue JSON through the public engine
 //! (D28, D37, D39, P-PRINT-1). Every expected line here was written from
-//! `docs/design/interface-1.0/api.md` ("Printed text" and "The command line")
-//! and the message templates of `yaml/conditions.yaml` before the engine ran.
-//! Each issue line starts with its location (P-ISSUE-1), counted by hand in
-//! the study's files below: the studies sit outside the current directory, so
-//! a location names its file by its absolute path.
+//! `docs/design/interface-1.0/api.md` at tag `yamaa-v0.6.2` ("Printed text"
+//! and "The command line") and the message templates of
+//! `yaml/conditions.yaml` before the engine ran. Each issue line starts with
+//! its location (P-ISSUE-1), counted by hand in the study's files below: the
+//! studies sit outside the current directory, so a location names its file by
+//! its absolute path.
 #![cfg(feature = "yaml")]
 
 use std::path::Path;

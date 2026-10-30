@@ -1,10 +1,11 @@
 # Installed status and printing of every result and lazy object (D36, D37).
 # Every printed line comes from the shared truth, which Python reads too: its
-# lines were written from the forms of docs/design/interface-1.0/api.md and the
-# message templates of yaml/conditions.yaml before the engine ran. `{path}`
-# stands for the path the test gave, and `{root}` for the study directory as
-# an issue location names it. Rust renders the text: format() returns
-# its lines, and print() writes them and returns the object invisibly.
+# lines were written from the forms of docs/design/interface-1.0/api.md at tag
+# yamaa-v0.6.2 and the message templates of yaml/conditions.yaml before the
+# engine ran. `{path}` stands for the path the test gave, and `{root}` for the
+# study directory as an issue location names it. Rust renders the text:
+# format() returns its lines, and print() writes them and returns the object
+# invisibly.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.

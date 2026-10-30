@@ -3,14 +3,14 @@
 Each case of the shared `issue-locations` truth writes its files, makes one
 call and compares its first issue's `file`, `line` and `column` with the
 authored location, one case for each rule of
-`docs/design/interface-1.0/api.md`, "Issue locations": a mapping member at
-its key, an expanded long form at the written node, a layered value in the
-layer whose value took effect, a refusal at the `parent` or `include` entry
-of a layer above the entry in that layer, a project path in the
-project file or in the file it lists, a data file's value at its
-declaration, a file the YAML reader refused at the position it reported,
-and an issue without a spec path without a location. R's issue_locations.R
-and the command line's parity test check the same truth.
+`docs/design/interface-1.0/api.md` at tag `yamaa-v0.6.2`, "Issue locations":
+a mapping member at its key, an expanded long form at the written node, a
+layered value in the layer whose value took effect, a refusal at the
+`parent` or `include` entry of a layer above the entry in that layer, a
+project path in the project file or in the file it lists, a data file's
+value at its declaration, a file the YAML reader refused at the position it
+reported, and an issue without a spec path without a location. R's
+issue_locations.R and the command line's parity test check the same truth.
 """
 
 from __future__ import annotations

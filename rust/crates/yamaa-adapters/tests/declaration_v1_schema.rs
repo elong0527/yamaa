@@ -39,7 +39,7 @@ mod declaration {
 
         fn examples() -> Vec<PathBuf> {
             let mut paths = Vec::new();
-            let mut pending = vec![repository().join("docs/design/interface-1.0/examples")];
+            let mut pending = vec![repository().join("rust/tests/declaration-examples")];
             while let Some(directory) = pending.pop() {
                 for entry in std::fs::read_dir(&directory).unwrap() {
                     let path = entry.unwrap().path();
@@ -104,7 +104,7 @@ mod declaration {
                 let directory = path
                     .strip_prefix(
                         repository()
-                            .join("docs/design/interface-1.0/examples")
+                            .join("rust/tests/declaration-examples")
                             .canonicalize()
                             .unwrap(),
                     )
@@ -174,8 +174,7 @@ mod declaration {
         #[test]
         fn a_0_5_spelling_in_a_1_0_file_fails() {
             let closures = Closures::shipped().unwrap();
-            let path =
-                repository().join("docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml");
+            let path = repository().join("rust/tests/declaration-examples/adam-adsl-bmi/spec.yaml");
             let original = std::fs::read_to_string(&path).unwrap();
             let edit = |old: &str, new: &str| {
                 assert!(original.contains(old), "{old}");

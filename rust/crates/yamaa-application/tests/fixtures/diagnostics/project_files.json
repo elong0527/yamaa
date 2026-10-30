@@ -276,12 +276,12 @@
       "input": {
         "files": {
           "project.yaml": {
-            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml",
+            "file": "rust/tests/declaration-examples/adam-adsl-bmi/project.yaml",
             "edits": [{"from": "  - spec.yaml\n", "to": "  - spec.yaml\ncodelists: [ct/sdtm.yaml]\n"}]
           },
-          "functions/bmi.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml"},
+          "functions/bmi.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/functions/bmi.yaml"},
           "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
-          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"},
+          "spec.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/spec.yaml"},
           "ct/sdtm.yaml": {"base": "sdtm", "edits": [{"from": "rank: 2", "to": "rank: 99999999999999999999"}]}
         },
         "specification": "spec.yaml",
@@ -312,13 +312,13 @@
       "input": {
         "files": {
           "project.yaml": {
-            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml",
+            "file": "rust/tests/declaration-examples/adam-adsl-bmi/project.yaml",
             "edits": [{"from": "environments:\n  r:", "to": "environments:\n  python:\n    lock: r/renv.lock\n  r:"}, {"from": "- functions/bmi.yaml", "to": "- functions/bmi.yaml\n- functions/copy.yaml"}]
           },
-          "functions/bmi.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml"},
+          "functions/bmi.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/functions/bmi.yaml"},
           "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
-          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"},
-          "functions/copy.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml"}
+          "spec.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/spec.yaml"},
+          "functions/copy.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/functions/bmi.yaml"}
         },
         "specification": "spec.yaml",
         "project": "project.yaml"
@@ -331,13 +331,13 @@
       "operation": ["check", "check_resources"],
       "input": {
         "files": {
-          "project.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml"},
+          "project.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/project.yaml"},
           "functions/bmi.yaml": {
-            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml",
+            "file": "rust/tests/declaration-examples/adam-adsl-bmi/functions/bmi.yaml",
             "edits": [{"from": "yamaabenchmarks::bmi", "to": "yamaabenchmarks.bmi"}]
           },
           "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
-          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"}
+          "spec.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/spec.yaml"}
         },
         "specification": "spec.yaml",
         "project": "project.yaml"
@@ -350,13 +350,13 @@
       "operation": ["check", "check_resources"],
       "input": {
         "files": {
-          "project.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml"},
+          "project.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/project.yaml"},
           "functions/bmi.yaml": {
-            "file": "docs/design/interface-1.0/examples/adam-adsl-bmi/functions/bmi.yaml",
+            "file": "rust/tests/declaration-examples/adam-adsl-bmi/functions/bmi.yaml",
             "edits": [{"from": "weight_kg\n  type: float", "to": "weight_kg\n  type: date"}, {"from": "weight_kg: 70.0\n    height_cm: 175.0\n    cm_per_m: 100", "to": "weight_kg: '2024-02-30'\n    height_cm: 175.0\n    cm_per_m: 100"}]
           },
           "r/renv.lock": {"file": "benchmarks/adam-adsl-bmi/r/renv.lock"},
-          "spec.yaml": {"file": "docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml"}
+          "spec.yaml": {"file": "rust/tests/declaration-examples/adam-adsl-bmi/spec.yaml"}
         },
         "specification": "spec.yaml",
         "project": "project.yaml"

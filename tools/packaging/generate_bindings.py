@@ -17,7 +17,7 @@
 - ``R/yamaa/NAMESPACE``, and
 - ``rust/interface/manifest.txt`` -- the normalized manifest of the frozen
   sections, which the stability check compares with the latest release tag
-  (``docs/design/interface-1.0/stability.md``).
+  (``docs/design/interface-1.0/stability.md`` at tag ``yamaa-v0.6.2``).
 
 Handwritten PyO3 and extendr implementations stay in their modules behind
 these declarations, and the handwritten conversions, host-function ports and

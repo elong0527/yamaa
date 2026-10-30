@@ -398,7 +398,6 @@ class RuleCheckTests(unittest.TestCase):
         # Records of their time keep their IDs, and an input is data.
         for kept in (
             "docs/releases/0.5.0.md",
-            "docs/design/interface-1.0/rules.md",
             "benchmarks/schema-case/input/dm.csv",
             "tools/tests/test_rules_check.py",
         ):

@@ -38,7 +38,7 @@ the held bytes.
 | public-environment | Original case selection, schema link references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants, spec/project text mutations and the issue row of a lower-cased transport name collision (its context compared by the file name both writers would write) |
-| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave, and `{file}` for the file the first issue is located in, as its location names it), typed plain values, the failed run's report bytes, the issue rows of a save with nothing to write, and the value-level check rows of a run whose entry selects no row (SUB-13); distinct host i64 vectors; a refused diagnostic containing NUL still gives R an empty issues frame, with its D39 message derived from SCHEMA-12 and the value_not_permitted template |
+| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` at tag `yamaa-v0.6.2` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave, and `{file}` for the file the first issue is located in, as its location names it), typed plain values, the failed run's report bytes, the issue rows of a save with nothing to write, and the value-level check rows of a run whose entry selects no row (SUB-13); distinct host i64 vectors; a refused diagnostic containing NUL still gives R an empty issues frame, with its D39 message derived from SCHEMA-12 and the value_not_permitted template |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave, and `{entry}` in its context for that specification's absolute path as the engine resolves it, with forward slashes |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, each refusal's one issue row and error text (`{source}` stands for the source path the test gave); invalid host limits use the ODM-1 argument row and the value_not_permitted template, with the supplied value and the core limit minimum in context |
@@ -52,7 +52,7 @@ the held bytes.
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | conditions | The condition catalogue's seven columns, every condition it names in name order, and one authored row of each shape: rules in card order, a condition whose issues cite no rule, and the four renames and seven retirements of 0.6.0 |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
-| issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"), and for a refusal at the `parent` or `include` entry of a layer above the entry, which is located in that layer (D181): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
+| issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md` at tag `yamaa-v0.6.2`, "Issue locations"), and for a refusal at the `parent` or `include` entry of a layer above the entry, which is located in that layer (D181): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
 | include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, each parent case's fragment, given parent and child, whose two checks return its rows, each refused parent's error text and rows (#3694), and the resolve case's layers, `parent` and `include` resources, resolved columns, the whole origin of each named value, with its layer and the start and end coordinates where that layer wrote it, and the fields the resolved specification never holds; `{root}` stands for the study's directory, `{path}` in an error text for the path the test gave and `{parent}` for the parent it gave |
 | project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row, or under `calls` each of several calls on those files with its rows; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
@@ -253,18 +253,18 @@ registry's causes of the condition cite, in card order (by prefix, then
 number). A row is the list of its cells in the order of `columns`, so no row
 reads as a parity case, which is an object with a `condition` key.
 
-`printing` pairs the installed Python and R printing suites (#3030 D36,
-D37, P-PRINT-1). Its lines were written from the forms of
-`docs/design/interface-1.0/api.md` ("Printed text") and the message templates
-of `yaml/conditions.yaml` before the engine ran. In its study ADSL builds,
-ADAE fails its own check (COLUMN-5), and ADTTE reads ADAE through its
-`schema` link and so is skipped; its submission is
+`printing` pairs the installed Python and R printing suites (#3030 D36, D37,
+P-PRINT-1). Its lines were written from the forms of
+`docs/design/interface-1.0/api.md` at tag `yamaa-v0.6.2` ("Printed text") and
+the message templates of `yaml/conditions.yaml` before the engine ran. In its
+study ADSL builds, ADAE fails its own check (COLUMN-5), and ADTTE reads ADAE
+through its `schema` link and so is skipped; its submission is
 `define-fixtures/sdtm-dm-metadata`, with the creation time of
 `public-define`. Each `first issue:` line names its location as D181 gives
 it, counted by hand in the study's files: ADAE's at its `derivation` key,
-ADTTE's at its `schema` key. The study lies outside the current directory,
-so the location names its file by its absolute path, which `{root}` stands
-for with forward slashes. Every status comes from the `selftest` family's
+ADTTE's at its `schema` key. The study lies outside the current directory, so
+the location names its file by its absolute path, which `{root}` stands for
+with forward slashes. Every status comes from the `selftest` family's
 vocabulary.
 
 `interface` pairs the installed Python and R interface and handle lifetime
