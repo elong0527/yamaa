@@ -9,6 +9,8 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import unquote
 
+from lxml import html
+
 import yaml
 from tools.benchmark_docs import generate
 from tools.tests import support
@@ -114,7 +116,7 @@ class DashboardContent(HTMLParser):
             self.sections.append(attrs.get("id"))
         if tag == "table" and "mapping-table" in attrs.get("class", "").split():
             self.in_mapping = True
-        if tag == "td" and not self.in_mapping:
+        if tag == "td" and not self.in_mapping and "data-value" in attrs:
             self.cells.append(attrs["data-value"])
         if tag == "a" and "download" in attrs:
             self.downloads.append(attrs)
@@ -141,6 +143,158 @@ class DashboardContent(HTMLParser):
 
 
 class DashboardTests(unittest.TestCase):
+    def test_transport_files_have_no_preview_panes(self):
+        # The display seam omits transport bytes without changing the fixtures.
+        benchmark = generate.BENCHMARKS / "send-bw-sendig311"
+        page = generate.render_benchmark(benchmark).decode("ascii")
+        self.assertEqual(
+            [pane["aria-label"] for pane in DashboardContent(page).file_panes],
+            ["input/body_weights.csv", "expected/bw.csv", "expected/define.xml"],
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = support.write(root, "input/DM.XPT", b"binary transport")
+            rendered, count, subjects = generate.render_files(
+                [path], "input", root, set(), {}
+            )
+        self.assertEqual(
+            (DashboardContent(rendered).file_panes, count, subjects), ([], 0, set())
+        )
+        self.assertIn("No preview available", rendered)
+        self.assertNotIn("No fixture files", rendered)
+
+    def test_define_xml_resolves_variables_origins_and_methods(self):
+        # Resolved display reads independently authored metadata, not the spec.
+        cases = [
+            (
+                "send-bw-sendig311",
+                "BWSTRESN",
+                [
+                    "BWSTRESN",
+                    "Standardized Result in Numeric Format",
+                    "float",
+                    "8",
+                    "1",
+                    "No",
+                    "Result Qualifier",
+                    "",
+                    "Derived; Sponsor",
+                    "The collected result read as a number.",
+                ],
+            ),
+            (
+                "schema-define-2-0",
+                "SUBJID",
+                [
+                    "SUBJID",
+                    "Subject Identifier for the Study",
+                    "text",
+                    "4",
+                    "",
+                    "Yes",
+                    "Topic",
+                    "",
+                    "CRF; Annotated Case Report Form (acrf.pdf); pages 1",
+                    "",
+                ],
+            ),
+        ]
+        for name, variable, expected in cases:
+            with self.subTest(benchmark=name):
+                benchmark = generate.BENCHMARKS / name
+                path = benchmark / "expected/define.xml"
+                rendered, count, subjects = generate.render_files(
+                    [path], "output", benchmark, set(), {}
+                )
+                document = html.fromstring(rendered)
+                row = document.xpath(
+                    f'//table[@class="define-table"]/tbody/tr[td[1]="{variable}"]'
+                )[0]
+                self.assertEqual(
+                    ([cell.text_content() for cell in row], count, subjects),
+                    (expected, 0, set()),
+                )
+                self.assertEqual(
+                    document.xpath('//details[@class="file-source"]//code')[
+                        0
+                    ].text_content(),
+                    path.read_text(),
+                )
+                self.assertEqual(document.xpath("//details/@open"), [])
+
+    def test_define_xml_resolves_value_conditions_and_codelist_values(self):
+        benchmark = generate.BENCHMARKS / "adam-adlb-metadata"
+        rendered, _, _ = generate.render_files(
+            [benchmark / "expected/define.xml"], "output", benchmark, set(), {}
+        )
+        document = html.fromstring(rendered)
+        row = document.xpath(
+            '//table[caption="ADLB.AVALC value-level metadata"]/tbody/tr'
+        )[0]
+        self.assertEqual(
+            [cell.text_content() for cell in row],
+            [
+                "PARAMCD = HCG",
+                "AVALC",
+                "Analysis Value (C)",
+                "text",
+                "8",
+                "",
+                "Yes",
+                "",
+                "Pregnancy Test Result (CL.HCGRS)\nNEGATIVE\nPOSITIVE",
+                "Predecessor; LB.LBSTRESC",
+                "",
+            ],
+        )
+
+    def test_html_files_render_in_isolated_frames_and_keep_original_source(self):
+        # srcdoc keeps each report usable from disk and out of the parent DOM.
+        source = '<!doctype html><html><head><style>h1 {color: blue}</style></head><body><h1>A &amp; B</h1><script>parent.alert("unsafe")</script></body></html>'
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for suffix in (".html", ".HTM", ".HTML"):
+                with self.subTest(suffix=suffix):
+                    path = support.write(root, "expected/report" + suffix, source)
+                    rendered, count, subjects = generate.render_files(
+                        [path], "output", root, set(), {}
+                    )
+                    document = html.fromstring(rendered)
+                    frame = document.xpath("//iframe")[0]
+                    self.assertEqual(
+                        (
+                            frame.get("title"),
+                            frame.get("sandbox"),
+                            frame.get("src"),
+                            count,
+                            subjects,
+                        ),
+                        ("Rendered expected/report" + suffix, "", None, 0, set()),
+                    )
+                    self.assertEqual(
+                        html.fromstring(frame.get("srcdoc")).xpath("//h1/text()"),
+                        ["A & B"],
+                    )
+                    self.assertEqual(document.xpath("//h1 | //script"), [])
+                    self.assertEqual(
+                        document.xpath("//details//code")[0].text_content(), source
+                    )
+
+    def test_other_and_malformed_xml_remain_literal(self):
+        cases = ("sdtm-dm-odm-snapshot", "negative-odm-unescaped-ampersand")
+        for name in cases:
+            with self.subTest(benchmark=name):
+                benchmark = generate.BENCHMARKS / name
+                path = benchmark / "input/odm.xml"
+                rendered, _, _ = generate.render_files(
+                    [path], "input", benchmark, set(), {}
+                )
+                document = html.fromstring(rendered)
+                self.assertEqual(
+                    document.xpath("//pre/code")[0].text_content(), path.read_text()
+                )
+                self.assertEqual(document.xpath('//table[@class="define-table"]'), [])
+
     def test_public_host_metadata_and_reviewed_exclusions_are_visible(self):
         active = generate.render_benchmark(
             generate.BENCHMARKS / "sdtm-dm-basic"

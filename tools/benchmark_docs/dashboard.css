@@ -159,6 +159,25 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .yaml-literal { color: #995213; }
 .code-line.is-target { background: #dce9f6; }
 .plain-file { margin: 0; padding: 10px 18px 18px; overflow: auto; font-size: 14px; line-height: 1.6; }
+.document-pane { grid-column: 1 / -1; }
+.html-preview { display: block; width: 100%; height: 640px; border: 0; border-top: 1px solid var(--line); background: white; }
+.file-source { border-top: 1px solid var(--line); padding: 12px 14px; }
+.file-source summary { color: var(--brand); cursor: pointer; font-size: 13px; }
+.file-source[open] summary { margin-bottom: 10px; }
+.define-document { border-top: 1px solid var(--line); padding: 16px 14px; }
+.define-document h3 { margin: 0 0 12px; font-size: 17px; }
+.define-document h4 { margin: 20px 0 8px; font-size: 16px; }
+.define-document p { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+.define-nav { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
+.define-document section { scroll-margin-top: 70px; }
+.define-scroll { overflow: auto; margin-bottom: 16px; }
+.define-table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 1.5; }
+.define-table caption { padding: 8px 0; text-align: left; font-weight: 650; }
+.define-table th, .define-table td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.define-table th { background: #f3f7fb; white-space: nowrap; }
+.define-table td { min-width: 70px; max-width: 320px; white-space: pre-line; overflow-wrap: anywhere; }
+.define-table td:nth-child(2), .define-table td:last-child { min-width: 180px; }
+.define-table tbody tr:nth-child(even) { background: #f7fafd; }
 .comments-body { padding: 4px 0 8px; }
 .comments-body noscript p { margin: 0 0 8px; }
 .page-footer { padding: 16px 28px; color: #66768a; font-size: 12px; gap: 10px; }

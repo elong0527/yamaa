@@ -37,6 +37,15 @@ checks that repeated rendering is stable. The
 generator only displays expected artifacts, it never executes yamaa; comments
 are giscus threads keyed by directory name, with the category ID in `GISCUS`.
 
+SAS transport (`.xpt`) files have no preview pane; their CSV companions show
+the data for review, and the transport files remain in the benchmark source.
+Define-XML 2.0 and 2.1 documents display resolved variable and value-level
+metadata, including codelists, origins and methods. Other XML stays literal,
+including intentionally malformed inputs. HTML files (`.html` and `.htm`)
+render in an isolated frame with inline styles and data images; scripts and
+external resources are disabled. Document previews span the dataset area and
+keep the original source in a collapsed disclosure below the rendered view.
+
 A page asks clinical trial statisticians and programmers to challenge the
 benchmark itself: is the task in the summary one a real study would need, and
 does it follow CDISC; do the inputs look like collected trial data; would
