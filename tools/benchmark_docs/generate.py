@@ -59,28 +59,13 @@ GISCUS = {
     "theme": "https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=3",
 }
 COMMENT_TERM_PREFIX = "yaml/examples/"
-OUTCOMES = (
-    (
-        "positive",
-        "Benchmarks",
-        "Each runs to completion and produces the artifact in expected/.",
-    ),
-    (
-        "negative",
-        "Anti-pattern",
-        "Each must fail, and expected/error.yaml pins the error it raises.",
-    ),
-)
-# The gallery opens with a table saying what each directory-name group is for,
-# counted from the directories themselves so the figures cannot drift from the
-# suite. A group absent from this map is an error rather than a silent
-# omission: adding one costs a single line here and keeps the table a complete
-# account of what the suite holds.
+# This order is shared by the overview table, jump links and gallery sections.
+# SEND uses the SDTM model, so its nonclinical examples join the tabulation
+# group while retaining their authored standard in the individual dashboards.
 GROUP_NOTES = {
-    "schema": "Assess yamaa schema",
+    "sdtm": "Assess collected data to SDTM and SEND tabulations",
     "adam": "Assess SDTM to ADaM and ADaM to results derivations",
-    "sdtm": "Assess ODM to SDTM derivations",
-    "send": "Assess collected nonclinical data to SEND derivations",
+    "schema": "Assess yamaa schema",
     "negative": "Assess yamaa error handling",
 }
 YAML_TOKEN = re.compile(
@@ -423,35 +408,14 @@ def highlight_yaml(line):
     return "".join(result)
 
 
-def benchmark_category(name, title, spec):
-    if name.startswith(("spec-", "schema-")):
-        return "Specification", title
-    category, separator, heading = title.partition(": ")
-    if not separator:
-        return str(spec.get("domain", "yamaa benchmark")), title
-    return category, heading
-
-
 def describe_benchmark(benchmark):
-    """Return the page title and category without rendering fixtures."""
+    """Return the README title and authored dataset type for the gallery."""
     source_url = REPOSITORY + "/blob/main/benchmarks/" + quote(benchmark.name)
     readme_path = benchmark / "README.md"
-    entry_path, _ = benchmark_entry(benchmark)
-    if entry_path is None:
-        raise ValueError(f"benchmark has no spec file: {benchmark.name}")
-    spec_path = entry_path
     readme_text = readme_path.read_text(encoding="utf-8")
     title, _ = render_readme(readme_text, source_url)
-    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
-    spec = spec if isinstance(spec, dict) else {}
-    category, _ = benchmark_category(benchmark.name, title, spec)
     metadata = load_metadata(benchmark)
-    taxonomy = (metadata["standard"], metadata["domain"])
-    if taxonomy and category != "Specification" and sibling_producers(benchmark, spec):
-        # An example that builds several domains files under the one its
-        # README names, not under whichever domain its entry happens to build.
-        category = taxonomy[1]
-    return title, category
+    return title, metadata["domain"]
 
 
 def page_link(name, label, relation):
@@ -464,24 +428,25 @@ def plural(count, noun):
     return f"{count} {noun}" + ("" if count == 1 else "s")
 
 
-def render_groups(names):
-    """Render the table of groups and their purpose that opens the gallery.
+def benchmark_group(name):
+    family = name.partition("-")[0]
+    family = "sdtm" if family == "send" else family
+    if family not in GROUP_NOTES:
+        raise ValueError(
+            f"benchmark family has no gallery description: {family}-* "
+            f"(add it to GROUP_NOTES in generate.py)"
+        )
+    return family
 
-    Counts come from the directory names, so the table cannot report a total
-    the suite no longer has. A group the notes do not describe raises rather
-    than disappearing from the table.
-    """
+
+def render_groups(names):
+    """Count the same gallery groups used by the listing and jump links."""
     counts = {}
     for name in names:
-        family = name.partition("-")[0]
-        if family not in GROUP_NOTES:
-            raise ValueError(
-                f"benchmark family has no gallery description: {family}-* "
-                f"(add it to GROUP_NOTES in generate.py)"
-            )
+        family = benchmark_group(name)
         counts[family] = counts.get(family, 0) + 1
     rows = "".join(
-        f"| `{family}-*` | {counts[family]} | {escape(GROUP_NOTES[family])} |\n"
+        f"| `{family}` | {counts[family]} | {escape(GROUP_NOTES[family])} |\n"
         for family in GROUP_NOTES
         if family in counts
     )
@@ -508,29 +473,32 @@ def render_index(entries):
     so they reach the table of contents, and the lists are written as HTML so
     a title is escaped exactly once and the stylesheet can lay them out.
 
-    A specification the design must refuse is a different contract from one
-    that must produce an artifact, so the two are listed apart rather than
-    interleaved by domain. A `negative-` directory name is what marks the
-    second group, the same test the repository validator applies.
+    The overview table, jump links and listing share the same group order.
+    Each subsection holds one dataset type from the benchmark metadata,
+    including schema examples and specifications that must be rejected.
 
     The overview above the listing is authored at `docs/articles/benchmark.md`
     and reaches the reader on the same page as the benchmarks it describes.
     Its totals are substituted from the directories rather than typed, and its
     curated links are checked against the suite, so neither can go stale.
     """
-    outcomes = {key: {} for key, _, _ in OUTCOMES}
+    families = {key: {} for key in GROUP_NOTES}
     for name, title, category in entries:
-        outcome = "negative" if name.startswith("negative-") else "positive"
-        outcomes[outcome].setdefault(category, []).append((name, title))
+        families[benchmark_group(name)].setdefault(category, []).append((name, title))
     blocks, jumps = [], []
-    for key, heading, note in OUTCOMES:
-        groups = outcomes[key]
+    for key in GROUP_NOTES:
+        groups = families[key]
         if not groups:
             continue
         total = sum(len(items) for items in groups.values())
-        jumps.append(f'<a href="#{key}">{escape(heading)} ({total})</a>')
+        jumps.append(f'<a href="#{key}">{key} ({total})</a>')
+        note = (
+            "Each must fail, and expected/error.yaml pins the error it raises."
+            if key == "negative"
+            else "Each runs to completion and produces the artifact in expected/."
+        )
         sections = [
-            f"## {escape(heading)} {{: #{key} }}\n\n"
+            f"## {key} {{: #{key} }}\n\n"
             f'<p class="benchmark-note">{plural(total, "benchmark")}. '
             f"{escape(note)}</p>"
         ]
@@ -915,11 +883,8 @@ def render_benchmark(benchmark, previous=None, next=None):
         subject_options.append(
             f'<option value="{escape(key)}">{escape(label)}</option>'
         )
-    category, heading = benchmark_category(benchmark.name, title, spec)
-    metadata = load_metadata(benchmark)
-    taxonomy = (metadata["standard"], metadata["domain"])
-    if taxonomy and not benchmark.name.startswith("spec-"):
-        category = ".".join(taxonomy)
+    category = ".".join((metadata["standard"], metadata["domain"]))
+    heading = title.split(": ", 1)[-1]
     heading = heading[:1].upper() + heading[1:]
     has_csv = any(path.suffix == ".csv" for path in outputs)
     if is_failure:
@@ -990,7 +955,7 @@ def render_benchmark(benchmark, previous=None, next=None):
             ),
         )
     else:
-        standard = taxonomy[0] if taxonomy else None
+        standard = metadata["standard"]
         standard = (
             f"CDISC {standard}" if standard in REVIEW_STANDARDS else "CDISC standards"
         )

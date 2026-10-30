@@ -24,6 +24,12 @@ the committed README, and `check_documentation.py` validates the rendered table.
 Runnable Python/R entries are metadata; passing is gated by the native run,
 where every active benchmark must pass on every lane.
 
+The overview table, jump links and gallery list groups in the order `sdtm`,
+`adam`, `schema`, `negative`, with one subsection per `benchmark.yaml` domain.
+SEND examples belong to the `sdtm` tabulation group and retain their SEND
+standard on their dashboards. README titles and specification contents do not
+determine gallery categories.
+
 Pass benchmark names instead of `--all` to regenerate only those pages, and
 `--check` to compare bytes without writing. Pinned dependencies and sorted,
 ASCII, timestamp-free output make generation byte-reproducible. The index test

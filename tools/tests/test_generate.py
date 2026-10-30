@@ -717,11 +717,18 @@ class DashboardTests(unittest.TestCase):
                 page,
             )
 
-    def test_schema_prefixed_benchmark_gets_its_own_gallery_category(self):
-        benchmark = generate.BENCHMARKS / "schema-inheritance"
-        title, category = generate.describe_benchmark(benchmark)
-        self.assertEqual(title, "Spec Inheritance")
-        self.assertEqual(category, "Specification")
+    def test_gallery_categories_use_the_authored_dataset_type(self):
+        # Metadata owns the gallery taxonomy even when the entry omits a
+        # domain, is a child spec, or the README has a different heading.
+        for name, domain in (
+            ("schema-inheritance", "ADLB"),
+            ("negative-version-mismatch", "ADSL"),
+            ("sdtm-dm-race-ethnicity", "DM"),
+            ("send-bw-sendig311", "BW"),
+        ):
+            with self.subTest(name=name):
+                _, category = generate.describe_benchmark(generate.BENCHMARKS / name)
+                self.assertEqual(category, domain)
 
     def test_producer_beside_the_entry_renders_as_a_second_spec(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
@@ -782,11 +789,6 @@ class DashboardTests(unittest.TestCase):
                 path.write_text(yaml.safe_dump(document), encoding="utf-8")
             page = generate.render_benchmark(benchmark).decode("ascii")
             self.assertIn('<span class="panel-caption">2 spec files</span>', page)
-
-    def test_example_building_two_domains_files_under_its_readme_domain(self):
-        benchmark = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
-        _, category = generate.describe_benchmark(benchmark)
-        self.assertEqual(category, "DM")
 
     def test_dashboard_badge_is_not_rendered_on_its_own_page(self):
         page = generate.render_benchmark(generate.BENCHMARKS / "sdtm-dm-basic").decode(
@@ -930,24 +932,32 @@ class DashboardTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(f'href="{name}.html"', text)
 
-    def test_gallery_counts_groups_from_the_directory_names(self):
+    def test_gallery_counts_groups_in_the_same_order_as_sections_and_jumps(self):
         # The group table is the figure readers quote, so it is counted from
         # the suite rather than typed into the overview, where it would drift.
         text = generate.render_index(
             [
-                ("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL"),
-                ("adam-adsl-two", "ADaM ADSL: derive more", "ADaM ADSL"),
-                ("negative-adsl-three", "ADaM ADSL: reject", "ADaM ADSL"),
+                ("negative-adsl-one", "Reject", "ADSL"),
+                ("schema-adsl-two", "Configure", "ADSL"),
+                ("adam-adsl-three", "Derive", "ADSL"),
+                ("sdtm-dm-four", "Tabulate", "DM"),
+                ("send-bw-five", "Tabulate nonclinical weights", "BW"),
             ]
         ).decode("ascii")
-        self.assertIn("| Group | Count | Purpose |", text)
-        self.assertIn(
-            "| `adam-*` | 2 | Assess SDTM to ADaM and ADaM to results derivations |",
-            text,
+        expected = [("sdtm", "2"), ("adam", "1"), ("schema", "1"), ("negative", "1")]
+        self.assertEqual(
+            {
+                "table": re.findall(r"^\| `([^`]+)` \| (\d+) \|", text, re.M),
+                "jumps": re.findall(r'<a href="#([^\"]+)">\w+ \((\d+)\)</a>', text),
+                "sections": re.findall(
+                    r"^## (\w+) \{:[^\n]+\}\n\n[^\n]+>(\d+) benchmarks?\.",
+                    text,
+                    re.M,
+                ),
+            },
+            {"table": expected, "jumps": expected, "sections": expected},
         )
-        self.assertIn("| `negative-*` | 1 | Assess yamaa error handling |", text)
-        # A group with no benchmarks does not get an empty row.
-        self.assertNotIn("`sdtm-*`", text)
+        self.assertIn('href="send-bw-five.html"', text.split("## adam")[0])
 
     def test_gallery_rejects_a_group_it_cannot_describe(self):
         with self.assertRaises(ValueError) as caught:
@@ -978,7 +988,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_gallery_is_a_markdown_page_for_the_documentation_site(self):
         text = generate.render_index(
-            [("adam-adsl-one", "ADaM ADSL: derive a flag", "ADaM ADSL")]
+            [("adam-adsl-one", "ADaM ADSL: derive a flag", "ADSL")]
         ).decode("ascii")
         # Front matter and Markdown headings: MkDocs renders this page with the
         # site header, navigation, and palette, so it must not be a whole
@@ -988,32 +998,60 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("<!doctype html>", text)
         self.assertNotIn("<body", text)
         self.assertIn("\n# Benchmark\n", text)
-        self.assertIn("\n## Benchmarks {: #positive }\n", text)
-        self.assertIn("\n### ADaM ADSL\n", text)
+        self.assertIn("\n## adam {: #adam }\n", text)
+        self.assertIn("\n### ADSL\n", text)
         self.assertIn("1 benchmark, generated from", text)
 
     def test_gallery_lists_rejected_benchmarks_apart_from_positive_ones(self):
         entries = [
-            ("adam-adsl-one", "ADaM ADSL: derive a flag", "ADaM ADSL"),
-            ("negative-adsl-two", "ADaM ADSL: reject a flag", "ADaM ADSL"),
+            ("adam-adsl-one", "ADaM ADSL: derive a flag", "ADSL"),
+            ("negative-adsl-two", "ADaM ADSL: reject a flag", "ADSL"),
         ]
         text = generate.render_index(entries).decode("ascii")
-        positive = text.index("{: #positive }")
+        positive = text.index("{: #adam }")
         negative = text.index("{: #negative }")
         self.assertLess(positive, negative)
         self.assertLess(text.index("adam-adsl-one.html"), negative)
         self.assertLess(negative, text.index("negative-adsl-two.html"))
         # One shared domain heading per group, not one shared between them.
-        self.assertEqual(text.count("### ADaM ADSL\n"), 2)
-        self.assertIn('<a href="#positive">Benchmarks (1)</a>', text)
-        self.assertIn('<a href="#negative">Anti-pattern (1)</a>', text)
+        self.assertEqual(text.count("### ADSL\n"), 2)
+        self.assertIn('<a href="#adam">adam (1)</a>', text)
+        self.assertIn('<a href="#negative">negative (1)</a>', text)
 
     def test_gallery_omits_a_group_with_no_benchmarks(self):
         text = generate.render_index(
-            [("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL")]
+            [("adam-adsl-one", "ADaM ADSL: derive", "ADSL")]
         ).decode("ascii")
-        self.assertIn("{: #positive }", text)
-        self.assertNotIn("{: #negative }", text)
+        self.assertEqual(re.findall(r"^## (\w+) \{:", text, re.M), ["adam"])
+        self.assertEqual(re.findall(r"^\| `([^`]+)`", text, re.M), ["adam"])
+
+    def test_gallery_has_one_subsection_per_dataset_type_in_each_group(self):
+        entries = [
+            (name, *generate.describe_benchmark(generate.BENCHMARKS / name))
+            for name in (
+                "schema-inheritance",
+                "schema-structure",
+                "schema-functions",
+                "negative-version-mismatch",
+            )
+        ]
+        text = generate.render_index(entries).decode("ascii")
+        self.assertEqual(
+            re.findall(r"^#{2,3} ([^\n]+)", text, re.M),
+            [
+                "Start here",
+                "All benchmarks",
+                "schema {: #schema }",
+                "ADLB",
+                "TEST",
+                "negative {: #negative }",
+                "ADSL",
+            ],
+        )
+        self.assertCountEqual(
+            re.findall(r'<li><a href="([^\"]+)\.html">', text),
+            [name for name, _, _ in entries],
+        )
 
     def test_multi_level_spec_renders_panes_without_retired_resolved_output(self):
         benchmark = generate.BENCHMARKS / "schema-inheritance"
