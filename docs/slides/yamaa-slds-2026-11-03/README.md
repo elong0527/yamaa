@@ -4,10 +4,9 @@
 for SLDS 2026 (2026-11-03, Marriott at the Brooklyn Bridge, New York).
 
 The deck reuses the NJSUG 2026-10-09 structure (motivation, MAP prompt
-tiers, YAML example, core principle, workflow) and adds the October 2026
-Pilot 7 sprint: shared program templates, Define-XML 2.0 reproduction,
-executable resolved specs, and the Start-review dashboard. Its YAML
-example is illustrative; check the current schema before reusing it.
+tiers, YAML example, core principle, workflow) and points to the
+RConsortium Pilot 7 site for the full-study work. Its YAML example is
+illustrative; check the current schema before reusing it.
 
 [View the rendered slides](https://elong0527.github.io/yamaa/slides/yamaa-slds-2026-11-03/index.html)
 
