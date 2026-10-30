@@ -1,17 +1,20 @@
 # yamaa <img src="https://raw.githubusercontent.com/elong0527/yamaa/main/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
+[![SDTMIG: 3.3+](https://img.shields.io/badge/SDTMIG-3.3%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported SDTMIG: 3.3; see the qualified version list and generation/export coverage")
+[![ADaMIG: 1.1+](https://img.shields.io/badge/ADaMIG-1.1%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported ADaMIG: 1.1; see the qualified version list and generation/export coverage")
+[![Define-XML 2.0.0+](https://img.shields.io/badge/Define--XML-2.0.0%2B-blue)](https://www.cdisc.org/standards/data-exchange/define-xml)
+
+[![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
+[![rustc](https://img.shields.io/badge/rustc-1.82%2B-orange?logo=rust)](https://www.rust-lang.org)
+[![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
+
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
 [![Release checks](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=release%20checks)](https://github.com/elong0527/yamaa/actions/workflows/native.yml "Builds and tests Python and R release packages on Linux, macOS, and Windows, and runs CRAN's incoming checks on the R source package")
 [![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml?query=branch%3Amain+event%3Aworkflow_dispatch)
-[![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
-[![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
-[![rustc](https://img.shields.io/badge/rustc-1.82%2B-orange?logo=rust)](https://www.rust-lang.org)
-[![Define-XML 2.0.0+](https://img.shields.io/badge/Define--XML-2.0.0%2B-blue)](https://www.cdisc.org/standards/data-exchange/define-xml)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
+
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/elong0527/yamaa)
-[![SDTMIG: 3.3+](https://img.shields.io/badge/SDTMIG-3.3%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported SDTMIG: 3.3; see the qualified version list and generation/export coverage")
-[![ADaMIG: 1.1+](https://img.shields.io/badge/ADaMIG-1.1%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported ADaMIG: 1.1; see the qualified version list and generation/export coverage")
 
 yamaa is a domain-specific language (DSL) for clinical trial data standardization.
 A yamaa specification transforms ODM XML data, extracted from an EDC system,
