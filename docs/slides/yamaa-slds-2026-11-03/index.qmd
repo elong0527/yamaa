@@ -39,7 +39,7 @@ organizations or institutions.
 
 ## Motivation
 
-* Two AI agents use the same specification to derive ADaM data.
+* Two AI agents use the same specification to derive analysis datasets in clinical trials. [example](https://arena.ai/c/01a18ded-d0db-7852-b6e9-1528ddf4eb42)
 * Both report completion, but their source code and outputs differ.
 * A reviewer makes non-trivial efforts to resolve the difference before signing off.
 
@@ -218,56 +218,16 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 Scroll inside the frame to explore the spec, inputs, and golden output.
 
-## yamaa: full studies
+## RConsortium Pilot 7: full studies
 
-* Build publicly available ground truth.
-  * [https://github.com/RConsortium/submissions-pilot7-synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+* Build publicly available agentic data standardization workflow.
+  * [https://rconsortium.github.io/submissions-pilot7-synthetic-data/](https://rconsortium.github.io/submissions-pilot7-synthetic-data/)
 * CDISC pilots (SDTM -> ADaM)
-  * cdiscpilot01 and RConsortium submission pilots 3, 5, and 6.
+  * cdiscpilot01 and RConsortium submission pilots 3 and 5.
 * OpenClinica real sample data (ODM -> SDTM -> ADaM)
   * Real sample data for testing the full data journey.
 * Synthetic studies (ODM -> SDTM -> ADaM)
   * Simulate ODM XML from real clinical studies.
-
-## Pilot 7: October sprint in one slide
-
-What landed since the September update (selected merges):
-
-- **Shared program templates:** ADSL, ADAE, ADLBC, ADTTE, and ADAS-Cog derivations reused across CDISCPILOT01 packages ([#154](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/154), [#156](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/156), [#157](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/157), [#163](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/163), [#164](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/164), [#173](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/173)).
-- **Define-XML 2.0 reproduced** for submission pilots 3 and 5 ([#144](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/144)); Pilot 01 legacy 1.0 comparison in [#148](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/148).
-- **Executable resolved specs saved** with documented-rule checks ([#167](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/167)) - the reviewed spec is the runnable spec.
-- **Synthetic studies:** KN189/KN564 SDTM, ADaM, Define-XML and review findings ([#152](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/152), [#155](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/155)).
-
-## Pilot 7: review is the product
-
-The October work converged the study dashboard on human review:
-
-- **Start review:** per-finding trace evidence with human dispositions ([#169](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/169), [#179](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/179)).
-- **Source documents vs YAML evidence separated** so reviewers see what the protocol said and what the spec claims ([#181](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/181)).
-- **Compare first:** side-by-side Define-XML and worksheet-tab Excel views load before source documents ([#170](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/170), [#175](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/175), [#176](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/176)).
-- **Automated consistency review** across the three pilot studies, grouped into reviewable issues ([#153](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/153), [#141](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/141)).
-
-Open next step: submit dashboard reviews directly to GitHub ([#180](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/180), open).
-
-## Four separate questions for a reviewer
-
-| Evidence | Question it answers |
-| --- | --- |
-| Execution | Did the specification build successfully? |
-| Reference comparison | Did the output match the published dataset under this comparator? |
-| Clinical review | Does the derivation express the documented study intent? |
-| Metadata and conformance checks | Does the package reproduce or satisfy the required metadata contract? |
-
-Reference agreement can coexist with a documentation conflict. Do not
-describe a passing comparator as regulatory validation.
-
-## Recommendations: ODM XML
-
-- [CDISC ODM](https://www.cdisc.org/standards/data-exchange/odm) is an XML standard for clinical research data.
-- EDC systems can export study data in ODM XML.
-- Teams familiar with define.xml will recognize the ODM structure.
-
-Learn with AI: [https://arena.ai/](https://arena.ai/)
 
 ## Recommendations: Input and Output
 
@@ -312,3 +272,4 @@ Collaborating with [keiji.ai](https://keiji.ai/) to test synthetic clinical tria
 - **Repository:** [github.com/elong0527/yamaa](https://github.com/elong0527/yamaa)
 - **Documentation:** [elong0527.github.io/yamaa](https://elong0527.github.io/yamaa/)
 - **Benchmarks:** [elong0527.github.io/yamaa/benchmark](https://elong0527.github.io/yamaa/benchmark/)
+- **Pilot 7:** [https://rconsortium.github.io/submissions-pilot7-synthetic-data/](https://rconsortium.github.io/submissions-pilot7-synthetic-data/)
