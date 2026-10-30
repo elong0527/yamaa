@@ -153,17 +153,23 @@ class DashboardTests(unittest.TestCase):
             [pane["aria-label"] for pane in DashboardContent(page).file_panes],
             ["input/body_weights.csv", "expected/bw.csv", "expected/define.xml"],
         )
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            path = support.write(root, "input/DM.XPT", b"binary transport")
-            rendered, count, subjects = generate.render_files(
-                [path], "input", root, set(), {}
-            )
-        self.assertEqual(
-            (DashboardContent(rendered).file_panes, count, subjects), ([], 0, set())
-        )
-        self.assertIn("No preview available", rendered)
-        self.assertNotIn("No fixture files", rendered)
+        fixtures = HERE / "fixtures/benchmark_docs"
+        cases = json.loads((fixtures / "transport-previews.json").read_text())
+        for case in cases:
+            with self.subTest(path=case["path"]):
+                root = fixtures / case["root"]
+                rendered, count, subjects = generate.render_files(
+                    [root / case["path"]], "input", root, set(), {}
+                )
+                self.assertEqual(
+                    {
+                        "panes": DashboardContent(rendered).file_panes,
+                        "row_count": count,
+                        "subjects": sorted(subjects),
+                        "message": html_tree.fromstring(rendered).text_content(),
+                    },
+                    case["expected"],
+                )
 
     def test_define_xml_resolves_variables_origins_and_methods(self):
         # Resolved display reads independently authored metadata, not the spec.

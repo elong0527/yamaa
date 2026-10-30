@@ -1,0 +1,12 @@
+[
+  {
+    "root": "transport-only",
+    "path": "input/DM.XPT",
+    "expected": {
+      "panes": [],
+      "row_count": 0,
+      "subjects": [],
+      "message": "No preview available; inspect the fixture files in the benchmark source."
+    }
+  }
+]
