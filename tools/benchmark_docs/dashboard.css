@@ -178,8 +178,6 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .define-table td { min-width: 70px; max-width: 320px; white-space: pre-line; overflow-wrap: anywhere; }
 .define-table td:nth-child(2), .define-table td:last-child { min-width: 180px; }
 .define-table tbody tr:nth-child(even) { background: #f7fafd; }
-.comments-body { padding: 4px 0 8px; }
-.comments-body noscript p { margin: 0 0 8px; }
 .page-footer { padding: 16px 28px; color: #66768a; font-size: 12px; gap: 10px; }
 .benchmark-nav { display: flex; align-items: center; gap: 12px; }
 .benchmark-nav a { color: #2d5f8a; }
@@ -226,9 +224,9 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
   .brand-row { background: none; color: var(--ink); }
   .brand, .brand-location, .source-link, .gallery-link { color: var(--ink); }
   .dashboard { padding: 0; }
-  .review-ask, #your-review, .comparison-bar, .code-toolbar, .panel-resizer, .page-footer, .split-toggle, .tab-row, .material-picker, #comments { display: none !important; }
+  .review-ask, #your-review, .comparison-bar, .code-toolbar, .panel-resizer, .page-footer, .split-toggle, .tab-row, .material-picker { display: none !important; }
   /* Paper has no tabs: print every material and every document in it. */
-  .discussion-panel .material-pane:not(#comments)[hidden], .discussion-panel .material-document[hidden] { display: block !important; }
+  .discussion-panel .material-pane:not(#your-review)[hidden], .discussion-panel .material-document[hidden] { display: block !important; }
   .discussion-panel .material-title { position: static !important; width: auto !important; height: auto !important; clip-path: none !important; }
   .discussion-panel .code-scroll, .discussion-panel .mapping-scroll { max-height: none !important; }
   .workbench { display: block; }
@@ -253,8 +251,7 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .section-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
 /* The review survey: fixed choices and one free-text box */
-.review-panel { margin-top: 26px; }
-.review-form { display: grid; gap: 14px; padding: 16px 18px 18px; font-size: 15px; }
+.review-form { display: grid; gap: 14px; padding: 4px 0 12px; font-size: 15px; }
 .review-question { margin: 0; padding: 0; border: 0; min-width: 0; }
 .review-question legend { padding: 0; margin-bottom: 8px; line-height: 1.5; }
 .review-question legend a { color: var(--ink); text-decoration: none; }
@@ -274,7 +271,7 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .review-submit { flex-shrink: 0; border: 1px solid var(--brand); border-radius: 6px; padding: 8px 16px; background: var(--brand); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer; }
 .review-submit:hover { background: var(--brand-deep); }
 
-/* Comments and the assessment materials: one tab row, optionally side by side */
+/* Human review and assessment: one tab row, optionally side by side */
 .discussion-panel { margin: 26px 0 22px; }
 .discussion-panel .panel-header { flex-wrap: wrap; }
 .discussion-body { padding: 6px 18px 18px; }
@@ -312,7 +309,7 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .material-file { overflow: hidden; border: 1px solid var(--line); border-radius: 6px; }
 .material-file .code-scroll { max-height: 420px; }
 .prompt-prose { max-width: none; columns: 1; font-size: 15px; }
-.is-split #comments .comments-body { max-height: 75vh; overflow: auto; }
+.is-split #your-review .review-form { max-height: 75vh; overflow: auto; }
 .mapping-scroll { max-height: 560px; }
 .mapping-table td { white-space: normal; vertical-align: top; height: auto; }
 .mapping-table td:first-child, .mapping-table th:first-child { white-space: nowrap; }

@@ -46,24 +46,11 @@ SOLUTION_FILES = ("result.R", "result.py", "result.sas")
 # README standards (CDISC, TEST) read as "CDISC standards".
 REVIEW_STANDARDS = ("SDTM", "ADaM", "SEND")
 REPOSITORY = "https://github.com/elong0527/yamaa"
-# Comments are giscus threads in the repository's GitHub Discussions, so they
-# outlive any deployment. Each benchmark maps to one discussion whose title is
-# COMMENT_TERM_PREFIX plus the benchmark directory name; renaming a directory
-# starts a new thread. IDs come from https://giscus.app after the repository
-# enables Discussions and installs the giscus app.
-GISCUS = {
-    "repo": "elong0527/yamaa",
-    "repo_id": "R_kgDOTXVQTg",
-    "category": "Comments",
-    "category_id": "DIC_kwDOTXVQTs4DFe_t",
-    "theme": "https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=3",
-}
-COMMENT_TERM_PREFIX = "yaml/examples/"
 # A review is a short survey, as on the Pilot 7 dashboards: fixed choices and
 # one free-text box. Submitting opens GitHub's new-discussion composer with the
 # answers filled in, so the static page holds no credentials; the reviewer
-# still selects Start discussion. Each review is its own discussion beside the
-# benchmark's giscus thread, in the same category.
+# still selects Start discussion. Each review is its own discussion in the
+# Comments category.
 REVIEW_URL = REPOSITORY + "/discussions/new?category=comments"
 AGREEMENT = ("Agree", "Disagree", "Need clarification")
 READINESS = ("Ready", "Ready after minor fixes", "Needs major changes", "Unsure")
@@ -473,6 +460,9 @@ def render_review_form(name, questions, suggestion_hint):
     """The survey: one fieldset per question, then a free-text box. The script
     reads the labels, prompts and choices back from these elements to write
     the discussion body, so each question is declared once."""
+    discussions_url = (
+        REPOSITORY + "/discussions?discussions_q=" + quote(f'"{name}" in:title')
+    )
     fieldsets = []
     for key, target, label, prompt, choices in questions:
         options = "".join(
@@ -487,11 +477,10 @@ def render_review_form(name, questions, suggestion_hint):
             f'<div class="review-choices">{options}</div></fieldset>'
         )
     return (
-        '<section id="your-review" class="panel review-panel" '
-        'aria-labelledby="your-review-heading">'
-        '<header class="panel-header"><h2 id="your-review-heading">Your review</h2>'
-        '<span class="panel-caption">Three questions and your suggestions</span>'
-        "</header>"
+        '<div class="material-toolbar"><h3 class="material-title">Your review</h3>'
+        '<p class="material-provenance">Three questions and your suggestions '
+        f'&middot; <a href="{escape(discussions_url)}">View benchmark discussions</a></p>'
+        "</div>"
         f'<form class="review-form" data-benchmark="{escape(name)}" '
         f'data-review-url="{escape(REVIEW_URL)}" novalidate hidden>'
         + "".join(fieldsets)
@@ -510,7 +499,7 @@ def render_review_form(name, questions, suggestion_hint):
         "readonly></textarea></div></form>"
         "<noscript><p>The review form needs JavaScript. Leave your review in "
         f'<a href="{escape(REPOSITORY)}/discussions">GitHub Discussions</a>.</p>'
-        "</noscript></section>"
+        "</noscript>"
     )
 
 
@@ -1090,9 +1079,9 @@ def render_benchmark(benchmark, previous=None, next=None):
         "<p>As a clinical trial statistician or programmer, answer three short "
         'questions in <a href="#your-review">Your review</a>: the task, the '
         "inputs, and whether this benchmark is ready to finalize. Propose a fix "
-        "with the <strong>Edit</strong> button on any source file, or discuss it "
-        'in <a href="#comments">Comments</a>.</p><p class="review-ask-note">The '
-        "other tabs beside Comments are background for assessment, not under "
+        "with the <strong>Edit</strong> button on any source file, or add a "
+        'suggestion to your review.</p><p class="review-ask-note">The '
+        "other tabs beside Your review are background for assessment, not under "
         "review.</p>"
     )
     review_form = render_review_form(benchmark.name, questions, suggestion_hint)
@@ -1183,13 +1172,6 @@ def render_benchmark(benchmark, previous=None, next=None):
         material_tabs=material_tabs,
         material_panes=material_panes,
         panel_script=(HERE / "panel-tabs.js").read_text(encoding="utf-8"),
-        giscus_repo=escape(GISCUS["repo"]),
-        giscus_repo_id=escape(GISCUS["repo_id"]),
-        giscus_category=escape(GISCUS["category"]),
-        giscus_category_id=escape(GISCUS["category_id"]),
-        giscus_theme=escape(GISCUS["theme"]),
-        comment_term=escape(COMMENT_TERM_PREFIX + benchmark.name),
-        discussions_url=REPOSITORY + "/discussions",
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
         review_script=(HERE / "review-form.js").read_text(encoding="utf-8"),
