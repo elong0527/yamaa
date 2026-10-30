@@ -918,7 +918,7 @@ and Python source archive were uploaded from its GitHub release assets
 unchanged (#3030 D177); and 0.6.2, uploaded the same way from the assets of
 the GitHub release that its tag created. 0.6.0 and 0.6.1 are GitHub releases
 only, and no 0.6 release had a candidate (#3673 D236, D289). 0.7.0 goes to
-PyPI when it is ready, without waiting for CRAN (#4064 D297). The GitHub
+PyPI when it is ready, and not to CRAN (#4064 D304). The GitHub
 release assets remain the standalone download route for every package.
 
 ### Command-line binaries
@@ -980,10 +980,10 @@ CRAN's checks, and a change CRAN asks for on 0.6.2 becomes 0.6.3. After
 1.0.0, such a patch is one that the stability contract allows.
 
 A release does not wait for CRAN. 0.7.0 reaches GitHub and PyPI when it is
-ready, and its R source package goes to CRAN only once CRAN has accepted
-0.6.2 and CRAN's interval between updates has passed (#4064 D297).
+ready, and its R source package is not submitted to CRAN: R users install it
+from the GitHub release (#4064 D304, which amends D297).
 
-Each later release, 0.6.3 or 0.7.0 among them, follows the same sequence
+Each later release follows the same sequence, 0.7.0 through its PyPI step,
 after the [release checklist](#release-checklist), whose item 4 names the
 dated advisory re-reviews: the first release after 2027-01-31 re-reviews the
 PyO3 and thrift ignores, and the first after 2027-04-30 the paste ignore
