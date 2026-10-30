@@ -690,35 +690,32 @@ class DashboardTests(unittest.TestCase):
             "readiness",
             generate.REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle",
             "Overall",
-            "Is this benchmark ready to finalize?",
+            "Would you agree that the benchmark is ready to finalize?",
             ("Ready", "Ready after minor fixes", "Needs major changes", "Unsure"),
         )
         inputs = (
             "inputs",
             "#inputs",
             "Inputs",
-            "Do the inputs look like data collected in a real study, and do they "
-            "include the situations you would expect?",
+            "Would you agree that the inputs and outputs represent real "
+            "data structures collected in clinical trials?",
             agreement,
         )
 
-        def task(standard):
-            return (
-                "task",
-                "#readme",
-                "Task",
-                "Would a real study need this derivation, specified this way, and "
-                f"does it follow {standard}: variable names, controlled terms, "
-                "record structure?",
-                agreement,
-            )
+        task = (
+            "task",
+            "#readme",
+            "Task",
+            "Would you agree that the benchmark use case represents real "
+            "data derivation in clinical trials?",
+            agreement,
+        )
 
         cases = (
-            (BENCHMARK.name, [task("CDISC ADaM"), inputs, readiness]),
-            ("sdtm-dm-basic", [task("CDISC SDTM"), inputs, readiness]),
-            ("send-bw-sendig311", [task("CDISC SEND"), inputs, readiness]),
-            # Metadata outside SDTM, ADaM or SEND reads as CDISC standards.
-            ("schema-source-ordinal", [task("CDISC standards"), inputs, readiness]),
+            (BENCHMARK.name, [task, inputs, readiness]),
+            ("sdtm-mh-ongoing-conditions", [task, inputs, readiness]),
+            ("send-bw-sendig311", [task, inputs, readiness]),
+            ("schema-source-ordinal", [task, inputs, readiness]),
             (
                 "negative-ambiguous-type",
                 [
@@ -747,8 +744,17 @@ class DashboardTests(unittest.TestCase):
             with self.subTest(case=name):
                 page, questions = survey(name)
                 self.assertEqual(questions, expected, name)
+                if name == "negative-ambiguous-type":
+                    self.assertIn(
+                        "Your review</a>: the task, the inputs, and whether this "
+                        "benchmark is ready to finalize.",
+                        page,
+                    )
                 # One free-text box, a script-only form, and GitHub's composer.
                 self.assertEqual(page.count('name="suggestions"'), 1, name)
+                self.assertIn(
+                    'placeholder="Suggestions to finalize the benchmark"', page, name
+                )
                 self.assertIn(
                     f'<form class="review-form" data-benchmark="{name}" '
                     'data-review-url="https://github.com/elong0527/yamaa/'
@@ -762,9 +768,9 @@ class DashboardTests(unittest.TestCase):
             ask,
             "<p>As a clinical trial statistician or programmer, answer three short "
             'questions in <a href="#your-review">Your review</a>: the task, the '
-            "inputs, and whether this benchmark is ready to finalize. Propose a fix "
-            "with the <strong>Edit</strong> button on any source file, or add a "
-            'suggestion to your review.</p><p class="review-ask-note">'
+            "inputs and outputs, and whether this benchmark is ready to finalize. "
+            "Propose a fix with the <strong>Edit</strong> button on any source "
+            'file, or add a suggestion to your review.</p><p class="review-ask-note">'
             "The other tabs beside Your review are background for assessment, not "
             "under review.</p>",
         )
