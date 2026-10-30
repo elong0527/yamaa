@@ -56,7 +56,8 @@ Comments category with the answers filled in, so the static page holds no
 credentials. The summary, inputs, and expected output carry an "Under review"
 chip, and every source file has an Edit button for proposing a fix. Under the
 datasets, "Human review and assessment" holds the "Your review" survey in its
-first tab, followed by assessment materials that are not under review -- the
-mapping spec generated from the YAML, the agent prompt tiers, the yamaa code,
-and the solution written without yamaa. A material a benchmark lacks has no
-tab. "Side by side" opens up to three tabs in columns.
+first tab, with a link to earlier benchmark discussions, followed by assessment
+materials that are not under review -- the mapping spec generated from the
+YAML, the agent prompt tiers, the yamaa code, and the solution written without
+yamaa. A material a benchmark lacks has no tab. "Side by side" opens up to
+three tabs in columns.

@@ -9,7 +9,7 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest import mock
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from lxml import html as html_tree
 
@@ -601,6 +601,9 @@ class DashboardTests(unittest.TestCase):
                         "tab": (tab.get("id"), tab.text, tab.get("aria-selected")),
                         "pane": (pane.get("id"), pane.get("aria-labelledby")),
                         "forms": pane.xpath("./form/@data-benchmark"),
+                        "discussions": parse_qs(
+                            urlsplit(pane.xpath("./div/p/a/@href")[0]).query
+                        ),
                     },
                     {
                         "heading": ["Human review and assessment"],
@@ -608,6 +611,7 @@ class DashboardTests(unittest.TestCase):
                         "tab": ("tab-your-review", "Your review", "true"),
                         "pane": ("your-review", "tab-your-review"),
                         "forms": [name],
+                        "discussions": {"discussions_q": [f'"{name}" in:title']},
                     },
                     name,
                 )

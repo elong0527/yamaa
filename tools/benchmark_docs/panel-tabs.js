@@ -95,8 +95,14 @@
     }
     return changed;
   }
-  window.addEventListener("hashchange", () => {
+  function revealAndScroll() {
     if (reveal()) document.getElementById(decodeURIComponent(location.hash.slice(1))).scrollIntoView();
+  }
+  window.addEventListener("hashchange", revealAndScroll);
+  // Clicking the current fragment again does not emit hashchange.
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest('a[href^="#"]');
+    if (link && link.hash === location.hash) revealAndScroll();
   });
   render();
   reveal();

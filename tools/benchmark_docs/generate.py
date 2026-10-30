@@ -460,6 +460,9 @@ def render_review_form(name, questions, suggestion_hint):
     """The survey: one fieldset per question, then a free-text box. The script
     reads the labels, prompts and choices back from these elements to write
     the discussion body, so each question is declared once."""
+    discussions_url = (
+        REPOSITORY + "/discussions?discussions_q=" + quote(f'"{name}" in:title')
+    )
     fieldsets = []
     for key, target, label, prompt, choices in questions:
         options = "".join(
@@ -475,7 +478,8 @@ def render_review_form(name, questions, suggestion_hint):
         )
     return (
         '<div class="material-toolbar"><h3 class="material-title">Your review</h3>'
-        '<p class="material-provenance">Three questions and your suggestions</p>'
+        '<p class="material-provenance">Three questions and your suggestions '
+        f'&middot; <a href="{escape(discussions_url)}">View benchmark discussions</a></p>'
         "</div>"
         f'<form class="review-form" data-benchmark="{escape(name)}" '
         f'data-review-url="{escape(REVIEW_URL)}" novalidate hidden>'
