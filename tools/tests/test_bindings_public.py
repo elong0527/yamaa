@@ -39,12 +39,13 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("inputs", [arg.arg for arg in method.args.kwonlyargs])
         self.public.public["types"]["input_frames"].pop("r")
         self.assertEqual(
-            self.public._r_signature(run), "stream = FALSE, progress = NULL"
+            self.public._r_signature(run),
+            "stream = FALSE, progress = NULL, threads = NULL",
         )
         self.public.public["types"]["input_frames"]["r"] = "named list or NULL"
         self.assertEqual(
             self.public._r_signature(run),
-            "stream = FALSE, progress = NULL, inputs = NULL",
+            "stream = FALSE, progress = NULL, inputs = NULL, threads = NULL",
         )
 
     def test_python_exports_the_declared_names(self):
@@ -80,13 +81,13 @@ class RenderingTests(unittest.TestCase):
     def test_python_delegates_each_member_to_its_operation(self):
         text = self.public.render_python([])
         for expected in (
-            '            _native._spec_run(\n                self._path,\n                self._project,\n                self._plans,\n                _flag(stream, "stream"),\n                progress,\n                inputs,\n            )\n',
+            '            _native._spec_run(\n                self._path,\n                self._project,\n                self._plans,\n                _flag(stream, "stream"),\n                progress,\n                inputs,\n                threads,\n            )\n',
             'return Spec(_native._project_spec(self._path, _text(name, "name")), self._path)',
             "return self._native.output(self._name)",
             "        return self._native.save()\n",
             '            self._native.member_issues(\n                _text(name, "name")\n            )  # raises',
             "        return MemberRun(self._native, name)",
-            "        return Check(_native._project_check(self._path, progress))",
+            "        return Check(_native._project_check(self._path, progress, threads))",
             "class Spec(_Lazy):",
             "    def __init__(self, path, project=None):",
             "    def __init__(self, native, name: str):",
@@ -339,8 +340,9 @@ class RenderingTests(unittest.TestCase):
             '    .path(source, "source"),\n'
             '    .optional_text(archive_member, "archive_member"),\n',
             '.reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix")))',
-            '      path, project, .optional_path(parent, "parent"), .version(), '
-            '.progress(progress, "progress")\n',
+            '      .optional_path(parent, "parent"),\n'
+            "      .version(),\n"
+            '      .progress(progress, "progress"),\n',
             '    .spec(.text(.reply(.native_project_spec(path, .text(name, "name"), '
             '.version())), "path"), path)\n',
             '      .optional_text(section, "section"),\n'
@@ -439,7 +441,7 @@ class RenderingTests(unittest.TestCase):
         self.assertIn(
             "return Check(\n"
             "            _native._spec_check(\n"
-            "                self._path, self._project, _optional_fspath(parent), progress\n"
+            "                self._path, self._project, _optional_fspath(parent), progress, threads\n"
             "            )\n"
             "        )",
             text,
@@ -769,6 +771,7 @@ class ValidationTests(unittest.TestCase):
                     args={
                         "parent": "optional_path = None",
                         "progress": "progress = None",
+                        "threads": "threads = None",
                     },
                     keyword_only=[],
                 ),
