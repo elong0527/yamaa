@@ -74,10 +74,19 @@ struct Named {
     /// derivations reading the current record augment (LOOKUP-15).
     source_index: Option<Option<Index>>,
     choices: IdentityMap<Identity, Choice>,
+    /// The choices of the last selection read whole, in its order. It
+    /// repeats entries of `choices`, so it goes whenever one of them does.
+    batch: Option<Batch>,
     materialized: IdentityMap<Option<Identity>, Built>,
     /// Whether derivations reading the current record augment only the
     /// matched records (LOOKUP-15), decided on first use.
     matched: Option<bool>,
+}
+
+/// The choices of a selection's rows, in its order, under their identities.
+struct Batch {
+    identities: Vec<Identity>,
+    choices: Vec<Choice>,
 }
 
 /// A cache entry a batch unit added, removed if the unit replays.
@@ -134,10 +143,14 @@ impl State {
         while self.journal.len() > mark.0 {
             match self.journal.pop().expect("a journal entry") {
                 Entry::Choice(relation, identity) => {
-                    self.named(relation).choices.remove(&identity);
+                    let named = self.named(relation);
+                    named.choices.remove(&identity);
+                    named.batch = None;
                 }
                 Entry::Materialized(relation, key) => {
-                    self.named(relation).materialized.remove(&key);
+                    let named = self.named(relation);
+                    named.materialized.remove(&key);
+                    named.batch = None;
                 }
             }
         }
@@ -217,6 +230,7 @@ impl State {
                 named.index = None;
                 named.source_index = None;
                 named.choices.clear();
+                named.batch = None;
                 named.materialized.clear();
             }
         }
@@ -543,7 +557,17 @@ pub(super) fn verify<'a: 's, 's, E>(
     }
 }
 
-/// An intermediate read node over rows.
+/// An intermediate read node over rows, as one column: each row's record
+/// choice, then the read column's value copied from the chosen record
+/// straight into one buffer, text included, as the row's handler counts.
+/// Rows are visited in order, so choices, firings and the first failure keep
+/// the order of one-row reads.
+///
+/// A choice is resolved once per row identity and cached for every read of
+/// the relation. When every row reads the same records, the choices of a
+/// whole selection are also kept in selection order, and the next read of
+/// the relation over the same rows, such as another of its columns, takes
+/// them without visiting the cache row by row.
 pub(super) fn read<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -555,21 +579,169 @@ pub(super) fn read<E>(
     let Read::Relation(relation, column) = plan.reads(expr)[0] else {
         unreachable!("an intermediate node reads its relation")
     };
-    prepare_matched(run, cx, Site::node(plan, expr), relation, rows);
-    let mut values = Values::missing(0);
-    for &row in rows {
-        let value = named_value(
-            run,
-            cx,
-            Site::node(plan, expr),
-            relation,
-            column as usize,
-            row,
-            observe,
-        )?;
-        values.push_value(value);
+    let site = Site::node(plan, expr);
+    prepare_matched(run, cx, site, relation, rows);
+    let enclosing;
+    let cx = match enclosed(cx) {
+        Some(outer) => {
+            enclosing = outer;
+            &enclosing
+        }
+        None => cx,
+    };
+    let item = item(plan, relation);
+    let mut gather = Gather::new(item, column as usize, rows.len(), site, observe);
+    // Derivations that read the current record build records per row, so
+    // only another relation's choices are kept for the selection; a row-mode
+    // read of one row keeps none.
+    let kept = match rows {
+        [first, _, ..] if shared_records(item) => Some(*first),
+        _ => None,
+    };
+    let identities: Vec<Identity> = match kept {
+        Some(_) => rows.iter().map(|&row| cx.frame.identity(row)).collect(),
+        None => Vec::new(),
+    };
+    if let Some(first) = kept {
+        let held = run
+            .relations
+            .named(relation)
+            .batch
+            .take()
+            .filter(|batch| batch.identities == identities);
+        if let Some(batch) = held {
+            let prepared = donor::materialize(run, cx, relation, Some(site), Some(first))?;
+            let table = prepared
+                .as_ref()
+                .map_or_else(|| source_table(item, cx), Built::table);
+            for &choice in &batch.choices {
+                gather.push(run, table, choice)?;
+            }
+            run.relations.named(relation).batch = Some(batch);
+            return Ok(gather.values);
+        }
     }
-    Ok(values)
+    let mut choices = Vec::new();
+    if kept.is_some() {
+        super::reserved(choices.try_reserve_exact(rows.len()))?;
+    }
+    for &row in rows {
+        let (prepared, choice) = choose(run, cx, site, relation, row)?;
+        let table = prepared
+            .as_ref()
+            .map_or_else(|| source_table(item, cx), Built::table);
+        gather.push(run, table, choice)?;
+        if kept.is_some() {
+            choices.push(choice);
+        }
+    }
+    if kept.is_some() {
+        run.relations.named(relation).batch = Some(Batch {
+            identities,
+            choices,
+        });
+    }
+    Ok(gather.values)
+}
+
+/// Whether every row of a relation chooses among the same records: those of
+/// its source, of its pairs, or of a donor built once. Derivations that read
+/// the current record build them per row instead.
+fn shared_records(item: &Intermediate) -> bool {
+    item.source.pairs().is_some()
+        || item
+            .derivations
+            .as_ref()
+            .is_none_or(|derived| derived.current.is_empty())
+}
+
+/// One read column under construction: each row's value copied from its
+/// chosen record, or the absent value, into a buffer reserved for the
+/// selection once its type is known, and each row's handler counted under
+/// the read's site.
+struct Gather<'i, 's> {
+    item: &'i Intermediate,
+    column: usize,
+    values: Values,
+    rows: usize,
+    reserved: bool,
+    firings: Option<Firings<'s>>,
+}
+
+impl<'i, 's> Gather<'i, 's> {
+    fn new(
+        item: &'i Intermediate,
+        column: usize,
+        rows: usize,
+        site: Site<'s>,
+        observe: bool,
+    ) -> Self {
+        Self {
+            item,
+            column,
+            values: Values::missing(0),
+            rows,
+            reserved: false,
+            firings: observe.then(|| Firings::new(site)),
+        }
+    }
+
+    /// The next row's value, read from `table` by its choice.
+    fn push<E>(
+        &mut self,
+        run: &mut Run<'_, '_, E>,
+        table: Table<'_, E>,
+        choice: Choice,
+    ) -> Result<(), Fail<E>> {
+        let (value, handler) = chosen(table, self.item, self.column, choice)?;
+        self.values.push(value);
+        if !self.reserved && !matches!(self.values, Values::Missing(_)) {
+            let rest = self.rows.saturating_sub(self.values.len());
+            super::reserved(self.values.try_reserve(rest))?;
+            self.reserved = true;
+        }
+        if let (Some(handler), Some(firings)) = (handler, self.firings.as_mut()) {
+            let site = firings.site.expr;
+            run.fire_at(site, firings.path(handler), handler)?;
+        }
+        Ok(())
+    }
+}
+
+/// The full site paths of a read's handlers, each formatted once.
+struct Firings<'s> {
+    site: Site<'s>,
+    absent: Option<String>,
+    multiple: Option<String>,
+}
+
+impl<'s> Firings<'s> {
+    fn new(site: Site<'s>) -> Self {
+        Self {
+            site,
+            absent: None,
+            multiple: None,
+        }
+    }
+
+    fn path(&mut self, handler: HandlerKind) -> &str {
+        let slot = match handler {
+            HandlerKind::Absent => &mut self.absent,
+            _ => &mut self.multiple,
+        };
+        let path = self.site.path;
+        slot.get_or_insert_with(|| format!("{path}.{}", handler.name()))
+    }
+}
+
+/// An aggregate derivation keeps its donor record apart from the current
+/// row: a named, kept selection reads the enclosing row on the primary.
+fn enclosed<'c, E>(cx: &Cx<'c, E>) -> Option<Cx<'c, E>> {
+    cx.record.is_some().then(|| Cx {
+        record: None,
+        table: cx.primary,
+        ..cx.clone()
+    })
 }
 
 /// One row's read of a named intermediate's column. `owner` is the node
@@ -584,16 +756,60 @@ pub(super) fn named_value<E>(
     row: usize,
     observe: bool,
 ) -> Result<Value, Fail<E>> {
-    // An aggregate derivation keeps its donor record apart from the current
-    // row: a named, kept selection reads the enclosing row on the primary.
-    if cx.record.is_some() {
-        let enclosing = Cx {
-            record: None,
-            table: cx.primary,
-            ..cx.clone()
-        };
+    if let Some(enclosing) = enclosed(cx) {
         return named_value(run, &enclosing, site, relation, column, row, observe);
     }
+    let item = item(run.plan, relation);
+    let (prepared, choice) = choose(run, cx, site, relation, row)?;
+    let table = prepared
+        .as_ref()
+        .map_or_else(|| source_table(item, cx), Built::table);
+    let (value, handler) = chosen(table, item, column, choice)?;
+    let value = owned(value);
+    if let Some(handler) = handler.filter(|_| observe) {
+        run.fire_at(
+            site.expr,
+            &format!("{}.{}", site.path, handler.name()),
+            handler,
+        )?;
+    }
+    Ok(value)
+}
+
+/// A row's value of a named intermediate's column by its choice, read from
+/// the records it chose among, and the handler the read fires.
+fn chosen<'v, E>(
+    table: Table<'v, E>,
+    item: &'v Intermediate,
+    column: usize,
+    choice: Choice,
+) -> Result<(ValueRef<'v>, Option<HandlerKind>), Fail<E>> {
+    Ok(match choice {
+        Choice::Record { row, multiple } => (
+            cell(table, item, row, column)?,
+            multiple.then_some(HandlerKind::MultipleMatches),
+        ),
+        // The declared literal, or missing by default; counted either way,
+        // under `absent` (D202).
+        Choice::Absent => (
+            item.no_match
+                .as_ref()
+                .map_or(ValueRef::Missing, ValueRef::from),
+            Some(HandlerKind::Absent),
+        ),
+    })
+}
+
+/// One row's record choice, from the relation's cache or resolved now and
+/// cached under the row's identity, with the records it chose among: a
+/// materialized donor's, or none for the source's own.
+fn choose<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    site: Site<'_>,
+    relation: RelationId,
+    row: usize,
+) -> Result<(Option<Built>, Choice), Fail<E>> {
     let plan = run.plan;
     let item = item(plan, relation);
     let identity = cx.frame.identity(row);
@@ -613,7 +829,7 @@ pub(super) fn named_value<E>(
         row,
         identity,
     };
-    let (prepared, choice) = match cached {
+    Ok(match cached {
         Some(choice) => (
             donor::materialize(run, cx, relation, Some(site), Some(row))?,
             choice,
@@ -640,31 +856,7 @@ pub(super) fn named_value<E>(
             )?;
             (prepared, choice)
         }
-    };
-    let table = match &prepared {
-        Some(data) => data.table(),
-        None => source_table(item, cx),
-    };
-    let (value, handler) = match choice {
-        Choice::Record { row, multiple } => (
-            owned(cell(table, item, row, column)?),
-            multiple.then_some(HandlerKind::MultipleMatches),
-        ),
-        // The declared literal, or missing by default; counted either way,
-        // under `absent` (D202).
-        Choice::Absent => (
-            item.no_match.clone().unwrap_or(Value::Missing),
-            Some(HandlerKind::Absent),
-        ),
-    };
-    if let Some(handler) = handler.filter(|_| observe) {
-        run.fire_at(
-            site.expr,
-            &format!("{}.{}", site.path, handler.name()),
-            handler,
-        )?;
-    }
-    Ok(value)
+    })
 }
 
 /// LOOKUP-15: the choice of a derived intermediate whose derivations read
