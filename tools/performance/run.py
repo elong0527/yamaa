@@ -464,13 +464,13 @@ def header(options):
         f"date: {datetime.date.today().isoformat()}",
         f"machine: {platform.system()} {platform.machine()}, {os.cpu_count()} cores"
         + _memory(),
-        f"cli: {options.cli} ({cli.splitlines()[0] if cli else 'missing'})",
+        f"cli: {_shown(options.cli)} ({cli.splitlines()[0] if cli else 'missing'})",
     ]
     if options.python:
         version = _output(
             [str(options.python), "-c", "import yamaa; print(yamaa.info()['version'])"]
         )
-        lines.append(f"python host: {options.python} (yamaa {version})")
+        lines.append(f"python host: {_shown(options.python)} (yamaa {version})")
     threads = options.polars_threads or os.environ.get("POLARS_MAX_THREADS")
     lines.append(
         f"polars: {pl.__version__}, {threads or 'default'} threads (polars-1: 1)"
@@ -483,6 +483,12 @@ def header(options):
             f"dplyr {dplyr or 'missing'}"
         )
     return "\n".join(lines)
+
+
+def _shown(path):
+    """`path` relative to the repository root, so a posted header names no
+    machine's directories."""
+    return os.path.relpath(path, ROOT)
 
 
 def _memory():
