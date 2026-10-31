@@ -367,6 +367,7 @@ fn step_scope(plan: &ResolvedPlan, step: Step, every: bool) -> Scope<'_> {
                 driver: Some(&bound.driver),
                 rows,
                 candidates: rows,
+                combined: false,
             }
         }
         Step::Column(column) => Scope {
@@ -376,6 +377,13 @@ fn step_scope(plan: &ResolvedPlan, step: Step, every: bool) -> Scope<'_> {
                 .flat_map(|binding| &plan.binding(binding).templates)
                 .all(|&template| plan.reads_driver(template)),
             candidates: every,
+            combined: false,
+        },
+        // A check runs once over every partition's candidates, outside every
+        // partition (#3830).
+        Step::Checks(_) => Scope {
+            combined: true,
+            ..Scope::default()
         },
         _ => Scope::default(),
     }
@@ -854,6 +862,11 @@ struct Scope<'p> {
     /// over belongs to such a template: the template's own rows in the row
     /// stage, and every candidate of the dataset in the column phase.
     candidates: bool,
+    /// The step runs once over every partition's candidates, outside every
+    /// partition, where no driver record is held: a lookup into another
+    /// input, whose match values or filter may read the current record,
+    /// needs the whole table there (#4191).
+    combined: bool,
 }
 
 /// Partition classes and effects of expressions. Each donor region's effects
@@ -904,7 +917,7 @@ impl Classes<'_> {
             | RelationKind::MatchedAggregate
             | RelationKind::OutputAggregate => Class::grouped(self.aggregate_keys(relation, scope)),
             RelationKind::Named { .. } | RelationKind::Join
-                if self.plan.reads_other_input(relation) =>
+                if !scope.combined && self.plan.reads_other_input(relation) =>
             {
                 Class::SAFE
             }
@@ -1029,7 +1042,7 @@ impl Classes<'_> {
                 | ExprKind::Joined(relation)
                 | ExprKind::JoinedSource(relation)
                 | ExprKind::SourceLookup(relation)
-                    if plan.reads_other_input(relation) =>
+                    if !scope.combined && plan.reads_other_input(relation) =>
                 {
                     Class::SAFE
                 }

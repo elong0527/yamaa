@@ -93,8 +93,9 @@ the whole table. It reads every other input whole first, and every partition
 reads it. A step needs the whole table when what it reads crosses partitions: a
 window, aggregate, grouped row template or key grain whose grouping omits a
 partition key; a named intermediate or implicit join over the driver input, a
-named intermediate with `derivations`, a pair relation or `SELF` rows; or a
-project function. A lookup into another input by its `key`, a qualified source
+named intermediate with `derivations`, a pair relation or `SELF` rows; a
+check that reads a named intermediate or implicit join; or a project function.
+Anywhere else, a lookup into another input by its `key`, a qualified source
 read or an intermediate over it that derives nothing reads records no partition
 produces or changes, so it divides. A specification that declares one
 key partitions by it. A run of one key group longer than 624,640 records is a

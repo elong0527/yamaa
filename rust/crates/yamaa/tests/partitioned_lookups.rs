@@ -82,7 +82,11 @@ fn refused(path: &str) -> String {
 /// - an intermediate keyed on ADSL that derives the arm from ADSL's records
 ///   is refused, since each partition would derive them again;
 /// - an intermediate over SRC keyed by ID is refused, since its records
-///   span every partition; ARM reads the record's own SUBJ, a, a and b.
+///   span every partition; ARM reads the record's own SUBJ, a, a and b;
+/// - a check that reads an intermediate keyed on ADSL is refused at the
+///   check, `verifications[0].assert`, since checks run once over every
+///   partition's candidates, where no driver record is held for the
+///   intermediate's filter to read.
 #[test]
 fn a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_not() {
     let one = Partitions::new(NonZeroUsize::MIN);
@@ -93,7 +97,12 @@ fn a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_n
     let named = "  SRC: {path: src.csv, types: {ID: int}}\n  ADSL: adsl.csv\n";
     // A label, the specification, the path of the step that refuses the
     // partitions and the whole-table output.
-    let cases: [(&str, String, Option<&str>, &str); 5] = [
+    let checked = spec(
+        named,
+        "intermediates:\n  - {id: SBJ, dataset: ADSL, key: [SUBJ], filter: 'ADSL.SUBJ = SRC.SUBJ'}\n",
+        "SBJ.ARM",
+    ) + "verifications:\n  - assert: {when: 'SBJ.ARM IS NOT NULL', require: 'ARM = SBJ.ARM'}\n";
+    let cases: [(&str, String, Option<&str>, &str); 6] = [
         (
             "ADSL read by its declared key",
             spec(INPUTS, "", "ADSL.ARM"),
@@ -135,6 +144,12 @@ fn a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_n
             ),
             Some("columns.ARM.derivation.source"),
             "ID,SUBJ,ARM\n1,a,a\n2,a,a\n3,b,b\n",
+        ),
+        (
+            "a check that reads an intermediate keyed on ADSL, filtered by the record's SUBJ",
+            checked,
+            Some("verifications[0].assert"),
+            arms,
         ),
     ];
     for (label, spec, refusal, output) in cases {
