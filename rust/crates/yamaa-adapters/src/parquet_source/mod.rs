@@ -257,11 +257,28 @@ pub fn scan(
     let runs = reader::Runs::open(content, odm, Some(rows), reader::NATIVE)?;
     let ready = runs.deferred().is_ok();
     let mut first: Option<(reader::Position, Error)> = None;
+    // The first partition whose stored columns do not decode.
+    let mut undecoded: Option<reader::Error> = None;
     let mut before = 0usize;
     for partition in 0..runs.len() {
+        // The whole read checks every page before anything later, so the
+        // first page that does not admit is its finding, wherever it is.
+        // A partition decodes from the bodies its pages' admission kept,
+        // and what it finds waits until every page is admitted.
+        let bodies = runs.admit(partition)?;
+        if runs.layout().is_err() || undecoded.is_some() {
+            continue;
+        }
         // The whole read decodes every partition's columns before any later
         // check, so the first partition that does not decode is its finding.
-        let raw = runs.raw(partition)?;
+        let raw = match runs.raw(partition, &bodies) {
+            Ok(raw) => raw,
+            Err(error) => {
+                undecoded = Some(error);
+                continue;
+            }
+        };
+        drop(bodies);
         if ready {
             let found = match runs.decoded(raw, partition, before) {
                 Err((position, error)) => Some((position, Error::from(error))),
@@ -287,6 +304,10 @@ pub fn scan(
         }
         before += runs.records(partition);
     }
+    runs.layout()?;
+    if let Some(error) = undecoded {
+        return Err(error.into());
+    }
     runs.deferred()?;
     match first {
         Some((_, error)) => Err(error),
@@ -297,21 +318,15 @@ pub fn scan(
 }
 
 /// The table of records `range` of a file [`scan`] admitted (#3830),
-/// decoded again from the row groups that hold them.
+/// decoded again from the row groups that hold them, keeping only the
+/// range's records.
 #[cfg(feature = "parquet")]
 pub fn decode_range(
     scanned: &Scanned,
     range: std::ops::Range<usize>,
 ) -> Result<ColumnTable, Error> {
-    use yamaa_core::table::TableAccess;
-    let (decoded, offset) = scanned.runs.range(range.clone())?;
-    let table = convert(decoded)?;
-    if offset == 0 && table.row_count() == range.len() {
-        return Ok(table);
-    }
-    table
-        .rows(offset..offset + range.len())
-        .map_err(Error::Table)
+    let decoded = scanned.runs.range(range)?;
+    convert(decoded)
 }
 
 /// The table schema held bytes decode to, with `odm` as [`parse_odm`] does,
