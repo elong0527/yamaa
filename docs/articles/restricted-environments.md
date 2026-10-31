@@ -16,7 +16,7 @@ Every route below needs no network once its files are on the machine. Each row
 names what qualifies it: CRAN's binary builders, or jobs of the native
 qualification workflow, `.github/workflows/native.yml`, every one of which
 must pass in the native run that a release is published from
-([Publication](../release.md#publication)). In a job's name, `<os>` is the
+([Releasing](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#releasing)). In a job's name, `<os>` is the
 runner: `ubuntu-24.04` is Linux x86_64, `ubuntu-24.04-arm` Linux aarch64,
 `macos-15` macOS arm64 and `windows-2025` Windows x64.
 
@@ -33,8 +33,7 @@ runner: `ubuntu-24.04` is Linux x86_64, `ubuntu-24.04-arm` Linux aarch64,
 The floors are CPython 3.12 (#3030 D56, confirming D13) and R 4.2.0. A source
 build needs Rust 1.82, the minimum that the Rust workspace declares; a
 repository check refuses a locked crate that needs a newer Rust.
-[Supported platforms](../release.md#supported-platforms) lists the platforms
-in full.
+The [release notes](https://github.com/elong0527/yamaa/releases/latest) list the supported platforms in full.
 
 ## From an internal mirror
 
@@ -107,8 +106,19 @@ A command-line archive needs no other file and no installer. Unpack the one
 for your platform, whose name ends with its Rust target, such as
 `yamaa-<version>-x86_64-unknown-linux-musl.zip`, and run the `yamaa`
 executable in the directory that it holds, `yamaa.exe` on Windows. The
-binaries are unsigned: [Command-line binaries](../release.md#command-line-binaries)
-says what macOS and Windows show the first time, and how to go on.
+binaries are unsigned and not notarized (#3030 D52), so each system stops
+the first run of one that a browser downloaded:
+
+- On macOS, Gatekeeper says Apple could not verify it. Clear the quarantine
+  attribute once, in the archive's directory:
+  `xattr -d com.apple.quarantine yamaa`. An archive fetched with `curl` and
+  unpacked with `unzip` carries no attribute.
+- On Windows, SmartScreen may say "Windows protected your PC": **More info**,
+  then **Run anyway**, starts it, or `Unblock-File` in PowerShell clears the
+  mark from the archive before extracting it. Where application control
+  admits only signed executables, the binary needs an administrator's
+  approval; the Python and R packages load inside interpreters that are
+  already allowed.
 
 A source archive carries every Rust crate that it builds, and Cargo reads no
 other, so the build needs a Rust toolchain but no network. The R source

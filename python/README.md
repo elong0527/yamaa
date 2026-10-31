@@ -101,8 +101,8 @@ pandas, PyArrow, the Python YAML readers, lxml and Pydantic for the table
 conversions' tests and independent artifact and conformance checks.
 `make setup` installs it.
 
-The [release guidance](https://elong0527.github.io/yamaa/release/#supported-platforms)
-lists the supported Python versions and platforms.
+The [release notes](https://github.com/elong0527/yamaa/releases/latest)
+list the supported Python versions and platforms.
 
 ## Contributing
 

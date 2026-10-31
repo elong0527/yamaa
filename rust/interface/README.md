@@ -80,8 +80,8 @@ values, `false`/`true` for booleans and nonnegative integers; generators parse
 these literals without eval.
 
 The definition declares the whole host surface that the hosts and the command
-line implement, and nothing they do not; the stability contract freezes its
-manifest from 1.0.0 (`docs/release.md`).
+line implement, and nothing they do not; the
+[stability contract](#stability-contract) freezes its manifest from 1.0.0.
 
 ### Vocabularies, tables and records
 
@@ -298,7 +298,7 @@ statuses, each command with its arguments, flags and JSON keys, a refusal's
 included, and the keys of each object its documents hold. It leaves out the
 private native sections, documentation and implementation details such as
 `holds` and `calls`. The interface check of
-[the stability contract](../../docs/release.md#stability-contract) compares
+[the stability contract](#stability-contract) compares
 these lines with the newest final release of the same major: a removed or
 changed line is a break, and an added line an addition. A stale manifest fails
 the read-only comparison like any other generated file.
@@ -576,6 +576,111 @@ values or raise an error: `to_pandas()` keeps each Arrow type as a
 `pandas.ArrowDtype`, and R raises for an integer beyond 2^53 or text containing
 NUL, which no plain R vector holds exactly. The generator must reuse these
 adapters rather than promise zero copies for those conversions.
+
+## Stability contract
+
+From yamaa 1.0.0, every 1.x release keeps the 1.0 interface: a project, a
+program or a script that works with 1.0.0 works the same way with every later
+1.x release, with the same results and the same saved bytes. Only a 2.0
+release may break it, and its release notes say what breaks (#3030 D20).
+Release candidates are not covered: the freeze starts at 1.0.0 (#3030 D1).
+
+**What is frozen.** Each surface is named by the files that hold it.
+
+- Files: the four file types, `project`, `spec`, `codelists` and `function`,
+  as the committed JSON Schemas in `yaml/json/` give them (every field's
+  name, kind, type, default and meaning, and the verbs and verifications
+  with their parameters), the closed grammars in `yaml/grammar/`, and the
+  closed vocabularies, such as column types, profiles and
+  `yaml/vocabulary/cdisc.yaml`. A release's schema for a file type is that
+  committed file at the release's tag; the files keep their path and carry
+  no `$id` (#3030 D161). The grammars and `yaml/conformance/expressions.yaml`
+  also ship as the release asset `yamaa-<Cargo version>-conformance.zip`.
+- Diagnostics: the condition names in `yaml/conditions.yaml` and the phases
+  each may report; the condition and rule that an existing failure reports;
+  a `context` key that a benchmark's expected `error.yaml` pins, with its
+  value (#3030 D156); and the twelve columns of `issues` and the fourteen of
+  the run report, in order. A release's condition catalogue, which
+  `conditions()` returns, is its committed `yaml/conditions.yaml` at its tag.
+- Host functions and the command line: the frozen sections of
+  `bindings.yaml`, as `manifest.txt` lists them (see
+  [Outputs and the manifest](#outputs-and-the-manifest)).
+- The Rust facade: the public items of the `yamaa` crate, as
+  `rust/crates/yamaa/public-api.txt` lists them. The internal crates and the
+  native modules (`yamaa._native` and the R package's registered routines)
+  are not covered (#3679). The facade's items carry Arrow's types, so the
+  Arrow major it builds with, 55 (exactly 55.2.0, as `rust/Cargo.toml` pins),
+  is part of its contract, and moving to another Arrow major is a facade
+  major release. Every item that names an Arrow type sits behind the
+  facade's default `arrow` feature, so an embedder that builds without it
+  opts out of the coupled surface (#4081).
+- Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
+  version 5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an
+  admitted project and its inputs, on every supported platform. The Parquet
+  profile asks only that a file read back the same
+  ([PARQUET-4](../../rules/reference/parquet.md#parquet-4)); yamaa keeps its
+  bytes too, including `created_by`, which is `parquet-rs version 55.2.0` in
+  every 1.x release (#3030 D160).
+- Printed text: the labels, order and separators of every summary line (a
+  run's, a project run's, a submission's, a check's and a selftest's, with
+  its `first failure:`, `not covered:` and information lines), the layout of
+  the `first issue:` line and of a project run's member lines, and the
+  `yamaa.Table:` header.
+
+**A minor release may add** optional fields whose absence keeps the 1.0
+meaning; file types, verbs, verifications and grammar functions; enumeration
+values; conditions, for new features only; `context` keys (#3030 D156); host
+functions, members, and optional arguments after the existing ones; commands,
+flags and JSON keys; and table columns after the frozen ones. A file that
+uses a feature added in 1.N declares `yamaa: "1.N"`, and an older engine
+refuses it as `unsupported_language_version`
+([SCHEMA-2](../../rules/reference/schema-language.md#schema-2)). A minor
+release may also raise a platform floor, such as the minimum Python, R or
+Rust, and its notes announce it; a patch release never does.
+
+**A new conformance check is opt-in.** A 1.x release adds a CDISC conformance
+check only through a new optional field that a file sets to ask for it, never
+as a new refusal or run-report row for a file an earlier 1.x release
+admitted: the checks that refuse a file without such a field are exactly
+those of 0.7.0. Every condition has error severity (#3030 D28), so a warning
+is no way around this (#4064 D298).
+
+**A patch release may change** defect fixes, documentation, packaging and
+platform support, and message text. A change a repository such as CRAN asks
+for moves every host to the same patch version (#3030 D51).
+
+**No 1.x release may** rename, remove or retype a field, argument, member,
+command, flag, column, condition, phase or enumeration value; drop a pinned
+`context` key or change its value; add a required field or argument; change
+a default; report a different condition or rule for an existing failure;
+change the results or bytes of an admitted file; or refuse a file that an
+earlier 1.x release admitted.
+
+**Messages are not frozen.** Every `message` column, error text, the message
+in a printed summary and the cells of a table preview may change in any
+release. Programs match `condition` and `rule`, never `message`, and read
+`context` as JSON, by key.
+
+**Defect fixes.** Behavior that contradicts a rule is a defect, and fixing it
+is not a break, even when bytes change. Each fix names the rule it restores,
+adds a benchmark that pins the corrected bytes, and is listed in the release
+notes. A fix that must change a frozen element, or a file of a benchmark the
+previous release had, adds an entry to
+`tools/validation/interface_exceptions.yaml` (#3442) naming the rule and the
+issue that records the owner's decision; nothing else is exempt. A wrong rule
+waits for 2.0, or changes in 1.x through a new optional field.
+
+**Enforcement.** `tools.validation.check_interface_stability`, run by
+`make check-repository`, compares the frozen surfaces with the newest final
+release of the same major and refuses a break in `yaml/conditions.yaml`,
+`manifest.txt`, `public-api.txt`, the JSON Schemas' named types and fields,
+the grammars (#3444), the core diagnostic registry's (phase, condition, rule)
+triples, the rule card IDs, and the specification, input or expected files of
+a benchmark present at that tag (#3445). It enforces nothing while the major
+is 0; for the first release of a new major it lists every break against the
+previous major, for that release's notes, and passes.
+`rust/crates/yamaa-adapters/tests/table_parquet_bytes.rs` keeps the Parquet
+writer's bytes and `created_by` fixed (#3475).
 
 ## Follow-up verification
 

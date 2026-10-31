@@ -1,7 +1,7 @@
 """Check that PyPI serves a release's Python packages with the release's bytes.
 
 The owner uploads the wheels and the Python source archive of a GitHub release
-to PyPI (#3030 D57), as docs/release.md describes under "PyPI upload", and then
+to PyPI (#3030 D57), as CONTRIBUTING.md describes under "Releasing", and then
 runs this check. It downloads every file that PyPI lists for the release's
 Python version, and the asset of the same name from the GitHub release of the
 tag, and compares their bytes. The release must hold exactly the assets that

@@ -7,9 +7,9 @@ and executable examples with authored expected results in
 [benchmarks/](../benchmarks/README.md).
 
 The [contributor guide](../CONTRIBUTING.md) owns crate boundaries, locked builds
-and local verification commands. The
-[release guide](../docs/release.md) owns supported platforms, approved decisions
-and migration notes. The [shared host interface](interface/README.md) owns
+and local verification commands, and how to release; each release's notes
+under [docs/releases/](../docs/releases/) give its supported platforms and
+changes. The [shared host interface](interface/README.md) owns
 `interface/bindings.yaml`, the one input from which both hosts' registrations,
 declarations and public layers are generated; `make check-repository` and the
 native qualification lane compare the generated files with it. Current rule checks and
@@ -793,7 +793,7 @@ partitioned execution and whole-table execution, and identifies the seams where
 partition boundaries sit. It changes no code behavior. The partitioned executor
 built on it (#3697, `ResolvedPlan::execute_partitioned` and the facade's
 `EngineOptions::with_partitions`), with the end states of a cancelled or failed
-run and save, is described in `docs/partition-execution.md`. It has two
+run and save, follows the partitioning rules in `rules/`. It has two
 strategies:
 
 - `Partitions::new(rows)` divides the driver input into consecutive partitions

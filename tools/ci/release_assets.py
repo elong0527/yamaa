@@ -5,8 +5,7 @@ The selector downloads those artifacts from the qualifying native run and
 requires each to hold exactly the assets declared in it; the publisher uploads
 exactly these files; the release rehearsal runs the selector;
 tools/ci/check_pypi_release.py requires PyPI to serve exactly the Python ones,
-unchanged; and the asset table in docs/release.md lists them, which
-tools/tests/test_release_artifacts.py keeps equal to `declared()`. So every
+unchanged; and the release body's download section lists them. So every
 asset the native run built is published, or publication fails, and nothing is
 rebuilt.
 """

@@ -3,7 +3,7 @@
 After each PyPI upload the owner dispatches the workflow, which installs the
 release into a fresh virtual environment on each platform that a release has
 a wheel for, with the oldest and the newest supported CPython, and runs its
-selftest (docs/release.md, "PyPI upload"). A platform or a Python that native
+selftest (CONTRIBUTING.md, "Releasing"). A platform or a Python that native
 qualification gains must join this matrix too, or its wheel would never be
 installed from PyPI.
 """

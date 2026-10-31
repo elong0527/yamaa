@@ -3,8 +3,8 @@ name: PyPI install
 # Manual dispatch requires this workflow file on the default branch.
 # Release verification, not a development check: after each PyPI upload the
 # owner dispatches it with the release's Python version, X.Y.Z or X.Y.ZrcN,
-# once tools/ci/check_pypi_release.py has passed (docs/release.md, "PyPI
-# upload"). Each job installs the release from the index as a user does and
+# once tools/ci/check_pypi_release.py has passed (CONTRIBUTING.md,
+# "Releasing"). Each job installs the release from the index as a user does and
 # runs the installed package's selftest. Nothing is checked out, so no
 # repository file can reach the fresh virtual environment that it installs
 # into. Dispatch: gh workflow run pypi-install.yml -f version=X.Y.Z

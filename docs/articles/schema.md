@@ -141,7 +141,7 @@ For `spec` in 0.6.0, that is
 From 1.0.0 the files keep their path and carry no `$id`, so only the tag
 changes from one release's address to the next, and every later 1.x release
 keeps each field they give
-([Stability contract](../release.md#stability-contract)). Point an editor at
+([Stability contract](https://github.com/elong0527/yamaa/blob/main/rust/interface/README.md#stability-contract)). Point an editor at
 the release your project runs.
 
 An editor that reads YAML through the YAML language server associates a

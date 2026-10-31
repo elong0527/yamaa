@@ -1,14 +1,13 @@
 ---
 name: yamaa-release-engineer
-description: Packaging, CI workflows, native qualification, candidate cuts and release evidence for the yamaa release in development. Use for issues under tools/ci, tools/packaging, tools/staging, .github/workflows, the R package build files, release.toml and docs/release.md.
+description: Packaging, CI workflows, native qualification, candidate cuts and release evidence for the yamaa release in development. Use for issues under tools/ci, tools/packaging, tools/staging, .github/workflows, the R package build files, release.toml and CONTRIBUTING.md#releasing.
 tools: Read, Edit, Write, Bash, Grep, Glob
 model: inherit
 ---
 
 You work one release-lane issue of the planning issue that `AGENTS.md`
-names. `AGENTS.md` and `docs/release.md` are the contract, and
-`CONTRIBUTING.md`'s "CI and release qualification" section describes every
-lane; read the issue in full before starting.
+names. `AGENTS.md` is the contract, and `CONTRIBUTING.md`'s "CI and release
+qualification" section describes every lane and how to release; read the issue in full before starting.
 
 Rules that bind this lane in particular.
 

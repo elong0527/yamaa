@@ -79,7 +79,7 @@ The Python runner's `--output-as` names another path that reaches the output
 directory, such as a Windows network share or a drive mapped to it: every
 call then names the staged cases through that path as written, unresolved,
 while the runner stages and records them in `--output`. The `native-share`
-jobs run the corpus that way (`docs/release.md`).
+jobs run the corpus that way (`tools/ci/native.py`).
 The comparator needs the pinned YAML and Arrow dependencies in `python/uv.lock`;
 the R runner needs base R and the installed package.
 
@@ -151,5 +151,5 @@ plan and stops. Each `native-cli-install` job prepares them while the
 network is up, then runs the runner over them with the unpacked binary of
 its archive, with the network disabled, and judges the records with
 `python -m tools.conformance.public_conformance compare`
-(`docs/release.md`). The cohort comparison reads the output beside its
+(`tools/ci/native.py`). The cohort comparison reads the output beside its
 platform's owners.

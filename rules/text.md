@@ -38,13 +38,12 @@ Evidence: `negative-str-pad-width`, `adam-adlb-supplb-padded-key`, `rust/crates/
 An unknown source or a failed conversion reports its existing condition.
 
 The padded text is at most 1 MiB, 1,048,576 bytes, the `text_bytes` limit of
-the [fixed resource policy](../docs/release.md#resource-limits). A present
-source whose text and padding would be longer refuses the run before the text
-is built, as `engine_rejected` with `resource` `text_bytes`, the applied
-`limit`, the `actual` length when it is known, and the `str_pad` path; a
-missing source needs no text, whatever the width. `str_decimal`,
-`str_template`, `str_replace` and `STR_JOIN` hold the text they build to the
-same limit.
+[LIMIT-2](limits.md#limit-2). A present source whose text and padding would be
+longer refuses the run before the text is built, as `engine_rejected` with
+`resource` `text_bytes`, the applied `limit`, the `actual` length when it is
+known, and the `str_pad` path; a missing source needs no text, whatever the
+width. `str_decimal`, `str_template`, `str_replace` and `STR_JOIN` hold the
+text they build to the same limit.
 
 <a id="text-13"></a>
 
@@ -621,7 +620,7 @@ as an unmatched string or a skipped verification.
 Fails: `engine_rejected`.
 Evidence: `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs::oversized_patterns_report_the_compiled_size_limit_at_the_pattern`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/text_replace.json::a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged`, `rust/tests/host-fixtures/cases.json::pattern_beyond_the_compiled_size_limit`.
 
-The policy is the [fixed resource policy](../docs/release.md#resource-limits).
+The limits are those of [LIMIT-2](limits.md#limit-2).
 For a column `matches` check, `spec_paths` names its declaring pattern, such as
 `columns.TERM.verifications[0].matches.pattern`. Nesting counts every group,
 alternation, sequence, repetition and class.

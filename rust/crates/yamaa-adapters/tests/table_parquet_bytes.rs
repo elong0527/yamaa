@@ -2,7 +2,7 @@
 //! Saved Parquet bytes: a regression control that keeps every byte the 1.0
 //! writer saves, the footer's `created_by` included (D160 on #3030, #3475).
 //!
-//! The stability contract in `docs/release.md` keeps the bytes that each
+//! The stability contract in `rust/interface/README.md` keeps the bytes that each
 //! profile saves through every 1.x release. PARQUET-4 asks only that a
 //! Parquet file read back the same, and the corpus compares Parquet that way,
 //! so a change to the encoder would pass it unnoticed. These tests save three
