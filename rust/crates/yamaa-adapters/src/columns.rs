@@ -176,6 +176,14 @@ pub struct Values<T> {
 }
 
 impl<T: Copy + Default> Values<T> {
+    /// No slots yet, with room for `len`.
+    pub fn with_capacity(len: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(len),
+            validity: Validity::default(),
+        }
+    }
+
     /// Every slot's payload with the slots' validity, as [`Values::payloads`]
     /// and [`Values::validity`] give them back: a missing slot's payload
     /// must be `T::default()`. `None` when their lengths differ.
@@ -298,6 +306,17 @@ impl Default for Text {
 }
 
 impl Text {
+    /// No slots yet, with room for `len` and an arena of `bytes`.
+    pub fn with_capacity(len: usize, bytes: usize) -> Self {
+        let mut offsets = Vec::with_capacity(len + 1);
+        offsets.push(0);
+        Self {
+            offsets,
+            bytes: String::with_capacity(bytes),
+            validity: Validity::default(),
+        }
+    }
+
     /// The text of byte arena `bytes`, value `i` being
     /// `bytes[offsets[i]..offsets[i + 1]]` where `validity` marks slot `i`
     /// present: `None` unless every value is UTF-8, each offset follows the

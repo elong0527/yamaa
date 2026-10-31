@@ -3,6 +3,8 @@
 //! varies by row. A buffer changes layout, never a value: every read lends
 //! the same `ValueRef` a table port would.
 use crate::{
+    expression::Column,
+    numeric::Number,
     table::{ColumnRef, ColumnValues, ValueRef},
     temporal::{Date, DateTime},
     value::{FiniteFloat, Value},
@@ -245,6 +247,13 @@ impl Default for Values {
     }
 }
 
+/// A buffer lends a column program one operand's values (#4199).
+impl Column for Values {
+    fn get(&self, row: usize) -> ValueRef<'_> {
+        Values::get(self, row)
+    }
+}
+
 impl Values {
     pub(crate) fn missing(len: usize) -> Self {
         Self::Missing(len)
@@ -321,6 +330,49 @@ impl Values {
         Some(Self::gather_column(column, rows))
     }
 
+    /// One number per row, as a buffer pushed them a row at a time holds
+    /// them: typed while every present number has one type, mixed when
+    /// both do, and missing when none is present. A column program's result
+    /// (#4199).
+    pub(super) fn from_numbers(numbers: &[Number]) -> Result<Self, TryReserveError> {
+        let present = |int: bool| {
+            numbers.iter().any(|number| match number {
+                Number::Int(_) => int,
+                Number::Float(_) => !int,
+                Number::Missing => false,
+            })
+        };
+        let valid = || Bits::from_fn(numbers.len(), |row| numbers[row] != Number::Missing);
+        Ok(match (present(true), present(false)) {
+            (false, false) => Self::Missing(numbers.len()),
+            (true, false) => {
+                let mut values = Vec::new();
+                values.try_reserve_exact(numbers.len())?;
+                values.extend(numbers.iter().map(|number| match number {
+                    Number::Int(value) => *value,
+                    _ => 0,
+                }));
+                Self::Int(values, valid()?)
+            }
+            (false, true) => {
+                let zero = FiniteFloat::new(0.0).expect("zero is finite");
+                let mut values = Vec::new();
+                values.try_reserve_exact(numbers.len())?;
+                values.extend(numbers.iter().map(|number| match number {
+                    Number::Float(value) => *value,
+                    _ => zero,
+                }));
+                Self::Float(values, valid()?)
+            }
+            (true, true) => {
+                let mut values = Vec::new();
+                values.try_reserve_exact(numbers.len())?;
+                values.extend(numbers.iter().map(|&number| Value::from(number)));
+                Self::Mixed(values)
+            }
+        })
+    }
+
     fn gather_column(column: ColumnRef<'_>, rows: &[usize]) -> Result<Self, TryReserveError> {
         fn fill<T: Copy>(
             rows: &[usize],
@@ -343,15 +395,16 @@ impl Values {
             })?;
             Ok((values, valid))
         }
-        let values = match column.values() {
-            ColumnValues::Int(_) => {
+        use crate::value::ColumnType;
+        let values = match column.values().kind() {
+            ColumnType::Int => {
                 let (values, valid) = fill(rows, 0, |row| match column.get(row) {
                     ValueRef::Int(value) => Some(value),
                     _ => None,
                 })?;
                 Self::Int(values, valid)
             }
-            ColumnValues::Float(_) => {
+            ColumnType::Float => {
                 let zero = FiniteFloat::new(0.0).expect("zero is finite");
                 let (values, valid) = fill(rows, zero, |row| match column.get(row) {
                     ValueRef::Float(value) => Some(value),
@@ -359,7 +412,7 @@ impl Values {
                 })?;
                 Self::Float(values, valid)
             }
-            ColumnValues::Date(_) => {
+            ColumnType::Date => {
                 let date = |row| match column.get(row) {
                     ValueRef::Date(value) => Some(value),
                     _ => None,
@@ -370,7 +423,7 @@ impl Values {
                 let (values, valid) = fill(rows, first, date)?;
                 Self::Date(values, valid)
             }
-            ColumnValues::DateTime(_) => {
+            ColumnType::DateTime => {
                 let datetime = |row| match column.get(row) {
                     ValueRef::DateTime(value) => Some(value),
                     _ => None,
@@ -381,14 +434,10 @@ impl Values {
                 let (values, valid) = fill(rows, first, datetime)?;
                 Self::DateTime(values, valid)
             }
-            ColumnValues::Str { offsets, .. } => {
-                let start = column.start();
+            ColumnType::Str => {
                 let mut strings = Strings::default();
                 strings.spans.try_reserve_exact(rows.len())?;
-                let bytes = rows
-                    .iter()
-                    .map(|&row| offsets[start + row + 1] - offsets[start + row])
-                    .sum();
+                let bytes = rows.iter().map(|&row| column.text_len(row)).sum();
                 strings.bytes.try_reserve_exact(bytes)?;
                 let valid = Bits::from_fn(rows.len(), |index| match column.get(rows[index]) {
                     ValueRef::Str(value) => {
@@ -489,6 +538,27 @@ impl Values {
             }
             Self::Mixed(values) => ValueRef::from(&values[index]),
         }
+    }
+
+    /// Lend the whole buffer as a column view, its storage as it is
+    /// (#4201); `None` for a buffer of no single column type: every row
+    /// missing, booleans, or mixed values.
+    pub(crate) fn column(&self) -> Option<ColumnRef<'_>> {
+        let (values, valid) = match self {
+            Self::Int(values, valid) => (ColumnValues::Int(values), valid),
+            Self::Float(values, valid) => (ColumnValues::FiniteFloat(values), valid),
+            Self::Date(values, valid) => (ColumnValues::MaskedDate(values), valid),
+            Self::DateTime(values, valid) => (ColumnValues::MaskedDateTime(values), valid),
+            Self::Str(values, valid) => (
+                ColumnValues::TextSpans {
+                    spans: &values.spans,
+                    bytes: &values.bytes,
+                },
+                valid,
+            ),
+            Self::Missing(_) | Self::Bool(..) | Self::Mixed(_) => return None,
+        };
+        ColumnRef::lend(values, Some(&valid.words))
     }
 
     /// An owned copy of one row's value.

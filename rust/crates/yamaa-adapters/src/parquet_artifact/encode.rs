@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use yamaa_core::{
     limits::Limits,
-    table::{TableAccess, ValueRef},
+    table::{ColumnReader, TableAccess, ValueRef},
     value::ColumnType,
 };
 
@@ -291,32 +291,11 @@ fn logical(footer: &mut Compact, kind: ColumnType) {
     footer.end();
 }
 
-/// Each PLAIN value of a column of `kind` in `values`, as its bytes: a
-/// string with the four length bytes before it.
-fn plain_values(kind: ColumnType, values: &[u8]) -> impl Iterator<Item = &[u8]> {
-    let mut rest = values;
-    std::iter::from_fn(move || {
-        if rest.is_empty() {
-            return None;
-        }
-        let width = match kind {
-            ColumnType::Str => {
-                let length = u32::from_le_bytes(rest[..4].try_into().expect("four bytes"));
-                4 + length as usize
-            }
-            ColumnType::Date => 4,
-            ColumnType::Int | ColumnType::Float | ColumnType::DateTime => 8,
-        };
-        let (value, after) = rest.split_at(width);
-        rest = after;
-        Some(value)
-    })
-}
-
-/// The dictionary's hash of a PLAIN value: aHash under fixed seeds, as
+/// The dictionary's hash of a present value: aHash under fixed seeds, as
 /// grouping hashes rows (#4188). It only finds a value's candidate entry;
-/// equal bytes decide, so a `DOUBLE` keeps its bits, and entries follow
-/// first occurrence, so no output depends on the hasher.
+/// equal values decide, and a `DOUBLE` is keyed on its bits, as its PLAIN
+/// bytes are, and entries follow first occurrence, so no output depends on
+/// the hasher.
 fn value_hasher() -> ahash::RandomState {
     ahash::RandomState::with_seeds(
         0x243f_6a88_85a3_08d3,
@@ -326,124 +305,142 @@ fn value_hasher() -> ahash::RandomState {
     )
 }
 
-/// A column chunk's dictionary: its PLAIN values, their count, and each
-/// present value's index into it.
-struct Dictionary {
-    page: Vec<u8>,
-    entries: usize,
-    indices: Vec<u32>,
+/// A value whose PLAIN bytes a page holds: a string with the four length
+/// bytes before it, or a fixed-width value's little-endian bytes.
+trait Plain: Copy + Eq + std::hash::Hash {
+    fn width(self) -> usize;
+    fn write(self, bytes: &mut Vec<u8>);
 }
 
-/// Where a closed data page of a row group ends: after its rows, its present
-/// values, and its PLAIN bytes.
+impl Plain for &str {
+    fn width(self) -> usize {
+        4 + self.len()
+    }
+    fn write(self, bytes: &mut Vec<u8>) {
+        // Admitted by `value_length` as the value was read.
+        bytes.extend((self.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(self.as_bytes());
+    }
+}
+
+/// An `INT64` or `DOUBLE`, or a timestamp's microseconds, as its 8 bytes.
+impl Plain for u64 {
+    fn width(self) -> usize {
+        8
+    }
+    fn write(self, bytes: &mut Vec<u8>) {
+        bytes.extend(self.to_le_bytes());
+    }
+}
+
+/// A `DATE`'s days as its 4 bytes.
+impl Plain for u32 {
+    fn width(self) -> usize {
+        4
+    }
+    fn write(self, bytes: &mut Vec<u8>) {
+        bytes.extend(self.to_le_bytes());
+    }
+}
+
+/// Where a closed data page of a column chunk ends: after its rows and its
+/// present values.
 #[derive(Clone, Copy, Default)]
 struct Bound {
     rows: usize,
     values: usize,
-    bytes: usize,
 }
 
-/// One projected column's levels, PLAIN values and closed pages for the row
-/// group being filled.
-struct Pending {
-    kind: ColumnType,
+/// One column chunk's rows, read from its column: each row's definition
+/// level, its present values, and the bounds of its data pages, each closed
+/// once its rows' PLAIN values reach `PAGE_BYTES`, the last at the chunk's
+/// end.
+struct Read<V> {
     levels: Vec<u8>,
-    values: Vec<u8>,
-    present: usize,
+    values: Vec<V>,
     pages: Vec<Bound>,
 }
 
-/// A column chunk's encoded pages: its dictionary page if it has one, its
-/// data pages one after another, how many data pages, and the bytes all its
-/// pages would take uncompressed, headers included.
-struct Encoded {
-    dictionary: Option<Vec<u8>>,
-    data: Vec<u8>,
-    pages: usize,
-    uncompressed: usize,
-}
-
-impl Pending {
-    fn new(kind: ColumnType) -> Self {
-        Self {
-            kind,
-            levels: Vec::new(),
-            values: Vec::new(),
-            present: 0,
+impl<V: Plain> Read<V> {
+    /// The rows of `segments`, in order, of a column whose present values
+    /// `present` turns into PLAIN values, or refuses as of another type.
+    fn rows<'a, T: TableAccess + ?Sized>(
+        reader: &ColumnReader<'a, T>,
+        segments: &[Range<usize>],
+        mut present: impl FnMut(ValueRef<'a>) -> Result<V, Error<T::Error>>,
+    ) -> Result<Self, Error<T::Error>> {
+        let rows = segments.iter().map(ExactSizeIterator::len).sum();
+        let mut read = Self {
+            levels: Vec::with_capacity(rows),
+            values: Vec::with_capacity(rows),
             pages: Vec::new(),
+        };
+        let mut open = 0;
+        for segment in segments {
+            let visit = |value| {
+                if matches!(value, ValueRef::Missing) {
+                    read.levels.push(0);
+                    return Ok(());
+                }
+                let value = present(value)?;
+                read.levels.push(1);
+                read.values.push(value);
+                open += value.width();
+                if open >= PAGE_BYTES {
+                    read.close();
+                    open = 0;
+                }
+                Ok(())
+            };
+            reader.try_for_each(segment.clone(), visit, Error::Cell)?;
         }
+        if read.levels.len() > read.closed().rows || read.pages.is_empty() {
+            read.close();
+        }
+        Ok(read)
     }
 
-    /// The end of the last closed page, or the row group's start.
+    /// The end of the last closed page, or the chunk's start.
     fn closed(&self) -> Bound {
         self.pages.last().copied().unwrap_or_default()
     }
 
-    /// Close the open page at the rows pushed so far.
+    /// Close the open page at the rows read so far.
     fn close(&mut self) {
         self.pages.push(Bound {
             rows: self.levels.len(),
-            values: self.present,
-            bytes: self.values.len(),
+            values: self.values.len(),
         });
     }
 
-    /// Append one cell: a missing value as a null level. The open page
-    /// closes once its PLAIN values reach `PAGE_BYTES`.
-    fn push<E>(&mut self, value: ValueRef<'_>) -> Result<(), Error<E>> {
-        if matches!(value, ValueRef::Missing) {
-            self.levels.push(0);
-            return Ok(());
-        }
-        match (self.kind, value) {
-            (ColumnType::Str, ValueRef::Str(value)) => {
-                let length = value_length(value.len())?;
-                self.values.extend(length.to_le_bytes());
-                self.values.extend(value.as_bytes());
-            }
-            (ColumnType::Int, ValueRef::Int(value)) => self.values.extend(value.to_le_bytes()),
-            (ColumnType::Float, ValueRef::Float(value)) => {
-                self.values.extend(value.get().to_le_bytes())
-            }
-            (ColumnType::Date, ValueRef::Date(value)) => {
-                self.values.extend(date_days(value).to_le_bytes())
-            }
-            (ColumnType::DateTime, ValueRef::DateTime(value)) => {
-                let micros = datetime_seconds(value)
-                    .checked_mul(1_000_000)
-                    .ok_or(Error::ValueType)?;
-                self.values.extend(micros.to_le_bytes());
-            }
-            _ => return Err(Error::ValueType),
-        }
-        self.levels.push(1);
-        self.present += 1;
-        if self.values.len() - self.closed().bytes >= PAGE_BYTES {
-            self.close();
-        }
-        Ok(())
-    }
-
-    /// The row group's dictionary of this column, unless it has no present
-    /// value or its PLAIN values pass `PAGE_BYTES`.
+    /// The chunk's dictionary, unless it has no present value or its PLAIN
+    /// values pass `PAGE_BYTES`. A value equal to the one before it takes
+    /// its index without a lookup.
     fn dictionary(&self) -> Option<Dictionary> {
-        if self.present == 0 {
+        let first = *self.values.first()?;
+        let mut entries: HashMap<V, u32, _> = HashMap::with_hasher(value_hasher());
+        let mut page = Vec::new();
+        let mut indices = Vec::with_capacity(self.values.len());
+        let mut last = (first, 0);
+        first.write(&mut page);
+        if page.len() > PAGE_BYTES {
             return None;
         }
-        let mut entries: HashMap<&[u8], u32, _> = HashMap::with_hasher(value_hasher());
-        let mut page = Vec::new();
-        let mut indices = Vec::with_capacity(self.present);
-        for value in plain_values(self.kind, &self.values) {
-            // At most ROW_GROUP_ROWS entries.
-            let next = entries.len() as u32;
-            let index = *entries.entry(value).or_insert_with(|| {
-                page.extend_from_slice(value);
-                next
-            });
-            if page.len() > PAGE_BYTES {
-                return None;
+        entries.insert(first, 0);
+        for &value in &self.values {
+            if value != last.0 {
+                // At most ROW_GROUP_ROWS entries.
+                let next = entries.len() as u32;
+                let index = *entries.entry(value).or_insert_with(|| {
+                    value.write(&mut page);
+                    next
+                });
+                if page.len() > PAGE_BYTES {
+                    return None;
+                }
+                last = (value, index);
             }
-            indices.push(index);
+            indices.push(last.1);
         }
         Some(Dictionary {
             page,
@@ -452,12 +449,9 @@ impl Pending {
         })
     }
 
-    /// The column chunk's pages, emptying the column for the next row group,
-    /// or the refusal of a page its header cannot count.
-    fn chunk<E>(&mut self, compressor: &mut Compressor) -> Result<Encoded, Error<E>> {
-        if self.levels.len() > self.closed().rows || self.pages.is_empty() {
-            self.close();
-        }
+    /// The column chunk's pages, or the refusal of a page its header cannot
+    /// count.
+    fn chunk<E>(&self, compressor: &mut Compressor) -> Result<Encoded, Error<E>> {
         let dictionary = self.dictionary();
         let mut encoded = Encoded {
             dictionary: None,
@@ -500,7 +494,11 @@ impl Pending {
                         &mut body,
                     );
                 }
-                _ => body.extend_from_slice(&self.values[start.bytes..end.bytes]),
+                _ => {
+                    for &value in &self.values[start.values..end.values] {
+                        value.write(&mut body);
+                    }
+                }
             }
             let mut header = Compact::new();
             header.i32(1, code::DATA_PAGE);
@@ -522,12 +520,83 @@ impl Pending {
             encoded.data.extend(page);
             start = end;
         }
-        self.levels.clear();
-        self.values.clear();
-        self.present = 0;
-        self.pages.clear();
         Ok(encoded)
     }
+}
+
+/// The pages of one row group's column chunk of `kind`, read from `reader`
+/// over the rows of `segments`, with its levels: each present value as the
+/// PLAIN value of the type PARQUET-1 maps `kind` to.
+fn column_chunk<T: TableAccess + ?Sized>(
+    kind: ColumnType,
+    reader: &ColumnReader<'_, T>,
+    segments: &[Range<usize>],
+    compressor: &mut Compressor,
+) -> Result<(Encoded, usize), Error<T::Error>> {
+    fn encode<V: Plain, E>(
+        read: Read<V>,
+        compressor: &mut Compressor,
+    ) -> Result<(Encoded, usize), Error<E>> {
+        Ok((read.chunk(compressor)?, read.levels.len()))
+    }
+    match kind {
+        ColumnType::Str => encode(
+            Read::rows(reader, segments, |value| match value {
+                ValueRef::Str(value) => value_length(value.len()).map(|_| value),
+                _ => Err(Error::ValueType),
+            })?,
+            compressor,
+        ),
+        ColumnType::Int => encode(
+            Read::rows(reader, segments, |value| match value {
+                ValueRef::Int(value) => Ok(value as u64),
+                _ => Err(Error::ValueType),
+            })?,
+            compressor,
+        ),
+        ColumnType::Float => encode(
+            Read::rows(reader, segments, |value| match value {
+                ValueRef::Float(value) => Ok(value.get().to_bits()),
+                _ => Err(Error::ValueType),
+            })?,
+            compressor,
+        ),
+        ColumnType::Date => encode(
+            Read::rows(reader, segments, |value| match value {
+                ValueRef::Date(value) => Ok(date_days(value) as u32),
+                _ => Err(Error::ValueType),
+            })?,
+            compressor,
+        ),
+        ColumnType::DateTime => encode(
+            Read::rows(reader, segments, |value| match value {
+                ValueRef::DateTime(value) => datetime_seconds(value)
+                    .checked_mul(1_000_000)
+                    .map(|micros| micros as u64)
+                    .ok_or(Error::ValueType),
+                _ => Err(Error::ValueType),
+            })?,
+            compressor,
+        ),
+    }
+}
+
+/// A column chunk's dictionary: its PLAIN values, their count, and each
+/// present value's index into it.
+struct Dictionary {
+    page: Vec<u8>,
+    entries: usize,
+    indices: Vec<u32>,
+}
+
+/// A column chunk's encoded pages: its dictionary page if it has one, its
+/// data pages one after another, how many data pages, and the bytes all its
+/// pages would take uncompressed, headers included.
+struct Encoded {
+    dictionary: Option<Vec<u8>>,
+    data: Vec<u8>,
+    pages: usize,
+    uncompressed: usize,
 }
 
 /// The Zstandard compressor every page of a file goes through.
@@ -606,18 +675,24 @@ impl File {
         Ok(())
     }
 
-    /// Write every pending row as one row group, column by column.
-    fn row_group<E>(&mut self, pending: &mut [Pending], rows: usize) -> Result<(), Error<E>> {
+    /// Write the `rows` rows of `segments` as one row group, a column at a
+    /// time: each of `readers`, of the column type of `kinds` beside it.
+    fn row_group<T: TableAccess + ?Sized>(
+        &mut self,
+        readers: &[ColumnReader<'_, T>],
+        kinds: &[ColumnType],
+        segments: &[Range<usize>],
+        rows: usize,
+    ) -> Result<(), Error<T::Error>> {
         let mut compressor = match self.compressor.take() {
             Some(compressor) => compressor,
             None => {
                 Compressor(zstd::bulk::Compressor::new(ZSTD_LEVEL).map_err(|_| Error::Compression)?)
             }
         };
-        let mut chunks = Vec::with_capacity(pending.len());
-        for column in pending {
-            let values = column.levels.len();
-            let encoded = column.chunk(&mut compressor)?;
+        let mut chunks = Vec::with_capacity(readers.len());
+        for (reader, &kind) in readers.iter().zip(kinds) {
+            let (encoded, values) = column_chunk(kind, reader, segments, &mut compressor)?;
             let start = self.bytes.len();
             let dictionary = match &encoded.dictionary {
                 Some(page) => {
@@ -744,9 +819,10 @@ impl File {
 }
 
 /// Encode `partitions` of `table`, one after another, returning where each
-/// partition's bytes end. Rows wait in `pending` until a row group is full,
-/// and the last group is written only when the file ends, so the row groups
-/// are the whole table's whatever the partitions (D264).
+/// partition's bytes end. Rows wait until a row group is full, and the last
+/// group is written only when the file ends, so the row groups are the whole
+/// table's whatever the partitions (D264). A row group is encoded a column at
+/// a time, each column read over the group's rows, which may span partitions.
 fn encode<T: TableAccess>(
     table: &T,
     projection: &[usize],
@@ -779,27 +855,33 @@ fn encode<T: TableAccess>(
         .iter()
         .map(|&index| columns[index].kind)
         .collect();
+    let readers: Vec<_> = projection
+        .iter()
+        .map(|&index| ColumnReader::new(table, index))
+        .collect();
     file.write(MAGIC)?;
-    let mut pending: Vec<Pending> = kinds.iter().map(|&kind| Pending::new(kind)).collect();
-    let (mut held, mut rows) = (0, 0);
+    // The row ranges the row group being filled holds, and their rows.
+    let (mut held, mut segments) = (0, Vec::new());
+    let mut rows = 0;
     let mut ends = Vec::with_capacity(partitions.len());
     for partition in partitions {
         admit(partition.len())?;
-        for row in partition.clone() {
-            for (column, &index) in pending.iter_mut().zip(projection) {
-                column.push(table.cell(row, index).map_err(Error::Cell)?)?;
-            }
-            held += 1;
-            rows += 1;
+        let mut start = partition.start;
+        while start < partition.end {
+            let end = partition.end.min(start + (ROW_GROUP_ROWS - held));
+            segments.push(start..end);
+            held += end - start;
+            rows += end - start;
+            start = end;
             if held == ROW_GROUP_ROWS {
-                file.row_group(&mut pending, held)?;
-                held = 0;
+                file.row_group(&readers, &kinds, &segments, held)?;
+                (held, segments) = (0, Vec::new());
             }
         }
         ends.push(file.bytes.len());
     }
     if held > 0 {
-        file.row_group(&mut pending, held)?;
+        file.row_group(&readers, &kinds, &segments, held)?;
     }
     let footer = file.footer(&names, &kinds, rows)?;
     file.write(&footer)?;

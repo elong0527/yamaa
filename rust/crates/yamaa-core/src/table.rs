@@ -129,35 +129,87 @@ pub enum ColumnValues<'a> {
         offsets: &'a [usize],
         bytes: &'a str,
     },
+    /// Row `i`'s text is `bytes[spans[i].0..spans[i].1]`, the spans in any
+    /// order, as the executor's text buffers hold it (#4201).
+    TextSpans {
+        spans: &'a [(usize, usize)],
+        bytes: &'a str,
+    },
     Int(&'a [i64]),
     /// A nonfinite payload reads missing, as VALUE-4 admits it.
     Float(&'a [f64]),
+    /// Finite payloads, each present where the bitmap says (#4201).
+    FiniteFloat(&'a [FiniteFloat]),
     /// Each row carries its own presence; the bitmap must agree with it.
     Date(&'a [Option<Date>]),
     DateTime(&'a [Option<DateTime>]),
+    /// Dates present where the bitmap says; the payload behind an unset bit
+    /// is a placeholder (#4201).
+    MaskedDate(&'a [Date]),
+    MaskedDateTime(&'a [DateTime]),
+}
+
+impl ColumnValues<'_> {
+    /// The column type of every value the payloads hold.
+    pub fn kind(&self) -> ColumnType {
+        match self {
+            Self::Str { .. } | Self::TextSpans { .. } => ColumnType::Str,
+            Self::Int(_) => ColumnType::Int,
+            Self::Float(_) | Self::FiniteFloat(_) => ColumnType::Float,
+            Self::Date(_) | Self::MaskedDate(_) => ColumnType::Date,
+            Self::DateTime(_) | Self::MaskedDateTime(_) => ColumnType::DateTime,
+        }
+    }
+
+    /// The rows the payloads hold, or `None` for text without an end offset.
+    fn len(&self) -> Option<usize> {
+        Some(match self {
+            Self::Str { offsets, .. } => offsets.len().checked_sub(1)?,
+            Self::TextSpans { spans, .. } => spans.len(),
+            Self::Int(values) => values.len(),
+            Self::Float(values) => values.len(),
+            Self::FiniteFloat(values) => values.len(),
+            Self::Date(values) => values.len(),
+            Self::DateTime(values) => values.len(),
+            Self::MaskedDate(values) => values.len(),
+            Self::MaskedDateTime(values) => values.len(),
+        })
+    }
 }
 
 impl<'a> ColumnRef<'a> {
     /// A view of every row of `values`, or `None` when the payloads, the
-    /// text offsets or the bitmap do not cover the same rows, so that a port
+    /// text bounds or the bitmap do not cover the same rows, so that a port
     /// lends only storage every read can address.
     pub fn new(values: ColumnValues<'a>, validity: Option<&'a [u64]>) -> Option<Self> {
-        let len = match values {
+        let addressable = match values {
             ColumnValues::Str { offsets, bytes } => {
-                let len = offsets.len().checked_sub(1)?;
                 let ordered = offsets.windows(2).all(|pair| pair[0] <= pair[1]);
-                let bounded = offsets.last().is_some_and(|&end| end <= bytes.len());
+                let bounded = offsets.last().is_none_or(|&end| end <= bytes.len());
                 let boundaries = offsets.iter().all(|&offset| bytes.is_char_boundary(offset));
-                if !(ordered && bounded && boundaries) {
-                    return None;
-                }
-                len
+                ordered && bounded && boundaries
             }
-            ColumnValues::Int(values) => values.len(),
-            ColumnValues::Float(values) => values.len(),
-            ColumnValues::Date(values) => values.len(),
-            ColumnValues::DateTime(values) => values.len(),
+            ColumnValues::TextSpans { spans, bytes } => spans.iter().all(|&(start, end)| {
+                start <= end
+                    && end <= bytes.len()
+                    && bytes.is_char_boundary(start)
+                    && bytes.is_char_boundary(end)
+            }),
+            _ => true,
         };
+        if !addressable {
+            return None;
+        }
+        Self::lend(values, validity)
+    }
+
+    /// [`ColumnRef::new`] for storage whose text bounds always address its
+    /// arena, such as the executor's buffers, which record only the bounds
+    /// of text they appended (#4201): only the parts' lengths are checked,
+    /// in constant time. A bound that did not address the arena would panic
+    /// on read, never lend other bytes.
+    pub(crate) fn lend(values: ColumnValues<'a>, validity: Option<&'a [u64]>) -> Option<Self> {
+        let len = values.len()?;
         if validity.is_some_and(|words| words.len() < len.div_ceil(64)) {
             return None;
         }
@@ -202,6 +254,7 @@ impl<'a> ColumnRef<'a> {
 
     /// Whether row `row`, which must be below [`ColumnRef::len`], holds a
     /// value by the bitmap.
+    #[inline]
     fn valid(&self, row: usize) -> bool {
         let index = self.start + row;
         self.validity
@@ -209,6 +262,7 @@ impl<'a> ColumnRef<'a> {
     }
 
     /// Lend row `row`'s value, which must be below [`ColumnRef::len`].
+    #[inline]
     pub fn get(&self, row: usize) -> ValueRef<'a> {
         debug_assert!(row < self.len);
         if !self.valid(row) {
@@ -219,13 +273,168 @@ impl<'a> ColumnRef<'a> {
             ColumnValues::Str { offsets, bytes } => {
                 ValueRef::Str(&bytes[offsets[index]..offsets[index + 1]])
             }
+            ColumnValues::TextSpans { spans, bytes } => {
+                let (start, end) = spans[index];
+                ValueRef::Str(&bytes[start..end])
+            }
             ColumnValues::Int(values) => ValueRef::Int(values[index]),
             ColumnValues::Float(values) => {
                 FiniteFloat::new(values[index]).map_or(ValueRef::Missing, ValueRef::Float)
             }
+            ColumnValues::FiniteFloat(values) => ValueRef::Float(values[index]),
             ColumnValues::Date(values) => values[index].map_or(ValueRef::Missing, ValueRef::Date),
             ColumnValues::DateTime(values) => {
                 values[index].map_or(ValueRef::Missing, ValueRef::DateTime)
+            }
+            ColumnValues::MaskedDate(values) => ValueRef::Date(values[index]),
+            ColumnValues::MaskedDateTime(values) => ValueRef::DateTime(values[index]),
+        }
+    }
+
+    /// Visit rows `rows` of the view, which must lie within it, in order,
+    /// each with the value [`ColumnRef::get`] lends, until `visit` refuses
+    /// one: the payloads' layout is matched once, not once per row (#4201).
+    #[inline]
+    pub fn try_for_each<R>(
+        &self,
+        rows: std::ops::Range<usize>,
+        mut visit: impl FnMut(ValueRef<'a>) -> Result<(), R>,
+    ) -> Result<(), R> {
+        debug_assert!(rows.end <= self.len);
+        // One loop per layout: `read` lends the payload at an index.
+        #[inline]
+        fn rows_of<'a, R>(
+            view: &ColumnRef<'a>,
+            rows: std::ops::Range<usize>,
+            visit: &mut impl FnMut(ValueRef<'a>) -> Result<(), R>,
+            read: impl Fn(usize) -> ValueRef<'a>,
+        ) -> Result<(), R> {
+            for row in rows {
+                visit(if view.valid(row) {
+                    read(view.start + row)
+                } else {
+                    ValueRef::Missing
+                })?;
+            }
+            Ok(())
+        }
+        match self.values {
+            ColumnValues::Str { offsets, bytes } => rows_of(self, rows, &mut visit, |index| {
+                ValueRef::Str(&bytes[offsets[index]..offsets[index + 1]])
+            }),
+            ColumnValues::TextSpans { spans, bytes } => rows_of(self, rows, &mut visit, |index| {
+                ValueRef::Str(&bytes[spans[index].0..spans[index].1])
+            }),
+            ColumnValues::Int(values) => {
+                rows_of(self, rows, &mut visit, |index| ValueRef::Int(values[index]))
+            }
+            ColumnValues::Float(values) => rows_of(self, rows, &mut visit, |index| {
+                FiniteFloat::new(values[index]).map_or(ValueRef::Missing, ValueRef::Float)
+            }),
+            ColumnValues::FiniteFloat(values) => rows_of(self, rows, &mut visit, |index| {
+                ValueRef::Float(values[index])
+            }),
+            ColumnValues::Date(values) => rows_of(self, rows, &mut visit, |index| {
+                values[index].map_or(ValueRef::Missing, ValueRef::Date)
+            }),
+            ColumnValues::DateTime(values) => rows_of(self, rows, &mut visit, |index| {
+                values[index].map_or(ValueRef::Missing, ValueRef::DateTime)
+            }),
+            ColumnValues::MaskedDate(values) => rows_of(self, rows, &mut visit, |index| {
+                ValueRef::Date(values[index])
+            }),
+            ColumnValues::MaskedDateTime(values) => rows_of(self, rows, &mut visit, |index| {
+                ValueRef::DateTime(values[index])
+            }),
+        }
+    }
+
+    /// The bytes of row `row`'s present text; 0 for a missing row or a
+    /// column of another type. The row must be below [`ColumnRef::len`].
+    #[inline]
+    pub fn text_len(&self, row: usize) -> usize {
+        debug_assert!(row < self.len);
+        if !self.valid(row) {
+            return 0;
+        }
+        let index = self.start + row;
+        match self.values {
+            ColumnValues::Str { offsets, .. } => offsets[index + 1] - offsets[index],
+            ColumnValues::TextSpans { spans, .. } => spans[index].1 - spans[index].0,
+            _ => 0,
+        }
+    }
+}
+
+/// One column of a table, read a row at a time: through the column view
+/// its port lends (#4190), so that a pass over a column makes no call per
+/// cell (#4201), or else through [`TableAccess::cell`]. Each read lends the
+/// value `cell` would, and refuses a row the table does not hold as `cell`
+/// does.
+pub enum ColumnReader<'a, T: TableAccess + ?Sized> {
+    View { view: ColumnRef<'a>, column: usize },
+    Cells { table: &'a T, column: usize },
+}
+
+impl<'a, T: TableAccess + ?Sized> ColumnReader<'a, T> {
+    /// Column `column` of `table`; a view that does not cover every row of
+    /// the table is read through its cells instead.
+    pub fn new(table: &'a T, column: usize) -> Self {
+        match table.column(column) {
+            Some(view) if view.len() == table.row_count() => Self::View { view, column },
+            _ => Self::Cells { table, column },
+        }
+    }
+
+    /// The column view, when the port lends one.
+    pub fn view(&self) -> Option<ColumnRef<'a>> {
+        match self {
+            Self::View { view, .. } => Some(*view),
+            Self::Cells { .. } => None,
+        }
+    }
+
+    /// Row `row`'s value.
+    #[inline]
+    pub fn get(&self, row: usize) -> Result<ValueRef<'a>, CellError<T::Error>> {
+        match self {
+            Self::View { view, .. } if row < view.len() => Ok(view.get(row)),
+            Self::View { column, .. } => Err(CellError::OutOfBounds {
+                row,
+                column: *column,
+            }),
+            Self::Cells { table, column } => table.cell(row, *column),
+        }
+    }
+
+    /// Visit rows `rows`, in order, each with the value [`Self::get`]
+    /// lends, until `visit` refuses one, or a row the table does not hold
+    /// is refused through `refused`: a view's rows in one loop per layout
+    /// ([`ColumnRef::try_for_each`]).
+    #[inline]
+    pub fn try_for_each<R>(
+        &self,
+        rows: std::ops::Range<usize>,
+        mut visit: impl FnMut(ValueRef<'a>) -> Result<(), R>,
+        refused: impl Fn(CellError<T::Error>) -> R,
+    ) -> Result<(), R> {
+        match self {
+            Self::View { view, column } => {
+                let held = rows.start.min(view.len())..rows.end.min(view.len());
+                view.try_for_each(held.clone(), &mut visit)?;
+                if rows.end > held.end {
+                    return Err(refused(CellError::OutOfBounds {
+                        row: held.end.max(rows.start),
+                        column: *column,
+                    }));
+                }
+                Ok(())
+            }
+            Self::Cells { table, column } => {
+                for row in rows {
+                    visit(table.cell(row, *column).map_err(&refused)?)?;
+                }
+                Ok(())
             }
         }
     }
@@ -300,6 +509,30 @@ mod tests {
                 Some(&[0u64][..]),
                 "a bitmap of too few words",
             ),
+            (
+                ColumnValues::TextSpans {
+                    spans: &[(0, 1), (2, 1)],
+                    bytes: "ab",
+                },
+                None,
+                "a span that ends before it starts",
+            ),
+            (
+                ColumnValues::TextSpans {
+                    spans: &[(1, 3)],
+                    bytes: "ab",
+                },
+                None,
+                "a span past the arena",
+            ),
+            (
+                ColumnValues::TextSpans {
+                    spans: &[(0, 1)],
+                    bytes: "\u{e9}",
+                },
+                None,
+                "a span inside a character",
+            ),
         ];
         for (values, validity, case) in refused {
             assert!(ColumnRef::new(values, validity).is_none(), "{case}");
@@ -310,5 +543,159 @@ mod tests {
             Some(ValueRef::Int(2))
         );
         assert!(view.slice(2..4).is_none(), "a range past the view");
+    }
+
+    // Reservations count the text that will be copied, not an obsolete
+    // payload masked missing. The middle slot retains six or eight bytes;
+    // its logical length is zero, including after the view is sliced.
+    #[test]
+    fn text_lengths_exclude_missing_payloads_even_in_slices() {
+        let bits = [0b101u64];
+        let cases = [
+            (
+                ColumnValues::Str {
+                    offsets: &[0, 2, 8, 9],
+                    bytes: "éhiddenz",
+                },
+                [2, 0, 1],
+            ),
+            (
+                ColumnValues::TextSpans {
+                    spans: &[(8, 9), (0, 8), (0, 2)],
+                    bytes: "éhiddenz",
+                },
+                [1, 0, 2],
+            ),
+        ];
+        for (values, expected) in cases {
+            let view = ColumnRef::new(values, Some(&bits)).unwrap();
+            assert_eq!(
+                [view.text_len(0), view.text_len(1), view.text_len(2)],
+                expected
+            );
+            let tail = view.slice(1..3).unwrap();
+            assert_eq!([tail.text_len(0), tail.text_len(1)], expected[1..]);
+        }
+    }
+
+    // The seam is a view's two reads (#4201): a pass over a range lends, row
+    // by row, what `get` lends, in every layout, missing where the bitmap
+    // or the payload says, and stops at the first refusal.
+    #[test]
+    fn a_pass_over_a_view_lends_what_each_read_lends() {
+        let day = |day| Date::new(2024, 2, day, crate::temporal::Precision::Day).unwrap();
+        let moment =
+            DateTime::new(day(29), 23, 59, 58, crate::temporal::Precision::Second).unwrap();
+        let float = |value| FiniteFloat::new(value).unwrap();
+        // The payloads the cases lend.
+        let finite = [float(-0.0), float(1.0), float(2.5)];
+        let dates = [Some(day(1)), Some(day(2)), None];
+        let masked_dates = [day(1), day(2), day(3)];
+        let datetimes = [None, Some(moment), Some(moment)];
+        let masked_datetimes = [moment; 3];
+        // Rows 0 and 2 are present, row 1 is missing by the bitmap.
+        let bits = [0b101u64];
+        let cases = [
+            (
+                ColumnValues::Str {
+                    offsets: &[0, 1, 1, 3],
+                    bytes: "abc",
+                },
+                [ValueRef::Str("a"), ValueRef::Missing, ValueRef::Str("bc")],
+                "text by offsets",
+            ),
+            (
+                ColumnValues::TextSpans {
+                    spans: &[(2, 3), (0, 3), (0, 2)],
+                    bytes: "abc",
+                },
+                [ValueRef::Str("c"), ValueRef::Missing, ValueRef::Str("ab")],
+                "text by spans in any order",
+            ),
+            (
+                ColumnValues::Int(&[7, 8, -9]),
+                [ValueRef::Int(7), ValueRef::Missing, ValueRef::Int(-9)],
+                "integers",
+            ),
+            (
+                ColumnValues::Float(&[0.5, 1.0, f64::NAN]),
+                [
+                    ValueRef::Float(float(0.5)),
+                    ValueRef::Missing,
+                    ValueRef::Missing,
+                ],
+                "floats, a nonfinite one missing",
+            ),
+            (
+                ColumnValues::FiniteFloat(&finite),
+                [
+                    ValueRef::Float(float(-0.0)),
+                    ValueRef::Missing,
+                    ValueRef::Float(float(2.5)),
+                ],
+                "finite floats",
+            ),
+            (
+                ColumnValues::Date(&dates),
+                [ValueRef::Date(day(1)), ValueRef::Missing, ValueRef::Missing],
+                "dates with their own presence",
+            ),
+            (
+                ColumnValues::MaskedDate(&masked_dates),
+                [
+                    ValueRef::Date(day(1)),
+                    ValueRef::Missing,
+                    ValueRef::Date(day(3)),
+                ],
+                "dates present by the bitmap",
+            ),
+            (
+                ColumnValues::DateTime(&datetimes),
+                [
+                    ValueRef::Missing,
+                    ValueRef::Missing,
+                    ValueRef::DateTime(moment),
+                ],
+                "datetimes with their own presence",
+            ),
+            (
+                ColumnValues::MaskedDateTime(&masked_datetimes),
+                [
+                    ValueRef::DateTime(moment),
+                    ValueRef::Missing,
+                    ValueRef::DateTime(moment),
+                ],
+                "datetimes present by the bitmap",
+            ),
+        ];
+        for (values, expected, case) in cases {
+            let view = ColumnRef::new(values, Some(&bits)).unwrap();
+            let mut passed = Vec::new();
+            let pass = view.try_for_each(0..3, |value| {
+                passed.push(value);
+                Ok::<_, ()>(())
+            });
+            let read: Vec<_> = (0..3).map(|row| view.get(row)).collect();
+            assert_eq!(
+                (pass, passed, read),
+                (Ok(()), expected.to_vec(), expected.to_vec()),
+                "{case}"
+            );
+        }
+        let view = ColumnRef::new(ColumnValues::Int(&[1, 2, 3]), None).unwrap();
+        let mut passed = Vec::new();
+        let refused = view.try_for_each(0..3, |value| {
+            passed.push(value);
+            if value == ValueRef::Int(2) {
+                Err("two")
+            } else {
+                Ok(())
+            }
+        });
+        assert_eq!(
+            (refused, passed),
+            (Err("two"), vec![ValueRef::Int(1), ValueRef::Int(2)]),
+            "a pass stops at its first refusal"
+        );
     }
 }
