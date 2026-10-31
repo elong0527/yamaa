@@ -96,6 +96,14 @@ a run hold \code{$timings}, a data frame of each phase the call ran, with the
 columns \code{name}, \code{phase}, \code{started_ms}, \code{elapsed_ms} and
 \code{outcome}; no saved file holds them.
 
+Both also take \code{threads}, the most partitions of one run that derive at
+once, each on a thread of its own: one positive whole number, or
+\code{NULL}, the default, for the fewer of 4 and the cores the process may
+use. \code{threads = 1} derives one partition at a time. The result, its
+issues, its report and the progress events are the same for every value;
+only the time and the peak memory change. Any other value fails the call
+with a \code{yamaa_error} condition.
+
 A failure raises a condition of class \code{yamaa_error} whose \code{issues}
 data frame says why; for a refused \code{$save()}, its \code{paths} lists
 the files written before the refusal.

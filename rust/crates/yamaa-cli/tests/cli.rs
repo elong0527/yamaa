@@ -168,9 +168,9 @@ fn help_prints_every_command_and_wins_over_other_arguments() {
          yamaa --version [--format text|json]\n       yamaa --help\n"
     ));
     for synopsis in [
-        "  check PATH [--spec NAME | --parent PATH] [--verbose]\n",
-        "  run PATH [--spec NAME | --section SECTION] [--verbose]\n",
-        "  submission PATH [--section SECTION] [--created TIME] [--verbose]\n",
+        "  check PATH [--spec NAME | --parent PATH] [--threads N] [--verbose]\n",
+        "  run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]\n",
+        "  submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]\n",
         "  resolve PATH [--spec NAME]\n",
         "  read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] \
          [--max-expanded-bytes N] [--max-xml-depth N]\n",
@@ -266,6 +266,32 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
         (
             &["resolve", "project.yaml", "--fix"],
             "resolve: unknown option --fix",
+        ),
+        // #4193: check, run and submission take a positive whole number of
+        // threads, and no other command takes one.
+        (
+            &["run", "a.yaml", "--threads", "two"],
+            "run: --threads takes a whole number, not two",
+        ),
+        (
+            &["run", "a.yaml", "--threads", "0"],
+            "run: --threads takes a positive whole number, not 0",
+        ),
+        (
+            &["check", "a.yaml", "--threads", "0"],
+            "check: --threads takes a positive whole number, not 0",
+        ),
+        (
+            &["submission", "project.yaml", "--threads", "00"],
+            "submission: --threads takes a positive whole number, not 00",
+        ),
+        (
+            &["run", "a.yaml", "--threads"],
+            "run: --threads needs a value",
+        ),
+        (
+            &["resolve", "a.yaml", "--threads", "2"],
+            "resolve: unknown option --threads",
         ),
         (&["read-odm"], "read-odm: missing SOURCE"),
         (&["read-odm", "study.xml"], "read-odm: missing OUT"),
@@ -587,6 +613,34 @@ fn verbose_writes_each_phase_the_division_and_then_the_timings_to_standard_error
             .collect::<Vec<_>>(),
         "the timings rows"
     );
+}
+
+/// `--threads N` (#4193) changes neither what a run prints nor what it
+/// reports as it runs: with 1, the serial run, and with 4, the run prints
+/// the standard output of a run without the flag, and under `--verbose` the
+/// same progress events and division, in the same order.
+#[test]
+fn threads_leave_what_a_run_prints_and_reports_as_it_is() {
+    let study = Study::new();
+    let events = |stderr: &str| {
+        stderr
+            .lines()
+            .take_while(|line| !line.starts_with("name\t"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let plain = outcome(&yamaa_in(&study.0, &["run", "sdtm/dm.yaml", "--verbose"]));
+    for threads in ["1", "4"] {
+        let threaded = outcome(&yamaa_in(
+            &study.0,
+            &["run", "sdtm/dm.yaml", "--threads", threads, "--verbose"],
+        ));
+        assert_eq!(
+            (threaded.0, threaded.1, events(&threaded.2)),
+            (plain.0, plain.1.clone(), events(&plain.2)),
+            "--threads {threads}: the status, standard output and progress events"
+        );
+    }
 }
 
 /// A PATH that declares `type: project` is checked and run whole, as

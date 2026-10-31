@@ -54,6 +54,8 @@ _PY_ANNOTATION = {
     "optional_text": "str | None",
     # A progress callback, which the native call checks (#3762).
     "progress": None,
+    # A thread count, which the native call checks (#4193).
+    "threads": None,
     "input_frames": "dict[str, object] | None",
     "count": "int",
     "flag": "bool",
@@ -96,6 +98,7 @@ _ARGUMENT_TOKENS = {
     "text",
     "optional_text",
     "progress",
+    "threads",
     "input_frames",
     "count",
     "flag",
@@ -106,6 +109,7 @@ _DEFAULTS = {
     "optional_path": {"None"},
     "optional_text": {"None"},
     "progress": {"None"},
+    "threads": {"None"},
     "input_frames": {"None"},
     "schema_request": {"None"},
     "flag": {"false", "true"},

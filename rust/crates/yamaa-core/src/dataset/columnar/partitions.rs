@@ -59,7 +59,8 @@ use std::sync::Arc;
 mod concurrent;
 
 /// The partitions of a driver input that a partitioned run decodes in
-/// order, on the calling thread (#3830).
+/// order, on the calling thread (#3830), or on the threads that derive them
+/// through a [`SharedDecode`] the source gives with it (#4193).
 pub trait PartitionSource {
     /// A decoded partition, which a run derives on another thread when it
     /// moves there ([`TableAccess::into_shared`], #4193).
@@ -75,6 +76,13 @@ pub trait PartitionSource {
     /// holds why.
     fn decode(&mut self, index: usize) -> Option<Self::Table>;
 }
+
+/// A decode of a partition, by its index and its records, that the threads
+/// deriving the partitions of a run share (#4193): what
+/// [`PartitionSource::decode`] gives, or none when it does not decode. The
+/// calling thread then decodes that partition again through
+/// [`PartitionSource::decode`], in the serial run's turn, to find why.
+pub type SharedDecode<'s, T> = dyn Fn(usize, Range<usize>) -> Option<T> + Sync + 's;
 
 /// Records `start..start + rows` of a table, as one partition of it.
 struct RowRange<'t, T: ?Sized> {
@@ -417,6 +425,8 @@ struct Input<'d, T> {
     whole_output: bool,
     /// How many partitions may derive at once (#4193).
     threads: NonZeroUsize,
+    /// The decode the threads that derive the partitions share, if any.
+    shared: Option<&'d SharedDecode<'d, T>>,
 }
 
 /// Where one partition's run runs (#3830).
@@ -441,6 +451,9 @@ struct Work<'w, T> {
     ranges: &'w [Range<usize>],
     schema: &'w TableSchema,
     decode: &'w mut dyn FnMut(usize, Range<usize>) -> Option<T>,
+    /// The same decode, which the threads that derive the partitions run
+    /// when they may.
+    shared: Option<&'w SharedDecode<'w, T>>,
 }
 
 /// Every partition's run and the first failure among them, or none when the
@@ -466,7 +479,9 @@ impl ResolvedPlan {
     /// Its records keep their positions in the whole input, which every
     /// partition holds in order; `keys` names the leading declared keys no
     /// partition splits a group of, zero for consecutive records (#3763),
-    /// and up to `threads` partitions derive at once.
+    /// and up to `threads` partitions derive at once. With `shared`, each
+    /// partition decodes on the thread that derives it; without it, the
+    /// calling thread decodes each in turn.
     ///
     /// Admission checks each partition within the row and cell limits on its
     /// own (#3792), every other source whole, and the partitions' schema,
@@ -483,7 +498,7 @@ impl ResolvedPlan {
     /// whose source could not decode a partition.
     pub fn execute_partitioned<P: PartitionSource>(
         &self,
-        source: &mut P,
+        (source, shared): (&mut P, Option<&SharedDecode<'_, P::Table>>),
         secondary: &[&dyn TableAccess<Error = <P::Table as TableAccess>::Error>],
         functions: &mut dyn FunctionPort<Error = <P::Table as TableAccess>::Error>,
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
@@ -501,6 +516,7 @@ impl ResolvedPlan {
             keys: keys.min(self.keys().len()),
             whole_output: false,
             threads,
+            shared,
         };
         self.run_divided(input, secondary, functions, observer, cancelled)
     }
@@ -576,6 +592,7 @@ impl ResolvedPlan {
             keys,
             whole_output: partitioning.whole_output,
             threads: partitioning.threads,
+            shared: None,
         };
         self.run_divided(input, secondary, functions, observer, cancelled)
     }
@@ -645,6 +662,7 @@ impl ResolvedPlan {
             ranges: &ranges,
             schema: input.schema,
             decode: input.decode,
+            shared: input.shared,
         };
         let threads = input.threads.get().min(ranges.len());
         // A plan that calls the host runs on the calling thread (FUNC-8);

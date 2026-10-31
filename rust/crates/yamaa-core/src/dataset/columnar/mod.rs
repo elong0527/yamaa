@@ -43,7 +43,7 @@ mod keygrain;
 mod odm;
 mod pairs;
 mod partitions;
-pub use partitions::PartitionSource;
+pub use partitions::{PartitionSource, SharedDecode};
 mod predicates;
 mod relations;
 mod scalar;

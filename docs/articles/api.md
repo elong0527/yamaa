@@ -1128,6 +1128,16 @@ than 10,000,000 records when the windows and aggregates group by the first two
 keys, such as `STUDYID` and `USUBJID`
 ([LIMIT-3](../../rules/limits.md#limit-3)).
 
+A run derives up to four of its partitions at once, each on a thread of its
+own, or fewer when the process may use fewer cores. `check()`, `run()` and
+`submission()` take `threads` to set that number, a positive whole number, as
+in `run(threads = 1)` in R and `run(threads=1)` in Python, and the command
+line takes `--threads N`. A `threads` of 1 derives one partition at a time,
+and a value that is neither a positive whole number nor the default, `NULL`
+in R and `None` in Python, fails the call. The output, its issues, its
+report and the progress events are the same for every value; only the time
+and the peak memory change.
+
 A relative path resolves from the YAML file that writes it, so
 `../edc/odm.xml` in `sdtm/dm.yaml` is the study's `edc/odm.xml`. A path you
 pass to a function is a character string in R, and a string or any
@@ -1181,9 +1191,9 @@ usage whatever else is given. Both exit 0.
 ### Commands
 
 ```text
-yamaa check PATH [--spec NAME | --parent PATH] [--verbose]
-yamaa run PATH [--spec NAME | --section SECTION] [--verbose]
-yamaa submission PATH [--section SECTION] [--created TIME] [--verbose]
+yamaa check PATH [--spec NAME | --parent PATH] [--threads N] [--verbose]
+yamaa run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]
+yamaa submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]
 yamaa resolve PATH [--spec NAME]
 yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
 yamaa lint [--fix] PATH...
@@ -1215,7 +1225,10 @@ of its own. For a specification, `check --parent` checks it as a fragment
 whose parent is the template the flag names, as `check(parent = )` does, so
 `check` takes `--spec` or `--parent`, not both. `--created TIME` gives the ISO 8601 creation time that a
 submission's documents carry; without it, the submission reads the clock once
-for every section and prints the time it read. A command's flags follow it,
+for every section and prints the time it read. `--threads N` sets how many
+partitions of one run derive at once, as `threads` does in R and Python
+([Inputs, outputs and paths](#inputs-outputs-and-paths)); an `N` of 0 is a
+usage error. A command's flags follow it,
 before or after its arguments, each at most once, and `--` ends the flags, so
 a PATH that starts with `-` can follow it. A PATH whose type the command does
 not take, such as a specification with `--spec`, is a usage error.

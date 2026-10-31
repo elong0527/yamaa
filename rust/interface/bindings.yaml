@@ -369,6 +369,12 @@ public:
     progress:
       python: "a callable of one dict, keys in records.progress_event order, or None"
       r: "a function of one named list, names in records.progress_event order, or NULL"
+    # #4193: how many partitions of one partitioned run derive at once, each
+    # on a thread of its own; 1 is the serial run. The result, its issues,
+    # its report and the progress events do not depend on it.
+    threads:
+      python: "a positive int, or None for the fewer of 4 and the cores the process may use"
+      r: "one positive whole number, or NULL for the fewer of 4 and the cores the process may use"
     input_frames: {python: "dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow", r: "named list of data.frames or NULL"}
     count: {python: int, r: "numeric(1), a whole number"}
     flag: {python: bool, r: "logical(1)"}
@@ -674,8 +680,8 @@ public:
       members:
         - name: check
           kind: method
-          args: {parent: optional_path = None, progress: progress = None}
-          keyword_only: [progress]
+          args: {parent: optional_path = None, progress: progress = None, threads: threads = None}
+          keyword_only: [progress, threads]
           returns: Check
           raises: refusal
           calls: spec_check
@@ -692,8 +698,8 @@ public:
         # #3697: with stream, nothing is read until the output is.
         - name: run
           kind: method
-          args: {stream: flag = false, progress: progress = None, inputs: input_frames = None}
-          keyword_only: [stream, progress, inputs]
+          args: {stream: flag = false, progress: progress = None, inputs: input_frames = None, threads: threads = None}
+          keyword_only: [stream, progress, inputs, threads]
           returns: Run
           raises: refusal
           calls: spec_run
@@ -723,23 +729,23 @@ public:
           doc: The listed specifications by `domain` name, in run order, read without study data.
         - name: check
           kind: method
-          args: {progress: progress = None}
-          keyword_only: [progress]
+          args: {progress: progress = None, threads: threads = None}
+          keyword_only: [progress, threads]
           returns: Check
           raises: refusal
           calls: project_check
         - name: run
           kind: method
-          args: {section: optional_text = None, progress: progress = None}
-          keyword_only: [progress]
+          args: {section: optional_text = None, progress: progress = None, threads: threads = None}
+          keyword_only: [progress, threads]
           returns: ProjectRun
           raises: refusal
           calls: project_run
           doc: Build every specification of one section, or of all sections.
         - name: submission
           kind: method
-          args: {section: optional_text = None, created: optional_text = None, progress: progress = None}
-          keyword_only: [created, progress]
+          args: {section: optional_text = None, created: optional_text = None, progress: progress = None, threads: threads = None}
+          keyword_only: [created, progress, threads]
           returns: Submission
           raises: refusal
           calls: project_submission
@@ -906,7 +912,7 @@ cli:
     # declares. A type the command does not take, at all or with the flags
     # given, is a usage error (exit status 2).
     - name: check
-      synopsis: yamaa check PATH [--spec NAME | --parent PATH] [--verbose]
+      synopsis: yamaa check PATH [--spec NAME | --parent PATH] [--threads N] [--verbose]
       args:
         - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
       flags:
@@ -916,12 +922,13 @@ cli:
           meaning: the specification the fragment is checked on, as its parent
           valid_when: "PATH declares type: spec, without --spec"
           host: Spec.check(parent)
+        - {name: --threads, value: N, meaning: "the most partitions of one run that derive at once, at least 1", host: Spec.check(threads)}
         - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Spec.check(progress)}
       operations: [spec_check, project_check, project_spec]
       text: the summary line, then each issue's line
       json_keys: [command, path, spec, status, issues]
     - name: run
-      synopsis: yamaa run PATH [--spec NAME | --section SECTION] [--verbose]
+      synopsis: yamaa run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]
       args:
         - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
       flags:
@@ -934,6 +941,7 @@ cli:
           values: section
           valid_when: "PATH declares type: project, without --spec"
           host: Project.run(section)
+        - {name: --threads, value: N, meaning: "the most partitions of one run that derive at once, at least 1", host: Spec.run(threads)}
         - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Spec.run(progress)}
       operations: [spec_run, run_save, project_spec, project_run, project_run_save]
       effect: "runs, then saves; a failed run saves only its report (OUTPUT-10, PROJECT-12)"
@@ -942,7 +950,7 @@ cli:
     # D129: without --created, the submission reads the clock once for every
     # section and prints the time it read.
     - name: submission
-      synopsis: yamaa submission PATH [--section SECTION] [--created TIME] [--verbose]
+      synopsis: yamaa submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]
       args:
         - {name: PATH, type: path, valid_when: "PATH declares type: project"}
       flags:
@@ -951,6 +959,7 @@ cli:
           value: TIME
           meaning: the ISO 8601 creation time the documents carry
           host: Project.submission(created=TIME)
+        - {name: --threads, value: N, meaning: "the most partitions of one run that derive at once, at least 1", host: Project.submission(threads)}
         - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Project.submission(progress)}
       operations: [project_submission, submission_save]
       effect: composes, then saves
@@ -1181,6 +1190,7 @@ python:
         project: "optional<text> = None"
         parent: "optional<text> = None"
         progress: "optional<host_callback> = None"
+        threads: "optional<host_object> = None"
       returns: _Check
     - kind: function
       name: _spec_summary
@@ -1197,6 +1207,7 @@ python:
         stream: "bool = false"
         progress: "optional<host_callback> = None"
         inputs: "optional<host_object> = None"
+        threads: "optional<host_object> = None"
       returns: _Run
     - kind: function
       name: _spec_resolve
@@ -1221,7 +1232,7 @@ python:
     - kind: function
       name: _project_check
       rust: api_entry::_project_check
-      args: {project: text, progress: "optional<host_callback> = None"}
+      args: {project: text, progress: "optional<host_callback> = None", threads: "optional<host_object> = None"}
       returns: _Check
     - kind: function
       name: _project_run
@@ -1231,6 +1242,7 @@ python:
         section: "optional<text> = None"
         plans: "optional<_Plans> = None"
         progress: "optional<host_callback> = None"
+        threads: "optional<host_object> = None"
       returns: _ProjectRun
     - kind: function
       name: _project_submission
@@ -1240,6 +1252,7 @@ python:
         section: "optional<text> = None"
         created: "optional<text> = None"
         progress: "optional<host_callback> = None"
+        threads: "optional<host_object> = None"
       returns: _Submission
     - kind: function
       name: _read_odm
@@ -1311,7 +1324,7 @@ r:
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
         - name: spec_check
-          args: {specification: raw, project: robj, parent: robj, version: raw, progress: robj}
+          args: {specification: raw, project: robj, parent: robj, version: raw, progress: robj, threads: robj}
           returns: r_reply
         - {name: check_status, args: {handle: robj}, returns: r_reply}
         - {name: check_issues, args: {handle: robj}, returns: r_reply}
@@ -1328,6 +1341,7 @@ r:
             stream: bool
             progress: robj
             inputs: robj
+            threads: robj
           returns: r_reply
         - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
         - name: read_odm
@@ -1344,9 +1358,9 @@ r:
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
         - {name: project_summary, args: {project: raw}, returns: r_reply}
         - {name: project_names, args: {project: raw, version: raw}, returns: r_reply}
-        - {name: project_check, args: {project: raw, version: raw, progress: robj}, returns: r_reply}
+        - {name: project_check, args: {project: raw, version: raw, progress: robj, threads: robj}, returns: r_reply}
         - name: project_run
-          args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj, progress: robj}
+          args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj, progress: robj, threads: robj}
           returns: r_reply
         - {name: project_run_status, args: {handle: robj}, returns: r_reply}
         - {name: project_run_names, args: {handle: robj}, returns: r_reply}
@@ -1362,7 +1376,7 @@ r:
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
         - {name: project_run_summary, args: {handle: robj}, returns: r_reply}
         - name: project_submission
-          args: {project: raw, section: robj, created: robj, version: raw, progress: robj}
+          args: {project: raw, section: robj, created: robj, version: raw, progress: robj, threads: robj}
           returns: r_reply
         - {name: submission_status, args: {handle: robj}, returns: r_reply}
         - {name: submission_created, args: {handle: robj}, returns: r_reply}

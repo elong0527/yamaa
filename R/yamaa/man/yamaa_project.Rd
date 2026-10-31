@@ -101,7 +101,9 @@ is called no more: the call checks, builds or composes nothing further, and
 its result fails with one \code{engine_rejected} issue whose code is
 \code{host_progress_failure} and refuses its save. A check, a project run,
 one specification's run and a submission hold \code{$timings}, a data frame
-of each phase the call ran; no saved file holds them.
+of each phase the call ran; no saved file holds them. The three methods also
+take \code{threads}, the most partitions of one run that derive at once, as
+\code{\link{yamaa_spec}} describes.
 
 Each \code{$save()} returns the absolute paths it wrote invisibly, in
 publication order. A failure raises a condition of class \code{yamaa_error}

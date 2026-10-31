@@ -17,6 +17,10 @@ use crate::{
 };
 use std::{any::Any, num::NonZeroUsize, ops::Range};
 
+/// A decode of a range of a scanned input's records that threads share
+/// ([`Decoder::shared_partition`], #4193).
+pub type RangeDecode<'a, T, E> = Box<dyn Fn(Range<usize>) -> Result<T, E> + Sync + 'a>;
+
 /// The engine's one way from held bytes to what it reads. Each request reads
 /// only the bytes it is given, applies its own physical limits before it
 /// allocates, and returns a value that owns its storage: no borrowed input
@@ -130,6 +134,21 @@ pub trait Decoder {
         _range: Range<usize>,
     ) -> Result<Self::Table, Self::Error> {
         unreachable!("{} was not scanned by partition", source.name)
+    }
+    /// Decode ranges of an input [`Self::partitioned`] scanned into
+    /// `scanned` as [`Self::partition`] does, from any thread (#4193), so
+    /// the partitions of a run decode on the threads that derive them.
+    /// `None` when this decoder decodes partitions only through
+    /// [`Self::partition`], on the calling thread.
+    fn shared_partition<'a>(
+        &self,
+        _scanned: &'a Self::Table,
+        _source: &'a SourceDeclaration,
+        _bytes: &'a [u8],
+        _interpretation: SourceInterpretation,
+        _contract: Option<&'a Contract>,
+    ) -> Option<RangeDecode<'a, Self::Table, Self::Error>> {
+        None
     }
     /// Whether a failed input is an ingestion finding, after which the
     /// remaining declared inputs still decode. A resource, transport or

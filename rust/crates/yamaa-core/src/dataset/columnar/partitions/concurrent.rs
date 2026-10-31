@@ -1,8 +1,10 @@
-//! Partitions derived at once (#4193): the calling thread decodes each
-//! partition in order and hands it to one of a bounded set of scoped
-//! threads, which runs it as the serial run does
-//! ([`ResolvedPlan::derive_serially`]); the calling thread then takes the
-//! runs back in partition order.
+//! Partitions derived at once (#4193): the calling thread hands each
+//! partition in order to one of a bounded set of scoped threads, which
+//! decodes it, when the source shares a decode ([`SharedDecode`]), and runs
+//! it as the serial run does ([`ResolvedPlan::derive_serially`]); the
+//! calling thread then takes the runs back in partition order. For a
+//! source that shares no decode, the calling thread decodes each partition
+//! before it hands it out.
 //!
 //! A partition's run depends on the partitions before it only through the
 //! mark it stops at: the earliest mark an earlier partition failed at. A
@@ -14,7 +16,10 @@
 //! failed comes back without its failure, which may hold a host's error
 //! that never leaves the thread that raised it, and the calling thread runs
 //! that partition again to find it. Only a run with a failure reruns
-//! anything.
+//! anything. A partition a thread could not decode, or whose schema is not
+//! the driver input's, is decoded again on the calling thread when the
+//! serial run reaches it, which finds why as the serial run does; a decode
+//! from held bytes reads nothing else, so no thread's decode is seen.
 //!
 //! The calling thread alone reports progress and polls the cancellation
 //! probe, which a host answers only on its own thread. It reports each
@@ -30,11 +35,14 @@
 //! ([`TableAccess::into_shared`]) runs on the calling thread when its turn
 //! comes.
 
-use super::{plain, Derived, Fail, Failure, Part, Placement, ResolvedPlan, Run, Shared, Work};
+use super::{
+    plain, Derived, Fail, Failure, Part, Placement, ResolvedPlan, Run, Shared, SharedDecode, Work,
+};
 use crate::dataset::execution::{ExecutionError, ExecutionEvent};
 use crate::function_invocation::NoFunctions;
-use crate::table::TableAccess;
+use crate::table::{TableAccess, TableSchema};
 use std::convert::Infallible;
+use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -47,18 +55,37 @@ const POLL: Duration = Duration::from_millis(10);
 /// A decoded partition as a thread owns it.
 type Moved<'t, E> = Box<dyn TableAccess<Error = E> + Send + Sync + 't>;
 
-/// A decoded partition handed to a thread.
+/// A partition as the calling thread hands it to a thread.
+enum Handed<'t, E> {
+    /// Decoded on the calling thread.
+    Decoded(Moved<'t, E>),
+    /// Its records, which the thread decodes.
+    Records(Range<usize>),
+}
+
+/// How a thread decodes the partitions handed out as records: the decode the
+/// source shares, if any, and the driver input's schema.
+type Decoding<'d, T> = (Option<&'d SharedDecode<'d, T>>, &'d TableSchema);
+
+/// A partition handed to a thread.
 struct Job<'t, E> {
     index: usize,
-    table: Moved<'t, E>,
+    handed: Handed<'t, E>,
     placement: Placement,
     /// Raised once the first partition's run enters its second mark.
     opened: Option<Arc<AtomicBool>>,
 }
 
-/// A partition's run as a thread hands it back: without its failure, and
-/// whether it failed; none when it was cancelled.
-type Sent = Option<(Box<Part<Infallible>>, bool)>;
+/// A partition's run as a thread hands it back.
+enum Sent {
+    /// The run, without its failure, and whether it failed.
+    Ran(Box<Part<Infallible>>, bool),
+    /// The run was cancelled.
+    Cancelled,
+    /// The partition did not decode on the thread, or its schema is not the
+    /// driver input's.
+    Undecoded,
+}
 
 /// A partition's run handed back, with the mark it stopped at.
 struct Ran {
@@ -177,12 +204,15 @@ impl ResolvedPlan {
         let (jobs, queue) = mpsc::channel();
         let queue = Mutex::new(queue);
         let (done, ran) = mpsc::channel();
+        let decoding = (work.shared, work.schema);
         std::thread::scope(|scope| {
             let workers: Vec<_> = (0..threads)
                 .map(|_| {
                     let done = done.clone();
                     let (queue, stop) = (&queue, &stop);
-                    scope.spawn(move || self.derive_handed_out(queue, &done, secondary, stop))
+                    scope.spawn(move || {
+                        self.derive_handed_out(queue, &done, (secondary, decoding), stop);
+                    })
                 })
                 .collect();
             drop(done);
@@ -213,12 +243,13 @@ impl ResolvedPlan {
         })
     }
 
-    /// A thread's side: run each partition handed out until none is left.
-    fn derive_handed_out<E>(
+    /// A thread's side: run each partition handed out until none is left,
+    /// decoding through `decode` those handed out as records.
+    fn derive_handed_out<T: TableAccess>(
         &self,
-        queue: &Mutex<mpsc::Receiver<Job<'_, E>>>,
+        queue: &Mutex<mpsc::Receiver<Job<'_, T::Error>>>,
         done: &mpsc::Sender<Ran>,
-        secondary: &Shared<'_, E>,
+        (secondary, (decode, schema)): (&Shared<'_, T::Error>, Decoding<'_, T>),
         stop: &AtomicBool,
     ) {
         let secondary = plain(secondary);
@@ -227,25 +258,38 @@ impl ResolvedPlan {
             let job = queue.lock().ok().and_then(|queue| queue.recv().ok());
             let Some(Job {
                 index,
-                table,
+                handed,
                 placement,
                 opened,
             }) = job
             else {
                 return;
             };
-            let mut functions = NoFunctions::new();
-            let part = self.run_partition(
-                (&*table, &secondary),
-                &mut functions,
-                &stopped,
-                (placement, opened),
-            );
-            drop(table);
+            let run = |table: &dyn TableAccess<Error = T::Error>| {
+                let mut functions = NoFunctions::new();
+                let part = self.run_partition(
+                    (table, &secondary),
+                    &mut functions,
+                    &stopped,
+                    (placement, opened),
+                );
+                part.map_or(Sent::Cancelled, |part| {
+                    let (part, failed) = part.sent();
+                    Sent::Ran(part, failed)
+                })
+            };
+            let part = match handed {
+                Handed::Decoded(table) => run(&*table),
+                Handed::Records(_) if stopped() => Sent::Cancelled,
+                Handed::Records(range) => match decode.and_then(|decode| decode(index, range)) {
+                    Some(table) if table.schema() == schema => run(&table),
+                    _ => Sent::Undecoded,
+                },
+            };
             let ran = Ran {
                 index,
                 limit: placement.limit,
-                part: part.map(Part::sent),
+                part,
             };
             if done.send(ran).is_err() {
                 return;
@@ -329,12 +373,13 @@ impl ResolvedPlan {
             records: range.len(),
         });
         match slot {
-            Slot::Ran(_, None) => Ok(None),
-            Slot::Ran(used, Some((part, false))) if part.holds_under(used, limit) => {
+            Slot::Ran(_, Sent::Cancelled) => Ok(None),
+            Slot::Ran(used, Sent::Ran(part, false)) if part.holds_under(used, limit) => {
                 Ok(Some(part.received()))
             }
             // A failure, which its thread keeps, is found again here, and so
-            // is a run that went past the serial run's limit.
+            // is a run that went past the serial run's limit, and why a
+            // partition did not decode on its thread.
             Slot::Ran(..) => self.decode_and_run(
                 outer,
                 &mut *c.work.decode,
@@ -345,9 +390,10 @@ impl ResolvedPlan {
         }
     }
 
-    /// Decode the next partition on the calling thread and hand it to a
-    /// thread, to run under the earliest failure known, or hold it when it
-    /// cannot move.
+    /// Hand the next partition to a thread, to run under the earliest
+    /// failure known: its records, which the thread decodes, when the
+    /// source shares a decode; else the partition decoded on the calling
+    /// thread, or held there when it cannot move.
     fn hand_out<'t, T: TableAccess + 't>(
         &self,
         outer: &Run<'_, '_, T::Error>,
@@ -359,38 +405,57 @@ impl ResolvedPlan {
         let limit = c.limit();
         if limit == 0 {
             let passed = Box::new(self.passed(outer, range.start));
-            c.slots[index] = Some(Slot::Ran(0, Some((passed, false))));
+            c.slots[index] = Some(Slot::Ran(0, Sent::Ran(passed, false)));
             return;
         }
-        let Some(table) = (c.work.decode)(index, range.clone()) else {
-            c.halt = Some(Halt::Undecoded(index));
-            return;
+        let placement = Placement {
+            records: range.start,
+            first: index == 0,
+            limit,
+            output_partition: outer.output_partition,
         };
-        if table.schema() != c.work.schema {
-            c.halt = Some(Halt::Schema(index));
-            return;
-        }
-        let table = match table.into_shared() {
-            Ok(table) => table,
-            Err(table) => {
-                c.slots[index] = Some(Slot::Held(table));
-                return;
-            }
+        let handed = match c.work.shared {
+            Some(_) => Handed::Records(range),
+            None => match Self::decode_to_move(c, index, range) {
+                Some(table) => Handed::Decoded(table),
+                None => return,
+            },
         };
         let job = Job {
             index,
-            table,
-            placement: Placement {
-                records: range.start,
-                first: index == 0,
-                limit,
-                output_partition: outer.output_partition,
-            },
+            handed,
+            placement,
             opened: (index == 0).then(|| Arc::clone(&c.opened)),
         };
         // Every thread runs until the calling thread returns.
         if c.jobs.send(job).is_ok() {
             c.running += 1;
+        }
+    }
+
+    /// Decode partition `index` on the calling thread to move it to a
+    /// thread; none when it did not decode or its schema is not the driver
+    /// input's, which halts the hand-outs, or when it cannot move, which
+    /// the calling thread then holds.
+    fn decode_to_move<'t, T: TableAccess + 't>(
+        c: &mut Coordinator<'_, 't, T, T::Error>,
+        index: usize,
+        range: Range<usize>,
+    ) -> Option<Moved<'t, T::Error>> {
+        let Some(table) = (c.work.decode)(index, range) else {
+            c.halt = Some(Halt::Undecoded(index));
+            return None;
+        };
+        if table.schema() != c.work.schema {
+            c.halt = Some(Halt::Schema(index));
+            return None;
+        }
+        match table.into_shared() {
+            Ok(table) => Some(table),
+            Err(table) => {
+                c.slots[index] = Some(Slot::Held(table));
+                None
+            }
         }
     }
 }

@@ -5,6 +5,8 @@
 # columns and the phases a run and a check list, and the issue rows of a run
 # whose callback signalled an error. Such a run fails and saves nothing, and a
 # callback may run the same specification again through the same object.
+# `threads =` (#4193) changes no event, and a value that is no positive whole
+# number is refused.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
@@ -93,4 +95,33 @@ cat("a callback may run the same object again\n")
 refusal <- tryCatch({ spec$run(progress = "not a function"); NULL }, error = conditionMessage)
 expect_identical(refusal, "`progress` must be a function or NULL", "a progress that is not a function")
 cat("a progress that is not a function is refused\n")
+
+# #4193: threads changes only time and memory (D-next on #4184). An R number
+# is a double unless written as an integer, so each count runs as both.
+for (threads in truth$threads$accepted) {
+  for (count in list(as.integer(threads), as.double(threads))) {
+    heard <- list()
+    threaded <- yamaa_spec(path)$run(
+      progress = function(event) heard[[length(heard) + 1L]] <<- event, threads = count)
+    expect_identical(list(threaded$status, heard), list("succeeded", expected_events(path)),
+      paste0("a run on ", deparse(count), " threads: its status and events"))
+  }
+}
+cat("a run reports the same events whatever its threads\n")
+
+project <- yamaa_project(file.path(root, "project.yaml"))
+calls <- list(
+  "spec$check" = function(threads) spec$check(threads = threads),
+  "spec$run" = function(threads) spec$run(threads = threads),
+  "project$check" = function(threads) project$check(threads = threads),
+  "project$run" = function(threads) project$run(threads = threads),
+  "project$submission" = function(threads) project$submission(threads = threads))
+for (threads in c(truth$threads$refused, list(NA, c(2, 3)))) {
+  for (label in names(calls)) {
+    refusal <- tryCatch({ calls[[label]](threads); NULL }, error = conditionMessage)
+    expect_identical(refusal, truth$threads$messages$r,
+      paste0(label, " with threads = ", deparse(threads)))
+  }
+}
+cat("threads that are no positive whole number are refused\n")
 unlink(root, recursive = TRUE)

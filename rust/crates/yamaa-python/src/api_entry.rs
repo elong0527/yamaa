@@ -80,14 +80,38 @@ fn runtime(py: Python<'_>) -> String {
 /// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
 const PARTITIONS: [usize; 2] = [2, 624_640];
 
+/// [`PARTITIONS`], up to `threads` of one run deriving at once when it is
+/// given and not None (#4193); a `threads` that is no positive integer
+/// raises `Error`.
+fn partitions(threads: Option<&Bound<'_, PyAny>>) -> PyResult<Partitions> {
+    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
+    let partitions = Partitions::by_keys(keys, rows).with_whole_table_fallback();
+    let Some(threads) = threads else {
+        return Ok(partitions);
+    };
+    partitions
+        .with_host_threads(&host_number(threads)?)
+        .ok_or_else(|| {
+            crate::errors::message(
+                threads.py(),
+                false,
+                "threads must be a positive integer or None",
+            )
+        })
+}
+
 /// The facade engine of one call: the Python host on the interpreter of
-/// `version`, over [`PARTITIONS`], with the installed project functions when
+/// `version`, over `partitions`, with the installed project functions when
 /// `functions`, and reporting to `progress` when one is given (#3762). Every
 /// call builds its engine here.
-fn engine(version: &str, functions: bool, progress: Option<&Progress>) -> yamaa::Engine {
-    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
+fn engine(
+    version: &str,
+    functions: bool,
+    progress: Option<&Progress>,
+    partitions: Partitions,
+) -> yamaa::Engine {
     let options = EngineOptions::new(HostLanguage::Python, "python".into(), version.into())
-        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback());
+        .with_partitions(partitions);
     let options = match functions {
         true => options.with_functions(Arc::new(Port)),
         false => options,
@@ -123,18 +147,31 @@ fn cancellable<T: Send>(
     })
 }
 
-/// Run a cancellable call of the engine, which may call project functions
-/// and report to `progress`.
+/// What a call that runs the engine is given besides its request: whether
+/// it may call project functions, its progress callback (#3762) and its
+/// `threads` (#4193).
+type Hosted<'a, 'py> = (
+    bool,
+    Option<Bound<'py, PyAny>>,
+    Option<&'a Bound<'py, PyAny>>,
+);
+
+/// Run a cancellable call of the engine, which may call project functions,
+/// report to `progress` and derive up to `threads` partitions at once.
 fn called<T: Send>(
     py: Python<'_>,
-    (functions, progress): (bool, Option<Bound<'_, PyAny>>),
+    (functions, progress, threads): Hosted<'_, '_>,
     run: impl Send + FnOnce(&yamaa::Engine, &CancellationToken) -> Result<T, Refused>,
 ) -> PyResult<(T, Causes)> {
     gate()?;
     let version = runtime(py);
+    let partitions = partitions(threads)?;
     let (progress, causes) = Progress::of(progress)?;
     let value = cancellable(py, |token| {
-        run(&engine(&version, functions, progress.as_ref()), token)
+        run(
+            &engine(&version, functions, progress.as_ref(), partitions),
+            token,
+        )
     })?;
     causes.finished(py)?;
     Ok((value, causes))
@@ -148,7 +185,8 @@ fn plain<T: Send>(
 ) -> PyResult<T> {
     gate()?;
     let version = runtime(py);
-    py.detach(|| run(&engine(&version, false, None)))
+    let partitions = partitions(None)?;
+    py.detach(|| run(&engine(&version, false, None, partitions)))
         .map_err(|refusal| raise(py, refusal))
 }
 
@@ -351,15 +389,17 @@ impl Check {
 /// The check of a specification, or, with `parent`, of a fragment composed on
 /// the specification `parent` names as its parent (#3694).
 #[pyfunction]
-#[pyo3(signature=(specification, project=None, parent=None, progress=None))]
+#[pyo3(signature=(specification, project=None, parent=None, progress=None, threads=None))]
 pub fn _spec_check(
     py: Python<'_>,
     specification: &str,
     project: Option<&str>,
     parent: Option<&str>,
     progress: Option<Bound<'_, PyAny>>,
+    threads: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Check> {
-    let (check, causes) = called(py, (true, progress), |engine, token| {
+    let hosted = (true, progress, threads.as_ref());
+    let (check, causes) = called(py, hosted, |engine, token| {
         let request = spec_request(engine, specification, project).cancel_with(token);
         Ok(match parent {
             Some(parent) => request.check_on(parent)?,
@@ -405,8 +445,9 @@ pub fn _plans() -> PyResult<Plans> {
 
 /// A run of one specification: built now, or with `stream` built as its
 /// output is read (#3697), polling a token of its own from then on.
+#[allow(clippy::too_many_arguments)] // #4214 gives the native calls one context argument
 #[pyfunction]
-#[pyo3(signature=(specification, project=None, plans=None, stream=false, progress=None, inputs=None))]
+#[pyo3(signature=(specification, project=None, plans=None, stream=false, progress=None, inputs=None, threads=None))]
 pub fn _spec_run(
     py: Python<'_>,
     specification: &str,
@@ -415,6 +456,7 @@ pub fn _spec_run(
     stream: bool,
     progress: Option<Bound<'_, PyAny>>,
     inputs: Option<Bound<'_, PyAny>>,
+    threads: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Run> {
     gate()?;
     let inputs = crate::input_frames::import(specification, inputs)?;
@@ -422,11 +464,12 @@ pub fn _spec_run(
     if stream {
         gate()?;
         let version = runtime(py);
+        let partitions = partitions(threads.as_ref())?;
         let (progress, causes) = Progress::of(progress)?;
         let token = crate::interrupt::stream_token();
         let run = crate::interrupt::run(py, |_| {
             py.detach(|| {
-                let engine = engine(&version, true, progress.as_ref());
+                let engine = engine(&version, true, progress.as_ref(), partitions);
                 let request = spec_request(&engine, specification, project)
                     .cancel_with(&token)
                     .inputs(inputs);
@@ -445,7 +488,7 @@ pub fn _spec_run(
         })?;
         return Ok(Run::new(Held::Streamed(Arc::new(run)), causes));
     }
-    let (run, causes) = called(py, (true, progress), |engine, token| {
+    let (run, causes) = called(py, (true, progress, threads.as_ref()), |engine, token| {
         let request = spec_request(engine, specification, project)
             .cancel_with(token)
             .inputs(inputs);
@@ -482,9 +525,9 @@ pub fn _read_odm(
     max_xml_depth: &Bound<'_, PyAny>,
 ) -> PyResult<Table> {
     gate()?;
-    let members = odm_limit_value(max_archive_members)?;
-    let bytes = odm_limit_value(max_expanded_bytes)?;
-    let depth = odm_limit_value(max_xml_depth)?;
+    let members = host_number(max_archive_members)?;
+    let bytes = host_number(max_expanded_bytes)?;
+    let depth = host_number(max_xml_depth)?;
     let items = plain(py, |engine| {
         let mut options = yamaa::OdmOptions::from_host_limits(source, members, bytes, depth)?;
         if let Some(member) = archive_member {
@@ -495,8 +538,9 @@ pub fn _read_odm(
     Ok(Table::from(&items))
 }
 
-/// Preserve the kind and exact integer spelling until shared admission.
-fn odm_limit_value(value: &Bound<'_, PyAny>) -> PyResult<yamaa::ContextValue> {
+/// A number a host argument gives, an ODM limit or `threads`: its kind and
+/// exact integer spelling preserved until the facade admits it.
+fn host_number(value: &Bound<'_, PyAny>) -> PyResult<yamaa::ContextValue> {
     use pyo3::types::{PyBool, PyFloat, PyInt, PyString};
     use yamaa::ContextValue as V;
     Ok(if value.is_none() {
@@ -786,29 +830,31 @@ pub fn _project_names(py: Python<'_>, project: &str) -> PyResult<Vec<String>> {
 }
 
 #[pyfunction]
-#[pyo3(signature=(project, progress=None))]
+#[pyo3(signature=(project, progress=None, threads=None))]
 pub fn _project_check(
     py: Python<'_>,
     project: &str,
     progress: Option<Bound<'_, PyAny>>,
+    threads: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Check> {
-    let (check, causes) = called(py, (true, progress), |engine, token| {
+    let (check, causes) = called(py, (true, progress, threads.as_ref()), |engine, token| {
         Ok(engine.project(project).cancel_with(token).check()?)
     })?;
     Ok(Check::new(check, causes))
 }
 
 #[pyfunction]
-#[pyo3(signature=(project, section=None, plans=None, progress=None))]
+#[pyo3(signature=(project, section=None, plans=None, progress=None, threads=None))]
 pub fn _project_run(
     py: Python<'_>,
     project: &str,
     section: Option<&str>,
     plans: Option<PyRef<'_, Plans>>,
     progress: Option<Bound<'_, PyAny>>,
+    threads: Option<Bound<'_, PyAny>>,
 ) -> PyResult<ProjectRun> {
     let plans = plans.as_deref().map(|plans| &plans.plans);
-    let (runs, causes) = called(py, (true, progress), |engine, token| {
+    let (runs, causes) = called(py, (true, progress, threads.as_ref()), |engine, token| {
         let request = project_request(engine, project, section).cancel_with(token);
         // Only an unknown section refuses the call with issues.
         Ok(match plans {
@@ -825,17 +871,19 @@ pub fn _project_run(
 }
 
 #[pyfunction]
-#[pyo3(signature=(project, section=None, created=None, progress=None))]
+#[pyo3(signature=(project, section=None, created=None, progress=None, threads=None))]
 pub fn _project_submission(
     py: Python<'_>,
     project: &str,
     section: Option<&str>,
     created: Option<&str>,
     progress: Option<Bound<'_, PyAny>>,
+    threads: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Submission> {
     let mut options = SubmissionOptions::new(yamaa::VERSION);
     options.created = created.map(str::to_owned);
-    let (submission, causes) = called(py, (true, progress), |engine, token| {
+    let hosted = (true, progress, threads.as_ref());
+    let (submission, causes) = called(py, hosted, |engine, token| {
         Ok(project_request(engine, project, section)
             .cancel_with(token)
             .submission(&options)?)

@@ -7,7 +7,8 @@ reports, the timings table's columns and the phases a run and a check list,
 and the issue rows of a run whose callback raised. A raising callback fails
 the run, which saves nothing; an interrupt it raises cancels the call, as a
 project function's does; and a callback may run the same specification again
-through the same object.
+through the same object. `threads=` (#4193) changes no event, and a value
+that is no positive integer is refused.
 
 A run lets other threads run while the engine works (#4072): a second
 thread finds the study's run over a large input in the engine, between its
@@ -281,6 +282,39 @@ class Progress(unittest.TestCase):
     def test_a_progress_that_is_not_callable_is_refused(self):
         with self.assertRaises(yamaa.Error):
             yamaa.spec(self.spec).run(progress="not callable")
+
+    def test_a_run_reports_the_same_events_whatever_its_threads(self):
+        # #4193: threads changes only time and memory (D-next on #4184).
+        for threads in TRUTH["threads"]["accepted"]:
+            with self.subTest(case=f"threads={threads}"):
+                heard = []
+                run = yamaa.spec(self.spec).run(progress=heard.append, threads=threads)
+                self.assertEqual(
+                    (run.status, heard),
+                    ("succeeded", self.events(os.fspath(self.spec))),
+                    f"a run on {threads} threads: its status and events",
+                )
+
+    def test_threads_that_are_no_positive_integer_are_refused(self):
+        spec = yamaa.spec(self.spec)
+        project = yamaa.project(self.root / "project.yaml")
+        calls = [
+            ("spec.check", spec.check),
+            ("spec.run", spec.run),
+            ("project.check", project.check),
+            ("project.run", project.run),
+            ("project.submission", project.submission),
+        ]
+        for threads in TRUTH["threads"]["refused"]:
+            for label, call in calls:
+                with self.subTest(case=f"{label}(threads={threads!r})"):
+                    with self.assertRaises(yamaa.Error) as raised:
+                        call(threads=threads)
+                    self.assertEqual(
+                        str(raised.exception),
+                        TRUTH["threads"]["messages"]["python"],
+                        f"{label} with threads={threads!r}",
+                    )
 
 
 if __name__ == "__main__":

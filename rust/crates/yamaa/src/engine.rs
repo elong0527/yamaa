@@ -18,7 +18,7 @@ use yamaa_application::file_application::Domain;
 use yamaa_core::diagnostic::Diagnostic;
 
 use crate::cancel::{CancellationToken, Cancelled};
-use crate::diagnostic::{Locator, Report};
+use crate::diagnostic::{ContextValue, Locator, Report};
 use crate::error::Failure;
 use crate::host::functions::{FunctionError, HostLanguage, ProjectFunctions};
 use crate::host::resolver::ResourceResolver;
@@ -180,12 +180,14 @@ impl Partitions {
     }
 
     /// The same partitions, up to `threads` of one run deriving at once,
-    /// each on a thread of its own (#4193), an engine setting with no host
-    /// surface. The calling thread decodes the partitions in order, reports
-    /// progress and polls the cancellation token; the result, its issues,
-    /// its report and the progress events, in order, are those of a run on
-    /// one thread. A run with a step that calls a project function runs on
-    /// the calling thread alone, as does a run with one partition.
+    /// each on a thread of its own (#4193), as the hosts' `threads` argument
+    /// and the command line's `--threads` ask ([`Self::with_host_threads`]).
+    /// Each thread decodes the partitions it derives from the held bytes of
+    /// a CSV or Parquet driver input; the calling thread reports progress
+    /// and polls the cancellation token. The result, its issues, its report
+    /// and the progress events, in order, are those of a run on one thread.
+    /// A run with a step that calls a project function runs on the calling
+    /// thread alone, as does a run with one partition.
     ///
     /// Without it, up to four partitions derive at once, and no more than
     /// the threads the process may run on
@@ -197,10 +199,36 @@ impl Partitions {
         self
     }
 
+    /// The same partitions, with the threads a host's `threads` argument
+    /// gives (#4193): a positive whole number, which R may give as a whole
+    /// double and which saturates at the most this platform counts, or a
+    /// missing value, which keeps the default ([`Self::with_threads`]).
+    /// `None` for any other value, which the host refuses as an argument it
+    /// cannot take.
+    pub fn with_host_threads(self, threads: &ContextValue) -> Option<Self> {
+        let count = match threads {
+            ContextValue::Null => return Some(self),
+            ContextValue::Int(count) => {
+                (*count >= 1).then(|| usize::try_from(*count).unwrap_or(usize::MAX))
+            }
+            // An integer beyond 64 bits, as Python gives it.
+            ContextValue::Wide(count) => (count.bytes().all(|digit| digit.is_ascii_digit())
+                && count.bytes().any(|digit| digit != b'0'))
+            .then_some(usize::MAX),
+            ContextValue::Float(count) if count.is_finite() && count.fract() == 0.0 => {
+                (*count >= 1.0).then_some(*count as usize)
+            }
+            _ => None,
+        };
+        count
+            .and_then(NonZeroUsize::new)
+            .map(|count| self.with_threads(count))
+    }
+
     /// The most partitions of one run that derive at once by default
-    /// (#4193): beyond four, the threads wait on the calling thread, which
-    /// decodes every partition, and each one more holds one more decoded
-    /// partition and its run's working state.
+    /// (#4193): each one more holds one more decoded partition and its
+    /// run's working state, and a run on a shared machine keeps to a few of
+    /// its cores unless asked for more.
     const DEFAULT_THREADS: NonZeroUsize = match NonZeroUsize::new(4) {
         Some(threads) => threads,
         None => unreachable!(),
