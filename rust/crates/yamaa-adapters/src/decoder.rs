@@ -51,6 +51,14 @@ impl<E> Snapshot<E> {
             Storage::Scanned(..) => None,
         }
     }
+    /// The table of an input read whole, shared without a copy by a clone;
+    /// `None` for one read by partition.
+    pub fn as_table(&self) -> Option<&ColumnTable> {
+        match &self.storage {
+            Storage::Whole(table, _) => Some(table),
+            Storage::Scanned(..) => None,
+        }
+    }
     /// What the scan of an input read by partition keeps (#3830); `None`
     /// for one read whole.
     pub fn scan(&self) -> Option<&Arc<Scanned>> {

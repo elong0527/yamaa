@@ -362,42 +362,28 @@ fn dataset_failure<'a, C, E>(
     report["verifications"] = json!(verifications);
     Ok(report)
 }
-/// The observation of a table whose records divide into `partitions` of
-/// these sizes, each admitted on its own: one partition for a table held
-/// whole, and those of an output held in partitions (D264).
-fn table_observation<T: TableAccess>(
+/// The observation of a table the run holds, whose records divide into
+/// `partitions` of these sizes: one partition for an input read whole
+/// (#4187), and those of an output held in partitions (D264, #3870). Each
+/// partition is admitted now, on its own, and the rows are encoded only
+/// when the observations are serialized, from a clone that shares the
+/// table, so the run holds no encoded copy of them.
+fn deferred_observation<T>(
     table: &T,
     id: &Identity<'_>,
     stage: &str,
     name: &str,
-    partitions: &[usize],
-) -> Result<StoredTable, Error> {
-    let rows = crate::report_storage::encode_partitions(table, partitions)?;
-    Ok(StoredTable {
-        metadata: table_metadata(table.schema(), id, stage, name),
-        rows: Rows::Encoded(rows),
-    })
-}
-
-/// The observation of the run's output, whose records divide into
-/// `partitions` of these sizes (#3870): each admitted now, on its own, and
-/// the rows encoded only when the observations are serialized, so the run
-/// holds no copy of them.
-fn deferred_observation(
-    table: &yamaa_core::dataset::Dataset,
-    id: &Identity<'_>,
-    stage: &str,
-    name: &str,
     partitions: Vec<usize>,
-) -> Result<StoredTable, Error> {
+) -> Result<StoredTable, Error>
+where
+    T: TableAccess + Clone + Send + Sync + 'static,
+{
     crate::report_storage::admit_partitions(table.schema().columns().len(), &partitions)?;
     let metadata = table_metadata(table.schema(), id, stage, name);
     let table = table.clone();
     Ok(StoredTable {
         metadata,
-        rows: Rows::Deferred(std::sync::Arc::new(move || {
-            crate::report_storage::encode_partitions(&table, &partitions)
-        })),
+        rows: Rows::deferred(move || crate::report_storage::encode_partitions(&table, &partitions)),
     })
 }
 
@@ -446,7 +432,7 @@ fn scanned_observation(
     let scanned = std::sync::Arc::clone(scanned);
     StoredTable {
         metadata,
-        rows: Rows::Deferred(std::sync::Arc::new(move || {
+        rows: Rows::deferred(move || {
             let mut writer = crate::report_storage::RowWriter::default();
             for range in observation_ranges(&scanned.partitions) {
                 let part = crate::source_decoding::decode_range(&scanned, &bytes, range)
@@ -454,7 +440,7 @@ fn scanned_observation(
                 writer.table(&part)?;
             }
             writer.finish()
-        })),
+        }),
     }
 }
 
@@ -490,11 +476,16 @@ pub(crate) fn envelope_sources<E>(
                 continue;
             };
             let name = &source.read.source.name;
-            tables.push(match (table.scan(), &source.snapshot) {
-                (Some(scanned), Some(bytes)) => {
+            tables.push(match (table.as_table(), table.scan(), &source.snapshot) {
+                (Some(whole), _, _) => {
+                    deferred_observation(whole, id, "source", name, vec![whole.row_count()])?
+                }
+                (None, Some(scanned), Some(bytes)) => {
                     scanned_observation(scanned, std::sync::Arc::clone(bytes), id, name)
                 }
-                _ => table_observation(table, id, "source", name, &[table.row_count()])?,
+                // An input read by partition always keeps the bytes its scan
+                // read; without them its records cannot be observed.
+                (None, _, _) => return Err(Error::InvalidObservation),
             });
         }
     }

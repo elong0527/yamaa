@@ -162,31 +162,30 @@ impl RowWriter {
     }
 }
 
-/// The rows of one table of a report: encoded once, or, for an input read
-/// by partition, encoded from its held bytes whenever the report is
-/// serialized, so the run keeps no copy of its records (#3830).
+/// The rows of one table of a report, encoded whenever the report is
+/// serialized: from the table the run holds (#4187), or, for an input read
+/// by partition, from its held bytes (#3830). The report keeps no encoded
+/// copy of any record, and clones share what encodes them.
 #[derive(Clone)]
-pub enum Rows {
-    Encoded(Arc<RawValue>),
-    Deferred(Arc<dyn Fn() -> Result<Arc<RawValue>, Error> + Send + Sync>),
-}
+pub struct Rows(Arc<dyn Fn() -> Result<Arc<RawValue>, Error> + Send + Sync>);
 
 impl Rows {
+    /// Rows that `encode` writes each time the report is serialized.
+    pub fn deferred(
+        encode: impl Fn() -> Result<Arc<RawValue>, Error> + Send + Sync + 'static,
+    ) -> Self {
+        Self(Arc::new(encode))
+    }
+
     /// The rows, encoded.
     fn encoded(&self) -> Result<Arc<RawValue>, Error> {
-        match self {
-            Self::Encoded(rows) => Ok(Arc::clone(rows)),
-            Self::Deferred(encode) => encode(),
-        }
+        (self.0)()
     }
 }
 
 impl fmt::Debug for Rows {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Encoded(rows) => formatter.debug_tuple("Encoded").field(rows).finish(),
-            Self::Deferred(_) => formatter.write_str("Deferred(..)"),
-        }
+        formatter.write_str("Rows(..)")
     }
 }
 
@@ -721,17 +720,12 @@ mod tests {
             crate::json!({"nodes":[{"diagnostics":[]}],"tables":[],"artifacts":[{"path":"out.csv"}]}),
             vec![StoredTable {
                 metadata: crate::json!({"name":"ROOT","rows":null}),
-                rows: Rows::Encoded(Arc::clone(&rows)),
+                rows: Rows::deferred(move || Ok(Arc::clone(&rows))),
             }],
         )
         .unwrap();
         let clone = first.clone();
-        match (&first.rows[0], &clone.rows[0]) {
-            (Rows::Encoded(first_rows), Rows::Encoded(clone_rows)) => {
-                assert!(Arc::ptr_eq(first_rows, clone_rows))
-            }
-            _ => panic!("encoded rows"),
-        }
+        assert!(Arc::ptr_eq(&first.rows[0].0, &clone.rows[0].0));
         drop(first);
         let value = clone.observations_value(true);
         assert_eq!(
