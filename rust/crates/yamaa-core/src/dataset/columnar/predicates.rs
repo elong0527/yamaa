@@ -128,10 +128,16 @@ fn columnwise<'p, 'a, E, T>(
 
 /// One operand's values over the selection: lent from the frame or from a
 /// source port's typed storage where they are held, otherwise gathered.
-enum Operand<'r> {
+pub(super) enum Operand<'r> {
     Values(Values),
     /// A frame column, at the selected rows.
     Frame(&'r Values, &'r [usize]),
+    /// A frame column, at the selected records of frame rows from `start`.
+    Records {
+        values: &'r Values,
+        records: &'r [usize],
+        start: usize,
+    },
     /// A source port's storage, at the selected rows' driver records.
     Storage(ColumnRef<'r>, Vec<usize>),
 }
@@ -141,6 +147,11 @@ impl Column for Operand<'_> {
         match self {
             Self::Values(values) => values.get(row),
             Self::Frame(values, rows) => values.get(rows[row]),
+            Self::Records {
+                values,
+                records,
+                start,
+            } => values.get(start + records[row]),
             Self::Storage(column, rows) => column.get(rows[row]),
         }
     }
@@ -852,6 +863,88 @@ impl<'r, E> ColumnResolver for RowColumns<'r, '_, E> {
             // reports it as `row_truth` does.
             BoundRead::Source(column) => driver_operand(cx, column, rows, identifier).map(Some),
             BoundRead::Column(column) => Ok(Some(Operand::Frame(cx.frame.column(column), rows))),
+        }
+    }
+}
+
+/// The truth of a predicate on each of `records`, records of `table`, as
+/// [`row_truth`] reads one: a source read reads the record, and
+/// `columns(column)` lends a completed column's values, one per record. The
+/// column program (#4199) answers when every record evaluates; otherwise
+/// none, and each record evaluates through [`row_truth`], which reports the
+/// failure. Nothing is counted either way.
+pub(super) fn record_truths<'r, E>(
+    predicate: &'r BoundPredicate,
+    table: Table<'r, E>,
+    records: &'r [usize],
+    columns: impl FnMut(usize) -> Operand<'r>,
+) -> Option<Vec<Truth>> {
+    if records.len() < 2 {
+        return None;
+    }
+    predicate
+        .plan()
+        .truth_column(
+            records.len(),
+            &mut RecordColumns {
+                table,
+                records,
+                columns,
+                bindings: predicate.bindings(),
+            },
+        )
+        .ok()
+}
+
+/// A predicate's operands over records of a table, read as `RowResolver`
+/// reads them.
+struct RecordColumns<'r, E, F> {
+    table: Table<'r, E>,
+    records: &'r [usize],
+    columns: F,
+    bindings: &'r [Binding],
+}
+
+impl<'r, E, F: FnMut(usize) -> Operand<'r>> ColumnResolver for RecordColumns<'r, E, F> {
+    type Error = CellError<E>;
+    type Column = Operand<'r>;
+    fn column(&mut self, identifier: &str) -> Result<Option<Operand<'r>>, Self::Error> {
+        let Ok(index) = self
+            .bindings
+            .binary_search_by(|binding| binding.name.as_str().cmp(identifier))
+        else {
+            return Ok(None);
+        };
+        match self.bindings[index].read {
+            BoundRead::Intermediate { .. } | BoundRead::Joined(_) => {
+                unreachable!("predicate admission rejects intermediate reads")
+            }
+            BoundRead::Source(column) => {
+                let records = self.records;
+                if let Table::Rows {
+                    frame, start, rows, ..
+                } = self.table
+                {
+                    if column < frame.width() && records.iter().all(|&record| record < rows) {
+                        return Ok(Some(Operand::Records {
+                            values: frame.column(column),
+                            records,
+                            start,
+                        }));
+                    }
+                }
+                if let Some(storage) = self.table.storage(column) {
+                    if records.iter().all(|&record| record < storage.len()) {
+                        return Ok(Some(Operand::Storage(storage, records.to_vec())));
+                    }
+                }
+                let mut values = Values::missing(0);
+                for &record in records {
+                    values.push(self.table.get(record, column)?);
+                }
+                Ok(Some(Operand::Values(values)))
+            }
+            BoundRead::Column(column) => Ok(Some((self.columns)(column))),
         }
     }
 }
