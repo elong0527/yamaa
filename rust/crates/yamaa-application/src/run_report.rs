@@ -11,7 +11,7 @@ use yamaa_core::{
     dataset::{Check, Execution, TemplateRows, VerificationSeverity},
     run_report::{self as core, Facts},
     specification::SourceProfile,
-    table::{TableAccess, ValueRef},
+    table::{ColumnReader, TableAccess, ValueRef},
     value::{ColumnType, Value as Scalar},
 };
 
@@ -343,23 +343,26 @@ fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>
                 rows: 0,
                 max_length: text.then_some(0),
             };
+            let reader = ColumnReader::new(dataset, index);
             for partition in &partitions {
-                let values = partition.clone().map(|row| {
-                    dataset
-                        .cell(row, index)
-                        .map_err(|_| Error::InvalidObservation)
-                });
-                for value in values {
-                    match value? {
+                let count = |value| {
+                    match value {
                         ValueRef::Missing => column.missing += 1,
                         ValueRef::Str(text) => {
+                            // A text has no more characters than bytes, so
+                            // one no longer in bytes than the longest so far
+                            // cannot pass it.
                             if let Some(longest) = &mut column.max_length {
-                                *longest = (*longest).max(text.chars().count());
+                                if text.len() > *longest {
+                                    *longest = (*longest).max(text.chars().count());
+                                }
                             }
                         }
                         _ => {}
                     }
-                }
+                    Ok(())
+                };
+                reader.try_for_each(partition.clone(), count, |_| Error::InvalidObservation)?;
                 column.rows += partition.len();
             }
             Ok(column)

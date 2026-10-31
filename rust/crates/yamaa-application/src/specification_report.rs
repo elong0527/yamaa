@@ -581,10 +581,70 @@ pub enum HostView {
 /// The host view an accepted result holds.
 #[derive(Debug)]
 enum View {
-    /// The output table.
-    Table(crate::public_table::PublicTable),
+    /// The output table, built when first read.
+    Table(HostTable),
     /// Nothing built: the batches are built as they are read.
     Deferred,
+}
+
+/// An admitted output table, built from the accepted rows when it is first
+/// read (#4201), so that a caller that never reads it, such as the command
+/// line, never pays for the copy. The admission ran with the build, so
+/// whether the run accepted its output does not wait on the read; once
+/// built, the table no longer holds the rows.
+#[derive(Debug)]
+struct HostTable {
+    /// The table's rows and columns, known without building it.
+    dimensions: (usize, usize),
+    rows: std::sync::Mutex<Option<AdmittedRows>>,
+    table: std::sync::OnceLock<crate::public_table::PublicTable>,
+}
+
+/// The accepted rows of an admitted output, its columns among them, and the
+/// logical schema the admission returned.
+#[derive(Debug)]
+struct AdmittedRows {
+    dataset: yamaa_core::dataset::Dataset,
+    projection: Vec<usize>,
+    logical: yamaa_core::table::TableSchema,
+}
+
+impl HostTable {
+    fn new(
+        dataset: &yamaa_core::dataset::Dataset,
+        projection: &[usize],
+        logical: yamaa_core::table::TableSchema,
+    ) -> Self {
+        let rows = AdmittedRows {
+            // A clone shares the rows.
+            dataset: dataset.clone(),
+            projection: projection.to_vec(),
+            logical,
+        };
+        Self {
+            dimensions: (dataset.row_count(), projection.len()),
+            rows: std::sync::Mutex::new(Some(rows)),
+            table: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// The table, built on the first call.
+    fn get(&self) -> &crate::public_table::PublicTable {
+        self.table.get_or_init(|| {
+            let rows = self
+                .rows
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take()
+                .expect("an unbuilt table holds its rows");
+            crate::public_table::PublicTable::from_admitted(
+                &rows.dataset,
+                &rows.projection,
+                &rows.logical,
+            )
+            .expect("the admission makes every check the build does")
+        })
+    }
 }
 
 /// An owned build result; obtaining it never calls a publisher. Its table is
@@ -601,7 +661,15 @@ impl BuildResult {
     /// The accepted output table, held only by a whole-table build.
     pub fn output(&self) -> Option<&crate::public_table::PublicTable> {
         match &self.view {
-            Some(View::Table(table)) => Some(table),
+            Some(View::Table(table)) => Some(table.get()),
+            _ => None,
+        }
+    }
+    /// The accepted output table's rows and columns, held only by a
+    /// whole-table build, without building the table.
+    pub fn output_dimensions(&self) -> Option<(usize, usize)> {
+        match &self.view {
+            Some(View::Table(table)) => Some(table.dimensions),
             _ => None,
         }
     }
@@ -810,18 +878,14 @@ pub(crate) fn prepare_result(
         .map(|artifact| {
             let execution = execution.ok_or(Error::InvalidObservation)?;
             let (dataset, partition) = (&execution.dataset, execution.partition_rows);
+            let logical =
+                crate::public_table::check_table(dataset, &artifact.projection, partition);
             match view {
-                HostView::Table => crate::public_table::PublicTable::from_partitions(
-                    dataset,
-                    &artifact.projection,
-                    partition,
-                )
-                .map(View::Table),
+                HostView::Table => logical.map(|logical| {
+                    View::Table(HostTable::new(dataset, &artifact.projection, logical))
+                }),
                 // Built batch by batch as it is read, after the same checks.
-                HostView::Deferred => {
-                    crate::public_table::check_table(dataset, &artifact.projection, partition)
-                        .map(|_| View::Deferred)
-                }
+                HostView::Deferred => logical.map(|_| View::Deferred),
             }
             .map_err(|e| match e {
                 crate::public_table::TableError::Limit {

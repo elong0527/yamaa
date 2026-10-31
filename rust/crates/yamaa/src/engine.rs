@@ -572,7 +572,8 @@ pub(crate) struct Build {
     /// the report, never these.
     built: Vec<Diagnostic>,
     report: Report,
-    output: Option<Table>,
+    /// The output table, built when first read (#4201).
+    output: std::sync::OnceLock<Option<Table>>,
     /// The rows and columns of an accepted output read as a stream, which
     /// builds no table (#3697).
     streamed: Option<(usize, usize)>,
@@ -616,7 +617,7 @@ impl Build {
             measured,
             built: Vec::new(),
             report: Report::default(),
-            output: None,
+            output: std::sync::OnceLock::new(),
             streamed: None,
             run_report: None,
             _failures: failures,
@@ -652,13 +653,10 @@ impl Build {
 
     fn refresh(&mut self) {
         self.report = Report::located(&self.issues(), &self.locator);
-        (self.output, self.run_report) = match self.domain() {
-            Some(domain) => (
-                domain.output().map(Table::from_adapter),
-                Some(Table::from_adapter(domain.run_report())),
-            ),
-            None => (None, None),
-        };
+        self.output = std::sync::OnceLock::new();
+        self.run_report = self
+            .domain()
+            .map(|domain| Table::from_adapter(domain.run_report()));
     }
 
     /// Whether the build produced its primary output, as a table or to be
@@ -684,15 +682,22 @@ impl Build {
     /// The accepted output's rows and columns, whether it is a table or read
     /// as a stream; none when the build has no output.
     pub(crate) fn dimensions(&self) -> Option<(usize, usize)> {
-        match &self.output {
-            Some(table) => Some((table.rows(), table.public().width())),
+        match self.domain().and_then(Domain::output_dimensions) {
+            Some(dimensions) => Some(dimensions),
             None => self.streamed.filter(|_| self.accepted()),
         }
     }
 
-    /// Borrow the output table, when the build produced one.
+    /// Borrow the output table, when the build produced one; the first
+    /// borrow builds it.
     pub(crate) fn output(&self) -> Option<&Table> {
-        self.output.as_ref()
+        self.output
+            .get_or_init(|| {
+                self.domain()
+                    .and_then(Domain::output)
+                    .map(Table::from_adapter)
+            })
+            .as_ref()
     }
 
     /// Borrow the run report table, which every executed build holds,

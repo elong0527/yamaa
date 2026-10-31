@@ -615,7 +615,7 @@ mod tests {
         bytes.extend(b"PAR1");
         let decoded = crate::parquet_source::reader::read(&bytes).unwrap();
         assert_eq!(decoded.schema.columns()[0].name, "V0");
-        assert_eq!(decoded.batches[0].num_rows(), 0);
+        assert_eq!(decoded.rows, 0);
     }
 
     #[test]

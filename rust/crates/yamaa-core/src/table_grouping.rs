@@ -94,21 +94,6 @@ pub(crate) enum OwnedKey {
     DateTime(DateTime),
 }
 
-impl OwnedKey {
-    /// The key this owns.
-    pub(crate) fn key(&self) -> Key<'_> {
-        match self {
-            Self::Missing => Key::Missing,
-            Self::Str(value) => Key::Str(value),
-            Self::Int(value) => Key::Int(*value),
-            Self::Float(bits) => Key::Float(*bits),
-            Self::Bool(value) => Key::Bool(*value),
-            Self::Date(value) => Key::Date(*value),
-            Self::DateTime(value) => Key::DateTime(*value),
-        }
-    }
-}
-
 impl From<Key<'_>> for OwnedKey {
     fn from(key: Key<'_>) -> Self {
         match key {

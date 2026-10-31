@@ -8,14 +8,18 @@
 //! compiles each regular-expression literal. Static operand types are checked
 //! against the site's names by [`CompiledExpression::type_findings`], the
 //! result type of expression-field text and of `aggregate` is
-//! [`CompiledExpression::result_type`], and one evaluator runs every context.
+//! [`CompiledExpression::result_type`], and one evaluator runs every context,
+//! a row at a time or, in its column form ([`ColumnResolver`]), over a whole
+//! selection.
 
 mod bind;
+mod columns;
 mod evaluate;
 mod syntax;
 mod types;
 
 pub use bind::{compile, AggregateResult, CompiledExpression, Reduction, ReductionOperand};
+pub use columns::{Column, ColumnResolver, Stop};
 pub use evaluate::{Condition, ErrorKind, EvaluationError, Resolved, Resolver, Step, Truth};
 pub use syntax::{
     parse, Comparison, Node, NodeKind, Parsed, SourcePosition, SourceSpan, TemporalKind, RESERVED,

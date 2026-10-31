@@ -21,7 +21,6 @@ use super::footer::{self, Chunk, Footer, Kind, Leaf, Node, Repetition, RowGroup,
 use super::format::{Codec, Converted, Encoding, Logical, Physical, TimeUnit};
 use super::reader::{self, Decoders, Error, NATIVE};
 use super::{compact, framing, metadata, physical, row_groups, ColumnSignature};
-use arrow_array::RecordBatch;
 use parquet::file::metadata::ParquetMetaData;
 use std::path::{Path, PathBuf};
 use yamaa_core::table::TableSchema;
@@ -824,10 +823,12 @@ fn upstream_arrow(
 fn upstream_columns(
     file: &[u8],
     _: &[framing::Page],
+    _: Option<&super::columns::Bodies>,
     footer: &Footer,
     keep: &[bool],
     arrow: &arrow_schema::Schema,
-    groups: std::ops::Range<usize>,
+    // The harness reads files whole, through no window.
+    (groups, _): (std::ops::Range<usize>, Option<std::ops::Range<usize>>),
 ) -> Result<Vec<Column>, Error> {
     let frame = framing::admit_partitioned(file, Some(std::num::NonZeroUsize::MIN))?;
     let metadata = row_groups::decode(frame.metadata, &frame.footer)?;
@@ -884,7 +885,7 @@ struct Reading {
     /// The table schema of an ordinary and of an ODM read, from the footer.
     schemas: [Result<TableSchema, Error>; 2],
     /// The table of an ordinary and of an ODM read, or its first finding.
-    tables: [Result<(TableSchema, Vec<RecordBatch>), Error>; 2],
+    tables: [Result<reader::Decoded, Error>; 2],
 }
 
 fn reading(
@@ -895,8 +896,7 @@ fn reading(
     Reading {
         signature,
         schemas: [false, true].map(|odm| reader::table_schema(bytes, odm, decoders)),
-        tables: [false, true]
-            .map(|odm| reader::whole(bytes, odm, decoders).map(|read| (read.schema, read.batches))),
+        tables: [false, true].map(|odm| reader::whole(bytes, odm, decoders)),
     }
 }
 
@@ -1055,4 +1055,105 @@ fn both_decoders_refuse_the_invalid_host_fixture_files() {
             );
         }
     }
+}
+
+/// What a read of `bytes` gives, as `odm` asks: each record's cells, or the
+/// first finding, spelled out. With `rows`, the file is scanned by
+/// partitions of at most `rows` records and its partitions' records are
+/// joined in order.
+fn outcome(bytes: &[u8], odm: bool, rows: Option<std::num::NonZeroUsize>) -> String {
+    use yamaa_core::table::TableAccess;
+    let cells = |table: &crate::column_table::ColumnTable, records: &mut Vec<String>| {
+        for row in 0..table.row_count() {
+            let row = (0..table.schema().columns().len()).map(|column| table.cell(row, column));
+            records.push(format!("{:?}", row.collect::<Vec<_>>()));
+        }
+    };
+    let mut records = Vec::new();
+    let read = match rows {
+        None => if odm {
+            super::parse_odm(bytes)
+        } else {
+            super::parse(bytes)
+        }
+        .map(|table| cells(&table, &mut records)),
+        Some(rows) => super::scan(bytes, odm, rows, &mut |table, _| {
+            cells(&table, &mut records)
+        })
+        .map(|_| ()),
+    };
+    match read {
+        Ok(()) => records.join("\n"),
+        Err(error) => format!("refused: {error:?}"),
+    }
+}
+
+/// A scan by partition reports what the whole read reports (`scan`): every
+/// input and every mutation of it, scanned a row group at a time, gives the
+/// whole read's records in order, or its first finding; so does each file
+/// with two of its pages' changes at once. The scan checks
+/// each partition's pages before decoding it, and holds what it finds until
+/// every page is checked, so a page that does not admit in a later
+/// partition is still the finding, as the whole read checks every page
+/// first. The inputs are too small for the row and cell limits, the one
+/// check a partition makes on its own.
+#[test]
+fn every_input_scans_by_partition_as_it_reads_whole() {
+    let inputs = inputs();
+    let threads = std::thread::available_parallelism().map_or(1, usize::from);
+    let divergent: Vec<String> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|thread| {
+                let inputs = &inputs;
+                scope.spawn(move || {
+                    let mut divergent = Vec::new();
+                    for (input, (label, bytes)) in
+                        inputs.iter().enumerate().skip(thread).step_by(threads)
+                    {
+                        let mut files = vec![bytes.clone()];
+                        files.extend(mutated(bytes, input));
+                        let pages = page_mutations(bytes, input);
+                        // Two changes at once, one from each half of the
+                        // pages' changes, so that a finding in one
+                        // partition meets another in a later one.
+                        let half = pages.len() / 2;
+                        for (early, late) in pages[..half].iter().zip(&pages[half..]) {
+                            let mut both = early.clone();
+                            for (at, byte) in late.iter().enumerate() {
+                                if *byte != bytes[at] {
+                                    both[at] = *byte;
+                                }
+                            }
+                            files.push(both);
+                        }
+                        files.extend(pages);
+                        for (index, file) in files.iter().enumerate() {
+                            for odm in [false, true] {
+                                let whole = outcome(file, odm, None);
+                                let scanned = outcome(file, odm, Some(std::num::NonZeroUsize::MIN));
+                                if whole != scanned {
+                                    divergent.push(format!(
+                                        "{label}, file {index}, odm {odm}: whole {}, scanned {}",
+                                        &whole[..whole.len().min(300)],
+                                        &scanned[..scanned.len().min(300)]
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    divergent
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().unwrap())
+            .collect()
+    });
+    assert!(
+        divergent.is_empty(),
+        "{} files scan otherwise; the first: {:#?}",
+        divergent.len(),
+        &divergent[..divergent.len().min(5)]
+    );
 }

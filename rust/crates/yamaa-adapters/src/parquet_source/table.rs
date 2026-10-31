@@ -1,12 +1,8 @@
-//! Convert admitted storage arrays into the engine's precision-bearing table.
-use super::reader::Decoded;
+//! Convert admitted stored columns into the engine's precision-bearing table.
+use super::reader::{Converted, Decoded};
 use crate::{
     column_table::{Column, ColumnTable, TableError},
     epoch::{date_from_days, datetime_from_seconds},
-};
-use arrow_array::{
-    Array, Date32Array, Float64Array, Int64Array, LargeStringArray, StringArray,
-    TimestampMicrosecondArray,
 };
 use yamaa_core::{temporal::Precision, value::ColumnType};
 
@@ -29,118 +25,87 @@ pub(super) fn convert(decoded: Decoded) -> Result<ColumnTable, Error> {
 /// column's offsets, before any value converts: its records.
 pub(super) fn admit(decoded: &Decoded) -> Result<usize, Error> {
     let columns = decoded.schema.columns().len();
-    let mut rows = 0usize;
-    for batch in &decoded.batches {
-        rows = rows.checked_add(batch.num_rows()).ok_or(Error::Invalid)?;
-        yamaa_core::limits::Limits::table(rows, columns).map_err(|error| {
-            Error::Table(TableError::Limit {
-                resource: error.resource,
-                limit: error.limit,
-                required: error.actual,
-            })
-        })?;
-        for array in batch.columns() {
-            if let Some(strings) = array.as_any().downcast_ref::<LargeStringArray>() {
-                // Each decoded text column fits Arrow Utf8's offsets.
-                if !crate::column_table::fits_utf8_offsets(
-                    strings.iter().flatten().map(|text| text.len()),
-                ) {
-                    return Err(Error::Representation);
-                }
+    yamaa_core::limits::Limits::table(decoded.rows, columns).map_err(|error| {
+        Error::Table(TableError::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            required: error.actual,
+        })
+    })?;
+    for column in &decoded.columns {
+        if let Converted::Column(Column::Str(text)) = column {
+            // Each decoded text column fits Arrow Utf8's offsets.
+            if !crate::column_table::fits_utf8_offsets([text.arena().len()]) {
+                return Err(Error::Representation);
             }
         }
     }
-    Ok(rows)
+    Ok(decoded.rows)
 }
 
-/// Convert an admitted decoded table of `rows` records.
+/// Convert an admitted decoded table of `rows` records: each temporal
+/// column's counts to civil values, a field the stored columns ended before
+/// empty, then the table.
 pub(super) fn build(decoded: Decoded, rows: usize) -> Result<ColumnTable, Error> {
-    let mut values = decoded
-        .schema
-        .columns()
-        .iter()
-        .map(|field| Column::empty(field.kind))
-        .collect::<Vec<_>>();
-    for batch in &decoded.batches {
-        for ((field, array), column) in decoded
-            .schema
-            .columns()
-            .iter()
-            .zip(batch.columns())
-            .zip(&mut values)
-        {
-            fn cast<T: 'static>(array: &dyn Array) -> Result<&T, Error> {
-                array.as_any().downcast_ref::<T>().ok_or(Error::Invalid)
-            }
-            let array = array.as_ref();
-            let present = |row| !array.is_null(row);
-            match (field.kind, column) {
-                (ColumnType::Str, Column::Str(text)) => {
-                    if let Some(strings) = array.as_any().downcast_ref::<StringArray>() {
-                        for row in 0..array.len() {
-                            text.push(present(row).then(|| strings.value(row)));
-                        }
-                    } else {
-                        let strings = cast::<LargeStringArray>(array)?;
-                        for row in 0..array.len() {
-                            text.push(present(row).then(|| strings.value(row)));
-                        }
-                    }
-                }
-                (ColumnType::Int, Column::Int(integers)) => {
-                    let array = cast::<Int64Array>(array)?;
-                    for row in 0..array.len() {
-                        integers.push(present(row).then(|| array.value(row)));
-                    }
-                }
-                (ColumnType::Float, Column::Float(floats)) => {
-                    let array = cast::<Float64Array>(array)?;
-                    for row in 0..array.len() {
-                        floats.push(present(row).then(|| array.value(row)));
-                    }
-                }
-                (ColumnType::Date, Column::Date(dates)) => {
-                    let days = cast::<Date32Array>(array)?;
-                    for row in 0..array.len() {
-                        dates.push(if present(row) {
-                            let day = i64::from(days.value(row));
-                            Some(date_from_days(day, Precision::Day).ok_or(Error::Invalid)?)
-                        } else {
-                            None
-                        });
-                    }
-                }
-                (ColumnType::DateTime, Column::DateTime(datetimes)) => {
-                    let micros = cast::<TimestampMicrosecondArray>(array)?;
-                    for row in 0..array.len() {
-                        datetimes.push(if present(row) {
-                            let micros = micros.value(row);
-                            if micros % 1_000_000 != 0 {
-                                return Err(Error::Invalid);
-                            }
-                            Some(
+    let mut converted = decoded.columns.into_iter();
+    let mut values = Vec::with_capacity(decoded.schema.columns().len());
+    for field in decoded.schema.columns() {
+        values.push(match (field.kind, converted.next()) {
+            (kind, None) => Column::empty(kind),
+            (ColumnType::Date, Some(Converted::Days(days))) => Column::Date(dates(&days)?),
+            (ColumnType::DateTime, Some(Converted::Micros(micros))) => Column::DateTime(
+                (0..micros.len())
+                    .map(|row| {
+                        micros
+                            .get(row)
+                            .map(|micros| {
+                                if micros % 1_000_000 != 0 {
+                                    return Err(Error::Invalid);
+                                }
                                 datetime_from_seconds(micros / 1_000_000, Precision::Second)
-                                    .ok_or(Error::Invalid)?,
-                            )
-                        } else {
-                            None
-                        });
-                    }
-                }
-                _ => return Err(Error::Invalid),
-            }
-        }
+                                    .ok_or(Error::Invalid)
+                            })
+                            .transpose()
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            (kind, Some(Converted::Column(column))) if column.kind() == kind => column,
+            _ => return Err(Error::Invalid),
+        });
     }
     ColumnTable::new(decoded.schema, values, rows).map_err(Error::Table)
 }
 
+/// Each present day's date, with day precision. A column repeats its days,
+/// such as a subject's visit dates, so the last 64 days converted are kept
+/// by their low bits and converted once.
+fn dates(
+    days: &super::columns::Stored<i32>,
+) -> Result<Vec<Option<yamaa_core::temporal::Date>>, Error> {
+    let mut dates = Vec::with_capacity(days.len());
+    let mut seen: [Option<(i32, yamaa_core::temporal::Date)>; 64] = [None; 64];
+    for row in 0..days.len() {
+        let Some(day) = days.get(row) else {
+            dates.push(None);
+            continue;
+        };
+        let slot = &mut seen[day.rem_euclid(64) as usize];
+        dates.push(Some(match *slot {
+            Some((at, date)) if at == day => date,
+            _ => {
+                let date = date_from_days(i64::from(day), Precision::Day).ok_or(Error::Invalid)?;
+                *slot = Some((day, date));
+                date
+            }
+        }));
+    }
+    Ok(dates)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow_array::{ArrayRef, RecordBatch};
-    use arrow_schema::{Field, Schema, TimeUnit};
-    use std::sync::Arc;
-    use yamaa_core::table::{Column, TableAccess, TableSchema, ValueRef};
+    use crate::columns::{Text, Values};
+    use yamaa_core::table::{Column as Field, TableAccess, TableSchema, ValueRef};
 
     fn source() -> Decoded {
         let schema = TableSchema::new(
@@ -152,46 +117,40 @@ mod tests {
                 ("T", ColumnType::DateTime),
             ]
             .into_iter()
-            .map(|(name, kind)| Column {
+            .map(|(name, kind)| Field {
                 name: name.into(),
                 kind,
             })
             .collect(),
         )
         .unwrap();
-        let arrays: Vec<ArrayRef> = vec![
-            Arc::new(LargeStringArray::from(vec![Some(""), None, Some("β")])),
-            Arc::new(Int64Array::from(vec![Some(i64::MIN), None, Some(i64::MAX)])),
-            Arc::new(Float64Array::from(vec![
-                Some(-0.0),
-                None,
-                Some(f64::from_bits(1)),
-            ])),
-            Arc::new(Date32Array::from(vec![
-                Some(-719_162),
-                None,
-                Some(2_932_896),
-            ])),
-            Arc::new(TimestampMicrosecondArray::from(vec![
-                Some(-1_000_000),
-                None,
-                Some(253_402_300_799_000_000),
-            ])),
-        ];
-        let stored = Arc::new(Schema::new(vec![
-            Field::new("S", arrow_schema::DataType::LargeUtf8, true),
-            Field::new("I", arrow_schema::DataType::Int64, true),
-            Field::new("F", arrow_schema::DataType::Float64, true),
-            Field::new("D", arrow_schema::DataType::Date32, true),
-            Field::new(
-                "T",
-                arrow_schema::DataType::Timestamp(TimeUnit::Microsecond, None),
-                true,
+        let columns = vec![
+            Converted::Column(Column::Str(
+                [Some(""), None, Some("β")].into_iter().collect::<Text>(),
+            )),
+            Converted::Column(Column::Int(
+                [Some(i64::MIN), None, Some(i64::MAX)].into_iter().collect(),
+            )),
+            Converted::Column(Column::Float(
+                [Some(-0.0), None, Some(f64::from_bits(1))]
+                    .into_iter()
+                    .collect::<Values<f64>>(),
+            )),
+            Converted::Days(
+                [Some(-719_162), None, Some(2_932_896)]
+                    .into_iter()
+                    .collect(),
             ),
-        ]));
+            Converted::Micros(
+                [Some(-1_000_000), None, Some(253_402_300_799_000_000)]
+                    .into_iter()
+                    .collect(),
+            ),
+        ];
         Decoded {
             schema,
-            batches: vec![RecordBatch::try_new(stored, arrays).unwrap()],
+            columns,
+            rows: 3,
         }
     }
 

@@ -13,6 +13,8 @@
 //! then not grouped by the fields, and has no cut.
 use crate::table::TableAccess;
 use crate::table_grouping::{Key, OwnedKey};
+use crate::temporal::{Date, DateTime};
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::ops::Range;
@@ -36,10 +38,13 @@ pub struct PartitionCut {
     rows: usize,
     /// The records read so far.
     read: usize,
-    /// The run being read: its key, and its first record.
-    run: Option<(Vec<OwnedKey>, usize)>,
-    /// The key of every run that has ended.
-    ended: BTreeSet<Vec<OwnedKey>>,
+    /// The first record of the run being read. Its key is the last
+    /// ascending one of `ended`, or, when `held`, the one `key` holds.
+    run: Option<usize>,
+    held: bool,
+    key: Vec<Held>,
+    /// The key of every run read so far, the one being read's too.
+    ended: Ended,
     /// Where each partition starts, the open one last.
     starts: Vec<usize>,
     /// The records of the open partition's completed runs.
@@ -52,57 +57,98 @@ impl PartitionCut {
     /// A cut into partitions of `rows` records that keep the runs of
     /// `fields` whole, or of consecutive records without fields.
     pub fn new(fields: Vec<usize>, rows: NonZeroUsize) -> Self {
+        let width = fields.len();
         Self {
             fields,
             rows: rows.get(),
             read: 0,
             run: None,
-            ended: BTreeSet::new(),
+            held: false,
+            key: Vec::with_capacity(width),
+            ended: Ended {
+                ascending: Keys::new(width),
+                rest: BTreeSet::new(),
+            },
             starts: vec![0],
             size: 0,
             grouped: true,
         }
     }
 
-    /// Read `table`'s records, the next ones of the input, in order.
+    /// Read `table`'s records, the next ones of the input, in order. Each
+    /// record's fields are compared with the run's key where they are
+    /// read, from the fields' storage when the table lends it (#4190),
+    /// which lends each row the value its cells do. A record that continues
+    /// its run allocates nothing, and a run's key is ended as its run
+    /// begins (`Ended::insert`), in the keys' arena.
     pub fn read<T: TableAccess + ?Sized>(&mut self, table: &T) {
         let first = self.read;
         self.read += table.row_count();
         if self.fields.is_empty() || !self.grouped {
             return;
         }
+        let fields = self.fields.clone();
+        let lent: Option<Vec<_>> = fields.iter().map(|&field| table.column(field)).collect();
+        let cell = |row: usize, index: usize| match &lent {
+            Some(columns) => Some(columns[index].get(row)),
+            None => table.cell(row, fields[index]).ok(),
+        };
+        let mut key = Vec::with_capacity(fields.len());
         for row in 0..table.row_count() {
-            let mut key = Vec::with_capacity(self.fields.len());
-            for &field in &self.fields {
-                match table.cell(row, field) {
-                    Ok(value) => key.push(Key::from(value)),
-                    Err(_) => {
-                        self.grouped = false;
-                        return;
-                    }
-                }
+            key.clear();
+            for index in 0..fields.len() {
+                let Some(value) = cell(row, index) else {
+                    self.grouped = false;
+                    return;
+                };
+                key.push(Key::from(value));
             }
-            let same = self.run.as_ref().is_some_and(|(current, _)| {
-                current.iter().map(OwnedKey::key).eq(key.iter().cloned())
-            });
+            // The run's key is the last ascending key, or the one `key`
+            // holds once the order broke.
+            let same = match self.run {
+                None => false,
+                Some(_) if self.held => self.key.iter().map(Held::key).eq(key.iter().cloned()),
+                Some(_) => self.ended.ascending.last_equals(&key),
+            };
             if same {
                 continue;
             }
+            let order =
+                (self.run.is_some() && !self.held).then(|| self.ended.ascending.compare_last(&key));
             let record = first + row;
             self.close(record);
-            let key: Vec<OwnedKey> = key.into_iter().map(OwnedKey::from).collect();
-            if self.ended.contains(&key) {
-                self.grouped = false;
-                return;
+            // The run ends no earlier key, and no later record equal to it
+            // reaches the ended keys: the run takes it first.
+            let kept = match order {
+                Some(Ordering::Less) => {
+                    self.ended.ascending.push(key.iter().cloned());
+                    Some(true)
+                }
+                _ => self.ended.insert(&key),
+            };
+            match kept {
+                None => {
+                    self.grouped = false;
+                    return;
+                }
+                Some(true) => self.held = false,
+                Some(false) => {
+                    self.held = true;
+                    self.key
+                        .resize_with(key.len(), || Held::Other(Key::Missing));
+                    for (held, field) in self.key.iter_mut().zip(&key) {
+                        held.set(field);
+                    }
+                }
             }
-            self.run = Some((key, record));
+            self.run = Some(record);
         }
     }
 
     /// End the run being read before record `end`, packing it into the open
     /// partition, or opening a new one when it does not fit.
     fn close(&mut self, end: usize) {
-        let Some((key, start)) = self.run.take() else {
+        let Some(start) = self.run.take() else {
             return;
         };
         let len = end - start;
@@ -111,7 +157,6 @@ impl PartitionCut {
             self.size = 0;
         }
         self.size += len;
-        self.ended.insert(key);
     }
 
     /// The partitions of every record read, in order. None when the records
@@ -132,6 +177,220 @@ impl PartitionCut {
             .collect();
         bounds.push(self.starts[self.starts.len() - 1]..self.read);
         Some(bounds)
+    }
+}
+
+/// One field of the key of the run being read, held so that the next run's
+/// key reuses its text's allocation.
+#[derive(Debug)]
+enum Held {
+    Text(String),
+    /// A key that holds no text.
+    Other(Key<'static>),
+}
+
+impl Held {
+    fn key(&self) -> Key<'_> {
+        match self {
+            Self::Text(text) => Key::Str(text),
+            Self::Other(key) => key.clone(),
+        }
+    }
+
+    fn set(&mut self, key: &Key<'_>) {
+        *self = match (std::mem::replace(self, Self::Other(Key::Missing)), key) {
+            (Self::Text(mut text), Key::Str(value)) => {
+                text.clear();
+                text.push_str(value);
+                Self::Text(text)
+            }
+            (_, Key::Str(value)) => Self::Text((*value).to_owned()),
+            (_, Key::Missing) => Self::Other(Key::Missing),
+            (_, Key::Int(value)) => Self::Other(Key::Int(*value)),
+            (_, Key::Float(bits)) => Self::Other(Key::Float(*bits)),
+            (_, Key::Bool(value)) => Self::Other(Key::Bool(*value)),
+            (_, Key::Date(value)) => Self::Other(Key::Date(*value)),
+            (_, Key::DateTime(value)) => Self::Other(Key::DateTime(*value)),
+        };
+    }
+}
+
+/// Keys of one width, field after field, their text in one arena, so that
+/// a key costs no allocation of its own. Each field reads back as the
+/// [`Key`] it was kept from, with that key's equality and order.
+#[derive(Debug)]
+struct Keys {
+    width: usize,
+    text: String,
+    fields: Vec<Field>,
+}
+
+/// One kept field: a [`Key`] whose text is a span of the arena.
+#[derive(Clone, Copy, Debug)]
+enum Field {
+    Missing,
+    Str(usize, usize),
+    Int(i64),
+    Float(u64),
+    Bool(bool),
+    Date(Date),
+    DateTime(DateTime),
+}
+
+impl Keys {
+    fn new(width: usize) -> Self {
+        Self {
+            width,
+            text: String::new(),
+            fields: Vec::new(),
+        }
+    }
+
+    /// The number of keys.
+    fn len(&self) -> usize {
+        self.fields.len() / self.width
+    }
+
+    /// Field `field` of every key end to end, as the key it was kept from.
+    fn field(&self, field: usize) -> Key<'_> {
+        match self.fields[field] {
+            Field::Missing => Key::Missing,
+            Field::Str(start, end) => Key::Str(&self.text[start..end]),
+            Field::Int(value) => Key::Int(value),
+            Field::Float(bits) => Key::Float(bits),
+            Field::Bool(value) => Key::Bool(value),
+            Field::Date(value) => Key::Date(value),
+            Field::DateTime(value) => Key::DateTime(value),
+        }
+    }
+
+    /// Key `index`, field by field.
+    fn key(&self, index: usize) -> impl Iterator<Item = Key<'_>> {
+        (index * self.width..(index + 1) * self.width).map(|field| self.field(field))
+    }
+
+    /// Whether the last key, which there must be, is `key`. Text compares
+    /// as the bytes it is.
+    fn last_equals(&self, key: &[Key<'_>]) -> bool {
+        let first = self.fields.len() - self.width;
+        key.iter()
+            .enumerate()
+            .all(|(index, field)| match (self.fields[first + index], field) {
+                (Field::Str(start, end), Key::Str(value)) => {
+                    self.text.as_bytes()[start..end] == *value.as_bytes()
+                }
+                _ => self.field(first + index) == *field,
+            })
+    }
+
+    /// The last key against `key`, in the keys' order; `Less` when there is
+    /// no key.
+    fn compare_last(&self, key: &[Key<'_>]) -> Ordering {
+        match self.len() {
+            0 => Ordering::Less,
+            keys => self.compare(keys - 1, key.iter().cloned()),
+        }
+    }
+
+    /// Key `index` against `key`, in the keys' order.
+    fn compare<'a>(&self, index: usize, key: impl IntoIterator<Item = Key<'a>>) -> Ordering {
+        let mut kept = self.key(index);
+        for other in key {
+            let Some(field) = kept.next() else {
+                return Ordering::Less;
+            };
+            match field.cmp(&other) {
+                Ordering::Equal => {}
+                order => return order,
+            }
+        }
+        match kept.next() {
+            Some(_) => Ordering::Greater,
+            None => Ordering::Equal,
+        }
+    }
+
+    fn push<'a>(&mut self, key: impl IntoIterator<Item = Key<'a>>) {
+        for field in key {
+            self.fields.push(match field {
+                Key::Missing => Field::Missing,
+                Key::Str(value) => {
+                    let start = self.text.len();
+                    self.text.push_str(value);
+                    Field::Str(start, self.text.len())
+                }
+                Key::Int(value) => Field::Int(value),
+                Key::Float(bits) => Field::Float(bits),
+                Key::Bool(value) => Field::Bool(value),
+                Key::Date(value) => Field::Date(value),
+                Key::DateTime(value) => Field::DateTime(value),
+            });
+        }
+    }
+}
+
+/// The keys of the runs read so far, in the order the runs began. While
+/// each is greater than the one before, as in an input sorted by the
+/// fields, they are kept in that order, and a key greater than the last is
+/// new without a search. Once a key is not, it and every later one go into
+/// a set.
+#[derive(Debug)]
+struct Ended {
+    ascending: Keys,
+    /// The keys of the runs that began after the order broke.
+    rest: BTreeSet<Vec<OwnedKey>>,
+}
+
+impl Ended {
+    /// Keep `key`, the key of a run that begins: whether it ascends, or
+    /// `None` when it is a key already kept, whose run has ended, since the
+    /// run being read takes its own records first. A key
+    /// greater than the last ascending one, before the order broke, needs
+    /// no search.
+    fn insert(&mut self, key: &[Key<'_>]) -> Option<bool> {
+        if self.rest.is_empty() && self.ascending.compare_last(key).is_lt() {
+            self.ascending.push(key.iter().cloned());
+            return Some(true);
+        }
+        if self.contains(key) {
+            return None;
+        }
+        self.rest
+            .insert(key.iter().cloned().map(OwnedKey::from).collect());
+        Some(false)
+    }
+
+    fn contains(&self, key: &[Key<'_>]) -> bool {
+        let keys = self.ascending.len();
+        if keys == 0 {
+            return self.contains_rest(key);
+        }
+        if self.rest.is_empty()
+            && self
+                .ascending
+                .compare(keys - 1, key.iter().cloned())
+                .is_lt()
+        {
+            return false;
+        }
+        let (mut low, mut high) = (0, keys);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if self.ascending.compare(middle, key.iter().cloned()).is_lt() {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        (low < keys && self.ascending.compare(low, key.iter().cloned()).is_eq())
+            || self.contains_rest(key)
+    }
+
+    fn contains_rest(&self, key: &[Key<'_>]) -> bool {
+        !self.rest.is_empty()
+            && self
+                .rest
+                .contains(&key.iter().cloned().map(OwnedKey::from).collect::<Vec<_>>())
     }
 }
 
@@ -288,6 +547,30 @@ mod tests {
                 vec![0],
                 Some(whole(0..2)),
             ),
+            (
+                "runs that descend without recurring stay grouped",
+                ["b", "a", "a", "c"]
+                    .map(|key| [text(key), Value::Int(1)])
+                    .to_vec(),
+                vec![0],
+                Some(vec![0..1, 1..3, 3..4]),
+            ),
+            (
+                "an ascending run's value recurs after the order breaks",
+                ["a", "b", "c", "a"]
+                    .map(|key| [text(key), Value::Int(1)])
+                    .to_vec(),
+                vec![0],
+                None,
+            ),
+            (
+                "a value recurs among the runs after the order breaks",
+                ["c", "a", "b", "a"]
+                    .map(|key| [text(key), Value::Int(1)])
+                    .to_vec(),
+                vec![0],
+                None,
+            ),
         ];
         for (label, rows, fields, expected) in cases {
             assert_eq!(
@@ -295,6 +578,35 @@ mod tests {
                 expected,
                 "{label}"
             );
+        }
+    }
+
+    /// The cut reads its input a table at a time, as a scan gives it
+    /// (#3830), a seam no reader reaches with chosen tables: a run goes on
+    /// across the tables, before the order of the runs breaks and after,
+    /// and a value recurs across them. The runs of a, a | a, b are 0..3 and
+    /// 3..4; of b | b, a | a, c, 0..2, 2..4 and 4..5; and a | b | a
+    /// recurs.
+    #[test]
+    fn a_run_goes_on_across_the_tables_it_is_read_from() {
+        type Case = (
+            &'static [&'static [&'static str]],
+            Option<Vec<Range<usize>>>,
+        );
+        let cases: [Case; 3] = [
+            (&[&["a", "a"], &["a", "b"]], Some(vec![0..3, 3..4])),
+            (
+                &[&["b"], &["b", "a"], &["a", "c"]],
+                Some(vec![0..2, 2..4, 4..5]),
+            ),
+            (&[&["a"], &["b"], &["a"]], None),
+        ];
+        for (tables, expected) in cases {
+            let mut cut = PartitionCut::new(vec![0], NonZeroUsize::MIN);
+            for keys in tables {
+                cut.read(&keyed(keys));
+            }
+            assert_eq!(cut.finish(), expected, "tables {tables:?}");
         }
     }
 

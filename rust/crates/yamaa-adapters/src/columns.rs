@@ -113,10 +113,57 @@ impl Validity {
 impl FromIterator<bool> for Validity {
     fn from_iter<I: IntoIterator<Item = bool>>(slots: I) -> Self {
         let mut validity = Self::default();
-        for present in slots {
-            validity.push(present);
-        }
+        validity.extend(slots);
         validity
+    }
+}
+
+impl Extend<bool> for Validity {
+    fn extend<I: IntoIterator<Item = bool>>(&mut self, slots: I) {
+        for present in slots {
+            self.push(present);
+        }
+    }
+}
+
+impl Validity {
+    /// Append a slot for each of `slots`, as [`Validity::push`] does one at
+    /// a time: still no bitmap while every slot holds a value, and whole
+    /// words at a time once there is one.
+    pub fn extend_from_slice(&mut self, mut slots: &[bool]) {
+        if self.words.is_none() {
+            let Some(first) = slots.iter().position(|present| !present) else {
+                self.len += slots.len();
+                return;
+            };
+            self.len += first;
+            self.push(false);
+            slots = &slots[first + 1..];
+        }
+        // Up to the next word boundary a slot at a time, then a word of 64.
+        let head = (64 - self.len % 64) % 64;
+        let (unaligned, rest) = slots.split_at(head.min(slots.len()));
+        for &present in unaligned {
+            self.push(present);
+        }
+        let words = self
+            .words
+            .as_mut()
+            .expect("a bitmap once a slot is missing");
+        let mut chunks = rest.chunks_exact(64);
+        for chunk in &mut chunks {
+            let word = chunk
+                .iter()
+                .enumerate()
+                .fold(0u64, |word, (bit, &present)| {
+                    word | u64::from(present) << bit
+                });
+            words.push(word);
+        }
+        self.len += rest.len() - chunks.remainder().len();
+        for &present in chunks.remainder() {
+            self.push(present);
+        }
     }
 }
 
@@ -129,6 +176,26 @@ pub struct Values<T> {
 }
 
 impl<T: Copy + Default> Values<T> {
+    /// No slots yet, with room for `len`.
+    pub fn with_capacity(len: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(len),
+            validity: Validity::default(),
+        }
+    }
+
+    /// Every slot's payload with the slots' validity, as [`Values::payloads`]
+    /// and [`Values::validity`] give them back: a missing slot's payload
+    /// must be `T::default()`. `None` when their lengths differ.
+    pub fn from_parts(values: Vec<T>, validity: Validity) -> Option<Self> {
+        (values.len() == validity.len()).then_some(Self { values, validity })
+    }
+
+    /// The payloads and the validity, as [`Values::from_parts`] takes them.
+    pub fn into_parts(self) -> (Vec<T>, Validity) {
+        (self.values, self.validity)
+    }
+
     /// Append one value, or a missing slot.
     pub fn push(&mut self, value: Option<T>) {
         self.validity.push(value.is_some());
@@ -196,6 +263,12 @@ impl Exact for i64 {
     }
 }
 
+impl Exact for f32 {
+    fn exact(self, other: Self) -> bool {
+        self.to_bits() == other.to_bits()
+    }
+}
+
 impl Exact for f64 {
     fn exact(self, other: Self) -> bool {
         self.to_bits() == other.to_bits()
@@ -233,6 +306,46 @@ impl Default for Text {
 }
 
 impl Text {
+    /// No slots yet, with room for `len` and an arena of `bytes`.
+    pub fn with_capacity(len: usize, bytes: usize) -> Self {
+        let mut offsets = Vec::with_capacity(len + 1);
+        offsets.push(0);
+        Self {
+            offsets,
+            bytes: String::with_capacity(bytes),
+            validity: Validity::default(),
+        }
+    }
+
+    /// The text of byte arena `bytes`, value `i` being
+    /// `bytes[offsets[i]..offsets[i + 1]]` where `validity` marks slot `i`
+    /// present: `None` unless every value is UTF-8, each offset follows the
+    /// one before it, the last is the arena's end, and a missing slot holds
+    /// no bytes. The arena is UTF-8 and each offset a character boundary
+    /// exactly when every value is UTF-8, so the arena is validated once.
+    pub fn from_utf8_parts(
+        offsets: Vec<usize>,
+        bytes: Vec<u8>,
+        validity: Validity,
+    ) -> Option<Self> {
+        let bytes = String::from_utf8(bytes).ok()?;
+        // Every offset of ASCII text is a character boundary, and a column
+        // without a missing slot has no slot to hold no bytes.
+        let shaped = offsets.len() == validity.len() + 1
+            && offsets.first() == Some(&0)
+            && offsets.last() == Some(&bytes.len())
+            && offsets.windows(2).all(|pair| pair[0] <= pair[1])
+            && (bytes.is_ascii() || offsets.iter().all(|&offset| bytes.is_char_boundary(offset)))
+            && (validity.words().is_none()
+                || (offsets.windows(2).enumerate())
+                    .all(|(index, pair)| pair[0] == pair[1] || validity.get(index)));
+        shaped.then_some(Self {
+            offsets,
+            bytes,
+            validity,
+        })
+    }
+
     /// Append one value, or a missing slot, which holds no bytes.
     pub fn push(&mut self, value: Option<&str>) {
         self.validity.push(value.is_some());
@@ -291,8 +404,14 @@ impl Text {
     /// The same values, missing wherever `missing` holds for a present one.
     /// `None` when no present value is, and the column stays as it is.
     pub fn missing_where(&self, missing: impl Fn(&str) -> bool) -> Option<Self> {
-        let marked = |index| self.get(index).is_some_and(&missing);
-        if !(0..self.len()).any(marked) {
+        // Along the offsets, reading no validity when no slot is missing.
+        let value = |pair: &[usize]| &self.bytes[pair[0]..pair[1]];
+        let marked = match self.validity.words() {
+            None => self.offsets.windows(2).any(|pair| missing(value(pair))),
+            Some(_) => (self.offsets.windows(2).enumerate())
+                .any(|(index, pair)| self.validity.get(index) && missing(value(pair))),
+        };
+        if !marked {
             return None;
         }
         let mut text = Self::default();
@@ -350,6 +469,37 @@ mod tests {
             (0..65).map(|index| index != 64).collect::<Vec<_>>()
         );
         assert_eq!(at_boundary, (0..65).map(|index| index != 64).collect());
+    }
+
+    #[test]
+    fn a_validity_extended_by_a_slice_equals_the_one_its_slots_build() {
+        // Slots appended after none, after 5 with the third missing, and
+        // after 64 all present, across word boundaries:
+        // none missing, one missing at each end of a word, and every
+        // third missing, in runs that fill whole words and leave a rest.
+        type Pattern = (&'static str, fn(usize) -> bool);
+        let patterns: [Pattern; 4] = [
+            ("all present", |_| true),
+            ("slot 63 missing", |slot| slot != 63),
+            ("slot 64 missing", |slot| slot != 64),
+            ("every third missing", |slot| slot % 3 != 0),
+        ];
+        for before in [0, 5, 64] {
+            for (label, present) in patterns {
+                for count in [0, 1, 63, 64, 65, 200] {
+                    let slots: Vec<bool> = (0..count).map(present).collect();
+                    let mut extended = (0..before)
+                        .map(|slot| before != 5 || slot != 2)
+                        .collect::<Validity>();
+                    let mut pushed = extended.clone();
+                    extended.extend_from_slice(&slots);
+                    for &slot in &slots {
+                        pushed.push(slot);
+                    }
+                    assert_eq!(extended, pushed, "{label}, {count} slots after {before}");
+                }
+            }
+        }
     }
 
     #[test]

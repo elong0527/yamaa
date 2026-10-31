@@ -12,11 +12,12 @@ use super::bind::CompiledExpression;
 use super::syntax::{Comparison, NodeKind, SourceSpan};
 use super::Function;
 use crate::numeric::{
-    self, ArithmeticErrorKind, BinaryOperator, IntegralFunction, MathFunction, Number,
-    UnaryOperator,
+    self, ArithmeticError, ArithmeticErrorKind, BinaryOperator, IntegralFunction, MathFunction,
+    Number, UnaryOperator,
 };
+use crate::portable_regex::Pattern as Regex;
 use crate::table::ValueRef;
-use crate::value::{compare_present, Selection, Value, ValueType};
+use crate::value::{compare_present_refs, Selection, Value, ValueType};
 
 /// Predicate truth is distinct from the runtime bool value and missing scalar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,7 +28,7 @@ pub enum Truth {
 }
 
 impl Truth {
-    fn from_bool(value: bool) -> Self {
+    pub(super) fn from_bool(value: bool) -> Self {
         if value {
             Self::True
         } else {
@@ -297,13 +298,11 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
             } => {
                 let left = self.operand(*left, Step::Left)?;
                 let right = self.operand(*right, Step::Right)?;
-                compare(*operator, &left, &right)
+                compare(*operator, (&left).into(), (&right).into())
             }
             NodeKind::IsNull { value, negated } => {
                 let value = self.operand(*value, Step::Value)?;
-                Ok(Truth::from_bool(
-                    matches!(value, Value::Missing) != *negated,
-                ))
+                Ok(is_null((&value).into(), *negated))
             }
             NodeKind::In {
                 value,
@@ -314,7 +313,7 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                 let mut truth = Truth::False;
                 for (index, item) in items.iter().enumerate() {
                     let item = self.operand(*item, Step::Item(index))?;
-                    let equal = compare(Comparison::Equal, &value, &item)
+                    let equal = compare(Comparison::Equal, (&value).into(), (&item).into())
                         .map_err(|condition| self.condition(condition, None))?;
                     truth = truth.or(equal);
                 }
@@ -331,11 +330,11 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                 let lower = self.operand(*lower, Step::Lower)?;
                 let second = self.operand(*value, Step::RepeatedValue)?;
                 let upper = self.operand(*upper, Step::Upper)?;
-                compare(Comparison::GreaterEqual, &first, &lower)
-                    .and_then(|left| {
-                        compare(Comparison::LessEqual, &second, &upper).map(|right| left.and(right))
-                    })
-                    .map(|truth| if *negated { truth.negate() } else { truth })
+                between(
+                    [(&first).into(), (&lower).into()],
+                    [(&second).into(), (&upper).into()],
+                    *negated,
+                )
             }
             NodeKind::Like {
                 value,
@@ -345,32 +344,12 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
             } => {
                 let value = self.operand(*value, Step::Value)?;
                 let pattern = self.operand(*pattern, Step::Pattern)?;
-                match (&value, &pattern) {
-                    (Value::Missing, _) | (_, Value::Missing) => Ok(Truth::Unknown),
-                    (Value::Str(value), Value::Str(pattern)) => like(value, pattern, *escape),
-                    _ => Err(Condition::ExpectedText {
-                        actual: if matches!(value, Value::Str(_)) {
-                            pattern.value_type()
-                        } else {
-                            value.value_type()
-                        }
-                        .expect("missing handled above"),
-                    }),
-                }
-                .map(|truth| if *negated { truth.negate() } else { truth })
+                like_truth((&value).into(), (&pattern).into(), *escape, *negated)
             }
             NodeKind::Call { arguments, .. } => {
                 let value = self.operand(arguments[0], Step::Value)?;
-                match value {
-                    Value::Missing => Ok(Truth::Unknown),
-                    Value::Str(value) => {
-                        let pattern = compiled.patterns[id].as_ref().expect("admitted pattern");
-                        Ok(Truth::from_bool(pattern.is_match(&value)))
-                    }
-                    other => Err(Condition::ContainsExpectedText {
-                        actual: other.value_type().expect("missing handled above"),
-                    }),
-                }
+                let pattern = compiled.patterns[id].as_ref().expect("admitted pattern");
+                contains_truth((&value).into(), pattern)
             }
             _ => unreachable!("the binder admits only truth values here"),
         };
@@ -485,80 +464,16 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                     )
                 });
             }
-            NodeKind::Unary { operator, operand } => {
-                let value = self.nested(Step::Unary, |e| e.number(*operand))?;
-                numeric::unary(*operator, value, expression)
-            }
-            NodeKind::Binary {
-                operator,
-                left,
-                right,
-            } => {
-                let (left, right) = self.pair(*left, *right)?;
-                numeric::binary(*operator, left, right, expression)
-            }
-            NodeKind::Call { name, arguments } => {
-                let function =
-                    Function::lookup(compiled.syntax.slice(*name)).expect("an admitted function");
-                match function {
-                    Function::Abs => {
-                        let value = self.nested(Step::Unary, |e| e.number(arguments[0]))?;
-                        numeric::unary(UnaryOperator::Abs, value, expression)
+            NodeKind::Unary { .. } | NodeKind::Binary { .. } | NodeKind::Call { .. } => {
+                let (operation, first, second) = Arithmetic::of(compiled, id);
+                let (left, right) = match second {
+                    None => (self.nested(Step::Unary, |e| e.number(first))?, None),
+                    Some(second) => {
+                        let (left, right) = self.pair(first, second)?;
+                        (left, Some(right))
                     }
-                    Function::Ceil | Function::Floor | Function::Trunc => {
-                        let value = self.nested(Step::Unary, |e| e.number(arguments[0]))?;
-                        return Ok(numeric::integral(
-                            match function {
-                                Function::Ceil => IntegralFunction::Ceil,
-                                Function::Floor => IntegralFunction::Floor,
-                                _ => IntegralFunction::Trunc,
-                            },
-                            value,
-                        ));
-                    }
-                    Function::Exp
-                    | Function::Ln
-                    | Function::Log10
-                    | Function::NormCdf
-                    | Function::NormInv => {
-                        let value = self.nested(Step::Unary, |e| e.number(arguments[0]))?;
-                        numeric::math(
-                            match function {
-                                Function::Exp => MathFunction::Exp,
-                                Function::Ln => MathFunction::Ln,
-                                Function::Log10 => MathFunction::Log10,
-                                Function::NormCdf => MathFunction::NormCdf,
-                                _ => MathFunction::NormInv,
-                            },
-                            value,
-                            expression,
-                        )
-                    }
-                    Function::Sqrt => {
-                        let value = self.nested(Step::Unary, |e| e.number(arguments[0]))?;
-                        numeric::sqrt(value, expression)
-                    }
-                    Function::Power => {
-                        let (left, right) = self.pair(arguments[0], arguments[1])?;
-                        numeric::power(left, right, expression)
-                    }
-                    Function::Mod => {
-                        let (left, right) = self.pair(arguments[0], arguments[1])?;
-                        numeric::binary(BinaryOperator::Modulo, left, right, expression)
-                    }
-                    Function::NullIf => {
-                        let (left, right) = self.pair(arguments[0], arguments[1])?;
-                        let value = numeric::null_if(left, right);
-                        // EXPR-14: the bound site's result type, also when
-                        // the `float` argument is missing.
-                        return Ok(if compiled.widened.binary_search(&id).is_ok() {
-                            value.widened()
-                        } else {
-                            value
-                        });
-                    }
-                    Function::StrContains => unreachable!("a truth value is not a number"),
-                }
+                };
+                operation.apply(left, right, expression)
             }
             _ => unreachable!("the binder admits only numbers here"),
         };
@@ -577,12 +492,19 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
     }
 }
 
+// The judgements of one row, which the row evaluator and the column form
+// (`columns.rs`) both apply to each row's evaluated operands.
+
 /// A mixed int and float pair compares by exact value; no operand is widened.
-fn compare(operator: Comparison, left: &Value, right: &Value) -> Result<Truth, Condition> {
-    if matches!(left, Value::Missing) || matches!(right, Value::Missing) {
+pub(super) fn compare(
+    operator: Comparison,
+    left: ValueRef<'_>,
+    right: ValueRef<'_>,
+) -> Result<Truth, Condition> {
+    if matches!(left, ValueRef::Missing) || matches!(right, ValueRef::Missing) {
         return Ok(Truth::Unknown);
     }
-    let ordering = compare_present(left, right).map_err(|_| Condition::IncompatiblePair {
+    let ordering = compare_present_refs(left, right).map_err(|_| Condition::IncompatiblePair {
         left: left.value_type().expect("present"),
         right: right.value_type().expect("present"),
     })?;
@@ -594,6 +516,136 @@ fn compare(operator: Comparison, left: &Value, right: &Value) -> Result<Truth, C
         Comparison::Greater => ordering == Ordering::Greater,
         Comparison::GreaterEqual => ordering != Ordering::Less,
     }))
+}
+
+/// `IS NULL`, or `IS NOT NULL` when negated.
+pub(super) fn is_null(value: ValueRef<'_>, negated: bool) -> Truth {
+    Truth::from_bool(matches!(value, ValueRef::Missing) != negated)
+}
+
+/// `BETWEEN` over its subject and lower bound, then its repeated subject
+/// and upper bound, each pair resolved before either comparison.
+pub(super) fn between(
+    [first, lower]: [ValueRef<'_>; 2],
+    [second, upper]: [ValueRef<'_>; 2],
+    negated: bool,
+) -> Result<Truth, Condition> {
+    compare(Comparison::GreaterEqual, first, lower)
+        .and_then(|left| compare(Comparison::LessEqual, second, upper).map(|right| left.and(right)))
+        .map(|truth| if negated { truth.negate() } else { truth })
+}
+
+/// `LIKE` of a value and a pattern; a missing operand is unknown.
+pub(super) fn like_truth(
+    value: ValueRef<'_>,
+    pattern: ValueRef<'_>,
+    escape: Option<char>,
+    negated: bool,
+) -> Result<Truth, Condition> {
+    match (value, pattern) {
+        (ValueRef::Missing, _) | (_, ValueRef::Missing) => Ok(Truth::Unknown),
+        (ValueRef::Str(value), ValueRef::Str(pattern)) => like(value, pattern, escape),
+        _ => Err(Condition::ExpectedText {
+            actual: if matches!(value, ValueRef::Str(_)) {
+                pattern.value_type()
+            } else {
+                value.value_type()
+            }
+            .expect("missing handled above"),
+        }),
+    }
+    .map(|truth| if negated { truth.negate() } else { truth })
+}
+
+/// `str_contains` of a value and its compiled pattern.
+pub(super) fn contains_truth(value: ValueRef<'_>, pattern: &Regex) -> Result<Truth, Condition> {
+    match value {
+        ValueRef::Missing => Ok(Truth::Unknown),
+        ValueRef::Str(value) => Ok(Truth::from_bool(pattern.is_match(value))),
+        other => Err(Condition::ContainsExpectedText {
+            actual: other.value_type().expect("missing handled above"),
+        }),
+    }
+}
+
+/// The operation of an arithmetic node: an operator or a numeric function,
+/// applied to its evaluated operands.
+#[derive(Clone, Copy)]
+pub(super) enum Arithmetic {
+    Unary(UnaryOperator),
+    Binary(BinaryOperator),
+    Integral(IntegralFunction),
+    Math(MathFunction),
+    Sqrt,
+    Power,
+    /// `NULLIF`, widened when its bound site's result type is `float`
+    /// (EXPR-14), also when the `float` argument is missing.
+    NullIf {
+        widened: bool,
+    },
+}
+
+impl Arithmetic {
+    /// The operation of an arithmetic node, and its one operand or its two
+    /// in written order.
+    pub(super) fn of(compiled: &CompiledExpression, id: usize) -> (Self, usize, Option<usize>) {
+        match &compiled.syntax.nodes()[id].kind {
+            NodeKind::Unary { operator, operand } => (Self::Unary(*operator), *operand, None),
+            NodeKind::Binary {
+                operator,
+                left,
+                right,
+            } => (Self::Binary(*operator), *left, Some(*right)),
+            NodeKind::Call { name, arguments } => {
+                let function =
+                    Function::lookup(compiled.syntax.slice(*name)).expect("an admitted function");
+                let operation = match function {
+                    Function::Abs => Self::Unary(UnaryOperator::Abs),
+                    Function::Ceil => Self::Integral(IntegralFunction::Ceil),
+                    Function::Floor => Self::Integral(IntegralFunction::Floor),
+                    Function::Trunc => Self::Integral(IntegralFunction::Trunc),
+                    Function::Exp => Self::Math(MathFunction::Exp),
+                    Function::Ln => Self::Math(MathFunction::Ln),
+                    Function::Log10 => Self::Math(MathFunction::Log10),
+                    Function::NormCdf => Self::Math(MathFunction::NormCdf),
+                    Function::NormInv => Self::Math(MathFunction::NormInv),
+                    Function::Sqrt => Self::Sqrt,
+                    Function::Power => Self::Power,
+                    Function::Mod => Self::Binary(BinaryOperator::Modulo),
+                    Function::NullIf => Self::NullIf {
+                        widened: compiled.widened.binary_search(&id).is_ok(),
+                    },
+                    Function::StrContains => unreachable!("a truth value is not a number"),
+                };
+                (operation, arguments[0], arguments.get(1).copied())
+            }
+            _ => unreachable!("an arithmetic node"),
+        }
+    }
+
+    /// The result for one row's operands; `right` is present exactly when
+    /// the operation takes two.
+    #[inline]
+    pub(super) fn apply(
+        self,
+        left: Number,
+        right: Option<Number>,
+        expression: &str,
+    ) -> Result<Number, ArithmeticError> {
+        let right = || right.expect("a binary operation has two operands");
+        match self {
+            Self::Unary(operator) => numeric::unary(operator, left, expression),
+            Self::Binary(operator) => numeric::binary(operator, left, right(), expression),
+            Self::Integral(function) => Ok(numeric::integral(function, left)),
+            Self::Math(function) => numeric::math(function, left, expression),
+            Self::Sqrt => numeric::sqrt(left, expression),
+            Self::Power => numeric::power(left, right(), expression),
+            Self::NullIf { widened } => {
+                let value = numeric::null_if(left, right());
+                Ok(if widened { value.widened() } else { value })
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy)]

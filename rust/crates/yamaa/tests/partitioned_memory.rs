@@ -180,7 +180,8 @@ const PER_RECORD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDY
 
 /// What a run of `spec` over 100,000 records in partitions of 10,000 takes
 /// beyond the input's bytes: its peak from the admission poll on, what it
-/// holds once it has returned, and the length of the file its save writes.
+/// holds once it has returned and its output has been read, which builds the
+/// host view (#4201), and the length of the file its save writes.
 /// Read as a stream when `streamed`, it is held once its first batch has
 /// been read and dropped, with its reader still open, and saves nothing.
 #[cfg(feature = "arrow")]
@@ -202,6 +203,8 @@ fn footprint(spec: &str, streamed: bool) -> (isize, isize, isize) {
         return (beyond_input(&polls, start, bytes, last), held, 0);
     }
     let mut run = engine.spec(&path).cancel_with(&token).run().unwrap();
+    // The host view is built when first read (#4201).
+    assert!(run.output().is_some(), "an output");
     let last = peak::take_peak();
     let held = peak::live() - start;
     let saved = run.save(&CancellationToken::new()).unwrap();
@@ -224,8 +227,9 @@ fn footprint(spec: &str, streamed: bool) -> (isize, isize, isize) {
 /// gives the baseline of each: what a run holds and takes for one partition
 /// with no output to speak of, the input's snapshot included.
 ///
-/// - **What the run keeps.** A finished run holds the dataset, the host
-///   view built from it and the encoded file; a streamed run holds the
+/// - **What the run keeps.** A finished run whose output has been read
+///   holds the dataset, the host view built from it and the encoded file;
+///   a streamed run holds the
 ///   dataset and the encoded file, and no host view, so its figure is the
 ///   dataset and the file measured alone. The host view's columns hold the
 ///   dataset's values in a layout no wider (8 bytes of offset for each text
