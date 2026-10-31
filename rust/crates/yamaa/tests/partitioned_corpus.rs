@@ -20,7 +20,8 @@
 //! [`FUNCTIONS`] with the reason.
 //!
 //! Every build runs on an engine that divides its driver input into
-//! one-record partitions, the division with the most partition boundaries.
+//! one-record partitions, the division with the most partition boundaries,
+//! four of them deriving at once (#4193).
 //! A plan whose steps are all partition-safe runs divided; a plan with a step
 //! that needs the whole table is refused, and runs again with the
 //! whole-table fallback. Either way, a positive benchmark reports no issue
@@ -43,8 +44,9 @@
 //! run's issues are its run's.
 //!
 //! Each benchmark runs again on an engine with key-bounded partitions over
-//! its two leading declared keys (#3763), one key group per partition, and
-//! the same holds of that run. Every benchmark the specifications show to
+//! its two leading declared keys (#3763), one key group per partition, one
+//! partition deriving at a time, and the same holds of that run: so a
+//! partitioned run gives the benchmark's output on one thread and on four. Every benchmark the specifications show to
 //! group its windows and aggregates by those keys is admitted: it runs with
 //! no fallback, divided where its input is grouped by those keys and as one
 //! partition where it is not; so is every benchmark of [`LOOKUPS`], which
@@ -645,9 +647,11 @@ struct Chains {
 /// writes its files, and the next entry and the submission read the
 /// artifacts that chain saved.
 fn reproduce(case: &Case, token: &CancellationToken) -> Option<Chains> {
-    let keyed = Partitions::by_keys(NonZeroUsize::new(2).unwrap(), NonZeroUsize::MIN);
+    let one = Partitions::new(NonZeroUsize::MIN).with_threads(NonZeroUsize::new(4).unwrap());
+    let keyed = Partitions::by_keys(NonZeroUsize::new(2).unwrap(), NonZeroUsize::MIN)
+        .with_threads(NonZeroUsize::MIN);
     let mut chains = Chains {
-        one: Chain::new(case, Some(Partitions::new(NonZeroUsize::MIN)))?,
+        one: Chain::new(case, Some(one))?,
         keyed: Chain::new(case, Some(keyed))?,
         whole: match case.needs_whole_table() {
             true => Some(Chain::new(case, None)?),

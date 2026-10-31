@@ -13,10 +13,14 @@
 //! them (`dataset::cut`).
 //!
 //! Each partition is then decoded, run through every derivation step as a
-//! whole-table run over its own records, and dropped before the next one is
-//! decoded: its row templates or its key grain, then its column phase. The
-//! run keeps each partition's candidate rows, and checks, keys and orders
-//! the candidates of every partition once, after the last partition.
+//! whole-table run over its own records, and dropped once its run ends: its
+//! row templates or its key grain, then its column phase. On one thread the
+//! run decodes each partition after the one before has run; on more, up to
+//! that many partitions run at once on threads of their own, and the
+//! calling thread takes their runs in partition order (`concurrent`,
+//! #4193). The run keeps each partition's candidate rows, and checks, keys
+//! and orders the candidates of every partition once, after the last
+//! partition.
 //!
 //! The first failure, the handler counts, the check records and the template
 //! rows are the whole-table run's. A partition's run passes the same
@@ -49,11 +53,16 @@ use crate::table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef};
 use crate::table_grouping::GroupingError;
 use std::num::NonZeroUsize;
 use std::ops::Range;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-/// The partitions of a driver input that a partitioned run decodes one at a
-/// time (#3830).
+mod concurrent;
+
+/// The partitions of a driver input that a partitioned run decodes in
+/// order, on the calling thread (#3830).
 pub trait PartitionSource {
-    /// A decoded partition.
+    /// A decoded partition, which a run derives on another thread when it
+    /// moves there ([`TableAccess::into_shared`], #4193).
     type Table: TableAccess;
     /// The schema every partition has.
     fn schema(&self) -> &TableSchema;
@@ -92,6 +101,22 @@ impl<T: TableAccess + ?Sized> TableAccess for RowRange<'_, T> {
         self.table
             .column(column)?
             .slice(self.start..self.start + self.rows)
+    }
+    /// The same records of the table as threads may share it, when they may.
+    fn into_shared<'s>(
+        self,
+    ) -> Result<Box<dyn TableAccess<Error = T::Error> + Send + Sync + 's>, Self>
+    where
+        Self: 's,
+    {
+        match self.table.shared() {
+            Some(table) => Ok(Box::new(RowRange {
+                table,
+                start: self.start,
+                rows: self.rows,
+            })),
+            None => Err(self),
+        }
     }
 }
 
@@ -146,6 +171,10 @@ pub(super) struct Marks {
     checks: Vec<(usize, Option<usize>)>,
     /// After how many marks each template completed.
     completed: Vec<usize>,
+    /// Raised once the run enters its second mark, past the first, the only
+    /// one at which a partition's run fails before it reads a record: the
+    /// first partition's verification of the intermediates (#4193).
+    opened: Option<Arc<AtomicBool>>,
     /// The rows an output admitted whole would hold at each of its
     /// capacity checks, after how many marks: one per template and for the
     /// key grain, which every partition's run makes in the same order.
@@ -164,6 +193,7 @@ impl Marks {
             checks: Vec::new(),
             completed: Vec::new(),
             capacity: Vec::new(),
+            opened: None,
         }
     }
 
@@ -219,6 +249,11 @@ impl<E> Run<'_, '_, E> {
         }
         marks.entered += 1;
         marks.coordinates = coordinates;
+        if marks.entered == 2 {
+            if let Some(opened) = marks.opened.take() {
+                opened.store(true, Ordering::Release);
+            }
+        }
         Ok(())
     }
 
@@ -325,6 +360,17 @@ impl<E> Part<E> {
         self.failure.as_ref().map(|_| self.marks.entered - 1)
     }
 
+    /// Whether this run, which stopped at mark `used`, is the run that stops
+    /// at `limit`, no later mark (#4193): one that failed before `limit`,
+    /// one that ended without entering it, or one that stopped there too.
+    fn holds_under(&self, used: usize, limit: usize) -> bool {
+        match self.failed_at() {
+            Some(mark) => mark < limit,
+            None if self.marks.limited => used == limit,
+            None => self.marks.entered <= limit,
+        }
+    }
+
     /// Its handler counts once every mark before `position` is done.
     fn counts_before(&self, position: usize) -> &HandlerMark {
         if position >= self.marks.entered {
@@ -369,6 +415,8 @@ struct Input<'d, T> {
     /// Whether the output is admitted whole, as a SAS or ODM driver
     /// input's is (D264).
     whole_output: bool,
+    /// How many partitions may derive at once (#4193).
+    threads: NonZeroUsize,
 }
 
 /// Where one partition's run runs (#3830).
@@ -388,14 +436,37 @@ struct Placement {
 /// mark.
 type Failure = Option<(usize, usize)>;
 
+/// The partitions a run derives and how it decodes them (#4193).
+struct Work<'w, T> {
+    ranges: &'w [Range<usize>],
+    schema: &'w TableSchema,
+    decode: &'w mut dyn FnMut(usize, Range<usize>) -> Option<T>,
+}
+
+/// Every partition's run and the first failure among them, or none when the
+/// run was cancelled or a partition did not decode.
+type Derived<E> = Option<(Vec<Part<E>>, Failure)>;
+
+/// The other inputs of a run as threads share them (#4193).
+type Shared<'s, E> = [&'s (dyn TableAccess<Error = E> + Sync)];
+
+/// The other inputs `shared` names, as a run reads them.
+fn plain<'s, E>(shared: &Shared<'s, E>) -> Vec<&'s dyn TableAccess<Error = E>> {
+    shared
+        .iter()
+        .map(|&table| table as &dyn TableAccess<Error = E>)
+        .collect()
+}
+
 impl ResolvedPlan {
     /// Execute the driver input a partition at a time (#3830): each
     /// partition of `source` is decoded when the run reaches it and dropped
-    /// before the next one is decoded, so the run holds at most one decoded
-    /// partition of its driver input. Its records keep their positions in
-    /// the whole input, which every partition holds in order; `keys` names
-    /// the leading declared keys no partition splits a group of, zero for
-    /// consecutive records (#3763).
+    /// once its run ends, so the run holds as many decoded partitions of its
+    /// driver input as derive at once, and one more decoded ahead (#4193).
+    /// Its records keep their positions in the whole input, which every
+    /// partition holds in order; `keys` names the leading declared keys no
+    /// partition splits a group of, zero for consecutive records (#3763),
+    /// and up to `threads` partitions derive at once.
     ///
     /// Admission checks each partition within the row and cell limits on its
     /// own (#3792), every other source whole, and the partitions' schema,
@@ -417,7 +488,7 @@ impl ResolvedPlan {
         functions: &mut dyn FunctionPort<Error = <P::Table as TableAccess>::Error>,
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
         cancelled: &dyn Fn() -> bool,
-        keys: usize,
+        (keys, threads): (usize, NonZeroUsize),
     ) -> ExecutionAttempt<<P::Table as TableAccess>::Error> {
         let schema = source.schema().clone();
         let admitted = source.ranges().to_vec();
@@ -429,6 +500,7 @@ impl ResolvedPlan {
             decode: &mut decode,
             keys: keys.min(self.keys().len()),
             whole_output: false,
+            threads,
         };
         self.run_divided(input, secondary, functions, observer, cancelled)
     }
@@ -436,7 +508,8 @@ impl ResolvedPlan {
     /// Execute `table` whole, or divided as `partitioning` asks: into
     /// consecutive partitions of its `rows` records (#3697), or into
     /// key-bounded partitions over its leading `keys` declared keys (#3763),
-    /// one partition at a time ([`Self::execute_partitioned`]).
+    /// up to `partitioning.threads` partitions at once
+    /// ([`Self::execute_partitioned`]).
     ///
     /// Partitions are cut between runs of records whose [`Self::cut_fields`]
     /// hold equal values, each holding as many whole runs as fit in `rows`
@@ -463,14 +536,16 @@ impl ResolvedPlan {
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
         cancelled: &dyn Fn() -> bool,
     ) -> ExecutionAttempt<T::Error> {
+        let whole =
+            |functions, observer| self.execute(table, secondary, functions, observer, cancelled);
         let Some(partitioning) = partitioning else {
-            return self.execute(table, secondary, functions, observer, cancelled);
+            return whole(functions, observer);
         };
         let keys = partitioning
             .leading_keys
             .map_or(0, |keys| keys.get().min(self.keys().len()));
         if partitioning.whole_table_fallback && self.whole_table_step(keys).is_some() {
-            return self.execute(table, secondary, functions, observer, cancelled);
+            return whole(functions, observer);
         }
         let rows = table.row_count();
         let size = partitioning.rows;
@@ -500,6 +575,7 @@ impl ResolvedPlan {
             decode: &mut decode,
             keys,
             whole_output: partitioning.whole_output,
+            threads: partitioning.threads,
         };
         self.run_divided(input, secondary, functions, observer, cancelled)
     }
@@ -565,50 +641,120 @@ impl ResolvedPlan {
             },
         ));
         observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
-        let width = self.region(RegionId::DATASET).output.columns().len();
-        let mut parts = Vec::with_capacity(ranges.len());
+        let work = Work {
+            ranges: &ranges,
+            schema: input.schema,
+            decode: input.decode,
+        };
+        let threads = input.threads.get().min(ranges.len());
+        // A plan that calls the host runs on the calling thread (FUNC-8);
+        // none is partitioned today, since such a step needs the whole table.
+        // So does a run over another input that threads may not share.
+        let others = outer.secondary;
+        let shared: Option<Vec<_>> = others.iter().map(|&table| table.shared()).collect();
+        let derived = match shared {
+            Some(shared) if threads > 1 && self.functions().is_empty() => {
+                self.derive_concurrently(outer, work, (&shared, threads), observer)?
+            }
+            _ => self.derive_serially(outer, work, observer)?,
+        };
+        match derived {
+            Some((parts, failure)) => self.combine(outer, parts, failure, observer),
+            None => Ok(Found::cancelled()),
+        }
+    }
+
+    /// Run each partition in turn on the calling thread (#3830): decoded
+    /// when the run reaches it and dropped before the next is decoded.
+    fn derive_serially<T: TableAccess>(
+        &self,
+        outer: &mut Run<'_, '_, T::Error>,
+        work: Work<'_, T>,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> Result<Derived<T::Error>, Fail<T::Error>> {
+        let mut parts = Vec::with_capacity(work.ranges.len());
         let mut failure: Failure = None;
-        for (index, range) in ranges.iter().enumerate() {
+        for (index, range) in work.ranges.iter().enumerate() {
             let limit = failure.map_or(usize::MAX, |(_, mark)| mark);
-            if limit == 0 {
-                parts.push(Part::passed(range.start, width, outer.handlers.mark()));
-                continue;
-            }
-            observer(ExecutionEvent::Partition {
-                number: index + 1,
-                records: range.len(),
-            });
-            let Some(table) = (input.decode)(index, range.clone()) else {
-                return Ok(Found::cancelled());
-            };
-            if table.schema() != input.schema {
-                return Err(Box::new(ExecutionError::SchemaMismatch));
-            }
-            let part = self.run_partition(
-                (&table, outer.secondary),
-                &mut *outer.functions,
-                outer.cancelled,
-                Placement {
-                    records: range.start,
-                    first: index == 0,
-                    limit,
-                    output_partition: outer.output_partition,
-                },
-            );
-            drop(table);
-            let Some(part) = part else {
-                return Ok(Found::cancelled());
+            let part = match limit {
+                0 => self.passed(outer, range.start),
+                _ => {
+                    observer(ExecutionEvent::Partition {
+                        number: index + 1,
+                        records: range.len(),
+                    });
+                    match self.decode_and_run(
+                        outer,
+                        &mut *work.decode,
+                        (work.schema, work.ranges),
+                        (index, limit),
+                    )? {
+                        Some(part) => part,
+                        None => return Ok(None),
+                    }
+                }
             };
             if let Some(mark) = part.failed_at() {
                 failure = Some((index, mark));
             }
             parts.push(part);
         }
-        self.combine(outer, parts, failure, observer)
+        Ok(Some((parts, failure)))
+    }
+
+    /// A partition after a failure at the first mark, which the run neither
+    /// decodes nor reports.
+    fn passed<E, F>(&self, outer: &Run<'_, '_, F>, records: usize) -> Part<E> {
+        let width = self.region(RegionId::DATASET).output.columns().len();
+        Part::passed(records, width, outer.handlers.mark())
+    }
+
+    /// Decode partition `index` and run it on the calling thread, stopping
+    /// at `limit`; none when the run was cancelled or the partition did not
+    /// decode.
+    fn decode_and_run<T: TableAccess>(
+        &self,
+        outer: &mut Run<'_, '_, T::Error>,
+        decode: &mut dyn FnMut(usize, Range<usize>) -> Option<T>,
+        (schema, ranges): (&TableSchema, &[Range<usize>]),
+        (index, limit): (usize, usize),
+    ) -> Result<Option<Part<T::Error>>, Fail<T::Error>> {
+        let range = ranges[index].clone();
+        let Some(table) = decode(index, range.clone()) else {
+            return Ok(None);
+        };
+        if table.schema() != schema {
+            return Err(Box::new(ExecutionError::SchemaMismatch));
+        }
+        Ok(self.run_here(outer, &table, (range.start, index == 0, limit)))
+    }
+
+    /// Run the decoded partition `table`, whose first record is at
+    /// `records`, on the calling thread, stopping at `limit`; none when the
+    /// run was cancelled.
+    fn run_here<E>(
+        &self,
+        outer: &mut Run<'_, '_, E>,
+        table: &dyn TableAccess<Error = E>,
+        (records, first, limit): (usize, bool, usize),
+    ) -> Option<Part<E>> {
+        let placement = Placement {
+            records,
+            first,
+            limit,
+            output_partition: outer.output_partition,
+        };
+        self.run_partition(
+            (table, outer.secondary),
+            &mut *outer.functions,
+            outer.cancelled,
+            (placement, None),
+        )
     }
 
     /// Run one partition, `primary`, through every derivation step, placed
-    /// as `placement` says (#3830). None when the run was cancelled.
+    /// as `placement` says, raising `opened` once it enters its second mark
+    /// (#3830, #4193). None when the run was cancelled.
     fn run_partition<'b, E>(
         &self,
         (primary, secondary): (
@@ -617,7 +763,7 @@ impl ResolvedPlan {
         ),
         functions: &'b mut dyn FunctionPort<Error = E>,
         cancelled: &'b dyn Fn() -> bool,
-        placement: Placement,
+        (placement, opened): (Placement, Option<Arc<AtomicBool>>),
     ) -> Option<Part<E>> {
         let Placement {
             records,
@@ -627,7 +773,9 @@ impl ResolvedPlan {
         } = placement;
         let mut run = Run::new(self, (primary, secondary), functions, cancelled);
         run.output_partition = output_partition;
-        run.marks = Some(Marks::new(limit, first));
+        let mut marks = Marks::new(limit, first);
+        marks.opened = opened;
+        run.marks = Some(marks);
         let mut frame = Frame::new(self.region(RegionId::DATASET).output.columns().len());
         let mut checked = Vec::new();
         let mut templates = Vec::new();
@@ -635,7 +783,8 @@ impl ResolvedPlan {
         if run.stopped.get() {
             return None;
         }
-        let marks = run.marks.take().expect("a partition's run has marks");
+        let mut marks = run.marks.take().expect("a partition's run has marks");
+        marks.opened = None;
         let failure = match result {
             Ok(()) => None,
             Err(_) if marks.limited => None,

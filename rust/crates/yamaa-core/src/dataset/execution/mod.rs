@@ -86,12 +86,19 @@ pub enum Division {
 /// cell limits refuse it as they refuse the whole-table run's output. A run
 /// whose driver input is SAS or ODM sets it, since those limits bound such
 /// an input whole (`specification_run`).
+///
+/// Up to `threads` partitions derive at once (#4193), each on a thread of
+/// its own, while the calling thread decodes the next partitions, polls the
+/// cancellation probe and reports progress; the attempt, its events in
+/// order, and every count are a run on one thread's. A plan that calls a
+/// project function runs on the calling thread alone (FUNC-8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitioning {
     pub rows: std::num::NonZeroUsize,
     pub leading_keys: Option<std::num::NonZeroUsize>,
     pub whole_table_fallback: bool,
     pub whole_output: bool,
+    pub threads: std::num::NonZeroUsize,
 }
 
 /// Fixed boundary failures remain distinct from normative language conditions.

@@ -74,13 +74,15 @@ fn stage(scratch: &Scratch, records: usize) -> (String, usize) {
 /// before.
 type Polls = Arc<Mutex<Vec<(isize, isize)>>>;
 
-/// An engine over key-bounded partitions of at most `rows` records, and a
-/// token whose every poll ends a count.
+/// An engine over key-bounded partitions of at most `rows` records, one
+/// deriving at a time, since the allocator counts the run's own thread
+/// alone, and a token whose every poll ends a count.
 fn polled(rows: usize) -> (Engine, CancellationToken, Polls) {
     let partitions = Partitions::by_keys(
         NonZeroUsize::new(2).unwrap(),
         NonZeroUsize::new(rows).unwrap(),
-    );
+    )
+    .with_threads(NonZeroUsize::MIN);
     let engine = Engine::new(
         EngineOptions::new(HostLanguage::Python, "yamaa".into(), "0".into())
             .with_partitions(partitions),

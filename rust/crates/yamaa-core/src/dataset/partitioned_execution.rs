@@ -15,7 +15,9 @@
 //! values, their order, the handler counts, the check records and the first
 //! failure a whole-table run produces. Each plan runs whole and over every
 //! listed division of its input, empty partitions included, and every run
-//! must equal the one authored attempt.
+//! must equal the one authored attempt. Every divided run also runs with
+//! four partitions deriving at once (#4193), which must give the same
+//! attempt as one at a time.
 use super::execution::{
     CheckRecord, Dataset, Execution, ExecutionAttempt, ExecutionError, ExecutionEvent,
     ExecutionPhase, RowIdentity, TemplateRows,
@@ -34,6 +36,9 @@ use crate::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
 use crate::value::{ColumnType, Value, ValueType};
 use std::cell::Cell;
 use std::convert::Infallible;
+use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 fn schema(columns: &[(&str, ColumnType)]) -> TableSchema {
     TableSchema::new(
@@ -100,14 +105,14 @@ fn identity(position: usize, key: i64) -> RowIdentity {
 struct Rows {
     schema: TableSchema,
     rows: Vec<Vec<Value>>,
-    reads: Cell<usize>,
+    reads: AtomicUsize,
 }
 impl Rows {
     fn new(schema: TableSchema, rows: Vec<Vec<Value>>) -> Self {
         Self {
             schema,
             rows,
-            reads: Cell::new(0),
+            reads: AtomicUsize::new(0),
         }
     }
 }
@@ -120,12 +125,15 @@ impl TableAccess for Rows {
         self.rows.len()
     }
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
-        self.reads.set(self.reads.get() + 1);
+        self.reads.fetch_add(1, Ordering::Relaxed);
         self.rows
             .get(row)
             .and_then(|values| values.get(column))
             .map(ValueRef::from)
             .ok_or(CellError::OutOfBounds { row, column })
+    }
+    fn shared(&self) -> Option<&(dyn TableAccess<Error = Infallible> + Sync)> {
+        Some(self)
     }
 }
 
@@ -143,6 +151,13 @@ fn divisions(rows: usize) -> Vec<Vec<usize>> {
 /// The secondary inputs of a run, which no partitioning divides.
 type Secondary<'a> = [&'a dyn TableAccess<Error = Infallible>];
 
+/// The partitions deriving at once that every divided run is checked under,
+/// against one at a time (#4193).
+const FOUR: NonZeroUsize = match NonZeroUsize::new(4) {
+    Some(four) => four,
+    None => unreachable!(),
+};
+
 /// `input` divided into consecutive partitions of `sizes` records, each
 /// decoded as a copy of its records when the run asks for it (#3830). It
 /// counts the partitions it decoded and the most that were alive at once.
@@ -150,7 +165,7 @@ struct Source<'i> {
     input: &'i Rows,
     ranges: Vec<std::ops::Range<usize>>,
     decoded: usize,
-    live: std::rc::Rc<Cell<usize>>,
+    live: Arc<AtomicUsize>,
     most: usize,
 }
 impl<'i> Source<'i> {
@@ -168,7 +183,7 @@ impl<'i> Source<'i> {
             input,
             ranges,
             decoded: 0,
-            live: std::rc::Rc::default(),
+            live: Arc::default(),
             most: 0,
         }
     }
@@ -183,12 +198,12 @@ impl super::PartitionSource for Source<'_> {
     }
     fn decode(&mut self, index: usize) -> Option<Decoded> {
         self.decoded += 1;
-        self.live.set(self.live.get() + 1);
-        self.most = self.most.max(self.live.get());
+        let live = self.live.fetch_add(1, Ordering::Relaxed) + 1;
+        self.most = self.most.max(live);
         let rows = self.input.rows[self.ranges[index].clone()].to_vec();
         Some(Decoded {
             rows: Rows::new(self.input.schema.clone(), rows),
-            live: std::rc::Rc::clone(&self.live),
+            live: Arc::clone(&self.live),
         })
     }
 }
@@ -196,11 +211,11 @@ impl super::PartitionSource for Source<'_> {
 /// One decoded partition, alive until the run drops it.
 struct Decoded {
     rows: Rows,
-    live: std::rc::Rc<Cell<usize>>,
+    live: Arc<AtomicUsize>,
 }
 impl Drop for Decoded {
     fn drop(&mut self) {
-        self.live.set(self.live.get() - 1);
+        self.live.fetch_sub(1, Ordering::Relaxed);
     }
 }
 impl TableAccess for Decoded {
@@ -214,23 +229,40 @@ impl TableAccess for Decoded {
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
         self.rows.cell(row, column)
     }
+    fn shared(&self) -> Option<&(dyn TableAccess<Error = Infallible> + Sync)> {
+        Some(self)
+    }
+    fn into_shared<'t>(
+        self,
+    ) -> Result<Box<dyn TableAccess<Error = Infallible> + Send + Sync + 't>, Self>
+    where
+        Self: 't,
+    {
+        Ok(Box::new(self))
+    }
 }
 
-/// One partitioned attempt over `input` divided into `sizes`.
+/// One partitioned attempt over `input` divided into `sizes`, the same with
+/// one partition deriving at a time and with four at once.
 fn partitioned(
     plan: &super::ResolvedPlan,
     input: &Rows,
     secondary: &Secondary<'_>,
     sizes: &[usize],
 ) -> ExecutionAttempt<Infallible> {
-    plan.execute_partitioned(
-        &mut Source::new(input, sizes),
-        secondary,
-        &mut NoFunctions::new(),
-        None,
-        &|| false,
-        0,
-    )
+    let run = |threads| {
+        plan.execute_partitioned(
+            &mut Source::new(input, sizes),
+            secondary,
+            &mut NoFunctions::new(),
+            None,
+            &|| false,
+            (0, threads),
+        )
+    };
+    let attempt = run(NonZeroUsize::MIN);
+    assert_eq!(run(FOUR), attempt, "partitions {sizes:?} on four threads");
+    attempt
 }
 
 /// Consecutive partitions of at most `rows` records (#3697), with or
@@ -241,6 +273,7 @@ fn consecutive(rows: usize, fallback: bool) -> Option<Partitioning> {
         leading_keys: None,
         whole_table_fallback: fallback,
         whole_output: false,
+        threads: NonZeroUsize::MIN,
     })
 }
 
@@ -1016,7 +1049,7 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
         &mut NoFunctions::new(),
         Some(&mut observe),
         &|| false,
-        0,
+        (0, NonZeroUsize::MIN),
     );
     let expected = ExecutionAttempt {
         result: Err(Box::new(ExecutionError::PartitionGlobal {
@@ -1091,7 +1124,7 @@ fn a_source_with_another_schema_fails_admission() {
         &mut NoFunctions::new(),
         None,
         &|| false,
-        0,
+        (0, NonZeroUsize::MIN),
     );
     let zero = |spec_path: &str| HandlerCount {
         spec_path: spec_path.into(),
@@ -1127,7 +1160,7 @@ fn a_partitioned_run_holds_one_decoded_partition_at_a_time() {
             &mut NoFunctions::new(),
             None,
             &|| false,
-            0,
+            (0, NonZeroUsize::MIN),
         );
         assert_eq!(
             (as_stated(attempt), source.most, source.decoded),
@@ -1236,7 +1269,7 @@ fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
             &mut NoFunctions::new(),
             Some(observe),
             &|| probe.cancelled(),
-            0,
+            (0, NonZeroUsize::MIN),
         )
     };
     let probe = Probe::new(None);
@@ -1247,6 +1280,137 @@ fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
     );
     assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
     assert_cancelled_at_every_poll(&run, (5, derivation, total));
+}
+
+/// The events of `run`, with its attempt.
+fn observed_run(
+    run: impl FnOnce(&mut dyn FnMut(ExecutionEvent)) -> ExecutionAttempt<Infallible>,
+) -> (ExecutionAttempt<Infallible>, Vec<ExecutionEvent>) {
+    let mut events = Vec::new();
+    let attempt = run(&mut |event| events.push(event));
+    (attempt, events)
+}
+
+/// Four partitions deriving at once report what one at a time reports
+/// (#4193): the same events in the same order, each partition the serial
+/// run decodes reported once, in order, and the same attempt. [`graded`]
+/// over five one-record partitions reports partitions 1 to 5 and succeeds;
+/// [`conversions`] over a, a, then b, under its two keys, reports both
+/// partitions and fails in the first, at a2's 3.5, so the second partition's
+/// run stops where the first failed.
+#[test]
+fn a_run_on_four_threads_reports_the_events_and_attempt_of_a_run_on_one() {
+    let (plan, input) = graded();
+    let resolved = plan.resolve().unwrap();
+    let run = |threads| {
+        observed_run(|observe| {
+            resolved.execute_partitioned(
+                &mut Source::new(&input, &[1; 5]),
+                &[],
+                &mut NoFunctions::new(),
+                Some(observe),
+                &|| false,
+                (0, threads),
+            )
+        })
+    };
+    let (one, events) = run(NonZeroUsize::MIN);
+    let partitions: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            ExecutionEvent::Partition { number, records } => Some((*number, *records)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        partitions,
+        [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1)],
+        "the partitions one thread reports"
+    );
+    assert_eq!(run(FOUR), (one, events), "graded on four threads");
+    assert_eq!(
+        as_stated(run(NonZeroUsize::MIN).0),
+        graded_attempt(),
+        "graded on one thread"
+    );
+    let (plan, input) = conversions(&[("a", 1, 0.5, 1.0), ("a", 2, 1.5, 3.5), ("b", 1, 1.0, 2.5)]);
+    let resolved = plan.resolve().unwrap();
+    let run = |threads| {
+        observed_run(|observe| {
+            resolved.execute_divided(
+                by_keys(2, 1, false).map(|partitioning| Partitioning {
+                    threads,
+                    ..partitioning
+                }),
+                &input,
+                &[],
+                &mut NoFunctions::new(),
+                Some(observe),
+                &|| false,
+            )
+        })
+    };
+    let one = run(NonZeroUsize::MIN);
+    assert!(
+        one.1.contains(&ExecutionEvent::Partition {
+            number: 2,
+            records: 1
+        }),
+        "one thread reports the second partition: {:?}",
+        one.1
+    );
+    assert_eq!(run(FOUR), one, "conversions on four threads");
+}
+
+/// Four partitions deriving at once poll the probe on the calling thread
+/// alone, which the probe's `Cell` holds it to (#4193): at admission, then
+/// each time the calling thread hands out a partition or waits for one,
+/// so at least once for each of [`graded`]'s five one-record partitions and
+/// once more before the run combines them. Cancelled at any of its first
+/// six polls, the run keeps nothing, polls no more, and its observer exits
+/// admission at the first poll and derivation at the others.
+#[test]
+fn a_run_on_four_threads_cancelled_in_derivation_keeps_nothing_and_names_its_phase() {
+    let (plan, input) = graded();
+    let resolved = plan.resolve().unwrap();
+    for from in 1..=6 {
+        let probe = Probe::new(Some(from));
+        let (attempt, events) = observed_run(|observe| {
+            resolved.execute_partitioned(
+                &mut Source::new(&input, &[1; 5]),
+                &[],
+                &mut NoFunctions::new(),
+                Some(observe),
+                &|| probe.cancelled(),
+                (0, FOUR),
+            )
+        });
+        let phase = match from {
+            1 => ExecutionPhase::Admission,
+            _ => ExecutionPhase::Derivation,
+        };
+        let expected = ExecutionAttempt {
+            result: Err(Box::new(ExecutionError::Cancelled)),
+            handler_counts: Vec::new(),
+            retained_verifications: Vec::new(),
+            template_rows: Vec::new(),
+        };
+        assert_eq!(
+            (attempt, probe.polls.get(), &events[events.len() - 2..]),
+            (
+                expected,
+                from,
+                &[
+                    ExecutionEvent::Exit {
+                        phase,
+                        outcome: Outcome::Failed,
+                    },
+                    ExecutionEvent::Phase(ExecutionPhase::Finished),
+                ][..]
+            ),
+            "cancelled at poll {from}: the attempt, the polls and the phase it exits"
+        );
+    }
 }
 
 /// A function port that counts its calls and answers each with 0.
@@ -1397,24 +1561,41 @@ fn by_keys(keys: usize, rows: usize, fallback: bool) -> Option<Partitioning> {
         leading_keys: std::num::NonZeroUsize::new(keys),
         whole_table_fallback: fallback,
         whole_output: false,
+        threads: NonZeroUsize::MIN,
     })
 }
 
-/// One run of `input` divided as `partitioning` asks.
+/// One run of `input` divided as `partitioning` asks, polling `cancelled`;
+/// unless it was cancelled, the same with four partitions deriving at once.
 fn divided_run(
     plan: &super::ResolvedPlan,
     input: &Rows,
     partitioning: Option<Partitioning>,
     cancelled: &dyn Fn() -> bool,
 ) -> ExecutionAttempt<Infallible> {
-    plan.execute_divided(
-        partitioning,
-        input,
-        &[],
-        &mut NoFunctions::new(),
-        None,
-        cancelled,
-    )
+    let run = |partitioning, cancelled: &dyn Fn() -> bool| {
+        plan.execute_divided(
+            partitioning,
+            input,
+            &[],
+            &mut NoFunctions::new(),
+            None,
+            cancelled,
+        )
+    };
+    let attempt = run(partitioning, cancelled);
+    let four = partitioning.map(|partitioning| Partitioning {
+        threads: FOUR,
+        ..partitioning
+    });
+    if !matches!(&attempt.result, Err(error) if **error == ExecutionError::Cancelled) {
+        assert_eq!(
+            run(four, &|| false),
+            attempt,
+            "{partitioning:?} on four threads"
+        );
+    }
+    attempt
 }
 
 /// An aggregate `expr` of `relation`, whose `V` reads its records' column
@@ -1624,7 +1805,7 @@ fn subject_windows_and_aggregates_have_their_whole_table_results_over_key_bounde
             "{keys} keys, at most {rows} records, fallback {fallback}"
         );
     }
-    input.reads.set(0);
+    input.reads.store(0, Ordering::Relaxed);
     let refused = ExecutionAttempt {
         result: Err(Box::new(ExecutionError::PartitionGlobal {
             path: "columns.C4.derivation".into(),
@@ -1636,7 +1817,7 @@ fn subject_windows_and_aggregates_have_their_whole_table_results_over_key_bounde
     assert_eq!(
         (
             divided_run(&resolved, &input, by_keys(3, 1, false), &|| false),
-            input.reads.get(),
+            input.reads.load(Ordering::Relaxed),
         ),
         (refused, 0),
         "three keys without the fallback, and the cells it read"
@@ -1941,10 +2122,10 @@ fn a_run_cancelled_between_key_bounded_partitions_keeps_nothing_and_names_its_ph
     );
     assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
     assert_cancelled_at_every_poll(&run, (3, derivation, total));
-    input.reads.set(0);
+    input.reads.store(0, Ordering::Relaxed);
     run(&Probe::new(Some(1)), &mut |_| {});
     assert_eq!(
-        input.reads.get(),
+        input.reads.load(Ordering::Relaxed),
         0,
         "cells read when cancelled at admission"
     );

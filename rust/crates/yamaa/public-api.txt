@@ -318,7 +318,9 @@ yamaa::engine::Partitions::by_keys: pub fn by_keys(keys: NonZeroUsize, rows: Non
 yamaa::engine::Partitions::leading_keys: pub leading_keys: Option<NonZeroUsize>
 yamaa::engine::Partitions::new: pub fn new(rows: NonZeroUsize) -> Self
 yamaa::engine::Partitions::rows: pub rows: NonZeroUsize
+yamaa::engine::Partitions::threads: pub threads: NonZeroUsize
 yamaa::engine::Partitions::whole_table_fallback: pub whole_table_fallback: bool
+yamaa::engine::Partitions::with_threads: pub fn with_threads(mut self, threads: NonZeroUsize) -> Self
 yamaa::engine::Partitions::with_whole_table_fallback: pub fn with_whole_table_fallback(mut self) -> Self
 yamaa::error::Failure: impl Failure
 yamaa::error::Failure: impl std::error::Error for Failure
