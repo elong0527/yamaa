@@ -1328,6 +1328,7 @@ dependencies = [
 name = "yamaa-adapters"
 version = "0.7.0"
 dependencies = [
+ "ahash",
  "arrow-array",
  "arrow-buffer",
  "arrow-ipc",

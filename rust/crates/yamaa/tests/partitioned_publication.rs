@@ -8,8 +8,8 @@
 //! Every single-specification benchmark already saves its files over
 //! one-record partitions in `partitioned_corpus.rs`, so each output of a CSV
 //! or Parquet driver is written one record at a time there. Here a Parquet
-//! output of several row groups is saved in partitions that divide no row
-//! group of the writer's 1,024 rows, a run whose check fires in two
+//! output of two row groups is saved in partitions that divide no row group
+//! of the writer's 131,072 rows, a run whose check fires in two
 //! partitions saves the whole-table run report, authored from the run
 //! report's columns, an output beyond the row limit saves a partition at a
 //! time, and a SAS driver's output beyond it is refused as the whole-table
@@ -53,30 +53,39 @@ fn saved(spec: &Path, partitions: Option<Partitions>) -> (usize, BTreeMap<String
     (rows, files)
 }
 
-/// A Parquet output of 2,500 rows saved in partitions of seven records, a
-/// size that divides no row group of the writer's 1,024 rows, has the
-/// whole-table run's bytes, its row groups of 1,024, 1,024 and 452 rows
-/// included (D160, D264). The corpus's one Parquet benchmark,
-/// `schema-parquet`, has two output rows, fewer than any such size, and
-/// saves its files over one-record partitions in `partitioned_corpus.rs`.
+/// A Parquet output of 131,100 rows, one row group of the writer's 131,072
+/// rows and 28 more, saved in partitions of 1,000 records, a size that
+/// divides no row group, reads back as the whole-table run's: the same
+/// fields, rows and values (D264, D305), not the same bytes. The corpus's
+/// Parquet benchmarks have fewer output rows than a row group, and save
+/// their files over one-record partitions in `partitioned_corpus.rs`.
 #[cfg(feature = "parquet")]
 #[test]
-fn a_parquet_output_saved_in_partitions_that_divide_no_row_group_has_the_whole_tables_bytes() {
+fn a_parquet_output_saved_in_partitions_that_divide_no_row_group_reads_back_as_the_whole_table() {
     use std::fmt::Write as _;
     const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float}}}\noutput: {path: out.parquet, columns: [ID, NAME, V]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n  - {name: V, type: float, derivation: SRC.V}\n";
     let mut input = String::from("ID,NAME,V\n");
-    for id in 1..=2_500 {
+    for id in 1..=131_100 {
         writeln!(input, "{id},name {id},{}.5", id % 97).unwrap();
     }
-    let seven = Partitions::new(NonZeroUsize::new(7).unwrap());
-    let [whole, divided] = [None, Some(seven)].map(|partitions| {
+    let thousand = Partitions::new(NonZeroUsize::new(1_000).unwrap());
+    let [whole, divided] = [None, Some(thousand)].map(|partitions| {
         let scratch = Scratch::new("partitioned-publication-parquet");
         scratch.write("spec.yaml", SPEC);
         scratch.write("input.csv", &input);
-        saved(&scratch.join("spec.yaml"), partitions)
+        let (rows, files) = saved(&scratch.join("spec.yaml"), partitions);
+        let files: BTreeMap<String, _> = files
+            .into_iter()
+            .map(|(name, bytes)| (name, crate::support::parquet_values(&bytes)))
+            .collect();
+        (rows, files)
     });
-    assert_eq!(whole.0, 2_500, "the whole-table run's rows");
-    assert_eq!(divided, whole, "partitions of seven records");
+    assert_eq!(whole.0, 131_100, "the whole-table run's rows");
+    assert!(
+        whole.1.values().all(Option::is_some),
+        "the whole-table run's files read back"
+    );
+    assert!(divided == whole, "partitions of 1,000 records");
 }
 
 /// A range check on AGE fires for ID 1, aged 17, and ID 4, aged 101: in each

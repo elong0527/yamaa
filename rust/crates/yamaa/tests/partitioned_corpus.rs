@@ -28,9 +28,9 @@
 //! benchmark's first issue, its entries' or else its submission's, holds
 //! every field its `expected/error.yaml` states, context included, and every
 //! issue equals the whole-table run's, its staged path aside. A Parquet
-//! file has no byte guarantee (PARQUET-4), so it equals the whole-table run's
-//! file instead, which the hosts' conformance checks compare with the
-//! expected file's content. Each engine builds in a staged copy of its own,
+//! file has no byte guarantee (PARQUET-4, D305), so it reads back as the
+//! whole-table run's file instead, which the hosts' conformance checks
+//! compare with the expected file's content. Each engine builds in a staged copy of its own,
 //! so a later entry and the submission read the artifacts that engine's
 //! builds saved; a submission composes from them, so partitions reach a
 //! Define or transport file only through the builds.
@@ -703,12 +703,17 @@ fn problems(case: &Case, chain: &Chain, whole: Option<&Chain>) -> Vec<String> {
             continue;
         }
         unstated.remove(&name);
-        let expected = if name.ends_with(".parquet") {
-            whole.and_then(|whole| whole.saved.get(&name).cloned())
+        let same = if name.ends_with(".parquet") {
+            // A Parquet file keeps its values, not its bytes (D305).
+            let values = |saved: Option<&Vec<u8>>| {
+                saved.and_then(|bytes| crate::support::parquet_values(bytes))
+            };
+            let expected = values(whole.and_then(|whole| whole.saved.get(&name)));
+            expected.is_some() && values(chain.saved.get(&name)) == expected
         } else {
-            Some(std::fs::read(&file).unwrap())
+            chain.saved.get(&name) == Some(&std::fs::read(&file).unwrap())
         };
-        if expected.is_none() || chain.saved.get(&name) != expected.as_ref() {
+        if !same {
             problems.push(format!("{name} differs from what the benchmark states"));
         }
     }

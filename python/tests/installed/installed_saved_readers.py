@@ -91,11 +91,6 @@ class SavedReaders(unittest.TestCase):
         self.assertEqual(timestamp["timeUnit"], "microseconds")
         for i in range(7):
             self.assertEqual(reader.schema.column(i).max_definition_level, 1)
-            for row_group in range(reader.metadata.num_row_groups):
-                self.assertEqual(
-                    reader.metadata.row_group(row_group).column(i).compression,
-                    "UNCOMPRESSED",
-                )
         self.assert_values(reader.read().to_pydict(), empty=empty)
 
     def read_csv(self, saved, *, empty):

@@ -614,13 +614,14 @@ Release candidates are not covered: the freeze starts at 1.0.0 (#3030 D1).
   major release. Every item that names an Arrow type sits behind the
   facade's default `arrow` feature, so an embedder that builds without it
   opts out of the coupled surface (#4081).
-- Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
-  version 5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an
-  admitted project and its inputs, on every supported platform. The Parquet
-  profile asks only that a file read back the same
-  ([PARQUET-4](../../rules/reference/parquet.md#parquet-4)); yamaa keeps its
-  bytes too, including `created_by`, which is `parquet-rs version 55.2.0` in
-  every 1.x release (#3030 D160).
+- Saved artifacts: the bytes each profile writes (CSV, SAS Transport version
+  5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an admitted
+  project and its inputs, on every supported platform, and the values each
+  Parquet file reads back as
+  ([PARQUET-4](../../rules/reference/parquet.md#parquet-4)). A Parquet file's
+  bytes are not kept: its encoding, compression, page and row-group sizes,
+  statistics and `created_by` may change in any 1.x release (#4184 D305,
+  which reverses that part of #3030 D160).
 - Printed text: the labels, order and separators of every summary line (a
   run's, a project run's, a submission's, a check's and a selftest's, with
   its `first failure:`, `not covered:` and information lines), the layout of

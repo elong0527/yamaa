@@ -86,7 +86,7 @@ change only what the row and cell limits bound: each partition of a divided
 input and its output, and the whole table everywhere else.
 
 Fails: `engine_rejected`.
-Evidence: `rust/tests/host-fixtures/cases.json::partitioned-default`, `rust/tests/host-fixtures/cases.json::longitudinal-capacity`, `rust/crates/yamaa/tests/partitioned_corpus.rs::partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_functions`, `rust/crates/yamaa/tests/partitioned_reading.rs::every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_partition`, `rust/crates/yamaa/tests/partitioned_publication.rs::a_parquet_output_saved_in_partitions_that_divide_no_row_group_has_the_whole_tables_bytes`, `rust/crates/yamaa/tests/partitioned_publication.rs::the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table_run_refuses_it`, `rust/crates/yamaa/tests/partitioned_confinement.rs::a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_back`.
+Evidence: `rust/tests/host-fixtures/cases.json::partitioned-default`, `rust/tests/host-fixtures/cases.json::longitudinal-capacity`, `rust/crates/yamaa/tests/partitioned_corpus.rs::partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_functions`, `rust/crates/yamaa/tests/partitioned_reading.rs::every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_partition`, `rust/crates/yamaa/tests/partitioned_publication.rs::a_parquet_output_saved_in_partitions_that_divide_no_row_group_reads_back_as_the_whole_table`, `rust/crates/yamaa/tests/partitioned_publication.rs::the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table_run_refuses_it`, `rust/crates/yamaa/tests/partitioned_confinement.rs::a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_back`.
 
 A run divides only a CSV or Parquet driver input that is its specification's
 only input, and only when no step needs the whole table. A step needs the whole
@@ -103,7 +103,8 @@ keyed `[STUDYID, USUBJID, ...]` omits `STUDYID` and runs whole; grouped by
 
 The row and cell limits bound each partition of a divided driver input, decoded
 one at a time, and of its output, saved as CSV or Parquet one partition after
-another with the whole-table write's bytes, Parquet row groups included. They
+another: a CSV output with the whole-table write's bytes, and a Parquet output
+reading back as the whole-table write does. They
 bound as whole tables the run report; a SAS, ODM or Dataset-JSON input and its
 output; every input of a specification that reads more than one; the input and
 output of a run with a step that needs the whole table; and a submission's SAS

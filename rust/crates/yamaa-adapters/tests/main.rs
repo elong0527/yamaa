@@ -24,7 +24,7 @@ mod scalar_bytes;
 mod submission_encoders;
 mod table_csv_source;
 mod table_dataset_json_source;
-mod table_parquet_bytes;
+mod table_parquet_readback;
 mod table_parquet_source;
 mod table_partitioned_sources;
 mod table_public_batches;

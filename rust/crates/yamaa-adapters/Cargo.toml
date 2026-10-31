@@ -14,7 +14,7 @@ default = ["yaml", "parquet", "readstat", "odm", "arrow"]
 yaml = ["dep:yamaa-saphyr-parser", "dep:num-bigint"]
 # Source and artifact codecs share one edge, including native Zstd compression.
 # The reader reads the Arrow schema a file embeds, so it needs Arrow too.
-parquet = ["arrow", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
+parquet = ["arrow", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap", "dep:ahash"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["dep:cc"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
@@ -64,6 +64,9 @@ flate2 = { version = "1.1.10", default-features = false, features = ["rust_backe
 lz4_flex = { version = "0.11.6", optional = true }
 zstd = { version = "0.14.3", default-features = false, optional = true }
 snap = { version = "1.1.2", optional = true }
+# The hash of the Parquet writer's dictionaries, under fixed seeds, as
+# yamaa-core's grouping hashes rows (#4188); no crate is added.
+ahash = { version = "0.8.12", default-features = false, optional = true }
 # ODM XML tokenizing only; the adapter adds namespace, reference and
 # well-formedness checks. Default features off: no encoding_rs or serde.
 # 0.42 needs Rust 1.86.

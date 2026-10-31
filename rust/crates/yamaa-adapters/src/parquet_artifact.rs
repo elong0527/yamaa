@@ -1,14 +1,12 @@
 //! Closed Parquet output profile over an admitted, immutable typed table.
-//! The file writer enforces fixed output bytes and table geometry.
-//! No filesystem authority, Arrow metadata, compression or numeric rounding.
+//! The file writer keeps values, not bytes (D305), and the table geometry.
+//! No filesystem authority, Arrow metadata or numeric rounding.
 use yamaa_core::{
     limits::Limits,
     table::{CellError, TableAccess, ValueRef},
 };
 #[cfg(feature = "parquet")]
 mod encode;
-#[cfg(all(test, feature = "parquet"))]
-mod upstream;
 
 #[derive(Debug, PartialEq)]
 pub enum Error<E> {
@@ -22,9 +20,9 @@ pub enum Error<E> {
     },
     Cell(CellError<E>),
     ValueType,
-    /// More row groups than an i16 ordinal numbers, which the 1.0 writer
-    /// refused (D160).
-    RowGroups,
+    /// The page compressor failed, which only a failed allocation makes it
+    /// do.
+    Compression,
 }
 
 /// Artifact encoding retains a capability boundary without the codec dependency.
@@ -40,8 +38,8 @@ pub type Partitioned = (Vec<u8>, Vec<usize>);
 /// [`render`] one partition of rows at a time (D264), over `partitions`, the
 /// consecutive ranges that divide the table's rows in order. The writer
 /// holds rows until its row group is full and writes the last group when
-/// the file ends, so the row groups, and so the bytes, equal the
-/// whole-table render's whatever the partitions (D160). Each partition is
+/// the file ends, so the file reads back as the whole-table render does
+/// whatever the partitions (D264, D305). Each partition is
 /// admitted on its own; the end of each partition's bytes is returned with
 /// them, the last at the file's length.
 pub fn render_partitions<T: TableAccess>(
