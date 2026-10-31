@@ -71,16 +71,109 @@ impl Bits {
         self.words.iter().any(|&word| word != 0)
     }
 
-    /// Append bits `range` of `other`.
+    /// Append bits `range` of `other`, a word at a time.
     pub(super) fn extend_from(&mut self, other: &Bits, range: Range<usize>) {
         let start = self.len;
-        self.len += range.len();
-        self.words.resize(self.len.div_ceil(64), 0);
-        for (offset, index) in range.enumerate() {
-            if other.get(index) {
-                self.set(start + offset, true);
-            }
+        self.grow(start + range.len());
+        self.copy_from(start, other, range);
+    }
+
+    /// The `count` bits from `start`, at most 64, in the low bits of one
+    /// word.
+    fn word_at(&self, start: usize, count: usize) -> u64 {
+        debug_assert!(count <= 64 && start + count <= self.len);
+        if count == 0 {
+            return 0;
         }
+        let (index, shift) = (start / 64, start % 64);
+        let mut word = self.words[index] >> shift;
+        if shift + count > 64 {
+            word |= self.words[index + 1] << (64 - shift);
+        }
+        word & low_mask(count)
+    }
+
+    /// Overwrite the `count` bits from `start`, at most 64, with the low
+    /// bits of `word`.
+    fn put_word(&mut self, start: usize, count: usize, word: u64) {
+        debug_assert!(count <= 64 && start + count <= self.len);
+        if count == 0 {
+            return;
+        }
+        let mask = low_mask(count);
+        let word = word & mask;
+        let (index, shift) = (start / 64, start % 64);
+        self.words[index] = (self.words[index] & !(mask << shift)) | (word << shift);
+        if shift + count > 64 {
+            let written = 64 - shift;
+            self.words[index + 1] =
+                (self.words[index + 1] & !(mask >> written)) | (word >> written);
+        }
+    }
+
+    /// Overwrite the bits from `at` with bits `range` of `other`, a word at
+    /// a time.
+    fn copy_from(&mut self, at: usize, other: &Bits, range: Range<usize>) {
+        let mut offset = 0;
+        while offset < range.len() {
+            let count = (range.len() - offset).min(64);
+            let word = other.word_at(range.start + offset, count);
+            self.put_word(at + offset, count, word);
+            offset += count;
+        }
+    }
+
+    /// Set every bit of `range` to `value`, a word at a time.
+    pub(super) fn fill(&mut self, range: Range<usize>, value: bool) {
+        let word = if value { u64::MAX } else { 0 };
+        let mut start = range.start;
+        while start < range.end {
+            let count = (range.end - start).min(64);
+            self.put_word(start, count, word);
+            start += count;
+        }
+    }
+
+    /// Whether any bit of `range` is set, read a word at a time.
+    pub(super) fn any_in(&self, range: Range<usize>) -> bool {
+        let mut start = range.start;
+        while start < range.end {
+            let count = (range.end - start).min(64);
+            if self.word_at(start, count) != 0 {
+                return true;
+            }
+            start += count;
+        }
+        false
+    }
+
+    /// The set bits, ascending.
+    fn ones(&self) -> Ones<'_> {
+        Ones {
+            words: &self.words,
+            index: 0,
+            word: self.words.first().copied().unwrap_or(0),
+        }
+    }
+
+    /// The first set bit, found a word at a time.
+    fn first_set(&self) -> Option<usize> {
+        self.words
+            .iter()
+            .position(|&word| word != 0)
+            .map(|index| index * 64 + self.words[index].trailing_zeros() as usize)
+    }
+
+    /// Keep, from `first` on, only the bits at `kept`, ascending rows from
+    /// `first` on, moved down in place.
+    pub(super) fn retain(&mut self, first: usize, kept: &[usize]) {
+        // Each write lands at or below the row it reads, and every later
+        // read is above it.
+        for (offset, &row) in kept.iter().enumerate() {
+            let bit = self.get(row);
+            self.set(first + offset, bit);
+        }
+        self.truncate(first + kept.len());
     }
 
     fn clear_tail(&mut self) {
@@ -92,7 +185,8 @@ impl Bits {
         }
     }
 
-    pub(super) fn len(&self) -> usize {
+    #[cfg(test)]
+    fn len(&self) -> usize {
         self.len
     }
 
@@ -130,15 +224,100 @@ impl Bits {
         }
     }
 
-    /// Whether every bit is set.
-    #[cfg(test)]
+    /// Whether every bit is set, read a word at a time.
     fn all(&self) -> bool {
-        (0..self.len).all(|index| self.get(index))
+        let mut start = 0;
+        while start < self.len {
+            let count = (self.len - start).min(64);
+            if self.word_at(start, count) != low_mask(count) {
+                return false;
+            }
+            start += count;
+        }
+        true
     }
 
     /// Keep the bits at `rows`, in that order.
     pub(super) fn gather(&self, rows: &[usize]) -> Result<Self, TryReserveError> {
         Self::from_fn(rows.len(), |index| self.get(rows[index]))
+    }
+}
+
+/// Append to `bytes` the text of each span of `from`, in order, and hand
+/// `place` each key with the span its text takes in `bytes`. Spans lying end
+/// to end are copied as one run, and an empty span joins any run, as it
+/// copies nothing; a span equal to the one before it, as a repeated value
+/// lends, shares that one's copy.
+fn append_runs(
+    bytes: &mut String,
+    from: &str,
+    spans: impl Iterator<Item = (usize, (usize, usize))>,
+    mut place: impl FnMut(usize, (usize, usize)),
+) {
+    // The source bytes of the run not yet copied.
+    let mut run = (0, 0);
+    // The last span copied, and where its text went.
+    let mut last = None;
+    for (key, span) in spans {
+        if let Some((source, placed)) = last {
+            if source == span {
+                place(key, placed);
+                continue;
+            }
+        }
+        let (start, end) = span;
+        if start != end && start != run.1 {
+            bytes.push_str(&from[run.0..run.1]);
+            run = (start, start);
+        }
+        let at = bytes.len() + (run.1 - run.0);
+        if start != end {
+            run.1 = end;
+        }
+        let placed = (at, at + (end - start));
+        last = Some((span, placed));
+        place(key, placed);
+    }
+    bytes.push_str(&from[run.0..run.1]);
+}
+
+/// The bytes `spans` cover when each begins where the one before it ends,
+/// as a buffer filled in row order holds them.
+fn end_to_end(spans: &[(usize, usize)]) -> Option<(usize, usize)> {
+    let (&(first, _), &(_, last)) = (spans.first()?, spans.last()?);
+    spans
+        .windows(2)
+        .all(|pair| pair[0].1 == pair[1].0)
+        .then_some((first, last))
+}
+
+/// The set bits of a bitmap, ascending, found a word at a time.
+struct Ones<'b> {
+    words: &'b [u64],
+    index: usize,
+    word: u64,
+}
+
+impl Iterator for Ones<'_> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<usize> {
+        while self.word == 0 {
+            self.index += 1;
+            self.word = *self.words.get(self.index)?;
+        }
+        let bit = self.word.trailing_zeros() as usize;
+        self.word &= self.word - 1;
+        Some(self.index * 64 + bit)
+    }
+}
+
+/// The low `count` bits of a word, `count` at most 64.
+fn low_mask(count: usize) -> u64 {
+    if count >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << count) - 1
     }
 }
 
@@ -185,29 +364,30 @@ impl Strings {
         Ok(gathered)
     }
 
-    /// Append rows `range` of `other`: one copy of the arena when their
-    /// text lies in it end to end, as a buffer filled in row order holds it.
+    /// Append rows `range` of `other`, their text in one copy per run of
+    /// rows lying end to end in its arena.
     fn extend_from(&mut self, other: &Strings, range: Range<usize>) {
-        let spans = &other.spans[range.clone()];
-        let contiguous = spans.windows(2).all(|pair| pair[0].1 == pair[1].0);
-        if let (true, Some(&(start, _)), Some(&(_, end))) =
-            (contiguous, spans.first(), spans.last())
-        {
+        let spans = &other.spans[range];
+        if let Some((first, last)) = end_to_end(spans) {
             let base = self.bytes.len();
-            self.bytes.push_str(&other.bytes[start..end]);
+            self.bytes.push_str(&other.bytes[first..last]);
             self.spans.extend(
                 spans
                     .iter()
-                    .map(|&(from, to)| (from - start + base, to - start + base)),
+                    .map(|&(start, end)| (start - first + base, end - first + base)),
             );
             return;
         }
-        self.spans.reserve(range.len());
-        self.bytes
-            .reserve(range.clone().map(|row| other.get(row).len()).sum());
-        for row in range {
-            self.push(other.get(row));
-        }
+        self.spans.reserve(spans.len());
+        let Self { spans: to, bytes } = self;
+        append_runs(
+            bytes,
+            &other.bytes,
+            spans.iter().copied().enumerate(),
+            |_, span| {
+                to.push(span);
+            },
+        );
     }
 
     /// Overwrite one row; the replaced bytes stay in the arena.
@@ -215,6 +395,33 @@ impl Strings {
         let start = self.bytes.len();
         self.bytes.push_str(value);
         self.spans[index] = (start, self.bytes.len());
+    }
+
+    /// Overwrite the rows from `start` with the rows of `from` that `valid`
+    /// marks, each reading as `set` of it leaves it, and every other row
+    /// untouched: their text is appended in row order, one copy per run of
+    /// rows lying end to end in `from`'s arena.
+    fn set_from(&mut self, start: usize, from: &Strings, valid: &Bits) {
+        if let (true, Some((first, last))) = (valid.all(), end_to_end(&from.spans)) {
+            let base = self.bytes.len();
+            self.bytes.push_str(&from.bytes[first..last]);
+            let to = &mut self.spans[start..start + from.len()];
+            for (span, &(begin, end)) in to.iter_mut().zip(&from.spans) {
+                *span = (begin - first + base, end - first + base);
+            }
+            return;
+        }
+        let Self { spans, bytes } = self;
+        let rows = valid.ones().map(|row| (row, from.spans[row]));
+        append_runs(bytes, &from.bytes, rows, |row, span| {
+            spans[start + row] = span;
+        });
+    }
+
+    /// Grow to `len` rows, each new one empty.
+    fn resize_empty(&mut self, len: usize) {
+        let end = self.bytes.len();
+        self.spans.resize(len, (end, end));
     }
 
     fn len(&self) -> usize {
@@ -474,6 +681,23 @@ impl Values {
         }
     }
 
+    /// The buffer's layout, validity, payloads and every row's text, with
+    /// text in an arena of its own row order, where each row's text lies
+    /// once: what a test compares when only the arena may differ.
+    #[cfg(test)]
+    pub(super) fn canonical(&self) -> String {
+        match self {
+            Self::Str(strings, valid) => {
+                let rows: Vec<usize> = (0..strings.len()).collect();
+                format!(
+                    "{:?}",
+                    Self::Str(strings.gather(&rows).unwrap(), valid.clone())
+                )
+            }
+            other => format!("{other:?}"),
+        }
+    }
+
     pub(crate) fn len(&self) -> usize {
         match self {
             Self::Missing(len) => *len,
@@ -669,9 +893,7 @@ impl Values {
             ValueRef::DateTime(value) => Self::DateTime(vec![value; missing], valid),
             ValueRef::Str(_) => {
                 let mut strings = Strings::default();
-                for _ in 0..missing {
-                    strings.push_empty();
-                }
+                strings.resize_empty(missing);
                 Self::Str(strings, valid)
             }
         }
@@ -735,17 +957,174 @@ impl Values {
         }
     }
 
-    /// Grow to `len` rows with missing values.
+    /// Overwrite the rows from `start` with `values`, leaving the buffer as
+    /// `set` of each row in order does: its layout, validity, payloads and
+    /// placeholders, and each row's text, though the arena may hold a
+    /// repeated text once. Payloads of one type are copied under their
+    /// validity a word at a time, and text in runs. Any other pairing of
+    /// layouts, which widens the buffer, sets one row at a time.
+    pub(super) fn set_range(&mut self, start: usize, values: &Values) {
+        debug_assert!(start + values.len() <= self.len());
+        if let Self::Missing(len) = *self {
+            // `set` turns a missing buffer typed at the first present value;
+            // setting a missing row of a missing buffer changes nothing.
+            match values.first_present() {
+                Some(value) => *self = Self::typed_like(value, len),
+                None => return,
+            }
+        }
+        let rows = start..start + values.len();
+        match (&mut *self, values) {
+            (Self::Int(to, valid), Self::Int(from, from_valid)) => {
+                put_valid(to, valid, start, from, from_valid);
+            }
+            (Self::Float(to, valid), Self::Float(from, from_valid)) => {
+                put_valid(to, valid, start, from, from_valid);
+            }
+            (Self::Bool(to, valid), Self::Bool(from, from_valid)) => {
+                put_valid(to, valid, start, from, from_valid);
+            }
+            (Self::Date(to, valid), Self::Date(from, from_valid)) => {
+                put_valid(to, valid, start, from, from_valid);
+            }
+            (Self::DateTime(to, valid), Self::DateTime(from, from_valid)) => {
+                put_valid(to, valid, start, from, from_valid);
+            }
+            (Self::Str(to, valid), Self::Str(from, from_valid)) => {
+                to.set_from(start, from, from_valid);
+                valid.copy_from(start, from_valid, 0..from.len());
+            }
+            (
+                Self::Int(_, valid)
+                | Self::Float(_, valid)
+                | Self::Bool(_, valid)
+                | Self::Date(_, valid)
+                | Self::DateTime(_, valid)
+                | Self::Str(_, valid),
+                Self::Missing(_),
+            ) => valid.fill(rows, false),
+            _ => {
+                for (index, row) in rows.enumerate() {
+                    self.set(row, values.get(index));
+                }
+            }
+        }
+    }
+
+    /// The first value present, in row order.
+    fn first_present(&self) -> Option<ValueRef<'_>> {
+        match self {
+            Self::Missing(_) => None,
+            Self::Int(_, valid)
+            | Self::Float(_, valid)
+            | Self::Bool(_, valid)
+            | Self::Date(_, valid)
+            | Self::DateTime(_, valid)
+            | Self::Str(_, valid) => valid.first_set().map(|row| self.get(row)),
+            Self::Mixed(values) => values
+                .iter()
+                .map(ValueRef::from)
+                .find(|value| *value != ValueRef::Missing),
+        }
+    }
+
+    /// Grow to `len` rows with missing values, by count: the rows and
+    /// placeholders `push_missing` would leave, one at a time.
     pub(super) fn resize_missing(&mut self, len: usize) {
         if len < self.len() {
             self.truncate(len);
         }
-        if let Self::Missing(rows) = self {
-            *rows = len;
+        if len == self.len() {
             return;
         }
-        while self.len() < len {
-            self.push_missing();
+        match self {
+            Self::Missing(rows) => *rows = len,
+            Self::Int(values, valid) => {
+                values.resize(len, 0);
+                valid.grow(len);
+            }
+            Self::Float(values, valid) => {
+                values.resize(len, FiniteFloat::new(0.0).expect("zero is finite"));
+                valid.grow(len);
+            }
+            Self::Bool(values, valid) => {
+                values.resize(len, false);
+                valid.grow(len);
+            }
+            // A temporal placeholder copies the last row; an empty typed
+            // buffer is the same as an empty missing one.
+            Self::Date(values, valid) => match values.last().copied() {
+                Some(placeholder) => {
+                    values.resize(len, placeholder);
+                    valid.grow(len);
+                }
+                None => *self = Self::Missing(len),
+            },
+            Self::DateTime(values, valid) => match values.last().copied() {
+                Some(placeholder) => {
+                    values.resize(len, placeholder);
+                    valid.grow(len);
+                }
+                None => *self = Self::Missing(len),
+            },
+            Self::Str(values, valid) => {
+                values.resize_empty(len);
+                valid.grow(len);
+            }
+            Self::Mixed(values) => values.resize(len, Value::Missing),
+        }
+    }
+
+    /// Keep, from `first` on, only the rows at `kept`, ascending rows from
+    /// `first` on, moved down in place. The buffer is left as appending the
+    /// kept rows to its first `first` rows leaves it.
+    pub(super) fn retain(&mut self, first: usize, kept: &[usize]) {
+        fn compact<T: Copy>(values: &mut Vec<T>, first: usize, kept: &[usize]) {
+            for (offset, &row) in kept.iter().enumerate() {
+                values[first + offset] = values[row];
+            }
+            values.truncate(first + kept.len());
+        }
+        let len = first + kept.len();
+        match self {
+            Self::Missing(rows) => *rows = len,
+            Self::Int(values, valid) => {
+                compact(values, first, kept);
+                valid.retain(first, kept);
+            }
+            Self::Float(values, valid) => {
+                compact(values, first, kept);
+                valid.retain(first, kept);
+            }
+            Self::Bool(values, valid) => {
+                compact(values, first, kept);
+                valid.retain(first, kept);
+            }
+            Self::Date(values, valid) => {
+                compact(values, first, kept);
+                valid.retain(first, kept);
+            }
+            Self::DateTime(values, valid) => {
+                compact(values, first, kept);
+                valid.retain(first, kept);
+            }
+            Self::Str(values, valid) => {
+                compact(&mut values.spans, first, kept);
+                valid.retain(first, kept);
+            }
+            Self::Mixed(values) => {
+                for (offset, &row) in kept.iter().enumerate() {
+                    values.swap(first + offset, row);
+                }
+                values.truncate(len);
+            }
+        }
+        // An emptied temporal buffer is a missing one, and stays missing
+        // while the rows appended to it hold no value.
+        if let (0, Self::Date(_, valid) | Self::DateTime(_, valid)) = (first, &*self) {
+            if len > 0 && !valid.any() {
+                *self = Self::Missing(len);
+            }
         }
     }
 
@@ -837,6 +1216,10 @@ impl Values {
         }
         match (&mut *self, other) {
             (Self::Missing(len), Self::Missing(_)) => *len += range.len(),
+            (_, Self::Missing(_)) => {
+                let len = self.len() + range.len();
+                self.resize_missing(len);
+            }
             (Self::Int(values, valid), Self::Int(from, from_valid)) => {
                 values.extend_from_slice(&from[range.clone()]);
                 valid.extend_from(from_valid, range);
@@ -895,6 +1278,30 @@ impl Values {
             Self::Mixed(_) => Self::Mixed(Vec::new()),
         }
     }
+}
+
+/// Overwrite `to` from `start` with the values of `from` that `from_valid`
+/// marks, and the validity of those rows with `from_valid`, a word at a
+/// time. A row `from` holds missing keeps its placeholder, as `set` does.
+fn put_valid<T: Copy>(to: &mut [T], valid: &mut Bits, start: usize, from: &[T], from_valid: &Bits) {
+    let mut offset = 0;
+    while offset < from.len() {
+        let count = (from.len() - offset).min(64);
+        let word = from_valid.word_at(offset, count);
+        let at = start + offset;
+        if word == low_mask(count) {
+            to[at..at + count].copy_from_slice(&from[offset..offset + count]);
+        } else {
+            let mut rest = word;
+            while rest != 0 {
+                let bit = rest.trailing_zeros() as usize;
+                to[at + bit] = from[offset + bit];
+                rest &= rest - 1;
+            }
+        }
+        offset += count;
+    }
+    valid.copy_from(start, from_valid, 0..from.len());
 }
 
 /// Rows whose values come from several sub-selections, reassembled in the
@@ -1112,6 +1519,316 @@ mod tests {
             Values::repeat(ValueRef::Int(1), 0),
             Values::Missing(0)
         ));
+    }
+
+    /// A buffer of `values` pushed one row at a time.
+    fn pushed(values: &[ValueRef<'_>]) -> Values {
+        let mut buffer = Values::missing(0);
+        for &value in values {
+            buffer.push(value);
+        }
+        buffer
+    }
+
+    /// `len` values, every `gap`-th missing, the rest `value(row)`.
+    fn every<'v>(
+        len: usize,
+        gap: usize,
+        value: impl Fn(usize) -> ValueRef<'v>,
+    ) -> Vec<ValueRef<'v>> {
+        (0..len)
+            .map(|row| {
+                if row % gap == 0 {
+                    ValueRef::Missing
+                } else {
+                    value(row)
+                }
+            })
+            .collect()
+    }
+
+    fn day(day: u8) -> Date {
+        Date::new(2024, 1, day, crate::temporal::Precision::Day).unwrap()
+    }
+
+    fn float(value: f64) -> FiniteFloat {
+        FiniteFloat::new(value).unwrap()
+    }
+
+    // The seam is the bulk completion of a crate-private buffer (#4208):
+    // writing a run of rows must leave the buffer, its layout, payloads,
+    // placeholders, validity and each row's text, exactly as `set` of each
+    // row of the run in order leaves it.
+    #[test]
+    fn a_range_set_leaves_the_buffer_as_setting_each_row_in_order() {
+        let names = ["a", "bc", "", "def"];
+        let mut out_of_order = pushed(&["x", "yz", "w"].map(ValueRef::Str));
+        out_of_order.set(0, ValueRef::Str("moved"));
+        let mut emptied = pushed(&[ValueRef::Int(4), ValueRef::Int(5)]);
+        emptied.set(0, ValueRef::Missing);
+        emptied.set(1, ValueRef::Missing);
+        let half_ints = || {
+            let mut buffer = pushed(&every(60, 5, |row| ValueRef::Int(row as i64)));
+            buffer.resize_missing(140);
+            buffer
+        };
+        let cases: Vec<(&str, Values, usize, Values)> = vec![
+            (
+                "ints with missing rows into a missing column, across two bitmap words",
+                Values::missing(140),
+                60,
+                pushed(&every(70, 7, |row| ValueRef::Int(row as i64))),
+            ),
+            (
+                "ints into an int column whose earlier rows are complete",
+                half_ints(),
+                60,
+                pushed(&every(80, 3, |row| ValueRef::Int(-(row as i64)))),
+            ),
+            (
+                "a run that starts with missing rows takes the type of its first value",
+                Values::missing(10),
+                2,
+                pushed(&[
+                    ValueRef::Missing,
+                    ValueRef::Missing,
+                    ValueRef::Float(float(1.5)),
+                ]),
+            ),
+            (
+                "floats into an int column widen it to mixed",
+                half_ints(),
+                60,
+                pushed(&[ValueRef::Float(float(0.5)), ValueRef::Missing]),
+            ),
+            (
+                "mixed values into a missing column",
+                Values::missing(6),
+                1,
+                pushed(&[ValueRef::Int(1), ValueRef::Str("s"), ValueRef::Missing]),
+            ),
+            (
+                "only missing values leave a missing column missing",
+                Values::missing(6),
+                1,
+                Values::missing(4),
+            ),
+            (
+                "an int buffer holding no value leaves a missing column missing",
+                Values::missing(6),
+                3,
+                emptied,
+            ),
+            (
+                "missing values clear the validity of a typed run",
+                pushed(&[ValueRef::Int(1); 70]),
+                3,
+                Values::missing(65),
+            ),
+            (
+                "text with missing rows into a missing column, across two bitmap words",
+                Values::missing(150),
+                50,
+                pushed(&every(90, 4, |row| ValueRef::Str(names[row % 4]))),
+            ),
+            (
+                "text present on every row into a text column, across two bitmap words",
+                pushed(&["p"; 140].map(ValueRef::Str)),
+                10,
+                pushed(&every(100, 1000, |row| ValueRef::Str(names[row % 4]))[1..]),
+            ),
+            (
+                "a repeated text into a text column",
+                pushed(&["p", "q", "r"].map(ValueRef::Str)),
+                1,
+                Values::repeat(ValueRef::Str("same"), 2),
+            ),
+            (
+                "text out of arena order into a text column",
+                pushed(&["p", "q", "r", "s", "t"].map(ValueRef::Str)),
+                1,
+                out_of_order,
+            ),
+            (
+                "dates into a date column with missing rows",
+                pushed(&every(66, 2, |row| {
+                    ValueRef::Date(day(1 + (row % 28) as u8))
+                })),
+                64,
+                pushed(&[ValueRef::Missing, ValueRef::Date(day(9))]),
+            ),
+            (
+                "booleans into a missing column",
+                Values::missing(5),
+                0,
+                pushed(&[
+                    ValueRef::Bool(true),
+                    ValueRef::Missing,
+                    ValueRef::Bool(false),
+                ]),
+            ),
+            (
+                "text into a mixed column",
+                pushed(&[ValueRef::Int(1), ValueRef::Str("a"), ValueRef::Missing]),
+                1,
+                pushed(&[ValueRef::Str("b"), ValueRef::Str("c")]),
+            ),
+        ];
+        for (label, initial, start, values) in cases {
+            let mut bulk = initial.clone();
+            bulk.set_range(start, &values);
+            let mut cells = initial;
+            for row in 0..values.len() {
+                cells.set(start + row, values.get(row));
+            }
+            assert_eq!(bulk.canonical(), cells.canonical(), "{label}");
+        }
+    }
+
+    // Growing by count must leave every layout as pushing one missing row
+    // at a time does.
+    #[test]
+    fn growing_by_count_leaves_the_buffer_as_pushing_missing_rows() {
+        let mut emptied_dates = pushed(&[ValueRef::Date(day(3))]);
+        emptied_dates.truncate(0);
+        let cases: Vec<(&str, Values)> = vec![
+            ("missing", Values::missing(2)),
+            ("ints", pushed(&[ValueRef::Int(1)])),
+            ("floats", pushed(&[ValueRef::Float(float(2.0))])),
+            ("booleans", pushed(&[ValueRef::Bool(true)])),
+            (
+                "dates",
+                pushed(&[ValueRef::Date(day(3)), ValueRef::Missing]),
+            ),
+            ("an emptied date buffer", emptied_dates),
+            ("text", pushed(&[ValueRef::Str("ab")])),
+            ("mixed", pushed(&[ValueRef::Int(1), ValueRef::Str("a")])),
+        ];
+        for (label, initial) in cases {
+            for len in [initial.len(), 70, 129] {
+                let mut grown = initial.clone();
+                grown.resize_missing(len);
+                let mut pushed = initial.clone();
+                while pushed.len() < len {
+                    pushed.push(ValueRef::Missing);
+                }
+                assert_eq!(
+                    format!("{grown:?}"),
+                    format!("{pushed:?}"),
+                    "{label} to {len} rows"
+                );
+            }
+        }
+    }
+
+    // Filtering in place must leave the layout and values that appending
+    // the kept rows to the first rows leaves.
+    #[test]
+    fn a_retained_buffer_reads_as_its_kept_rows_appended_to_its_head() {
+        let ints = pushed(&every(140, 3, |row| ValueRef::Int(row as i64)));
+        let dates = pushed(&[ValueRef::Missing, ValueRef::Date(day(2)), ValueRef::Missing]);
+        let mixed = pushed(&[ValueRef::Int(1), ValueRef::Str("a"), ValueRef::Int(2)]);
+        let text = pushed(&every(80, 5, |row| ValueRef::Str(["a", "bc"][row % 2])));
+        let cases: Vec<(&str, Values, usize, Vec<usize>)> = vec![
+            (
+                "ints, dropping rows across bitmap words",
+                ints.clone(),
+                10,
+                (10..140).filter(|row| row % 4 != 1).collect(),
+            ),
+            ("ints, keeping no row", ints, 64, vec![]),
+            (
+                "dates from the first row, keeping only missing rows",
+                dates.clone(),
+                0,
+                vec![0, 2],
+            ),
+            (
+                "dates from the first row, keeping a value",
+                dates,
+                0,
+                vec![1, 2],
+            ),
+            (
+                "mixed rows sharing one type stay mixed",
+                mixed,
+                0,
+                vec![0, 2],
+            ),
+            (
+                "text",
+                text,
+                3,
+                (3..80).filter(|row| row % 3 == 0).collect(),
+            ),
+            ("missing", Values::missing(9), 2, vec![4, 8]),
+        ];
+        for (label, initial, first, kept) in cases {
+            let mut retained = initial.clone();
+            retained.retain(first, &kept);
+            let mut appended = initial.clone();
+            appended.truncate(first);
+            for &row in &kept {
+                appended.push(initial.get(row));
+            }
+            assert_eq!(
+                (std::mem::discriminant(&retained), read(&retained)),
+                (std::mem::discriminant(&appended), read(&appended)),
+                "{label}"
+            );
+        }
+    }
+
+    // Word-at-a-time bit runs must read and write what one bit at a time
+    // does, at every alignment.
+    #[test]
+    fn bit_runs_move_what_single_bits_do_at_every_alignment() {
+        let source = Bits::from_fn(200, |index| index % 3 == 0 || index % 7 == 0).unwrap();
+        for (at, start, len) in [
+            (0, 0, 200),
+            (3, 61, 70),
+            (63, 1, 64),
+            (64, 5, 65),
+            (100, 130, 1),
+            (7, 0, 0),
+        ] {
+            let mut words = Bits::new(250, true);
+            words.copy_from(at, &source, start..start + len);
+            let mut bits = Bits::new(250, true);
+            for offset in 0..len {
+                bits.set(at + offset, source.get(start + offset));
+            }
+            let label = format!("{len} bits from {start} to {at}");
+            assert_eq!(words.words, bits.words, "{label}");
+            assert_eq!(
+                source.any_in(start..start + len),
+                (start..start + len).any(|index| source.get(index)),
+                "{label}"
+            );
+            let mut filled = Bits::new(250, false);
+            filled.fill(at..at + len, true);
+            assert_eq!(
+                (0..250).map(|index| filled.get(index)).collect::<Vec<_>>(),
+                (0..250)
+                    .map(|index| (at..at + len).contains(&index))
+                    .collect::<Vec<_>>(),
+                "{label} filled"
+            );
+        }
+        let mut extended = Bits::new(3, true);
+        extended.extend_from(&source, 60..130);
+        assert_eq!(
+            (0..73).map(|index| extended.get(index)).collect::<Vec<_>>(),
+            (0..3)
+                .map(|_| true)
+                .chain((60..130).map(|index| source.get(index)))
+                .collect::<Vec<_>>(),
+            "70 bits appended after 3"
+        );
+        assert_eq!(Bits::new(130, false).first_set(), None);
+        let mut late = Bits::new(130, false);
+        late.set(129, true);
+        assert_eq!(late.first_set(), Some(129));
     }
 
     #[test]
