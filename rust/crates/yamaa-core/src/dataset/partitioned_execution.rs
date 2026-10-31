@@ -672,6 +672,71 @@ fn a_duplicate_key_split_across_partitions_fails_the_output_keys() {
     assert_every_division(&plan, &input, &[], &expected);
 }
 
+/// The key grain's output keys are the groups it built (#4188): over IDs
+/// 1, 1, missing, 2, missing, the two 1s are one candidate and each missing
+/// record its own, so the candidates are 1, missing, 2, missing. Their two
+/// missing keys fail OUTPUT-2 and form the one repeated key of OUTPUT-3,
+/// named by its first candidate, of three key groups, whether the whole-table
+/// run reuses the key grain's groups or a run cut between runs of ID, into
+/// partitions of at most one record or of the whole input, groups the output
+/// again.
+#[test]
+fn the_key_grain_output_keys_repeat_only_its_missing_keys() {
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let plan = DatasetPlan::new(
+        source.clone(),
+        source.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        Vec::new(),
+        vec![0],
+        Vec::new(),
+    );
+    let input = Rows::new(
+        source,
+        vec![
+            vec![int(1)],
+            vec![int(1)],
+            vec![Value::Missing],
+            vec![int(2)],
+            vec![Value::Missing],
+        ],
+    );
+    let missing = |position| RowIdentity {
+        position,
+        values: vec![Value::Missing],
+    };
+    let mut absent = record("keys[0]", ConditionCode::OutputMissingKeyFailed, (4, 2, 4));
+    absent.offending_rows = vec![missing(1), missing(3)];
+    let mut duplicates = record("keys", ConditionCode::OutputDuplicateKeyFailed, (3, 1, 4));
+    duplicates.offending_rows = vec![missing(1)];
+    let expected = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::KeyFailures(vec![
+            absent, duplicates,
+        ]))),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: vec![TemplateRows {
+            emitted: 4,
+            read: 5,
+        }],
+    };
+    let resolved = plan.resolve().unwrap();
+    let whole = resolved.execute(&input, &[], &mut NoFunctions::new(), None, &|| false);
+    assert_eq!(whole, expected, "the whole-table run");
+    for rows in [1, 5] {
+        let attempt = divided_run(&resolved, &input, consecutive(rows, false), &|| false);
+        assert_eq!(
+            as_stated(attempt),
+            expected,
+            "partitions of at most {rows} records"
+        );
+    }
+}
+
 /// A conversion of 1.5 to an integer, which `conversion::integral` refuses.
 fn not_integral() -> ConversionError {
     ConversionError {

@@ -55,7 +55,7 @@
 
 [crates]
 adler2 = "transitive dependency of miniz_oxide: Adler-32 checksums of zlib streams"
-ahash = "transitive dependency of arrow-array: the hasher of its hash tables"
+ahash = "the row hash of grouping, under fixed seeds (yamaa-core); arrow-array uses it too, for its hash tables"
 aho-corasick = "not compiled: locked because the std features of regex and regex-automata name it; yamaa-core leaves regex's perf-literal feature off"
 alloc-no-stdlib = "transitive dependency of brotli: its allocator interface"
 alloc-stdlib = "transitive dependency of brotli: the standard library allocator behind that interface"

@@ -247,6 +247,10 @@ struct Run<'p, 'a, E> {
     /// Where one partition's run of a partitioned run has reached (#3830);
     /// none in a whole-table run.
     pub marks: Option<partitions::Marks>,
+    /// The group of each frame row under the output keys, once the key
+    /// grain has built the frame's rows (#4188), so the output key check
+    /// does not group the same keys again.
+    pub key_groups: Option<Vec<usize>>,
 }
 
 /// What a batch unit restores before it replays in row mode.
@@ -282,6 +286,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             stopped: std::cell::Cell::new(false),
             output_partition: None,
             marks: None,
+            key_groups: None,
         }
     }
 

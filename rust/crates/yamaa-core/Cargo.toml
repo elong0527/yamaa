@@ -24,6 +24,9 @@ num-bigint = { version = "0.4.8", default-features = false }
 # one-pass DFA and bounded backtracker are faster crate-internal engines with
 # the same leftmost-first results and no further dependencies.
 regex = { version = "1.13.1", default-features = false, features = ["std", "perf-dfa", "perf-onepass", "perf-backtrack"] }
+# The row hash of grouping, under fixed seeds (#4188). Arrow already builds
+# it into every host, so the engine adds no crate.
+ahash = { version = "0.8.12", default-features = false }
 
 [lints]
 workspace = true
