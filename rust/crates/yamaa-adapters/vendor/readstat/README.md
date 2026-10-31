@@ -115,7 +115,7 @@ pandas SAS reader; no lower 4,096-blob ceiling is applied.
 
 Each upstream commit after `104ba03a`, through the review baseline, that
 changes a vendored file is ported by hand, inside the local changes above, or
-not ported, with its reason. The release checklist in `docs/release.md`
+not ported, with its reason. The release checklist in `CONTRIBUTING.md`
 reviews the commits after the baseline and moves it.
 
 | Upstream commits | Change | Status |

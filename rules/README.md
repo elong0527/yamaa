@@ -124,6 +124,7 @@ profiles in `rules/profiles/`.
 | [Dates and times](temporal.md) | TIME | Compute differences, study days and times of day, read declared date forms, assemble and complete collected dates and times, report collected precision and imputation flags, and apply civil arithmetic. |
 | [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what each run read, counted and checked in one run report. |
 | [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |
+| [Resource limits](limits.md) | LIMIT | Bound each file, table, declaration, pattern and built text by one fixed policy, refuse past it with one identity, and bound each partition of a partitioned run. |
 | [File resolution](reference/files.md) | FILE | Resolve declared local paths from their base, reach one regular file, and read one immutable snapshot per physical file. |
 | [CSV profile](reference/csv.md) | CSV | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
 | [Parquet profile](reference/parquet.md) | PARQUET | Read and write the closed Parquet field and value mapping. |

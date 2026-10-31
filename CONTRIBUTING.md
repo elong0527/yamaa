@@ -4,7 +4,8 @@
 rules, the design principles, the pull request flow and what to run before
 a push. This guide holds the mechanics those rules point to. Language
 behavior belongs in [rules/](rules/README.md) and [yaml/](yaml/README.md);
-release, platforms and migrations in [docs/release.md](docs/release.md).
+each release's platforms and changes in its notes under
+[docs/releases/](docs/releases/), which are its GitHub release body.
 Every tool named here documents itself: read its module docstring or file
 header before changing what it checks.
 
@@ -458,8 +459,8 @@ Python wheel, Python source, R source, R binary and command-line
 combination, checks public benchmark conformance, the installed host
 suites, packaging, optimized Rust behavior and portable math, and installs
 each published artifact with the network disabled; `tools/ci/native.py`
-declares the matrix and [publication](docs/release.md#publication) says
-which run a release tag names. Passing ordinary CI does not qualify a
+declares the matrix and [Releasing](#releasing) says which run a release
+tag names. Passing ordinary CI does not qualify a
 release.
 
 **R package checks.** Every R check, in CI's `r` job, native
@@ -492,6 +493,61 @@ development directories left out of source bundles; a new entry is audited
 for build-script and `include!` inputs and proved with an offline build.
 Harbor owns its checks and its own lock under `evaluations/harbor/`; see
 its [guide](evaluations/harbor/README.md).
+
+### Releasing
+
+`tools/packaging/release.toml` declares the release once: its version X.Y.Z
+and, for a candidate, its number N. `tools.packaging.check_shared_release_versions`
+requires every manifest, lock, benchmark R environment and tag link of
+`python/README.md` to spell it: Python `X.Y.ZrcN`, Cargo `X.Y.Z-rc.N`, R
+`X.Y.Z` through the candidates (#3030 D53), tag `yamaa-vX.Y.Z[-rc.N]`. The
+notes `docs/releases/X.Y.Z.md`, with `X.Y.Z-rc.N.md` for a candidate, are the
+GitHub release body; their Supported platforms table is held to the native
+matrix by `tools.validation.check_supported_platforms`.
+
+1. Freeze main at the release commit (D226 on #3030) and dispatch on it
+   `native.yml`, `dependency-graphs.yml`, `R-CMD-check.yaml`,
+   `release-compatibility.yml` and `ci.yml`; after native passes,
+   `release-rehearsal.yml`, whose summary shows the assets and the release
+   body. A change to main moves the freeze and repeats every run.
+2. Record on the release issue that those runs passed, and that:
+   - the interface check passes against the previous final release, or, at
+     major 0, the notes state each break;
+   - every ignore in `rust/deny.toml` and `osv-scanner.toml` still matches a
+     locked package, its reason still holds, and its review date is ahead;
+   - the components the scanners cannot see were compared with their
+     upstream releases and advisories since the previous release: the
+     vendored saphyr-parser (#3969), the vendored ReadStat (against upstream
+     `dev` from the baseline its README records), the zstd library that
+     `zstd-sys` bundles, and the libxml2 and libxslt that the lxml wheels
+     bundle.
+3. Push an annotated tag that names the qualified native run;
+   `release.yml` publishes that run's artifacts, which
+   `tools/ci/release_assets.py` declares, unchanged:
+
+   ```sh
+   git tag -a yamaa-vX.Y.Z <commit> -m "yamaa X.Y.Z" -m "Qualified-Run: <run id>"
+   git push origin refs/tags/yamaa-vX.Y.Z
+   ```
+
+4. Upload the release's Python files to PyPI with the owner's token
+   (#3030 D57), then check them against the release and install them as
+   users do:
+
+   ```sh
+   gh release download <tag> --repo elong0527/yamaa --dir <new dir> \
+     --pattern 'yamaa-<version>-*.whl' --pattern 'yamaa-<version>.tar.gz'
+   uvx twine@latest upload <new dir>/*
+   python -m tools.ci.check_pypi_release --repository elong0527/yamaa --tag <tag>
+   gh workflow run pypi-install.yml --repo elong0527/yamaa -f version=<version>
+   ```
+
+5. For a final release that goes to CRAN, check the unchanged
+   `yamaa_X.Y.Z.tar.gz` asset on win-builder (R-devel) and the macOS
+   builder, record the results in `R/yamaa/cran-comments.md`, and submit it
+   through CRAN's web form. A candidate never goes to CRAN, and 0.7.0 does
+   not (#4064 D304).
+6. Announce the release once the PyPI check and install workflow pass.
 
 ## Documentation
 

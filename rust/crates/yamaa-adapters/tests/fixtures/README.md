@@ -81,7 +81,7 @@ saves the same bytes; `nulls.parquet.b64` was saved by parquet 55.2.0 under
 the same settings before it left.
 
 The encoder wrote these bytes, so they are a regression control, not
-independently authored truth. The stability contract in `docs/release.md`
+independently authored truth. The stability contract in `rust/interface/README.md`
 keeps them through every 1.x release: a release replaces them only for a
 defect fix that names the rule it restores, and a move to another Parquet
 release must leave them unchanged.

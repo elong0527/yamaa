@@ -150,16 +150,14 @@ run$save()             # write adsl.csv
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Running specifications? [R, Python and command-line API](https://elong0527.github.io/yamaa/articles/api/) shows every call in both languages and every command.
-- Building on yamaa? The [stability contract](https://elong0527.github.io/yamaa/release/#stability-contract) lists what every 1.x release keeps from 1.0.0.
+- Building on yamaa? The [stability contract](https://github.com/elong0527/yamaa/blob/main/rust/interface/README.md#stability-contract) lists what every 1.x release keeps from 1.0.0.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
-- Developing the engine? [Contributing](CONTRIBUTING.md) describes the shared architecture and checks; [release guidance](docs/release.md) records supported platforms and migration notes.
+- Developing the engine? [Contributing](CONTRIBUTING.md) describes the shared architecture, checks and releases; each [release](https://github.com/elong0527/yamaa/releases) lists its supported platforms and changes.
 
 ## License
 
 This project is licensed under the terms of the MIT license. The Python and R
 packages and the command-line binaries also include third-party code under its
-own licenses; each package carries those notices in `LICENSE-THIRD-PARTY.txt`
-and the other files listed in the
-[release guidance](docs/release.md#source-package-contents), with an inventory
-of its components in `COMPONENTS.tsv`.
+own licenses; each package carries those notices in `LICENSE-THIRD-PARTY.txt`,
+with an inventory of its components in `COMPONENTS.tsv`.

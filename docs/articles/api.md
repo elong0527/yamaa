@@ -39,7 +39,7 @@ project functions.
 Examples in R and Python are shown in tabs, R first; pick a language once and
 every tab on the page follows. From 1.0.0, every 1.x release keeps the
 functions, arguments, members and printed forms on this page, as the
-[stability contract](../release.md#stability-contract) says.
+[stability contract](https://github.com/elong0527/yamaa/blob/main/rust/interface/README.md#stability-contract) says.
 
 ## Input files
 
@@ -1126,7 +1126,7 @@ CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
 so a CSV or Parquet input that is a specification's only input may hold more
 than 10,000,000 records when the windows and aggregates group by the first two
 keys, such as `STUDYID` and `USUBJID`
-([Resource limits](../release.md#resource-limits)).
+([LIMIT-3](../../rules/limits.md#limit-3)).
 
 A relative path resolves from the YAML file that writes it, so
 `../edc/odm.xml` in `sdtm/dm.yaml` is the study's `edc/odm.xml`. A path you
@@ -1367,6 +1367,6 @@ same keys, except where the table names a refusal's.
 
 From 1.0.0, every 1.x release keeps the commands, flags, exit statuses and
 JSON keys on this page, and may add commands, flags and keys, as the
-[stability contract](../release.md#stability-contract) says. The messages
+[stability contract](https://github.com/elong0527/yamaa/blob/main/rust/interface/README.md#stability-contract) says. The messages
 are not frozen: a program reads `status`, and an issue's `condition` and
 `rule`, never its `message`.

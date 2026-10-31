@@ -826,7 +826,7 @@ pub enum Step {
     Order,
 }
 
-/// Partition safety from the accepted inventory in `docs/partition-execution.md`.
+/// Whether a step can run partitioned and keep the whole-table result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PartitionClass {
     Safe,

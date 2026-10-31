@@ -2089,24 +2089,6 @@ class ReleaseDownloadChooser(unittest.TestCase):
 
 
 class ReleaseAssetDeclaration(unittest.TestCase):
-    def test_docs_list_exactly_the_declared_assets(self):
-        lines = (ROOT / "docs/release.md").read_text(encoding="utf-8").splitlines()
-        header = "| Asset | File | Native artifact |"
-        self.assertEqual(lines.count(header), 1)
-        start = lines.index(header) + 2
-        rows = []
-        for line in lines[start:]:
-            if not line.startswith("|"):
-                break
-            rows.append(tuple(cell.strip() for cell in line.strip("|").split("|")))
-        self.assertEqual(
-            rows,
-            [
-                (asset.title, f"`{asset.file}`", f"`{asset.artifact}`")
-                for asset in ASSETS
-            ],
-        )
-
     def test_a_name_pattern_spells_the_identity_for_each_package(self):
         wheel, sdist, r_source = (
             next(asset for asset in ASSETS if asset.kind == kind)

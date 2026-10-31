@@ -3,9 +3,8 @@
 This file is the single entry point for agents. It maps the repository,
 states the hard rules and the design principles, and says what to run
 before a push. Area guides (linked below) add detail; none of them
-overrides this file. Release docs are not needed for normal changes: read
-`docs/release.md` only for a release, a supported-platform change, or a
-migration decision.
+overrides this file. `CONTRIBUTING.md#releasing` is needed only for a
+release.
 
 Run `make help` at the repository root for the supported checks and
 their prerequisites. Local targets and CI share the owned scripts under
@@ -59,7 +58,7 @@ The whole of this guide is the contract; this list is the order of work.
   unpublished Rust crates, may change freely, except the `yamaa` facade's
   public items, frozen from 1.0.0. Remove obsolete interfaces and callers
   together instead of adding compatibility aliases. From 1.0.0, the
-  stability contract in `docs/release.md` applies.
+  stability contract in `rust/interface/README.md` applies.
 - **Complete review before merging.** The owner's maintenance session
   reviews and merges every pull request (D175 on #3030), only once CI is
   green on the exact head (D176) and one completed review of that head is
@@ -365,4 +364,5 @@ the patterns and helpers of each language; these are the rules.
 - Site build and canonical pages: `CONTRIBUTING.md#documentation`
 - Benchmark factory: `automation/benchmark_factory/README.md`
 - Harbor evaluation: `evaluations/harbor/README.md`
-- Release, platforms, and migrations (not needed for normal changes): `docs/release.md`
+- Releasing (not needed for normal changes): `CONTRIBUTING.md#releasing`;
+  each release's platforms and changes: `docs/releases/`

@@ -99,7 +99,7 @@ of every guide's domain, variable and business rules. From 1.0.0, a new
 conformance check arrives only as an opt-in, through a new optional field,
 never as a new refusal or a new run-report row for a file that an earlier
 1.x release admitted, as the
-[stability contract](../release.md#stability-contract) says. Study teams
+[stability contract](https://github.com/elong0527/yamaa/blob/main/rust/interface/README.md#stability-contract) says. Study teams
 validate their complete submission against the selected guide and
 applicable FDA rules. Changing the guide declaration alone does not convert
 newer content into a conforming older dataset.

@@ -1655,10 +1655,10 @@ not have, and a name written alone that reads no field of the left side, fail
 as `unknown_field` at `key`. A missing `key` fails as
 `missing_required_field` at `key`, and one that names no pair as
 `invalid_field_type` ([LOOKUP-5](#lookup-5)), and one of more than 64 pairs
-is refused as every key is, under the [fixed resource
-policy](../docs/release.md#resource-limits). Key values constant on both
-sides pair every record of one side with every record of the other: the
-relation holds at most as many records as the product of its sides'.
+is refused as every key is, under [LIMIT-2](limits.md#limit-2). Key values
+constant on both sides pair every record of one side with every record of the
+other: the relation holds at most as many records as the product of its
+sides'.
 
 `filter` narrows the matching pairs ([LOOKUP-8](#lookup-8)). It reads each
 side's fields qualified by the side's name, and it is asked of every matching

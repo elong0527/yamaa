@@ -1,4 +1,8 @@
-"""Check "Supported platforms" in docs/release.md against the native matrix.
+"""Check "Supported platforms" in the release notes against the native matrix.
+
+The notes of the release in development, docs/releases/<version>.md with the
+version that tools/packaging/release.toml declares, are the GitHub release
+body, so the table that users read there is the one checked.
 
 The section's table has one row per platform and one column per package form
 that a release publishes. A cell claims what native qualification proves for
@@ -47,10 +51,11 @@ import sys
 from dataclasses import dataclass
 
 from tools.ci import manylinux, native
+from tools.packaging import release_identity
 from tools.paths import ROOT
 
-PAGE = ROOT / "docs" / "release.md"
-LABEL = "docs/release.md"
+LABEL = f"docs/releases/{release_identity.read().version}.md"
+PAGE = ROOT / LABEL
 SECTION = "## Supported platforms"
 MODULE = "tools/validation/check_supported_platforms.py"
 

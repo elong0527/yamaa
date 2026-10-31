@@ -46,8 +46,7 @@ cargo fmt and Clippy on the touched crates (D148 on #3030). Reproduce a red CI
 job with its own target. Native installation qualification is a separate full
 matrix in .github/workflows/native.yml, on dispatch or qualification/issue-*
 pushes. The tools package is installed editable so python -m tools.<module>
-also works from a separate working directory. See CONTRIBUTING.md and
-docs/release.md.
+also works from a separate working directory. See CONTRIBUTING.md.
 """
 
 if __name__ == "__main__":

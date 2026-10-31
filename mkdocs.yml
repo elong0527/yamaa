@@ -114,9 +114,3 @@ nav:
       - Codelists and terminology: articles/terminology.md
       - Supported standards: articles/supported-standards.md
   - Benchmark: benchmark/index.md
-  - Engine:
-      - Contributing: https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md
-      - Partitioned execution design: partition-execution.md
-      - Release and migration: release.md
-      - Python package: https://github.com/elong0527/yamaa/tree/main/python
-      - R package: https://github.com/elong0527/yamaa/tree/main/R/yamaa

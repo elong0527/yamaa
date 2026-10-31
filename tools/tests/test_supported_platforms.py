@@ -1,4 +1,4 @@
-"""Supported platforms in docs/release.md claims what the native matrix qualifies."""
+"""Supported platforms in the release notes claims what the native matrix qualifies."""
 
 import contextlib
 import io
@@ -10,7 +10,7 @@ from tools.ci import select_release_artifacts as release
 from tools.commands import repository
 from tools.validation import check_supported_platforms as platforms
 
-PAGE = "docs/release.md: Supported platforms"
+PAGE = f"{platforms.LABEL}: Supported platforms"
 LINUX, MACOS = "Linux x86_64", "macOS arm64"
 WHEEL, SOURCE = platforms.WHEEL, platforms.PYTHON_SOURCE
 R_SOURCE, R_BINARY, CLI = platforms.R_SOURCE, platforms.R_BINARY, platforms.CLI
@@ -53,11 +53,11 @@ NEWEST = {"CPython": "3.13", "R": "4.6"}
 
 
 def page(*table):
-    """An invented release page whose Supported platforms holds `table` beside
+    """Invented release notes whose Supported platforms holds `table` beside
     another table, followed by a section whose own table starts with Platform."""
     return "\n".join(
         (
-            "# Release and migration",
+            "# yamaa 0.7.0",
             "",
             "## Supported platforms",
             "",
@@ -341,7 +341,7 @@ class ReadTest(unittest.TestCase):
         heading = "expected one '## Supported platforms' heading"
         table = "expected one table under Supported platforms whose first heading"
         for text, message in (
-            ("# Release and migration\n", heading),
+            ("# yamaa 0.7.0\n", heading),
             (page(*TABLE) + "## Supported platforms\n", heading),
             (page(), table),
             (page(*TABLE, "", *TABLE), table),
@@ -519,7 +519,7 @@ class RealFilesTest(unittest.TestCase):
             platforms.main()
         self.assertEqual(
             output.getvalue(),
-            f"docs/release.md: Supported platforms claims what "
+            f"{platforms.LABEL}: Supported platforms claims what "
             f"{len(platforms.lanes())} qualifying native lanes prove on "
             f"{len(self.rows)} platforms, and nothing else\n",
         )

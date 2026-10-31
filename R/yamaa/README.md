@@ -90,7 +90,7 @@ network.
 [Installing in a restricted environment](../../docs/articles/restricted-environments.md)
 gives its steps, and those for installing on a machine without internet
 access from an internal CRAN mirror or from files carried in. The
-[release guidance](../../docs/release.md#supported-platforms) lists the
+[release notes](https://github.com/elong0527/yamaa/releases/latest) list the
 supported platforms.
 
 The `R/yamaa/` directory lacks the shared Rust sources, so it cannot be
@@ -211,5 +211,5 @@ time, and test time.
   [resource paths](../../rules/reference/files.md),
   [SAS sources](../../rules/reference/sas.md) and
   [submission documents](../../rules/README.md#rule-files).
-- [Release guidance](../../docs/release.md): supported platforms,
-  [resource limits](../../docs/release.md#resource-limits) and migration.
+- [Resource limits](../../rules/limits.md): the fixed limits and what a
+  refusal reports.
