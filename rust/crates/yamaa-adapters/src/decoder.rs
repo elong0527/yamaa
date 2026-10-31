@@ -282,6 +282,23 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
             .unwrap_or_else(|| unreachable!("{} was not scanned by partition", source.name));
         crate::source_decoding::decode_range(scan, bytes, range).map(Snapshot::whole)
     }
+    /// A range decodes from the scan and the held bytes alone, so any
+    /// thread may decode it (#4193).
+    fn shared_partition<'a>(
+        &self,
+        scanned: &'a Snapshot<E>,
+        source: &'a SourceDeclaration,
+        bytes: &'a [u8],
+        _: yamaa_core::specification::SourceInterpretation,
+        _: Option<&'a yamaa_core::producer_contract::Contract>,
+    ) -> Option<yamaa_core::decoder::RangeDecode<'a, Snapshot<E>, Error>> {
+        let scan = scanned
+            .scan()
+            .unwrap_or_else(|| unreachable!("{} was not scanned by partition", source.name));
+        Some(Box::new(move |range| {
+            crate::source_decoding::decode_range(scan, bytes, range).map(Snapshot::whole)
+        }))
+    }
 }
 
 #[cfg(test)]

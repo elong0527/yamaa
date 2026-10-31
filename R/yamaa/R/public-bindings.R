@@ -172,13 +172,18 @@ format.yamaa_submission <- function(x, ...) {
   plans <- NULL
   object <- new.env(parent = emptyenv())
   object$.path <- path
-  object$check <- function(parent = NULL, progress = NULL) {
+  object$check <- function(parent = NULL, progress = NULL, threads = NULL) {
     .check(.reply(.native_spec_check(
-      path, project, .optional_path(parent, "parent"), .version(), .progress(progress, "progress")
+      path,
+      project,
+      .optional_path(parent, "parent"),
+      .version(),
+      .progress(progress, "progress"),
+      threads
     )))
   }
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
-  object$run <- function(stream = FALSE, progress = NULL, inputs = NULL) {
+  object$run <- function(stream = FALSE, progress = NULL, inputs = NULL, threads = NULL) {
     plans <<- .reply(.native_plans(plans))
     .run(.reply(.native_spec_run(
       path,
@@ -187,7 +192,8 @@ format.yamaa_submission <- function(x, ...) {
       plans,
       .flag(stream, "stream"),
       .progress(progress, "progress"),
-      .input_frames(inputs, "inputs")
+      .input_frames(inputs, "inputs"),
+      threads
     )))
   }
   .object(object, "yamaa_spec")
@@ -212,10 +218,12 @@ format.yamaa_spec <- function(x, ...) {
     .spec(.text(.reply(.native_project_spec(path, .text(name, "name"), .version())), "path"), path)
   }
   .read_only(object, "names", function() .reply(.native_project_names(path, .version())))
-  object$check <- function(progress = NULL) {
-    .check(.reply(.native_project_check(path, .version(), .progress(progress, "progress"))))
+  object$check <- function(progress = NULL, threads = NULL) {
+    .check(.reply(.native_project_check(
+      path, .version(), .progress(progress, "progress"), threads
+    )))
   }
-  object$run <- function(section = NULL, progress = NULL) {
+  object$run <- function(section = NULL, progress = NULL, threads = NULL) {
     plans <<- .reply(.native_plans(plans))
     .project_run(.reply(.native_project_run(
       path,
@@ -223,16 +231,18 @@ format.yamaa_spec <- function(x, ...) {
       .version(),
       .capabilities(),
       plans,
-      .progress(progress, "progress")
+      .progress(progress, "progress"),
+      threads
     )))
   }
-  object$submission <- function(section = NULL, created = NULL, progress = NULL) {
+  object$submission <- function(section = NULL, created = NULL, progress = NULL, threads = NULL) {
     .submission(.reply(.native_project_submission(
       path,
       .optional_text(section, "section"),
       .optional_text(created, "created"),
       .version(),
-      .progress(progress, "progress")
+      .progress(progress, "progress"),
+      threads
     )))
   }
   .object(object, "yamaa_project")

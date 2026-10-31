@@ -207,18 +207,41 @@ fn parse_capabilities(parsed: List) -> std::result::Result<Functions, Refusal> {
 /// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
 const PARTITIONS: [usize; 2] = [2, 624_640];
 
+/// [`PARTITIONS`], deriving the engine's default threads at once.
+fn default_partitions() -> Partitions {
+    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
+    Partitions::by_keys(keys, rows).with_whole_table_fallback()
+}
+
+/// [`PARTITIONS`], up to `threads` of one run deriving at once unless it is
+/// `NULL` (#4193); `NA`, or anything but one positive whole number, refuses
+/// the call.
+fn partitions(threads: &Robj) -> std::result::Result<Partitions, Refusal> {
+    let partitions = default_partitions();
+    if threads.is_null() {
+        return Ok(partitions);
+    }
+    let value = match threads.is_na() {
+        true => yamaa::ContextValue::Text("NA".into()),
+        false => odm_limit_value(threads),
+    };
+    partitions
+        .with_host_threads(&value)
+        .ok_or_else(|| Refusal::from("`threads` must be one positive whole number or NULL"))
+}
+
 /// The facade engine of one call: the R host on R's `version`, over
-/// [`PARTITIONS`], with the installed project functions when `functions` are
+/// `partitions`, with the installed project functions when `functions` are
 /// given, reporting to `progress` when one is given (#3762). Every call
 /// builds its engine here.
 fn engine(
     version: &str,
     functions: Option<Functions>,
     progress: Option<Progress>,
+    partitions: Partitions,
 ) -> yamaa::Engine {
-    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
-    let options = EngineOptions::new(HostLanguage::R, "r".into(), version.into())
-        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback());
+    let options =
+        EngineOptions::new(HostLanguage::R, "r".into(), version.into()).with_partitions(partitions);
     let options = match functions {
         Some(functions) => options.with_functions(Arc::new(functions)),
         None => options,
@@ -241,14 +264,15 @@ fn progress(value: &Robj) -> std::result::Result<Option<Progress>, Refusal> {
 /// cancels it (D186).
 fn called<T>(
     version: &Raw,
-    (capabilities, progress): (Option<List>, &Robj),
+    (capabilities, progress, threads): (Option<List>, &Robj, &Robj),
     run: impl FnOnce(&yamaa::Engine, &CancellationToken) -> std::result::Result<T, Failure>,
 ) -> std::result::Result<T, Refusal> {
     let version = text(version)?;
     let functions = capabilities.map(parse_capabilities).transpose()?;
+    let partitions = partitions(threads)?;
     let progress = self::progress(progress)?;
     let token = crate::interrupt::token();
-    let answer = run(&engine(&version, functions, progress), &token);
+    let answer = run(&engine(&version, functions, progress, partitions), &token);
     if token.is_cancelled() {
         return Err("the call was cancelled".into());
     }
@@ -471,12 +495,13 @@ fn spec_check(
     parent: Robj,
     version: Raw,
     progress: Robj,
+    threads: Robj,
 ) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let parent = optional_text(&parent)?;
         let specification = text(&specification)?;
-        let check = called(&version, (None, &progress), |engine, token| {
+        let check = called(&version, (None, &progress, &threads), |engine, token| {
             let request =
                 spec_request(engine, &specification, project.as_deref()).cancel_with(token);
             match parent.as_deref() {
@@ -556,6 +581,7 @@ fn plans_of(holder: &Option<Rc<Value>>) -> Option<&yamaa::Plans> {
 
 /// A run of one specification: built now, or with `stream` built as its
 /// output is read (#3697), polling a token of its own from then on.
+#[allow(clippy::too_many_arguments)] // #4214 gives the native calls one context argument
 #[extendr]
 fn spec_run(
     specification: Raw,
@@ -565,6 +591,7 @@ fn spec_run(
     stream: bool,
     progress: Robj,
     inputs: Robj,
+    threads: Robj,
 ) -> List {
     reply(|| {
         if runtime.len() != 2 {
@@ -591,6 +618,7 @@ fn spec_run(
                 &version,
                 Some(parse_capabilities(capabilities)?),
                 self::progress(&progress)?,
+                partitions(&threads)?,
             );
             let token = crate::interrupt::stream_token();
             let request = spec_request(&engine, &specification, project.as_deref())
@@ -608,7 +636,7 @@ fn spec_run(
         }
         let run = called(
             &version,
-            (Some(capabilities), &progress),
+            (Some(capabilities), &progress, &threads),
             |engine, token| {
                 let request = spec_request(engine, &specification, project.as_deref())
                     .cancel_with(token)
@@ -629,7 +657,7 @@ fn spec_resolve(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
-        let engine = engine(&text(&version)?, None, None);
+        let engine = engine(&text(&version)?, None, None, default_partitions());
         let value = spec_request(&engine, &specification, project.as_deref()).resolve()?;
         Ok(crate::context_values::context_value(&value)?)
     })
@@ -655,7 +683,7 @@ fn read_odm(
             options = options.with_archive_member(member);
         }
         // The read needs no host capability, so the engine names no R version.
-        let items = engine("", None, None).read_odm(&source, &options)?;
+        let items = engine("", None, None, default_partitions()).read_odm(&source, &options)?;
         table(Some(&items))
     })
 }
@@ -848,7 +876,7 @@ fn run_observations(handle: Robj, include_measurements: bool) -> List {
 fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
     reply(|| {
         let (project, name) = (text(&project)?, text(&name)?);
-        let engine = engine(&text(&version)?, None, None);
+        let engine = engine(&text(&version)?, None, None, default_partitions());
         let path = engine.project(&project).spec(&name)?.path().to_owned();
         Ok(r!(path.as_str()))
     })
@@ -859,7 +887,7 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 fn project_names(project: Raw, version: Raw) -> List {
     reply(|| {
         let project = text(&project)?;
-        let names = engine(&text(&version)?, None, None)
+        let names = engine(&text(&version)?, None, None, default_partitions())
             .project(&project)
             .names()?;
         Ok(Strings::from_values(names).into_robj())
@@ -867,10 +895,10 @@ fn project_names(project: Raw, version: Raw) -> List {
 }
 
 #[extendr]
-fn project_check(project: Raw, version: Raw, progress: Robj) -> List {
+fn project_check(project: Raw, version: Raw, progress: Robj, threads: Robj) -> List {
     reply(|| {
         let project = text(&project)?;
-        let check = called(&version, (None, &progress), |engine, token| {
+        let check = called(&version, (None, &progress, &threads), |engine, token| {
             engine.project(&project).cancel_with(token).check()
         })?;
         store(Value::Check(Mutex::new(check)))
@@ -885,6 +913,7 @@ fn project_run(
     capabilities: List,
     plans: Robj,
     progress: Robj,
+    threads: Robj,
 ) -> List {
     reply(|| {
         let section = optional_text(&section)?;
@@ -893,7 +922,7 @@ fn project_run(
         let plans = plans_of(&holder);
         let runs = called(
             &version,
-            (Some(capabilities), &progress),
+            (Some(capabilities), &progress, &threads),
             |engine, token| {
                 let request =
                     project_request(engine, &project, section.as_deref()).cancel_with(token);
@@ -993,6 +1022,7 @@ fn project_submission(
     created: Robj,
     version: Raw,
     progress: Robj,
+    threads: Robj,
 ) -> List {
     reply(|| {
         let section = optional_text(&section)?;
@@ -1000,7 +1030,7 @@ fn project_submission(
         let project = text(&project)?;
         let mut options = SubmissionOptions::new(yamaa::VERSION);
         options.created = created;
-        let submission = called(&version, (None, &progress), |engine, token| {
+        let submission = called(&version, (None, &progress, &threads), |engine, token| {
             project_request(engine, &project, section.as_deref())
                 .cancel_with(token)
                 .submission(&options)

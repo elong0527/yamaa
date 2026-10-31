@@ -5090,28 +5090,33 @@
         ],
         "spec.check": [
           "parent",
-          "progress"
+          "progress",
+          "threads"
         ],
         "spec.resolve": [],
         "spec.run": [
           "stream",
           "progress",
-          "inputs"
+          "inputs",
+          "threads"
         ],
         "project.spec": [
           "name"
         ],
         "project.check": [
-          "progress"
+          "progress",
+          "threads"
         ],
         "project.run": [
           "section",
-          "progress"
+          "progress",
+          "threads"
         ],
         "project.submission": [
           "section",
           "created",
-          "progress"
+          "progress",
+          "threads"
         ],
         "run.save": [],
         "project_run.save": [],
@@ -8886,6 +8891,14 @@
         {"name": "{path}", "phase": "output", "kind": "start", "outcome": null, "number": null, "rows": null},
         {"name": "{path}", "phase": "output", "kind": "end", "outcome": "succeeded", "number": null, "rows": null}
       ],
+      "threads": {
+        "accepted": [1, 4],
+        "refused": [0, -1, 1.5, "4", true],
+        "messages": {
+          "python": "threads must be a positive integer or None",
+          "r": "`threads` must be one positive whole number or NULL"
+        }
+      },
       "timing_columns": ["name", "phase", "started_ms", "elapsed_ms", "outcome"],
       "run_phases": ["preparation", "input", "admission", "derivation", "output_keys", "verification", "output"],
       "check_phases": ["preparation"],

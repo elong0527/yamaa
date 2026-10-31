@@ -314,11 +314,11 @@ class Spec(_Lazy):
         self._project = project
         self._plans = _native._plans()
 
-    def check(self, parent=None, *, progress=None) -> Check:
+    def check(self, parent=None, *, progress=None, threads=None) -> Check:
         """Report problems without reading study data or running project code; with `parent`, check this fragment as if the specification at that path were its parent; `progress` is called with each progress event."""
         return Check(
             _native._spec_check(
-                self._path, self._project, _optional_fspath(parent), progress
+                self._path, self._project, _optional_fspath(parent), progress, threads
             )
         )
 
@@ -332,6 +332,7 @@ class Spec(_Lazy):
         stream: bool = False,
         progress=None,
         inputs: dict[str, object] | None = None,
+        threads=None,
     ) -> Run:
         """Build the dataset in memory, or with stream as its output is read; `progress` is called with each progress event."""
         return Run(
@@ -342,6 +343,7 @@ class Spec(_Lazy):
                 _flag(stream, "stream"),
                 progress,
                 inputs,
+                threads,
             )
         )
 
@@ -365,19 +367,30 @@ class Project(_Lazy):
         """The listed specifications by `domain` name, in run order, read without study data."""
         return _native._project_names(self._path)
 
-    def check(self, *, progress=None) -> Check:
-        return Check(_native._project_check(self._path, progress))
+    def check(self, *, progress=None, threads=None) -> Check:
+        return Check(_native._project_check(self._path, progress, threads))
 
-    def run(self, section: str | None = None, *, progress=None) -> ProjectRun:
+    def run(
+        self, section: str | None = None, *, progress=None, threads=None
+    ) -> ProjectRun:
         """Build every specification of one section, or of all sections."""
         return ProjectRun(
             _native._project_run(
-                self._path, _optional_text(section, "section"), self._plans, progress
+                self._path,
+                _optional_text(section, "section"),
+                self._plans,
+                progress,
+                threads,
             )
         )
 
     def submission(
-        self, section: str | None = None, *, created: str | None = None, progress=None
+        self,
+        section: str | None = None,
+        *,
+        created: str | None = None,
+        progress=None,
+        threads=None,
     ) -> Submission:
         return Submission(
             _native._project_submission(
@@ -385,6 +398,7 @@ class Project(_Lazy):
                 _optional_text(section, "section"),
                 _optional_text(created, "created"),
                 progress,
+                threads,
             )
         )
 

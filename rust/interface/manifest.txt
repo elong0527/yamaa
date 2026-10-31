@@ -174,20 +174,22 @@ cli.global_flags.--help: flag
 cli.exit_status.0: the command completed and succeeded: its status is succeeded and any save wrote everything, or resolve, schema, --version or --help printed its output
 cli.exit_status.1: the command completed with findings: a status of failed or skipped, a refused save, remaining lint findings, a failed selftest case, or a refusal that carries issues
 cli.exit_status.2: the command could not run as asked: a usage error, an argument the facade cannot take, a PATH whose declared type the command does not take, or a failed write to standard output; a file problem the engine reports as an issue exits 1
-cli.commands.check: yamaa check PATH [--spec NAME | --parent PATH] [--verbose]
+cli.commands.check: yamaa check PATH [--spec NAME | --parent PATH] [--threads N] [--verbose]
 cli.commands.check.args[0]: PATH: path
 cli.commands.check.flags.--spec: NAME
 cli.commands.check.flags.--parent: PATH
+cli.commands.check.flags.--threads: N
 cli.commands.check.flags.--verbose: flag
 cli.commands.check.json_keys.command
 cli.commands.check.json_keys.path
 cli.commands.check.json_keys.spec
 cli.commands.check.json_keys.status
 cli.commands.check.json_keys.issues
-cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION] [--verbose]
+cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]
 cli.commands.run.args[0]: PATH: path
 cli.commands.run.flags.--spec: NAME
 cli.commands.run.flags.--section: SECTION; values section
+cli.commands.run.flags.--threads: N
 cli.commands.run.flags.--verbose: flag
 cli.commands.run.json_keys.command
 cli.commands.run.json_keys.path
@@ -197,10 +199,11 @@ cli.commands.run.json_keys.status
 cli.commands.run.json_keys.members
 cli.commands.run.json_keys.issues
 cli.commands.run.json_keys.paths
-cli.commands.submission: yamaa submission PATH [--section SECTION] [--created TIME] [--verbose]
+cli.commands.submission: yamaa submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]
 cli.commands.submission.args[0]: PATH: path
 cli.commands.submission.flags.--section: SECTION; values section
 cli.commands.submission.flags.--created: TIME
+cli.commands.submission.flags.--threads: N
 cli.commands.submission.flags.--verbose: flag
 cli.commands.submission.json_keys.command
 cli.commands.submission.json_keys.path
@@ -302,6 +305,7 @@ public.types.optional_path: python str or os.PathLike or None, unannotated; r ch
 public.types.text: python str; r character(1)
 public.types.optional_text: python str | None; r character(1) or NULL
 public.types.progress: python a callable of one dict, keys in records.progress_event order, or None; r a function of one named list, names in records.progress_event order, or NULL
+public.types.threads: python a positive int, or None for the fewer of 4 and the cores the process may use; r one positive whole number, or NULL for the fewer of 4 and the cores the process may use
 public.types.input_frames: python dict[str, object] or None; frames export Arrow PyCapsule streams, pandas through pyarrow; r named list of data.frames or NULL
 public.types.count: python int; r numeric(1), a whole number
 public.types.flag: python bool; r logical(1)
@@ -392,11 +396,13 @@ public.classes.Spec: python yamaa.Spec; r yamaa_spec
 public.classes.Spec.check: method; returns Check; raises refusal
 public.classes.Spec.check.args[0]: parent: optional_path = None
 public.classes.Spec.check.args[1]: progress: progress = None; keyword-only
+public.classes.Spec.check.args[2]: threads: threads = None; keyword-only
 public.classes.Spec.resolve: method; returns tree; raises refusal
 public.classes.Spec.run: method; returns Run; raises refusal
 public.classes.Spec.run.args[0]: stream: flag = false; keyword-only
 public.classes.Spec.run.args[1]: progress: progress = None; keyword-only
 public.classes.Spec.run.args[2]: inputs: input_frames = None; keyword-only
+public.classes.Spec.run.args[3]: threads: threads = None; keyword-only
 public.classes.Spec.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Project: python yamaa.Project; r yamaa_project
 public.classes.Project.spec: method; returns Spec; raises refusal
@@ -404,13 +410,16 @@ public.classes.Project.spec.args[0]: name: text
 public.classes.Project.names: property; returns names; raises refusal
 public.classes.Project.check: method; returns Check; raises refusal
 public.classes.Project.check.args[0]: progress: progress = None; keyword-only
+public.classes.Project.check.args[1]: threads: threads = None; keyword-only
 public.classes.Project.run: method; returns ProjectRun; raises refusal
 public.classes.Project.run.args[0]: section: optional_text = None
 public.classes.Project.run.args[1]: progress: progress = None; keyword-only
+public.classes.Project.run.args[2]: threads: threads = None; keyword-only
 public.classes.Project.submission: method; returns Submission; raises refusal
 public.classes.Project.submission.args[0]: section: optional_text = None
 public.classes.Project.submission.args[1]: created: optional_text = None; keyword-only
 public.classes.Project.submission.args[2]: progress: progress = None; keyword-only
+public.classes.Project.submission.args[3]: threads: threads = None; keyword-only
 public.classes.Project.summary: printing; python __repr__; r print, format; raises refusal
 public.classes.Lint: python yamaa.Lint; r yamaa_lint_result
 public.classes.Lint.status: property; returns status; raises refusal

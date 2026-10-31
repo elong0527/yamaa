@@ -43,6 +43,7 @@ const SECTION: Flag = flag("--section", Takes::Text);
 const CREATED: Flag = flag("--created", Takes::Text);
 const FIX: Flag = flag("--fix", Takes::Nothing);
 const VERBOSE: Flag = flag("--verbose", Takes::Nothing);
+const THREADS: Flag = flag("--threads", Takes::Count);
 const ARCHIVE_MEMBER: Flag = flag("--archive-member", Takes::Text);
 const MAX_ARCHIVE_MEMBERS: Flag = flag("--max-archive-members", Takes::Count);
 const MAX_EXPANDED_BYTES: Flag = flag("--max-expanded-bytes", Takes::Count);
@@ -64,31 +65,32 @@ pub(crate) struct Command {
 }
 
 /// Every command, in the order of the design's table (#3030 section 2.8,
-/// with D68's `--spec` and `--section`, #3694's `--parent` and #3762's
-/// `--verbose`), and `conditions` beside `schema` (#3700).
+/// with D68's `--spec` and `--section`, #3694's `--parent`, #3762's
+/// `--verbose` and #4193's `--threads`), and `conditions` beside `schema`
+/// (#3700).
 pub(crate) static COMMANDS: [Command; 9] = [
     Command {
         name: "check",
-        synopsis: "check PATH [--spec NAME | --parent PATH] [--verbose]",
+        synopsis: "check PATH [--spec NAME | --parent PATH] [--threads N] [--verbose]",
         arguments: &["PATH"],
         repeats: false,
-        flags: &[SPEC, PARENT, VERBOSE],
+        flags: &[SPEC, PARENT, THREADS, VERBOSE],
         exclusive: &["--spec", "--parent"],
     },
     Command {
         name: "run",
-        synopsis: "run PATH [--spec NAME | --section SECTION] [--verbose]",
+        synopsis: "run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]",
         arguments: &["PATH"],
         repeats: false,
-        flags: &[SPEC, SECTION, VERBOSE],
+        flags: &[SPEC, SECTION, THREADS, VERBOSE],
         exclusive: &["--spec", "--section"],
     },
     Command {
         name: "submission",
-        synopsis: "submission PATH [--section SECTION] [--created TIME] [--verbose]",
+        synopsis: "submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]",
         arguments: &["PATH"],
         repeats: false,
-        flags: &[SECTION, CREATED, VERBOSE],
+        flags: &[SECTION, CREATED, THREADS, VERBOSE],
         exclusive: &[],
     },
     Command {

@@ -429,18 +429,36 @@ fn options() -> EngineOptions {
         .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
 }
 
-/// The command line's [`engine`], which under `--verbose` writes each
-/// progress event to standard error as it happens (#3762). A line that cannot
-/// be written is lost, and the command goes on.
-fn reporting(verbose: &Verbose) -> Engine {
-    let options = options();
-    Engine::new(match verbose.on {
+/// The command line's [`engine`], deriving up to `--threads N` partitions
+/// of one run at once when `call` gives it (#4193), and which under
+/// `--verbose` writes each progress event to standard error as it happens
+/// (#3762). A line that cannot be written is lost, and the command goes on.
+/// An `N` of 0 is an argument the facade cannot take.
+fn reporting(call: &Call, verbose: &Verbose) -> Result<Engine, Execution> {
+    let mut options = options();
+    if let Some(count) = call.count("--threads") {
+        let count = ContextValue::Int(i64::try_from(count).unwrap_or(i64::MAX));
+        let partitions = options
+            .partitions
+            .and_then(|partitions| partitions.with_host_threads(&count));
+        let Some(partitions) = partitions else {
+            return Err(Execution::Refused(Usage(format!(
+                "{}: --threads takes a positive whole number, not {}",
+                call.name,
+                call.value("--threads")
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            ))));
+        };
+        options = options.with_partitions(partitions);
+    }
+    Ok(Engine::new(match verbose.on {
         true => options.with_progress(|event: &ProgressEvent| {
             let _ = writeln!(std::io::stderr(), "{}", progress_line(event));
             Ok(())
         }),
         false => options,
-    })
+    }))
 }
 
 /// The request of the project `path`, polling `token`, whose run and
@@ -468,7 +486,7 @@ fn check(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Pr
     let name = flag(call, "--spec")?;
     let parent = flag(call, "--parent")?;
     let document = document("check", [("path", text(path)), ("spec", optional(name))]);
-    let engine = reporting(verbose);
+    let engine = reporting(call, verbose)?;
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -525,7 +543,7 @@ fn run(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Prin
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = reporting(verbose);
+    let engine = reporting(call, verbose)?;
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -643,7 +661,7 @@ fn submission(
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = reporting(verbose);
+    let engine = reporting(call, verbose)?;
     match engine.file_type(path) {
         Ok(FileType::Project) => {}
         Ok(other) => return Err(not_taken(call, path, other, None)),

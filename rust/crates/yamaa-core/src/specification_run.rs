@@ -806,25 +806,35 @@ fn execute_captured_into<C, D: Decoder>(
     attempt.result = match by_partition {
         // The partitions the scan cut the input into are the run's (#3792),
         // each decoded again from the held bytes the scan read when the run
-        // reaches it (#3830).
+        // reaches it (#3830), on the thread that derives it when the decoder
+        // shares its decode (#4193).
         Some((read, ranges)) => {
+            let declaration = &prepared.sources()[driver];
+            let bytes = attempt.sources[driver]
+                .snapshot
+                .as_deref()
+                .expect("a scanned input keeps its bytes");
+            let interpretation = prepared
+                .source_interpretation(driver)
+                .expect("admitted source interpretation");
+            let contract = prepared.source_contract(driver);
+            let shared =
+                decoder.shared_partition(primary, declaration, bytes, interpretation, contract);
+            let shared = shared
+                .as_deref()
+                .map(|decode| move |_, range| decode(range).ok());
             let mut source = Partitions {
                 decoder,
                 scanned: primary,
-                declaration: &prepared.sources()[driver],
-                bytes: attempt.sources[driver]
-                    .snapshot
-                    .as_deref()
-                    .expect("a scanned input keeps its bytes"),
-                interpretation: prepared
-                    .source_interpretation(driver)
-                    .expect("admitted source interpretation"),
-                contract: prepared.source_contract(driver),
+                declaration,
+                bytes,
+                interpretation,
+                contract,
                 ranges,
                 error: None,
             };
             let executed = plan.execute_partitioned(
-                &mut source,
+                (&mut source, shared.as_ref().map(|decode| decode as _)),
                 &secondary,
                 &mut functions,
                 Some(&mut observer),

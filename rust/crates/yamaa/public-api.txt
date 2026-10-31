@@ -320,6 +320,7 @@ yamaa::engine::Partitions::new: pub fn new(rows: NonZeroUsize) -> Self
 yamaa::engine::Partitions::rows: pub rows: NonZeroUsize
 yamaa::engine::Partitions::threads: pub threads: NonZeroUsize
 yamaa::engine::Partitions::whole_table_fallback: pub whole_table_fallback: bool
+yamaa::engine::Partitions::with_host_threads: pub fn with_host_threads(self, threads: &ContextValue) -> Option<Self>
 yamaa::engine::Partitions::with_threads: pub fn with_threads(mut self, threads: NonZeroUsize) -> Self
 yamaa::engine::Partitions::with_whole_table_fallback: pub fn with_whole_table_fallback(mut self) -> Self
 yamaa::error::Failure: impl Failure

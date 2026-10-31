@@ -5,8 +5,8 @@
   .Call(wrap__core_version)
 }
 
-.native_spec_check <- function(specification, project, parent, version, progress) {
-  .Call(wrap__spec_check, specification, project, parent, version, progress)
+.native_spec_check <- function(specification, project, parent, version, progress, threads) {
+  .Call(wrap__spec_check, specification, project, parent, version, progress, threads)
 }
 
 .native_check_status <- function(handle) {
@@ -33,8 +33,8 @@
   .Call(wrap__plans, handle)
 }
 
-.native_spec_run <- function(specification, project, runtime, plans, stream, progress, inputs) {
-  .Call(wrap__spec_run, specification, project, runtime, plans, stream, progress, inputs)
+.native_spec_run <- function(specification, project, runtime, plans, stream, progress, inputs, threads) {
+  .Call(wrap__spec_run, specification, project, runtime, plans, stream, progress, inputs, threads)
 }
 
 .native_spec_resolve <- function(specification, project, version) {
@@ -89,12 +89,12 @@
   .Call(wrap__project_names, project, version)
 }
 
-.native_project_check <- function(project, version, progress) {
-  .Call(wrap__project_check, project, version, progress)
+.native_project_check <- function(project, version, progress, threads) {
+  .Call(wrap__project_check, project, version, progress, threads)
 }
 
-.native_project_run <- function(project, section, version, capabilities, plans, progress) {
-  .Call(wrap__project_run, project, section, version, capabilities, plans, progress)
+.native_project_run <- function(project, section, version, capabilities, plans, progress, threads) {
+  .Call(wrap__project_run, project, section, version, capabilities, plans, progress, threads)
 }
 
 .native_project_run_status <- function(handle) {
@@ -149,8 +149,8 @@
   .Call(wrap__project_run_summary, handle)
 }
 
-.native_project_submission <- function(project, section, created, version, progress) {
-  .Call(wrap__project_submission, project, section, created, version, progress)
+.native_project_submission <- function(project, section, created, version, progress, threads) {
+  .Call(wrap__project_submission, project, section, created, version, progress, threads)
 }
 
 .native_submission_status <- function(handle) {
