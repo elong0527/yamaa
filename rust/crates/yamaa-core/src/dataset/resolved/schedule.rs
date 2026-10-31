@@ -384,8 +384,9 @@ fn step_scope(plan: &ResolvedPlan, step: Step, every: bool) -> Scope<'_> {
 impl ResolvedPlan {
     /// The first dataset step a partitioned run cannot divide (#3697): a
     /// step the schedule marks [`PartitionClass::Global`], whose evaluation
-    /// reads a window, an aggregate, a named or joined relation, SELF rows
-    /// or a project function; or the driver step of a template driven by a
+    /// reads a window, an aggregate, a named or joined relation that does not
+    /// read another input held whole (#4191), SELF rows or a
+    /// project function; or the driver step of a template driven by a
     /// named intermediate whose materialization calls a project function or
     /// is global itself, through its derivations, its filter or its keys.
     /// The run's own reconciliation points, which the inventory also marks
@@ -523,6 +524,34 @@ impl ResolvedPlan {
                     crate::dataset::IntermediateSource::Primary { .. }
                 )
             })
+    }
+
+    /// Whether the dataset's relation `relation` reads an input other than
+    /// the driver input, held whole before any partition (#4191): an
+    /// implicit join into such an input (`input.<id>.key`, a qualified
+    /// source read), or a named intermediate over one that derives nothing.
+    /// No partition of the driver input produces or changes a record of it,
+    /// so every partition matches against the same records the whole-table
+    /// run does. A relation over the driver input or `SELF`, a pair
+    /// relation, and an intermediate whose donor plan derives values, which
+    /// each partition would build and count again, stay global.
+    fn reads_other_input(&self, relation: RelationId) -> bool {
+        let node = self.relation(relation);
+        let Donor::Source(source) = node.donor else {
+            return false;
+        };
+        node.region == RegionId::DATASET
+            && self.region_sources(RegionId::DATASET).next() != Some(source)
+            && match node.kind {
+                RelationKind::Join => true,
+                RelationKind::Named { .. } => {
+                    node.derivations.is_none()
+                        && node.named.as_deref().is_some_and(|item| {
+                            matches!(item.source, crate::dataset::IntermediateSource::Input(_))
+                        })
+                }
+                _ => false,
+            }
     }
 
     /// The first intermediate over the driver input with a `unique` check,
@@ -874,6 +903,11 @@ impl Classes<'_> {
             RelationKind::CurrentGroup
             | RelationKind::MatchedAggregate
             | RelationKind::OutputAggregate => Class::grouped(self.aggregate_keys(relation, scope)),
+            RelationKind::Named { .. } | RelationKind::Join
+                if self.plan.reads_other_input(relation) =>
+            {
+                Class::SAFE
+            }
             RelationKind::Named { .. } | RelationKind::Join => Class::of(PartitionClass::Global),
         };
         pending.extend(node.filter);
@@ -990,6 +1024,14 @@ impl Classes<'_> {
                 }
                 ExprKind::Aggregate(relation) => {
                     Class::grouped(self.aggregate_keys(relation, scope))
+                }
+                ExprKind::Intermediate(relation)
+                | ExprKind::Joined(relation)
+                | ExprKind::JoinedSource(relation)
+                | ExprKind::SourceLookup(relation)
+                    if plan.reads_other_input(relation) =>
+                {
+                    Class::SAFE
                 }
                 ExprKind::ProjectFunction
                 | ExprKind::Intermediate(_)

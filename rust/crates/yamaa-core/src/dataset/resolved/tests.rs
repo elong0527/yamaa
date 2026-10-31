@@ -592,8 +592,6 @@ fn registration_registers_every_site_up_front_in_expression_order() {
     );
     let info = resolved.schedule()[position(&resolved, Step::Row(BindingId(1)))];
     assert_eq!(info.effects, Effects::Handlers);
-    let info = resolved.schedule()[position(&resolved, Step::Row(BindingId(4)))];
-    assert_eq!(info.partition, PartitionClass::Global);
 }
 
 /// A named read counts its absence under `absent` whether or not the
@@ -1515,8 +1513,8 @@ fn classes_of_r(plan: &DatasetPlan) -> [PartitionClass; 4] {
 /// the driver input must pair each key with the field that holds it. A row
 /// of a template driven by SEC belongs to no partition, so a column window
 /// or qualified aggregate that reads one holds no key, while the record
-/// template's own row window still does. A named read needs the whole table
-/// under any partitions.
+/// template's own row window still does. A named read of SEC, held whole
+/// beside every partition, is partition-safe under any partitions (#4191).
 #[test]
 fn a_window_or_aggregate_is_partition_safe_exactly_when_it_groups_by_every_partition_key() {
     use crate::dataset::{AggregateRelation as Relation, AggregateSource as Source};
@@ -1646,12 +1644,12 @@ fn a_window_or_aggregate_is_partition_safe_exactly_when_it_groups_by_every_parti
             [G, S, G, G],
         ),
         (
-            "a named intermediate's read",
+            "a named intermediate's read of SEC",
             column_shape(Expression::Intermediate {
                 index: 0,
                 column: 2,
             }),
-            [G, G, G, G],
+            [S, S, S, S],
         ),
         (
             "a column window by S and U over the rows of a template driven by SEC too",
