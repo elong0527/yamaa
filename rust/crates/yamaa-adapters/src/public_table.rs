@@ -17,7 +17,7 @@ use std::num::NonZeroUsize;
 use std::{convert::Infallible, fmt, ops::Range, sync::Arc};
 use yamaa_core::{
     limits::Limits,
-    table::{TableAccess, TableSchema, ValueRef},
+    table::{ColumnReader, TableAccess, TableSchema, ValueRef},
     value::ColumnType,
 };
 
@@ -391,9 +391,19 @@ impl PublicTable {
         projection: &[usize],
         partition: Option<NonZeroUsize>,
     ) -> Result<Self, TableError> {
-        let selected = check_table(table, projection, partition)?
-            .columns()
-            .to_vec();
+        let logical = check_table(table, projection, partition)?;
+        Self::from_admitted(table, projection, &logical)
+    }
+
+    /// [`Self::from_partitions`] of a table [`check_table`] admitted under
+    /// `projection`, with the logical schema it returned, which a host view
+    /// builds when it is first read (#4201). Every check the build makes,
+    /// the admission made first.
+    pub fn from_admitted<T: TableAccess<Error = Infallible>>(
+        table: &T,
+        projection: &[usize],
+        logical: &TableSchema,
+    ) -> Result<Self, TableError> {
         let rows = table.row_count();
         let chunks = if rows == 0 {
             vec![0]
@@ -402,6 +412,7 @@ impl PublicTable {
             chunks.push(rows - chunks.len() * BATCH_ROWS);
             chunks
         };
+        let selected = logical.columns().to_vec();
         Self::from_rows(table, projection, selected, 0..rows, chunks)
     }
 
@@ -413,53 +424,67 @@ impl PublicTable {
         rows: Range<usize>,
         chunks: Vec<usize>,
     ) -> Result<Self, TableError> {
-        let cell = |row, column| table.cell(row, column).expect("validated coordinate");
         let columns = selected
             .into_iter()
             .zip(projection)
             .map(|(field, &index)| {
-                let cells = rows.clone().map(|row| cell(row, index));
+                let reader = ColumnReader::new(table, index);
+                let len = rows.len();
                 let column = match field.kind {
-                    ColumnType::Str => PublicColumn::Str(
-                        cells
-                            .map(|value| match value {
+                    ColumnType::Str => {
+                        // The arena's size, from the text bounds a view lends.
+                        let bytes = reader
+                            .view()
+                            .map_or(0, |view| rows.clone().map(|row| view.text_len(row)).sum());
+                        let mut text = Text::with_capacity(len, bytes);
+                        fill(&reader, rows.clone(), |value| {
+                            text.push(match value {
                                 ValueRef::Str(text) => Some(text),
                                 _ => None,
                             })
-                            .collect(),
-                    ),
-                    ColumnType::Int => PublicColumn::Int(
-                        cells
-                            .map(|value| match value {
+                        });
+                        PublicColumn::Str(text)
+                    }
+                    ColumnType::Int => {
+                        let mut values = Values::with_capacity(len);
+                        fill(&reader, rows.clone(), |value| {
+                            values.push(match value {
                                 ValueRef::Int(value) => Some(value),
                                 _ => None,
                             })
-                            .collect(),
-                    ),
-                    ColumnType::Float => PublicColumn::Float(
-                        cells
-                            .map(|value| match value {
+                        });
+                        PublicColumn::Int(values)
+                    }
+                    ColumnType::Float => {
+                        let mut values = Values::with_capacity(len);
+                        fill(&reader, rows.clone(), |value| {
+                            values.push(match value {
                                 ValueRef::Float(value) => Some(value.get()),
                                 _ => None,
                             })
-                            .collect(),
-                    ),
-                    ColumnType::Date => PublicColumn::Date(
-                        cells
-                            .map(|value| match value {
+                        });
+                        PublicColumn::Float(values)
+                    }
+                    ColumnType::Date => {
+                        let mut values = Values::with_capacity(len);
+                        fill(&reader, rows.clone(), |value| {
+                            values.push(match value {
                                 ValueRef::Date(value) => Some(date_days(value)),
                                 _ => None,
                             })
-                            .collect(),
-                    ),
-                    ColumnType::DateTime => PublicColumn::DateTime(
-                        cells
-                            .map(|value| match value {
+                        });
+                        PublicColumn::Date(values)
+                    }
+                    ColumnType::DateTime => {
+                        let mut values = Values::with_capacity(len);
+                        fill(&reader, rows.clone(), |value| {
+                            values.push(match value {
                                 ValueRef::DateTime(value) => Some(datetime_seconds(value)),
                                 _ => None,
                             })
-                            .collect(),
-                    ),
+                        });
+                        PublicColumn::DateTime(values)
+                    }
                 };
                 (field.name, column)
             })
@@ -622,6 +647,22 @@ pub fn output_schema(
     Some(public_schema(&columns))
 }
 
+/// Push the value of each of `rows` of `column`, which an admitted table
+/// holds, in order.
+fn fill<'a, T: TableAccess<Error = Infallible>>(
+    column: &ColumnReader<'a, T>,
+    rows: Range<usize>,
+    mut push: impl FnMut(ValueRef<'a>),
+) {
+    let visit = |value| {
+        push(value);
+        Ok(())
+    };
+    column
+        .try_for_each(rows, visit, |_| ())
+        .expect("validated coordinate");
+}
+
 /// The columns `projection` names of `table`, as the host view's logical
 /// schema; a position outside the table, or a repeated name, is refused.
 fn projected<T: TableAccess>(table: &T, projection: &[usize]) -> Result<TableSchema, TableError> {
@@ -657,13 +698,22 @@ pub fn check_table<T: TableAccess<Error = Infallible>>(
         if field.kind != ColumnType::Str {
             continue;
         }
+        let column = ColumnReader::new(table, column);
         for start in (0..table.row_count()).step_by(BATCH_ROWS) {
             let end = table.row_count().min(start + BATCH_ROWS);
-            let lengths = (start..end).filter_map(|row| match table.cell(row, column) {
-                Ok(ValueRef::Str(text)) => Some(text.len()),
-                _ => None,
-            });
-            if !crate::column_table::fits_utf8_offsets(lengths) {
+            // The batch's text bytes: its offsets fit when their last does,
+            // as lengths only add.
+            let mut bytes = 0usize;
+            let sum = |value| {
+                if let ValueRef::Str(text) = value {
+                    bytes = bytes.saturating_add(text.len());
+                }
+                Ok(())
+            };
+            // The rows are the table's and its port cannot fail, so no read
+            // is refused.
+            let _: Result<(), ()> = column.try_for_each(start..end, sum, |_| ());
+            if !crate::column_table::fits_utf8_offsets([bytes]) {
                 return Err(TableError::Representation {
                     representation: crate::column_table::UTF8_OFFSETS,
                 });

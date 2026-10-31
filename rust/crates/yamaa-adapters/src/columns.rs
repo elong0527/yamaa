@@ -129,6 +129,14 @@ pub struct Values<T> {
 }
 
 impl<T: Copy + Default> Values<T> {
+    /// No slots yet, with room for `len`.
+    pub fn with_capacity(len: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(len),
+            validity: Validity::default(),
+        }
+    }
+
     /// Append one value, or a missing slot.
     pub fn push(&mut self, value: Option<T>) {
         self.validity.push(value.is_some());
@@ -233,6 +241,17 @@ impl Default for Text {
 }
 
 impl Text {
+    /// No slots yet, with room for `len` and an arena of `bytes`.
+    pub fn with_capacity(len: usize, bytes: usize) -> Self {
+        let mut offsets = Vec::with_capacity(len + 1);
+        offsets.push(0);
+        Self {
+            offsets,
+            bytes: String::with_capacity(bytes),
+            validity: Validity::default(),
+        }
+    }
+
     /// Append one value, or a missing slot, which holds no bytes.
     pub fn push(&mut self, value: Option<&str>) {
         self.validity.push(value.is_some());

@@ -280,6 +280,11 @@ impl Domain {
     pub fn output(&self) -> Option<&crate::public_table::PublicTable> {
         self.result.output()
     }
+    /// The output table's rows and columns, without building the table,
+    /// which is built when first read (#4201).
+    pub fn output_dimensions(&self) -> Option<(usize, usize)> {
+        self.result.output_dimensions()
+    }
     /// Whether the build accepted its primary output: built as a table, or
     /// deferred to be read as a stream (#3697).
     pub fn accepted(&self) -> bool {

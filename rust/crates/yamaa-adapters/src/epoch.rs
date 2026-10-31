@@ -14,13 +14,17 @@ fn before_year(year: i64) -> i64 {
     365 * previous + previous / 4 - previous / 100 + previous / 400
 }
 
-/// Convert already validated civil fields to an exact epoch day.
+/// Days before the first of each month of a common year.
+const BEFORE_MONTH: [i64; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+
+/// Convert already validated civil fields to an exact epoch day: the days
+/// before its year and month, February 29 counted after February of a leap
+/// year, as `month_days` counts them.
 pub fn date_days(date: Date) -> i32 {
     let (year, month, day) = date.fields();
-    let mut ordinal = before_year(i64::from(year));
-    for prior in 1..month {
-        ordinal += month_days(year, prior);
-    }
+    let leap = month > 2 && month_days(year, 2) == 29;
+    let ordinal =
+        before_year(i64::from(year)) + BEFORE_MONTH[usize::from(month) - 1] + i64::from(leap);
     (ordinal + i64::from(day) - 1 - EPOCH_ORDINAL) as i32
 }
 
@@ -81,4 +85,38 @@ pub fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateT
         precision,
     )
     .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The seam is the epoch day of a civil date (#4201), read from a table of
+    // days before each month. The expected days are counted by hand in the
+    // proleptic Gregorian calendar: the epoch, the leap days of 2000 and
+    // 2024, the common years 1900, 2023 and 2100 past February, and the
+    // calendar's first and last days. Every day of 0001 to 9999 then reads
+    // back through `date_from_days`, which walks the months one at a time.
+    #[test]
+    fn a_date_counts_its_epoch_day_and_every_day_reads_back() {
+        let cases = [
+            ((1970, 1, 1), 0),
+            ((2000, 2, 29), 11_016),
+            ((2000, 3, 1), 11_017),
+            ((1900, 3, 1), -25_508),
+            ((2023, 3, 1), 19_417),
+            ((2024, 2, 29), 19_782),
+            ((2100, 3, 1), 47_541),
+            ((1, 1, 1), -719_162),
+            ((9999, 12, 31), 2_932_896),
+        ];
+        for ((year, month, day), expected) in cases {
+            let date = Date::new(year, month, day, Precision::Day).unwrap();
+            assert_eq!(date_days(date), expected, "{year:04}-{month:02}-{day:02}");
+        }
+        for days in -719_162..=2_932_896 {
+            let date = date_from_days(days, Precision::Day).unwrap();
+            assert_eq!(i64::from(date_days(date)), days, "epoch day {days}");
+        }
+    }
 }

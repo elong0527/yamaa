@@ -24,6 +24,7 @@ use parquet::{
 };
 use std::{convert::Infallible, ops::Range};
 use yamaa_adapters::{
+    column_table::ColumnTable,
     epoch::{date_from_days, datetime_from_seconds},
     parquet_artifact::{render, render_partitions},
 };
@@ -321,7 +322,16 @@ fn every_table_reads_back_as_authored_whole_and_a_partition_at_a_time() {
             .map(|column| column.name.clone())
             .collect();
         let expected = (names, table.cells.clone());
-        let (names, rows, _) = read_back(render(table, &table.projection()).unwrap());
+        let whole = render(table, &table.projection()).unwrap();
+        // The same values through a port that lends its columns whole
+        // (#4201): the encoder reads them as it reads cells, so the file is
+        // the one the cells give.
+        let lent = ColumnTable::from_access(table).unwrap();
+        assert!(
+            render(&lent, &table.projection()).unwrap() == whole,
+            "{label}, read through column views"
+        );
+        let (names, rows, _) = read_back(whole);
         assert_eq!((names, rows), expected, "{label}, whole");
         for size in [1, 7, 1_000] {
             let partitions = partitions(table.row_count(), size);
@@ -361,11 +371,19 @@ fn a_table_past_one_row_group_reads_back_in_order_from_two_row_groups() {
         .collect();
     let table = Table::new(&COLUMNS, cells);
     let names: Vec<String> = COLUMNS.iter().map(|(name, _)| (*name).to_owned()).collect();
+    let lent = ColumnTable::from_access(&table).unwrap();
     for (label, partitions) in [
         ("whole", partitions(ROWS, ROWS)),
         ("partitions of 100,000", partitions(ROWS, 100_000)),
     ] {
-        let (saved, _) = render_partitions(&table, &table.projection(), &partitions).unwrap();
+        let (saved, ends) = render_partitions(&table, &table.projection(), &partitions).unwrap();
+        // A port that lends its columns whole saves the same file, its
+        // partitions ending at the same bytes (#4201).
+        assert!(
+            render_partitions(&lent, &table.projection(), &partitions).unwrap()
+                == (saved.clone(), ends),
+            "{label}, read through column views"
+        );
         let (read, rows, metadata) = read_back(saved);
         let groups: Vec<i64> = metadata
             .row_groups()
