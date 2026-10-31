@@ -349,11 +349,14 @@ impl<'a> ColumnRef<'a> {
         }
     }
 
-    /// The bytes row `row`'s text bounds span, which must be below
-    /// [`ColumnRef::len`], whether or not the row is present; 0 in a column
-    /// of another type.
+    /// The bytes of row `row`'s present text; 0 for a missing row or a
+    /// column of another type. The row must be below [`ColumnRef::len`].
     #[inline]
     pub fn text_len(&self, row: usize) -> usize {
+        debug_assert!(row < self.len);
+        if !self.valid(row) {
+            return 0;
+        }
         let index = self.start + row;
         match self.values {
             ColumnValues::Str { offsets, .. } => offsets[index + 1] - offsets[index],
@@ -540,6 +543,39 @@ mod tests {
             Some(ValueRef::Int(2))
         );
         assert!(view.slice(2..4).is_none(), "a range past the view");
+    }
+
+    // Reservations count the text that will be copied, not an obsolete
+    // payload masked missing. The middle slot retains six or eight bytes;
+    // its logical length is zero, including after the view is sliced.
+    #[test]
+    fn text_lengths_exclude_missing_payloads_even_in_slices() {
+        let bits = [0b101u64];
+        let cases = [
+            (
+                ColumnValues::Str {
+                    offsets: &[0, 2, 8, 9],
+                    bytes: "éhiddenz",
+                },
+                [2, 0, 1],
+            ),
+            (
+                ColumnValues::TextSpans {
+                    spans: &[(8, 9), (0, 8), (0, 2)],
+                    bytes: "éhiddenz",
+                },
+                [1, 0, 2],
+            ),
+        ];
+        for (values, expected) in cases {
+            let view = ColumnRef::new(values, Some(&bits)).unwrap();
+            assert_eq!(
+                [view.text_len(0), view.text_len(1), view.text_len(2)],
+                expected
+            );
+            let tail = view.slice(1..3).unwrap();
+            assert_eq!([tail.text_len(0), tail.text_len(1)], expected[1..]);
+        }
     }
 
     // The seam is a view's two reads (#4201): a pass over a range lends, row

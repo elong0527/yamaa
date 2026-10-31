@@ -432,7 +432,7 @@ impl PublicTable {
                 let len = rows.len();
                 let column = match field.kind {
                     ColumnType::Str => {
-                        // The arena's size, from the text bounds a view lends.
+                        // The arena's size, from the present text a view lends.
                         let bytes = reader
                             .view()
                             .map_or(0, |view| rows.clone().map(|row| view.text_len(row)).sum());
