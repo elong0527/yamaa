@@ -197,10 +197,10 @@ pub(super) fn read(
 /// A column as the native reader holds it.
 fn converted(column: Column) -> columns::Column {
     match column {
-        Column::Int32(values) => columns::Column::Int32(values),
-        Column::Int64(values) => columns::Column::Int64(values),
-        Column::Float(values) => columns::Column::Float(values),
-        Column::Double(values) => columns::Column::Double(values),
+        Column::Int32(values) => columns::Column::Int32(values.into_iter().collect()),
+        Column::Int64(values) => columns::Column::Int64(values.into_iter().collect()),
+        Column::Float(values) => columns::Column::Float(values.into_iter().collect()),
+        Column::Double(values) => columns::Column::Double(values.into_iter().collect()),
         Column::Bytes(values) => {
             let mut binary = columns::Binary::default();
             for value in &values {

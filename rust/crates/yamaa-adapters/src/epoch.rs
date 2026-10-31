@@ -35,28 +35,33 @@ fn month_days(year: u16, month: u8) -> i64 {
 }
 
 /// Decode a bounded epoch day without timezone, float arithmetic or host dates.
+///
+/// The civil fields come from the day's place in its 400-year era of
+/// 146,097 days, counted from a March 1, so that the leap day ends each year
+/// (the days-to-civil method of Howard Hinnant's "chrono-compatible
+/// low-level date algorithms"): a few integer divisions, the same for every
+/// day.
 pub fn date_from_days(days: i64, precision: Precision) -> Option<Date> {
     let ordinal = days.checked_add(EPOCH_ORDINAL)?;
     if !(0..=MAX_ORDINAL).contains(&ordinal) {
         return None;
     }
-    let (mut low, mut high) = (1, 10000);
-    while low + 1 < high {
-        let middle = (low + high) / 2;
-        if before_year(middle) <= ordinal {
-            low = middle;
-        } else {
-            high = middle;
-        }
-    }
-    let year = low as u16;
-    let mut remaining = ordinal - before_year(low);
-    let mut month = 1;
-    while remaining >= month_days(year, month) {
-        remaining -= month_days(year, month);
-        month += 1;
-    }
-    Date::new(year, month, remaining as u8 + 1, precision).ok()
+    // Days from 0000-03-01, positive within the bound.
+    let shifted = ordinal + 306;
+    let era = shifted / 146_097;
+    let of_era = shifted % 146_097;
+    let year_of_era = (of_era - of_era / 1_460 + of_era / 36_524 - of_era / 146_096) / 365;
+    let of_year = of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    // Months from March, each run of five a 153-day cycle.
+    let from_march = (5 * of_year + 2) / 153;
+    let day = of_year - (153 * from_march + 2) / 5 + 1;
+    let month = if from_march < 10 {
+        from_march + 3
+    } else {
+        from_march - 9
+    };
+    let year = era * 400 + year_of_era + i64::from(month <= 2);
+    Date::new(year as u16, month as u8, day as u8, precision).ok()
 }
 
 /// Convert complete civil time to integral seconds without timezone adjustment.
@@ -81,4 +86,45 @@ pub fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateT
         precision,
     )
     .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The seam is the constant-time day decoder, which no reader reaches
+    // for every day: each day of the years 1 to 9999 decodes to the civil
+    // date that `date_days`, counting years and months forward, encodes
+    // back to that day, one day after the day before it.
+    #[test]
+    fn every_day_of_the_years_1_to_9999_decodes_to_the_date_that_encodes_it() {
+        let (first, last) = (-EPOCH_ORDINAL, MAX_ORDINAL - EPOCH_ORDINAL);
+        let mut previous: Option<Date> = None;
+        for day in first..=last {
+            let date =
+                date_from_days(day, Precision::Day).unwrap_or_else(|| panic!("day {day} decodes"));
+            assert_eq!(i64::from(date_days(date)), day, "day {day} encodes back");
+            if let Some(previous) = previous {
+                assert!(previous < date, "day {day} follows the day before it");
+            }
+            previous = Some(date);
+        }
+        assert_eq!(
+            date_from_days(first, Precision::Day).map(|date| date.fields()),
+            Some((1, 1, 1)),
+            "the first day"
+        );
+        assert_eq!(
+            date_from_days(last, Precision::Day).map(|date| date.fields()),
+            Some((9999, 12, 31)),
+            "the last day"
+        );
+        for outside in [first - 1, last + 1, i64::MIN, i64::MAX] {
+            assert_eq!(
+                date_from_days(outside, Precision::Day),
+                None,
+                "day {outside}"
+            );
+        }
+    }
 }

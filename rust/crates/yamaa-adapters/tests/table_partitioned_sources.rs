@@ -569,6 +569,67 @@ mod table {
                 }
             }
 
+            /// A range keeps only its own records of the row groups it
+            /// reads, their missing values where they are: `NAME` is missing
+            /// for every third `ID` and `X` for every fourth, so ranges that
+            /// start and end inside a row group of three begin and end on
+            /// missing and present values alike (#4200).
+            #[test]
+            fn a_range_keeps_the_missing_values_of_its_records() {
+                use arrow_array::Float64Array;
+                let name = |id: i64| (id % 3 != 0).then(|| format!("r{id}"));
+                let half = |id: i64| (id % 4 != 0).then_some(id as f64 / 2.0);
+                let bytes = written(
+                    vec![
+                        ("ID", Arc::new(Int64Array::from_iter_values(1..=15))),
+                        ("NAME", Arc::new(StringArray::from_iter((1..=15).map(name)))),
+                        ("X", Arc::new(Float64Array::from_iter((1..=15).map(half)))),
+                    ],
+                    3,
+                );
+                let names: Vec<Option<String>> = (1..=15).map(name).collect();
+                let expected: Vec<Vec<ValueRef<'_>>> = (1..=15i64)
+                    .map(|id| {
+                        let row = id as usize - 1;
+                        vec![
+                            ValueRef::Int(id),
+                            names[row]
+                                .as_deref()
+                                .map_or(ValueRef::Missing, ValueRef::Str),
+                            half(id).map_or(ValueRef::Missing, |x| {
+                                ValueRef::Float(yamaa_core::value::FiniteFloat::new(x).unwrap())
+                            }),
+                        ]
+                    })
+                    .collect();
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let mut decoder = Decoder::<Infallible>::default();
+                let scanned = decoder
+                    .partitioned(
+                        &source,
+                        &bytes,
+                        SourceInterpretation::Ordinary,
+                        None,
+                        size(6),
+                        &mut |_, _| {},
+                    )
+                    .unwrap()
+                    .unwrap();
+                for range in [0..15, 2..7, 3..4, 4..5, 5..14, 11..12, 13..15, 7..7] {
+                    let part = decoder
+                        .partition(
+                            &scanned,
+                            &source,
+                            &bytes,
+                            SourceInterpretation::Ordinary,
+                            None,
+                            range.clone(),
+                        )
+                        .unwrap();
+                    assert_eq!(cells(&part), expected[range.clone()], "records {range:?}");
+                }
+            }
+
             /// A stored date outside the years 1 to 9999 in the third row
             /// group fails both reads at its row in the whole file, 8, not
             /// at its row in the partition (PARQUET-5).

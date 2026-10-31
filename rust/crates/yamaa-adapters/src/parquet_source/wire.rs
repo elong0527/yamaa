@@ -623,7 +623,6 @@ pub(super) fn accepted(bytes: &[u8], variant: i16) -> Result<bool, Error> {
 #[cfg(test)]
 mod tests {
     use super::super::{framing, reader};
-    use arrow_array::{Int64Array, TimestampMicrosecondArray};
     use parquet::file::metadata::ParquetMetaData;
 
     fn varint(mut value: u64, output: &mut Vec<u8>) {
@@ -820,9 +819,8 @@ mod tests {
     #[test]
     fn the_authored_file_reads_through_admission_and_the_native_decoder() {
         let decoded = reader::read(&file(&[7, -1], At::File, |fields| fields)).unwrap();
-        let column = decoded.batches[0].column(0);
-        let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
-        assert_eq!(values.values(), &[7, -1]);
+        let values = decoded.integers(0);
+        assert_eq!(values, &[7, -1]);
     }
 
     /// For each Thrift struct the native decoder reads, one known field with
@@ -1347,12 +1345,12 @@ mod tests {
         // listing that many entries or types reads.
         assert_eq!(KEY_VALUES, Limits::COLUMNS);
         let keys = file(&[7], At::File, |f| f.raw(5, 9, &entries(KEY_VALUES)));
-        assert_eq!(reader::read(&keys).unwrap().batches[0].num_rows(), 1);
+        assert_eq!(reader::read(&keys).unwrap().rows, 1);
         assert_eq!(GEOSPATIAL_TYPES, Limits::COLUMNS);
         let types = file(&[7], At::Meta, |f| {
             f.strct(17, geospatial(GEOSPATIAL_TYPES))
         });
-        assert_eq!(reader::read(&types).unwrap().batches[0].num_rows(), 1);
+        assert_eq!(reader::read(&types).unwrap().rows, 1);
     }
 
     /// `walk` gives each known field id one bit of a `u32`.
@@ -1483,9 +1481,8 @@ mod tests {
             f.strct(10, timestamp(Fields::default().strct(2, Fields::default())))
         });
         let decoded = reader::read(&bytes).unwrap();
-        let column = decoded.batches[0].column(0);
-        let values = column.as_any().downcast_ref::<TimestampMicrosecondArray>();
-        assert_eq!(values.unwrap().values(), &[0, 1_000_000]);
+        let values = decoded.integers(0);
+        assert_eq!(values, &[0, 1_000_000]);
         let cases: [Addition; 5] = [
             (At::File, |f| {
                 let pair = Fields::default().binary(1, b"k").binary(2, b"v").end();
@@ -1528,18 +1525,16 @@ mod tests {
         for (at, add) in cases {
             let decoded = reader::read(&file(&[7, -1], at, add));
             let decoded = decoded.unwrap_or_else(|error| panic!("{at:?}: {error:?}"));
-            let column = decoded.batches[0].column(0);
-            let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
-            assert_eq!(values.values(), &[7, -1], "{at:?}");
+            let values = decoded.integers(0);
+            assert_eq!(values, &[7, -1], "{at:?}");
         }
     }
 
     /// The values of the authored file's column `V`, read whole.
     fn read_values(bytes: &[u8]) -> Result<Vec<i64>, reader::Error> {
         let decoded = reader::read(bytes)?;
-        let column = decoded.batches[0].column(0);
-        let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
-        Ok(values.values().to_vec())
+        let values = decoded.integers(0);
+        Ok(values.to_vec())
     }
 
     /// Column orders bear only on statistics, which the engine never reads,
@@ -1989,9 +1984,8 @@ mod tests {
         // The native decoder reads each of the shortest key-value entries.
         let keys = file(&[7], At::File, |f| f.raw(5, 9, &list(N, &[0x18, 0, 0])));
         let decoded = reader::read(&keys).unwrap();
-        let column = decoded.batches[0].column(0);
-        let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
-        assert_eq!(values.values(), &[7]);
+        let values = decoded.integers(0);
+        assert_eq!(values, &[7]);
         // Every schema element but the root also names its repetition.
         let names = repeated(12, N, &root, &[0x48, 0, 0]);
         assert!(malformed(&columnless(&names, |f| f.raw(4, 9, &[0x0c]))));

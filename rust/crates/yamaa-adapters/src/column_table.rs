@@ -72,7 +72,7 @@ pub fn fits_utf8_offsets(lengths: impl IntoIterator<Item = usize>) -> bool {
 }
 
 /// One column of a table, of one column type.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Column {
     Str(Text),
     Int(Values<i64>),
