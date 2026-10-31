@@ -477,142 +477,66 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
     // How the driver input was read by partition (#3792), and the records
     // of each partition the run divides it into (#3830).
     let mut by_partition: Option<PartitionRead> = None;
-    for (index, declaration) in prepared.sources().iter().enumerate() {
-        // Record the request before crossing the host boundary so a panic leaves
-        // a truthful incomplete observation without discarding earlier sources.
-        attempt.sources.push(CapturedSource::new(declaration));
-        let observed = attempt.sources.last_mut().expect("requested source");
-        // A capture enters the resource unless it returns bytes the caller
-        // holds, which never fail: mark the entry first, so a failure or an
-        // unwound host boundary keeps a truthful observation.
-        observed.read.origin = Some(Origin::Resource);
-        let captured = resolver.capture(Name::Input(declaration));
-        observed.read.captured = captured.is_ok();
-        let owned = match captured {
-            Ok(captured) => {
-                observed.read.origin = Some(captured.origin);
-                observed.read.snapshots_created = Some(usize::from(captured.created));
-                observed.snapshot = Some(captured.bytes);
-                captured.table
-            }
-            Err(error) => {
-                observed.read.snapshots_created = Some(0);
-                observed.read.failure = resolver
-                    .failure(Name::Input(declaration), &error)
-                    .and_then(Failure::resource);
-                attempt.result = Err(PortError::Capture(error));
-                return;
+    let partitioning = scope.partitioning();
+    let driver = prepared.driver_index();
+    // Whether the driver input's decoding waits for the inputs declared
+    // after it (#4191), whose schemas decide whether it is read by partition.
+    let mut deferred = false;
+    let mut stopped = None;
+    for index in 0..prepared.sources().len() {
+        let owned = match capture_source::<R, D>(prepared, resolver, attempt, index) {
+            Ok(owned) => owned,
+            Err(stop) => {
+                stopped = Some(stop);
+                break;
             }
         };
-        let bytes = observed.snapshot.as_deref().expect("captured source");
-        if let Err(error) = crate::limits::Limits::source_bytes(bytes.len()) {
-            attempt.result = Err(PortError::Run(RunError::Boundary {
-                source: index,
-                error,
-            }));
+        if index == driver && defers(prepared, decoder, attempt, partitioning, owned.is_some()) {
+            deferred = true;
+            continue;
+        }
+        let read = (index == driver).then_some(partitioning).flatten();
+        match decode_source(
+            prepared,
+            decoder,
+            attempt,
+            &mut errors,
+            (index, owned),
+            read,
+        ) {
+            Ok(read) => by_partition = by_partition.or(read),
+            Err(stop) => {
+                stopped = Some(stop);
+                break;
+            }
+        }
+    }
+    if deferred {
+        // The driver input decodes last, by partition when every other input
+        // decoded and the plan bound to their schemas admits partitions, and
+        // its findings keep their place among the inputs'. A failure that
+        // ends the attempt there ends it as reading in declaration order
+        // does: before any later input.
+        let later = errors.split_off(errors.partition_point(|(index, _)| *index < driver));
+        let read = (driver, None);
+        match decode_source(prepared, decoder, attempt, &mut errors, read, partitioning) {
+            Ok(read) => {
+                errors.extend(later);
+                by_partition = read;
+            }
+            Err(stop) => {
+                attempt.sources.truncate(driver + 1);
+                stopped = Some(stop);
+            }
+        }
+    }
+    match stopped {
+        Some(Stop::Final) => return,
+        Some(Stop::Sources) => {
+            attempt.result = Err(PortError::Run(source_errors(errors)));
             return;
         }
-        let interpretation = prepared
-            .source_interpretation(index)
-            .expect("admitted source interpretation");
-        let contract = prepared.source_contract(index);
-        let owned_decoded = owned.as_ref().and_then(|table| {
-            decoder.served_table(declaration, table.as_ref(), interpretation, contract)
-        });
-        // Only a table the owned decoder accepted replaces the byte snapshot;
-        // a byte fallback keeps the bytes it actually decoded.
-        let used_owned = owned_decoded.is_some();
-        let read = scope.partitioning().and_then(|partitioning| {
-            if used_owned {
-                return None;
-            }
-            reads_by_partition(
-                prepared,
-                decoder,
-                declaration,
-                bytes,
-                interpretation,
-                partitioning,
-            )
-        });
-        let mut scanned = None;
-        let decoded = match owned_decoded {
-            Some(decoded) => decoded,
-            None => {
-                let scan = read.as_ref().and_then(|read| {
-                    scan(decoder, declaration, bytes, interpretation, contract, read)
-                });
-                match scan {
-                    Some(Ok((table, scan))) => {
-                        scanned = Some(scan);
-                        Ok(table)
-                    }
-                    Some(Err(error)) => Err(error),
-                    None => decoder.table(declaration, bytes, interpretation, contract),
-                }
-            }
-        };
-        if used_owned {
-            observed.snapshot = None;
-            observed.owned_snapshot = owned;
-        }
-        match decoded {
-            Ok(table) => {
-                observed.table = Some(table);
-                let table = observed.table.as_ref().expect("decoded source");
-                // An input read by partition is admitted a partition at a
-                // time, each on its own; any other input is admitted whole.
-                let admitted = admit_source_table(table, scanned.as_ref());
-                if let Err(error) = admitted {
-                    attempt.result = Err(PortError::Run(RunError::Boundary {
-                        source: index,
-                        error,
-                    }));
-                    return;
-                }
-                if let Some(scan) = scanned {
-                    match scan.odm {
-                        Ok(values) if !values.is_empty() => {
-                            errors.push((index, SourceIssue::OdmValues(values)))
-                        }
-                        Ok(_) => (),
-                        Err(error) => {
-                            attempt.result = Ok(ingestion_failure(odm_failure(
-                                error,
-                                declaration,
-                                index,
-                                prepared.driver_index(),
-                            )));
-                            return;
-                        }
-                    }
-                    by_partition = read.map(|read| (read, scan.partitions));
-                } else if prepared.source_interpretation(index) == Some(SourceInterpretation::Odm) {
-                    let table = attempt.sources[index]
-                        .table
-                        .as_ref()
-                        .expect("decoded ODM source");
-                    match odm_records(table, declaration, index, prepared.driver_index()) {
-                        Ok(values) if !values.is_empty() => {
-                            errors.push((index, SourceIssue::OdmValues(values)))
-                        }
-                        Ok(_) => (),
-                        Err(error) => {
-                            attempt.result = Ok(ingestion_failure(error));
-                            return;
-                        }
-                    }
-                }
-            }
-            Err(error) => {
-                let continuing = decoder.continue_after(&error);
-                errors.push((index, SourceIssue::Decode(error)));
-                if !continuing {
-                    attempt.result = Err(PortError::Run(source_errors(errors)));
-                    return;
-                }
-            }
-        }
+        None => (),
     }
     if !errors.is_empty() {
         attempt.result = Err(PortError::Run(source_errors(errors)));
@@ -626,6 +550,194 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
         (scope, input_finished),
         by_partition,
     );
+}
+
+/// Why reading the inputs stopped before every input was read: a failure
+/// the attempt's result holds, or a decoding failure after which no input
+/// decodes, whose result is the findings so far.
+enum Stop {
+    Final,
+    Sources,
+}
+
+/// Capture input `index`, recording its observation, and check its size: the
+/// table the resolver served in place of bytes, if any.
+fn capture_source<R: Resolver, D: Decoder>(
+    prepared: &PreparedSpecification,
+    resolver: &mut R,
+    attempt: &mut CapturedAttempt<R::Error, D::Error, D::Table>,
+    index: usize,
+) -> Result<Option<Arc<dyn std::any::Any + Send + Sync>>, Stop> {
+    let declaration = &prepared.sources()[index];
+    // Record the request before crossing the host boundary so a panic leaves
+    // a truthful incomplete observation without discarding earlier sources.
+    attempt.sources.push(CapturedSource::new(declaration));
+    let observed = attempt.sources.last_mut().expect("requested source");
+    // A capture enters the resource unless it returns bytes the caller
+    // holds, which never fail: mark the entry first, so a failure or an
+    // unwound host boundary keeps a truthful observation.
+    observed.read.origin = Some(Origin::Resource);
+    let captured = resolver.capture(Name::Input(declaration));
+    observed.read.captured = captured.is_ok();
+    let owned = match captured {
+        Ok(captured) => {
+            observed.read.origin = Some(captured.origin);
+            observed.read.snapshots_created = Some(usize::from(captured.created));
+            observed.snapshot = Some(captured.bytes);
+            captured.table
+        }
+        Err(error) => {
+            observed.read.snapshots_created = Some(0);
+            observed.read.failure = resolver
+                .failure(Name::Input(declaration), &error)
+                .and_then(Failure::resource);
+            attempt.result = Err(PortError::Capture(error));
+            return Err(Stop::Final);
+        }
+    };
+    let bytes = observed.snapshot.as_deref().expect("captured source");
+    if let Err(error) = crate::limits::Limits::source_bytes(bytes.len()) {
+        attempt.result = Err(PortError::Run(RunError::Boundary {
+            source: index,
+            error,
+        }));
+        return Err(Stop::Final);
+    }
+    Ok(owned)
+}
+
+/// Whether a partitioned run decodes its driver input after the inputs
+/// declared after it (#4191): they decide, with the driver input's header or
+/// footer, whether it is read by partition. A driver input the resolver
+/// served as a table, or one its decoder reads only whole, decodes in its
+/// place, as does a driver input declared last.
+fn defers<C, D: Decoder>(
+    prepared: &PreparedSpecification,
+    decoder: &mut D,
+    attempt: &CapturedAttempt<C, D::Error, D::Table>,
+    partitioning: Option<dataset::Partitioning>,
+    served: bool,
+) -> bool {
+    let driver = prepared.driver_index();
+    if partitioning.is_none() || served || driver + 1 == prepared.sources().len() {
+        return false;
+    }
+    let bytes = attempt.sources[driver]
+        .snapshot
+        .as_deref()
+        .expect("captured source");
+    let interpretation = prepared
+        .source_interpretation(driver)
+        .expect("admitted source interpretation");
+    decoder
+        .partition_schema(&prepared.sources()[driver], bytes, interpretation)
+        .is_some()
+}
+
+/// Decode and admit captured input `index`, whose resolver served `owned`,
+/// if any: read by partition when it is the driver input, `partitioning`
+/// asks for partitions and the plan admits them ([`reads_by_partition`]), and
+/// otherwise whole. A finding after which the remaining inputs still decode
+/// joins `errors`; any other failure stops the reading. Returns how the
+/// input was read by partition, if it was.
+fn decode_source<C, D: Decoder>(
+    prepared: &PreparedSpecification,
+    decoder: &mut D,
+    attempt: &mut CapturedAttempt<C, D::Error, D::Table>,
+    errors: &mut Vec<(usize, SourceIssue<D::Error>)>,
+    (index, owned): (usize, Option<Arc<dyn std::any::Any + Send + Sync>>),
+    partitioning: Option<dataset::Partitioning>,
+) -> Result<Option<PartitionRead>, Stop> {
+    let declaration = &prepared.sources()[index];
+    let bytes = Arc::clone(
+        attempt.sources[index]
+            .snapshot
+            .as_ref()
+            .expect("captured source"),
+    );
+    let interpretation = prepared
+        .source_interpretation(index)
+        .expect("admitted source interpretation");
+    let contract = prepared.source_contract(index);
+    let owned_decoded = owned.as_ref().and_then(|table| {
+        decoder.served_table(declaration, table.as_ref(), interpretation, contract)
+    });
+    // Only a table the owned decoder accepted replaces the byte snapshot;
+    // a byte fallback keeps the bytes it actually decoded.
+    let used_owned = owned_decoded.is_some();
+    let read = partitioning
+        .filter(|_| !used_owned)
+        .and_then(|partitioning| {
+            reads_by_partition(prepared, decoder, &attempt.sources, &bytes, partitioning)
+        });
+    let mut scanned = None;
+    let decoded = match owned_decoded {
+        Some(decoded) => decoded,
+        None => {
+            let scan = read.as_ref().and_then(|read| {
+                scan(decoder, declaration, &bytes, interpretation, contract, read)
+            });
+            match scan {
+                Some(Ok((table, scan))) => {
+                    scanned = Some(scan);
+                    Ok(table)
+                }
+                Some(Err(error)) => Err(error),
+                None => decoder.table(declaration, &bytes, interpretation, contract),
+            }
+        }
+    };
+    let observed = &mut attempt.sources[index];
+    if used_owned {
+        observed.snapshot = None;
+        observed.owned_snapshot = owned;
+    }
+    let table = match decoded {
+        Ok(table) => observed.table.insert(table),
+        Err(error) => {
+            let continuing = decoder.continue_after(&error);
+            errors.push((index, SourceIssue::Decode(error)));
+            return if continuing {
+                Ok(None)
+            } else {
+                Err(Stop::Sources)
+            };
+        }
+    };
+    // An input read by partition is admitted a partition at a time, each on
+    // its own; any other input is admitted whole.
+    if let Err(error) = admit_source_table(table, scanned.as_ref()) {
+        attempt.result = Err(PortError::Run(RunError::Boundary {
+            source: index,
+            error,
+        }));
+        return Err(Stop::Final);
+    }
+    let driver = prepared.driver_index();
+    let odm = match scanned {
+        Some(scan) => {
+            let partitions = scan.partitions;
+            scan.odm
+                .map_err(|error| odm_failure(error, declaration, index, driver))
+                .map(|values| (values, read.map(|read| (read, partitions))))
+        }
+        None if interpretation == SourceInterpretation::Odm => {
+            odm_records(table, declaration, index, driver).map(|values| (values, None))
+        }
+        None => Ok((Vec::new(), None)),
+    };
+    match odm {
+        Ok((values, read)) => {
+            if !values.is_empty() {
+                errors.push((index, SourceIssue::OdmValues(values)));
+            }
+            Ok(read)
+        }
+        Err(error) => {
+            attempt.result = Ok(ingestion_failure(error));
+            Err(Stop::Final)
+        }
+    }
 }
 
 /// Bind and execute inputs after every capture and admission succeeds.
@@ -793,12 +905,14 @@ fn divided(
 }
 
 /// How a partitioned run reads its driver input by partition (#3792), if it
-/// does: the specification reads no other input, the decoder reads this
-/// one's profile by partition, and the plan, bound to the schema the input's
-/// header or footer declares, has no step that needs the whole table under
-/// the run's partitions. Every other run reads each input whole and admits
-/// it whole, so a plan with such a step, or the whole-table fallback that
-/// runs it, refuses an input beyond the row or cell limit exactly as an
+/// does: every other input is decoded, the decoder reads the driver input's
+/// profile by partition, and the plan, bound to the schema the driver
+/// input's header or footer declares and to the other inputs' schemas, has
+/// no step that needs the whole table under the run's partitions. Every
+/// other input is read whole before any partition, and every partition
+/// reads it (#4191). Every other run reads each input whole and admits it
+/// whole, so a plan with such a step, or the whole-table fallback that runs
+/// it, refuses an input beyond the row or cell limit exactly as an
 /// unpartitioned run does.
 ///
 /// Key-bounded partitions (#3763) are cut as the scan reads the records, by
@@ -807,16 +921,20 @@ fn divided(
 fn reads_by_partition<D: Decoder>(
     prepared: &PreparedSpecification,
     decoder: &mut D,
-    declaration: &SourceDeclaration,
+    sources: &[CapturedSource<D::Table>],
     bytes: &[u8],
-    interpretation: SourceInterpretation,
     partitioning: dataset::Partitioning,
 ) -> Option<ByPartition> {
-    if prepared.sources().len() != 1 {
-        return None;
-    }
-    let schema = decoder.partition_schema(declaration, bytes, interpretation)?;
-    let plan = prepared.bind_sources(&[&schema]).ok()?;
+    let driver = prepared.driver_index();
+    let interpretation = prepared.source_interpretation(driver)?;
+    // Every other input's schema, then the driver input's header or footer.
+    let mut schemas = (0..prepared.sources().len())
+        .filter(|&index| index != driver)
+        .map(|index| sources.get(index)?.table.as_ref().map(TableAccess::schema))
+        .collect::<Option<Vec<_>>>()?;
+    let schema = decoder.partition_schema(&prepared.sources()[driver], bytes, interpretation)?;
+    schemas.insert(driver, &schema);
+    let plan = prepared.bind_sources(&schemas).ok()?;
     let keys = partitioning
         .leading_keys
         .map_or(0, |keys| keys.get().min(plan.keys().len()));

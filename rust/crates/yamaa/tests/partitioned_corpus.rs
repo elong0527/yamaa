@@ -47,7 +47,8 @@
 //! the same holds of that run. Every benchmark the specifications show to
 //! group its windows and aggregates by those keys is admitted: it runs with
 //! no fallback, divided where its input is grouped by those keys and as one
-//! partition where it is not.
+//! partition where it is not; so is every benchmark of [`LOOKUPS`], which
+//! reads its other inputs only through lookups (#4191).
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -116,6 +117,28 @@ const KEY_BOUNDED: [&str; 34] = [
     "adam-advs-orthostatic-criteria",
     "adam-advs-prior-result",
     "adam-clinsite-site-level",
+];
+
+/// Benchmarks that read another input beside their driver input, which
+/// key-bounded partitions over their two leading declared keys must admit
+/// too (#4191), read from their specifications: every other input is read
+/// only through lookups, each of the input's records unchanged, so every
+/// partition reads it whole. adam-adlb-bds reads ADSL by its declared key
+/// beside windows and an aggregate grouped by both keys; schema-lookup
+/// reads two intermediates, each over its own input; schema-lookup-source-range
+/// reads an input by its key within a date range, and
+/// schema-lookup-nearest-date an intermediate by the nearest date;
+/// schema-lookup-intermediate-unique verifies its intermediate unique; and
+/// negative-lookup-unmatched-key and negative-source-require-match fail
+/// where a row has no record, with the whole-table run's issue.
+const LOOKUPS: [&str; 7] = [
+    "adam-adlb-bds",
+    "negative-lookup-unmatched-key",
+    "negative-source-require-match",
+    "schema-lookup",
+    "schema-lookup-intermediate-unique",
+    "schema-lookup-nearest-date",
+    "schema-lookup-source-range",
 ];
 
 /// The benchmarks this test leaves out: exactly those whose project lists
@@ -768,6 +791,7 @@ fn partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_funct
     }
     let not_admitted: Vec<&str> = KEY_BOUNDED
         .into_iter()
+        .chain(LOOKUPS)
         .filter(|name| !key_admitted.iter().any(|case| case == name))
         .collect();
     assert!(
