@@ -1,0 +1,30 @@
+yamaa: "1.0"
+type: function
+name: bmi
+description: Body mass index from a weight in kg and a height in cm.
+params:
+  - {name: weight_kg, type: float}
+  - {name: height_cm, type: float}
+returns: float
+implementations: {python: yamaa_performance_bmi.bmi}
+
+tests:
+  - id: normal
+    covers: [normal, numeric-comparison]
+    args: {weight_kg: 70.0, height_cm: 175.0}
+    result: 22.857142857142858
+
+  - id: zero-weight
+    covers: [boundary, numeric-comparison]
+    args: {weight_kg: 0.0, height_cm: 175.0}
+    result: 0.0
+
+  - id: missing-weight
+    covers: ["short-circuit-missing:weight_kg"]
+    args: {weight_kg: null, height_cm: 175.0}
+    result: null
+
+  - id: missing-height
+    covers: ["short-circuit-missing:height_cm"]
+    args: {weight_kg: 70.0, height_cm: null}
+    result: null

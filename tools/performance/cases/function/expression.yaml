@@ -1,0 +1,40 @@
+# BMI as a yamaa expression, one row per subject. function.yaml computes the
+# same BMI through a Python project function, with the same arithmetic in the
+# same order, so the two outputs are equal and their times differ by the calls.
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/vitals.parquet
+
+output:
+  path: adsl.parquet
+  columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: HEIGHTCM
+    type: float
+    label: Height (cm)
+    derivation: SOURCE.HEIGHTCM
+
+  - name: WEIGHTKG
+    type: float
+    label: Weight (kg)
+    derivation: SOURCE.WEIGHTKG
+
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation: "WEIGHTKG / ((HEIGHTCM / 100) * (HEIGHTCM / 100))"

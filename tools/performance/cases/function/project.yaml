@@ -1,0 +1,8 @@
+# The project that gives function.yaml its function. It names no lock, so the
+# installed callable runs unchecked; the runner puts this directory on the
+# Python path.
+yamaa: "1.0"
+type: project
+functions: [functions/bmi.yaml]
+adam:
+  specs: [function.yaml]

@@ -1,0 +1,132 @@
+# benchmarks/adam-adlb-bds/spec.yaml for scaled inputs: its inputs and output
+# are Parquet, so the input types come from the files, and its verifications,
+# which count the benchmark's 20 rows, are left out. Keep the derivation the
+# same as the benchmark's; polars_cases.py and dplyr_bds.R repeat it.
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
+input:
+  LB: input/lb.parquet
+  ADSL: {path: input/adsl.parquet, key: [STUDYID, USUBJID]}
+
+output:
+  path: adlb.parquet
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, ADT, TRTSDT, TRT01A, AVAL, AVALU,
+            ABLFL, BASE, CHG, PCHG, ASEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: LB.LBDTC
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: ADSL.TRTSDT
+
+  - name: TRT01A
+    type: str
+    label: Actual Treatment for Period 01
+    derivation: ADSL.TRT01A
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+
+  # Baseline is the latest record on or before treatment start, per subject
+  # and parameter; BASE repeats its value on every record.
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation:
+      baseline_flag:
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD]
+        date: ADT
+        reference: TRTSDT
+        source: AVAL
+
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation:
+      aggregate:
+        filter: "ABLFL = 'Y'"
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        expr: "ONLY(AVAL)"
+
+  - name: CHG
+    type: float
+    label: Change from Baseline
+    derivation: "AVAL - BASE"
+
+  # NULLIF leaves the percentage empty when the baseline value is zero.
+  - name: PCHG
+    type: float
+    label: Percent Change from Baseline
+    derivation: "100 * CHG / NULLIF(BASE, 0)"
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [PARAMCD, ADT]
+
+# One record per collected ALT and AST result with a numeric value, plus a
+# second ALT record converted to SI units (1 U/L = 0.0167 ukat/L).
+rows:
+  - id: alt
+    dataset: LB
+    filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD: "'ALT'"
+      PARAM: "'Alanine Aminotransferase'"
+      AVAL: LB.LBSTRESN
+      AVALU: LB.LBSTRESU
+
+  - id: alt_si
+    dataset: LB
+    filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD: "'ALTSI'"
+      PARAM: "'Alanine Aminotransferase (SI)'"
+      AVAL: "LB.LBSTRESN * 0.0167"
+      AVALU: "'ukat/L'"
+
+  - id: ast
+    dataset: LB
+    filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD: "'AST'"
+      PARAM: "'Aspartate Aminotransferase'"
+      AVAL: LB.LBSTRESN
+      AVALU: LB.LBSTRESU
+
