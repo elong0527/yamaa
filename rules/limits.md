@@ -30,11 +30,13 @@ refusals a build reports, without reading any input record.
 
 <a id="limit-2"></a>
 
-### LIMIT-2. One fixed policy bounds each file, table, declaration, pattern and built text, and no caller selects another
+### LIMIT-2. One fixed policy bounds each file, table, declaration, pattern and built text
 
 Each file, table, declaration, compiled regular expression and built text value
 is admitted against the fixed maximum below at the boundary that owns it,
-before it is kept or grown. No caller selects other limits, no budget is shared
+before it is kept or grown. No caller selects other limits, except the
+archive-member, expanded-byte and XML-depth bounds that `read_odm()` and
+`yamaa read-odm` take ([ODM-1](reference/odm.md#odm-1)); no budget is shared
 between boundaries, and no limit depends on available memory.
 
 Fails: `engine_rejected`.
