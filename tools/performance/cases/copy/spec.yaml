@@ -1,0 +1,50 @@
+# SDTM LB copied unchanged from Parquet to Parquet: one input, plain references,
+# and the keys LB is already sorted by, so the run takes the single-input,
+# partitioned path.
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: LB
+keys: [STUDYID, USUBJID, LBTESTCD, LBDTC]
+input:
+  SOURCE: input/lb.parquet
+
+output:
+  path: lb.parquet
+  columns: [STUDYID, USUBJID, LBTESTCD, LBTEST, LBDTC, LBSTRESN, LBSTRESU]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation: SOURCE.LBTESTCD
+
+  - name: LBTEST
+    type: str
+    label: Lab Test or Examination Name
+    derivation: SOURCE.LBTEST
+
+  - name: LBDTC
+    type: date
+    label: Date of Specimen Collection
+    derivation: SOURCE.LBDTC
+
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result in Standard Units
+    derivation: SOURCE.LBSTRESN
+
+  - name: LBSTRESU
+    type: str
+    label: Standard Units
+    derivation: SOURCE.LBSTRESU

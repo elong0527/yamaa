@@ -221,6 +221,8 @@ are that proof; `HOSTS=python` or `HOSTS=r` runs one half, and only to debug
 a failure of that gate (D148 on #3030). `make probe-executor` times one
 specification at three row counts; `examples/executor_probe.rs` in the
 `yamaa` crate documents it, and its timings go on an issue.
+[`tools/performance/`](tools/performance/README.md) compares whole runs with
+polars and dplyr at four input sizes, by hand; its results go on an issue too.
 
 ## Writing tests
 

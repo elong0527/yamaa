@@ -1,0 +1,43 @@
+# expression.yaml with BMI from the project function `bmi`, which
+# yamaa_performance_bmi.bmi implements in Python, called once per row
+# (FUNC-8). Run it through project.yaml.
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/vitals.parquet
+
+output:
+  path: adsl.parquet
+  columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: HEIGHTCM
+    type: float
+    label: Height (cm)
+    derivation: SOURCE.HEIGHTCM
+
+  - name: WEIGHTKG
+    type: float
+    label: Weight (kg)
+    derivation: SOURCE.WEIGHTKG
+
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      function:
+        name: bmi
+        args: {weight_kg: WEIGHTKG, height_cm: HEIGHTCM}
