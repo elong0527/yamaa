@@ -64,19 +64,25 @@ declared on a `parquet` path fails under [CSV-6](csv.md#csv-6).
 Parquet artifacts written from the same completed dataset must read back
 identically: the same field names in the same order, the same logical types,
 the same rows in the same order, the same nulls, and the same values, with
-every `DOUBLE` bit-identical. An implementation writes uncompressed pages and
-adds no key-value metadata of its own beyond what the format requires.
-Conforming parquet artifacts are not required to have identical bytes.
+every `DOUBLE` bit-identical. An implementation adds no key-value metadata of
+its own beyond what the format requires. Conforming parquet artifacts are not
+required to have identical bytes, and an implementation may change their
+encoding, compression, page and row-group sizes and statistics between
+releases.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-adapters/src/parquet_artifact/encode.rs::a_page_or_footer_its_size_field_cannot_count_is_refused`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-adapters/tests/table_parquet_readback.rs::every_table_reads_back_as_authored_whole_and_a_partition_at_a_time`, `rust/crates/yamaa-adapters/src/parquet_artifact/encode.rs::a_page_or_footer_its_size_field_cannot_count_is_refused`.
 
 An artifact that must be byte-identical uses the `csv` profile.
 
 A page header counts its page's bytes in a signed 32-bit integer, and the
 four bytes before the closing magic count the footer's bytes unsigned. The
-writer stores one column's values of 1,024 consecutive rows as one page and
-names every field in the footer once per row group, so a page holds at most
-2,147,483,647 bytes and the footer at most 4,294,967,295. An output whose page
+writer fills row groups of 131,072 rows and names every field in the footer
+once per row group. It stores one column's values of consecutive rows in
+Zstandard-compressed pages, each closed once its values reach 1 MiB, and a row
+group's values of a column in a dictionary when its distinct values fit in
+1 MiB. A page holds at most 2,147,483,647 bytes and the footer at most
+4,294,967,295, so a single value, or names long enough over enough row groups,
+can pass a count. An output whose page
 or footer would pass its count is refused as that limit, `parquet_page_bytes`
 or `parquet_footer_bytes`, and no file is saved, as an output over the output
 byte limit is refused as `output_bytes`.

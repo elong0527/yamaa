@@ -66,3 +66,32 @@ impl yamaa::ProjectFunctions for NoFunctions {
         unreachable!("the test calls no project function")
     }
 }
+
+/// A Parquet file's field names and rows as the engine's Parquet reader
+/// reads them back, each cell its type and value, a float by its bits: two
+/// files that read back alike have equal values (PARQUET-4), whatever their
+/// bytes (D305). `None` when the reader refuses the file.
+#[cfg(feature = "parquet")]
+pub fn parquet_values(bytes: &[u8]) -> Option<(Vec<String>, Vec<Vec<String>>)> {
+    use yamaa_core::table::{TableAccess, ValueRef};
+    let table = yamaa_adapters::parquet_source::parse(bytes).ok()?;
+    let columns = table.schema().columns();
+    let names = columns.iter().map(|column| column.name.clone()).collect();
+    let mut rows = Vec::with_capacity(table.row_count());
+    for row in 0..table.row_count() {
+        let mut cells = Vec::with_capacity(columns.len());
+        for column in 0..columns.len() {
+            cells.push(match table.cell(row, column).ok()? {
+                ValueRef::Missing => "missing".to_owned(),
+                ValueRef::Str(text) => format!("str {text:?}"),
+                ValueRef::Int(value) => format!("int {value}"),
+                ValueRef::Float(value) => format!("float {:016x}", value.get().to_bits()),
+                ValueRef::Date(date) => format!("date {:?}", date.fields()),
+                ValueRef::DateTime(datetime) => format!("datetime {:?}", datetime.fields()),
+                ValueRef::Bool(value) => format!("bool {value}"),
+            });
+        }
+        rows.push(cells);
+    }
+    Some((names, rows))
+}

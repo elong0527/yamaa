@@ -674,13 +674,8 @@ class ParquetOriginalOutput(unittest.TestCase):
             physical, logical = expected_types[kind]
             self.assertEqual(reader.schema.column(column).physical_type, physical)
             self.assertEqual(reader.schema.column(column).logical_type.type, logical)
-        for group in range(reader.metadata.num_row_groups):
-            for column in range(reader.metadata.num_columns):
-                self.assertEqual(
-                    reader.metadata.row_group(group).column(column).compression,
-                    "UNCOMPRESSED",
-                )
-                self.assertEqual(reader.schema.column(column).max_definition_level, 1)
+        for column in range(reader.metadata.num_columns):
+            self.assertEqual(reader.schema.column(column).max_definition_level, 1)
         actual = reader.read().to_pylist()
         projection = [derived["columns"].index(c) for c in artifact["columns"]]
         for row, truth in zip(actual, derived["rows"], strict=True):
@@ -774,9 +769,6 @@ class ParquetOriginalOutput(unittest.TestCase):
         self.assertEqual(timestamp["timeUnit"], "microseconds")
         for i in range(6):
             self.assertEqual(reader.schema.column(i).max_definition_level, 1)
-            self.assertEqual(
-                reader.metadata.row_group(0).column(i).compression, "UNCOMPRESSED"
-            )
         rows = reader.read().to_pylist()
         self.assertEqual([row["I"] for row in rows], [-(2**63), 2**63 - 1, 2**53 + 1])
         self.assertEqual([row["S"] for row in rows], [None, "\u00e9\U0001f642", "text"])

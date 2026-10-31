@@ -1,20 +1,23 @@
-//! The native writer of the closed Parquet output profile (#3878).
+//! The native writer of the Parquet output profile (#3878).
 //!
-//! It writes the bytes that the 1.0 writer, parquet 55.2.0's
-//! `SerializedFileWriter` under the settings below, saved (D160 on #3030), so
-//! every 1.x release keeps them, the footer's `created_by` included. Each
-//! projected column is an OPTIONAL leaf of the type PARQUET-1 maps its column
-//! type to. Rows fill row groups of 1,024; each column chunk of a row group is
-//! one uncompressed V1 data page of PLAIN values after its RLE definition
-//! levels, with no dictionary, statistics, page index or key-value metadata.
-//! The footer lists the column chunks' encodings, PLAIN and RLE, one page
-//! encoding statistic and a type-defined column order for each column.
+//! A saved file promises its values, not its bytes (D305 on #4184): the
+//! layout below may change between releases while every file reads back as
+//! PARQUET-4 asks. Each projected column is an OPTIONAL leaf of the type
+//! PARQUET-1 maps its column type to. Rows fill row groups of 131,072. A
+//! column chunk whose distinct values take at most 1 MiB as PLAIN values is
+//! dictionary-encoded: one dictionary page of those values, then data pages
+//! of RLE_DICTIONARY indices; any other chunk's data pages hold PLAIN values.
+//! A data page is a V1 page of consecutive rows, their RLE definition levels
+//! then their values, closed once its rows' PLAIN values reach 1 MiB. Every
+//! page is compressed with Zstandard. There are no statistics, page index or
+//! key-value metadata.
 //!
 //! The footer and page headers are Thrift compact structs (`Compact`), and the
-//! definition levels are the RLE/bit-packed hybrid as parquet 55's
-//! `RleEncoder` chose its runs (`Levels`), so the bytes are the same.
+//! definition levels and dictionary indices are the RLE/bit-packed hybrid
+//! (`hybrid`).
 use super::Error;
 use crate::epoch::{date_days, datetime_seconds};
+use std::collections::HashMap;
 use std::ops::Range;
 use yamaa_core::{
     limits::Limits,
@@ -23,20 +26,23 @@ use yamaa_core::{
 };
 
 /// The rows of a full row group.
-const ROW_GROUP_ROWS: usize = 1024;
+const ROW_GROUP_ROWS: usize = 1 << 17;
 
-/// The writer that the footer names (D160).
-const CREATED_BY: &[u8] = b"parquet-rs version 55.2.0";
+/// The PLAIN values at which a data page closes, and the most a column
+/// chunk's dictionary holds as PLAIN values.
+const PAGE_BYTES: usize = 1 << 20;
+
+/// The Zstandard level of every page.
+const ZSTD_LEVEL: i32 = 1;
+
+/// The writer that the footer names.
+const CREATED_BY: &str = concat!("yamaa version ", env!("CARGO_PKG_VERSION"));
 
 /// The magic bytes that begin and end a Parquet file.
 const MAGIC: &[u8] = b"PAR1";
 
-/// The most row groups a file holds: the 1.0 writer numbered each with an
-/// i16 ordinal and refused the next.
-const ROW_GROUPS: usize = 1 << 15;
-
 /// A page's size as the Thrift i32 its header holds, or the refusal of a
-/// body larger than an i32 counts, which the 1.0 writer wrapped (#4075).
+/// body larger than an i32 counts (#4075).
 fn page_size<E>(body: usize) -> Result<i32, Error<E>> {
     i32::try_from(body).map_err(|_| Error::Limit {
         resource: "parquet_page_bytes",
@@ -53,9 +59,9 @@ fn value_length<E>(value: usize) -> Result<u32, Error<E>> {
 }
 
 /// The footer's length as the four bytes that end it, or the refusal of
-/// metadata longer than a u32 counts, which the 1.0 writer wrapped: each
-/// row group repeats every field's name, so long names over many row groups
-/// can pass it within the output byte limit (#4075).
+/// metadata longer than a u32 counts: each row group repeats every field's
+/// name, so long names over many row groups can pass it within the output
+/// byte limit (#4075).
 fn footer_length<E>(metadata: usize) -> Result<u32, Error<E>> {
     u32::try_from(metadata).map_err(|_| Error::Limit {
         resource: "parquet_footer_bytes",
@@ -76,15 +82,16 @@ mod code {
     pub const TIMESTAMP_MICROS: i32 = 10;
     pub const PLAIN: i32 = 0;
     pub const RLE: i32 = 3;
-    pub const UNCOMPRESSED: i32 = 0;
+    pub const RLE_DICTIONARY: i32 = 8;
+    pub const ZSTD: i32 = 6;
     pub const DATA_PAGE: i32 = 0;
+    pub const DICTIONARY_PAGE: i32 = 2;
 }
 
 /// Thrift compact wire types.
 mod wire {
     pub const TRUE: u8 = 1;
     pub const FALSE: u8 = 2;
-    pub const I16: u8 = 4;
     pub const I32: u8 = 5;
     pub const I64: u8 = 6;
     pub const BINARY: u8 = 8;
@@ -108,14 +115,6 @@ impl Compact {
         }
     }
 
-    fn varint(&mut self, mut value: u64) {
-        while value >= 0x80 {
-            self.bytes.push(value as u8 | 0x80);
-            value >>= 7;
-        }
-        self.bytes.push(value as u8);
-    }
-
     /// The header of field `id` of wire type `kind`: the delta from the last
     /// id in its four high bits when it is 1 to 15, or else the type, then
     /// the id as a zigzag varint.
@@ -127,23 +126,18 @@ impl Compact {
             self.bytes.push((delta as u8) << 4 | kind);
         } else {
             self.bytes.push(kind);
-            self.varint(zigzag(i64::from(id)));
+            varint(&mut self.bytes, zigzag(i64::from(id)));
         }
-    }
-
-    fn i16(&mut self, id: i16, value: i16) {
-        self.field(id, wire::I16);
-        self.varint(zigzag(i64::from(value)));
     }
 
     fn i32(&mut self, id: i16, value: i32) {
         self.field(id, wire::I32);
-        self.varint(zigzag(i64::from(value)));
+        varint(&mut self.bytes, zigzag(i64::from(value)));
     }
 
     fn i64(&mut self, id: i16, value: i64) {
         self.field(id, wire::I64);
-        self.varint(zigzag(value));
+        varint(&mut self.bytes, zigzag(value));
     }
 
     fn bool(&mut self, id: i16, value: bool) {
@@ -179,16 +173,16 @@ impl Compact {
             self.bytes.push((size as u8) << 4 | kind);
         } else {
             self.bytes.push(0xf0 | kind);
-            self.varint(size as u64);
+            varint(&mut self.bytes, size as u64);
         }
     }
 
     fn element_i32(&mut self, value: i32) {
-        self.varint(zigzag(i64::from(value)));
+        varint(&mut self.bytes, zigzag(i64::from(value)));
     }
 
     fn element_binary(&mut self, value: &[u8]) {
-        self.varint(value.len() as u64);
+        varint(&mut self.bytes, value.len() as u64);
         self.bytes.extend_from_slice(value);
     }
 
@@ -199,124 +193,68 @@ impl Compact {
     }
 }
 
+/// An unsigned LEB128 varint, as Thrift's compact protocol and the hybrid's
+/// run headers write one.
+fn varint(bytes: &mut Vec<u8>, mut value: u64) {
+    while value >= 0x80 {
+        bytes.push(value as u8 | 0x80);
+        value >>= 7;
+    }
+    bytes.push(value as u8);
+}
+
 fn zigzag(value: i64) -> u64 {
     ((value << 1) ^ (value >> 63)) as u64
 }
 
-/// Definition levels of an OPTIONAL leaf, one bit wide, in the RLE/bit-packed
-/// hybrid as parquet 55's `RleEncoder` writes them: values wait in groups of
-/// eight, a value repeated eight times or more becomes an RLE run, and other
-/// groups join a bit-packed run of at most 63 groups, whose header byte is
-/// reserved before its first group and written when the run ends.
-struct Levels {
-    bytes: Vec<u8>,
-    buffered: [u8; 8],
-    count: usize,
-    current: u8,
-    repeat: usize,
-    packed: usize,
-    indicator: Option<usize>,
+/// The values from `start` that equal the value at `start`.
+fn run<T: PartialEq>(values: &[T], start: usize) -> usize {
+    values[start..]
+        .iter()
+        .take_while(|&value| *value == values[start])
+        .count()
 }
 
-impl Levels {
-    fn new() -> Self {
-        Self {
-            bytes: Vec::new(),
-            buffered: [0; 8],
-            count: 0,
-            current: 0,
-            repeat: 0,
-            packed: 0,
-            indicator: None,
+/// `values`, each of `width` bits (1 to 32), in the RLE/bit-packed hybrid:
+/// a value repeated eight times or more from where a run may begin is an RLE
+/// run, and the values between such runs are bit-packed eight to a group,
+/// only the last group of all padded with zeros.
+fn hybrid<T: Copy + PartialEq + Into<u32>>(values: &[T], width: u32, bytes: &mut Vec<u8>) {
+    let mut start = 0;
+    while start < values.len() {
+        let repeated = run(values, start);
+        if repeated >= 8 {
+            varint(bytes, (repeated as u64) << 1);
+            let value = values[start].into().to_le_bytes();
+            bytes.extend_from_slice(&value[..width.div_ceil(8) as usize]);
+            start += repeated;
+            continue;
         }
-    }
-
-    fn put(&mut self, value: u8) {
-        if self.current == value {
-            self.repeat += 1;
-            if self.repeat > 8 {
-                return;
+        let mut end = start;
+        loop {
+            end += 8;
+            if end >= values.len() {
+                end = values.len();
+                break;
             }
-        } else {
-            if self.repeat >= 8 {
-                self.flush_rle();
-            }
-            self.repeat = 1;
-            self.current = value;
-        }
-        self.buffered[self.count] = value;
-        self.count += 1;
-        if self.count == 8 {
-            self.flush_buffered();
-        }
-    }
-
-    fn varint(&mut self, mut value: usize) {
-        while value >= 0x80 {
-            self.bytes.push(value as u8 | 0x80);
-            value >>= 7;
-        }
-        self.bytes.push(value as u8);
-    }
-
-    fn flush_rle(&mut self) {
-        self.varint(self.repeat << 1);
-        self.bytes.push(self.current);
-        self.count = 0;
-        self.repeat = 0;
-    }
-
-    /// Write the buffered group, if any, to the bit-packed run, and its header
-    /// byte when `end` ends the run.
-    fn flush_packed(&mut self, end: bool) {
-        let indicator = *self.indicator.get_or_insert_with(|| {
-            self.bytes.push(0);
-            self.bytes.len() - 1
-        });
-        if self.count > 0 {
-            let byte = (0..self.count).fold(0, |byte, i| byte | self.buffered[i] << i);
-            self.bytes.push(byte);
-        }
-        self.count = 0;
-        if end {
-            self.bytes[indicator] = ((self.packed / 8) << 1 | 1) as u8;
-            self.indicator = None;
-            self.packed = 0;
-        }
-    }
-
-    fn flush_buffered(&mut self) {
-        if self.repeat >= 8 {
-            self.count = 0;
-            if self.packed > 0 {
-                self.flush_packed(true);
-            }
-            return;
-        }
-        self.packed += self.count;
-        self.flush_packed(self.packed / 8 + 1 >= 64);
-        self.repeat = 0;
-    }
-
-    /// The encoded levels, after their length as four little-endian bytes.
-    fn finish(mut self) -> Vec<u8> {
-        if self.packed > 0 || self.repeat > 0 || self.count > 0 {
-            let all_repeat = self.packed == 0 && (self.repeat == self.count || self.count == 0);
-            if self.repeat > 0 && all_repeat {
-                self.flush_rle();
-            } else {
-                if self.count > 0 {
-                    self.buffered[self.count..].fill(0);
-                    self.count = 8;
-                }
-                self.packed += self.count;
-                self.flush_packed(true);
-                self.repeat = 0;
+            if run(values, end) >= 8 {
+                break;
             }
         }
-        let mut page = (self.bytes.len() as u32).to_le_bytes().to_vec();
-        page.extend(self.bytes);
-        page
+        let groups = (end - start).div_ceil(8);
+        varint(bytes, (groups as u64) << 1 | 1);
+        let (mut buffer, mut bits) = (0u64, 0);
+        for index in start..start + groups * 8 {
+            let value = values.get(index).map_or(0, |&value| value.into());
+            buffer |= u64::from(value) << bits;
+            bits += width;
+            while bits >= 8 {
+                bytes.push(buffer as u8);
+                buffer >>= 8;
+                bits -= 8;
+            }
+        }
+        start = end;
     }
 }
 
@@ -353,24 +291,105 @@ fn logical(footer: &mut Compact, kind: ColumnType) {
     footer.end();
 }
 
-/// One projected column's levels and PLAIN values for the row group being
-/// filled.
+/// Each PLAIN value of a column of `kind` in `values`, as its bytes: a
+/// string with the four length bytes before it.
+fn plain_values(kind: ColumnType, values: &[u8]) -> impl Iterator<Item = &[u8]> {
+    let mut rest = values;
+    std::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let width = match kind {
+            ColumnType::Str => {
+                let length = u32::from_le_bytes(rest[..4].try_into().expect("four bytes"));
+                4 + length as usize
+            }
+            ColumnType::Date => 4,
+            ColumnType::Int | ColumnType::Float | ColumnType::DateTime => 8,
+        };
+        let (value, after) = rest.split_at(width);
+        rest = after;
+        Some(value)
+    })
+}
+
+/// The dictionary's hash of a PLAIN value: aHash under fixed seeds, as
+/// grouping hashes rows (#4188). It only finds a value's candidate entry;
+/// equal bytes decide, so a `DOUBLE` keeps its bits, and entries follow
+/// first occurrence, so no output depends on the hasher.
+fn value_hasher() -> ahash::RandomState {
+    ahash::RandomState::with_seeds(
+        0x243f_6a88_85a3_08d3,
+        0x1319_8a2e_0370_7344,
+        0xa409_3822_299f_31d0,
+        0x082e_fa98_ec4e_6c89,
+    )
+}
+
+/// A column chunk's dictionary: its PLAIN values, their count, and each
+/// present value's index into it.
+struct Dictionary {
+    page: Vec<u8>,
+    entries: usize,
+    indices: Vec<u32>,
+}
+
+/// Where a closed data page of a row group ends: after its rows, its present
+/// values, and its PLAIN bytes.
+#[derive(Clone, Copy, Default)]
+struct Bound {
+    rows: usize,
+    values: usize,
+    bytes: usize,
+}
+
+/// One projected column's levels, PLAIN values and closed pages for the row
+/// group being filled.
 struct Pending {
     kind: ColumnType,
     levels: Vec<u8>,
     values: Vec<u8>,
+    present: usize,
+    pages: Vec<Bound>,
+}
+
+/// A column chunk's encoded pages: its dictionary page if it has one, its
+/// data pages one after another, how many data pages, and the bytes all its
+/// pages would take uncompressed, headers included.
+struct Encoded {
+    dictionary: Option<Vec<u8>>,
+    data: Vec<u8>,
+    pages: usize,
+    uncompressed: usize,
 }
 
 impl Pending {
     fn new(kind: ColumnType) -> Self {
         Self {
             kind,
-            levels: Vec::with_capacity(ROW_GROUP_ROWS),
+            levels: Vec::new(),
             values: Vec::new(),
+            present: 0,
+            pages: Vec::new(),
         }
     }
 
-    /// Append one cell: a missing value as a null level.
+    /// The end of the last closed page, or the row group's start.
+    fn closed(&self) -> Bound {
+        self.pages.last().copied().unwrap_or_default()
+    }
+
+    /// Close the open page at the rows pushed so far.
+    fn close(&mut self) {
+        self.pages.push(Bound {
+            rows: self.levels.len(),
+            values: self.present,
+            bytes: self.values.len(),
+        });
+    }
+
+    /// Append one cell: a missing value as a null level. The open page
+    /// closes once its PLAIN values reach `PAGE_BYTES`.
     fn push<E>(&mut self, value: ValueRef<'_>) -> Result<(), Error<E>> {
         if matches!(value, ValueRef::Missing) {
             self.levels.push(0);
@@ -398,43 +417,161 @@ impl Pending {
             _ => return Err(Error::ValueType),
         }
         self.levels.push(1);
+        self.present += 1;
+        if self.values.len() - self.closed().bytes >= PAGE_BYTES {
+            self.close();
+        }
         Ok(())
     }
 
-    /// The column chunk's one data page, its header then its body, emptying
-    /// the levels and values for the next row group, or the refusal of a
-    /// body its header cannot count.
-    fn page<E>(&mut self) -> Result<Vec<u8>, Error<E>> {
-        let mut levels = Levels::new();
-        for &level in &self.levels {
-            levels.put(level);
+    /// The row group's dictionary of this column, unless it has no present
+    /// value or its PLAIN values pass `PAGE_BYTES`.
+    fn dictionary(&self) -> Option<Dictionary> {
+        if self.present == 0 {
+            return None;
         }
-        let mut body = levels.finish();
-        body.append(&mut self.values);
-        let size = page_size(body.len())?;
-        let mut header = Compact::new();
-        header.i32(1, code::DATA_PAGE);
-        header.i32(2, size);
-        header.i32(3, size);
-        header.begin(5);
-        // At most ROW_GROUP_ROWS levels.
-        header.i32(1, self.levels.len() as i32);
-        header.i32(2, code::PLAIN);
-        header.i32(3, code::RLE);
-        header.i32(4, code::RLE);
-        header.end();
-        let mut page = header.finish();
-        page.extend(body);
+        let mut entries: HashMap<&[u8], u32, _> = HashMap::with_hasher(value_hasher());
+        let mut page = Vec::new();
+        let mut indices = Vec::with_capacity(self.present);
+        for value in plain_values(self.kind, &self.values) {
+            // At most ROW_GROUP_ROWS entries.
+            let next = entries.len() as u32;
+            let index = *entries.entry(value).or_insert_with(|| {
+                page.extend_from_slice(value);
+                next
+            });
+            if page.len() > PAGE_BYTES {
+                return None;
+            }
+            indices.push(index);
+        }
+        Some(Dictionary {
+            page,
+            entries: entries.len(),
+            indices,
+        })
+    }
+
+    /// The column chunk's pages, emptying the column for the next row group,
+    /// or the refusal of a page its header cannot count.
+    fn chunk<E>(&mut self, compressor: &mut Compressor) -> Result<Encoded, Error<E>> {
+        if self.levels.len() > self.closed().rows || self.pages.is_empty() {
+            self.close();
+        }
+        let dictionary = self.dictionary();
+        let mut encoded = Encoded {
+            dictionary: None,
+            data: Vec::new(),
+            pages: self.pages.len(),
+            uncompressed: 0,
+        };
+        // Bit width of the largest index, at least one.
+        let width = dictionary
+            .as_ref()
+            .map(|dictionary| (u32::BITS - (dictionary.entries as u32 - 1).leading_zeros()).max(1));
+        if let Some(dictionary) = &dictionary {
+            let mut header = Compact::new();
+            header.i32(1, code::DICTIONARY_PAGE);
+            let (page, uncompressed) = compressor.page(header, &dictionary.page, |header| {
+                header.begin(7);
+                // At most ROW_GROUP_ROWS entries.
+                header.i32(1, dictionary.entries as i32);
+                header.i32(2, code::PLAIN);
+                header.end();
+            })?;
+            encoded.uncompressed += uncompressed;
+            encoded.dictionary = Some(page);
+        }
+        let mut start = Bound::default();
+        let mut body = Vec::new();
+        for &end in &self.pages {
+            body.clear();
+            body.extend([0; 4]);
+            hybrid(&self.levels[start.rows..end.rows], 1, &mut body);
+            // At most ROW_GROUP_ROWS levels.
+            let levels = (body.len() - 4) as u32;
+            body[..4].copy_from_slice(&levels.to_le_bytes());
+            match (&dictionary, width) {
+                (Some(dictionary), Some(width)) => {
+                    body.push(width as u8);
+                    hybrid(
+                        &dictionary.indices[start.values..end.values],
+                        width,
+                        &mut body,
+                    );
+                }
+                _ => body.extend_from_slice(&self.values[start.bytes..end.bytes]),
+            }
+            let mut header = Compact::new();
+            header.i32(1, code::DATA_PAGE);
+            let rows = end.rows - start.rows;
+            let encoding = match dictionary {
+                Some(_) => code::RLE_DICTIONARY,
+                None => code::PLAIN,
+            };
+            let (page, uncompressed) = compressor.page(header, &body, |header| {
+                header.begin(5);
+                // At most ROW_GROUP_ROWS levels.
+                header.i32(1, rows as i32);
+                header.i32(2, encoding);
+                header.i32(3, code::RLE);
+                header.i32(4, code::RLE);
+                header.end();
+            })?;
+            encoded.uncompressed += uncompressed;
+            encoded.data.extend(page);
+            start = end;
+        }
         self.levels.clear();
-        Ok(page)
+        self.values.clear();
+        self.present = 0;
+        self.pages.clear();
+        Ok(encoded)
     }
 }
 
-/// A written column chunk: its first page's offset, its size and its levels.
+/// The Zstandard compressor every page of a file goes through.
+struct Compressor(zstd::bulk::Compressor<'static>);
+
+impl Compressor {
+    /// A page of `body` after its header: `header` holds the page type, then
+    /// the sizes, then the fields `rest` writes. Returns the page and the
+    /// bytes it would take uncompressed, or the refusal of a body its header
+    /// cannot count.
+    fn page<E>(
+        &mut self,
+        mut header: Compact,
+        body: &[u8],
+        rest: impl FnOnce(&mut Compact),
+    ) -> Result<(Vec<u8>, usize), Error<E>> {
+        let uncompressed = page_size(body.len())?;
+        let compressed = self.0.compress(body).map_err(|_| Error::Compression)?;
+        header.i32(2, uncompressed);
+        header.i32(3, page_size(compressed.len())?);
+        rest(&mut header);
+        let mut page = header.finish();
+        let size = page.len() + body.len();
+        page.extend(compressed);
+        Ok((page, size))
+    }
+}
+
+/// A written column chunk: where its dictionary page, if any, and its first
+/// data page begin, its bytes compressed and not, its levels and data pages.
 struct Chunk {
-    offset: usize,
-    size: usize,
+    dictionary: Option<usize>,
+    data: usize,
+    compressed: usize,
+    uncompressed: usize,
     values: usize,
+    pages: usize,
+}
+
+impl Chunk {
+    /// The offset of the chunk's first page.
+    fn start(&self) -> usize {
+        self.dictionary.unwrap_or(self.data)
+    }
 }
 
 /// A written row group: its column chunks, in projection order, and rows.
@@ -447,6 +584,7 @@ struct Group {
 struct File {
     bytes: Vec<u8>,
     groups: Vec<Group>,
+    compressor: Option<Compressor>,
     /// The size the file would have reached at the write that exceeded the
     /// limit.
     exceeded: Option<Option<usize>>,
@@ -470,21 +608,36 @@ impl File {
 
     /// Write every pending row as one row group, column by column.
     fn row_group<E>(&mut self, pending: &mut [Pending], rows: usize) -> Result<(), Error<E>> {
-        if self.groups.len() == ROW_GROUPS {
-            return Err(Error::RowGroups);
-        }
+        let mut compressor = match self.compressor.take() {
+            Some(compressor) => compressor,
+            None => {
+                Compressor(zstd::bulk::Compressor::new(ZSTD_LEVEL).map_err(|_| Error::Compression)?)
+            }
+        };
         let mut chunks = Vec::with_capacity(pending.len());
         for column in pending {
             let values = column.levels.len();
-            let page = column.page()?;
-            let offset = self.bytes.len();
-            self.write(&page)?;
+            let encoded = column.chunk(&mut compressor)?;
+            let start = self.bytes.len();
+            let dictionary = match &encoded.dictionary {
+                Some(page) => {
+                    self.write(page)?;
+                    Some(start)
+                }
+                None => None,
+            };
+            let data = self.bytes.len();
+            self.write(&encoded.data)?;
             chunks.push(Chunk {
-                offset,
-                size: page.len(),
+                dictionary,
+                data,
+                compressed: self.bytes.len() - start,
+                uncompressed: encoded.uncompressed,
                 values,
+                pages: encoded.pages,
             });
         }
+        self.compressor = Some(compressor);
         self.groups.push(Group { chunks, rows });
         Ok(())
     }
@@ -519,7 +672,7 @@ impl File {
         }
         footer.i64(3, rows as i64);
         footer.list(4, wire::STRUCT, self.groups.len());
-        for (ordinal, group) in self.groups.iter().enumerate() {
+        for group in &self.groups {
             footer.element();
             footer.list(1, wire::STRUCT, group.chunks.len());
             for ((chunk, name), &kind) in group.chunks.iter().zip(names).zip(kinds) {
@@ -527,39 +680,53 @@ impl File {
                 footer.i64(2, 0);
                 footer.begin(3);
                 footer.i32(1, leaf(kind).0);
-                footer.list(2, wire::I32, 2);
-                footer.element_i32(code::PLAIN);
-                footer.element_i32(code::RLE);
+                let encodings: &[i32] = match chunk.dictionary {
+                    Some(_) => &[code::PLAIN, code::RLE, code::RLE_DICTIONARY],
+                    None => &[code::PLAIN, code::RLE],
+                };
+                footer.list(2, wire::I32, encodings.len());
+                for &encoding in encodings {
+                    footer.element_i32(encoding);
+                }
                 footer.list(3, wire::BINARY, 1);
                 footer.element_binary(name.as_bytes());
-                footer.i32(4, code::UNCOMPRESSED);
+                footer.i32(4, code::ZSTD);
                 footer.i64(5, chunk.values as i64);
-                footer.i64(6, chunk.size as i64);
-                footer.i64(7, chunk.size as i64);
-                footer.i64(9, chunk.offset as i64);
-                // One data page of PLAIN values.
-                footer.list(13, wire::STRUCT, 1);
-                footer.element();
-                footer.i32(1, code::DATA_PAGE);
-                footer.i32(2, code::PLAIN);
-                footer.i32(3, 1);
-                footer.end();
+                footer.i64(6, chunk.uncompressed as i64);
+                footer.i64(7, chunk.compressed as i64);
+                footer.i64(9, chunk.data as i64);
+                if let Some(offset) = chunk.dictionary {
+                    footer.i64(11, offset as i64);
+                }
+                // Each page type and encoding, with its pages.
+                let statistics: &[(i32, i32, usize)] = match chunk.dictionary {
+                    Some(_) => &[
+                        (code::DICTIONARY_PAGE, code::PLAIN, 1),
+                        (code::DATA_PAGE, code::RLE_DICTIONARY, chunk.pages),
+                    ],
+                    None => &[(code::DATA_PAGE, code::PLAIN, chunk.pages)],
+                };
+                footer.list(13, wire::STRUCT, statistics.len());
+                for &(page, encoding, count) in statistics {
+                    footer.element();
+                    footer.i32(1, page);
+                    footer.i32(2, encoding);
+                    // At most one page per row.
+                    footer.i32(3, count as i32);
+                    footer.end();
+                }
                 footer.end();
                 footer.end();
             }
-            let size: usize = group.chunks.iter().map(|chunk| chunk.size).sum();
-            footer.i64(2, size as i64);
+            let uncompressed: usize = group.chunks.iter().map(|chunk| chunk.uncompressed).sum();
+            let compressed: usize = group.chunks.iter().map(|chunk| chunk.compressed).sum();
+            footer.i64(2, uncompressed as i64);
             footer.i64(3, group.rows as i64);
-            footer.i64(
-                5,
-                group.chunks.first().map_or(0, |chunk| chunk.offset) as i64,
-            );
-            footer.i64(6, size as i64);
-            // Below ROW_GROUPS, which row_group refuses to pass.
-            footer.i16(7, ordinal as i16);
+            footer.i64(5, group.chunks.first().map_or(0, Chunk::start) as i64);
+            footer.i64(6, compressed as i64);
             footer.end();
         }
-        footer.binary(6, CREATED_BY);
+        footer.binary(6, CREATED_BY.as_bytes());
         footer.list(7, wire::STRUCT, names.len());
         for _ in names {
             // TYPE_ORDER: an empty TypeDefinedOrder.
@@ -579,7 +746,7 @@ impl File {
 /// Encode `partitions` of `table`, one after another, returning where each
 /// partition's bytes end. Rows wait in `pending` until a row group is full,
 /// and the last group is written only when the file ends, so the row groups
-/// are the whole table's whatever the partitions (D264, D160).
+/// are the whole table's whatever the partitions (D264).
 fn encode<T: TableAccess>(
     table: &T,
     projection: &[usize],
@@ -651,6 +818,7 @@ pub(super) fn render_partitions<T: TableAccess>(
     let mut file = File {
         bytes: Vec::new(),
         groups: Vec::new(),
+        compressor: None,
         exceeded: None,
     };
     let result = encode(table, projection, partitions, &mut file);
@@ -671,25 +839,6 @@ pub(super) fn render_partitions<T: TableAccess>(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Every host's default partition (#3794) holds whole row groups, so the
-    /// row groups a partitioned write ends are the whole-table write's, and
-    /// it is the most of them whose partition of the widest table the cell
-    /// limit admits.
-    #[test]
-    fn the_default_partition_is_the_most_whole_row_groups_the_cell_limit_admits() {
-        let rows = Limits::PARTITION_ROWS;
-        assert_eq!(
-            (
-                rows % ROW_GROUP_ROWS,
-                Limits::table(rows, Limits::COLUMNS),
-                Limits::table(rows + ROW_GROUP_ROWS, Limits::COLUMNS)
-                    .map_err(|error| error.resource),
-            ),
-            (0, Ok(()), Err("table_cells")),
-            "the default partition of {rows} rows"
-        );
-    }
 
     /// Seam: the size checks of a page, a footer and a string value, at
     /// lengths no test could build. A page header counts its body in a
@@ -731,5 +880,42 @@ mod tests {
             ),
             "a page, a footer and a string value at their size fields' largest value and one byte past it"
         );
+    }
+
+    /// The hybrid's runs, written by hand from the format's definition
+    /// (Parquet's Encodings.md, "Run Length Encoding / Bit-Packing Hybrid"):
+    /// an RLE run's header is its length shifted left once, then the value in
+    /// the bytes its width needs; a bit-packed run's header is its groups of
+    /// eight shifted left once with the low bit set, then each group's values
+    /// packed from the least significant bit, the last group padded.
+    #[test]
+    fn the_hybrid_writes_runs_of_eight_as_rle_and_the_rest_bit_packed() {
+        let cases: [(&[u32], u32, &[u8], &str); 5] = [
+            (&[1; 10], 1, &[20, 1], "ten ones, one bit wide"),
+            (
+                &[5; 8],
+                9,
+                &[16, 5, 0],
+                "eight fives, nine bits wide, in two bytes",
+            ),
+            (
+                &[0, 1, 0, 1, 1],
+                1,
+                &[3, 0b0001_1010],
+                "five values, one padded group",
+            ),
+            (
+                &[1, 2, 3, 0, 1, 2, 3, 0, 7, 7, 7, 7, 7, 7, 7, 7, 7],
+                2,
+                &[3, 0b0011_1001, 0b0011_1001, 18, 7],
+                "a packed group, then nine sevens",
+            ),
+            (&[], 3, &[], "no values"),
+        ];
+        for (values, width, expected, label) in cases {
+            let mut bytes = Vec::new();
+            hybrid(values, width, &mut bytes);
+            assert_eq!(bytes, expected, "{label}");
+        }
     }
 }

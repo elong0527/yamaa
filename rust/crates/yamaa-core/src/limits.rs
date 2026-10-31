@@ -20,10 +20,13 @@ impl Limits {
     pub const TABLE_ROWS: usize = 10_000_000;
     pub const TABLE_CELLS: usize = 640_000_000;
     /// The driver records of one partition of the partitions every host
-    /// runs with by default (#3794, D264): the most whole row groups of the
-    /// Parquet writer, 1,024 rows each, whose partition of [`Self::COLUMNS`]
-    /// columns stays within [`Self::TABLE_CELLS`], 610 of them. Each binding
-    /// and the command line spell it where they construct their engine.
+    /// runs with by default (#3794, D264): the most whole multiples of
+    /// 1,024 records whose partition of [`Self::COLUMNS`] columns stays
+    /// within [`Self::TABLE_CELLS`], 610 of them. 1,024 was the 1.0 Parquet
+    /// writer's row group; the writer holds rows across partitions until its
+    /// row group is full, so its row groups need not divide a partition
+    /// (D305). Each binding and the command line spell it where they
+    /// construct their engine.
     pub const PARTITION_ROWS: usize = 624_640;
     /// The leading declared keys no partition of the default partitions
     /// splits a group of (#3794): two, so that each partition of an ADaM or
@@ -34,10 +37,8 @@ impl Limits {
     pub const REGEX_SIZE: usize = 10 * 1024 * 1024;
     /// The bytes of one text value that a verb which can grow text builds:
     /// `str_pad`, `str_decimal`, `str_template`, `str_replace` and
-    /// `STR_JOIN` (#4103). 1 MiB is the largest power of two whose full
-    /// Parquet page, the 1,024 values of a row group each after its 4-byte
-    /// length, stays within the page's i32 size (#4075), and about 32 times
-    /// the longest SAS character value, 32,767 bytes.
+    /// `STR_JOIN` (#4103). 1 MiB is about 32 times the longest SAS
+    /// character value, 32,767 bytes.
     pub const TEXT_BYTES: usize = 1024 * 1024;
     pub const FINDINGS: usize = 10_000;
 

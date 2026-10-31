@@ -798,7 +798,7 @@ mod table {
         // Seam, for every test here: the Parquet encoder over tables built in
         // memory, its file read back with the `parquet` crate.
         use parquet::{
-            basic::{Compression, LogicalType, Repetition, Type},
+            basic::{LogicalType, Repetition, Type},
             file::{reader::FileReader, serialized_reader::SerializedFileReader},
             record::{Field, RowAccessor},
         };
@@ -937,10 +937,6 @@ mod table {
                     field.self_type().get_basic_info().repetition(),
                     Repetition::OPTIONAL
                 );
-                assert_eq!(
-                    reader.metadata().row_group(0).column(i).compression(),
-                    Compression::UNCOMPRESSED
-                );
             }
             let rows = reader
                 .get_row_iter(None)
@@ -1043,7 +1039,7 @@ mod table {
         fn ordered_row_groups_and_projection_survive_an_empty_source() {
             let table = table(
                 &[("A", ColumnType::Int), ("B", ColumnType::Int)],
-                (0..2051)
+                (0..131_075)
                     .map(|i| vec![Value::Int(i), Value::Int(-i)])
                     .collect(),
             );
@@ -1056,7 +1052,8 @@ mod table {
                     .iter()
                     .map(|g| g.num_rows())
                     .collect::<Vec<_>>(),
-                [1024, 1024, 3]
+                // The writer's row groups of 131,072 rows (D305).
+                [131_072, 3]
             );
             assert_eq!(
                 reader
