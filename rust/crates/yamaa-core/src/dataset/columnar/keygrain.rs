@@ -112,32 +112,59 @@ pub(super) fn construct<'a: 's, 's, E>(
     // order.
     let partitions = super::group::partition(retained.len(), keys.len(), value)
         .map_err(|_| Box::new(ExecutionError::Grouping(GroupingError::Allocation)))?;
-    let mut groups: Vec<Vec<usize>> = Vec::new();
-    reserved(groups.try_reserve_exact(partitions.len()))?;
-    for members in partitions.iter() {
+    // Each candidate is a whole group, at its first member, or, for a group
+    // with a missing key, one member: each missing-key record survives
+    // independently for the output gate. Candidates follow their first
+    // records.
+    let mut split = Vec::new();
+    reserved(split.try_reserve_exact(partitions.len()))?;
+    let mut candidates: Vec<(usize, usize)> = Vec::new();
+    reserved(candidates.try_reserve(partitions.len()))?;
+    for (group, members) in partitions.iter().enumerate() {
         let first = retained[members[0]];
-        if keys
+        let missing = keys
             .iter()
-            .any(|&key| matches!(probes.get(first, key), ValueRef::Missing))
-        {
-            // Each missing-key record survives independently for the output gate.
-            groups.extend(members.iter().map(|&member| vec![member]));
+            .any(|&key| matches!(probes.get(first, key), ValueRef::Missing));
+        split.push(missing);
+        if missing {
+            reserved(candidates.try_reserve(members.len() - 1))?;
+            candidates.extend(members.iter().map(|&member| (member, group)));
         } else {
-            groups.push(members.to_vec());
+            candidates.push((members[0], group));
         }
     }
-    groups.sort_unstable_by_key(|members| members[0]);
-    run.check_capacity(region, 0, groups.len())?;
-    reserved(frame.try_reserve(groups.len(), retained.len()))?;
-    for members in groups {
-        let records: Vec<usize> = members.iter().map(|&member| retained[member]).collect();
+    if split.contains(&true) {
+        candidates.sort_unstable_by_key(|&(first, _)| first);
+    }
+    run.check_capacity(region, 0, candidates.len())?;
+    reserved(frame.try_reserve(candidates.len(), retained.len()))?;
+    // The key group of each candidate, by frame row, for the output key
+    // check over the same keys and rows.
+    let mut key_groups = Vec::new();
+    reserved(key_groups.try_reserve_exact(candidates.len()))?;
+    let start = frame.rows();
+    let mut records = Vec::new();
+    for (position, group) in candidates {
+        records.clear();
+        if split[group] {
+            records.push(retained[position]);
+        } else {
+            records.extend(
+                partitions
+                    .group(group)
+                    .iter()
+                    .map(|&member| retained[member]),
+            );
+        }
         let first = records[0];
         let row = frame.push(NO_TEMPLATE, Identity::Candidate(frame.rows()), &records);
         for &key in &keys {
             let value: Value = probes.value(first, key);
             frame.complete_value(row, key, value);
         }
+        key_groups.push(group);
     }
+    run.key_groups = (start == 0).then_some(key_groups);
     Ok(())
 }
 

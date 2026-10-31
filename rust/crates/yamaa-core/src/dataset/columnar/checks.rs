@@ -456,18 +456,24 @@ pub(super) fn verify_output<'a: 's, 's, E>(
             });
         }
     }
-    let groups = partition(frame, &keys, run.output_partition)
-        .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
-    let duplicates: Vec<usize> = groups
-        .iter()
-        .filter(|members| members.len() > 1)
-        .map(|members| members[0])
-        .collect();
+    let (evaluated, duplicates) = match run.key_groups.take() {
+        Some(key_groups) if key_groups.len() == rows => repeated_keys(&key_groups)?,
+        _ => {
+            let groups = partition(frame, &keys, run.output_partition)
+                .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+            let duplicates = groups
+                .iter()
+                .filter(|members| members.len() > 1)
+                .map(|members| members[0])
+                .collect();
+            (groups.len(), duplicates)
+        }
+    };
     if !duplicates.is_empty() {
         failures.push(CheckRecord {
             path: "keys".into(),
             code: crate::diagnostic::ConditionCode::OutputDuplicateKeyFailed,
-            evaluated_count: groups.len(),
+            evaluated_count: evaluated,
             failed_count: duplicates.len(),
             output_rows: rows,
             codelist: None,
@@ -579,7 +585,7 @@ pub(super) fn verify_output<'a: 's, 's, E>(
                 }
                 let groups = partition(frame, &distinct, run.output_partition)
                     .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
-                let repeated: Vec<&Vec<usize>> =
+                let repeated: Vec<&[usize]> =
                     groups.iter().filter(|members| members.len() > 1).collect();
                 CheckRecord {
                     path,
@@ -869,16 +875,15 @@ fn row_count_check<'a: 's, 's, E>(
             _ => true,
         });
     }
-    let groups = if let Some(columns) = &count.group_by {
-        partition(frame, columns, run.output_partition)
-            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
-    } else {
-        vec![(0..rows).collect()]
+    let groups = match &count.group_by {
+        Some(columns) => partition(frame, columns, run.output_partition)
+            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?,
+        None => super::group::Groups::whole(rows),
     };
     let mut offenders = Vec::new();
     let mut counts = Vec::new();
     let mut denominators = Vec::new();
-    for members in &groups {
+    for members in groups.iter() {
         if count.when.is_some() && !members.iter().any(|&row| bound[row]) {
             continue;
         }
@@ -925,15 +930,34 @@ pub(super) fn partition(
     frame: &Frame,
     columns: &[usize],
     partition: Option<std::num::NonZeroUsize>,
-) -> Result<Vec<Vec<usize>>, crate::table_grouping::GroupingError<Infallible>> {
+) -> Result<super::group::Groups, crate::table_grouping::GroupingError<Infallible>> {
     super::group::admit(columns, frame.width(), frame.rows(), partition)?;
-    Ok(
-        super::group::partition(frame.rows(), columns.len(), |row, position| {
-            frame.get(row, columns[position])
-        })
-        .map_err(|_| crate::table_grouping::GroupingError::Allocation)?
-        .into_vecs(),
-    )
+    super::group::partition(frame.rows(), columns.len(), |row, position| {
+        frame.get(row, columns[position])
+    })
+    .map_err(|_| crate::table_grouping::GroupingError::Allocation)
+}
+
+/// The output key groups the key grain found (#4188), given the group of
+/// each row: how many there are, and the first row of each that repeats a
+/// key, in row order, as `partition` over the keys would answer. A key-grain
+/// candidate repeats its key only when the key is missing, as each
+/// missing-key record is its own candidate.
+fn repeated_keys<E>(key_groups: &[usize]) -> Result<(usize, Vec<usize>), Fail<E>> {
+    let groups = key_groups.iter().max().map_or(0, |&group| group + 1);
+    let mut sizes = super::filled(groups, 0usize)?;
+    for &group in key_groups {
+        sizes[group] += 1;
+    }
+    let mut duplicates = Vec::new();
+    for (row, &group) in key_groups.iter().enumerate() {
+        if sizes[group] > 1 {
+            duplicates.push(row);
+            // Only the group's first row names it.
+            sizes[group] = 0;
+        }
+    }
+    Ok((groups, duplicates))
 }
 
 /// Stable presentation order over completed rows, after all verification:

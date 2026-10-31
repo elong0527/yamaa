@@ -1,42 +1,13 @@
-//! Partition rows by key values, groups in first-occurrence order and
-//! members in row order (ROW-4). Missing values compare equal;
-//! text is exact; temporal precision and float zero signs do not affect
-//! equality, as `table_grouping::Key` defines it. Each row is hashed once
-//! and compared with its group's first row, so no key is copied. A
-//! partitioned run (#3830) groups each partition on its own: its partitions
-//! never split a group (`ResolvedPlan::cut_fields`).
+//! Partition frame rows by key values, as `table_grouping::partition_keys`
+//! does: groups in first-occurrence order and members in row order (ROW-4).
+//! Missing values compare equal; text is exact; temporal precision and
+//! float zero signs do not affect equality, as `table_grouping::Key`
+//! defines it. A partitioned run (#3830) groups each partition on its own:
+//! its partitions never split a group (`ResolvedPlan::cut_fields`).
 use crate::table::ValueRef;
+pub(super) use crate::table_grouping::Groups;
 use crate::table_grouping::Key;
-use std::collections::hash_map::{DefaultHasher, Entry};
-use std::collections::{HashMap, TryReserveError};
-use std::hash::{Hash, Hasher};
-
-/// Groups as offsets into one member list.
-pub(super) struct Groups {
-    offsets: Vec<usize>,
-    members: Vec<usize>,
-}
-
-impl Groups {
-    pub(super) fn len(&self) -> usize {
-        self.offsets.len() - 1
-    }
-
-    pub(super) fn group(&self, group: usize) -> &[usize] {
-        &self.members[self.offsets[group]..self.offsets[group + 1]]
-    }
-
-    pub(super) fn iter(&self) -> impl Iterator<Item = &[usize]> + '_ {
-        (0..self.len()).map(|group| self.group(group))
-    }
-
-    /// The groups as owned member lists.
-    pub(super) fn into_vecs(self) -> Vec<Vec<usize>> {
-        (0..self.len())
-            .map(|group| self.group(group).to_vec())
-            .collect()
-    }
-}
+use std::collections::TryReserveError;
 
 /// The admission checks of `table_grouping::partition`, before any value is
 /// read: a nonempty list of distinct, bound columns over an admitted table,
@@ -64,75 +35,15 @@ pub(super) fn admit(
 }
 
 /// Partition items `0..count`; `value(item, position)` is the item's key
-/// value at a key position, for `width` positions. The buffers sized by the
-/// item count are reserved first.
+/// value at a key position, for `width` positions, under grouping equality.
 pub(super) fn partition<'v>(
     count: usize,
     width: usize,
     value: impl Fn(usize, usize) -> ValueRef<'v>,
 ) -> Result<Groups, TryReserveError> {
-    let mut first: HashMap<u64, usize> = HashMap::new();
-    // Groups sharing a hash, chained by group.
-    let mut chain: Vec<usize> = Vec::new();
-    let mut representative: Vec<usize> = Vec::new();
-    let mut group_of = Vec::new();
-    group_of.try_reserve_exact(count)?;
-    let mut members = Vec::new();
-    members.try_reserve_exact(count)?;
-    let equal = |left: usize, right: usize| {
-        (0..width)
-            .all(|position| Key::from(value(left, position)) == Key::from(value(right, position)))
-    };
-    for item in 0..count {
-        let mut hasher = DefaultHasher::new();
-        for position in 0..width {
-            Key::from(value(item, position)).hash(&mut hasher);
-        }
-        let hash = hasher.finish();
-        let group = match first.entry(hash) {
-            Entry::Vacant(entry) => {
-                let group = representative.len();
-                entry.insert(group);
-                representative.push(item);
-                chain.push(usize::MAX);
-                group
-            }
-            Entry::Occupied(entry) => {
-                let mut group = *entry.get();
-                loop {
-                    if equal(representative[group], item) {
-                        break group;
-                    }
-                    if chain[group] == usize::MAX {
-                        let created = representative.len();
-                        representative.push(item);
-                        chain.push(usize::MAX);
-                        chain[group] = created;
-                        break created;
-                    }
-                    group = chain[group];
-                }
-            }
-        };
-        group_of.push(group);
-    }
-    let groups = representative.len();
-    let mut offsets = Vec::new();
-    offsets.try_reserve_exact(groups + 1)?;
-    offsets.resize(groups + 1, 0usize);
-    for &group in &group_of {
-        offsets[group + 1] += 1;
-    }
-    for group in 0..groups {
-        offsets[group + 1] += offsets[group];
-    }
-    let mut cursor = offsets.clone();
-    members.resize(count, 0usize);
-    for (item, &group) in group_of.iter().enumerate() {
-        members[cursor[group]] = item;
-        cursor[group] += 1;
-    }
-    Ok(Groups { offsets, members })
+    crate::table_grouping::partition_keys(count, width, |item, position| {
+        Key::from(value(item, position))
+    })
 }
 
 #[cfg(test)]

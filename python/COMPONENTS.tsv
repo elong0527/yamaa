@@ -1,6 +1,6 @@
 name	version	license	source	purpose
 adler2	2.0.1	MIT	crates.io	transitive dependency of miniz_oxide: Adler-32 checksums of zlib streams
-ahash	0.8.12	MIT	crates.io	transitive dependency of arrow-array: the hasher of its hash tables
+ahash	0.8.12	MIT	crates.io	the row hash of grouping, under fixed seeds (yamaa-core); arrow-array uses it too, for its hash tables
 aho-corasick	1.1.5	MIT	crates.io	not compiled: locked because the std features of regex and regex-automata name it; yamaa-core leaves regex's perf-literal feature off
 alloc-no-stdlib	2.0.4	BSD-3-Clause	crates.io	transitive dependency of brotli: its allocator interface
 alloc-stdlib	0.2.4	BSD-3-Clause	crates.io	transitive dependency of brotli: the standard library allocator behind that interface
