@@ -4,6 +4,7 @@
 //! the current record rebuild the donor records for each current row and
 //! augment only the records whose stored keys match it (LOOKUP-15); every
 //! donor handler counts each time the records are built.
+use super::buffer::Values;
 use super::frame::{Frame, Identity};
 use super::index::Index;
 use super::relations::{self, Site};
@@ -299,13 +300,32 @@ fn build<E>(
         }
     };
     reserved(frame.try_reserve(stored.len(), stored.len()))?;
-    for (position, &source_row) in stored.iter().enumerate() {
-        // A record's member is its position in the donor's input; only a
-        // compact build moves it from the source row.
-        let row = frame.push(0, Identity::Candidate(source_row), &[position]);
-        for column in 0..derived.stored_columns {
-            let value = relations::cell(table, item, source_row, column)?;
-            frame.complete(row, column, value);
+    // A record's member is its position in the donor's input; only a
+    // compact build moves it from the source row.
+    frame.extend(0, stored.len(), |position, records| {
+        records.push(position);
+        Identity::Candidate(stored[position])
+    });
+    // A stored column the input holds as typed storage is gathered whole
+    // (#4208), and cannot fail; the others are read a cell at a time in
+    // record order, so the first failing cell is the same.
+    let every: Vec<usize> = (0..stored.len()).collect();
+    let mut cells = Vec::new();
+    for column in 0..derived.stored_columns {
+        match table
+            .storage(column)
+            .and_then(|storage| Values::from_column(storage, stored))
+        {
+            Some(values) => frame.complete_rows(&every, column, reserved(values)?),
+            None => cells.push(column),
+        }
+    }
+    if !cells.is_empty() {
+        for (row, &source_row) in stored.iter().enumerate() {
+            for &column in &cells {
+                let value = relations::cell(table, item, source_row, column)?;
+                frame.complete(row, column, value);
+            }
         }
     }
     // A donor plan's inputs are the outer inputs of the same name, or the primary.
@@ -321,13 +341,9 @@ fn build<E>(
                 .map_or(cx.primary, |index| cx.secondary[index])
         })
         .collect();
-    let positions: Vec<usize>;
     let rows = match records {
         Records::Matched(rows) => rows,
-        Records::All | Records::Compact(_) => {
-            positions = (0..frame.rows()).collect();
-            &positions
-        }
+        Records::All | Records::Compact(_) => &every,
     };
     let saved_relations =
         std::mem::replace(&mut run.relations, relations::State::new(plan, region));

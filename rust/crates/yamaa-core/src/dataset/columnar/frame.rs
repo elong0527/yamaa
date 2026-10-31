@@ -188,32 +188,35 @@ impl Frame {
         if keep.iter().all(|&kept| kept) {
             return Ok(());
         }
-        let kept: Vec<usize> = (first..self.rows())
-            .filter(|row| keep[row - first])
-            .collect();
+        let mut kept = Vec::new();
+        kept.try_reserve_exact(keep.iter().filter(|&&kept| kept).count())?;
+        kept.extend((first..self.rows()).filter(|row| keep[row - first]));
+        // Every column, bitmap and per-row list is compacted in place: each
+        // kept row moves down to its new position, which no later kept row
+        // reads.
         for column in &mut self.columns {
-            let tail = column.gather(&kept)?;
-            column.truncate(first);
-            column.extend_from(&tail, 0..tail.len());
+            column.retain(first, &kept);
         }
         for completed in &mut self.completed {
-            let tail = completed.gather(&kept)?;
-            completed.truncate(first);
-            completed.extend_from(&tail, 0..tail.len());
+            completed.retain(first, &kept);
         }
-        let templates: Vec<u32> = kept.iter().map(|&row| self.templates[row]).collect();
-        let identities: Vec<Identity> = kept.iter().map(|&row| self.identities[row]).collect();
-        let members: Vec<Vec<usize>> = kept.iter().map(|&row| self.members(row).to_vec()).collect();
-        self.templates.truncate(first);
-        self.identities.truncate(first);
-        self.offsets.truncate(first + 1);
-        self.records.truncate(self.offsets[first]);
-        self.templates.extend(templates);
-        self.identities.extend(identities);
-        for members in members {
-            self.records.extend(members);
-            self.offsets.push(self.records.len());
+        let mut end = self.offsets[first];
+        for (offset, &row) in kept.iter().enumerate() {
+            let position = first + offset;
+            self.templates[position] = self.templates[row];
+            self.identities[position] = self.identities[row];
+            // Read before the write: while no row is dropped, the offset
+            // written next is the one read next, and is unchanged.
+            let members = self.offsets[row]..self.offsets[row + 1];
+            self.records.copy_within(members.clone(), end);
+            end += members.len();
+            self.offsets[position + 1] = end;
         }
+        let rows = first + kept.len();
+        self.templates.truncate(rows);
+        self.identities.truncate(rows);
+        self.offsets.truncate(rows + 1);
+        self.records.truncate(end);
         Ok(())
     }
 
@@ -254,20 +257,31 @@ impl Frame {
         self.completed[column].set(row, true);
     }
 
-    /// Complete one column on `rows` with the values aligned with them. When
-    /// the rows are every row in order and none was complete, the buffer is
-    /// taken whole.
+    /// Complete one column on `rows` with the values aligned with them.
+    /// When the rows are one ascending run and none of them was complete,
+    /// the values are written into that run in bulk (#4208): the buffer is
+    /// taken whole when the run is every row, and is otherwise left as
+    /// completing each cell in order leaves it. Other rows complete one cell
+    /// at a time.
     pub(super) fn complete_rows(&mut self, rows: &[usize], column: usize, values: Values) {
-        let whole = rows.len() == self.rows()
-            && rows.iter().enumerate().all(|(index, &row)| index == row)
-            && (0..self.rows()).all(|row| !self.completed[column].get(row));
-        if whole {
+        debug_assert_eq!(rows.len(), values.len());
+        let start = rows.first().copied().unwrap_or(0);
+        let run = start..start + rows.len();
+        let bulk = rows
+            .iter()
+            .enumerate()
+            .all(|(index, &row)| row == start + index)
+            && !self.completed[column].any_in(run.clone());
+        if !bulk {
+            for (index, &row) in rows.iter().enumerate() {
+                self.complete(row, column, values.get(index));
+            }
+        } else if run == (0..self.rows()) {
             self.columns[column] = values;
             self.completed[column] = Bits::new(self.rows(), true);
-            return;
-        }
-        for (index, &row) in rows.iter().enumerate() {
-            self.complete(row, column, values.get(index));
+        } else {
+            self.columns[column].set_range(start, &values);
+            self.completed[column].fill(run, true);
         }
     }
 
@@ -292,11 +306,16 @@ impl Frame {
             .extend_from_slice(&other.templates[rows.clone()]);
         self.identities
             .extend_from_slice(&other.identities[rows.clone()]);
-        for row in rows {
-            self.records
-                .extend(other.members(row).iter().map(|&record| record + records));
-            self.offsets.push(self.records.len());
-        }
+        let base = self.records.len();
+        let first = other.offsets[rows.start];
+        let members = &other.records[first..other.offsets[rows.end]];
+        self.records
+            .extend(members.iter().map(|&record| record + records));
+        self.offsets.extend(
+            other.offsets[rows.start + 1..rows.end + 1]
+                .iter()
+                .map(|&offset| offset - first + base),
+        );
     }
 
     /// The rows `order` names, in that order, as columns, consuming the
@@ -331,5 +350,184 @@ impl Frame {
             });
         }
         Ok(ordered)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A frame of `rows` rows of template 0, row `n` built from records
+    /// `n` and `n + 1000`.
+    fn frame(width: usize, rows: usize) -> Frame {
+        let mut frame = Frame::new(width);
+        frame.extend(0, rows, |row, records| {
+            records.extend([row, row + 1000]);
+            Identity::Candidate(row)
+        });
+        frame
+    }
+
+    /// Everything a frame holds, each column's text in an arena of its own
+    /// row order.
+    fn canonical(frame: &Frame) -> String {
+        let columns: Vec<String> = frame.columns.iter().map(Values::canonical).collect();
+        format!(
+            "{columns:?} {:?} {:?} {:?} {:?} {:?}",
+            frame.completed, frame.templates, frame.identities, frame.offsets, frame.records
+        )
+    }
+
+    /// A buffer of `values` pushed one row at a time.
+    fn pushed(values: impl IntoIterator<Item = Value>) -> Values {
+        let mut buffer = Values::missing(0);
+        for value in values {
+            buffer.push_value(value);
+        }
+        buffer
+    }
+
+    // The seam is the frame's bulk completion (#4208): completing a run of
+    // rows must leave the frame, buffers and completion bits, as completing
+    // each cell in order does; other rows go a cell at a time.
+    #[test]
+    fn a_completed_run_leaves_the_frame_as_completing_each_cell_in_order() {
+        let ints = |rows: std::ops::Range<usize>| {
+            pushed(rows.map(|row| match row % 5 {
+                0 => Value::Missing,
+                _ => Value::Int(row as i64),
+            }))
+        };
+        // Each case completes its steps in order on one frame of 140 rows.
+        type Step = (Vec<usize>, Values);
+        let cases: Vec<(&str, Vec<Step>)> = vec![
+            (
+                "a template's run across bitmap words, then the run before it",
+                vec![
+                    ((60..130).collect(), ints(60..130)),
+                    ((0..60).collect(), ints(0..60)),
+                ],
+            ),
+            (
+                "text after ints widens the column to mixed",
+                vec![
+                    ((0..70).collect(), ints(0..70)),
+                    (
+                        (70..140).collect(),
+                        pushed((70..140).map(|_| Value::Str("t".into()))),
+                    ),
+                ],
+            ),
+            (
+                "scattered rows, then a run over a completed cell",
+                vec![
+                    (vec![5, 3, 90], ints(0..3)),
+                    ((80..100).collect(), ints(80..100)),
+                ],
+            ),
+        ];
+        for (label, steps) in cases {
+            let mut bulk = frame(1, 140);
+            let mut cells = frame(1, 140);
+            for (rows, values) in steps {
+                for (index, &row) in rows.iter().enumerate() {
+                    cells.complete(row, 0, values.get(index));
+                }
+                bulk.complete_rows(&rows, 0, values);
+            }
+            assert_eq!(canonical(&bulk), canonical(&cells), "{label}");
+        }
+    }
+
+    // Filtering must keep the kept rows in order, each with its template,
+    // identity, member records, values and completion, as a frame that
+    // pushed only those rows holds them.
+    #[test]
+    fn a_filtered_frame_holds_its_kept_rows_in_order() {
+        let mut filtered = Frame::new(2);
+        let mut expected = Frame::new(2);
+        let keep: Vec<bool> = (0..130).map(|row| row % 3 != 1 && row != 64).collect();
+        let add = |frame: &mut Frame, row: usize| {
+            let members: Vec<usize> = (0..row % 4).map(|member| row * 10 + member).collect();
+            let at = frame.push((row % 2) as u32, Identity::Candidate(row), &members);
+            let value = match row % 7 {
+                0 => Value::Missing,
+                1 => Value::Str(format!("r{row}")),
+                _ => Value::Int(row as i64),
+            };
+            frame.complete(at, 0, ValueRef::from(&value));
+            if row % 5 != 0 {
+                frame.complete(at, 1, ValueRef::Int(row as i64));
+            }
+        };
+        for row in 0..133 {
+            add(&mut filtered, row);
+            if row < 3 || keep[row - 3] {
+                add(&mut expected, row);
+            }
+        }
+        filtered.retain_from(3, &keep).unwrap();
+        let rows = |frame: &Frame| {
+            (0..frame.rows())
+                .map(|row| {
+                    (
+                        frame.template(row),
+                        frame.identity(row),
+                        frame.members(row).to_vec(),
+                        [frame.value(row, 0), frame.value(row, 1)],
+                        [frame.is_completed(row, 0), frame.is_completed(row, 1)],
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            rows(&filtered),
+            rows(&expected),
+            "rows 3..133, every third and row 67 dropped"
+        );
+        assert_eq!(
+            (0..2)
+                .map(|column| std::mem::discriminant(filtered.column(column)))
+                .collect::<Vec<_>>(),
+            (0..2)
+                .map(|column| std::mem::discriminant(expected.column(column)))
+                .collect::<Vec<_>>(),
+            "the column layouts"
+        );
+        assert_eq!(
+            filtered.member_count(),
+            expected.member_count(),
+            "the member records"
+        );
+    }
+
+    // Appending a partition's rows must read as pushing them, with their
+    // records moved on.
+    #[test]
+    fn appended_rows_read_as_the_rows_they_copy() {
+        let mut part = frame(1, 70);
+        part.complete_rows(
+            &(0..70).collect::<Vec<_>>(),
+            0,
+            pushed((0..70).map(|row| Value::Int(row as i64))),
+        );
+        let mut whole = frame(1, 3);
+        whole.append(&part, 2..68, 500);
+        for (row, from) in (3..69).zip(2..68) {
+            assert_eq!(
+                (
+                    whole.members(row).to_vec(),
+                    whole.value(row, 0),
+                    whole.is_completed(row, 0)
+                ),
+                (vec![from + 500, from + 1500], Value::Int(from as i64), true),
+                "appended row {row}"
+            );
+        }
+        assert_eq!(
+            whole.members(2),
+            [2, 1002],
+            "the rows before the appended ones"
+        );
     }
 }
