@@ -49,7 +49,12 @@ check_result <- function(result, key) {
   # A rewritten path is the file named, made absolute lexically with forward
   # slashes, as the file column is: repeated separators collapse, and links
   # and short names are not resolved.
-  paths <- if (isTRUE(expected$rewritten)) gsub("/+", "/", gsub("\\", "/", path, fixed = TRUE)) else character()
+  paths <- if (isTRUE(expected$rewritten)) {
+    spelling <- gsub("\\", "/", path, fixed = TRUE)
+    # Keep the leading double slash of a UNC path while collapsing the rest.
+    prefix <- if (startsWith(spelling, "//")) "/" else ""
+    paste0(prefix, gsub("/+", "/", spelling))
+  } else character()
   expect_identical(list(class = class(result), members = names(result), length = length(result),
     status = result$status, paths = result$paths, summary = format(result)),
     list(class = truth$result$r_class, members = fixture_strings(truth$result$members), length = 3L,
