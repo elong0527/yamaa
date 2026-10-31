@@ -710,9 +710,8 @@ pub fn check_table<T: TableAccess<Error = Infallible>>(
                 }
                 Ok(())
             };
-            // The rows are the table's and its port cannot fail, so no read
-            // is refused.
-            let _: Result<(), ()> = column.try_for_each(start..end, sum, |_| ());
+            // A port that refuses a row it holds cannot be built.
+            column.try_for_each(start..end, sum, |_| TableError::InvalidTable)?;
             if !crate::column_table::fits_utf8_offsets([bytes]) {
                 return Err(TableError::Representation {
                     representation: crate::column_table::UTF8_OFFSETS,

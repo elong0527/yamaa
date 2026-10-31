@@ -551,6 +551,12 @@ mod tests {
         let moment =
             DateTime::new(day(29), 23, 59, 58, crate::temporal::Precision::Second).unwrap();
         let float = |value| FiniteFloat::new(value).unwrap();
+        // The payloads the cases lend.
+        let finite = [float(-0.0), float(1.0), float(2.5)];
+        let dates = [Some(day(1)), Some(day(2)), None];
+        let masked_dates = [day(1), day(2), day(3)];
+        let datetimes = [None, Some(moment), Some(moment)];
+        let masked_datetimes = [moment; 3];
         // Rows 0 and 2 are present, row 1 is missing by the bitmap.
         let bits = [0b101u64];
         let cases = [
@@ -585,7 +591,7 @@ mod tests {
                 "floats, a nonfinite one missing",
             ),
             (
-                ColumnValues::FiniteFloat(&[float(-0.0), float(1.0), float(2.5)]),
+                ColumnValues::FiniteFloat(&finite),
                 [
                     ValueRef::Float(float(-0.0)),
                     ValueRef::Missing,
@@ -594,12 +600,12 @@ mod tests {
                 "finite floats",
             ),
             (
-                ColumnValues::Date(&[Some(day(1)), Some(day(2)), None]),
+                ColumnValues::Date(&dates),
                 [ValueRef::Date(day(1)), ValueRef::Missing, ValueRef::Missing],
                 "dates with their own presence",
             ),
             (
-                ColumnValues::MaskedDate(&[day(1), day(2), day(3)]),
+                ColumnValues::MaskedDate(&masked_dates),
                 [
                     ValueRef::Date(day(1)),
                     ValueRef::Missing,
@@ -608,7 +614,7 @@ mod tests {
                 "dates present by the bitmap",
             ),
             (
-                ColumnValues::DateTime(&[None, Some(moment), Some(moment)]),
+                ColumnValues::DateTime(&datetimes),
                 [
                     ValueRef::Missing,
                     ValueRef::Missing,
@@ -617,7 +623,7 @@ mod tests {
                 "datetimes with their own presence",
             ),
             (
-                ColumnValues::MaskedDateTime(&[moment, moment, moment]),
+                ColumnValues::MaskedDateTime(&masked_datetimes),
                 [
                     ValueRef::DateTime(moment),
                     ValueRef::Missing,
