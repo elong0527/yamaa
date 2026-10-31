@@ -521,18 +521,20 @@ matrix by `tools.validation.check_supported_platforms`.
      `dev` from the baseline its README records), the zstd library that
      `zstd-sys` bundles, and the libxml2 and libxslt that the lxml wheels
      bundle.
-3. Push an annotated tag that names the qualified native run;
-   `release.yml` publishes that run's artifacts, which
-   `tools/ci/release_assets.py` declares, unchanged:
+3. Push an annotated tag that names the qualified native run, with `<tag>`
+   the identity's tag, `yamaa-vX.Y.Z` or `yamaa-vX.Y.Z-rc.N`, and `<version>`
+   its Cargo spelling; `release.yml` publishes that run's artifacts, which
+   `tools/ci/release_assets.py` declares, unchanged, and refuses any other
+   tag:
 
    ```sh
-   git tag -a yamaa-vX.Y.Z <commit> -m "yamaa X.Y.Z" -m "Qualified-Run: <run id>"
-   git push origin refs/tags/yamaa-vX.Y.Z
+   git tag -a <tag> <commit> -m "yamaa <version>" -m "Qualified-Run: <run id>"
+   git push origin refs/tags/<tag>
    ```
 
 4. Upload the release's Python files to PyPI with the owner's token
-   (#3030 D57), then check them against the release and install them as
-   users do:
+   (#3030 D57), with `<version>` now the Python spelling, then check them
+   against the release and install them as users do:
 
    ```sh
    gh release download <tag> --repo elong0527/yamaa --dir <new dir> \
