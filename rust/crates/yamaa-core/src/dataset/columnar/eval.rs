@@ -171,28 +171,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     let value = super::relations::operand_value(*index, operands);
                     return Ok(Values::repeat(ValueRef::from(value), rows.len()));
                 }
-                let field = field as usize;
-                // A port that holds the field as typed storage lends it
-                // whole, and the selection's values are gathered from it in
-                // one pass (#4190).
-                if let Some(column) = cx.table.storage(field) {
-                    let source_rows: Vec<usize> =
-                        rows.iter().map(|&row| cx.frame.members(row)[0]).collect();
-                    if let Some(values) = Values::from_column(column, &source_rows) {
-                        return super::reserved(values);
-                    }
-                }
-                for &row in rows {
-                    let source_row = cx.frame.members(row)[0];
-                    let value = cx.table.get(source_row, field).map_err(|error| {
-                        Box::new(ExecutionError::Cell {
-                            path: self.plan.expr(expr).path.to_string(),
-                            source_row,
-                            error,
-                        })
-                    })?;
-                    values.push(value);
-                }
+                return driver_field(cx, field as usize, rows, &self.plan.expr(expr).path);
             }
             Read::Column(column) => {
                 // A match operand that reads a completed output column.
@@ -375,6 +354,36 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             identity,
         })
     }
+}
+
+/// One raw field of each selected row's driver record. A port that holds
+/// the field as typed storage lends it whole, and the selection's values are
+/// gathered from it in one pass (#4190); a cell that fails names `path`.
+pub(super) fn driver_field<E>(
+    cx: &Cx<'_, E>,
+    field: usize,
+    rows: &[usize],
+    path: &str,
+) -> Result<Values, Fail<E>> {
+    if let Some(column) = cx.table.storage(field) {
+        let source_rows: Vec<usize> = rows.iter().map(|&row| cx.frame.members(row)[0]).collect();
+        if let Some(values) = Values::from_column(column, &source_rows) {
+            return super::reserved(values);
+        }
+    }
+    let mut values = Values::missing(0);
+    for &row in rows {
+        let source_row = cx.frame.members(row)[0];
+        let value = cx.table.get(source_row, field).map_err(|error| {
+            Box::new(ExecutionError::Cell {
+                path: path.into(),
+                source_row,
+                error,
+            })
+        })?;
+        values.push(value);
+    }
+    Ok(values)
 }
 
 /// An owned copy of one value.
