@@ -51,12 +51,13 @@ pub struct EngineOptions {
 }
 
 /// Partitioned execution: each run divides its driver input into partitions
-/// and runs each partition through every derivation step before it decodes
-/// the next, holding one decoded partition at a time (#3830); the output
+/// and runs each partition through every derivation step, holding only the
+/// decoded partitions it is deriving (#3830), up to four at once on threads
+/// of their own by default ([`Partitions::with_threads`], #4193); the output
 /// keys, checks and order then run once over every partition's rows. A run
-/// polls its token in every partition as well. Its result, output, issues
-/// and run report are the whole-table run's, and the partition boundaries
-/// change none of them.
+/// polls its token while it derives its partitions as well. Its result,
+/// output, issues and run report are the whole-table run's, and neither the
+/// partition boundaries nor the threads change any of them.
 ///
 /// There are two strategies:
 ///
@@ -113,6 +114,9 @@ pub struct Partitions {
     /// Whether a step that needs the whole table runs over the whole input
     /// instead of refusing the run.
     pub whole_table_fallback: bool,
+    /// How many partitions of one run derive at once, each on a thread of
+    /// its own (#4193); see [`Partitions::with_threads`].
+    pub threads: NonZeroUsize,
 }
 
 impl Partitions {
@@ -123,6 +127,7 @@ impl Partitions {
             rows,
             leading_keys: None,
             whole_table_fallback: false,
+            threads: Self::default_threads(),
         }
     }
 
@@ -163,6 +168,7 @@ impl Partitions {
             rows,
             leading_keys: Some(keys),
             whole_table_fallback: false,
+            threads: Self::default_threads(),
         }
     }
 
@@ -173,6 +179,40 @@ impl Partitions {
         self
     }
 
+    /// The same partitions, up to `threads` of one run deriving at once,
+    /// each on a thread of its own (#4193), an engine setting with no host
+    /// surface. The calling thread decodes the partitions in order, reports
+    /// progress and polls the cancellation token; the result, its issues,
+    /// its report and the progress events, in order, are those of a run on
+    /// one thread. A run with a step that calls a project function runs on
+    /// the calling thread alone, as does a run with one partition.
+    ///
+    /// Without it, up to four partitions derive at once, and no more than
+    /// the threads the process may run on
+    /// ([`std::thread::available_parallelism`]). Each partition deriving at
+    /// once holds its decoded records and its run's working state, so peak
+    /// memory grows with the threads.
+    pub fn with_threads(mut self, threads: NonZeroUsize) -> Self {
+        self.threads = threads;
+        self
+    }
+
+    /// The most partitions of one run that derive at once by default
+    /// (#4193): beyond four, the threads wait on the calling thread, which
+    /// decodes every partition, and each one more holds one more decoded
+    /// partition and its run's working state.
+    const DEFAULT_THREADS: NonZeroUsize = match NonZeroUsize::new(4) {
+        Some(threads) => threads,
+        None => unreachable!(),
+    };
+
+    /// The default threads, or fewer when the process may run on fewer.
+    fn default_threads() -> NonZeroUsize {
+        std::thread::available_parallelism().map_or(NonZeroUsize::MIN, |available| {
+            available.min(Self::DEFAULT_THREADS)
+        })
+    }
+
     pub(crate) fn into_core(self) -> yamaa_core::dataset::Partitioning {
         yamaa_core::dataset::Partitioning {
             rows: self.rows,
@@ -180,6 +220,7 @@ impl Partitions {
             whole_table_fallback: self.whole_table_fallback,
             // The run sets it for a SAS or ODM driver input (D264).
             whole_output: false,
+            threads: self.threads,
         }
     }
 }

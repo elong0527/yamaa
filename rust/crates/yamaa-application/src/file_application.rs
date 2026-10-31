@@ -1474,6 +1474,7 @@ mod tests {
                 leading_keys: None,
                 whole_table_fallback: false,
                 whole_output: false,
+                threads: std::num::NonZeroUsize::MIN,
             };
             let mut result = domain_observed(
                 Request {

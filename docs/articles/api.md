@@ -346,7 +346,7 @@ and `rows`:
 |---|---|
 | `name` | The specification's path as given; a project run member's name; a submission's section |
 | `phase` | `preparation`, `activation`, `input`, `admission`, `derivation`, `output_keys`, `verification`, `output` or `composition` |
-| `kind` | `start` or `end` of the phase; `partition` as a partitioned run enters a partition of its input, in `derivation`; `batch` as a streamed run hands out a batch of its output, after `output` |
+| `kind` | `start` or `end` of the phase; `partition` for each partition of its input a partitioned run derives, in order, in `derivation`, as the run enters it or, with partitions deriving at once on several threads, as it takes the partition's work back; `batch` as a streamed run hands out a batch of its output, after `output` |
 | `outcome` | For an `end`, `succeeded` or `failed`; otherwise missing |
 | `number`, `rows` | For a `partition`, its number from 1 and its records; for a `batch`, its number and its rows; otherwise missing |
 

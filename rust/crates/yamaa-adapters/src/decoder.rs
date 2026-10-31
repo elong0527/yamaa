@@ -100,6 +100,17 @@ impl<E> TableAccess for Snapshot<E> {
             Storage::Scanned(..) => None,
         }
     }
+    /// Every snapshot may be shared and moved between the threads of a
+    /// partitioned run (#4193): it holds its values, and no error.
+    fn shared(&self) -> Option<&(dyn TableAccess<Error = E> + Sync)> {
+        Some(self)
+    }
+    fn into_shared<'t>(self) -> Result<Box<dyn TableAccess<Error = E> + Send + Sync + 't>, Self>
+    where
+        Self: 't,
+    {
+        Ok(Box::new(self))
+    }
 }
 pub struct Decoder<E> {
     /// The closures a project's files admit against, or none until a project

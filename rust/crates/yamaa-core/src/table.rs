@@ -252,6 +252,27 @@ pub trait TableAccess {
         let _ = column;
         None
     }
+    /// This snapshot as threads may share it (#4193), or `None`, the
+    /// default, for a port that stays on the thread that holds it. A
+    /// partitioned run derives its partitions on several threads only when
+    /// every input it reads besides its driver input lends one; the port
+    /// needs no `Send` or `Sync` otherwise, and neither do its errors.
+    fn shared(&self) -> Option<&(dyn TableAccess<Error = Self::Error> + Sync)> {
+        None
+    }
+    /// This snapshot as a table another thread may own (#4193), or itself
+    /// back, the default, for a port that stays on the thread that holds
+    /// it: a partitioned run then derives that partition on the calling
+    /// thread.
+    #[allow(clippy::type_complexity)]
+    fn into_shared<'t>(
+        self,
+    ) -> Result<Box<dyn TableAccess<Error = Self::Error> + Send + Sync + 't>, Self>
+    where
+        Self: Sized + 't,
+    {
+        Err(self)
+    }
 }
 
 #[cfg(test)]

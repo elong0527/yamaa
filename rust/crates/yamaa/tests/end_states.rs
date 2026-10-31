@@ -287,8 +287,10 @@ fn before_start_a_refused_partitioned_run_publishes_only_its_report() {
 /// Mid-partition, cancelled: whichever poll of a partitioned run finds its
 /// token cancelled, at a checkpoint or between two partitions, the call
 /// returns no result and no issue, and nothing is staged or published. An
-/// uncancelled partitioned run polls more often than a whole-table run: each
-/// partition's run polls at every checkpoint of its derivation (#3830).
+/// uncancelled partitioned run on one thread polls more often than a
+/// whole-table run: each partition's run polls at every checkpoint of its
+/// derivation (#3830). On more threads the calling thread polls instead,
+/// as often as it waits (#4193), which `yamaa-core` proves at each poll.
 /// Both specifications have no rows, so each builds the key grain. Over
 /// three one-record partitions, SPEC's four derivation checkpoints, its
 /// intermediates', its first key's, its key grain's and its column W's,
@@ -309,6 +311,7 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
         (consecutive, SPEC, INPUT, 8),
         (key_bounded, SUBJECTS, VISITS, 10),
     ] {
+        let partitions = partitions.with_threads(NonZeroUsize::MIN);
         polls.store(0, Ordering::SeqCst);
         let whole = Engine::new(
             EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())

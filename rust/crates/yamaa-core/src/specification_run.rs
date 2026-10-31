@@ -829,7 +829,7 @@ fn execute_captured_into<C, D: Decoder>(
                 &mut functions,
                 Some(&mut observer),
                 &cancelled,
-                read.keys,
+                (read.keys, read.partitioning.threads),
             );
             match source.error {
                 Some(error) => Err(PortError::Run(source_errors(vec![(
