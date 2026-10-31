@@ -381,28 +381,58 @@ pub(crate) fn refused_header(
     identity: &str,
     field: &str,
 ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+    match read_header(resources, declaring, written, identity, field)? {
+        Header::Refused(refused) => Some(refused),
+        Header::Admitted(_) => None,
+    }
+}
+
+/// What a field that names a specification reads of it before preparing it.
+pub(crate) enum Header {
+    /// The refusal at the field, as [`refused_header`] gives it.
+    Refused(yamaa_core::diagnostic::Diagnostic),
+    /// The file as written, decoded but not prepared, whose header the field
+    /// does not refuse.
+    Admitted(yamaa_core::schema::Document),
+}
+
+/// [`refused_header`], keeping the decoded file when its header is not
+/// refused; `None` when the file cannot be read or decoded.
+pub(crate) fn read_header(
+    resources: &mut Resources,
+    declaring: &str,
+    written: &str,
+    identity: &str,
+    field: &str,
+) -> Option<Header> {
     use yamaa_core::language::{
         self, FileType, HeaderFault, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION,
     };
     let (bytes, _) = resources.capture_metadata_from(declaring, written).ok()?;
     let document = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
-    let fault @ (HeaderFault::Legacy { .. }
-    | HeaderFault::Version { .. }
-    | HeaderFault::FileType { .. }) =
-        language::read_header(&document, Some(LANGUAGE_VERSION), FileType::Spec).err()?
-    else {
-        return None;
+    let refusal = match language::read_header(&document, Some(LANGUAGE_VERSION), FileType::Spec) {
+        Err(
+            fault @ (HeaderFault::Legacy { .. }
+            | HeaderFault::Version { .. }
+            | HeaderFault::FileType { .. }),
+        ) => {
+            let reference = Reference {
+                field: field.into(),
+                written: written.into(),
+                expected: FileType::Spec,
+                base: PathBase::Declaring,
+            };
+            match reference.refuse(identity, &fault) {
+                ReferenceFault::Field(diagnostic) => Some(diagnostic),
+                ReferenceFault::Finding(_) => None,
+            }
+        }
+        _ => None,
     };
-    let reference = Reference {
-        field: field.into(),
-        written: written.into(),
-        expected: FileType::Spec,
-        base: PathBase::Declaring,
-    };
-    match reference.refuse(identity, &fault) {
-        ReferenceFault::Field(diagnostic) => Some(diagnostic),
-        ReferenceFault::Finding(_) => None,
-    }
+    Some(match refusal {
+        Some(refused) => Header::Refused(refused),
+        None => Header::Admitted(document),
+    })
 }
 
 /// A classified failure observed for a `schema` link keeps its authored field.

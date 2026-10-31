@@ -44,6 +44,80 @@
       "issues": [{"condition": "duplicate_specification_name", "spec_paths": ["sdtm.specs[0]", "send.specs[0]"], "context": {"specifications": ["{study}/sdtm/dm.yaml", "{study}/sdtm/dm.yaml"]}}]
     },
     {
+      "case": "the_domain_a_listed_file_writes_replaces_the_one_its_parent_writes",
+      "operation": "find_specification",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/base.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\n",
+          "adam/adsl.yaml": {"base": "adsl", "edits": [{"from": "domain: ADSL\n", "to": "parent: base.yaml\ndomain: ADSL\n"}]},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": {"base": "project"}
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "ADXX"
+      },
+      "compares": ["condition", "context.available"],
+      "issues": [{"condition": "unknown_specification_name", "context": {"available": ["ADAE", "ADSL", "DM"]}}]
+    },
+    {
+      "case": "a_domain_only_a_parent_writes_names_a_listing_that_prepares",
+      "operation": "find_specification",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/base.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\n",
+          "adam/adsl.yaml": {"base": "adsl", "edits": [{"from": "domain: ADSL\n", "to": "parent: base.yaml\n"}]},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": {"base": "project"}
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "ADSL"
+      },
+      "compares": ["condition"],
+      "issues": []
+    },
+    {
+      "case": "a_domain_only_a_parent_writes_names_no_listing_that_cannot_be_prepared",
+      "operation": "find_specification",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/base.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\n",
+          "adam/adsl.yaml": {"base": "adsl", "edits": [{"from": "domain: ADSL\n", "to": "parent: base.yaml\nunknown: 1\n"}]},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": {"base": "project"}
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "ADSL"
+      },
+      "compares": ["condition", "context.available"],
+      "issues": [{"condition": "unknown_specification_name", "context": {"available": ["ADAE", "DM"]}}]
+    },
+    {
+      "case": "a_listing_that_cannot_be_prepared_shares_the_name_its_own_file_writes",
+      "operation": "duplicate_names",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": {"base": "adsl"},
+          "adam/adae.yaml": {"base": "adae", "edits": [{"from": "domain: ADAE\n", "to": "domain: ADSL\nunknown: 1\n"}]},
+          "project.yaml": {"base": "project"}
+        },
+        "directories": ["out"],
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.name", "context.specifications"],
+      "issues": [{"condition": "duplicate_specification_name", "spec_paths": ["adam.specs[0]", "adam.specs[1]"], "context": {"name": "ADSL", "specifications": ["{study}/adam/adae.yaml", "{study}/adam/adsl.yaml"]}}]
+    },
+    {
       "case": "a_project_file_that_is_absent_fails_at_the_callers_path",
       "operation": ["read_project", "project_check"],
       "input": {"files": {}, "directories": ["out"], "project": "project.yaml", "specification": "spec.yaml"},

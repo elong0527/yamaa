@@ -10,8 +10,10 @@
 //! refuses as `read_project` does; `read_project` takes the same
 //! `specification` unread, so that one case states that both report the
 //! same rows. The others read the project first, which must succeed:
-//! `find_specification` reports what refuses the listed `name`,
-//! `duplicate_names` the names listed twice, `check_findings` a project
+//! `find_specification` reports what refuses the listed `name` and
+//! `duplicate_names` the names listed twice, each from the project read for
+//! its names alone (`project_scope::Names`), as selecting a specification by
+//! name reads it; `check_findings` a project
 //! check's findings, `plan_refusal` what refuses the run of the `section`'s
 //! scope (every section unless written), `refused_step` what refuses the
 //! step of that plan that runs the listed `name`, and `blocked_consumer`
@@ -30,7 +32,7 @@ use crate::support::diagnostic::{
     form::Outcome,
     replay::{closed, field, items, text},
 };
-use yamaa_application::project_scope::{self, Project};
+use yamaa_application::project_scope::{self, Names, Project};
 use yamaa_core::json::Value;
 
 pub(super) const FILES: &[File] = &[fixture!("project_scope.json")];
@@ -61,6 +63,19 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
             outcome: Outcome::default(),
         });
     }
+    if let "find_specification" | "duplicate_names" = operation {
+        let names = Names::read_located(&project, Some(host(input)), None)
+            .unwrap_or_else(|(issues, _)| panic!("the project is refused: {issues:?}"));
+        let issues = match operation {
+            "find_specification" => names.find(text(field(input, "name"))).err(),
+            _ => Some(names.duplicates()),
+        };
+        return Some(Reported {
+            issues: issues.unwrap_or_default(),
+            study: Some(study),
+            outcome: Outcome::default(),
+        });
+    }
     let read = Project::read(&project, Some(host(input)), None);
     let issues = match (operation, read) {
         ("read_project", Ok(_)) => vec![],
@@ -83,8 +98,6 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
                     .unwrap_or_else(|| panic!("no step runs {name}"))
             };
             match operation {
-                "find_specification" => project.find(name()).err().unwrap_or_default(),
-                "duplicate_names" => project.duplicates(),
                 "check_findings" => project.check_findings(),
                 "plan_refusal" => project.plan(section).refusal().to_vec(),
                 "refused_step" => {
