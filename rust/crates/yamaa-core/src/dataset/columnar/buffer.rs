@@ -395,15 +395,16 @@ impl Values {
             })?;
             Ok((values, valid))
         }
-        let values = match column.values() {
-            ColumnValues::Int(_) => {
+        use crate::value::ColumnType;
+        let values = match column.values().kind() {
+            ColumnType::Int => {
                 let (values, valid) = fill(rows, 0, |row| match column.get(row) {
                     ValueRef::Int(value) => Some(value),
                     _ => None,
                 })?;
                 Self::Int(values, valid)
             }
-            ColumnValues::Float(_) => {
+            ColumnType::Float => {
                 let zero = FiniteFloat::new(0.0).expect("zero is finite");
                 let (values, valid) = fill(rows, zero, |row| match column.get(row) {
                     ValueRef::Float(value) => Some(value),
@@ -411,7 +412,7 @@ impl Values {
                 })?;
                 Self::Float(values, valid)
             }
-            ColumnValues::Date(_) => {
+            ColumnType::Date => {
                 let date = |row| match column.get(row) {
                     ValueRef::Date(value) => Some(value),
                     _ => None,
@@ -422,7 +423,7 @@ impl Values {
                 let (values, valid) = fill(rows, first, date)?;
                 Self::Date(values, valid)
             }
-            ColumnValues::DateTime(_) => {
+            ColumnType::DateTime => {
                 let datetime = |row| match column.get(row) {
                     ValueRef::DateTime(value) => Some(value),
                     _ => None,
@@ -433,14 +434,10 @@ impl Values {
                 let (values, valid) = fill(rows, first, datetime)?;
                 Self::DateTime(values, valid)
             }
-            ColumnValues::Str { offsets, .. } => {
-                let start = column.start();
+            ColumnType::Str => {
                 let mut strings = Strings::default();
                 strings.spans.try_reserve_exact(rows.len())?;
-                let bytes = rows
-                    .iter()
-                    .map(|&row| offsets[start + row + 1] - offsets[start + row])
-                    .sum();
+                let bytes = rows.iter().map(|&row| column.text_len(row)).sum();
                 strings.bytes.try_reserve_exact(bytes)?;
                 let valid = Bits::from_fn(rows.len(), |index| match column.get(rows[index]) {
                     ValueRef::Str(value) => {
@@ -541,6 +538,27 @@ impl Values {
             }
             Self::Mixed(values) => ValueRef::from(&values[index]),
         }
+    }
+
+    /// Lend the whole buffer as a column view, its storage as it is
+    /// (#4201); `None` for a buffer of no single column type: every row
+    /// missing, booleans, or mixed values.
+    pub(crate) fn column(&self) -> Option<ColumnRef<'_>> {
+        let (values, valid) = match self {
+            Self::Int(values, valid) => (ColumnValues::Int(values), valid),
+            Self::Float(values, valid) => (ColumnValues::FiniteFloat(values), valid),
+            Self::Date(values, valid) => (ColumnValues::MaskedDate(values), valid),
+            Self::DateTime(values, valid) => (ColumnValues::MaskedDateTime(values), valid),
+            Self::Str(values, valid) => (
+                ColumnValues::TextSpans {
+                    spans: &values.spans,
+                    bytes: &values.bytes,
+                },
+                valid,
+            ),
+            Self::Missing(_) | Self::Bool(..) | Self::Mixed(_) => return None,
+        };
+        ColumnRef::lend(values, Some(&valid.words))
     }
 
     /// An owned copy of one row's value.

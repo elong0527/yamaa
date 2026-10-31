@@ -9,7 +9,7 @@ use crate::{
     conversion::ConversionError,
     expression::Reducer,
     numeric_lifecycle::{HandlerCount, HandlerCountOverflow},
-    table::{CellError, TableAccess, TableSchema, ValueRef},
+    table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef},
     table_grouping::GroupingError,
     table_reduction::TableReductionError,
     value::{Value, ValueType},
@@ -217,6 +217,15 @@ impl TableAccess for Dataset {
             .filter(|_| row < self.inner.rows)
             .map(|values| values.get(row))
             .ok_or(CellError::OutOfBounds { row, column })
+    }
+    /// Lend a typed column's buffer whole, so that the output's encoders,
+    /// host view and report read it without a call per cell (#4201).
+    fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
+        self.inner
+            .columns
+            .get(column)?
+            .column()
+            .filter(|view| view.len() == self.inner.rows)
     }
 }
 
