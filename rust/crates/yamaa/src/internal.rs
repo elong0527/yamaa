@@ -154,6 +154,20 @@ pub(crate) fn read_project(
     .map_err(|(issues, locator)| (issues, Arc::new(locator)))
 }
 
+/// Read a project file and the name of each listed specification, as far as
+/// selecting one by name needs, through the engine's resolver.
+pub(crate) fn read_names(
+    shared: &EngineShared,
+    project: &str,
+) -> Result<yamaa_application::project_scope::Names, Unread> {
+    yamaa_application::project_scope::Names::read_located(
+        project,
+        shared.language,
+        resolver_bridge(shared),
+    )
+    .map_err(|(issues, locator)| (issues, Arc::new(locator)))
+}
+
 /// The embedder's project functions are the build's host-functions port: a
 /// host's (Python's or R's), the memory route's or another embedder's. Each
 /// call converts between the core's values and the facade's on the calling

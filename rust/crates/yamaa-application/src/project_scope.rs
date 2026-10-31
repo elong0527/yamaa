@@ -52,6 +52,22 @@ pub struct Listed {
     failure: Vec<Diagnostic>,
 }
 impl Listed {
+    /// The listing at `section.specs[index]`, which writes `written`, before
+    /// its specification is read.
+    fn unread(section: Submission, index: usize, written: String) -> Self {
+        Self {
+            section,
+            index,
+            location: written.clone(),
+            written,
+            identity: None,
+            name: None,
+            inputs: Vec::new(),
+            output: None,
+            report: None,
+            failure: Vec::new(),
+        }
+    }
     /// The specification file, as checks and builds receive it.
     pub fn path(&self) -> &str {
         &self.location
@@ -184,6 +200,16 @@ impl Project {
         host: Option<Language>,
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
     ) -> Result<Self, (Vec<Diagnostic>, Locator)> {
+        Self::read_to(project, host, resolver, Depth::Listing)
+    }
+
+    /// Capture the project file and read each listing to `depth`.
+    fn read_to(
+        project: &str,
+        host: Option<Language>,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+        depth: Depth,
+    ) -> Result<Self, (Vec<Diagnostic>, Locator)> {
         let crate::file_workflow::CapturedProject {
             mut resources,
             environment,
@@ -224,7 +250,8 @@ impl Project {
         let (listed, documents): (Vec<_>, Vec<_>) = written
             .into_iter()
             .map(|(section, index, written)| {
-                read_listing(&mut resources, &identity, section, index, &written)
+                let listed = Listed::unread(section, index, written);
+                read_listing(&mut resources, &identity, listed, depth)
             })
             .unzip();
         let listings = listed
@@ -275,50 +302,7 @@ impl Project {
 
     /// One finding for each name that two or more listings share.
     pub fn duplicates(&self) -> Vec<Diagnostic> {
-        let mut names = self
-            .listed
-            .iter()
-            .filter_map(|listed| listed.name.as_deref())
-            .collect::<Vec<_>>();
-        names.sort_unstable();
-        names.dedup();
-        let mut issues = Vec::new();
-        for name in names {
-            let listings = self
-                .listed
-                .iter()
-                .filter(|listed| listed.name.as_deref() == Some(name))
-                .map(|listed| (listed.listing(), listed.identity().to_owned()))
-                .collect::<Vec<_>>();
-            if listings.len() > 1 {
-                let mut finding = scope::duplicate_name(name, &listings);
-                finding
-                    .context
-                    .insert("source".into(), Value::String(self.identity.clone()));
-                issues.push(finding);
-            }
-        }
-        issues
-    }
-
-    /// The listing named `name`, or the finding that lists the names the
-    /// project defines.
-    pub fn find(&self, name: &str) -> Result<&Listed, Vec<Diagnostic>> {
-        self.listed
-            .iter()
-            .find(|listed| listed.name.as_deref() == Some(name))
-            .ok_or_else(|| {
-                let available = self
-                    .listed
-                    .iter()
-                    .filter_map(|listed| listed.name.as_deref())
-                    .collect::<Vec<_>>();
-                let mut finding = scope::unknown_name(name, &available);
-                finding
-                    .context
-                    .insert("source".into(), Value::String(self.identity.clone()));
-                vec![finding]
-            })
+        duplicates(&self.identity, &self.listed)
     }
 
     /// The listings of one section, or of every declared section in run order.
@@ -490,33 +474,111 @@ impl Project {
     }
 }
 
-/// Read the specification a project lists at `section.specs[index]` as
-/// `written`. A 1.0 project (`versioned`) reads its header at the listing
-/// first ([`crate::file_preparation::refused_header`], SCHEMA-2): a version
-/// the engine does not read, or another type, is the listing's own finding,
-/// as a listed function or codelist file's is.
+/// A project file with the name of every specification its sections list,
+/// read only as far as selecting one by its name needs (#4213): a listed
+/// specification whose own file writes its `domain` is named without being
+/// prepared. Its names and their refusals are those [`Project::read`] gives,
+/// located in the project file as it locates them.
+pub struct Names(Project);
+
+impl Names {
+    /// [`Project::read_located`], reading each listing for its name alone.
+    pub fn read_located(
+        project: &str,
+        host: Option<Language>,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+    ) -> Result<Self, (Vec<Diagnostic>, Locator)> {
+        Project::read_to(project, host, resolver, Depth::Name).map(Self)
+    }
+    /// What locates the project findings; see [`Project::locator`].
+    pub fn locator(&self) -> &Arc<Locator> {
+        &self.0.locator
+    }
+    /// See [`Project::duplicates`].
+    pub fn duplicates(&self) -> Vec<Diagnostic> {
+        self.0.duplicates()
+    }
+    /// The listing named `name`, or the finding that lists the names the
+    /// project defines.
+    pub fn find(&self, name: &str) -> Result<&Listed, Vec<Diagnostic>> {
+        let listed = &self.0.listed;
+        listed
+            .iter()
+            .find(|listed| listed.name.as_deref() == Some(name))
+            .ok_or_else(|| {
+                let available = listed
+                    .iter()
+                    .filter_map(|listed| listed.name.as_deref())
+                    .collect::<Vec<_>>();
+                let mut finding = scope::unknown_name(name, &available);
+                finding
+                    .context
+                    .insert("source".into(), Value::String(self.0.identity.clone()));
+                vec![finding]
+            })
+    }
+}
+
+/// One finding for each name that two or more of `listed` share, in the
+/// project file `project`.
+fn duplicates(project: &str, listed: &[Listed]) -> Vec<Diagnostic> {
+    let mut names = listed
+        .iter()
+        .filter_map(|listed| listed.name.as_deref())
+        .collect::<Vec<_>>();
+    names.sort_unstable();
+    names.dedup();
+    let mut issues = Vec::new();
+    for name in names {
+        let listings = listed
+            .iter()
+            .filter(|listed| listed.name.as_deref() == Some(name))
+            .map(|listed| (listed.listing(), listed.identity().to_owned()))
+            .collect::<Vec<_>>();
+        if listings.len() > 1 {
+            let mut finding = scope::duplicate_name(name, &listings);
+            finding
+                .context
+                .insert("source".into(), Value::String(project.to_owned()));
+            issues.push(finding);
+        }
+    }
+    issues
+}
+
+/// How far a project reads each specification it lists.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Depth {
+    /// Everything project operations read: the name, links and output files,
+    /// from the prepared specification.
+    Listing,
+    /// Only the name, which selecting a specification by it needs (#4213).
+    Name,
+}
+
+/// Read the specification `listed` names, unread, to `depth`. A 1.0 project
+/// reads its header at the listing first
+/// ([`crate::file_preparation::read_header`], SCHEMA-2): a version the engine
+/// does not read, or another type, is the listing's own finding, as a listed
+/// function or codelist file's is.
+///
+/// Its name is the `domain` its own file writes, which no parent or fragment
+/// replaces (LAYER-3, LAYER-5), or else the `domain` of the prepared
+/// specification (PROJECT-5). Read for the name alone, a specification whose
+/// own file writes one is not prepared: it has that name whether or not it
+/// prepares, since one that cannot be prepared keeps it too (PROJECT-6).
 fn read_listing(
     resources: &mut Resources,
     project: &str,
-    section: Submission,
-    index: usize,
-    written: &str,
+    mut listed: Listed,
+    depth: Depth,
 ) -> (
     Listed,
     Option<crate::specification_source::PreparedDocument>,
 ) {
-    let mut listed = Listed {
-        section,
-        index,
-        written: written.to_owned(),
-        location: written.to_owned(),
-        identity: None,
-        name: None,
-        inputs: Vec::new(),
-        output: None,
-        report: None,
-        failure: Vec::new(),
-    };
+    use crate::file_preparation::Header;
+    let written = listed.written.clone();
+    let written = written.as_str();
     match resources.location_from(project, written) {
         Ok(location) => listed.location = location,
         Err(error) => {
@@ -524,25 +586,30 @@ fn read_listing(
             return (listed, None);
         }
     }
-    if let Some((identity, refused)) =
-        resources
-            .resolve_from(project, written)
-            .ok()
-            .and_then(|identity| {
-                let refused = crate::file_preparation::refused_header(
-                    resources,
-                    project,
-                    written,
-                    &identity,
-                    &listed.listing(),
-                )?;
-                Some((identity, refused))
-            })
-    {
-        listed.identity = Some(identity);
-        listed.failure = vec![refused];
+    let mut own = None;
+    if let Ok(identity) = resources.resolve_from(project, written) {
+        match crate::file_preparation::read_header(
+            resources,
+            project,
+            written,
+            &identity,
+            &listed.listing(),
+        ) {
+            Some(Header::Refused(refused)) => {
+                listed.identity = Some(identity);
+                listed.failure = vec![refused];
+                return (listed, None);
+            }
+            Some(Header::Admitted(model)) => own = Some((identity, domain(&model))),
+            None => {}
+        }
+    }
+    if let (Depth::Name, Some((identity, Some(name)))) = (depth, &own) {
+        listed.identity = Some(identity.clone());
+        listed.name = Some(name.clone());
         return (listed, None);
     }
+    let own = own.map(|(_, name)| name);
     let document =
         match crate::file_preparation::prepare_document_from(resources, Some(project), written) {
             Ok(document) => document,
@@ -561,7 +628,10 @@ fn read_listing(
             // links here, and its own check or build reports why.
             Err(_) => {
                 listed.identity = resources.resolve_from(project, written).ok();
-                listed.name = written_name(resources, project, written);
+                listed.name = match own {
+                    Some(own) => own,
+                    None => written_name(resources, project, written),
+                };
                 return (listed, None);
             }
         };
@@ -576,10 +646,7 @@ fn read_listing(
     };
     let model = document.document();
     listed.identity = Some(document.source().identity.clone());
-    listed.name = model
-        .field(model.root(), "domain")
-        .and_then(|node| text(model, node))
-        .map(str::to_owned);
+    listed.name = own.flatten().or_else(|| domain(model));
     if let Some(N::Mapping(inputs)) = model
         .field(model.root(), "input")
         .map(|input| &model.nodes()[input])
@@ -620,9 +687,13 @@ fn read_listing(
 /// a parent layer supplies is not read, so such a listing has no name.
 fn written_name(resources: &mut Resources, project: &str, written: &str) -> Option<String> {
     let (bytes, _) = resources.capture_metadata_from(project, written).ok()?;
-    let model = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
+    domain(&crate::yaml_decode::decode_yaml(&bytes).ok()?.document)
+}
+
+/// The `domain` text `model` writes at its root.
+fn domain(model: &Document) -> Option<String> {
     let node = model.field(model.root(), "domain")?;
-    text(&model, node).map(str::to_owned)
+    text(model, node).map(str::to_owned)
 }
 
 /// One specification of a run scope, in run order.

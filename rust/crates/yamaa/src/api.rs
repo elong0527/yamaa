@@ -1238,7 +1238,7 @@ impl<'a> ProjectRequest<'a> {
     /// does not list, whose issue names the listed names.
     pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure> {
         let action = Action::Select(name);
-        let read = crate::internal::read_project(self.engine.shared(), self.path).map_err(
+        let read = crate::internal::read_names(self.engine.shared(), self.path).map_err(
             |(issues, locator)| Failure::rejected(action, &Report::located(&issues, &locator)),
         )?;
         let duplicates = read.duplicates();

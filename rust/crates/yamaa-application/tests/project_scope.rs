@@ -13,7 +13,7 @@ use yamaa_adapters::file_resources::HeldArtifacts;
 use yamaa_application::{
     file_application::{self, Domain},
     file_workflow,
-    project_scope::Project,
+    project_scope::{Names, Project},
     publication::{self, Cause},
     specification_report::Identity,
 };
@@ -115,10 +115,12 @@ fn listings_follow_section_run_order_and_names_are_their_domains() {
         [Submission::Sdtm, Submission::Adam]
     );
     assert_eq!(project.define_sections().count(), 0);
-    assert_eq!(project.find("ADSL").unwrap().name(), Some("ADSL"));
+    let names = Names::read_located(&study.path("project.yaml"), Some(Language::Python), None)
+        .unwrap_or_else(|(issues, _)| panic!("{issues:?}"));
+    assert_eq!(names.find("ADSL").unwrap().name(), Some("ADSL"));
     // An unknown name, and the same file listed twice, which shares its name
     // with itself, are refused as `project_scope.json` records.
-    assert!(project.find("AE").is_err());
+    assert!(names.find("AE").is_err());
     assert!(project.duplicates().is_empty());
 }
 
