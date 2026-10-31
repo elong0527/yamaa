@@ -24,7 +24,7 @@ use super::resolved::{
 };
 use crate::function_invocation::FunctionPort;
 use crate::limits::Limits;
-use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
+use crate::table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef};
 use crate::value::Value;
 use std::ops::Range;
 
@@ -120,9 +120,21 @@ impl<E> TableAccess for Table<'_, E> {
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<E>> {
         (*self).get(row, column)
     }
+    fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
+        (*self).storage(column)
+    }
 }
 
 impl<'a, E> Table<'a, E> {
+    /// A source port's column, lent whole with the table's own lifetime
+    /// when the port holds it as typed storage (#4190).
+    fn storage(self, column: usize) -> Option<ColumnRef<'a>> {
+        match self {
+            Self::Source(table) => table.column(column),
+            Self::Rows { .. } | Self::Input { .. } => None,
+        }
+    }
+
     /// Borrow one cell with the table's own lifetime.
     fn get(self, row: usize, column: usize) -> Result<ValueRef<'a>, CellError<E>> {
         match self {
@@ -370,6 +382,9 @@ impl<T: TableAccess + ?Sized> TableAccess for Borrowed<'_, T> {
     }
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<T::Error>> {
         self.0.cell(row, column)
+    }
+    fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
+        self.0.column(column)
     }
 }
 
@@ -923,9 +938,10 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     }
                 }
             } else {
-                for (members, &identity) in groups.iter().zip(&identities) {
-                    frame.push(cx_template, Identity::Candidate(identity), members);
-                }
+                frame.extend(cx_template, groups.len(), |index, records| {
+                    records.extend_from_slice(&groups[index]);
+                    Identity::Candidate(identities[index])
+                });
                 let rows: Vec<usize> = (start..frame.rows()).collect();
                 for &binding in &prewindow {
                     run.complete_binding(frame, binding, (table, secondary), first, &rows, None)?;
@@ -937,7 +953,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                         .iter()
                         .map(|truth| *truth == crate::expression::Truth::True)
                         .collect();
-                    frame.retain_from(start, &keep);
+                    reserved(frame.retain_from(start, &keep))?;
                 }
             }
             Ok(())
@@ -1022,7 +1038,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     .collect();
                 Ok(())
             })?;
-            frame.retain_from(first, &keep);
+            reserved(frame.retain_from(first, &keep))?;
         }
         templates.push(TemplateRows {
             emitted: frame.rows() - first,

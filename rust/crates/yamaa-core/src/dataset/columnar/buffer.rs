@@ -3,11 +3,12 @@
 //! varies by row. A buffer changes layout, never a value: every read lends
 //! the same `ValueRef` a table port would.
 use crate::{
-    table::ValueRef,
+    table::{ColumnRef, ColumnValues, ValueRef},
     temporal::{Date, DateTime},
     value::{FiniteFloat, Value},
 };
 use std::collections::TryReserveError;
+use std::ops::Range;
 
 /// A growable bit vector.
 #[derive(Clone, Debug, Default)]
@@ -35,6 +36,49 @@ impl Bits {
         };
         bits.clear_tail();
         bits
+    }
+
+    /// `len` bits, bit `index` set when `set(index)` holds, asked in order
+    /// and built a word at a time.
+    fn from_fn(len: usize, mut set: impl FnMut(usize) -> bool) -> Result<Self, TryReserveError> {
+        let mut words = Vec::new();
+        words.try_reserve_exact(len.div_ceil(64))?;
+        let mut start = 0;
+        while start < len {
+            let end = (start + 64).min(len);
+            let mut word = 0u64;
+            for index in start..end {
+                word |= u64::from(set(index)) << (index - start);
+            }
+            words.push(word);
+            start = end;
+        }
+        Ok(Self { words, len })
+    }
+
+    /// Grow to `len` bits, each new one clear.
+    pub(super) fn grow(&mut self, len: usize) {
+        if len > self.len {
+            self.words.resize(len.div_ceil(64), 0);
+            self.len = len;
+        }
+    }
+
+    /// Whether any bit is set.
+    fn any(&self) -> bool {
+        self.words.iter().any(|&word| word != 0)
+    }
+
+    /// Append bits `range` of `other`.
+    pub(super) fn extend_from(&mut self, other: &Bits, range: Range<usize>) {
+        let start = self.len;
+        self.len += range.len();
+        self.words.resize(self.len.div_ceil(64), 0);
+        for (offset, index) in range.enumerate() {
+            if other.get(index) {
+                self.set(start + offset, true);
+            }
+        }
     }
 
     fn clear_tail(&mut self) {
@@ -91,12 +135,8 @@ impl Bits {
     }
 
     /// Keep the bits at `rows`, in that order.
-    pub(super) fn gather(&self, rows: &[usize]) -> Self {
-        let mut bits = Self::new(0, false);
-        for &row in rows {
-            bits.push(self.get(row));
-        }
-        bits
+    pub(super) fn gather(&self, rows: &[usize]) -> Result<Self, TryReserveError> {
+        Self::from_fn(rows.len(), |index| self.get(rows[index]))
     }
 }
 
@@ -128,6 +168,44 @@ impl Strings {
     fn push_empty(&mut self) {
         let end = self.bytes.len();
         self.spans.push((end, end));
+    }
+
+    /// The rows `rows` of `self`, their text copied once into an arena
+    /// reserved to its size.
+    fn gather(&self, rows: &[usize]) -> Result<Self, TryReserveError> {
+        let mut gathered = Self::default();
+        gathered.spans.try_reserve_exact(rows.len())?;
+        let bytes = rows.iter().map(|&row| self.get(row).len()).sum();
+        gathered.bytes.try_reserve_exact(bytes)?;
+        for &row in rows {
+            gathered.push(self.get(row));
+        }
+        Ok(gathered)
+    }
+
+    /// Append rows `range` of `other`: one copy of the arena when their
+    /// text lies in it end to end, as a buffer filled in row order holds it.
+    fn extend_from(&mut self, other: &Strings, range: Range<usize>) {
+        let spans = &other.spans[range.clone()];
+        let contiguous = spans.windows(2).all(|pair| pair[0].1 == pair[1].0);
+        if let (true, Some(&(start, _)), Some(&(_, end))) =
+            (contiguous, spans.first(), spans.last())
+        {
+            let base = self.bytes.len();
+            self.bytes.push_str(&other.bytes[start..end]);
+            self.spans.extend(
+                spans
+                    .iter()
+                    .map(|&(from, to)| (from - start + base, to - start + base)),
+            );
+            return;
+        }
+        self.spans.reserve(range.len());
+        self.bytes
+            .reserve(range.clone().map(|row| other.get(row).len()).sum());
+        for row in range {
+            self.push(other.get(row));
+        }
     }
 
     /// Overwrite one row; the replaced bytes stay in the arena.
@@ -205,13 +283,146 @@ impl Values {
         }
     }
 
-    /// The same value on every row.
+    /// The same value on every row; text is held once, and every row lends
+    /// it.
     pub(super) fn repeat(value: ValueRef<'_>, len: usize) -> Self {
-        let mut values = Self::Missing(0);
-        for _ in 0..len {
-            values.push(value);
+        if len == 0 {
+            return Self::Missing(0);
         }
-        values
+        let valid = || Bits::new(len, true);
+        match value {
+            ValueRef::Missing => Self::Missing(len),
+            ValueRef::Int(value) => Self::Int(vec![value; len], valid()),
+            ValueRef::Float(value) => Self::Float(vec![value; len], valid()),
+            ValueRef::Bool(value) => Self::Bool(vec![value; len], valid()),
+            ValueRef::Date(value) => Self::Date(vec![value; len], valid()),
+            ValueRef::DateTime(value) => Self::DateTime(vec![value; len], valid()),
+            ValueRef::Str(value) => Self::Str(
+                Strings {
+                    spans: vec![(0, value.len()); len],
+                    bytes: value.to_owned(),
+                },
+                valid(),
+            ),
+        }
+    }
+
+    /// The values of `column` at `rows`, positions in it, in that order,
+    /// each the `ValueRef` the column lends; `None` when a row is outside
+    /// the column. The buffer is sized to `rows` before it is filled, and is
+    /// missing when no row holds a value, as one pushed a row at a time is.
+    pub(super) fn from_column(
+        column: ColumnRef<'_>,
+        rows: &[usize],
+    ) -> Option<Result<Self, TryReserveError>> {
+        if rows.iter().any(|&row| row >= column.len()) {
+            return None;
+        }
+        Some(Self::gather_column(column, rows))
+    }
+
+    fn gather_column(column: ColumnRef<'_>, rows: &[usize]) -> Result<Self, TryReserveError> {
+        fn fill<T: Copy>(
+            rows: &[usize],
+            placeholder: T,
+            read: impl Fn(usize) -> Option<T>,
+        ) -> Result<(Vec<T>, Bits), TryReserveError> {
+            let mut values = Vec::new();
+            values.try_reserve_exact(rows.len())?;
+            let mut last = placeholder;
+            let valid = Bits::from_fn(rows.len(), |index| match read(rows[index]) {
+                Some(value) => {
+                    last = value;
+                    values.push(value);
+                    true
+                }
+                None => {
+                    values.push(last);
+                    false
+                }
+            })?;
+            Ok((values, valid))
+        }
+        let values = match column.values() {
+            ColumnValues::Int(_) => {
+                let (values, valid) = fill(rows, 0, |row| match column.get(row) {
+                    ValueRef::Int(value) => Some(value),
+                    _ => None,
+                })?;
+                Self::Int(values, valid)
+            }
+            ColumnValues::Float(_) => {
+                let zero = FiniteFloat::new(0.0).expect("zero is finite");
+                let (values, valid) = fill(rows, zero, |row| match column.get(row) {
+                    ValueRef::Float(value) => Some(value),
+                    _ => None,
+                })?;
+                Self::Float(values, valid)
+            }
+            ColumnValues::Date(_) => {
+                let date = |row| match column.get(row) {
+                    ValueRef::Date(value) => Some(value),
+                    _ => None,
+                };
+                let Some(first) = rows.iter().find_map(|&row| date(row)) else {
+                    return Ok(Self::Missing(rows.len()));
+                };
+                let (values, valid) = fill(rows, first, date)?;
+                Self::Date(values, valid)
+            }
+            ColumnValues::DateTime(_) => {
+                let datetime = |row| match column.get(row) {
+                    ValueRef::DateTime(value) => Some(value),
+                    _ => None,
+                };
+                let Some(first) = rows.iter().find_map(|&row| datetime(row)) else {
+                    return Ok(Self::Missing(rows.len()));
+                };
+                let (values, valid) = fill(rows, first, datetime)?;
+                Self::DateTime(values, valid)
+            }
+            ColumnValues::Str { offsets, .. } => {
+                let start = column.start();
+                let mut strings = Strings::default();
+                strings.spans.try_reserve_exact(rows.len())?;
+                let bytes = rows
+                    .iter()
+                    .map(|&row| offsets[start + row + 1] - offsets[start + row])
+                    .sum();
+                strings.bytes.try_reserve_exact(bytes)?;
+                let valid = Bits::from_fn(rows.len(), |index| match column.get(rows[index]) {
+                    ValueRef::Str(value) => {
+                        strings.push(value);
+                        true
+                    }
+                    _ => {
+                        strings.push_empty();
+                        false
+                    }
+                })?;
+                Self::Str(strings, valid)
+            }
+        };
+        Ok(values.or_missing())
+    }
+
+    /// The same buffer, missing when it is typed and no row holds a value,
+    /// as a buffer pushed a row at a time stays.
+    fn or_missing(self) -> Self {
+        let present = match &self {
+            Self::Int(_, valid)
+            | Self::Float(_, valid)
+            | Self::Bool(_, valid)
+            | Self::Date(_, valid)
+            | Self::DateTime(_, valid)
+            | Self::Str(_, valid) => valid.any(),
+            Self::Missing(_) | Self::Mixed(_) => return self,
+        };
+        if present {
+            self
+        } else {
+            Self::Missing(self.len())
+        }
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -454,14 +665,6 @@ impl Values {
         }
     }
 
-    /// Overwrite one row with an owned value.
-    pub(super) fn set_value(&mut self, index: usize, value: Value) {
-        match self {
-            Self::Mixed(values) => values[index] = value,
-            _ => self.set(index, ValueRef::from(&value)),
-        }
-    }
-
     /// Grow to `len` rows with missing values.
     pub(super) fn resize_missing(&mut self, len: usize) {
         if len < self.len() {
@@ -521,13 +724,106 @@ impl Values {
         }
     }
 
-    /// The values at `rows`, in that order.
-    pub(crate) fn gather(&self, rows: &[usize]) -> Self {
-        let mut gathered = Self::Missing(0);
-        for &row in rows {
-            gathered.push(self.get(row));
+    /// The values at `rows`, in that order, in a buffer sized to them: a
+    /// typed buffer gathers its payloads in one pass, and stays typed while
+    /// any gathered row holds a value.
+    pub(crate) fn gather(&self, rows: &[usize]) -> Result<Self, TryReserveError> {
+        fn pick<T: Copy>(values: &[T], rows: &[usize]) -> Result<Vec<T>, TryReserveError> {
+            let mut picked = Vec::new();
+            picked.try_reserve_exact(rows.len())?;
+            picked.extend(rows.iter().map(|&row| values[row]));
+            Ok(picked)
         }
-        gathered
+        let gathered = match self {
+            Self::Missing(_) => Self::Missing(rows.len()),
+            Self::Int(values, valid) => Self::Int(pick(values, rows)?, valid.gather(rows)?),
+            Self::Float(values, valid) => Self::Float(pick(values, rows)?, valid.gather(rows)?),
+            Self::Bool(values, valid) => Self::Bool(pick(values, rows)?, valid.gather(rows)?),
+            Self::Date(values, valid) => Self::Date(pick(values, rows)?, valid.gather(rows)?),
+            Self::DateTime(values, valid) => {
+                Self::DateTime(pick(values, rows)?, valid.gather(rows)?)
+            }
+            Self::Str(values, valid) => Self::Str(values.gather(rows)?, valid.gather(rows)?),
+            // A mixed buffer's rows may share one type, as the buffer they
+            // came from did before it turned mixed.
+            Self::Mixed(_) => {
+                let mut gathered = Self::Missing(0);
+                gathered.try_reserve(rows.len())?;
+                for &row in rows {
+                    gathered.push(self.get(row));
+                }
+                gathered
+            }
+        };
+        Ok(gathered.or_missing())
+    }
+
+    /// Append rows `range` of `other`: payloads copied in bulk when both
+    /// buffers hold one type, or into an empty buffer; a row at a time
+    /// otherwise, as `push` keeps the buffer typed.
+    pub(super) fn extend_from(&mut self, other: &Values, range: Range<usize>) {
+        if range.is_empty() {
+            return;
+        }
+        match (&mut *self, other) {
+            (Self::Missing(len), Self::Missing(_)) => *len += range.len(),
+            (Self::Int(values, valid), Self::Int(from, from_valid)) => {
+                values.extend_from_slice(&from[range.clone()]);
+                valid.extend_from(from_valid, range);
+            }
+            (Self::Float(values, valid), Self::Float(from, from_valid)) => {
+                values.extend_from_slice(&from[range.clone()]);
+                valid.extend_from(from_valid, range);
+            }
+            (Self::Bool(values, valid), Self::Bool(from, from_valid)) => {
+                values.extend_from_slice(&from[range.clone()]);
+                valid.extend_from(from_valid, range);
+            }
+            (Self::Date(values, valid), Self::Date(from, from_valid)) => {
+                values.extend_from_slice(&from[range.clone()]);
+                valid.extend_from(from_valid, range);
+            }
+            (Self::DateTime(values, valid), Self::DateTime(from, from_valid)) => {
+                values.extend_from_slice(&from[range.clone()]);
+                valid.extend_from(from_valid, range);
+            }
+            (Self::Str(values, valid), Self::Str(from, from_valid)) => {
+                values.extend_from(from, range.clone());
+                valid.extend_from(from_valid, range);
+            }
+            (
+                Self::Missing(0),
+                Self::Int(..)
+                | Self::Float(..)
+                | Self::Bool(..)
+                | Self::Date(..)
+                | Self::DateTime(..)
+                | Self::Str(..),
+            ) => {
+                *self = other.empty_like();
+                self.extend_from(other, range);
+                *self = std::mem::take(self).or_missing();
+            }
+            _ => {
+                for row in range {
+                    self.push(other.get(row));
+                }
+            }
+        }
+    }
+
+    /// An empty buffer of the same layout.
+    fn empty_like(&self) -> Self {
+        match self {
+            Self::Missing(_) => Self::Missing(0),
+            Self::Int(..) => Self::Int(Vec::new(), Bits::default()),
+            Self::Float(..) => Self::Float(Vec::new(), Bits::default()),
+            Self::Bool(..) => Self::Bool(Vec::new(), Bits::default()),
+            Self::Date(..) => Self::Date(Vec::new(), Bits::default()),
+            Self::DateTime(..) => Self::DateTime(Vec::new(), Bits::default()),
+            Self::Str(..) => Self::Str(Strings::default(), Bits::default()),
+            Self::Mixed(_) => Self::Mixed(Vec::new()),
+        }
     }
 }
 
@@ -633,6 +929,121 @@ mod tests {
         assert_eq!(values.get(3), ValueRef::Int(1));
     }
 
+    /// Every row's value of a buffer.
+    fn read(values: &Values) -> Vec<ValueRef<'_>> {
+        (0..values.len()).map(|row| values.get(row)).collect()
+    }
+
+    // The seam is the bulk paths of a crate-private buffer (#4190): each
+    // must read back what pushing the same values a row at a time reads.
+    #[test]
+    fn a_lent_column_gathers_what_each_row_reads_and_stays_missing_without_a_value() {
+        let words = [0b1101u64];
+        let ints = ColumnRef::new(ColumnValues::Int(&[5, 0, 7, 9]), Some(&words)).unwrap();
+        let gathered = Values::from_column(ints, &[3, 1, 0, 1]).unwrap().unwrap();
+        assert_eq!(
+            read(&gathered),
+            [
+                ValueRef::Int(9),
+                ValueRef::Missing,
+                ValueRef::Int(5),
+                ValueRef::Missing
+            ],
+            "ints at rows 3, 1, 0, 1, row 1 missing by the bitmap"
+        );
+        let only_missing = Values::from_column(ints, &[1, 1]).unwrap().unwrap();
+        assert!(
+            matches!(only_missing, Values::Missing(2)),
+            "rows without a value gather a missing buffer, as pushing them does"
+        );
+        assert!(
+            Values::from_column(ints, &[4]).is_none(),
+            "a row outside the column is left to the cell read"
+        );
+        let text = ColumnRef::new(
+            ColumnValues::Str {
+                offsets: &[0, 1, 1, 3],
+                bytes: "a\u{e9}",
+            },
+            None,
+        )
+        .unwrap();
+        let gathered = Values::from_column(text, &[2, 0, 1]).unwrap().unwrap();
+        assert_eq!(
+            read(&gathered),
+            [
+                ValueRef::Str("\u{e9}"),
+                ValueRef::Str("a"),
+                ValueRef::Str("")
+            ],
+            "text rows 2, 0, 1, row 1 empty and present"
+        );
+        let day = Date::new(2024, 2, 29, crate::temporal::Precision::Day).unwrap();
+        let days = [None, Some(day), None];
+        let dates = ColumnRef::new(ColumnValues::Date(&days), None).unwrap();
+        let gathered = Values::from_column(dates, &[0, 1, 2]).unwrap().unwrap();
+        assert_eq!(
+            read(&gathered),
+            [ValueRef::Missing, ValueRef::Date(day), ValueRef::Missing],
+            "dates with missing rows before and after the present one"
+        );
+    }
+
+    #[test]
+    fn gathered_extended_and_repeated_buffers_read_the_values_pushed_a_row_at_a_time() {
+        let mut ints = Values::missing(0);
+        for value in [
+            ValueRef::Missing,
+            ValueRef::Int(1),
+            ValueRef::Int(2),
+            ValueRef::Missing,
+        ] {
+            ints.push(value);
+        }
+        let gathered = ints.gather(&[2, 0, 1]).unwrap();
+        assert_eq!(
+            read(&gathered),
+            [ValueRef::Int(2), ValueRef::Missing, ValueRef::Int(1)],
+            "ints gathered at rows 2, 0, 1"
+        );
+        assert!(matches!(ints.gather(&[0, 3]).unwrap(), Values::Missing(2)));
+        let mut extended = Values::missing(0);
+        extended.extend_from(&ints, 1..4);
+        extended.extend_from(&ints, 0..2);
+        assert_eq!(
+            read(&extended),
+            [
+                ValueRef::Int(1),
+                ValueRef::Int(2),
+                ValueRef::Missing,
+                ValueRef::Missing,
+                ValueRef::Int(1)
+            ],
+            "ints 1..4 then 0..2 appended to an empty buffer"
+        );
+        let mut text = Values::missing(0);
+        for value in ["ab", "c", "de"] {
+            text.push(ValueRef::Str(value));
+        }
+        // An overwritten row's text leaves the arena out of row order.
+        text.set(0, ValueRef::Str("xyz"));
+        let mut extended = Values::repeat(ValueRef::Str("q"), 2);
+        extended.extend_from(&text, 1..3);
+        extended.extend_from(&text, 0..2);
+        assert_eq!(
+            read(&extended),
+            ["q", "q", "c", "de", "xyz", "c"].map(ValueRef::Str),
+            "text appended from rows in and out of arena order"
+        );
+        let mut mixed = Values::repeat(ValueRef::Missing, 1);
+        mixed.extend_from(&text, 1..2);
+        assert_eq!(read(&mixed), [ValueRef::Missing, ValueRef::Str("c")]);
+        assert!(matches!(
+            Values::repeat(ValueRef::Int(1), 0),
+            Values::Missing(0)
+        ));
+    }
+
     #[test]
     fn bits_grow_and_shrink() {
         let mut bits = Bits::new(70, true);
@@ -643,6 +1054,6 @@ mod tests {
         assert!(bits.all());
         bits.push(false);
         assert!(!bits.get(65));
-        assert_eq!(bits.gather(&[0, 65]).len(), 2);
+        assert_eq!(bits.gather(&[0, 65]).unwrap().len(), 2);
     }
 }

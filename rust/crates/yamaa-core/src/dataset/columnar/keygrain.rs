@@ -8,7 +8,6 @@ use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{BindingId, RegionId, Step};
 use crate::table::{TableAccess, ValueRef};
 use crate::table_grouping::GroupingError;
-use crate::value::Value;
 
 /// Build the candidates of the key-grain template into `frame`. A
 /// partition's run (#3830) marks the filter, the key bindings and the
@@ -66,9 +65,10 @@ pub(super) fn construct<'a: 's, 's, E>(
     // One probe row per source record, so a probe's position is its record.
     let mut probes = Frame::new(frame.width());
     reserved(probes.try_reserve(rows, rows))?;
-    for row in 0..rows {
-        probes.push(NO_TEMPLATE, Identity::Probe(row), &[row]);
-    }
+    probes.extend(NO_TEMPLATE, rows, |row, records| {
+        records.push(row);
+        Identity::Probe(row)
+    });
     let callbacks = bindings
         .iter()
         .any(|&binding| run.step_callbacks(region, Step::Row(binding)));
@@ -143,9 +143,12 @@ pub(super) fn construct<'a: 's, 's, E>(
     let mut key_groups = Vec::new();
     reserved(key_groups.try_reserve_exact(candidates.len()))?;
     let start = frame.rows();
-    let mut records = Vec::new();
-    for (position, group) in candidates {
-        records.clear();
+    // The probe row each candidate takes its keys from.
+    let mut firsts = Vec::new();
+    reserved(firsts.try_reserve_exact(candidates.len()))?;
+    frame.extend(NO_TEMPLATE, candidates.len(), |index, records| {
+        let (position, group) = candidates[index];
+        let first = records.len();
         if split[group] {
             records.push(retained[position]);
         } else {
@@ -156,13 +159,15 @@ pub(super) fn construct<'a: 's, 's, E>(
                     .map(|&member| retained[member]),
             );
         }
-        let first = records[0];
-        let row = frame.push(NO_TEMPLATE, Identity::Candidate(frame.rows()), &records);
-        for &key in &keys {
-            let value: Value = probes.value(first, key);
-            frame.complete_value(row, key, value);
-        }
+        firsts.push(records[first]);
         key_groups.push(group);
+        Identity::Candidate(start + index)
+    });
+    // Each key column is gathered from the probes in one pass (#4190).
+    let rows: Vec<usize> = (start..frame.rows()).collect();
+    for &key in &keys {
+        let values = reserved(probes.column(key).gather(&firsts))?;
+        frame.complete_rows(&rows, key, values);
     }
     run.key_groups = (start == 0).then_some(key_groups);
     Ok(())

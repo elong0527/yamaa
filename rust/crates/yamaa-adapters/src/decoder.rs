@@ -20,7 +20,7 @@ use yamaa_core::{
     project_environment::LockKind,
     project_preparation::DecodeTarget,
     specification::SourceDeclaration,
-    table::{CellError, TableAccess, TableSchema, ValueRef},
+    table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef},
 };
 
 /// One decoded input: a table, or an input read by partition (#3792), which
@@ -91,6 +91,13 @@ impl<E> TableAccess for Snapshot<E> {
                 CellError::Access(never) => match never {},
             }),
             Storage::Scanned(..) => Err(CellError::OutOfBounds { row, column }),
+        }
+    }
+    /// A column of an input read whole, lent as the table holds it.
+    fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
+        match &self.storage {
+            Storage::Whole(table, _) => TableAccess::column(table, column),
+            Storage::Scanned(..) => None,
         }
     }
 }

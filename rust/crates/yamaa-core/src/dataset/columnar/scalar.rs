@@ -784,6 +784,21 @@ pub(super) fn collect<E>(
         .iter()
         .find(|operand| operand.role == OperandRole::Filter)
         .map(|operand| operand.expr);
+    // Rows of one record each, read unfiltered and unselected, hold that
+    // record's reading: gathered in one pass from a port that lends the
+    // field whole (#4190).
+    if filter.is_none() && selection.is_none() && cx.record.is_none() {
+        if let Some(storage) = cx.table.storage(column) {
+            let single = rows.iter().all(|&row| cx.frame.members(row).len() == 1);
+            if single {
+                let source_rows: Vec<usize> =
+                    rows.iter().map(|&row| cx.frame.members(row)[0]).collect();
+                if let Some(values) = Values::from_column(storage, &source_rows) {
+                    return super::reserved(values);
+                }
+            }
+        }
+    }
     let mut values = Values::missing(0);
     for &row in rows {
         let value = super::predicates::collect_row(
