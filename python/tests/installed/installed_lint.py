@@ -53,8 +53,11 @@ class Lint(unittest.TestCase):
 
     def check_result(self, result, key):
         expected = TRUTH["result"][key]
+        # A rewritten path is the file named, absolute, with forward slashes,
+        # as the findings' file column is: not resolved through links or
+        # short names.
         paths = (
-            [str(self.path.resolve()).replace(os.sep, "/")]
+            [os.path.abspath(self.path).replace(os.sep, "/")]
             if expected["rewritten"]
             else []
         )

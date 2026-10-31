@@ -520,11 +520,16 @@ impl Chain {
 
     /// The issues as values, the chain's staged path written `<staged>`
     /// wherever a location, message or context holds it, so chains staged
-    /// apart compare.
+    /// apart compare. An issue spells the path with forward slashes, which
+    /// on Windows is not the staged path's own spelling.
     fn issue_values(&self) -> Vec<Vec<ContextValue>> {
-        fn unstaged(value: ContextValue, staged: &str) -> ContextValue {
+        fn unstaged(value: ContextValue, staged: &[String; 2]) -> ContextValue {
             match value {
-                ContextValue::Text(text) => ContextValue::Text(text.replace(staged, "<staged>")),
+                ContextValue::Text(text) => ContextValue::Text(
+                    staged
+                        .iter()
+                        .fold(text, |text, spelling| text.replace(spelling, "<staged>")),
+                ),
                 ContextValue::List(items) => ContextValue::List(
                     items
                         .into_iter()
@@ -540,13 +545,14 @@ impl Chain {
                 other => other,
             }
         }
-        let staged = self.staged.to_str().unwrap();
+        let native = self.staged.to_str().unwrap();
+        let staged = [native.to_owned(), native.replace('\\', "/")];
         self.issues
             .iter()
             .map(|issues| {
                 issues
                     .iter()
-                    .map(|issue| unstaged(issue.to_value(), staged))
+                    .map(|issue| unstaged(issue.to_value(), &staged))
                     .collect()
             })
             .collect()

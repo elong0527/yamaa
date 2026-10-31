@@ -46,7 +46,10 @@ check_table <- function(result, rows, label, file_name = truth[["file_name"]]) {
 
 check_result <- function(result, key) {
   expected <- truth$result[[key]]
-  paths <- if (isTRUE(expected$rewritten)) normalizePath(path, winslash = "/") else character()
+  # A rewritten path is the file named, made absolute lexically with forward
+  # slashes, as the file column is: repeated separators collapse, and links
+  # and short names are not resolved.
+  paths <- if (isTRUE(expected$rewritten)) gsub("/+", "/", gsub("\\", "/", path, fixed = TRUE)) else character()
   expect_identical(list(class = class(result), members = names(result), length = length(result),
     status = result$status, paths = result$paths, summary = format(result)),
     list(class = truth$result$r_class, members = fixture_strings(truth$result$members), length = 3L,
