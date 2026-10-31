@@ -1,9 +1,11 @@
 //! Table contracts: the engine's own table lends each column's typed storage
-//! whole (#4190), and a range of its records copies each column in bulk.
-//! A layout, never a value: every row read through the lent column, and
-//! every record of a copied range, is the cell the table's port reads.
+//! whole (#4190), a range of its records copies each column in bulk, and
+//! ranges of several tables join into one (#4212). A layout, never a
+//! value: every row read through the lent column, and every record of a
+//! copied range or a joined table, is the cell the table's port reads.
 //!
-//! The seam is `TableAccess::column` and `ColumnTable::rows`, which the
+//! The seam is `TableAccess::column`, `ColumnTable::rows` and
+//! `ColumnTable::concat`, which the
 //! benchmark reader and the host fixtures observe only through a run's
 //! output, never one cell against another.
 mod table {
@@ -174,6 +176,63 @@ mod table {
                         .map(|row| exact(expected(column, row)))
                         .collect();
                     assert_eq!(read, authored, "column {column} of records {range:?}");
+                }
+            }
+        }
+
+        /// Ranges of tables joined in order hold each record of each range
+        /// as the authored cell, and each column equals the one a copy of
+        /// the joined records builds, its missing slots included: pieces
+        /// that start and end inside a bitmap word, on its boundary, with
+        /// no missing slot (rows 65 to 69 of every column but the text),
+        /// empty, and a first table whole, whose columns, held by no other
+        /// table, are extended in place.
+        #[test]
+        fn ranges_of_tables_joined_in_order_keep_every_value_and_missing_slot() {
+            let (whole, rest) = (table(), table());
+            let cases: [(&str, Vec<std::ops::Range<usize>>); 5] = [
+                ("contiguous", vec![0..3, 3..64, 64..130, 130..ROWS]),
+                ("inside words", vec![5..70, 70..71, 71..140]),
+                ("no missing slot", vec![2..3, 65..69, 7..8]),
+                ("with empty pieces", vec![10..10, 0..ROWS, 64..64]),
+                ("a whole first table", vec![0..ROWS, 3..64, 149..150]),
+            ];
+            for (label, ranges) in cases {
+                // A table of its own first, then the two shared tables in
+                // turn, which hold the same records.
+                let pieces: Vec<(ColumnTable, std::ops::Range<usize>)> = ranges
+                    .iter()
+                    .enumerate()
+                    .map(|(index, range)| {
+                        let table = match index {
+                            0 => table(),
+                            odd if odd % 2 == 1 => rest.clone(),
+                            _ => whole.clone(),
+                        };
+                        (table, range.clone())
+                    })
+                    .collect();
+                let joined = ColumnTable::concat(pieces).unwrap();
+                let rows: Vec<usize> = ranges.iter().flat_map(|range| range.clone()).collect();
+                assert_eq!(joined.row_count(), rows.len(), "{label}: records");
+                for column in 0..5 {
+                    let read: Vec<String> = (0..joined.row_count())
+                        .map(|row| exact(joined.cell(row, column).unwrap()))
+                        .collect();
+                    let authored: Vec<String> = rows
+                        .iter()
+                        .map(|&row| exact(expected(column, row)))
+                        .collect();
+                    assert_eq!(read, authored, "{label}: column {column}");
+                    let mut copied = Column::empty(joined.schema().columns()[column].kind);
+                    for &row in &rows {
+                        copied.push(expected(column, row));
+                    }
+                    assert_eq!(
+                        joined.column(column),
+                        &copied,
+                        "{label}: column {column} layout"
+                    );
                 }
             }
         }

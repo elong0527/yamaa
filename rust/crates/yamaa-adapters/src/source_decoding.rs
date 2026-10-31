@@ -238,6 +238,87 @@ pub struct Scanned {
     reader: Reader,
 }
 
+/// The partitions of a Parquet input its scan decoded and kept for the
+/// run's partitions (#4212): the first ones, while together they hold no
+/// more records than one partition of the run and stay within the row and
+/// cell limits (LIMIT-3). The run holds a partition decoded anyway, so
+/// keeping one costs no more than the read by partition holds (#3830), and
+/// the run decodes those records once. Each table is the one the scan
+/// admitted and visited, and is dropped once every one of its records has
+/// been taken; any record no table holds decodes again from the held bytes.
+#[derive(Default)]
+pub struct Kept {
+    tables: std::sync::Mutex<Vec<KeptTable>>,
+}
+
+/// One kept partition: its first record among the input's, its table, and
+/// how many of its records the run has taken.
+struct KeptTable {
+    start: usize,
+    table: ColumnTable,
+    taken: usize,
+}
+
+impl Kept {
+    /// Keep `table`, whose first record is `start`, when it is the input's
+    /// first or follows the tables kept so far, and they stay within `fits`
+    /// together with it.
+    fn offer(&mut self, start: usize, table: &ColumnTable, fits: impl Fn(usize) -> bool) {
+        use yamaa_core::table::TableAccess;
+        let tables = self
+            .tables
+            .get_mut()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let records = tables
+            .iter()
+            .map(|kept| kept.table.row_count())
+            .sum::<usize>();
+        // Only the first partitions are kept, each following the last.
+        let follows = tables.last().map_or(start == 0, |kept| {
+            kept.start + kept.table.row_count() == start
+        });
+        let rows = table.row_count();
+        if rows > 0 && follows && fits(records + rows) {
+            tables.push(KeptTable {
+                start,
+                table: table.clone(),
+                taken: 0,
+            });
+        }
+    }
+
+    /// Take the kept records `range` holds: each kept table it overlaps,
+    /// in order, with its first record and the rows of it in `range`. A
+    /// table all of whose records have been taken is no longer kept.
+    fn take(&self, range: &std::ops::Range<usize>) -> Vec<Taken> {
+        use yamaa_core::table::TableAccess;
+        let mut tables = self
+            .tables
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let mut taken = Vec::new();
+        tables.retain_mut(|kept| {
+            let end = kept.start + kept.table.row_count();
+            let (from, to) = (range.start.max(kept.start), range.end.min(end));
+            if from >= to {
+                return true;
+            }
+            kept.taken += to - from;
+            taken.push((
+                kept.start,
+                kept.table.clone(),
+                from - kept.start..to - kept.start,
+            ));
+            kept.taken < kept.table.row_count()
+        });
+        taken
+    }
+}
+
+/// A kept table's records a range takes: the table's first record among
+/// the input's, the table, and the rows of it the range holds.
+type Taken = (usize, ColumnTable, std::ops::Range<usize>);
+
 /// What decodes a range of a scanned input's records.
 enum Reader {
     Csv {
@@ -295,11 +376,12 @@ pub(crate) fn scan_partitions(
     contract: Option<&yamaa_core::producer_contract::Contract>,
     rows: std::num::NonZeroUsize,
     visit: &mut dyn FnMut(&ColumnTable, usize),
-) -> Option<Result<Scanned, Error>> {
+) -> Option<Result<(Scanned, Kept), Error>> {
     use yamaa_core::specification::SourceProfile;
     use yamaa_core::table::TableAccess;
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
     let mut first = First(None);
+    let mut kept = Kept::default();
     let mut schema = None;
     let mut admitted = Vec::new();
     let mut partition = 0usize;
@@ -332,6 +414,15 @@ pub(crate) fn scan_partitions(
                 }
                 if first.0.is_none() {
                     visit(&table, start);
+                    // The first Parquet partitions are kept for the run, up
+                    // to one partition's records (#4212); CSV decodes again.
+                    if source.profile == SourceProfile::Parquet {
+                        let width = table.schema().columns().len();
+                        kept.offer(start, &table, |records| {
+                            records <= rows.get()
+                                && yamaa_core::limits::Limits::table(records, width).is_ok()
+                        });
+                    }
                 }
             }
             Err(error) => first.offer(ORDINAL, partition, error),
@@ -402,13 +493,74 @@ pub(crate) fn scan_partitions(
     if let Some((_, error)) = first.0 {
         return Some(Err(error));
     }
-    Some(Ok(Scanned {
-        schema: schema.expect("a scan reads at least one partition"),
-        records,
-        partitions: admitted,
-        source: source.clone(),
-        reader,
-    }))
+    Some(Ok((
+        Scanned {
+            schema: schema.expect("a scan reads at least one partition"),
+            records,
+            partitions: admitted,
+            source: source.clone(),
+            reader,
+        },
+        kept,
+    )))
+}
+
+/// Decode records `range` of an input [`scan_partitions`] scanned for a
+/// run's partition (#4212): the records `kept` holds are taken from the
+/// tables the scan kept and the rest decoded again from the held bytes, as
+/// [`decode_range`] decodes them, joined in order. When the joined records
+/// do not admit as one table, the range decodes again whole, so it gives
+/// what [`decode_range`] gives, finding and all.
+pub fn decode_partition(
+    scanned: &Scanned,
+    kept: &Kept,
+    bytes: &[u8],
+    range: std::ops::Range<usize>,
+) -> Result<ColumnTable, Error> {
+    let taken = kept.take(&range);
+    if taken.is_empty() {
+        return decode_range(scanned, bytes, range);
+    }
+    match joined(scanned, bytes, range.clone(), taken) {
+        Some(table) => Ok(table),
+        None => decode_range(scanned, bytes, range),
+    }
+}
+
+/// Records `range` from the kept tables `taken` holds them in, and the rest
+/// decoded from the held bytes, joined in order; `None` when a part does
+/// not decode or the parts do not admit as one table.
+fn joined(
+    scanned: &Scanned,
+    bytes: &[u8],
+    range: std::ops::Range<usize>,
+    taken: Vec<Taken>,
+) -> Option<ColumnTable> {
+    use yamaa_core::table::TableAccess;
+    let mut parts = Vec::with_capacity(taken.len() + 2);
+    let mut at = range.start;
+    let decoded = |records: std::ops::Range<usize>| {
+        let table = decode_range(scanned, bytes, records).ok()?;
+        let rows = 0..table.row_count();
+        Some((table, rows))
+    };
+    for (start, table, rows) in taken {
+        if start + rows.start > at {
+            parts.push(decoded(at..start + rows.start)?);
+        }
+        at = start + rows.end;
+        parts.push((table, rows));
+    }
+    if at < range.end {
+        parts.push(decoded(at..range.end)?);
+    }
+    // A kept table the range holds whole is the range's table.
+    if let [(table, rows)] = &parts[..] {
+        if *rows == (0..table.row_count()) {
+            return Some(table.clone());
+        }
+    }
+    ColumnTable::concat(parts).ok()
 }
 
 /// Decode records `range` of an input [`scan_partitions`] scanned, from the
@@ -556,6 +708,77 @@ fn empty_string_convention(
     match replaced {
         None => Ok(table),
         Some(table) => table.map_err(|error| Error::Source(TextTableError::Table(error))),
+    }
+}
+
+/// The partitions a scan keeps for the run (#4212): the seam is `Kept`,
+/// whose tables no read by partition exposes.
+#[cfg(test)]
+mod kept_tests {
+    use super::*;
+    use yamaa_core::table::{Column as Field, TableAccess, TableSchema};
+
+    /// A table of `ID` values `range`, the records `range` of an input.
+    fn records(range: std::ops::Range<usize>) -> ColumnTable {
+        let schema = TableSchema::new(vec![Field {
+            name: "ID".into(),
+            kind: yamaa_core::value::ColumnType::Int,
+        }])
+        .unwrap();
+        let ids = range.clone().map(|id| Some(id as i64)).collect();
+        ColumnTable::new(
+            schema,
+            vec![crate::column_table::Column::Int(ids)],
+            range.len(),
+        )
+        .unwrap()
+    }
+
+    /// Partitions of 4, 4 and 2 records offered within 8 records: the
+    /// first two are kept, the third is not, and neither is one that does
+    /// not follow them; past a first partition that does not fit, none is
+    /// kept. Each range then takes the kept records it holds,
+    /// with each table's first record and its rows in the range, and a
+    /// table is no longer kept once its every record is taken, so a range
+    /// taken again finds none.
+    #[test]
+    fn a_scan_keeps_its_first_partitions_within_the_budget_until_the_run_takes_them() {
+        let mut kept = Kept::default();
+        for range in [0..4, 4..8, 8..10, 12..13] {
+            kept.offer(range.start, &records(range), |records| records <= 8);
+        }
+        let taken = |kept: &Kept, range| {
+            kept.take(&range)
+                .into_iter()
+                .map(|(start, table, rows)| (start, table.row_count(), rows))
+                .collect::<Vec<_>>()
+        };
+        type Case = (
+            std::ops::Range<usize>,
+            Vec<(usize, usize, std::ops::Range<usize>)>,
+        );
+        let cases: [Case; 5] = [
+            (0..3, vec![(0, 4, 0..3)]),
+            (3..6, vec![(0, 4, 3..4), (4, 4, 0..2)]),
+            (0..3, vec![]),
+            (6..10, vec![(4, 4, 2..4)]),
+            (4..8, vec![]),
+        ];
+        for (range, expected) in cases {
+            assert_eq!(taken(&kept, range.clone()), expected, "records {range:?}");
+        }
+        assert!(
+            kept.tables.lock().unwrap().is_empty(),
+            "every kept table taken"
+        );
+        let mut late = Kept::default();
+        for range in [0..9, 9..12] {
+            late.offer(range.start, &records(range), |records| records <= 8);
+        }
+        assert!(
+            late.tables.lock().unwrap().is_empty(),
+            "no partition after one that does not fit"
+        );
     }
 }
 

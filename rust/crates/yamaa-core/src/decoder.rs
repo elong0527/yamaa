@@ -4,9 +4,10 @@
 //! The adapters implement it with the YAML reader, the shipped closures and
 //! the CSV, Parquet, SAS and ODM codecs; core holds no codec. A CSV or
 //! Parquet input can also be read by partition (#3792): a scan decodes every
-//! partition once, in order, to find what the whole read finds, keeping none
-//! of them, and each range of records then decodes again when the run reads
-//! it (#3830).
+//! partition once, in order, to find what the whole read finds, keeping at
+//! most one partition's records of them (#4212), and each range of records
+//! then decodes again when the run reads it, but for the records the scan
+//! kept (#3830).
 use crate::{
     producer_contract::Contract,
     project_environment::LockKind,
@@ -101,7 +102,9 @@ pub trait Decoder {
     /// Scan one captured input by partition (#3792): decode each partition
     /// of about `rows` records once, in order, admitted on its own, and give
     /// it to `visit` with the position of its first record among the
-    /// input's records before dropping it (#3830). Every finding
+    /// input's records before dropping it (#3830), or keeping it for
+    /// [`Self::partition`] while the partitions kept hold no more than
+    /// `rows` records together (#4212). Every finding
     /// [`Self::table`] reports is reported in the same order and with the
     /// same context; only the row and cell limits bound each partition
     /// instead of the whole table. The table returned holds no record: it
@@ -121,9 +124,9 @@ pub trait Decoder {
         None
     }
     /// Decode records `range` of an input [`Self::partitioned`] scanned
-    /// into `scanned`, from the same held bytes: a table of `range.len()`
-    /// records, read by their positions in the range. The scan found every
-    /// finding, so this finds none.
+    /// into `scanned`, from the same held bytes or the partitions its scan
+    /// kept: a table of `range.len()` records, read by their positions in
+    /// the range. The scan found every finding, so this finds none.
     fn partition(
         &mut self,
         _scanned: &Self::Table,
