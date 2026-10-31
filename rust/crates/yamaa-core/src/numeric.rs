@@ -4,6 +4,7 @@
 //! to later layers. These functions do not skip evaluating an expression tree.
 
 use crate::expression_table::Function;
+use crate::table::ValueRef;
 use crate::value::{compare_present, FiniteFloat, Value, ValueType};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -42,14 +43,34 @@ impl TryFrom<&Value> for Number {
 
     /// Accept only numeric or missing values; return the incompatible type otherwise.
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        Self::try_from(ValueRef::from(value))
+    }
+}
+
+impl TryFrom<ValueRef<'_>> for Number {
+    type Error = ValueType;
+
+    /// Accept only numeric or missing values; return the incompatible type otherwise.
+    fn try_from(value: ValueRef<'_>) -> Result<Self, Self::Error> {
         match value {
-            Value::Missing => Ok(Self::Missing),
-            Value::Int(number) => Ok(Self::Int(*number)),
-            Value::Float(number) => Ok(Self::Float(*number)),
-            Value::Str(_) => Err(ValueType::Str),
-            Value::Bool(_) => Err(ValueType::Bool),
-            Value::Date(_) => Err(ValueType::Date),
-            Value::DateTime(_) => Err(ValueType::DateTime),
+            ValueRef::Missing => Ok(Self::Missing),
+            ValueRef::Int(number) => Ok(Self::Int(number)),
+            ValueRef::Float(number) => Ok(Self::Float(number)),
+            ValueRef::Str(_) => Err(ValueType::Str),
+            ValueRef::Bool(_) => Err(ValueType::Bool),
+            ValueRef::Date(_) => Err(ValueType::Date),
+            ValueRef::DateTime(_) => Err(ValueType::DateTime),
+        }
+    }
+}
+
+impl<'a> From<Number> for ValueRef<'a> {
+    /// Lend a number as the cell it would be.
+    fn from(number: Number) -> Self {
+        match number {
+            Number::Missing => Self::Missing,
+            Number::Int(value) => Self::Int(value),
+            Number::Float(value) => Self::Float(value),
         }
     }
 }
@@ -136,6 +157,7 @@ impl ArithmeticError {
 }
 
 /// Narrow an exact intermediate to i64 or retain its full overflow diagnostic value.
+#[inline]
 fn checked_integer(value: i128, expression: &str) -> Result<Number, ArithmeticError> {
     i64::try_from(value)
         .map(Number::Int)
@@ -147,6 +169,7 @@ fn checked_integer(value: i128, expression: &str) -> Result<Number, ArithmeticEr
 
 /// Apply a binary primitive to evaluated operands; propagate missing before arithmetic
 /// and return structured overflow or zero-divisor failures with expression context.
+#[inline]
 pub fn binary(
     operator: BinaryOperator,
     left: Number,
@@ -188,6 +211,7 @@ pub fn binary(
 }
 
 /// Apply a unary primitive, preserving numeric type and missing; reject i64 overflow.
+#[inline]
 pub fn unary(
     operator: UnaryOperator,
     value: Number,
@@ -219,6 +243,7 @@ pub fn unary(
 /// operand has the promoted pair type. A missing right operand has no value
 /// to promote by; the bound site widens the result when its declared type is
 /// `float` (EXPR-14).
+#[inline]
 pub fn null_if(left: Number, right: Number) -> Number {
     if left == Number::Missing {
         return Number::Missing;
@@ -247,6 +272,7 @@ pub enum IntegralFunction {
 /// Clear fractional significand bits directly so no host math library or bounded
 /// integer conversion is needed. Zero results are positive, matching the Python
 /// reference's integer intermediate, including for a negative-zero input.
+#[inline]
 pub fn integral(function: IntegralFunction, number: Number) -> Number {
     let Some(value) = number.as_float() else {
         return Number::Missing;
@@ -274,6 +300,7 @@ pub fn integral(function: IntegralFunction, number: Number) -> Number {
 /// Return the binary64 square root after numeric promotion (FORMULA-15 and VALUE-10).
 /// Missing propagates; negative present input reports a domain condition. Negative
 /// zero is valid and retains its sign, matching the Python reference.
+#[inline]
 pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError> {
     let Some(value) = number.as_float() else {
         return Ok(Number::Missing);
@@ -461,6 +488,7 @@ fn normal_quantile(p: f64) -> f64 {
 /// Apply portable POWER after both operands evaluate; missing precedes domain checks.
 /// Domain tests use promoted binary64 arguments, as the reference does. Diagnostic
 /// bits preserve signed zero and full finite values without changing error equality.
+#[inline]
 pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, ArithmeticError> {
     let (Some(base), Some(exponent)) = (left.as_float(), right.as_float()) else {
         return Ok(Number::Missing);

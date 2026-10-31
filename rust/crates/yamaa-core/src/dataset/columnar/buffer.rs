@@ -3,6 +3,8 @@
 //! varies by row. A buffer changes layout, never a value: every read lends
 //! the same `ValueRef` a table port would.
 use crate::{
+    expression::Column,
+    numeric::Number,
     table::{ColumnRef, ColumnValues, ValueRef},
     temporal::{Date, DateTime},
     value::{FiniteFloat, Value},
@@ -245,6 +247,13 @@ impl Default for Values {
     }
 }
 
+/// A buffer lends a column program one operand's values (#4199).
+impl Column for Values {
+    fn get(&self, row: usize) -> ValueRef<'_> {
+        Values::get(self, row)
+    }
+}
+
 impl Values {
     pub(crate) fn missing(len: usize) -> Self {
         Self::Missing(len)
@@ -319,6 +328,49 @@ impl Values {
             return None;
         }
         Some(Self::gather_column(column, rows))
+    }
+
+    /// One number per row, as a buffer pushed them a row at a time holds
+    /// them: typed while every present number has one type, mixed when
+    /// both do, and missing when none is present. A column program's result
+    /// (#4199).
+    pub(super) fn from_numbers(numbers: &[Number]) -> Result<Self, TryReserveError> {
+        let present = |int: bool| {
+            numbers.iter().any(|number| match number {
+                Number::Int(_) => int,
+                Number::Float(_) => !int,
+                Number::Missing => false,
+            })
+        };
+        let valid = || Bits::from_fn(numbers.len(), |row| numbers[row] != Number::Missing);
+        Ok(match (present(true), present(false)) {
+            (false, false) => Self::Missing(numbers.len()),
+            (true, false) => {
+                let mut values = Vec::new();
+                values.try_reserve_exact(numbers.len())?;
+                values.extend(numbers.iter().map(|number| match number {
+                    Number::Int(value) => *value,
+                    _ => 0,
+                }));
+                Self::Int(values, valid()?)
+            }
+            (false, true) => {
+                let zero = FiniteFloat::new(0.0).expect("zero is finite");
+                let mut values = Vec::new();
+                values.try_reserve_exact(numbers.len())?;
+                values.extend(numbers.iter().map(|number| match number {
+                    Number::Float(value) => *value,
+                    _ => zero,
+                }));
+                Self::Float(values, valid()?)
+            }
+            (true, true) => {
+                let mut values = Vec::new();
+                values.try_reserve_exact(numbers.len())?;
+                values.extend(numbers.iter().map(|&number| Value::from(number)));
+                Self::Mixed(values)
+            }
+        })
     }
 
     fn gather_column(column: ColumnRef<'_>, rows: &[usize]) -> Result<Self, TryReserveError> {
