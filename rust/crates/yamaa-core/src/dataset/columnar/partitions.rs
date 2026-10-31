@@ -45,7 +45,7 @@ use crate::dataset::execution::{
 use crate::dataset::resolved::{FilterPlacement, RegionId, ResolvedPlan, Stage, Step, TemplateId};
 use crate::dataset::Partitioning;
 use crate::function_invocation::FunctionPort;
-use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
+use crate::table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef};
 use crate::table_grouping::GroupingError;
 use std::num::NonZeroUsize;
 use std::ops::Range;
@@ -87,6 +87,11 @@ impl<T: TableAccess + ?Sized> TableAccess for RowRange<'_, T> {
             return Err(CellError::OutOfBounds { row, column });
         }
         self.table.cell(self.start + row, column)
+    }
+    fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
+        self.table
+            .column(column)?
+            .slice(self.start..self.start + self.rows)
     }
 }
 

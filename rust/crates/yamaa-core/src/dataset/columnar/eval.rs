@@ -172,6 +172,16 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     return Ok(Values::repeat(ValueRef::from(value), rows.len()));
                 }
                 let field = field as usize;
+                // A port that holds the field as typed storage lends it
+                // whole, and the selection's values are gathered from it in
+                // one pass (#4190).
+                if let Some(column) = cx.table.storage(field) {
+                    let source_rows: Vec<usize> =
+                        rows.iter().map(|&row| cx.frame.members(row)[0]).collect();
+                    if let Some(values) = Values::from_column(column, &source_rows) {
+                        return super::reserved(values);
+                    }
+                }
                 for &row in rows {
                     let source_row = cx.frame.members(row)[0];
                     let value = cx.table.get(source_row, field).map_err(|error| {

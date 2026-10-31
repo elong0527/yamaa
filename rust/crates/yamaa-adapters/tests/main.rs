@@ -22,6 +22,7 @@ mod scalar_bytes;
 // paths when each file was its own binary.
 #[allow(clippy::module_inception)]
 mod submission_encoders;
+mod table_column_storage;
 mod table_csv_source;
 mod table_dataset_json_source;
 mod table_parquet_readback;

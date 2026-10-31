@@ -12,7 +12,7 @@ use crate::epoch::{date_from_days, datetime_from_seconds};
 use std::{convert::Infallible, sync::Arc};
 use yamaa_core::{
     limits::Limits,
-    table::{CellError, TableAccess, TableSchema, ValueRef},
+    table::{CellError, ColumnRef, ColumnValues, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DateTime, Precision},
     value::{ColumnType, FiniteFloat},
 };
@@ -167,6 +167,41 @@ impl Column {
             Self::DateTime(values) => values[row].map(ValueRef::DateTime),
         };
         value.unwrap_or(ValueRef::Missing)
+    }
+
+    /// Rows `range`, copied whole (#4190).
+    fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        match self {
+            Self::Str(values) => Self::Str(values.slice(range)),
+            Self::Int(values) => Self::Int(values.slice(range)),
+            Self::Float(values) => Self::Float(values.slice(range)),
+            Self::Date(values) => Self::Date(values[range].to_vec()),
+            Self::DateTime(values) => Self::DateTime(values[range].to_vec()),
+        }
+    }
+
+    /// The column's storage, lent whole to the engine (#4190).
+    fn storage(&self) -> Option<ColumnRef<'_>> {
+        let (values, validity) = match self {
+            Self::Str(text) => (
+                ColumnValues::Str {
+                    offsets: text.offsets(),
+                    bytes: text.arena(),
+                },
+                text.validity().words(),
+            ),
+            Self::Int(values) => (
+                ColumnValues::Int(values.payloads()),
+                values.validity().words(),
+            ),
+            Self::Float(values) => (
+                ColumnValues::Float(values.payloads()),
+                values.validity().words(),
+            ),
+            Self::Date(values) => (ColumnValues::Date(values), None),
+            Self::DateTime(values) => (ColumnValues::DateTime(values), None),
+        };
+        ColumnRef::new(values, validity)
     }
 
     /// The same column with each nonfinite float missing, or `None` when no
@@ -348,17 +383,9 @@ impl ColumnTable {
             return Err(TableError::SchemaMismatch { batch: 0 });
         }
         let columns = self
-            .schema
-            .columns()
+            .columns
             .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                let mut column = Column::empty(field.kind);
-                for row in range.clone() {
-                    column.push(self.cell(row, index).expect("a record of the table"));
-                }
-                column
-            })
+            .map(|column| column.slice(range.clone()))
             .collect();
         Self::new(self.schema.clone(), columns, rows)
     }
@@ -408,6 +435,11 @@ impl TableAccess for ColumnTable {
             return Err(CellError::OutOfBounds { row, column });
         }
         Ok(self.columns[column].cell(row))
+    }
+
+    /// Lend a column's typed storage whole (#4190).
+    fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
+        self.columns.get(column)?.storage()
     }
 }
 

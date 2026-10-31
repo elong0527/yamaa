@@ -64,6 +64,50 @@ impl Validity {
     pub fn any_missing(&self, range: std::ops::Range<usize>) -> bool {
         self.words.is_some() && range.into_iter().any(|index| !self.get(index))
     }
+
+    /// The bitmap, one bit per slot, least significant first, set when the
+    /// slot holds a value; `None` while every slot does.
+    pub fn words(&self) -> Option<&[u64]> {
+        self.words.as_deref()
+    }
+
+    /// Slots `range`, a word at a time; still no bitmap when none of them
+    /// is missing.
+    pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        let len = range.len();
+        let Some(words) = &self.words else {
+            return Self { len, words: None };
+        };
+        let shift = range.start % 64;
+        let first = range.start / 64;
+        let mut sliced: Vec<u64> = (0..len.div_ceil(64))
+            .map(|index| {
+                let low = words[first + index] >> shift;
+                let high = match (shift, words.get(first + index + 1)) {
+                    (0, _) | (_, None) => 0,
+                    (_, Some(&next)) => next << (64 - shift),
+                };
+                low | high
+            })
+            .collect();
+        if len % 64 != 0 {
+            if let Some(last) = sliced.last_mut() {
+                *last &= (1u64 << (len % 64)) - 1;
+            }
+        }
+        let full = |index: usize, &word: &u64| {
+            let used = (len - index * 64).min(64);
+            word == u64::MAX >> (64 - used)
+        };
+        let all_present = sliced
+            .iter()
+            .enumerate()
+            .all(|(index, word)| full(index, word));
+        Self {
+            len,
+            words: (!all_present).then_some(sliced),
+        }
+    }
 }
 
 impl FromIterator<bool> for Validity {
@@ -113,6 +157,14 @@ impl<T: Copy + Default> Values<T> {
 
     pub fn validity(&self) -> &Validity {
         &self.validity
+    }
+
+    /// Slots `range`, copied whole.
+    pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        Self {
+            validity: self.validity.slice(range.clone()),
+            values: self.values[range].to_vec(),
+        }
     }
 }
 
@@ -223,6 +275,19 @@ impl Text {
         &self.validity
     }
 
+    /// Slots `range`, their text copied as one run of the arena.
+    pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        let base = self.offsets[range.start];
+        Self {
+            offsets: self.offsets[range.start..=range.end]
+                .iter()
+                .map(|&offset| offset - base)
+                .collect(),
+            bytes: self.bytes[base..self.offsets[range.end]].to_owned(),
+            validity: self.validity.slice(range),
+        }
+    }
+
     /// The same values, missing wherever `missing` holds for a present one.
     /// `None` when no present value is, and the column stays as it is.
     pub fn missing_where(&self, missing: impl Fn(&str) -> bool) -> Option<Self> {
@@ -285,6 +350,17 @@ mod tests {
             (0..65).map(|index| index != 64).collect::<Vec<_>>()
         );
         assert_eq!(at_boundary, (0..65).map(|index| index != 64).collect());
+    }
+
+    #[test]
+    fn a_sliced_validity_equals_the_one_its_slots_build() {
+        // Slot 70 is the only missing one, so a range without it keeps no
+        // bitmap, as pushing its slots keeps none (#4190).
+        let validity = (0..150).map(|index| index != 70).collect::<Validity>();
+        for range in [0..150, 3..130, 64..71, 71..150, 0..70, 70..70] {
+            let built = range.clone().map(|index| index != 70).collect::<Validity>();
+            assert_eq!(validity.slice(range.clone()), built, "slots {range:?}");
+        }
     }
 
     #[test]

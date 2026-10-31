@@ -136,6 +136,31 @@ impl Frame {
         row
     }
 
+    /// Append `count` rows with every column missing and incomplete, each
+    /// of `template`: `row(index, records)` appends the row's member records
+    /// to `records` and answers its identity. The columns grow once, not
+    /// once per row (#4190).
+    pub(super) fn extend(
+        &mut self,
+        template: u32,
+        count: usize,
+        mut row: impl FnMut(usize, &mut Vec<usize>) -> Identity,
+    ) {
+        for index in 0..count {
+            let identity = row(index, &mut self.records);
+            self.templates.push(template);
+            self.identities.push(identity);
+            self.offsets.push(self.records.len());
+        }
+        let rows = self.rows();
+        for column in &mut self.columns {
+            column.resize_missing(rows);
+        }
+        for completed in &mut self.completed {
+            completed.grow(rows);
+        }
+    }
+
     /// Drop every row from `rows` on.
     pub(super) fn truncate(&mut self, rows: usize) {
         if rows >= self.rows() {
@@ -154,27 +179,27 @@ impl Frame {
     }
 
     /// Keep, from `first` on, only the rows `keep` marks, in order.
-    pub(super) fn retain_from(&mut self, first: usize, keep: &[bool]) {
+    pub(super) fn retain_from(
+        &mut self,
+        first: usize,
+        keep: &[bool],
+    ) -> Result<(), std::collections::TryReserveError> {
         debug_assert_eq!(keep.len(), self.rows() - first);
         if keep.iter().all(|&kept| kept) {
-            return;
+            return Ok(());
         }
         let kept: Vec<usize> = (first..self.rows())
             .filter(|row| keep[row - first])
             .collect();
         for column in &mut self.columns {
-            let tail = column.gather(&kept);
+            let tail = column.gather(&kept)?;
             column.truncate(first);
-            for index in 0..tail.len() {
-                column.push(tail.get(index));
-            }
+            column.extend_from(&tail, 0..tail.len());
         }
         for completed in &mut self.completed {
-            let tail = completed.gather(&kept);
+            let tail = completed.gather(&kept)?;
             completed.truncate(first);
-            for index in 0..tail.len() {
-                completed.push(tail.get(index));
-            }
+            completed.extend_from(&tail, 0..tail.len());
         }
         let templates: Vec<u32> = kept.iter().map(|&row| self.templates[row]).collect();
         let identities: Vec<Identity> = kept.iter().map(|&row| self.identities[row]).collect();
@@ -189,6 +214,7 @@ impl Frame {
             self.records.extend(members);
             self.offsets.push(self.records.len());
         }
+        Ok(())
     }
 
     pub(super) fn template(&self, row: usize) -> Option<usize> {
@@ -209,6 +235,11 @@ impl Frame {
         self.columns[column].get(row)
     }
 
+    /// Every row's value of one column.
+    pub(super) fn column(&self, column: usize) -> &Values {
+        &self.columns[column]
+    }
+
     pub(super) fn value(&self, row: usize, column: usize) -> Value {
         self.columns[column].value(row)
     }
@@ -220,12 +251,6 @@ impl Frame {
     /// Complete one cell with its converted value.
     pub(super) fn complete(&mut self, row: usize, column: usize, value: ValueRef<'_>) {
         self.columns[column].set(row, value);
-        self.completed[column].set(row, true);
-    }
-
-    /// Complete one cell, moving an owned value in.
-    pub(super) fn complete_value(&mut self, row: usize, column: usize, value: Value) {
-        self.columns[column].set_value(row, value);
         self.completed[column].set(row, true);
     }
 
@@ -255,16 +280,19 @@ impl Frame {
     /// Append rows `rows` of `other`, their member records moved on by
     /// `records`: one partition's candidates joining the whole run's, whose
     /// records count the whole input's (#3830).
+    /// Each column is copied in bulk (#4190).
     pub(super) fn append(&mut self, other: &Frame, rows: std::ops::Range<usize>, records: usize) {
+        for (values, from) in self.columns.iter_mut().zip(&other.columns) {
+            values.extend_from(from, rows.clone());
+        }
+        for (completed, from) in self.completed.iter_mut().zip(&other.completed) {
+            completed.extend_from(from, rows.clone());
+        }
+        self.templates
+            .extend_from_slice(&other.templates[rows.clone()]);
+        self.identities
+            .extend_from_slice(&other.identities[rows.clone()]);
         for row in rows {
-            for (values, from) in self.columns.iter_mut().zip(&other.columns) {
-                values.push(from.get(row));
-            }
-            for (completed, from) in self.completed.iter_mut().zip(&other.completed) {
-                completed.push(from.get(row));
-            }
-            self.templates.push(other.templates[row]);
-            self.identities.push(other.identities[row]);
             self.records
                 .extend(other.members(row).iter().map(|&record| record + records));
             self.offsets.push(self.records.len());
@@ -299,12 +327,7 @@ impl Frame {
             ordered.push(if in_place {
                 column
             } else {
-                let mut gathered = Values::missing(0);
-                gathered.try_reserve(order.len())?;
-                for &row in order {
-                    gathered.push(column.get(row));
-                }
-                gathered
+                column.gather(order)?
             });
         }
         Ok(ordered)
