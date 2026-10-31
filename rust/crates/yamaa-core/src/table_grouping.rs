@@ -26,8 +26,12 @@ pub(crate) enum Key<'a> {
 }
 
 /// Hash consistent with key equality: temporal values hash their civil
-/// fields, as their equality compares only those.
+/// fields, as their equality compares only those. Always inlined: a
+/// grouping hashes every key of every row, and an out-of-line call writes
+/// each key to memory first, which once doubled the output key check's
+/// time when more groupings shared the hasher.
 impl std::hash::Hash for Key<'_> {
+    #[inline(always)]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
@@ -237,6 +241,34 @@ impl Groups {
         &self.members[self.offsets[group]..self.offsets[group + 1]]
     }
 
+    /// The groups of items `0..group_of.len()`, `group_of[item]` the group of
+    /// each item among `groups` groups: members in item order.
+    pub(crate) fn from_assignment(
+        group_of: &[usize],
+        groups: usize,
+    ) -> Result<Self, TryReserveError> {
+        let mut offsets = Vec::new();
+        offsets.try_reserve_exact(groups + 1)?;
+        offsets.resize(groups + 1, 0usize);
+        for &group in group_of {
+            offsets[group + 1] += 1;
+        }
+        for group in 0..groups {
+            offsets[group + 1] += offsets[group];
+        }
+        let mut cursor = Vec::new();
+        cursor.try_reserve_exact(groups + 1)?;
+        cursor.extend_from_slice(&offsets);
+        let mut members = Vec::new();
+        members.try_reserve_exact(group_of.len())?;
+        members.resize(group_of.len(), 0usize);
+        for (item, &group) in group_of.iter().enumerate() {
+            members[cursor[group]] = item;
+            cursor[group] += 1;
+        }
+        Ok(Self { offsets, members })
+    }
+
     /// One group of every item `0..count`, empty when there is no item.
     pub(crate) fn whole(count: usize) -> Self {
         Self {
@@ -272,6 +304,17 @@ pub(crate) fn partition_keys<'v>(
     width: usize,
     key: impl Fn(usize, usize) -> Key<'v>,
 ) -> Result<Groups, TryReserveError> {
+    let (group_of, groups) = assign_keys(count, width, key)?;
+    Groups::from_assignment(&group_of, groups)
+}
+
+/// The group of each item `0..count` that [`partition_keys`] forms, and how
+/// many groups there are.
+pub(crate) fn assign_keys<'v>(
+    count: usize,
+    width: usize,
+    key: impl Fn(usize, usize) -> Key<'v>,
+) -> Result<(Vec<usize>, usize), TryReserveError> {
     let mut first: HashMap<u64, usize, BuildHasherDefault<Prehashed>> = HashMap::default();
     first.try_reserve(count)?;
     let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
@@ -280,8 +323,6 @@ pub(crate) fn partition_keys<'v>(
     let mut representative: Vec<usize> = Vec::new();
     let mut group_of = Vec::new();
     group_of.try_reserve_exact(count)?;
-    let mut members = Vec::new();
-    members.try_reserve_exact(count)?;
     let equal = |left: usize, right: usize| {
         (0..width).all(|position| key(left, position) == key(right, position))
     };
@@ -318,21 +359,5 @@ pub(crate) fn partition_keys<'v>(
         };
         group_of.push(group);
     }
-    let groups = representative.len();
-    let mut offsets = Vec::new();
-    offsets.try_reserve_exact(groups + 1)?;
-    offsets.resize(groups + 1, 0usize);
-    for &group in &group_of {
-        offsets[group + 1] += 1;
-    }
-    for group in 0..groups {
-        offsets[group + 1] += offsets[group];
-    }
-    let mut cursor = offsets.clone();
-    members.resize(count, 0usize);
-    for (item, &group) in group_of.iter().enumerate() {
-        members[cursor[group]] = item;
-        cursor[group] += 1;
-    }
-    Ok(Groups { offsets, members })
+    Ok((group_of, representative.len()))
 }

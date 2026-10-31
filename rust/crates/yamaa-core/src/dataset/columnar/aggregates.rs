@@ -3,7 +3,9 @@
 //! with derivations first.
 use super::buffer::Values;
 use super::eval::owned;
+use super::frame::IdentityMap;
 use super::index::{Equality, Index};
+use super::predicates::Operand;
 use super::relations::{candidates, Probe, Refusal};
 use super::{Cx, Fail, Run, Table};
 use crate::aggregate_reduction::{reduce_values, AggregateReductionError, ReductionFields};
@@ -12,13 +14,12 @@ use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{ExprId, ExprKind, Op, OperandRole, ResolvedPlan};
 use crate::dataset::{AggregatePhase, AggregateRelation, AggregateSource, BoundAggregate};
 use crate::expression::{
-    AggregateResult, Reducer, Reduction, ReductionOperand, Resolver as ExpressionResolver,
+    AggregateResult, Reducer, Reduction, ReductionOperand, Resolver as ExpressionResolver, Truth,
 };
 use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
 use crate::table_reduction::TableReductionError;
 use crate::value::{Selection, Value, ValueType};
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 
 /// Where an aggregate's donor records come from, for port failures.
 #[derive(Clone, Copy)]
@@ -75,11 +76,20 @@ impl<'a, E> Record<'a, E> {
 }
 
 /// The output rows each output aggregate ranges over, indexed by their group
-/// values, and the answers of its filter per row, by aggregate and range.
+/// values, and the answers of its filter per row, by aggregate and range;
+/// for a selection of several rows, each group's answer instead.
 #[derive(Default)]
 pub(super) struct Outputs {
-    groups: HashMap<(ExprId, usize, usize), Index>,
-    filters: HashMap<(ExprId, usize, usize), Vec<Option<bool>>>,
+    groups: IdentityMap<(ExprId, usize, usize), Index>,
+    filters: IdentityMap<(ExprId, usize, usize), Vec<Option<bool>>>,
+    answers: IdentityMap<(ExprId, usize, usize), Answers>,
+}
+
+/// One output aggregate's answers over one range: whether its filter keeps
+/// each row of the range, and the answer of each group reduced so far.
+struct Answers {
+    kept: Option<Vec<Truth>>,
+    groups: Vec<Option<Value>>,
 }
 
 /// The donor records of one aggregate over the current row.
@@ -95,11 +105,214 @@ pub(super) fn aggregate<E>(
     expr: ExprId,
     rows: &[usize],
 ) -> Result<Values, Fail<E>> {
+    if let Some(values) = batch(run, cx, expr, rows) {
+        return Ok(values);
+    }
     let mut values = Values::missing(0);
     for &row in rows {
         values.push_value(aggregate_value(run, cx, expr, row)?);
     }
     Ok(values)
+}
+
+/// The aggregate over a selection of several rows, reduced once per group
+/// of records: once per group of output rows for an output aggregate, once
+/// per row over the records of the current group. None when the selection
+/// evaluates row by row: one row, which is the reference every selection
+/// agrees with; a matched relation or an aggregate with derivations, which
+/// go through the lookup path; and any failure, which the row path then
+/// reports where it meets it, in row order. Nothing evaluated here counts a
+/// handler or enters a relation, so a selection that falls back to the row
+/// path leaves nothing behind.
+fn batch<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    expr: ExprId,
+    rows: &[usize],
+) -> Option<Values> {
+    if rows.len() < 2 {
+        return None;
+    }
+    let plan = run.plan;
+    let Op::Aggregate(bound) = &plan.expr(expr).op else {
+        unreachable!("an aggregate node holds its aggregate")
+    };
+    if bound.derived_schema().is_some() {
+        return None;
+    }
+    let values = match bound.relation() {
+        AggregateRelation::CurrentGroup => current_group(run, cx, bound, rows),
+        AggregateRelation::Output { group_by } => output(run, cx, expr, bound, group_by, rows),
+        AggregateRelation::Matched { .. } => return None,
+    };
+    values.ok().flatten()
+}
+
+/// The column `ONLY` reads when it is the aggregate's whole expression:
+/// its one record's value is lent, never owned on its way to the buffer.
+fn only_value(bound: &BoundAggregate) -> Option<usize> {
+    let expression = bound.expression();
+    match (expression.reductions(), expression.result()) {
+        (
+            [Reduction {
+                reducer: Reducer::Only,
+                operand: ReductionOperand::Value(name),
+                ..
+            }],
+            AggregateResult::Reduction(0),
+        ) => Some(bound.column(name)),
+        _ => None,
+    }
+}
+
+/// An aggregate over the current group for each of `rows`: the filter runs
+/// once over every row's records as a column program, and each row reduces
+/// its kept records.
+fn current_group<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    bound: &BoundAggregate,
+    rows: &[usize],
+) -> Result<Option<Values>, Fail<E>> {
+    let donor = cx.table;
+    let mut records = Vec::new();
+    let kept = match bound.filter() {
+        None => None,
+        Some(filter) => {
+            for &row in rows {
+                super::reserved(records.try_reserve(cx.frame.members(row).len()))?;
+                records.extend_from_slice(cx.frame.members(row));
+            }
+            let count = records.len();
+            let truths = super::predicates::record_truths(filter, donor, &records, |_| {
+                Operand::Values(Values::missing(count))
+            });
+            let Some(truths) = truths else {
+                return Ok(None);
+            };
+            Some(truths)
+        }
+    };
+    let only = only_value(bound);
+    let lent = only.and_then(|column| donor.storage(column));
+    let mut values = Values::missing(0);
+    super::reserved(values.try_reserve(rows.len()))?;
+    let mut members = Vec::new();
+    let mut offset = 0;
+    for &row in rows {
+        let all = cx.frame.members(row);
+        members.clear();
+        match &kept {
+            Some(truths) => members.extend(
+                all.iter()
+                    .zip(&truths[offset..offset + all.len()])
+                    .filter(|(_, &truth)| truth == Truth::True)
+                    .map(|(&member, _)| member),
+            ),
+            None => members.extend_from_slice(all),
+        }
+        offset += all.len();
+        if let Some(column) = only {
+            match members[..] {
+                [] => values.push(ValueRef::Missing),
+                [member] => values.push(match lent {
+                    Some(lent) if member < lent.len() => lent.get(member),
+                    _ => cell(&donor, bound, Coordinate::Primary, member, column)?,
+                }),
+                // Several records fail; the row path reports it.
+                _ => return Ok(None),
+            }
+            continue;
+        }
+        let selected = Selected {
+            members: std::mem::take(&mut members),
+            representative: all.first().copied(),
+        };
+        let value = reduce_selected(run, cx, bound, &donor, Coordinate::Primary, &selected, row)?;
+        members = selected.members;
+        values.push_value(value);
+    }
+    Ok(Some(values))
+}
+
+/// An output aggregate for each of `rows`: the output rows it ranges over
+/// grouped once by their group values, the grouping the unit's windows over
+/// the same keys share; the filter run once over the range as a column
+/// program; and each group reduced once, its answer given to every row of
+/// the group.
+fn output<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    expr: ExprId,
+    bound: &BoundAggregate,
+    group_by: &[usize],
+    rows: &[usize],
+) -> Result<Option<Values>, Fail<E>> {
+    let range = cx.output.clone();
+    if rows.iter().any(|row| !range.contains(row))
+        || group_by.iter().any(|&column| column >= cx.frame.width())
+    {
+        return Ok(None);
+    }
+    let donor = Table::Rows {
+        frame: cx.frame,
+        schema: cx.schema,
+        start: range.start,
+        rows: range.len(),
+    };
+    let grouping = super::reserved(run.windows.grouping(cx.frame, group_by, range.clone()))?;
+    let key = (expr, range.start, range.len());
+    let mut answers = match run.windows.outputs.answers.remove(&key) {
+        Some(answers) => answers,
+        None => {
+            let kept = match bound.filter() {
+                None => None,
+                Some(filter) => {
+                    let positions: Vec<usize> = (0..range.len()).collect();
+                    let truths =
+                        super::predicates::record_truths(filter, donor, &positions, |_| {
+                            Operand::Values(Values::missing(range.len()))
+                        });
+                    let Some(truths) = truths else {
+                        return Ok(None);
+                    };
+                    Some(truths)
+                }
+            };
+            Answers {
+                kept,
+                groups: super::filled(grouping.groups.len(), None)?,
+            }
+        }
+    };
+    let mut values = Values::missing(0);
+    super::reserved(values.try_reserve(rows.len()))?;
+    for &row in rows {
+        let group = grouping.group_of[row - range.start];
+        if answers.groups[group].is_none() {
+            let all = grouping.groups.group(group);
+            let members = match &answers.kept {
+                Some(truths) => all
+                    .iter()
+                    .copied()
+                    .filter(|&position| truths[position] == Truth::True)
+                    .collect(),
+                None => all.to_vec(),
+            };
+            let selected = Selected {
+                members,
+                representative: all.first().copied(),
+            };
+            let value =
+                reduce_selected(run, cx, bound, &donor, Coordinate::Output, &selected, row)?;
+            answers.groups[group] = Some(value);
+        }
+        values.push(ValueRef::from(
+            answers.groups[group].as_ref().expect("an answered group"),
+        ));
+    }
+    run.windows.outputs.answers.insert(key, answers);
+    Ok(Some(values))
 }
 
 fn aggregate_value<E>(

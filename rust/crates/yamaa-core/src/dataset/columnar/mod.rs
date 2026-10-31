@@ -965,6 +965,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .filter(|&binding| plan.binding(binding).stage == Stage::Window)
             .collect();
         let rows: Vec<usize> = (first..frame.rows()).collect();
+        // The window stage adds and removes no row, and its bindings share
+        // the groupings of the columns no later binding writes.
+        self.windows = windows::Runs::default();
         for binding in windowed {
             let step = super::resolved::Step::Window(binding);
             let callbacks = self.step_callbacks(region, step);
@@ -979,7 +982,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 // The whole-table run prepares the window over every
                 // partition's rows before it evaluates any (#3830).
                 run.mark(partitions::Coordinates::Window(index))?;
-                run.windows = windows::Runs::default();
+                run.windows.step();
                 let mut cx = run.template_cx(frame, region, table, secondary, first);
                 cx.output = output.clone();
                 windows::prepare(run, &cx, plan.binding(binding).expr)?;
@@ -1165,6 +1168,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             cx.local(plan, bound.column)
         };
         frame.complete_rows(rows, column, values);
+        self.windows.written(column);
         Ok(())
     }
 
@@ -1215,6 +1219,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         let plan = self.plan;
         let region = RegionId::DATASET;
         self.relations.begin_columns(plan);
+        // The column phase adds and removes no row, and its steps share the
+        // groupings of the columns no later step writes.
+        self.windows = windows::Runs::default();
         let columns: Vec<ColumnId> = plan.region_columns(region).collect();
         let mut completed = row_completed(plan);
         let mut next = 0;
@@ -1249,7 +1256,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 .collect();
             let columns = [local];
             if self.marks.is_some() {
-                self.windows = windows::Runs::default();
+                self.windows.step();
                 let mut prepared = None;
                 for (binding, served) in &bindings {
                     let expr = plan.binding(*binding).expr;
@@ -1293,7 +1300,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     rows: &rows,
                 };
                 self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
-                    run.windows = windows::Runs::default();
+                    run.windows.step();
                     // Bindings split from one column binding share its
                     // expression, and a column-level window over it is
                     // prepared once, through the first one's driver.
@@ -1372,6 +1379,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         };
         let local = self.local_column(region, bound.column);
         frame.complete_rows(rows, local, values);
+        self.windows.written(local);
         Ok(())
     }
 

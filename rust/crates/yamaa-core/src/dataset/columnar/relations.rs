@@ -2091,7 +2091,7 @@ pub(super) fn sort<'v, T>(
 /// compare under VALUE-19 (`value::comparable_types`). Comparability holds
 /// within `int` and `float` and otherwise within one type, `bool` aside, so
 /// each value is checked against the term's first present value.
-fn comparable<'v, T>(
+pub(super) fn comparable<'v, T>(
     items: &[T],
     terms: usize,
     value: impl Fn(&T, usize) -> ValueRef<'v>,
