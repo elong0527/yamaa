@@ -22,6 +22,8 @@ use crate::schema::{
 };
 use std::collections::BTreeSet;
 
+mod recurrence;
+
 /// How the surviving columns are ordered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Order {
@@ -682,7 +684,7 @@ impl<'a> Live<'a> {
         if !issues.is_empty() {
             return Err(Error::Invalid(issues));
         }
-        let analysis = dependency_analysis::analyze_admitted(graph);
+        let analysis = recurrence::order(self, &selected, graph);
         if let Some(cycle) = analysis.cycle {
             let members = &cycle[..cycle.len() - 1];
             return Err(Error::Invalid(vec![Issue::Cycle {

@@ -186,7 +186,35 @@ pub(crate) fn analyze(
         }
     }
     let mut analysis = column_dependencies::analyze(&contracted, keys, has_rows)?;
-    analysis = without_delayed_forwards(analysis, &reads);
+    // Contraction owns scheduling, never a forward read's declaration
+    // identity. A feedback group owns its internal order; retain the cycle
+    // suppression of the contracted policy for the first refused cycle.
+    let refused = analysis
+        .diagnostics
+        .iter()
+        .find_map(|diagnostic| match diagnostic {
+            column_dependencies::Diagnostic::Cycle { columns } => Some(columns.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    analysis.diagnostics.retain(|diagnostic| {
+        !matches!(
+            diagnostic,
+            column_dependencies::Diagnostic::ForwardReference { .. }
+        )
+    });
+    analysis.diagnostics.extend(
+        without_delayed_forwards(ordinary, &reads)
+            .diagnostics
+            .into_iter()
+            .filter(|diagnostic| match diagnostic {
+                column_dependencies::Diagnostic::ForwardReference { column, .. } => {
+                    !refused.contains(column)
+                        && !groups.iter().any(|group| group.columns.contains(column))
+                }
+                _ => false,
+            }),
+    );
     analysis.order = analysis
         .order
         .into_iter()

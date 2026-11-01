@@ -1,6 +1,6 @@
 # Reject Future-Filled Weight
 
-**Goal:** fill a missing weight from the most recent earlier
+**Goal:** fill a missing weight from the next measurement's filled
 weight, carrying `ADT`, `AVAL`, and `AVALF` for each measurement.
 
 **Input:** collected weight records carrying the collection date
