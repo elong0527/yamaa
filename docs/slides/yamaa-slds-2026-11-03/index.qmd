@@ -233,7 +233,7 @@ Scroll inside the frame to explore the spec, inputs, and golden output.
 
 ## yamaa: performance {.perf}
 
-Same five ADaM datasets as R Submission Pilot 5's R programs, every cell identical; lower is better.
+yamaa reproduces R Submission Pilot 5's five ADaM datasets, every cell identical; lower is better.
 
 ::: {.perf-grid}
 ::: {.perf-panel}
