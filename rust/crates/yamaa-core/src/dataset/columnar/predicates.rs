@@ -1007,6 +1007,16 @@ pub(super) fn collect_row<E>(
     collection: Collection<'_>,
     row: usize,
 ) -> Result<Value, Fail<E>> {
+    collect_lent(run, cx, collection, row).map(owned)
+}
+
+/// The reading [`collect_row`] answers, lent from the records' table.
+pub(super) fn collect_lent<'a, E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'a, E>,
+    collection: Collection<'_>,
+    row: usize,
+) -> Result<ValueRef<'a>, Fail<E>> {
     let plan = run.plan;
     let (table, members) = cx.records(row);
     let retained: Vec<usize>;
@@ -1036,16 +1046,13 @@ pub(super) fn collect_row<E>(
     // A single record has at most one distinct reading.
     if members.len() == 1 && collection.selection.is_none() {
         let source_row = members[0];
-        return table
-            .get(source_row, collection.column)
-            .map(owned)
-            .map_err(|error| {
-                Box::new(ExecutionError::Cell {
-                    path: collection.path.into(),
-                    source_row,
-                    error,
-                })
-            });
+        return table.get(source_row, collection.column).map_err(|error| {
+            Box::new(ExecutionError::Cell {
+                path: collection.path.into(),
+                source_row,
+                error,
+            })
+        });
     }
     let mut carrying = Vec::new();
     let mut distinct = BTreeSet::new();
@@ -1095,7 +1102,7 @@ pub(super) fn collect_row<E>(
                     HandlerKind::MultipleMatches,
                 )?,
             }
-            return Ok(owned(value));
+            return Ok(value);
         }
         return Err(Box::new(ExecutionError::MultipleValues {
             path: collection.path.into(),
@@ -1104,5 +1111,5 @@ pub(super) fn collect_row<E>(
             identity: run.failure_identity(cx, row),
         }));
     }
-    Ok(first.map_or(Value::Missing, owned))
+    Ok(first.unwrap_or(ValueRef::Missing))
 }

@@ -195,6 +195,11 @@ fn current_group<E>(
     };
     let only = only_value(bound);
     let lent = only.and_then(|column| donor.storage(column));
+    if let Some(lent) = lent {
+        if let Some(values) = only_singles(cx, kept.as_deref(), lent, rows)? {
+            return Ok(Some(values));
+        }
+    }
     let mut values = Values::missing(0);
     super::reserved(values.try_reserve(rows.len()))?;
     let mut members = Vec::new();
@@ -233,6 +238,38 @@ fn current_group<E>(
         values.push_value(value);
     }
     Ok(Some(values))
+}
+
+/// `ONLY` over the column `lent` for each of `rows` when every row keeps
+/// exactly one record within it, as rows built one per record do: the kept
+/// records' values gathered from the storage at once, each the value the
+/// row path lends. None otherwise; `kept` holds the filter's truth of each
+/// row's records in turn, when there is a filter.
+fn only_singles<E>(
+    cx: &Cx<'_, E>,
+    kept: Option<&[Truth]>,
+    lent: crate::table::ColumnRef<'_>,
+    rows: &[usize],
+) -> Result<Option<Values>, Fail<E>> {
+    let mut singles = Vec::new();
+    super::reserved(singles.try_reserve_exact(rows.len()))?;
+    let mut offset = 0;
+    for &row in rows {
+        let all = cx.frame.members(row);
+        let mut kept_records = all
+            .iter()
+            .enumerate()
+            .filter(|&(index, _)| kept.is_none_or(|truths| truths[offset + index] == Truth::True));
+        let (Some((_, &record)), None) = (kept_records.next(), kept_records.next()) else {
+            return Ok(None);
+        };
+        singles.push(record);
+        offset += all.len();
+    }
+    match Values::from_column(lent, &singles) {
+        Some(values) => super::reserved(values).map(Some),
+        None => Ok(None),
+    }
 }
 
 /// An output aggregate for each of `rows`: the output rows it ranges over

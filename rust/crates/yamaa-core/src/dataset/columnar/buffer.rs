@@ -1317,15 +1317,29 @@ impl Values {
     /// by their civil fields. The first row repeats none. Each layout is
     /// compared in one pass, with no value lent.
     pub(super) fn repeats(&self, rows: &[usize]) -> Result<Vec<bool>, TryReserveError> {
+        self.repeats_by(rows.len(), |index| rows[index])
+    }
+
+    /// [`Values::repeats`] over the rows of a range, in order.
+    pub(super) fn repeats_in(&self, rows: Range<usize>) -> Result<Vec<bool>, TryReserveError> {
+        self.repeats_by(rows.len(), |index| rows.start + index)
+    }
+
+    /// [`Values::repeats`] over `count` rows, `row(index)` the row at each
+    /// index.
+    fn repeats_by(
+        &self,
+        count: usize,
+        row: impl Fn(usize) -> usize,
+    ) -> Result<Vec<bool>, TryReserveError> {
         fn typed<T>(
             values: &[T],
             valid: &Bits,
-            rows: &[usize],
+            pairs: impl Iterator<Item = (usize, usize)>,
             repeats: &mut Vec<bool>,
             equal: impl Fn(&T, &T) -> bool,
         ) {
-            repeats.extend(rows.windows(2).map(|pair| {
-                let (previous, row) = (pair[0], pair[1]);
+            repeats.extend(pairs.map(|(previous, row)| {
                 match (valid.get(previous), valid.get(row)) {
                     (true, true) => equal(&values[previous], &values[row]),
                     (present, other) => present == other,
@@ -1333,34 +1347,34 @@ impl Values {
             }));
         }
         let mut repeats = Vec::new();
-        repeats.try_reserve_exact(rows.len())?;
-        if rows.is_empty() {
+        repeats.try_reserve_exact(count)?;
+        if count == 0 {
             return Ok(repeats);
         }
         repeats.push(false);
+        let pairs = (1..count).map(|index| (row(index - 1), row(index)));
         match self {
-            Self::Missing(_) => repeats.resize(rows.len(), true),
-            Self::Int(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
-            Self::Float(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
-            Self::Bool(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
-            Self::Date(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
+            Self::Missing(_) => repeats.resize(count, true),
+            Self::Int(values, valid) => typed(values, valid, pairs, &mut repeats, |a, b| a == b),
+            Self::Float(values, valid) => typed(values, valid, pairs, &mut repeats, |a, b| a == b),
+            Self::Bool(values, valid) => typed(values, valid, pairs, &mut repeats, |a, b| a == b),
+            Self::Date(values, valid) => typed(values, valid, pairs, &mut repeats, |a, b| a == b),
             Self::DateTime(values, valid) => {
-                typed(values, valid, rows, &mut repeats, |a, b| a == b);
+                typed(values, valid, pairs, &mut repeats, |a, b| a == b);
             }
             Self::Str(strings, valid) => {
-                repeats.extend(rows.windows(2).map(|pair| {
-                    let (previous, row) = (pair[0], pair[1]);
+                repeats.extend(pairs.map(|(previous, row)| {
                     match (valid.get(previous), valid.get(row)) {
-                        (true, true) => strings.bytes_of(previous) == strings.bytes_of(row),
+                        (true, true) => {
+                            same_bytes(strings.bytes_of(previous), strings.bytes_of(row))
+                        }
                         (present, other) => present == other,
                     }
                 }));
             }
-            Self::Mixed(values) => {
-                repeats.extend(rows.windows(2).map(|pair| {
-                    ValueRef::from(&values[pair[0]]) == ValueRef::from(&values[pair[1]])
-                }))
-            }
+            Self::Mixed(values) => repeats.extend(pairs.map(|(previous, row)| {
+                ValueRef::from(&values[previous]) == ValueRef::from(&values[row])
+            })),
         }
         Ok(repeats)
     }
@@ -1377,6 +1391,33 @@ impl Values {
             Self::Str(..) => Self::Str(Strings::default(), Bits::default()),
             Self::Mixed(_) => Self::Mixed(Vec::new()),
         }
+    }
+}
+
+/// Whether two byte strings are equal. Text up to 16 bytes, as most key
+/// text is, compares in at most two overlapping reads of each, not through
+/// a call to `memcmp`.
+fn same_bytes(left: &[u8], right: &[u8]) -> bool {
+    let len = left.len();
+    if len != right.len() {
+        return false;
+    }
+    let word = |bytes: &[u8], at: usize| {
+        u64::from_le_bytes(bytes[at..at + 8].try_into().expect("eight bytes"))
+    };
+    let half = |bytes: &[u8], at: usize| {
+        u32::from_le_bytes(bytes[at..at + 4].try_into().expect("four bytes"))
+    };
+    match len {
+        0 => true,
+        1..=3 => {
+            left[0] == right[0]
+                && left[len / 2] == right[len / 2]
+                && left[len - 1] == right[len - 1]
+        }
+        4..=7 => half(left, 0) == half(right, 0) && half(left, len - 4) == half(right, len - 4),
+        8..=16 => word(left, 0) == word(right, 0) && word(left, len - 8) == word(right, len - 8),
+        _ => left == right,
     }
 }
 
@@ -1467,9 +1508,11 @@ pub(super) fn own(value: ValueRef<'_>) -> Value {
 mod tests {
     use super::*;
 
-    // The seam is a join's repeat check (#4210): each row compared with the
-    // previous one as grouping keys compare them (`Key::from`), so a row
-    // taken as a repeat matches the records the previous row matched.
+    // The seam is a join's repeat check (#4210) and a window grouping's runs
+    // (#4209): each row compared with the previous one as grouping keys
+    // compare them (`Key::from`), so a row taken as a repeat matches the
+    // records the previous row matched, and is in its group. A range of rows
+    // repeats as the same rows listed do.
     #[test]
     fn repeats_compare_each_row_with_the_previous_as_grouping_keys_do() {
         use crate::temporal::{Date, Precision};
@@ -1521,6 +1564,29 @@ mod tests {
                 vec![false, true, false, false, false],
             ),
             (
+                "text of every length by all of its bytes",
+                pushed(&[
+                    ValueRef::Str("abc"),
+                    ValueRef::Str("abc"),
+                    ValueRef::Str("abd"),
+                    ValueRef::Str("PERF-01"),
+                    ValueRef::Str("PERF-01"),
+                    ValueRef::Str("PERF-02"),
+                    ValueRef::Str("PERF-01-000001"),
+                    ValueRef::Str("PERF-01-000001"),
+                    ValueRef::Str("PERF-02-000001"),
+                    ValueRef::Str("a long subject identifier"),
+                    ValueRef::Str("a long subject identifier"),
+                    ValueRef::Str("a long subject identifiez"),
+                    ValueRef::Str("a long subject identifie"),
+                ]),
+                (0..13).collect(),
+                vec![
+                    false, true, false, false, true, false, false, true, false, false, true, false,
+                    false,
+                ],
+            ),
+            (
                 "an int and a float of equal value are two keys",
                 pushed(&[ValueRef::Int(2), float(2.0), float(2.0)]),
                 (0..3).collect(),
@@ -1541,6 +1607,14 @@ mod tests {
         ];
         for (label, values, rows, expected) in cases {
             assert_eq!(values.repeats(&rows).unwrap(), expected, "{label}");
+            if rows.windows(2).all(|pair| pair[1] == pair[0] + 1) {
+                let range = rows[0]..rows[0] + rows.len();
+                assert_eq!(
+                    values.repeats_in(range).unwrap(),
+                    expected,
+                    "{label}, a range"
+                );
+            }
         }
     }
 
