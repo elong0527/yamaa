@@ -58,14 +58,15 @@ impl Handlers {
         }
     }
 
-    /// Count one firing of a table site.
+    /// Count `firings` firings of a table site.
     pub(super) fn fire(
         &mut self,
         plan: &ResolvedPlan,
         site: HandlerSiteId,
+        firings: u64,
     ) -> Result<(), HandlerCountOverflow> {
         let count = &mut self.counts[site.index()];
-        *count = count.checked_add(1).ok_or_else(|| {
+        *count = count.checked_add(firings).ok_or_else(|| {
             let entry = plan.handler(site);
             HandlerCountOverflow {
                 spec_path: entry.path.to_string(),
@@ -75,16 +76,18 @@ impl Handlers {
         Ok(())
     }
 
-    /// Count one firing at a path: its table site, or a site registered now.
+    /// Count `firings` firings at a path, at least one: its table site, or
+    /// a site registered now.
     pub(super) fn fire_path(
         &mut self,
         plan: &ResolvedPlan,
         path: &str,
         kind: HandlerKind,
+        firings: u64,
     ) -> Result<(), HandlerCountOverflow> {
         let key: (Arc<str>, u8) = (path.into(), kind_order(kind));
         if let Some(&site) = self.index.get(&key) {
-            return self.fire(plan, site);
+            return self.fire(plan, site, firings);
         }
         let position = match self
             .dynamic
@@ -104,7 +107,7 @@ impl Handlers {
         let entry = &mut self.dynamic[position];
         entry.count = entry
             .count
-            .checked_add(1)
+            .checked_add(firings)
             .ok_or_else(|| HandlerCountOverflow {
                 spec_path: path.into(),
                 handler: kind,

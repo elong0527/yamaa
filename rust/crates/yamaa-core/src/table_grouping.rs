@@ -66,6 +66,12 @@ impl<'a> From<ValueRef<'a>> for Key<'a> {
 }
 
 impl<'a> Key<'a> {
+    /// The row hash's state, for a map keyed by keys: aHash under the fixed
+    /// seeds, since no output depends on the hasher.
+    pub(crate) fn hasher() -> ahash::RandomState {
+        ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3])
+    }
+
     /// `value` under key equality (VALUE-19, LOOKUP-9), as key matching and
     /// an intermediate's `unique` check compare it: numbers by value, so an
     /// integral float within the `int` range is the `Int` it equals, and

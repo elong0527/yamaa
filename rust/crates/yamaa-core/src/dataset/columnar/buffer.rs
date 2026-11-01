@@ -353,6 +353,13 @@ impl Strings {
         &self.bytes[start..end]
     }
 
+    /// One row's text as bytes, without the character boundary checks
+    /// that lending it as text makes.
+    fn bytes_of(&self, index: usize) -> &[u8] {
+        let (start, end) = self.spans[index];
+        &self.bytes.as_bytes()[start..end]
+    }
+
     fn push(&mut self, value: &str) {
         let start = self.bytes.len();
         self.bytes.push_str(value);
@@ -1295,6 +1302,60 @@ impl Values {
         }
     }
 
+    /// For each of `rows`, whether its value equals the previous row's as
+    /// grouping keys compare them (`Key::from`): a missing value equals a
+    /// missing one, and values of one type compare by value, temporal ones
+    /// by their civil fields. The first row repeats none. Each layout is
+    /// compared in one pass, with no value lent.
+    pub(super) fn repeats(&self, rows: &[usize]) -> Result<Vec<bool>, TryReserveError> {
+        fn typed<T>(
+            values: &[T],
+            valid: &Bits,
+            rows: &[usize],
+            repeats: &mut Vec<bool>,
+            equal: impl Fn(&T, &T) -> bool,
+        ) {
+            repeats.extend(rows.windows(2).map(|pair| {
+                let (previous, row) = (pair[0], pair[1]);
+                match (valid.get(previous), valid.get(row)) {
+                    (true, true) => equal(&values[previous], &values[row]),
+                    (present, other) => present == other,
+                }
+            }));
+        }
+        let mut repeats = Vec::new();
+        repeats.try_reserve_exact(rows.len())?;
+        if rows.is_empty() {
+            return Ok(repeats);
+        }
+        repeats.push(false);
+        match self {
+            Self::Missing(_) => repeats.resize(rows.len(), true),
+            Self::Int(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
+            Self::Float(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
+            Self::Bool(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
+            Self::Date(values, valid) => typed(values, valid, rows, &mut repeats, |a, b| a == b),
+            Self::DateTime(values, valid) => {
+                typed(values, valid, rows, &mut repeats, |a, b| a == b);
+            }
+            Self::Str(strings, valid) => {
+                repeats.extend(rows.windows(2).map(|pair| {
+                    let (previous, row) = (pair[0], pair[1]);
+                    match (valid.get(previous), valid.get(row)) {
+                        (true, true) => strings.bytes_of(previous) == strings.bytes_of(row),
+                        (present, other) => present == other,
+                    }
+                }));
+            }
+            Self::Mixed(values) => {
+                repeats.extend(rows.windows(2).map(|pair| {
+                    ValueRef::from(&values[pair[0]]) == ValueRef::from(&values[pair[1]])
+                }))
+            }
+        }
+        Ok(repeats)
+    }
+
     /// An empty buffer of the same layout.
     fn empty_like(&self) -> Self {
         match self {
@@ -1396,6 +1457,83 @@ pub(super) fn own(value: ValueRef<'_>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The seam is a join's repeat check (#4210): each row compared with the
+    // previous one as grouping keys compare them (`Key::from`), so a row
+    // taken as a repeat matches the records the previous row matched.
+    #[test]
+    fn repeats_compare_each_row_with_the_previous_as_grouping_keys_do() {
+        use crate::temporal::{Date, Precision};
+        let pushed = |values: &[ValueRef<'_>]| {
+            let mut buffer = Values::missing(0);
+            for &value in values {
+                buffer.push(value);
+            }
+            buffer
+        };
+        let float = |value: f64| ValueRef::Float(FiniteFloat::new(value).unwrap());
+        let day = Date::new(2024, 3, 1, Precision::Day).unwrap();
+        let month = Date::new(2024, 3, 1, Precision::Month).unwrap();
+        let cases: Vec<(&str, Values, Vec<usize>, Vec<bool>)> = vec![
+            (
+                "integers, a missing value repeating a missing one",
+                pushed(&[
+                    ValueRef::Int(1),
+                    ValueRef::Int(1),
+                    ValueRef::Missing,
+                    ValueRef::Missing,
+                    ValueRef::Int(2),
+                ]),
+                (0..5).collect(),
+                vec![false, true, false, true, false],
+            ),
+            (
+                "both zeros are one key",
+                pushed(&[float(0.0), float(-0.0), float(1.5)]),
+                (0..3).collect(),
+                vec![false, true, false],
+            ),
+            (
+                "dates by their civil fields, whatever their precision",
+                pushed(&[ValueRef::Date(day), ValueRef::Date(month)]),
+                vec![0, 1],
+                vec![false, true],
+            ),
+            (
+                "text by its bytes",
+                pushed(&[
+                    ValueRef::Str("A"),
+                    ValueRef::Str("A"),
+                    ValueRef::Str("a"),
+                    ValueRef::Missing,
+                    ValueRef::Str(""),
+                ]),
+                (0..5).collect(),
+                vec![false, true, false, false, false],
+            ),
+            (
+                "an int and a float of equal value are two keys",
+                pushed(&[ValueRef::Int(2), float(2.0), float(2.0)]),
+                (0..3).collect(),
+                vec![false, false, true],
+            ),
+            (
+                "rows in selection order",
+                pushed(&[ValueRef::Int(5), ValueRef::Int(6), ValueRef::Int(5)]),
+                vec![0, 2, 1],
+                vec![false, true, false],
+            ),
+            (
+                "every row missing",
+                Values::missing(3),
+                (0..3).collect(),
+                vec![false, true, true],
+            ),
+        ];
+        for (label, values, rows, expected) in cases {
+            assert_eq!(values.repeats(&rows).unwrap(), expected, "{label}");
+        }
+    }
 
     #[test]
     fn a_buffer_stays_typed_until_a_second_type_arrives() {

@@ -45,6 +45,7 @@ mod pairs;
 mod partitions;
 pub use partitions::{PartitionSource, SharedDecode};
 mod predicates;
+mod reads;
 mod relations;
 mod scalar;
 #[cfg(test)]
@@ -133,6 +134,16 @@ impl<'a, E> Table<'a, E> {
             Self::Source(table) => table.column(column),
             Self::Rows { .. } | Self::Input { .. } => None,
         }
+    }
+
+    /// A source port's column for a read of `rows` of its records, when
+    /// lending it repays the port's check of the whole column before it
+    /// lends it: a read of several rows, and of at least an eighth of the
+    /// records. A smaller read reads its cells.
+    fn lent(self, column: usize, rows: usize) -> Option<ColumnRef<'a>> {
+        (rows > 1 && rows.saturating_mul(8) >= self.row_count())
+            .then(|| self.storage(column))
+            .flatten()
     }
 
     /// Borrow one cell with the table's own lifetime.
@@ -336,7 +347,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// Count one firing of a handler site.
     fn fire(&mut self, site: super::resolved::HandlerSiteId) -> Result<(), Fail<E>> {
         self.handlers
-            .fire(self.plan, site)
+            .fire(self.plan, site, 1)
             .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))
     }
 
@@ -347,7 +358,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         kind: crate::numeric_lifecycle::HandlerKind,
     ) -> Result<(), Fail<E>> {
         self.handlers
-            .fire_path(self.plan, path, kind)
+            .fire_path(self.plan, path, kind, 1)
             .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))
     }
 
