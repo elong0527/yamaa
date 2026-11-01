@@ -3,16 +3,7 @@
 "yamaa: agentic workflow for CDISC data standardization" -- a presentation
 for NJSUG (2026-10-09).
 
-The deck is a dated record of the talk as given and stays unchanged: its YAML
-example is the 0.5 syntax of that date, not 1.0 (#3030 D162).
-
 [View the rendered slides](https://elong0527.github.io/yamaa/slides/yamaa-njsug-2026-10-09/index.html)
-
-## Files
-
-- `index.qmd` -- the deck
-- `custom.css` -- the deck's single style file (copied from yamaa-pilot7-2026-09-25)
-- `title-logo.html` -- title-slide logo, included via `include-after-body` and moved right after the subtitle at runtime
 
 ## Build
 
