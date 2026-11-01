@@ -296,7 +296,7 @@ def _resolve_imports(definition):
 
 def _validate_python(definition):
     python = definition["python"]
-    unknown = set(python) - {"module", "registration", "exports"}
+    unknown = set(python) - {"module", "registration", "settings", "exports"}
     if unknown:
         raise ValueError(f"unknown Python definition keys: {sorted(unknown)}")
     if python.get("module") != "yamaa._native":
@@ -430,8 +430,15 @@ def _validate_pairing(definition, r_functions):
 
 def _validate_r(definition):
     r = definition["r"]
-    if not isinstance(r, dict) or set(r) != {"module", "registration", "groups"}:
-        raise ValueError("R definition must contain module, registration and groups")
+    if not isinstance(r, dict) or set(r) != {
+        "module",
+        "registration",
+        "settings",
+        "groups",
+    }:
+        raise ValueError(
+            "R definition must contain module, registration, settings and groups"
+        )
     if (
         r["module"] != "yamaa"
         or r["registration"] != (R_SOURCE / "lib.rs").relative_to(ROOT).as_posix()

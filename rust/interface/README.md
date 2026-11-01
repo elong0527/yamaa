@@ -50,7 +50,7 @@ symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
 the edge, and the `boundary` import's version role to
 `yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
-The boundary version, now 8 for R input frames and the grouped R runtime context, is the single source for both hosts:
+The boundary version, now 9 for the native calls' one `settings` argument (#4214), is the single source for both hosts:
 the generator writes it into each host's request, and neither keeps a
 separately maintained copy. `format_version` versions the IDL grammar only.
 
@@ -64,9 +64,13 @@ YAML tags, mapping keys that are not text (only the command line's exit
 statuses are integers), unknown type tokens, duplicate exports, invalid Rust
 paths, unresolved imports and operation references to absent exports.
 Argument mapping order is positional order; sequence order is emission order.
-The R native `runtime` role groups the raw R version and existing capability
-list in that order; `.runtime()` supplies this context so a run endpoint stays
-within the seven-argument ceiling. R input frames cross as alias bytes and a
+A native argument named `settings` holds what configures the call's engine
+rather than its request, so that no native call passes more than seven
+arguments (#4214). Each host's native section lists its members once under
+`settings`, in order: Python's is a tuple of the public arguments `progress`
+and `threads`, and R's a list of the raw R version, the project host
+capabilities and the same public arguments. The generator fills it from the
+member's arguments and, in R, from `.version()` and `.capabilities()`. R input frames cross as alias bytes and a
 frame of column-name bytes, typed vectors and the explicit row count; text vectors use lists of raw
 UTF-8 values or NULL, with no unchecked R string borrowed in Rust.
 An optional public argument with a `None` default is emitted only on the hosts

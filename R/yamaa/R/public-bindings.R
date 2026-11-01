@@ -177,9 +177,7 @@ format.yamaa_submission <- function(x, ...) {
       path,
       project,
       .optional_path(parent, "parent"),
-      .version(),
-      .progress(progress, "progress"),
-      threads
+      list(.version(), .capabilities(), .progress(progress, "progress"), threads)
     )))
   }
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
@@ -188,12 +186,10 @@ format.yamaa_submission <- function(x, ...) {
     .run(.reply(.native_spec_run(
       path,
       project,
-      .runtime(),
       plans,
       .flag(stream, "stream"),
-      .progress(progress, "progress"),
       .input_frames(inputs, "inputs"),
-      threads
+      list(.version(), .capabilities(), .progress(progress, "progress"), threads)
     )))
   }
   .object(object, "yamaa_spec")
@@ -220,7 +216,7 @@ format.yamaa_spec <- function(x, ...) {
   .read_only(object, "names", function() .reply(.native_project_names(path, .version())))
   object$check <- function(progress = NULL, threads = NULL) {
     .check(.reply(.native_project_check(
-      path, .version(), .progress(progress, "progress"), threads
+      path, list(.version(), .capabilities(), .progress(progress, "progress"), threads)
     )))
   }
   object$run <- function(section = NULL, progress = NULL, threads = NULL) {
@@ -228,11 +224,8 @@ format.yamaa_spec <- function(x, ...) {
     .project_run(.reply(.native_project_run(
       path,
       .optional_text(section, "section"),
-      .version(),
-      .capabilities(),
       plans,
-      .progress(progress, "progress"),
-      threads
+      list(.version(), .capabilities(), .progress(progress, "progress"), threads)
     )))
   }
   object$submission <- function(section = NULL, created = NULL, progress = NULL, threads = NULL) {
@@ -240,9 +233,7 @@ format.yamaa_spec <- function(x, ...) {
       path,
       .optional_text(section, "section"),
       .optional_text(created, "created"),
-      .version(),
-      .progress(progress, "progress"),
-      threads
+      list(.version(), .capabilities(), .progress(progress, "progress"), threads)
     )))
   }
   .object(object, "yamaa_project")

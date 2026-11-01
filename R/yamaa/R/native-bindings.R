@@ -5,8 +5,8 @@
   .Call(wrap__core_version)
 }
 
-.native_spec_check <- function(specification, project, parent, version, progress, threads) {
-  .Call(wrap__spec_check, specification, project, parent, version, progress, threads)
+.native_spec_check <- function(specification, project, parent, settings) {
+  .Call(wrap__spec_check, specification, project, parent, settings)
 }
 
 .native_check_status <- function(handle) {
@@ -33,8 +33,8 @@
   .Call(wrap__plans, handle)
 }
 
-.native_spec_run <- function(specification, project, runtime, plans, stream, progress, inputs, threads) {
-  .Call(wrap__spec_run, specification, project, runtime, plans, stream, progress, inputs, threads)
+.native_spec_run <- function(specification, project, plans, stream, inputs, settings) {
+  .Call(wrap__spec_run, specification, project, plans, stream, inputs, settings)
 }
 
 .native_spec_resolve <- function(specification, project, version) {
@@ -89,12 +89,12 @@
   .Call(wrap__project_names, project, version)
 }
 
-.native_project_check <- function(project, version, progress, threads) {
-  .Call(wrap__project_check, project, version, progress, threads)
+.native_project_check <- function(project, settings) {
+  .Call(wrap__project_check, project, settings)
 }
 
-.native_project_run <- function(project, section, version, capabilities, plans, progress, threads) {
-  .Call(wrap__project_run, project, section, version, capabilities, plans, progress, threads)
+.native_project_run <- function(project, section, plans, settings) {
+  .Call(wrap__project_run, project, section, plans, settings)
 }
 
 .native_project_run_status <- function(handle) {
@@ -149,8 +149,8 @@
   .Call(wrap__project_run_summary, handle)
 }
 
-.native_project_submission <- function(project, section, created, version, progress, threads) {
-  .Call(wrap__project_submission, project, section, created, version, progress, threads)
+.native_project_submission <- function(project, section, created, settings) {
+  .Call(wrap__project_submission, project, section, created, settings)
 }
 
 .native_submission_status <- function(handle) {
@@ -244,7 +244,7 @@
 # The interface handshake (rust/interface/README.md): .onLoad sends this
 # request before any other native call, and a refusal stops the load.
 .interface_request <- list(
-  version = 8L,
+  version = 9L,
   required = c("structured_records", "arrow_c_stream", "plan_reuse"),
   optional = c("format_yaml", "format_parquet", "format_readstat", "format_odm")
 )

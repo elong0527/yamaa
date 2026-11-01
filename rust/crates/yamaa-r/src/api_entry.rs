@@ -257,22 +257,49 @@ fn progress(value: &Robj) -> std::result::Result<Option<Progress>, Refusal> {
     Progress::of(value).map_err(Refusal::from)
 }
 
-/// Run a cancellable call of the engine as the R host on R's `version`, with
-/// the R interrupt probe behind its token and, when `capabilities` are given,
-/// the installed project functions. Once the call returns the token is
-/// polled once more, so an interrupt that arrived as it returned still
-/// cancels it (D186).
+/// The facade engine that a call's `settings` configure (#4214): the one
+/// list the generated layer passes for what configures the engine rather
+/// than the request, holding R's version, the project host capabilities,
+/// the progress callback (#3762) and `threads` (#4193), in that order. The
+/// engine installs the project functions only when `functions`.
+fn configured(settings: &List, functions: bool) -> std::result::Result<yamaa::Engine, Refusal> {
+    if settings.len() != 4 {
+        return Err("invalid engine settings".into());
+    }
+    let setting = |index: usize| {
+        settings
+            .elt(index)
+            .map_err(|_| Refusal::from("invalid engine settings"))
+    };
+    let version = setting(0)?
+        .as_raw()
+        .ok_or("engine settings version must be UTF-8 bytes")?;
+    let version = text(&version)?;
+    let functions = match functions {
+        true => Some(parse_capabilities(
+            setting(1)?
+                .as_list()
+                .ok_or("engine settings capabilities must be a list")?,
+        )?),
+        false => None,
+    };
+    let partitions = partitions(&setting(3)?)?;
+    let progress = progress(&setting(2)?)?;
+    Ok(engine(&version, functions, progress, partitions))
+}
+
+/// Run a cancellable call of the engine its `settings` configure, with the
+/// R interrupt probe behind its token and, when `functions`, the installed
+/// project functions. Once the call returns the token is polled once more,
+/// so an interrupt that arrived as it returned still cancels it (D186).
 fn called<T>(
-    version: &Raw,
-    (capabilities, progress, threads): (Option<List>, &Robj, &Robj),
+    settings: &List,
+    functions: bool,
     run: impl FnOnce(&yamaa::Engine, &CancellationToken) -> std::result::Result<T, Failure>,
 ) -> std::result::Result<T, Refusal> {
-    let version = text(version)?;
-    let functions = capabilities.map(parse_capabilities).transpose()?;
-    let partitions = partitions(threads)?;
-    let progress = self::progress(progress)?;
+    let engine = configured(settings, functions)?;
     let token = crate::interrupt::token();
-    let answer = run(&engine(&version, functions, progress, partitions), &token);
+    let answer = run(&engine, &token);
     if token.is_cancelled() {
         return Err("the call was cancelled".into());
     }
@@ -489,19 +516,12 @@ fn project_request<'a>(
 /// The check of a specification, or, with `parent`, of a fragment composed on
 /// the specification `parent` names as its parent (#3694).
 #[extendr]
-fn spec_check(
-    specification: Raw,
-    project: Robj,
-    parent: Robj,
-    version: Raw,
-    progress: Robj,
-    threads: Robj,
-) -> List {
+fn spec_check(specification: Raw, project: Robj, parent: Robj, settings: List) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let parent = optional_text(&parent)?;
         let specification = text(&specification)?;
-        let check = called(&version, (None, &progress, &threads), |engine, token| {
+        let check = called(&settings, false, |engine, token| {
             let request =
                 spec_request(engine, &specification, project.as_deref()).cancel_with(token);
             match parent.as_deref() {
@@ -581,45 +601,23 @@ fn plans_of(holder: &Option<Rc<Value>>) -> Option<&yamaa::Plans> {
 
 /// A run of one specification: built now, or with `stream` built as its
 /// output is read (#3697), polling a token of its own from then on.
-#[allow(clippy::too_many_arguments)] // #4214 gives the native calls one context argument
 #[extendr]
 fn spec_run(
     specification: Raw,
     project: Robj,
-    runtime: List,
     plans: Robj,
     stream: bool,
-    progress: Robj,
     inputs: Robj,
-    threads: Robj,
+    settings: List,
 ) -> List {
     reply(|| {
-        if runtime.len() != 2 {
-            return Err("invalid runtime context".into());
-        }
-        let version = runtime
-            .elt(0)
-            .ok()
-            .and_then(|value| value.as_raw())
-            .ok_or("runtime version must be UTF-8 bytes")?;
-        let capabilities = runtime
-            .elt(1)
-            .ok()
-            .and_then(|value| value.as_list())
-            .ok_or("runtime capabilities must be a list")?;
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
         let inputs = crate::input_frames::import(&specification, &inputs)?;
         let holder = held_plans(&plans)?;
         let plans = plans_of(&holder);
         if stream {
-            let version = text(&version)?;
-            let engine = engine(
-                &version,
-                Some(parse_capabilities(capabilities)?),
-                self::progress(&progress)?,
-                partitions(&threads)?,
-            );
+            let engine = configured(&settings, true)?;
             let token = crate::interrupt::stream_token();
             let request = spec_request(&engine, &specification, project.as_deref())
                 .cancel_with(&token)
@@ -634,20 +632,16 @@ fn spec_run(
             }
             return store(Value::Streamed(run?));
         }
-        let run = called(
-            &version,
-            (Some(capabilities), &progress, &threads),
-            |engine, token| {
-                let request = spec_request(engine, &specification, project.as_deref())
-                    .cancel_with(token)
-                    .inputs(inputs);
-                match plans {
-                    Some(plans) => request.reusing(plans),
-                    None => request,
-                }
-                .run()
-            },
-        )?;
+        let run = called(&settings, true, |engine, token| {
+            let request = spec_request(engine, &specification, project.as_deref())
+                .cancel_with(token)
+                .inputs(inputs);
+            match plans {
+                Some(plans) => request.reusing(plans),
+                None => request,
+            }
+            .run()
+        })?;
         store(Value::Run(Mutex::new(run)))
     })
 }
@@ -895,10 +889,10 @@ fn project_names(project: Raw, version: Raw) -> List {
 }
 
 #[extendr]
-fn project_check(project: Raw, version: Raw, progress: Robj, threads: Robj) -> List {
+fn project_check(project: Raw, settings: List) -> List {
     reply(|| {
         let project = text(&project)?;
-        let check = called(&version, (None, &progress, &threads), |engine, token| {
+        let check = called(&settings, false, |engine, token| {
             engine.project(&project).cancel_with(token).check()
         })?;
         store(Value::Check(Mutex::new(check)))
@@ -906,34 +900,21 @@ fn project_check(project: Raw, version: Raw, progress: Robj, threads: Robj) -> L
 }
 
 #[extendr]
-fn project_run(
-    project: Raw,
-    section: Robj,
-    version: Raw,
-    capabilities: List,
-    plans: Robj,
-    progress: Robj,
-    threads: Robj,
-) -> List {
+fn project_run(project: Raw, section: Robj, plans: Robj, settings: List) -> List {
     reply(|| {
         let section = optional_text(&section)?;
         let project = text(&project)?;
         let holder = held_plans(&plans)?;
         let plans = plans_of(&holder);
-        let runs = called(
-            &version,
-            (Some(capabilities), &progress, &threads),
-            |engine, token| {
-                let request =
-                    project_request(engine, &project, section.as_deref()).cancel_with(token);
-                // Only an unknown section refuses the call with issues.
-                match plans {
-                    Some(plans) => request.reusing(plans),
-                    None => request,
-                }
-                .run()
-            },
-        )?;
+        let runs = called(&settings, true, |engine, token| {
+            let request = project_request(engine, &project, section.as_deref()).cancel_with(token);
+            // Only an unknown section refuses the call with issues.
+            match plans {
+                Some(plans) => request.reusing(plans),
+                None => request,
+            }
+            .run()
+        })?;
         store(Value::ProjectRun(Mutex::new(runs)))
     })
 }
@@ -1016,21 +997,14 @@ fn project_run_summary(handle: Robj) -> List {
 }
 
 #[extendr]
-fn project_submission(
-    project: Raw,
-    section: Robj,
-    created: Robj,
-    version: Raw,
-    progress: Robj,
-    threads: Robj,
-) -> List {
+fn project_submission(project: Raw, section: Robj, created: Robj, settings: List) -> List {
     reply(|| {
         let section = optional_text(&section)?;
         let created = optional_text(&created)?;
         let project = text(&project)?;
         let mut options = SubmissionOptions::new(yamaa::VERSION);
         options.created = created;
-        let submission = called(&version, (None, &progress, &threads), |engine, token| {
+        let submission = called(&settings, false, |engine, token| {
             project_request(engine, &project, section.as_deref())
                 .cancel_with(token)
                 .submission(&options)

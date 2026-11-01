@@ -81,8 +81,7 @@ def _spec_check(
     specification: str,
     project: str | None = None,
     parent: str | None = None,
-    progress: object | None = None,
-    threads: object | None = None,
+    settings: tuple[object | None, object | None] | None = None,
 ) -> _Check: ...
 def _spec_summary(specification: str) -> str: ...
 def _spec_run(
@@ -90,9 +89,8 @@ def _spec_run(
     project: str | None = None,
     plans: _Plans | None = None,
     stream: bool = False,
-    progress: object | None = None,
     inputs: object | None = None,
-    threads: object | None = None,
+    settings: tuple[object | None, object | None] | None = None,
 ) -> _Run: ...
 def _spec_resolve(
     specification: str, project: str | None = None
@@ -101,21 +99,19 @@ def _project_spec(project: str, name: str) -> str: ...
 def _project_summary(project: str) -> str: ...
 def _project_names(project: str) -> list[str]: ...
 def _project_check(
-    project: str, progress: object | None = None, threads: object | None = None
+    project: str, settings: tuple[object | None, object | None] | None = None
 ) -> _Check: ...
 def _project_run(
     project: str,
     section: str | None = None,
     plans: _Plans | None = None,
-    progress: object | None = None,
-    threads: object | None = None,
+    settings: tuple[object | None, object | None] | None = None,
 ) -> _ProjectRun: ...
 def _project_submission(
     project: str,
     section: str | None = None,
     created: str | None = None,
-    progress: object | None = None,
-    threads: object | None = None,
+    settings: tuple[object | None, object | None] | None = None,
 ) -> _Submission: ...
 def _read_odm(
     source: str,
