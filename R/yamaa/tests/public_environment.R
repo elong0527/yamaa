@@ -17,8 +17,8 @@ host_truth <- read_host_fixture(host_fixture_root,"public-environment")
 namespace <- asNamespace("yamaa")
 spec_run_native <- get("wrap__spec_run", namespace)
 for (capabilities in list(list(), list(NULL, function(...) NULL, function(...) NULL))) {
-  reply <- .Call(spec_run_native, charToRaw("absent-spec.yaml"), NULL,
-    list(charToRaw(as.character(getRversion())), capabilities), NULL, FALSE, NULL, NULL, NULL)
+  reply <- .Call(spec_run_native, charToRaw("absent-spec.yaml"), NULL, NULL, FALSE, NULL,
+    list(charToRaw(as.character(getRversion())), capabilities, NULL, NULL))
   label <- sprintf("%d malformed capabilities", length(capabilities))
   stopifnot_case(label, "the reply has no value" = is.null(reply$value),
     "the reply has no issues" = nrow(reply$error$issues) == 0L)

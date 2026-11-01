@@ -32,7 +32,11 @@ and it keeps a plans handle when a native call it makes takes ``plans``. A
 member or a function ``calls`` an operation of the ``operations`` table, and
 each native argument of that operation's Python and R exports is bound by
 name: to the member's own arguments, to a held value, to the plans handle, or
-in R to the host's ``version`` and ``capabilities``. A member that returns a
+in R to the host's ``version``. A native argument named ``settings`` (#4214)
+is what configures the call's engine rather than its request, one value of
+the members each host's native section lists under ``settings``: a Python
+tuple of the member's arguments, or an R list of them and of the host's
+``version`` and ``capabilities``. A member that returns a
 class makes it from the call's result and the values it holds. README.md lists
 the member kinds and these rules.
 """
@@ -139,6 +143,9 @@ _R_ARGUMENT = {
     "flag": ".flag",
 }
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
+# The members of R's native `settings` (#4214) that the host supplies rather
+# than the public call: R's version and the project host capabilities.
+_R_HOST_SETTINGS = {"version": ".version", "capabilities": ".capabilities"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
 _R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
 _KINDS = {"property", "method", "index", "protocol", "private", "printing"}
@@ -262,11 +269,35 @@ class Public:
             for function in group["functions"]
         }
         self.package = definition["r"]["module"]
+        self.py_settings = definition["python"].get("settings")
+        self.r_settings = definition["r"].get("settings")
         self._validate()
 
     # --- Validation --------------------------------------------------------------
 
+    def _validate_settings(self):
+        """The members of each host's native `settings` (#4214): distinct
+        names, the same public arguments in both hosts and in the same order,
+        and in R besides the host's own values. Python's is a tuple, so it
+        lists at least two."""
+        for host, members in (("python", self.py_settings), ("r", self.r_settings)):
+            if (
+                not isinstance(members, list)
+                or not all(isinstance(name, str) for name in members)
+                or len(set(members)) != len(members)
+            ):
+                raise ValueError(f"{host}.settings must list distinct names")
+        if len(self.py_settings) < 2:
+            raise ValueError("python.settings must list at least two arguments")
+        public = [name for name in self.r_settings if name not in _R_HOST_SETTINGS]
+        if public != self.py_settings:
+            raise ValueError(
+                "r.settings must list python.settings in order, besides "
+                + " and ".join(sorted(_R_HOST_SETTINGS))
+            )
+
     def _validate(self):
+        self._validate_settings()
         python = _keys(self.public["python"], "public.python", {"version", "doc"})
         if python["version"] != "__version__":
             raise ValueError("public.python.version must be __version__")
@@ -846,6 +877,9 @@ class Public:
                 values.append(self._py_argument(native, args[native]))
                 used.add(native)
                 continue
+            if native == "settings":
+                values.append(self._py_settings(args, used, what))
+                continue
             found = None
             if class_name is not None:
                 for hold, role in self.holds(class_name):
@@ -866,6 +900,16 @@ class Public:
                 f"{what}: {sorted(set(args) - used)} fill no Python argument"
             )
         return _Call(callable_, values), target
+
+    def _py_settings(self, args, used, what):
+        """The tuple that fills a native `settings` argument (#4214)."""
+        values = []
+        for name in self.py_settings:
+            if name not in args:
+                raise ValueError(f"{what}: nothing fills the Python setting {name}")
+            values.append(self._py_argument(name, args[name]))
+            used.add(name)
+        return _Call("", values)
 
     def _py_construct(self, target, first, class_name, args, what):
         self._same_native(target, first, class_name, what)
@@ -1206,10 +1250,8 @@ class Public:
                 values.append(handle)
             elif native == "version":
                 values.append(_Call(".version"))
-            elif native == "capabilities":
-                values.append(_Call(".capabilities"))
-            elif native == "runtime":
-                values.append(_Call(".runtime"))
+            elif native == "settings":
+                values.append(self._r_settings(args, used, converted, what))
             elif native == "plans" and class_name and self.plans(class_name):
                 values.append("plans")
                 plans = True
@@ -1231,6 +1273,21 @@ class Public:
         if set(args) - used:
             raise ValueError(f"{what}: {sorted(set(args) - used)} fill no R argument")
         return _Call(".reply", [_Call(f".native_{reference}", values)]), plans
+
+    def _r_settings(self, args, used, converted, what):
+        """The list that fills a native `settings` argument (#4214)."""
+        values = []
+        for name in self.r_settings:
+            if name in _R_HOST_SETTINGS:
+                values.append(_Call(_R_HOST_SETTINGS[name]))
+                continue
+            if name not in args:
+                raise ValueError(f"{what}: nothing fills the R setting {name}")
+            used.add(name)
+            values.append(
+                name if name in converted else self._r_argument(name, args[name])
+            )
+        return _Call("list", values)
 
     def _r_context(self, role, hold, class_name, args, handle, converted):
         if role == "handle":
@@ -1295,7 +1352,7 @@ class Public:
         args = self._r_args(entry)
         bound = set()
         for native in self.r_functions[reference]["args"]:
-            if native in args or native in {"version", "capabilities", "plans"}:
+            if native in args or native in {"version", "settings", "plans"}:
                 continue
             bound.update(
                 hold for hold, role in self.holds(class_name) if role == native

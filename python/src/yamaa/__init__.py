@@ -37,7 +37,7 @@ _INTERFACE_FIELDS = (
     "missing_features",
 )
 _INTERFACE_REQUEST = {
-    "version": 8,
+    "version": 9,
     "required": ["structured_records", "arrow_c_stream", "plan_reuse"],
     "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],
 }
@@ -318,7 +318,7 @@ class Spec(_Lazy):
         """Report problems without reading study data or running project code; with `parent`, check this fragment as if the specification at that path were its parent; `progress` is called with each progress event."""
         return Check(
             _native._spec_check(
-                self._path, self._project, _optional_fspath(parent), progress, threads
+                self._path, self._project, _optional_fspath(parent), (progress, threads)
             )
         )
 
@@ -341,9 +341,8 @@ class Spec(_Lazy):
                 self._project,
                 self._plans,
                 _flag(stream, "stream"),
-                progress,
                 inputs,
-                threads,
+                (progress, threads),
             )
         )
 
@@ -368,7 +367,7 @@ class Project(_Lazy):
         return _native._project_names(self._path)
 
     def check(self, *, progress=None, threads=None) -> Check:
-        return Check(_native._project_check(self._path, progress, threads))
+        return Check(_native._project_check(self._path, (progress, threads)))
 
     def run(
         self, section: str | None = None, *, progress=None, threads=None
@@ -379,8 +378,7 @@ class Project(_Lazy):
                 self._path,
                 _optional_text(section, "section"),
                 self._plans,
-                progress,
-                threads,
+                (progress, threads),
             )
         )
 
@@ -397,8 +395,7 @@ class Project(_Lazy):
                 self._path,
                 _optional_text(section, "section"),
                 _optional_text(created, "created"),
-                progress,
-                threads,
+                (progress, threads),
             )
         )
 

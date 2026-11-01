@@ -84,9 +84,6 @@
 
 .version <- function() charToRaw(as.character(getRversion()))
 
-# One native runtime context: version and the existing host capabilities.
-.runtime <- function() list(.version(), .capabilities())
-
 .capabilities <- function() {
   capabilities <- .yamaa_locked_host_capabilities()
   list(capabilities$verify, capabilities$resolve, .project_condition_details)

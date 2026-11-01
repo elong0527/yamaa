@@ -81,13 +81,13 @@ class RenderingTests(unittest.TestCase):
     def test_python_delegates_each_member_to_its_operation(self):
         text = self.public.render_python([])
         for expected in (
-            '            _native._spec_run(\n                self._path,\n                self._project,\n                self._plans,\n                _flag(stream, "stream"),\n                progress,\n                inputs,\n                threads,\n            )\n',
+            '            _native._spec_run(\n                self._path,\n                self._project,\n                self._plans,\n                _flag(stream, "stream"),\n                inputs,\n                (progress, threads),\n            )\n',
             'return Spec(_native._project_spec(self._path, _text(name, "name")), self._path)',
             "return self._native.output(self._name)",
             "        return self._native.save()\n",
             '            self._native.member_issues(\n                _text(name, "name")\n            )  # raises',
             "        return MemberRun(self._native, name)",
-            "        return Check(_native._project_check(self._path, progress, threads))",
+            "        return Check(_native._project_check(self._path, (progress, threads)))",
             "class Spec(_Lazy):",
             "    def __init__(self, path, project=None):",
             "    def __init__(self, native, name: str):",
@@ -341,8 +341,7 @@ class RenderingTests(unittest.TestCase):
             '    .optional_text(archive_member, "archive_member"),\n',
             '.reply(.native_lint(.paths(paths, "paths"), .flag(fix, "fix")))',
             '      .optional_path(parent, "parent"),\n'
-            "      .version(),\n"
-            '      .progress(progress, "progress"),\n',
+            '      list(.version(), .capabilities(), .progress(progress, "progress"), threads)\n',
             '    .spec(.text(.reply(.native_project_spec(path, .text(name, "name"), '
             '.version())), "path"), path)\n',
             '      .optional_text(section, "section"),\n'
@@ -441,11 +440,50 @@ class RenderingTests(unittest.TestCase):
         self.assertIn(
             "return Check(\n"
             "            _native._spec_check(\n"
-            "                self._path, self._project, _optional_fspath(parent), progress, threads\n"
+            "                self._path, self._project, _optional_fspath(parent), (progress, threads)\n"
             "            )\n"
             "        )",
             text,
         )
+
+    def test_a_native_settings_argument_holds_each_hosts_declared_members(self):
+        # #4214: `settings` is the one native argument of what configures a
+        # call's engine. bindings.yaml lists Python's members as progress and
+        # threads, a tuple, and R's as the host's version and capabilities and
+        # the same two, a list; each public argument keeps its conversion.
+        python = self.public.render_python([])
+        r = self.public.render_r([])
+        settings = (
+            '      list(.version(), .capabilities(), .progress(progress, "progress"), '
+            "threads)\n"
+        )
+        for label, text, expected in (
+            (
+                "Project.run in Python",
+                python,
+                '                _optional_text(section, "section"),\n'
+                "                self._plans,\n"
+                "                (progress, threads),\n"
+                "            )\n",
+            ),
+            (
+                "Spec.run in R",
+                r,
+                "      plans,\n"
+                '      .flag(stream, "stream"),\n'
+                '      .input_frames(inputs, "inputs"),\n' + settings,
+            ),
+            (
+                "Project.submission in R",
+                r,
+                '      .optional_text(created, "created"),\n' + settings,
+            ),
+        ):
+            with self.subTest(case=label):
+                self.assertIn(expected, text)
+        for removed in (".runtime()", "      progress,\n", "      threads\n"):
+            with self.subTest(removed=removed):
+                self.assertNotIn(removed, python + r)
 
     def test_a_python_only_class_is_the_native_class_exported_as_it_is(self):
         python = self.public.render_python([])
@@ -734,6 +772,34 @@ class ValidationTests(unittest.TestCase):
             (
                 "public.classes.Table, the class every table is, is missing",
                 lambda d: d["public"]["classes"].pop("Table"),
+            ),
+        ]
+        for message, mutate in cases:
+            with self.subTest(message=message):
+                self.refuses(message, mutate)
+
+    def test_each_hosts_native_settings_list_the_same_public_arguments(self):
+        cases = [
+            (
+                "python.settings must list distinct names",
+                lambda d: d["python"].update(settings=["progress", "progress"]),
+            ),
+            (
+                "python.settings must list at least two arguments",
+                lambda d: d["python"].update(settings=["progress"]),
+            ),
+            (
+                "r.settings must list python.settings in order",
+                lambda d: d["r"].update(
+                    settings=["version", "capabilities", "threads", "progress"]
+                ),
+            ),
+            # A member whose call takes settings but lacks one of their members.
+            (
+                "nothing fills the Python setting threads",
+                lambda d: member(d, "Project", "check").update(
+                    args={"progress": "progress = None"}, keyword_only=["progress"]
+                ),
             ),
         ]
         for message, mutate in cases:
