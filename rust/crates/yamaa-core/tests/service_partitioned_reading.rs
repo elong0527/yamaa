@@ -295,7 +295,7 @@ mod service {
                 _: &[u8],
                 _: SourceInterpretation,
                 _: Option<&yamaa_core::producer_contract::Contract>,
-                rows: NonZeroUsize,
+                (rows, _): (NonZeroUsize, NonZeroUsize),
                 visit: &mut dyn FnMut(&Input, usize),
             ) -> Option<Result<Input, Payload>> {
                 self.requests.borrow_mut().push("partitioned");

@@ -6,7 +6,9 @@
 //! a Parquet input's first partitions of up to one partition's records,
 //! which it keeps for the run (#4212), and any range of records then
 //! decodes from what it kept and, for the rest, again from the held bytes
-//! (#3830).
+//! (#3830). A Parquet input's partitions decode up to the run's threads at
+//! once (#4220), and every scan on four threads gives what the scan on one
+//! gives: the same partitions, records and finding.
 //!
 //! The seam is the decoder port's read by partition, which neither the
 //! benchmark reader nor the host fixtures reach: no host runs partitioned
@@ -50,6 +52,9 @@ mod table {
             NonZeroUsize::new(records).unwrap()
         }
 
+        /// The threads of a scan on the calling thread alone.
+        const ONE: NonZeroUsize = NonZeroUsize::MIN;
+
         /// An input scanned by partition (#3830): the table the scan left,
         /// which holds no record, the records of each partition it visited,
         /// and each partition decoded again from its range.
@@ -59,7 +64,10 @@ mod table {
             parts: Vec<Snapshot<Infallible>>,
         }
 
-        /// The input read whole, then scanned by partitions of `records`.
+        /// The input read whole, then scanned by partitions of `records` on
+        /// one thread. The scan on four threads must give what it gives:
+        /// the same schema, records and partitions, each decoded again to
+        /// the same records, or the same finding (#4220).
         type Reads = (Result<Snapshot<Infallible>, Error>, Result<Divided, Error>);
         fn read(
             source: &SourceDeclaration,
@@ -69,6 +77,28 @@ mod table {
         ) -> Reads {
             let mut decoder = Decoder::<Infallible>::default();
             let whole = decoder.table(source, bytes, interpretation, None);
+            let [one, four] = [1, 4].map(|threads| {
+                let partitions = (size(records), size(threads));
+                divide(&mut decoder, source, bytes, interpretation, partitions)
+            });
+            assert_eq!(
+                outline(&four),
+                outline(&one),
+                "{}, partitions of {records} on four threads",
+                source.path
+            );
+            (whole, one)
+        }
+
+        /// `source` scanned by `partitions`, its records and threads, and
+        /// each partition it visited decoded again from its range.
+        fn divide(
+            decoder: &mut Decoder<Infallible>,
+            source: &SourceDeclaration,
+            bytes: &[u8],
+            interpretation: SourceInterpretation,
+            partitions: (NonZeroUsize, NonZeroUsize),
+        ) -> Result<Divided, Error> {
             let mut visited = Vec::new();
             let scanned = decoder
                 .partitioned(
@@ -76,11 +106,11 @@ mod table {
                     bytes,
                     interpretation,
                     None,
-                    size(records),
+                    partitions,
                     &mut |part, first| visited.push(first..first + part.row_count()),
                 )
                 .expect("a CSV or Parquet input scans by partition");
-            let divided = scanned.map(|scanned| Divided {
+            scanned.map(|scanned| Divided {
                 sizes: visited.iter().map(|range| range.len()).collect(),
                 parts: visited
                     .iter()
@@ -91,8 +121,23 @@ mod table {
                     })
                     .collect(),
                 scanned,
-            });
-            (whole, divided)
+            })
+        }
+
+        /// A scan's whole record: the schema and records of the input it
+        /// scanned, its partitions' records, and each partition's cells, or
+        /// its finding, spelled out.
+        type Outline<'a> = (TableSchema, usize, Vec<usize>, Vec<Vec<Vec<ValueRef<'a>>>>);
+        fn outline(divided: &Result<Divided, Error>) -> Result<Outline<'_>, String> {
+            match divided {
+                Ok(divided) => Ok((
+                    divided.scanned.schema().clone(),
+                    divided.scanned.row_count(),
+                    divided.sizes.clone(),
+                    divided.parts.iter().map(|part| cells(part)).collect(),
+                )),
+                Err(error) => Err(format!("{error:?}")),
+            }
         }
 
         /// The records of `parts`, in order, cell by cell.
@@ -203,7 +248,7 @@ mod table {
                         bytes,
                         SourceInterpretation::Ordinary,
                         None,
-                        size(2),
+                        (size(2), ONE),
                         &mut |_, _| {},
                     )
                     .unwrap()
@@ -552,7 +597,7 @@ mod table {
                         &bytes,
                         SourceInterpretation::Ordinary,
                         None,
-                        size(6),
+                        (size(6), ONE),
                         &mut |_, _| {},
                     )
                     .unwrap()
@@ -613,7 +658,7 @@ mod table {
                         &bytes,
                         SourceInterpretation::Ordinary,
                         None,
-                        size(6),
+                        (size(6), ONE),
                         &mut |_, _| {},
                     )
                     .unwrap()
@@ -639,9 +684,10 @@ mod table {
             /// inside the kept partition and the row groups, decoded in
             /// either order, on the calling thread or through the decode
             /// threads share, gives the whole read's records, with `NAME`
-            /// missing for every third `ID`. A range decoded once more, as
-            /// a partition that did not decode on its thread is, gives
-            /// them again from the held bytes.
+            /// missing for every third `ID`, whether one thread or four
+            /// scanned the input (#4220). A range decoded once more, as a
+            /// partition that did not decode on its thread is, gives them
+            /// again from the held bytes.
             #[test]
             fn a_division_reads_the_kept_partition_and_decodes_the_rest_as_the_whole_read() {
                 let name = |id: i64| (id % 3 != 0).then(|| format!("r{id}"));
@@ -671,7 +717,7 @@ mod table {
                     ("a range across every partition", vec![0..14, 14..15]),
                 ];
                 for (label, ranges) in divisions {
-                    for shared in [false, true] {
+                    for (shared, threads) in [(false, 1), (true, 1), (false, 4), (true, 4)] {
                         let mut decoder = Decoder::<Infallible>::default();
                         let scanned = decoder
                             .partitioned(
@@ -679,7 +725,7 @@ mod table {
                                 &bytes,
                                 interpretation,
                                 None,
-                                size(6),
+                                (size(6), size(threads)),
                                 &mut |_, _| {},
                             )
                             .unwrap()
@@ -702,7 +748,7 @@ mod table {
                             assert_eq!(
                                 cells(&part),
                                 expected[range.clone()],
-                                "{label}, shared {shared}: records {range:?}"
+                                "{label}, shared {shared}, {threads} threads: records {range:?}"
                             );
                         }
                     }

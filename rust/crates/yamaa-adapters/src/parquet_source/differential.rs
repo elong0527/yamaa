@@ -1058,10 +1058,14 @@ fn both_decoders_refuse_the_invalid_host_fixture_files() {
 }
 
 /// What a read of `bytes` gives, as `odm` asks: each record's cells, or the
-/// first finding, spelled out. With `rows`, the file is scanned by
-/// partitions of at most `rows` records and its partitions' records are
-/// joined in order.
-fn outcome(bytes: &[u8], odm: bool, rows: Option<std::num::NonZeroUsize>) -> String {
+/// first finding, spelled out. With `partitions`, the file is scanned by
+/// partitions of at most that many records, up to that many threads at
+/// once, and its partitions' records are joined in order.
+fn outcome(
+    bytes: &[u8],
+    odm: bool,
+    partitions: Option<(std::num::NonZeroUsize, std::num::NonZeroUsize)>,
+) -> String {
     use yamaa_core::table::TableAccess;
     let cells = |table: &crate::column_table::ColumnTable, records: &mut Vec<String>| {
         for row in 0..table.row_count() {
@@ -1070,17 +1074,18 @@ fn outcome(bytes: &[u8], odm: bool, rows: Option<std::num::NonZeroUsize>) -> Str
         }
     };
     let mut records = Vec::new();
-    let read = match rows {
+    let read = match partitions {
         None => if odm {
             super::parse_odm(bytes)
         } else {
             super::parse(bytes)
         }
         .map(|table| cells(&table, &mut records)),
-        Some(rows) => super::scan(bytes, odm, rows, &mut |table, _| {
-            cells(&table, &mut records)
-        })
-        .map(|_| ()),
+        Some(partitions) => {
+            let visit =
+                &mut |table: crate::column_table::ColumnTable, _| cells(&table, &mut records);
+            super::scan(bytes, odm, partitions, (&|table| table, visit)).map(|_| ())
+        }
     };
     match read {
         Ok(()) => records.join("\n"),
@@ -1089,9 +1094,10 @@ fn outcome(bytes: &[u8], odm: bool, rows: Option<std::num::NonZeroUsize>) -> Str
 }
 
 /// A scan by partition reports what the whole read reports (`scan`): every
-/// input and every mutation of it, scanned a row group at a time, gives the
-/// whole read's records in order, or its first finding; so does each file
-/// with two of its pages' changes at once. The scan checks
+/// input and every mutation of it, scanned a row group at a time on one
+/// thread and on four (#4220), gives the whole read's records in order, or
+/// its first finding; so does each file with two of its pages' changes at
+/// once, whose findings fall in two partitions. The scan checks
 /// each partition's pages before decoding it, and holds what it finds until
 /// every page is checked, so a page that does not admit in a later
 /// partition is still the finding, as the whole read checks every page
@@ -1130,13 +1136,20 @@ fn every_input_scans_by_partition_as_it_reads_whole() {
                         for (index, file) in files.iter().enumerate() {
                             for odm in [false, true] {
                                 let whole = outcome(file, odm, None);
-                                let scanned = outcome(file, odm, Some(std::num::NonZeroUsize::MIN));
-                                if whole != scanned {
-                                    divergent.push(format!(
-                                        "{label}, file {index}, odm {odm}: whole {}, scanned {}",
-                                        &whole[..whole.len().min(300)],
-                                        &scanned[..scanned.len().min(300)]
-                                    ));
+                                for threads in [1, 4] {
+                                    let partitions = (
+                                        std::num::NonZeroUsize::MIN,
+                                        std::num::NonZeroUsize::new(threads).unwrap(),
+                                    );
+                                    let scanned = outcome(file, odm, Some(partitions));
+                                    if whole != scanned {
+                                        divergent.push(format!(
+                                            "{label}, file {index}, odm {odm}, {threads} threads: \
+                                             whole {}, scanned {}",
+                                            &whole[..whole.len().min(300)],
+                                            &scanned[..scanned.len().min(300)]
+                                        ));
+                                    }
                                 }
                             }
                         }
