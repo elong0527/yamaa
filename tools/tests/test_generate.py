@@ -1,6 +1,7 @@
 import csv
 import functools
 import html
+import io
 import json
 import re
 import shutil
@@ -14,7 +15,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from lxml import html as html_tree
 
 import yaml
-from tools.benchmark_docs import generate
+from tools.benchmark_docs import generate, review_status
 from tools.tests import support
 
 HERE = Path(__file__).resolve().parent
@@ -145,6 +146,11 @@ class DashboardContent(HTMLParser):
 
 
 class DashboardTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(review_status, "ROUND_STARTS", ())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_transport_files_have_no_preview_panes(self):
         # The display seam omits transport bytes without changing the fixtures.
         benchmark = generate.BENCHMARKS / "send-bw-sendig311"
@@ -664,7 +670,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertNotIn("<select", single)
 
-    def test_review_survey_asks_three_questions_with_fixed_choices(self):
+    def test_review_survey_asks_two_questions_with_agree_or_disagree(self):
         def survey(name):
             page = generate.render_benchmark(generate.BENCHMARKS / name).decode("ascii")
             questions = [
@@ -685,14 +691,7 @@ class DashboardTests(unittest.TestCase):
             ]
             return page, questions
 
-        agreement = ("Agree", "Disagree", "Need clarification")
-        readiness = (
-            "readiness",
-            generate.REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle",
-            "Overall",
-            "Would you agree that the benchmark is ready to finalize?",
-            ("Ready", "Ready after minor fixes", "Needs major changes", "Unsure"),
-        )
+        agreement = ("Agree", "Disagree")
         inputs = (
             "inputs",
             "#inputs",
@@ -712,10 +711,10 @@ class DashboardTests(unittest.TestCase):
         )
 
         cases = (
-            (BENCHMARK.name, [task, inputs, readiness]),
-            ("sdtm-mh-ongoing-conditions", [task, inputs, readiness]),
-            ("send-bw-sendig311", [task, inputs, readiness]),
-            ("schema-source-ordinal", [task, inputs, readiness]),
+            (BENCHMARK.name, [task, inputs]),
+            ("sdtm-mh-ongoing-conditions", [task, inputs]),
+            ("send-bw-sendig311", [task, inputs]),
+            ("schema-source-ordinal", [task, inputs]),
             (
                 "negative-ambiguous-type",
                 [
@@ -736,7 +735,6 @@ class DashboardTests(unittest.TestCase):
                         "summary gives?",
                         agreement,
                     ),
-                    readiness,
                 ],
             ),
         )
@@ -746,19 +744,24 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(questions, expected, name)
                 if name == "negative-ambiguous-type":
                     self.assertIn(
-                        "Your review</a>: the task, the inputs, and whether this "
-                        "benchmark is ready to finalize.",
+                        "Your review</a>: the task and the inputs. Agreeing with "
+                        "both approves this benchmark;",
                         page,
                     )
-                # One free-text box, a script-only form, and GitHub's composer.
-                self.assertEqual(page.count('name="suggestions"'), 1, name)
+                # One free-text box, a script-only form, GitHub's composer, and
+                # the queue that takes the reviewer on from this benchmark.
+                self.assertEqual(page.count('name="comments"'), 1, name)
                 self.assertIn(
-                    'placeholder="Suggestions to finalize the benchmark"', page, name
+                    'placeholder="What should change to finalize the benchmark"',
+                    page,
+                    name,
                 )
                 self.assertIn(
                     f'<form class="review-form" data-benchmark="{name}" '
                     'data-review-url="https://github.com/elong0527/yamaa/'
-                    'discussions/new?category=comments" novalidate hidden>',
+                    'discussions/new?category=comments" '
+                    f'data-next-url="review/next/?after={name}" data-approve="Agree" '
+                    'data-done-key="yamaa-benchmark-reviewed:" novalidate hidden>',
                     page,
                 )
 
@@ -766,13 +769,13 @@ class DashboardTests(unittest.TestCase):
         ask = page.split('<div class="review-ask-body">', 1)[1].split("</div>", 1)[0]
         self.assertEqual(
             ask,
-            "<p>As a clinical trial statistician or programmer, answer three short "
-            'questions in <a href="#your-review">Your review</a>: the task, the '
-            "inputs and outputs, and whether this benchmark is ready to finalize. "
-            "Propose a fix with the <strong>Edit</strong> button on any source "
-            'file, or add a suggestion to your review.</p><p class="review-ask-note">'
-            "The other tabs beside Your review are background for assessment, not "
-            "under review.</p>",
+            "<p>As a clinical trial statistician or programmer, answer two short "
+            'questions in <a href="#your-review">Your review</a>: the task and the '
+            "inputs and outputs. Agreeing with both approves this benchmark; "
+            "disagreeing with either needs a comment. Propose a fix with the "
+            "<strong>Edit</strong> button on any source file, or add it to your "
+            'comments.</p><p class="review-ask-note">The other tabs beside Your '
+            "review are background for assessment, not under review.</p>",
         )
         # The summary is challenged too, so it carries the chip with the data.
         self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 3)
@@ -781,6 +784,338 @@ class DashboardTests(unittest.TestCase):
             '<span class="panel-caption">What this benchmark means</span>',
             page,
         )
+
+    def test_review_queue_offers_started_benchmarks_before_open_ones(self):
+        entries = [
+            ("adam-adsl-second", "Second", "ADSL"),
+            ("adam-adsl-first", "First", "ADSL"),
+            ("adam-adae-event", "Event", "ADAE"),
+            ("negative-refused", "Refused", "ADSL"),
+            ("schema-field", "Field", "Schema"),
+            ("sdtm-dm-basic", "Basic", "DM"),
+            ("send-bw-weight", "Weight", "BW"),
+        ]
+        saved = {
+            "updated": "2026-11-02 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": "adam-adsl-first",
+                    "reviewer": "a",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Approve",
+                },
+                {
+                    "benchmark": "adam-adae-event",
+                    "reviewer": "a",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Approve",
+                },
+                {
+                    "benchmark": "adam-adae-event",
+                    "reviewer": "b",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Approve",
+                },
+            ],
+        }
+        page = generate.render_review_queue(entries, saved).decode("ascii")
+        queue = html_tree.fromstring(page).xpath('//*[@id="review-queue"]/text()')
+        self.assertEqual(
+            json.loads(queue[0]),
+            {
+                "doneKey": "yamaa-benchmark-reviewed:",
+                "started": ["adam-adsl-first"],
+                "open": ["send-bw-weight", "sdtm-dm-basic", "adam-adsl-second"],
+            },
+        )
+
+    def test_a_new_round_reopens_a_previously_completed_benchmark(self):
+        # The seam is the form/queue completion protocol, outside fixture readers.
+        name = "adam-adsl-reworked"
+        entries = [(name, "Reworked", "ADSL")]
+        saved = {
+            "updated": "2026-11-06 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": name,
+                    "reviewer": reviewer,
+                    "posted": "2026-11-02T10:00:00Z",
+                    "overall": "Not approve",
+                }
+                for reviewer in ("a", "b")
+            ],
+        }
+        queues, keys = [], []
+        for starts in ((), ("2026-11-05",)):
+            with mock.patch.object(review_status, "ROUND_STARTS", starts):
+                queue = html_tree.fromstring(
+                    generate.render_review_queue(entries, saved)
+                )
+                queues.append(
+                    json.loads(queue.xpath('//*[@id="review-queue"]/text()')[0])
+                )
+                form = html_tree.fromstring(generate.render_review_form(name, (), ""))
+                keys.append(form.xpath("//form/@data-done-key")[0])
+        self.assertEqual(
+            (
+                queues[0]["open"],
+                queues[1]["open"],
+                queues[0]["doneKey"] == keys[0],
+                queues[1]["doneKey"] == keys[1],
+                keys[0] != keys[1],
+            ),
+            ([], [name], True, True, True),
+            "rework clears votes and previous browser completion in the next round",
+        )
+
+    def test_review_is_read_from_a_discussion_the_dashboard_wrote(self):
+        body = "Review of it.\r\n\r\n| **Overall** | Not approve |\r\n\r\n### Comments"
+        author = {"login": "reviewer-a"}
+        posted = "2026-11-02T10:00:00Z"
+        cases = (
+            (
+                "crlf body",
+                {
+                    "title": "Review: adam-adae-death",
+                    "body": body,
+                    "createdAt": posted,
+                    "author": author,
+                },
+                {
+                    "benchmark": "adam-adae-death",
+                    "reviewer": "reviewer-a",
+                    "posted": posted,
+                    "overall": "Not approve",
+                },
+            ),
+            (
+                "giscus thread",
+                {
+                    "title": "yaml/examples/adam-adae-death",
+                    "body": body,
+                    "createdAt": posted,
+                    "author": author,
+                },
+                None,
+            ),
+            (
+                "no overall row",
+                {
+                    "title": "Review: adam-adae-death",
+                    "body": "| **Overall:** Ready |",
+                    "createdAt": posted,
+                    "author": author,
+                },
+                None,
+            ),
+            (
+                "deleted account",
+                {
+                    "title": "Review: adam-adae-death",
+                    "body": body,
+                    "createdAt": posted,
+                    "author": None,
+                },
+                None,
+            ),
+        )
+        for label, discussion, expected in cases:
+            with self.subTest(case=label):
+                self.assertEqual(review_status.read_review(discussion), expected, label)
+
+    def test_reading_reviews_stops_when_the_cursor_does_not_advance(self):
+        # The seam is the GitHub answer, which no fixture home can reach.
+        for label, cursor in (("no cursor", None), ("same cursor", "same")):
+            page = {
+                "data": {
+                    "repository": {
+                        "discussions": {
+                            "pageInfo": {"hasNextPage": True, "endCursor": cursor},
+                            "nodes": [],
+                        }
+                    }
+                }
+            }
+            with self.subTest(case=label):
+                with mock.patch.object(
+                    review_status.urllib.request,
+                    "urlopen",
+                    side_effect=lambda *_, **__: io.BytesIO(json.dumps(page).encode()),
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "did not advance"):
+                        review_status.fetch("token")
+
+    def test_review_tally_settles_a_benchmark_after_two_people_review_it(self):
+        def review(benchmark, reviewer, posted, overall):
+            return {
+                "benchmark": benchmark,
+                "reviewer": reviewer,
+                "posted": f"2026-11-0{posted}T10:00:00Z",
+                "overall": overall,
+            }
+
+        names = ["none", "one", "agreed", "split", "changed", "repeated"]
+        reviews = [
+            review("one", "a", 1, "Not approve"),
+            review("agreed", "a", 1, "Approve"),
+            review("agreed", "b", 2, "Approve"),
+            review("split", "a", 1, "Approve"),
+            review("split", "b", 2, "Not approve"),
+            # Newest first, so the tally must order by time, not by list.
+            review("changed", "a", 2, "Approve"),
+            review("changed", "a", 1, "Not approve"),
+            review("changed", "b", 1, "Approve"),
+            review("repeated", "a", 1, "Approve"),
+            review("repeated", "a", 2, "Approve"),
+            review("not-in-the-queue", "a", 1, "Approve"),
+        ]
+        self.assertEqual(
+            review_status.tally(names, reviews),
+            {
+                "none": [(0, "Not reviewed")],
+                "one": [(1, "In review")],
+                "agreed": [(2, "Approved")],
+                "split": [(2, "Needs rework")],
+                "changed": [(2, "Approved")],
+                "repeated": [(1, "In review")],
+            },
+        )
+
+    def test_review_rounds_keep_approvals_and_restart_after_rework(self):
+        def review(reviewer, posted, overall):
+            return {
+                "reviewer": reviewer,
+                "posted": f"2026-11-{posted:02}T10:00:00Z",
+                "overall": overall,
+            }
+
+        approve, reject = "Approve", "Not approve"
+        cases = (
+            (
+                "an approval stands against a later review",
+                [
+                    review("a", 1, approve),
+                    review("b", 2, approve),
+                    review("c", 6, reject),
+                ],
+                [(2, "Approved")],
+            ),
+            (
+                "rework waits for the next round",
+                [review("a", 1, approve), review("b", 2, reject)],
+                [(2, "Needs rework"), (0, "Not reviewed")],
+            ),
+            (
+                "an approval stands against a later review in the same round",
+                [
+                    review("a", 1, approve),
+                    review("b", 2, approve),
+                    review("c", 3, reject),
+                ],
+                [(2, "Approved")],
+            ),
+            (
+                "rework passes on new reviews",
+                [
+                    review("a", 1, reject),
+                    review("b", 1, reject),
+                    review("a", 6, approve),
+                    review("b", 7, approve),
+                ],
+                [(2, "Needs rework"), (2, "Approved")],
+            ),
+            (
+                "a review short of settling carries over",
+                [review("a", 1, approve), review("b", 6, approve)],
+                [(1, "In review"), (2, "Approved")],
+            ),
+            ("no reviews", [], [(0, "Not reviewed"), (0, "Not reviewed")]),
+            (
+                "a review on the first day counts in the new round",
+                [review("a", 5, approve)],
+                [(0, "Not reviewed"), (1, "In review")],
+            ),
+        )
+        for label, reviews, expected in cases:
+            with self.subTest(case=label):
+                self.assertEqual(
+                    review_status.rounds(reviews, ("2026-11-05",)), expected, label
+                )
+
+    def test_review_page_states_the_status_of_each_benchmark(self):
+        entries = [
+            ("adam-adsl-age", "Age", "ADSL"),
+            ("sdtm-dm-basic", "Basic", "DM"),
+            ("negative-refused", "Refused", "ADSL"),
+        ]
+        saved = {
+            "updated": "2026-11-02 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": "sdtm-dm-basic",
+                    "reviewer": "a",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Not approve",
+                }
+            ],
+        }
+        self.assertEqual(
+            generate.render_review_status(entries, saved),
+            "Updated 2026-11-02 10:00 UTC.\n\n"
+            "| Round | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+            "|---|---|---|---|---|---|\n"
+            "| Round 1 | 2 | 0 | 0 | 1 | 1 |\n\n"
+            "| Group | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+            "|---|---|---|---|---|---|\n"
+            "| `sdtm` | 1 | 0 | 0 | 1 | 0 |\n"
+            "| `adam` | 1 | 0 | 0 | 0 | 1 |\n"
+            "| **All** | 2 | 0 | 0 | 1 | 1 |\n\n"
+            "| Benchmark | Domain | Round | Reviews (2 needed) | Status |\n"
+            "|---|---|---|---|---|\n"
+            '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | 1 | In review |\n'
+            '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 1 | 0 | Not reviewed |\n',
+        )
+        settled = {
+            "updated": "2026-11-06 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": benchmark,
+                    "reviewer": reviewer,
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": overall,
+                }
+                for benchmark, reviewer, overall in (
+                    ("sdtm-dm-basic", "a", "Approve"),
+                    ("sdtm-dm-basic", "b", "Approve"),
+                    ("adam-adsl-age", "a", "Approve"),
+                    ("adam-adsl-age", "b", "Not approve"),
+                )
+            ],
+        }
+        with mock.patch.object(review_status, "ROUND_STARTS", ("2026-11-05",)):
+            self.assertEqual(
+                generate.render_review_status(entries, settled),
+                "Updated 2026-11-06 10:00 UTC.\n\n"
+                "| Round | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+                "|---|---|---|---|---|---|\n"
+                "| Round 1 | 2 | 1 | 1 | 0 | 0 |\n"
+                "| Round 2 | 1 | 0 | 0 | 0 | 1 |\n\n"
+                "| Group | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+                "|---|---|---|---|---|---|\n"
+                "| `sdtm` | 1 | 1 | 0 | 0 | 0 |\n"
+                "| `adam` | 1 | 0 | 0 | 0 | 1 |\n"
+                "| **All** | 2 | 1 | 0 | 0 | 1 |\n\n"
+                "| Benchmark | Domain | Round | Reviews (2 needed) | Status |\n"
+                "|---|---|---|---|---|\n"
+                '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | 2 | Approved |\n'
+                '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 2 | 0 | Not reviewed |\n',
+            )
+        page = generate.render_review_page(entries, saved).decode("ascii")
+        self.assertIn("| Reviewers | `a` |\n", page)
+        page = generate.render_review_page(entries, None).decode("ascii")
+        self.assertIn("| Reviewers | None yet |\n", page)
+        self.assertIn("It covers\n2 benchmarks.", page)
+        self.assertIn("## Status\n\nStatus is not available in this build.\n", page)
 
     def test_every_source_shown_has_an_edit_link_to_a_file_that_exists(self):
         """The review ask points at the Edit buttons, so no source may lack one."""

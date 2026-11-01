@@ -3,19 +3,26 @@ name: Docs
 on:
   push:
     branches: [main]
+  discussion:
+    types: [created, edited, deleted]
   workflow_dispatch:
 
 permissions:
   contents: read
+  discussions: read
   pages: write
   id-token: write
 
-concurrency:
-  group: docs-deployment
-  cancel-in-progress: false
-
 jobs:
   deploy:
+    # Editing a review title away from Review: also removes a counted review.
+    if: >-
+      github.event_name != 'discussion' ||
+      startsWith(github.event.discussion.title, 'Review: ') ||
+      startsWith(github.event.changes.title.from, 'Review: ')
+    concurrency:
+      group: docs-deployment
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
@@ -37,10 +44,17 @@ jobs:
           for deck in docs/slides/*/index.qmd; do
             quarto render "$deck"
           done
+      - name: Install the site tooling
+        run: uv sync --project python --locked --group tooling --no-install-package yamaa
+      # The site still builds without the reviews; the review page says so.
+      - name: Save the published benchmark reviews
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uv run --project python --no-sync python -m tools.benchmark_docs.review_status
       - name: Build the strict site from current sources
-        run: |
-          uv sync --project python --locked --group tooling --no-install-package yamaa
-          make docs
+        run: make docs
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

@@ -48,14 +48,40 @@ keep the original source in a collapsed disclosure below the rendered view.
 A page asks clinical trial statisticians and programmers to review the
 benchmark itself in a short survey under "Your review", as the Pilot 7
 dashboards do: does the use case represent real data derivation in clinical
-trials, do the inputs and outputs represent real trial data structures, and is
-the benchmark ready to finalize, plus a free-text box for suggestions to
-finalize it. Failure benchmarks ask whether the specification error is realistic
-and whether the inputs trigger the stated failure. The questions and their fixed
-choices are declared once in `generate.py`; `review-form.js` reads them back from
-the page, keeps a draft in the browser, and opens GitHub's new-discussion
-composer in the Comments category with the answers filled in, so the static page
-holds no credentials. The summary, inputs, and expected output carry an "Under review"
+trials, and do the inputs and outputs represent real trial data structures, plus
+a free-text box for comments. Failure benchmarks ask whether the specification
+error is realistic and whether the inputs trigger the stated failure. Each
+question takes Agree or Disagree: agreeing with both approves the benchmark, and
+a disagreement needs a comment. The questions and their fixed choices are
+declared once in `generate.py`; `review-form.js` reads them back from the page,
+keeps a draft in the browser, and opens GitHub's new-discussion composer in the
+Comments category with the answers filled in, so the static page holds no
+credentials. A reviewer must be signed in to GitHub to publish a review.
+
+Submitting or skipping a review moves the page to `review/next/`, the review
+queue `generate.py` writes beside the dashboards. Nobody assigns benchmarks. The
+queue lists the `sdtm` and `adam` benchmarks that one more review would settle,
+then those nobody has reviewed, and `review-queue.js` starts each browser at its
+own place among the second list so reviewers spread out. It sends the reviewer
+to the next benchmark this browser has not marked done, so the same link also
+resumes a review. The mark records that the reviewer left the page, not that
+GitHub published the review.
+
+`review/` is the page to circulate: its purpose, people and how-to are authored
+in `docs/articles/benchmark-review.md`, and the generator adds the status.
+The Docs workflow refreshes the site when a `Review:` discussion is created,
+edited or deleted, as well as after a main push or manual dispatch. It runs
+`review_status.py` first, which saves the published
+reviews beside the page, because the Discussions API needs a token. A build
+without that file says the status is not available. `review_status.py` also
+holds the date each later round opens: an approved benchmark stays approved, a
+benchmark that needs rework starts the next round with no reviews, and other
+reviews carry over. Approval freezes as soon as the required reviewers approve,
+including within a round.
+Each new round uses fresh browser completion marks, so a reworked benchmark is
+offered again even to someone who reviewed it before.
+
+The summary, inputs, and expected output carry an "Under review"
 chip, and every source file has an Edit button for proposing a fix. Under the
 datasets, "Human review and assessment" holds the "Your review" survey in its
 first tab, with a link to earlier benchmark discussions, followed by assessment

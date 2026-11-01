@@ -13,6 +13,7 @@ site/
 /study/
 docs/benchmark/*.html
 docs/benchmark/index.md
+docs/benchmark/review/
 docs/coverage/
 .coverage
 .coverage.*

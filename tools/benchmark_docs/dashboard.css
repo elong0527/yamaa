@@ -260,16 +260,19 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .review-choice { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #c3d2e0; border-radius: 6px; padding: 6px 12px; background: white; font-size: 14px; cursor: pointer; }
 .review-choice:has(input:checked) { border-color: var(--brand); background: #e8f0f8; color: var(--brand-deep); font-weight: 600; }
 .review-choice input { margin: 0; accent-color: var(--brand); }
-.review-suggestions-label, .review-prepared label { font-weight: 650; }
-.review-suggestions-label small { color: var(--muted); font-weight: 500; }
+.review-comments-label, .review-prepared label { font-weight: 650; }
+.review-comments-label small { color: var(--muted); font-weight: 500; }
 .review-form textarea { box-sizing: border-box; width: 100%; border: 1px solid #c3d2e0; border-radius: 6px; padding: 8px 10px; color: var(--ink); font: inherit; font-size: 14px; resize: vertical; }
 .review-prepared { display: grid; gap: 6px; }
 .review-feedback { margin: 0; color: var(--brand-deep); font-size: 14px; overflow-wrap: anywhere; }
 .review-feedback.is-error { color: var(--danger); }
 .review-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .review-note { margin: 0; color: var(--muted); font-size: 13px; }
-.review-submit { flex-shrink: 0; border: 1px solid var(--brand); border-radius: 6px; padding: 8px 16px; background: var(--brand); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer; }
+.review-buttons { display: flex; flex-shrink: 0; gap: 8px; }
+.review-submit, .review-skip { flex: 1 0 auto; border: 1px solid var(--brand); border-radius: 6px; padding: 8px 16px; background: var(--brand); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer; }
 .review-submit:hover { background: var(--brand-deep); }
+.review-skip { background: white; color: var(--brand-deep); }
+.review-skip:hover { background: #e8f0f8; }
 
 /* Human review and assessment: one tab row, optionally side by side */
 .discussion-panel { margin: 26px 0 22px; }
