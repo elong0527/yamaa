@@ -1071,6 +1071,10 @@ cli:
 python:
   module: yamaa._native
   registration: rust/crates/yamaa-python/src/lib.rs
+  # #4214: a native call's `settings` argument, what configures the call's
+  # engine rather than its request: a tuple of these public arguments, in
+  # order. One argument keeps every native call under eight parameters.
+  settings: [progress, threads]
   exports:
     - kind: constant
       name: _CORE_VERSION
@@ -1189,8 +1193,7 @@ python:
         specification: text
         project: "optional<text> = None"
         parent: "optional<text> = None"
-        progress: "optional<host_callback> = None"
-        threads: "optional<host_object> = None"
+        settings: "optional<tuple<optional<host_callback>, optional<host_object>>> = None"
       returns: _Check
     - kind: function
       name: _spec_summary
@@ -1205,9 +1208,8 @@ python:
         project: "optional<text> = None"
         plans: "optional<_Plans> = None"
         stream: "bool = false"
-        progress: "optional<host_callback> = None"
         inputs: "optional<host_object> = None"
-        threads: "optional<host_object> = None"
+        settings: "optional<tuple<optional<host_callback>, optional<host_object>>> = None"
       returns: _Run
     - kind: function
       name: _spec_resolve
@@ -1232,7 +1234,9 @@ python:
     - kind: function
       name: _project_check
       rust: api_entry::_project_check
-      args: {project: text, progress: "optional<host_callback> = None", threads: "optional<host_object> = None"}
+      args:
+        project: text
+        settings: "optional<tuple<optional<host_callback>, optional<host_object>>> = None"
       returns: _Check
     - kind: function
       name: _project_run
@@ -1241,8 +1245,7 @@ python:
         project: text
         section: "optional<text> = None"
         plans: "optional<_Plans> = None"
-        progress: "optional<host_callback> = None"
-        threads: "optional<host_object> = None"
+        settings: "optional<tuple<optional<host_callback>, optional<host_object>>> = None"
       returns: _ProjectRun
     - kind: function
       name: _project_submission
@@ -1251,8 +1254,7 @@ python:
         project: text
         section: "optional<text> = None"
         created: "optional<text> = None"
-        progress: "optional<host_callback> = None"
-        threads: "optional<host_object> = None"
+        settings: "optional<tuple<optional<host_callback>, optional<host_object>>> = None"
       returns: _Submission
     - kind: function
       name: _read_odm
@@ -1313,6 +1315,12 @@ python:
 r:
   module: yamaa
   registration: rust/crates/yamaa-r/src/lib.rs
+  # #4214: a native call's `settings` argument, what configures the call's
+  # engine rather than its request: a list of these, in order. `version` is
+  # R's version and `capabilities` the project host capabilities, which the
+  # host supplies; the others are public arguments. One argument keeps every
+  # native call under eight parameters.
+  settings: [version, capabilities, progress, threads]
   # Includes every function in recursively used extendr_module! blocks.
   # extendr supplies wrap__<name>, get_yamaa_metadata and registration machinery.
   groups:
@@ -1324,7 +1332,7 @@ r:
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
         - name: spec_check
-          args: {specification: raw, project: robj, parent: robj, version: raw, progress: robj, threads: robj}
+          args: {specification: raw, project: robj, parent: robj, settings: r_list}
           returns: r_reply
         - {name: check_status, args: {handle: robj}, returns: r_reply}
         - {name: check_issues, args: {handle: robj}, returns: r_reply}
@@ -1336,12 +1344,10 @@ r:
           args:
             specification: raw
             project: robj
-            runtime: r_list
             plans: robj
             stream: bool
-            progress: robj
             inputs: robj
-            threads: robj
+            settings: r_list
           returns: r_reply
         - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
         - name: read_odm
@@ -1358,9 +1364,9 @@ r:
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
         - {name: project_summary, args: {project: raw}, returns: r_reply}
         - {name: project_names, args: {project: raw, version: raw}, returns: r_reply}
-        - {name: project_check, args: {project: raw, version: raw, progress: robj, threads: robj}, returns: r_reply}
+        - {name: project_check, args: {project: raw, settings: r_list}, returns: r_reply}
         - name: project_run
-          args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj, progress: robj, threads: robj}
+          args: {project: raw, section: robj, plans: robj, settings: r_list}
           returns: r_reply
         - {name: project_run_status, args: {handle: robj}, returns: r_reply}
         - {name: project_run_names, args: {handle: robj}, returns: r_reply}
@@ -1376,7 +1382,7 @@ r:
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
         - {name: project_run_summary, args: {handle: robj}, returns: r_reply}
         - name: project_submission
-          args: {project: raw, section: robj, created: robj, version: raw, progress: robj, threads: robj}
+          args: {project: raw, section: robj, created: robj, settings: r_list}
           returns: r_reply
         - {name: submission_status, args: {handle: robj}, returns: r_reply}
         - {name: submission_created, args: {handle: robj}, returns: r_reply}

@@ -168,6 +168,7 @@ check_gate <- function() {
   on.exit(unlink(work, recursive = TRUE))
   path <- charToRaw("missing.yaml")
   r_version <- charToRaw(as.character(getRversion()))
+  settings <- list(r_version, list(), NULL, NULL)
   handles <- c("check_status", "check_issues", "check_timings", "check_summary", "plans", "run_status",
     "run_output", "run_issues", "run_report", "run_timings", "run_save", "run_summary",
     "project_run_status", "project_run_names", "project_run_issues", "project_run_report",
@@ -181,17 +182,17 @@ check_gate <- function() {
     setNames(rep(list(list(NULL)), length(handles)), handles),
     setNames(rep(list(list(NULL, charToRaw("TEST"))), length(members)), members),
     list(run_observations = list(NULL, FALSE),
-      spec_check = list(path, NULL, NULL, r_version, NULL, NULL),
+      spec_check = list(path, NULL, NULL, settings),
       spec_summary = list(path),
-      spec_run = list(path, NULL, list(r_version, list()), NULL, FALSE, NULL, NULL, NULL),
+      spec_run = list(path, NULL, NULL, FALSE, NULL, settings),
       spec_resolve = list(path, NULL, r_version),
       read_odm = list(charToRaw("missing.xml"), NULL, 10000, 268435456, 64),
       project_spec = list(path, charToRaw("TEST"), r_version),
       project_summary = list(path),
       project_names = list(path, r_version),
-      project_check = list(path, r_version, NULL, NULL),
-      project_run = list(path, NULL, r_version, list(), NULL, NULL, NULL),
-      project_submission = list(path, NULL, NULL, r_version, NULL, NULL),
+      project_check = list(path, settings),
+      project_run = list(path, NULL, NULL, settings),
+      project_submission = list(path, NULL, NULL, settings),
       lint = list(list(path), FALSE),
       empty_issues = list(),
       schema = list(charToRaw("spec")),
