@@ -25,14 +25,21 @@
 //!   holding one thread of the budget, so its activation and calls run on
 //!   the calling thread (FUNC-8).
 //! - **Cancellation.** The calling thread alone polls the operation's
-//!   token, whose probe a host answers on its own thread, at least every
-//!   [`POLL`] while it waits, and every member's thread polls a
-//!   [`CancellationToken::follower`] of it at its own checkpoints. A
-//!   cancelled run keeps nothing.
-//! - **Panics.** A member's thread that panics stops the others, and its
-//!   panic is raised again on the calling thread once they have ended.
+//!   token, whose probe a host answers on its own thread: at least every
+//!   [`POLL`] while it waits, and, as a run on one thread does, before it
+//!   publishes each member and once it has reported a member's events, so
+//!   a callback that cancels the run hears of no later member. Every
+//!   member's thread polls a [`CancellationToken::follower`] of it at its
+//!   own checkpoints. A cancelled run keeps nothing.
+//! - **Panics.** A member's thread that panics stops the members after it
+//!   and starts none after it; its panic is held in its turn and raised on
+//!   the calling thread when the members before it are published, as a run
+//!   on one thread would raise it, once the other threads have ended. A run
+//!   that ends before that turn, cancelled or by a failed callback, drops
+//!   it.
 
 use std::any::Any;
+use std::cell::RefCell;
 use std::num::NonZeroUsize;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -86,9 +93,12 @@ enum Slot {
     Ready,
     /// Building on a thread.
     Running,
-    /// Ready to publish: refused, built, or a plan for the calling thread.
+    /// Ready to publish: refused, built, a plan for the calling thread, or
+    /// the panic its thread raised.
     Done(Sent),
     Published,
+    /// Stopped after a member before it panicked; never published.
+    Stopped,
 }
 
 /// How a pass of the calling thread's loop ended.
@@ -110,15 +120,37 @@ struct Schedule {
     free: usize,
     /// The members published so far, in run order.
     members: Vec<Member>,
+    /// The earliest member whose thread panicked, if any.
+    panicked: Option<usize>,
 }
 
-/// Cancels a token once dropped: a scope that ends, or unwinds, stops the
-/// members still building.
-struct StopOnDrop<'a>(&'a CancellationToken);
+/// The token of each member that started on a thread, a follower of the
+/// operation's, by position: cancelling one stops that member alone. Once
+/// dropped, as a scope ends or unwinds, it stops every member still
+/// building.
+struct Stops(RefCell<Vec<Option<CancellationToken>>>);
 
-impl Drop for StopOnDrop<'_> {
+impl Stops {
+    /// The token of the member at `position`, which starts now.
+    fn start(&self, position: usize, token: &CancellationToken) -> CancellationToken {
+        let follower = token.follower();
+        self.0.borrow_mut()[position] = Some(follower.clone());
+        follower
+    }
+
+    /// Stop every member after `position` that started.
+    fn after(&self, position: usize) {
+        for follower in self.0.borrow().iter().skip(position + 1).flatten() {
+            follower.cancel();
+        }
+    }
+}
+
+impl Drop for Stops {
     fn drop(&mut self) {
-        self.0.cancel();
+        for follower in self.0.borrow().iter().flatten() {
+            follower.cancel();
+        }
     }
 }
 
@@ -138,23 +170,22 @@ pub(crate) fn build(
         held: HeldArtifacts::new(),
         free: threads.get(),
         members: Vec::with_capacity(nodes.len()),
+        panicked: None,
     };
-    let stop = token.follower();
     let (sender, receiver) = mpsc::channel::<(usize, usize, Sent)>();
     let ended = std::thread::scope(|scope| {
-        let _stop = StopOnDrop(&stop);
+        // Dropped before the scope joins the threads, so they stop first.
+        let stops = Stops(RefCell::new(vec![None; nodes.len()]));
         loop {
-            if token.is_cancelled() {
-                break Ended::Cancelled;
-            }
             schedule.admit(engine, nodes);
             match schedule.publish(engine, nodes, plans, reporter, token) {
                 Ok(true) => break Ended::Published,
                 Ok(false) => {}
-                Err(Cancelled) => break Ended::Cancelled,
+                Err(ended) => break ended,
             }
             for (position, share) in schedule.dispatch() {
-                let (node, sender, stop) = (&nodes[position], sender.clone(), stop.clone());
+                let (node, sender) = (&nodes[position], sender.clone());
+                let stop = stops.start(position, token);
                 let held = Arc::new(schedule.held.clone());
                 scope.spawn(move || {
                     let sent = catch_unwind(AssertUnwindSafe(|| {
@@ -167,7 +198,7 @@ pub(crate) fn build(
             }
             match receiver.recv_timeout(POLL) {
                 Ok((position, share, sent)) => {
-                    if let Some(ended) = schedule.receive(nodes, position, share, sent) {
+                    if let Some(ended) = schedule.receive(nodes, &stops, (position, share), sent) {
                         break ended;
                     }
                 }
@@ -265,15 +296,16 @@ impl Schedule {
 
     /// The members that start now, each with its share of the free
     /// threads: an equal share among the members ready to start, at least
-    /// one, in run order while a thread is free.
+    /// one, in run order while a thread is free. None after a member whose
+    /// thread panicked starts.
     fn dispatch(&mut self) -> Vec<(usize, NonZeroUsize)> {
-        let mut ready = self
-            .slots
+        let before = self.panicked.unwrap_or(self.slots.len());
+        let mut ready = self.slots[..before]
             .iter()
             .filter(|slot| matches!(slot, Slot::Ready))
             .count();
         let mut started = Vec::new();
-        for (position, slot) in self.slots.iter_mut().enumerate() {
+        for (position, slot) in self.slots[..before].iter_mut().enumerate() {
             if self.free == 0 || ready == 0 {
                 break;
             }
@@ -293,18 +325,29 @@ impl Schedule {
     }
 
     /// Take back what the member at `position`'s thread sent, returning its
-    /// `share` of the threads; a cancelled or panicked thread ends the run.
+    /// `share` of the threads. A cancelled thread ends the run, unless a
+    /// member before it panicked, which stopped it; a panicked thread stops
+    /// the members after it, and its panic waits for its turn.
     fn receive(
         &mut self,
         nodes: &[Node<'_>],
-        position: usize,
-        share: usize,
+        stops: &Stops,
+        (position, share): (usize, usize),
         sent: Sent,
     ) -> Option<Ended> {
         self.free += share;
         match sent {
+            Sent::Cancelled if self.panicked.is_some_and(|panicked| panicked < position) => {
+                self.slots[position] = Slot::Stopped;
+                return None;
+            }
             Sent::Cancelled => return Some(Ended::Cancelled),
-            Sent::Panicked(payload) => return Some(Ended::Panicked(payload)),
+            Sent::Panicked(_) => {
+                if self.panicked.is_none_or(|panicked| position < panicked) {
+                    self.panicked = Some(position);
+                    stops.after(position);
+                }
+            }
             Sent::Built { ref build, .. } => self.finished(nodes, position, build),
             Sent::Host { .. } => {}
         }
@@ -315,7 +358,9 @@ impl Schedule {
     /// Publish the members that are done, in run order, as the calling
     /// thread of a run on one thread would: true once every member to
     /// publish is published, which is none after the progress callback
-    /// failed. A member whose run calls project functions runs here, in its
+    /// failed. As on one thread, the token is polled before each member and
+    /// once its events are reported, and a member's panic is raised in its
+    /// turn. A member whose run calls project functions runs here, in its
     /// turn, once a thread of the budget is free.
     fn publish(
         &mut self,
@@ -324,10 +369,13 @@ impl Schedule {
         plans: &Plans,
         reporter: &Reporter,
         token: &CancellationToken,
-    ) -> Result<bool, Cancelled> {
+    ) -> Result<bool, Ended> {
         let mut position = self.members.len();
         while position < nodes.len() {
             let node = &nodes[position];
+            if token.is_cancelled() {
+                return Err(Ended::Cancelled);
+            }
             // A failed callback publishes no later member, whether or not it
             // is done, so the run stops starting members at once.
             if reporter.failed() {
@@ -355,6 +403,9 @@ impl Schedule {
                     if let Some(plan) = compiled {
                         engine.keep(plans, &node.request, node.plan.clone(), &plan);
                     }
+                    if token.is_cancelled() {
+                        return Err(Ended::Cancelled);
+                    }
                     *build
                 }
                 Sent::Host {
@@ -364,17 +415,26 @@ impl Schedule {
                     events,
                 } => {
                     reporter.replay(events);
-                    let build = self.on_calling_thread(
-                        engine,
-                        node,
-                        (plans, &plan, compiled),
-                        reporter.resume(measured),
-                        token,
-                    )?;
+                    if token.is_cancelled() {
+                        if compiled {
+                            engine.keep(plans, &node.request, node.plan.clone(), &plan);
+                        }
+                        return Err(Ended::Cancelled);
+                    }
+                    let build = self
+                        .on_calling_thread(
+                            engine,
+                            node,
+                            (plans, &plan, compiled),
+                            reporter.resume(measured),
+                            token,
+                        )
+                        .map_err(|Cancelled| Ended::Cancelled)?;
                     self.finished(nodes, position, &build);
                     build
                 }
-                Sent::Cancelled | Sent::Panicked(_) => unreachable!("a run that stopped ended"),
+                Sent::Panicked(payload) => return Err(Ended::Panicked(payload)),
+                Sent::Cancelled => unreachable!("a cancelled member ended the run"),
             };
             self.members.push(node.member(build));
             position += 1;
@@ -435,6 +495,7 @@ mod tests {
                 held: HeldArtifacts::new(),
                 free,
                 members: Vec::new(),
+                panicked: None,
             };
             let shares = schedule
                 .dispatch()
@@ -449,5 +510,73 @@ mod tests {
                 "{label}: the threads left free"
             );
         }
+    }
+
+    /// Each slot's state, as the tests compare it.
+    fn states(schedule: &Schedule) -> Vec<&'static str> {
+        schedule
+            .slots
+            .iter()
+            .map(|slot| match slot {
+                Slot::Waiting => "waiting",
+                Slot::Ready => "ready",
+                Slot::Running => "running",
+                Slot::Done(Sent::Panicked(_)) => "panicked",
+                Slot::Done(_) => "done",
+                Slot::Published => "published",
+                Slot::Stopped => "stopped",
+            })
+            .collect()
+    }
+
+    /// The panic rule the module states: a member's panic is held in its
+    /// slot, the members after it that started are stopped, and none after
+    /// it starts; a member after it that comes back cancelled is stopped,
+    /// not a cancelled run, and one before it still ends the run cancelled.
+    #[test]
+    fn a_panicked_member_waits_for_its_turn_and_stops_the_members_after_it() {
+        let token = CancellationToken::new();
+        let stops = Stops(RefCell::new(vec![None; 4]));
+        let followers = (0..3)
+            .map(|position| stops.start(position, &token))
+            .collect::<Vec<_>>();
+        let mut schedule = Schedule {
+            slots: vec![Slot::Running, Slot::Running, Slot::Running, Slot::Ready],
+            completed: vec![None; 4],
+            held: HeldArtifacts::new(),
+            free: 1,
+            members: Vec::new(),
+            panicked: None,
+        };
+        let ended = schedule.receive(&[], &stops, (1, 1), Sent::Panicked(Box::new("panic")));
+        assert!(ended.is_none(), "a panic ends nothing on arrival");
+        assert_eq!(
+            followers
+                .iter()
+                .map(CancellationToken::is_cancelled)
+                .collect::<Vec<_>>(),
+            [false, false, true],
+            "the members stopped"
+        );
+        assert_eq!(
+            schedule.dispatch(),
+            [],
+            "the members that start after the panic"
+        );
+        let ended = schedule.receive(&[], &stops, (2, 1), Sent::Cancelled);
+        assert!(
+            ended.is_none(),
+            "a member stopped after the panic ends nothing"
+        );
+        assert_eq!(
+            states(&schedule),
+            ["running", "panicked", "stopped", "ready"],
+            "the slots after the panic"
+        );
+        let ended = schedule.receive(&[], &stops, (0, 1), Sent::Cancelled);
+        assert!(
+            matches!(ended, Some(Ended::Cancelled)),
+            "a member before the panic that comes back cancelled"
+        );
     }
 }
