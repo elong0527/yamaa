@@ -80,9 +80,9 @@ fn shared_records(item: &Intermediate) -> bool {
 /// The rows of a read whose rows all choose among the same records: the
 /// donor prepared once, as the first row's read prepares it, then each row
 /// in order, its choice cached or resolved now.
-fn shared<'c, E>(
+fn shared<E>(
     run: &mut Run<'_, '_, E>,
-    cx: &Cx<'c, E>,
+    cx: &Cx<'_, E>,
     site: Site<'_>,
     relation: RelationId,
     rows: &[usize],
@@ -320,6 +320,25 @@ impl<'i, 's> Gather<'i, 's> {
 
     /// The next row's value, read from `table` by its choice.
     fn push<E>(&mut self, table: Table<'_, E>, choice: Choice) -> Result<(), Fail<E>> {
+        if self.lending {
+            if self.sources.is_empty() {
+                super::reserved(self.sources.try_reserve_exact(self.rows))?;
+            }
+            self.sources.push(match choice {
+                Choice::Record { row, .. } => row,
+                Choice::Absent => usize::MAX,
+            });
+        } else {
+            let (value, _) = chosen(table, self.item, self.column, choice)?;
+            self.values.push(value);
+            if !self.reserved && !matches!(self.values, Values::Missing(_)) {
+                let rest = self.rows.saturating_sub(self.values.len());
+                super::reserved(self.values.try_reserve(rest))?;
+                self.reserved = true;
+            }
+        }
+        // A selected cell that refuses access has not answered the read:
+        // as on the row path, only a successful read counts its handler.
         if self.observe {
             let kind = match choice {
                 Choice::Absent => Some(HandlerKind::Absent),
@@ -332,23 +351,6 @@ impl<'i, 's> Gather<'i, 's> {
                     None => self.fired.push((kind, 1)),
                 }
             }
-        }
-        if self.lending {
-            if self.sources.is_empty() {
-                super::reserved(self.sources.try_reserve_exact(self.rows))?;
-            }
-            self.sources.push(match choice {
-                Choice::Record { row, .. } => row,
-                Choice::Absent => usize::MAX,
-            });
-            return Ok(());
-        }
-        let (value, _) = chosen(table, self.item, self.column, choice)?;
-        self.values.push(value);
-        if !self.reserved && !matches!(self.values, Values::Missing(_)) {
-            let rest = self.rows.saturating_sub(self.values.len());
-            super::reserved(self.values.try_reserve(rest))?;
-            self.reserved = true;
         }
         Ok(())
     }
@@ -434,4 +436,102 @@ fn pushed<'v>(
         });
     }
     values
+}
+
+#[cfg(test)]
+mod tests {
+    // The seam is a named read's handler accounting when the selected donor
+    // cell refuses access, which authored data fixtures cannot make a port
+    // do. LOOKUP-24 counts a successful multiple-match read; the failed cell
+    // contributes no firing, while earlier successful reads keep theirs.
+    use super::*;
+    use crate::dataset::IntermediateSource;
+    use crate::table::{CellError, Column, TableAccess, TableSchema};
+    use crate::value::ColumnType;
+
+    struct RefusingCell(TableSchema);
+    impl TableAccess for RefusingCell {
+        type Error = &'static str;
+        fn schema(&self) -> &TableSchema {
+            &self.0
+        }
+        fn row_count(&self) -> usize {
+            2
+        }
+        fn cell(&self, row: usize, _column: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+            match row {
+                0 => Ok(ValueRef::Int(7)),
+                _ => Err(CellError::Access("refused selected cell")),
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_selected_cell_counts_no_multiple_matches_firing() {
+        let table = RefusingCell(
+            TableSchema::new(vec![Column {
+                name: "VALUE".into(),
+                kind: ColumnType::Int,
+            }])
+            .unwrap(),
+        );
+        let item = Intermediate {
+            identifier: "L".into(),
+            path: "intermediates[0]".into(),
+            source: IntermediateSource::Input(0),
+            keys: Vec::new(),
+            filter: None,
+            selection: None,
+            nearest: None,
+            range: None,
+            columns: None,
+            no_match: None,
+            require_match: false,
+            unique: Vec::new(),
+            derivations: None,
+            pending_schema: None,
+        };
+        let site = Site {
+            expr: None,
+            path: "columns[OUT]",
+        };
+        let mut gather = Gather::new(&item, 0, 2, site, true);
+        gather
+            .push(
+                Table::Source(&table),
+                Choice::Record {
+                    row: 0,
+                    multiple: true,
+                },
+            )
+            .unwrap();
+        match *gather
+            .push(
+                Table::Source(&table),
+                Choice::Record {
+                    row: 1,
+                    multiple: true,
+                },
+            )
+            .unwrap_err()
+        {
+            ExecutionError::SecondaryCell {
+                source: 0,
+                source_row: 1,
+                error: CellError::Access("refused selected cell"),
+                ..
+            } => {}
+            other => panic!("selected cell failure was not retained: {other:?}"),
+        }
+        assert_eq!(
+            gather.fired,
+            vec![(HandlerKind::MultipleMatches, 1)],
+            "only the successful read fires"
+        );
+        assert_eq!(
+            (gather.values.len(), gather.values.get(0)),
+            (1, ValueRef::Int(7)),
+            "the successful read stays"
+        );
+    }
 }
