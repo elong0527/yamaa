@@ -9,7 +9,8 @@
 //! The tables cross the definition levels' runs (a group of eight, a
 //! bit-packed run of 63 groups), the row group of 131,072 rows, a data page's
 //! 1 MiB of values and the dictionary's 1 MiB bound, the layout the encoder
-//! documents.
+//! documents. Each table lends itself to threads, and is saved on four as on
+//! one, byte for byte (#4220).
 //!
 //! The seam is the encoder's saved file read by an independent reader; the
 //! benchmark reader and the host fixtures read Parquet through the engine's
@@ -22,7 +23,7 @@ use parquet::{
     },
     record::Field,
 };
-use std::{convert::Infallible, ops::Range};
+use std::{convert::Infallible, num::NonZeroUsize, ops::Range};
 use yamaa_adapters::{
     column_table::ColumnTable,
     epoch::{date_from_days, datetime_from_seconds},
@@ -120,7 +121,16 @@ impl TableAccess for Table {
             .map(ValueRef::from)
             .ok_or(CellError::OutOfBounds { row, column })
     }
+    fn shared(&self) -> Option<&(dyn TableAccess<Error = Infallible> + Sync)> {
+        Some(self)
+    }
 }
+
+/// The threads a table is saved on besides one (#4220).
+const FOUR: NonZeroUsize = match NonZeroUsize::new(4) {
+    Some(four) => four,
+    None => unreachable!(),
+};
 
 /// The five column types that PARQUET-1 maps, in its order.
 const COLUMNS: [(&str, ColumnType); 5] = [
@@ -335,11 +345,18 @@ fn every_table_reads_back_as_authored_whole_and_a_partition_at_a_time() {
         assert_eq!((names, rows), expected, "{label}, whole");
         for size in [1, 7, 1_000] {
             let partitions = partitions(table.row_count(), size);
-            let (saved, ends) = render_partitions(table, &table.projection(), &partitions).unwrap();
+            let (saved, ends) =
+                render_partitions(table, &table.projection(), &partitions, NonZeroUsize::MIN)
+                    .unwrap();
             assert_eq!(
                 ends.last(),
                 Some(&saved.len()),
                 "{label}, partitions of {size}"
+            );
+            assert!(
+                render_partitions(table, &table.projection(), &partitions, FOUR).unwrap()
+                    == (saved.clone(), ends),
+                "{label}, partitions of {size}, on four threads"
             );
             let (names, rows, _) = read_back(saved);
             assert_eq!((names, rows), expected, "{label}, partitions of {size}");
@@ -376,14 +393,31 @@ fn a_table_past_one_row_group_reads_back_in_order_from_two_row_groups() {
         ("whole", partitions(ROWS, ROWS)),
         ("partitions of 100,000", partitions(ROWS, 100_000)),
     ] {
-        let (saved, ends) = render_partitions(&table, &table.projection(), &partitions).unwrap();
+        let (saved, ends) =
+            render_partitions(&table, &table.projection(), &partitions, NonZeroUsize::MIN).unwrap();
         // A port that lends its columns whole saves the same file, its
-        // partitions ending at the same bytes (#4201).
-        assert!(
-            render_partitions(&lent, &table.projection(), &partitions).unwrap()
-                == (saved.clone(), ends),
-            "{label}, read through column views"
-        );
+        // partitions ending at the same bytes (#4201), and so does a save on
+        // four threads, each row group encoded on its own (#4220).
+        let saves = [
+            (
+                render_partitions(&lent, &table.projection(), &partitions, NonZeroUsize::MIN),
+                "read through column views",
+            ),
+            (
+                render_partitions(&table, &table.projection(), &partitions, FOUR),
+                "on four threads",
+            ),
+            (
+                render_partitions(&lent, &table.projection(), &partitions, FOUR),
+                "read through column views on four threads",
+            ),
+        ];
+        for (save, case) in saves {
+            assert!(
+                save.unwrap() == (saved.clone(), ends.clone()),
+                "{label}, {case}"
+            );
+        }
         let (read, rows, metadata) = read_back(saved);
         let groups: Vec<i64> = metadata
             .row_groups()

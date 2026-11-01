@@ -185,8 +185,11 @@ impl Partitions {
     /// and the command line's `--threads` ask ([`Self::with_host_threads`]).
     /// Each thread decodes the partitions it derives from the held bytes of
     /// a CSV or Parquet driver input; the calling thread reports progress
-    /// and polls the cancellation token. The result, its issues, its report
-    /// and the progress events, in order, are those of a run on one thread.
+    /// and polls the cancellation token. A Parquet output then encodes up
+    /// to `threads` of its row groups at once, and its file is byte for
+    /// byte the one a run on one thread saves (#4220). The result, its
+    /// issues, its report and the progress events, in order, are those of a
+    /// run on one thread.
     /// A run with a step that calls a project function runs on the calling
     /// thread alone, as does a run with one partition.
     ///

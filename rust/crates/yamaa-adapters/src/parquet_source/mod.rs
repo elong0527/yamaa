@@ -27,6 +27,8 @@ mod framing;
 #[cfg(feature = "parquet")]
 mod metadata;
 #[cfg(feature = "parquet")]
+mod partitions;
+#[cfg(feature = "parquet")]
 mod payload;
 /// parquet 55's column reader, which the differential harness reads by.
 #[cfg(all(test, feature = "parquet"))]
@@ -227,6 +229,15 @@ pub struct Scanned {
     never: std::convert::Infallible,
 }
 
+/// What [`scan`] gives each partition's table to (#4220): the first step, on
+/// the thread that built the table, makes something of that table alone;
+/// the second, the visit, takes what it made on the calling thread, in
+/// order, with the position of the table's first record among the file's.
+pub type ScanSteps<'a, T> = (
+    &'a (dyn Fn(ColumnTable) -> T + Sync),
+    &'a mut dyn FnMut(T, usize),
+);
+
 /// Where a scan's table admission falls in the whole read's order: every
 /// partition is admitted before any value converts.
 #[cfg(feature = "parquet")]
@@ -237,84 +248,32 @@ const BUILD: reader::Position = (18, 0, 0);
 
 /// Scan held bytes by partition (#3792), with `odm` as [`parse_odm`] does:
 /// the row groups in partitions of at most `rows` records, a row group of
-/// more records a partition of its own. Each partition is decoded once, in
-/// order, given to `visit` with the position of its first record among the
-/// file's records, and dropped (#3830): no two partitions are decoded at
-/// once. Every finding [`parse`] reports is reported in the same order, a
-/// value's row being its row in the whole file, except that each partition,
-/// not the whole file, is admitted within the row and cell limits: the
-/// whole read checks each stage over every partition before the next, so
-/// the first finding is the one whose stage and column come first, then
-/// whose partition does.
+/// more records a partition of its own. Each partition is decoded once,
+/// its table given to `prepare` on the thread that built it, and what
+/// `prepare` makes of it given to `visit` on the calling thread, in order,
+/// with the position of its first record among the file's records, then
+/// dropped (#3830). Up to `threads` partitions are admitted, decoded,
+/// built and prepared at once, each on a thread of its own, so no more than
+/// `threads` are decoded at once; with one thread, the calling thread
+/// decodes each in turn (#4220). Every finding [`parse`] reports is
+/// reported in the same order, a value's row being its row in the whole
+/// file, except that each partition, not the whole file, is admitted within
+/// the row and cell limits: the whole read checks each stage over every
+/// partition before the next, so the first finding is the one whose stage
+/// and column come first, then whose partition does. The thread count
+/// changes neither the finding nor what `visit` is given.
 #[cfg(feature = "parquet")]
-pub fn scan(
+pub fn scan<T: Send>(
     content: &[u8],
     odm: bool,
-    rows: std::num::NonZeroUsize,
-    visit: &mut dyn FnMut(ColumnTable, usize),
+    (rows, threads): (std::num::NonZeroUsize, std::num::NonZeroUsize),
+    (prepare, visit): ScanSteps<'_, T>,
 ) -> Result<Scanned, Error> {
-    use yamaa_core::table::TableAccess;
     let runs = reader::Runs::open(content, odm, Some(rows), reader::NATIVE)?;
-    let ready = runs.deferred().is_ok();
-    let mut first: Option<(reader::Position, Error)> = None;
-    // The first partition whose stored columns do not decode.
-    let mut undecoded: Option<reader::Error> = None;
-    let mut before = 0usize;
-    for partition in 0..runs.len() {
-        // The whole read checks every page before anything later, so the
-        // first page that does not admit is its finding, wherever it is.
-        // A partition decodes from the bodies its pages' admission kept,
-        // and what it finds waits until every page is admitted.
-        let bodies = runs.admit(partition)?;
-        if runs.layout().is_err() || undecoded.is_some() {
-            continue;
-        }
-        // The whole read decodes every partition's columns before any later
-        // check, so the first partition that does not decode is its finding.
-        let raw = match runs.raw(partition, &bodies) {
-            Ok(raw) => raw,
-            Err(error) => {
-                undecoded = Some(error);
-                continue;
-            }
-        };
-        drop(bodies);
-        if ready {
-            let found = match runs.decoded(raw, partition, before) {
-                Err((position, error)) => Some((position, Error::from(error))),
-                Ok(decoded) => match table::admit(&decoded) {
-                    Err(error) => Some((ADMIT, table_error(error))),
-                    Ok(rows) => match table::build(decoded, rows) {
-                        Err(error) => Some((BUILD, table_error(error))),
-                        Ok(table) => {
-                            debug_assert_eq!(table.row_count(), runs.records(partition));
-                            if first.is_none() {
-                                visit(table, before);
-                            }
-                            None
-                        }
-                    },
-                },
-            };
-            if let Some((position, error)) = found {
-                if first.as_ref().is_none_or(|(at, _)| position < *at) {
-                    first = Some((position, error));
-                }
-            }
-        }
-        before += runs.records(partition);
-    }
-    runs.layout()?;
-    if let Some(error) = undecoded {
-        return Err(error.into());
-    }
-    runs.deferred()?;
-    match first {
-        Some((_, error)) => Err(error),
-        None => Ok(Scanned {
-            runs: Box::new(runs),
-        }),
-    }
+    partitions::scan(&runs, threads, (prepare, visit))?;
+    Ok(Scanned {
+        runs: Box::new(runs),
+    })
 }
 
 /// The table of records `range` of a file [`scan`] admitted (#3830),
@@ -463,11 +422,11 @@ pub fn signature(_: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
     Err(Error::ReaderUnavailable)
 }
 #[cfg(not(feature = "parquet"))]
-pub fn scan(
+pub fn scan<T: Send>(
     _: &[u8],
     _: bool,
-    _: std::num::NonZeroUsize,
-    _: &mut dyn FnMut(ColumnTable, usize),
+    _: (std::num::NonZeroUsize, std::num::NonZeroUsize),
+    _: ScanSteps<'_, T>,
 ) -> Result<Scanned, Error> {
     Err(Error::ReaderUnavailable)
 }

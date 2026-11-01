@@ -166,7 +166,9 @@ const MICROS: i64 = super::format::TimeUnit::Micros.per_second();
 
 /// A held file read by partition (#3792): what its footer and pages admit,
 /// and what decodes one partition's row groups at a time, each partition
-/// once for its checks and again whenever a run reads it (#3830).
+/// once for its checks and again whenever a run reads it (#3830). Its
+/// checks read it alone, so the threads of a scan share it, each checking
+/// partitions of its own (#4220).
 pub(super) struct Runs {
     decoders: Decoders,
     /// The held file, and its pages as framing admitted them.
@@ -543,8 +545,8 @@ impl Runs {
 
     /// Check partition `partition`'s pages, as the whole read checks every
     /// page before anything later, and keep their decoded bodies for the
-    /// column reader. Partitions are checked in order, so the first page
-    /// that does not admit is the whole read's finding.
+    /// column reader. The scan takes the partitions' checks in order, so the
+    /// first page that does not admit is the whole read's finding.
     pub(super) fn admit(&self, partition: usize) -> Result<columns::Bodies, Error> {
         let leaves = &self.footer.schema.leaves;
         let count = self.footer.row_groups.len();

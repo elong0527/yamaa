@@ -15,10 +15,19 @@
 //! The footer and page headers are Thrift compact structs (`Compact`), and the
 //! definition levels and dictionary indices are the RLE/bit-packed hybrid
 //! (`hybrid`).
+//!
+//! Up to the run's `threads` row groups are encoded at once (#4220), when the
+//! table lends itself to threads (`TableAccess::shared`): each thread encodes
+//! and compresses one row group's column chunks into buffers of its own, with
+//! a compressor of its own, and the calling thread appends them in row-group
+//! order, so the file, each partition's end and the first refusal are those
+//! of the write on one thread, whatever the threads.
 use super::Error;
 use crate::epoch::{date_days, datetime_seconds};
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::ops::Range;
+use std::sync::{mpsc, Mutex};
 use yamaa_core::{
     limits::Limits,
     table::{ColumnReader, TableAccess, ValueRef},
@@ -599,10 +608,21 @@ struct Encoded {
     uncompressed: usize,
 }
 
-/// The Zstandard compressor every page of a file goes through.
+/// The Zstandard compressor the pages of a row group go through: one for a
+/// file written on one thread, and one for each thread that encodes row
+/// groups. Each page is a frame of its own, so a page compresses to the same
+/// bytes whichever compressor takes it.
 struct Compressor(zstd::bulk::Compressor<'static>);
 
 impl Compressor {
+    /// A compressor at `ZSTD_LEVEL`, or the refusal of one that cannot be
+    /// made, which only a failed allocation refuses.
+    fn new<E>() -> Result<Self, Error<E>> {
+        zstd::bulk::Compressor::new(ZSTD_LEVEL)
+            .map(Self)
+            .map_err(|_| Error::Compression)
+    }
+
     /// A page of `body` after its header: `header` holds the page type, then
     /// the sizes, then the fields `rest` writes. Returns the page and the
     /// bytes it would take uncompressed, or the refusal of a body its header
@@ -675,44 +695,64 @@ impl File {
         Ok(())
     }
 
-    /// Write the `rows` rows of `segments` as one row group, a column at a
-    /// time: each of `readers`, of the column type of `kinds` beside it.
+    /// Append one encoded column chunk with its levels: its dictionary page,
+    /// if any, then its data pages.
+    fn append<E>(&mut self, (encoded, values): (Encoded, usize)) -> Result<Chunk, Error<E>> {
+        let start = self.bytes.len();
+        let dictionary = match &encoded.dictionary {
+            Some(page) => {
+                self.write(page)?;
+                Some(start)
+            }
+            None => None,
+        };
+        let data = self.bytes.len();
+        self.write(&encoded.data)?;
+        Ok(Chunk {
+            dictionary,
+            data,
+            compressed: self.bytes.len() - start,
+            uncompressed: encoded.uncompressed,
+            values,
+            pages: encoded.pages,
+        })
+    }
+
+    /// Write the rows of `segments` as one row group, a column at a time:
+    /// each of `columns` encoded, then appended.
     fn row_group<T: TableAccess + ?Sized>(
         &mut self,
-        readers: &[ColumnReader<'_, T>],
-        kinds: &[ColumnType],
+        columns: &Columns<'_, T>,
         segments: &[Range<usize>],
-        rows: usize,
     ) -> Result<(), Error<T::Error>> {
         let mut compressor = match self.compressor.take() {
             Some(compressor) => compressor,
-            None => {
-                Compressor(zstd::bulk::Compressor::new(ZSTD_LEVEL).map_err(|_| Error::Compression)?)
-            }
+            None => Compressor::new()?,
         };
-        let mut chunks = Vec::with_capacity(readers.len());
-        for (reader, &kind) in readers.iter().zip(kinds) {
-            let (encoded, values) = column_chunk(kind, reader, segments, &mut compressor)?;
-            let start = self.bytes.len();
-            let dictionary = match &encoded.dictionary {
-                Some(page) => {
-                    self.write(page)?;
-                    Some(start)
-                }
-                None => None,
-            };
-            let data = self.bytes.len();
-            self.write(&encoded.data)?;
-            chunks.push(Chunk {
-                dictionary,
-                data,
-                compressed: self.bytes.len() - start,
-                uncompressed: encoded.uncompressed,
-                values,
-                pages: encoded.pages,
-            });
+        let mut chunks = Vec::with_capacity(columns.readers.len());
+        for (reader, &kind) in columns.readers.iter().zip(&columns.kinds) {
+            let encoded = column_chunk(kind, reader, segments, &mut compressor)?;
+            chunks.push(self.append(encoded)?);
         }
         self.compressor = Some(compressor);
+        self.groups.push(Group {
+            chunks,
+            rows: rows(segments),
+        });
+        Ok(())
+    }
+
+    /// Append a row group of `rows` rows whose column chunks a thread
+    /// encoded, in projection order, as [`File::row_group`] appends them.
+    fn encoded_group<E>(
+        &mut self,
+        encoded: Vec<(Encoded, usize)>,
+        rows: usize,
+    ) -> Result<(), Error<E>> {
+        let mut chunks = Vec::with_capacity(encoded.len());
+        for chunk in encoded {
+            chunks.push(self.append(chunk)?);
+        }
         self.groups.push(Group { chunks, rows });
         Ok(())
     }
@@ -818,23 +858,259 @@ impl File {
     }
 }
 
+/// The rows of a row group's `segments`.
+fn rows(segments: &[Range<usize>]) -> usize {
+    segments.iter().map(ExactSizeIterator::len).sum()
+}
+
+/// The projected columns a row group reads: each one's reader and column
+/// type.
+struct Columns<'a, T: TableAccess + ?Sized> {
+    readers: Vec<ColumnReader<'a, T>>,
+    kinds: Vec<ColumnType>,
+}
+
+impl<T: TableAccess + ?Sized> Columns<'_, T> {
+    /// The column chunks of the row group of `segments`, in projection
+    /// order, through `compressor`, made on first use; or the first
+    /// column's refusal.
+    fn chunks(
+        &self,
+        segments: &[Range<usize>],
+        compressor: &mut Option<Compressor>,
+    ) -> Result<Vec<(Encoded, usize)>, Error<T::Error>> {
+        let compressor = match compressor {
+            Some(compressor) => compressor,
+            None => compressor.insert(Compressor::new()?),
+        };
+        self.readers
+            .iter()
+            .zip(&self.kinds)
+            .map(|(reader, &kind)| column_chunk(kind, reader, segments, compressor))
+            .collect()
+    }
+}
+
+/// The row groups of a write, planned before any is encoded. Rows wait until
+/// a row group is full, and the last group is written only when the file
+/// ends, so the row groups are the whole table's whatever the partitions
+/// (D264); a row group's rows may span partitions.
+struct Plan {
+    /// The row ranges of each row group the write reaches, in order.
+    groups: Vec<Vec<Range<usize>>>,
+    /// For each admitted partition, the row groups full by its end.
+    ends: Vec<usize>,
+    /// The rows of the admitted partitions.
+    rows: usize,
+}
+
+impl Plan {
+    /// The row groups of `partitions`, each admitted by `admit` in turn, and
+    /// the refusal of the first partition it refuses: the write stops there,
+    /// once the row groups full before it are written.
+    fn new<E>(
+        partitions: &[Range<usize>],
+        admit: impl Fn(usize) -> Result<(), Error<E>>,
+    ) -> (Self, Option<Error<E>>) {
+        let mut plan = Self {
+            groups: Vec::new(),
+            ends: Vec::with_capacity(partitions.len()),
+            rows: 0,
+        };
+        // The row ranges the row group being filled holds, and their rows.
+        let (mut held, mut segments) = (0, Vec::new());
+        for partition in partitions {
+            if let Err(refusal) = admit(partition.len()) {
+                return (plan, Some(refusal));
+            }
+            let mut start = partition.start;
+            while start < partition.end {
+                let end = partition.end.min(start + (ROW_GROUP_ROWS - held));
+                segments.push(start..end);
+                held += end - start;
+                plan.rows += end - start;
+                start = end;
+                if held == ROW_GROUP_ROWS {
+                    plan.groups.push(std::mem::take(&mut segments));
+                    held = 0;
+                }
+            }
+            plan.ends.push(plan.groups.len());
+        }
+        if held > 0 {
+            plan.groups.push(segments);
+        }
+        (plan, None)
+    }
+
+    /// Write each row group in order through `group`, returning where each
+    /// admitted partition's bytes end; a partition's `refused` admission
+    /// comes after the row groups full before it.
+    fn write<E>(
+        &self,
+        file: &mut File,
+        refused: Option<Error<E>>,
+        mut group: impl FnMut(&mut File, usize) -> Result<(), Error<E>>,
+    ) -> Result<Vec<usize>, Error<E>> {
+        let mut next = 0;
+        let mut ends = Vec::with_capacity(self.ends.len());
+        for &end in &self.ends {
+            for index in next..end {
+                group(file, index)?;
+            }
+            next = end;
+            ends.push(file.bytes.len());
+        }
+        if let Some(refused) = refused {
+            return Err(refused);
+        }
+        for index in next..self.groups.len() {
+            group(file, index)?;
+        }
+        Ok(ends)
+    }
+}
+
+/// Write the row groups of `plan` on the calling thread, each encoded as it
+/// is appended.
+fn serially<T: TableAccess + ?Sized>(
+    file: &mut File,
+    columns: &Columns<'_, T>,
+    plan: &Plan,
+    refused: Option<Error<T::Error>>,
+) -> Result<Vec<usize>, Error<T::Error>> {
+    plan.write(file, refused, |file, index| {
+        file.row_group(columns, &plan.groups[index])
+    })
+}
+
+/// A row group's column chunks as a thread hands them back, or none when its
+/// encode was refused. The refusal stays on its thread, since it may hold an
+/// error of the table's that cannot leave it; the calling thread finds it
+/// again by writing that row group itself, as the serial write does.
+type Sent = Option<Vec<(Encoded, usize)>>;
+
+/// Write the row groups of `plan` as [`serially`] does, each encoded on one
+/// of up to `threads` threads and appended in order by the calling thread,
+/// which hands out the next row group as it appends one: at most `threads`
+/// encoded row groups are held at once.
+fn concurrently<T: TableAccess + Sync + ?Sized>(
+    file: &mut File,
+    columns: &Columns<'_, T>,
+    plan: &Plan,
+    refused: Option<Error<T::Error>>,
+    threads: NonZeroUsize,
+) -> Result<Vec<usize>, Error<T::Error>> {
+    // The row groups the write reaches: none after a refused partition.
+    let groups = match refused {
+        Some(_) => plan.ends.last().copied().unwrap_or(0),
+        None => plan.groups.len(),
+    };
+    let threads = threads.get().min(groups);
+    if threads < 2 {
+        return serially(file, columns, plan, refused);
+    }
+    let (jobs, queue) = mpsc::channel();
+    let queue = Mutex::new(queue);
+    let (done, ran) = mpsc::channel::<(usize, Sent)>();
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                let (done, queue) = (done.clone(), &queue);
+                scope.spawn(move || encode_handed_out(columns, &plan.groups, queue, &done))
+            })
+            .collect();
+        drop(done);
+        // Dropped once the write ends, which ends every thread.
+        let jobs = jobs;
+        let mut slots: Vec<Option<Sent>> = (0..groups).map(|_| None).collect();
+        let mut handed = 0;
+        while handed < threads && jobs.send(handed).is_ok() {
+            handed += 1;
+        }
+        let written = plan.write(file, refused, |file, index| {
+            while slots[index].is_none() {
+                match ran.recv() {
+                    Ok((at, sent)) => slots[at] = Some(sent),
+                    // Every thread ended, which only a panic ends early.
+                    Err(_) => slots[index] = Some(None),
+                }
+            }
+            let segments = &plan.groups[index];
+            let appended = match slots[index].take().flatten() {
+                Some(chunks) => file.encoded_group(chunks, rows(segments)),
+                None => file.row_group(columns, segments),
+            };
+            if appended.is_ok() && handed < groups && jobs.send(handed).is_ok() {
+                handed += 1;
+            }
+            appended
+        });
+        drop(jobs);
+        for worker in workers {
+            if let Err(panic) = worker.join() {
+                std::panic::resume_unwind(panic);
+            }
+        }
+        written
+    })
+}
+
+/// A thread's side of [`concurrently`]: encode each row group handed out
+/// until none is left, with a compressor of its own, and hand back its
+/// column chunks. A panic hands back none, so the calling thread encodes the
+/// row group itself, and then ends the thread with it.
+fn encode_handed_out<T: TableAccess + Sync + ?Sized>(
+    columns: &Columns<'_, T>,
+    groups: &[Vec<Range<usize>>],
+    queue: &Mutex<mpsc::Receiver<usize>>,
+    done: &mpsc::Sender<(usize, Sent)>,
+) {
+    let mut compressor = None;
+    loop {
+        let job = queue.lock().ok().and_then(|queue| queue.recv().ok());
+        let Some(index) = job else {
+            return;
+        };
+        let encoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            columns.chunks(&groups[index], &mut compressor).ok()
+        }));
+        match encoded {
+            Ok(sent) => {
+                if done.send((index, sent)).is_err() {
+                    return;
+                }
+            }
+            Err(panic) => {
+                let _ = done.send((index, None));
+                std::panic::resume_unwind(panic);
+            }
+        }
+    }
+}
+
 /// Encode `partitions` of `table`, one after another, returning where each
-/// partition's bytes end. Rows wait until a row group is full, and the last
-/// group is written only when the file ends, so the row groups are the whole
-/// table's whatever the partitions (D264). A row group is encoded a column at
-/// a time, each column read over the group's rows, which may span partitions.
-fn encode<T: TableAccess>(
+/// partition's bytes end, its row groups written by `write` in order. A row
+/// group is encoded a column at a time, each column read over the group's
+/// rows.
+fn encode<T: TableAccess + ?Sized>(
     table: &T,
     projection: &[usize],
     partitions: &[Range<usize>],
     file: &mut File,
+    write: impl FnOnce(
+        &mut File,
+        &Columns<'_, T>,
+        &Plan,
+        Option<Error<T::Error>>,
+    ) -> Result<Vec<usize>, Error<T::Error>>,
 ) -> Result<Vec<usize>, Error<T::Error>> {
-    let columns = table.schema().columns();
+    let schema = table.schema().columns();
     if projection.is_empty()
         || projection
             .iter()
             .enumerate()
-            .any(|(i, &c)| c >= columns.len() || projection[..i].contains(&c))
+            .any(|(i, &c)| c >= schema.len() || projection[..i].contains(&c))
     {
         return Err(Error::Projection);
     }
@@ -849,41 +1125,19 @@ fn encode<T: TableAccess>(
     admit(0)?;
     let names: Vec<&str> = projection
         .iter()
-        .map(|&index| columns[index].name.as_str())
+        .map(|&index| schema[index].name.as_str())
         .collect();
-    let kinds: Vec<ColumnType> = projection
-        .iter()
-        .map(|&index| columns[index].kind)
-        .collect();
-    let readers: Vec<_> = projection
-        .iter()
-        .map(|&index| ColumnReader::new(table, index))
-        .collect();
+    let columns = Columns {
+        readers: projection
+            .iter()
+            .map(|&index| ColumnReader::new(table, index))
+            .collect(),
+        kinds: projection.iter().map(|&index| schema[index].kind).collect(),
+    };
     file.write(MAGIC)?;
-    // The row ranges the row group being filled holds, and their rows.
-    let (mut held, mut segments) = (0, Vec::new());
-    let mut rows = 0;
-    let mut ends = Vec::with_capacity(partitions.len());
-    for partition in partitions {
-        admit(partition.len())?;
-        let mut start = partition.start;
-        while start < partition.end {
-            let end = partition.end.min(start + (ROW_GROUP_ROWS - held));
-            segments.push(start..end);
-            held += end - start;
-            rows += end - start;
-            start = end;
-            if held == ROW_GROUP_ROWS {
-                file.row_group(&readers, &kinds, &segments, held)?;
-                (held, segments) = (0, Vec::new());
-            }
-        }
-        ends.push(file.bytes.len());
-    }
-    if held > 0 {
-        file.row_group(&readers, &kinds, &segments, held)?;
-    }
-    let footer = file.footer(&names, &kinds, rows)?;
+    let (plan, refused) = Plan::new(partitions, admit);
+    let ends = write(file, &columns, &plan, refused)?;
+    let footer = file.footer(&names, &columns.kinds, plan.rows)?;
     file.write(&footer)?;
     Ok(ends)
 }
@@ -891,11 +1145,13 @@ fn encode<T: TableAccess>(
 /// Retain only a complete file. Any error or limit discards all bytes.
 /// Zero records still produce a readable schema with every projected field.
 /// The last partition's bytes end with the file, its last row group and
-/// footer included.
+/// footer included. Up to `threads` row groups are encoded at once when the
+/// table lends itself to threads; the file is the one a thread writes.
 pub(super) fn render_partitions<T: TableAccess>(
     table: &T,
     projection: &[usize],
     partitions: &[Range<usize>],
+    threads: NonZeroUsize,
 ) -> Result<super::Partitioned, Error<T::Error>> {
     let mut file = File {
         bytes: Vec::new(),
@@ -903,7 +1159,16 @@ pub(super) fn render_partitions<T: TableAccess>(
         compressor: None,
         exceeded: None,
     };
-    let result = encode(table, projection, partitions, &mut file);
+    let result = match table.shared() {
+        Some(shared) if threads.get() > 1 => encode(
+            shared,
+            projection,
+            partitions,
+            &mut file,
+            |file, columns, plan, refused| concurrently(file, columns, plan, refused, threads),
+        ),
+        _ => encode(table, projection, partitions, &mut file, serially),
+    };
     if let Some(actual) = file.exceeded {
         return Err(Error::Limit {
             resource: "output_bytes",

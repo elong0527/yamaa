@@ -820,12 +820,20 @@ pub fn build_result<'a, C, E>(
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
 ) -> Result<BuildResult, Refusal<'a, E>> {
-    build_result_with(run, attempt, id, facts, HostView::Table, &[])
+    build_result_with(
+        run,
+        attempt,
+        id,
+        facts,
+        (HostView::Table, std::num::NonZeroUsize::MIN),
+        &[],
+    )
 }
 
 /// [`build_result`] with the host view `view`: a [`HostView::Deferred`]
 /// result builds no table, and its report, issues and status are the
-/// [`HostView::Table`] result's.
+/// [`HostView::Table`] result's. Up to `threads` of the output's row groups
+/// are encoded at once, the run's threads (#4220), with the bytes of one.
 /// `overridden` identifies memory inputs even when inspection or an earlier
 /// capture prevented this attempt from entering those sources.
 pub fn build_result_with<'a, C, E>(
@@ -833,7 +841,7 @@ pub fn build_result_with<'a, C, E>(
     attempt: &'a Attempt<C, E>,
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
-    view: HostView,
+    (view, threads): (HostView, std::num::NonZeroUsize),
     overridden: &[&str],
 ) -> Result<BuildResult, Refusal<'a, E>> {
     let supplied = crate::project_report::supplied(attempt, facts)?;
@@ -857,7 +865,14 @@ pub fn build_result_with<'a, C, E>(
             .map_or(&[], |dataset| dataset.template_rows.as_slice()),
         overridden,
     );
-    Ok(prepare_result(run, execution, id, report, &facts, view)?)
+    Ok(prepare_result(
+        run,
+        execution,
+        id,
+        report,
+        &facts,
+        (view, threads),
+    )?)
 }
 
 pub(crate) fn prepare_result(
@@ -866,12 +881,12 @@ pub(crate) fn prepare_result(
     id: Identity<'_>,
     observations: StoredReport,
     facts: &crate::run_report::RunFacts,
-    view: HostView,
+    (view, threads): (HostView, std::num::NonZeroUsize),
 ) -> Result<BuildResult, Error> {
     let fallback = observations.clone();
     // Every run reports, so a failed output preparation becomes a failed run
     // whose report records the failure rather than a refused result.
-    let mut prepared = prepare_output(run, execution, &id, observations)
+    let mut prepared = prepare_output(run, execution, &id, observations, threads)
         .or_else(|error| rejected_output(fallback, &error))?;
     let table = prepared
         .artifact()
@@ -948,12 +963,14 @@ pub(crate) fn prepare_result(
 /// execution reaches the encoder: a failed capture, decoding, binding or
 /// execution supplies none, and its observations are the failed report.
 /// Output declaration findings precede encoding, and the encoded bytes are
-/// bounded before the report that describes them is completed.
+/// bounded before the report that describes them is completed. A Parquet
+/// output encodes up to `threads` row groups at once.
 fn prepare_output(
     run: &PreparedRun,
     execution: Option<&yamaa_core::dataset::Execution>,
     id: &Identity<'_>,
     observations: StoredReport,
+    threads: std::num::NonZeroUsize,
 ) -> Result<PreparedOutput, Error> {
     let Some(execution) = execution else {
         return Ok(PreparedOutput::failed(observations));
@@ -982,7 +999,7 @@ fn prepare_output(
         compiled.output_profile(),
         compiled.output_decimals(),
         execution,
-        &projection,
+        (&projection, threads),
     )?;
     yamaa_core::limits::Limits::output_bytes(bytes.len()).map_err(|error| {
         Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
@@ -1060,12 +1077,13 @@ pub(crate) fn output_diagnostics(
 /// (D264): its bytes, and where each partition's bytes end, the last at
 /// their length. An output admitted whole is one partition. Each codec
 /// bounds its allocation as it encodes; the caller bounds the bytes it
-/// returns.
+/// returns. Parquet encodes up to `threads` row groups at once (#4220); the
+/// CSV writer writes on the calling thread.
 fn encode(
     profile: Option<&'static str>,
     decimals: Option<&str>,
     execution: &yamaa_core::dataset::Execution,
-    projection: &[usize],
+    (projection, threads): (&[usize], std::num::NonZeroUsize),
 ) -> Result<(Vec<u8>, Vec<usize>), Error> {
     let dataset = &execution.dataset;
     let partitions = execution.output_partitions();
@@ -1093,8 +1111,8 @@ fn encode(
                 })
         }
         Some("parquet") => {
-            crate::parquet_artifact::render_partitions(dataset, projection, &partitions).map_err(
-                |error| match error {
+            crate::parquet_artifact::render_partitions(dataset, projection, &partitions, threads)
+                .map_err(|error| match error {
                     crate::parquet_artifact::Error::Unavailable => {
                         Error::CapabilityUnavailable { feature: "parquet" }
                     }
@@ -1109,8 +1127,7 @@ fn encode(
                         vec!["output.path".into()],
                     )),
                     _ => Error::InvalidObservation,
-                },
-            )
+                })
         }
         _ => Err(Error::InvalidObservation),
     }

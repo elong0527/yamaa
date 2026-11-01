@@ -144,9 +144,10 @@ fn admit_source_table<T: TableAccess>(
 }
 
 /// Scan `declaration`'s held bytes by partition (#3830): every partition
-/// decoded once, in order, cut as `read` asks, and its ODM records checked
-/// when the input is read as ODM. `None` when the decoder reads the input
-/// only whole.
+/// decoded once, up to the run's threads at once (#4220), and visited on
+/// the calling thread in order, cut as `read` asks, and its ODM records
+/// checked when the input is read as ODM. `None` when the decoder reads the
+/// input only whole.
 #[allow(clippy::type_complexity)]
 fn scan<D: Decoder>(
     decoder: &mut D,
@@ -169,7 +170,7 @@ fn scan<D: Decoder>(
         bytes,
         interpretation,
         contract,
-        read.partitioning.rows,
+        (read.partitioning.rows, read.partitioning.threads),
         &mut |part, first| {
             cut.read(part);
             if !odm || matches!(failure, Some(RecordError::Schema)) {

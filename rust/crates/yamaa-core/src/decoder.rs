@@ -99,18 +99,20 @@ pub trait Decoder {
     ) -> Option<TableSchema> {
         None
     }
-    /// Scan one captured input by partition (#3792): decode each partition
-    /// of about `rows` records once, in order, admitted on its own, and give
-    /// it to `visit` with the position of its first record among the
+    /// Scan one captured input by partition (#3792), `partitions` being
+    /// `(rows, threads)`: decode each partition of about `rows` records
+    /// once, admitted on its own, and give it to `visit` on the calling
+    /// thread, in order, with the position of its first record among the
     /// input's records before dropping it (#3830), or keeping it for
     /// [`Self::partition`] while the partitions kept hold no more than
-    /// `rows` records together (#4212). Every finding
-    /// [`Self::table`] reports is reported in the same order and with the
-    /// same context; only the row and cell limits bound each partition
-    /// instead of the whole table. The table returned holds no record: it
-    /// has the input's schema and record count, and [`Self::partition`]
-    /// decodes any range of its records again. `None` when the decoder reads
-    /// the input only whole.
+    /// `rows` records together (#4212). Up to `threads` partitions may
+    /// decode at once, each on a thread of its own (#4220).
+    /// Every finding [`Self::table`] reports is reported in the same order
+    /// and with the same context, whatever the threads; only the row and
+    /// cell limits bound each partition instead of the whole table. The
+    /// table returned holds no record: it has the input's schema and record
+    /// count, and [`Self::partition`] decodes any range of its records
+    /// again. `None` when the decoder reads the input only whole.
     #[allow(clippy::type_complexity)]
     fn partitioned(
         &mut self,
@@ -118,7 +120,7 @@ pub trait Decoder {
         _bytes: &[u8],
         _interpretation: SourceInterpretation,
         _contract: Option<&Contract>,
-        _rows: NonZeroUsize,
+        _partitions: (NonZeroUsize, NonZeroUsize),
         _visit: &mut dyn FnMut(&Self::Table, usize),
     ) -> Option<Result<Self::Table, Self::Error>> {
         None

@@ -348,6 +348,11 @@ impl TableAccess for Dataset {
                 .collect(),
         )
     }
+    /// The dataset as threads share it: its columns are only read, so the
+    /// output's encoder reads them on the run's threads (#4220).
+    fn shared(&self) -> Option<&(dyn TableAccess<Error = Infallible> + Sync)> {
+        Some(self)
+    }
 }
 
 /// Output identity remains available after a failed artifact has been discarded.

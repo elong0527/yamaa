@@ -26,9 +26,16 @@ pub enum Error<E> {
 }
 
 /// Artifact encoding retains a capability boundary without the codec dependency.
+/// The table is encoded whole, on the calling thread.
 pub fn render<T: TableAccess>(table: &T, projection: &[usize]) -> Result<Vec<u8>, Error<T::Error>> {
     let whole = 0..table.row_count();
-    render_partitions(table, projection, std::slice::from_ref(&whole)).map(|(bytes, _)| bytes)
+    render_partitions(
+        table,
+        projection,
+        std::slice::from_ref(&whole),
+        std::num::NonZeroUsize::MIN,
+    )
+    .map(|(bytes, _)| bytes)
 }
 
 /// An encoded file, and where each of its partitions' bytes end, the last at
@@ -42,18 +49,24 @@ pub type Partitioned = (Vec<u8>, Vec<usize>);
 /// whatever the partitions (D264, D305). Each partition is
 /// admitted on its own; the end of each partition's bytes is returned with
 /// them, the last at the file's length.
+///
+/// Up to the run's `threads` row groups are encoded at once (#4220) when the
+/// table lends itself to threads ([`TableAccess::shared`]); otherwise, and
+/// for one thread, they are encoded on the calling thread. The bytes, the
+/// ends and the first refusal are the same either way.
 pub fn render_partitions<T: TableAccess>(
     table: &T,
     projection: &[usize],
     partitions: &[std::ops::Range<usize>],
+    threads: std::num::NonZeroUsize,
 ) -> Result<Partitioned, Error<T::Error>> {
     #[cfg(feature = "parquet")]
     {
-        encode::render_partitions(table, projection, partitions)
+        encode::render_partitions(table, projection, partitions, threads)
     }
     #[cfg(not(feature = "parquet"))]
     {
-        let _ = (table, projection, partitions);
+        let _ = (table, projection, partitions, threads);
         Err(Error::Unavailable)
     }
 }
