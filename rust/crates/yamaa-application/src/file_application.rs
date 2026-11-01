@@ -614,7 +614,14 @@ pub fn run_with_view<A: HostFunctions>(
         return (attempt, Err(failure));
     }
     scope.phase(yamaa_core::application_observer::Phase::Output);
-    let converted = result(prepared, run, &attempt, classify, identity, view);
+    // The output is encoded on the run's threads (#4220), on the calling
+    // thread alone for a run that is not partitioned.
+    let threads = scope
+        .partitioning()
+        .map_or(std::num::NonZeroUsize::MIN, |partitioning| {
+            partitioning.threads
+        });
+    let converted = result(prepared, run, &attempt, classify, identity, (view, threads));
     scope.exit(
         yamaa_core::application_observer::Phase::Output,
         if converted.is_ok() {
@@ -633,7 +640,7 @@ fn result<E>(
     attempt: &Attempt<crate::file_resources::Error, E>,
     classify: impl Fn(&E) -> Classification,
     identity: Identity<'_>,
-    view: HostView,
+    (view, threads): (HostView, std::num::NonZeroUsize),
 ) -> Result<Domain, Failure> {
     use crate::project_report::Classified;
     let mut held = Vec::new();
@@ -661,7 +668,7 @@ fn result<E>(
         attempt,
         identity,
         &facts,
-        view,
+        (view, threads),
         &run.input_aliases().collect::<Vec<_>>(),
     )
     .map_err(|refusal| refusal.issues())?;

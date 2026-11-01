@@ -1139,6 +1139,7 @@ line takes `--threads N`. A project run also builds its specifications at
 once on those threads: a specification starts once every specification whose
 output it reads has finished, and the specifications building at once and
 their partitions share the `threads`, so a project run never uses more. A
+Parquet output is encoded on the same threads, that many row groups at once. A
 specification that calls a project function runs on the thread that called
 the method. A `threads` of 1 derives one partition and builds one
 specification at a time, and a value that is neither a positive whole number
