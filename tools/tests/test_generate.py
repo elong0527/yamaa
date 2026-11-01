@@ -1001,6 +1001,15 @@ class DashboardTests(unittest.TestCase):
                 [(2, "Needs rework"), (0, "Not reviewed")],
             ),
             (
+                "an approval stands against a later review in the same round",
+                [
+                    review("a", 1, approve),
+                    review("b", 2, approve),
+                    review("c", 3, reject),
+                ],
+                [(2, "Approved")],
+            ),
+            (
                 "rework passes on new reviews",
                 [
                     review("a", 1, reject),

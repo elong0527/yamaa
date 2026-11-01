@@ -68,18 +68,18 @@ def status(verdicts):
 
 def rounds(reviews, starts):
     """A benchmark's (reviewers, status) in each round it took part in. Only a
-    person's latest review counts. An approval stands for good, rework starts the
-    next round with no reviews, and any other reviews carry over."""
+    person's latest review counts until approval. An approval stands for good,
+    rework starts the next round with no reviews, and other reviews carry over."""
     history, verdicts = [], {}
     pending = sorted(reviews, key=lambda review: review["posted"])
     for end in (*starts, None):
         while pending and (end is None or pending[0]["posted"] < end):
             review = pending.pop(0)
             verdicts[review["reviewer"]] = review["overall"]
+            if status(list(verdicts.values())) == APPROVED:
+                return history + [(len(verdicts), APPROVED)]
         found = status(list(verdicts.values()))
         history.append((len(verdicts), found))
-        if found == APPROVED:
-            break
         if found == NEEDS_REWORK:
             verdicts = {}
     return history
