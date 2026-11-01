@@ -1,16 +1,16 @@
 //! Windows over completed rows: one run per window and unit, partitioned
-//! once, each partition completed when its first row is read.
-use super::buffer::Values;
+//! once. A batch completes every partition before it writes any answer; a
+//! row-mode replay completes each partition when its first row is read.
+use super::buffer::{Bits, Values};
 use super::frame::{Frame, IdentityMap};
 use super::group::Grouping;
-use super::{Cx, Fail, Run};
+use super::{Cx, Fail, Run, Table};
 use crate::dataset::execution::{ExecutionError, Resource};
 use crate::dataset::resolved::{ExprId, ExprKind, Op, WindowId};
 use crate::dataset::{Window, WindowKind};
 use crate::expression::Truth;
 use crate::limits::Limits;
 use crate::table::{TableAccess, TableSchema, ValueRef};
-use crate::value::Value;
 use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
@@ -81,13 +81,29 @@ impl Runs {
         let built = if columns.is_empty() {
             Grouping::whole(rows.len())
         } else if let Some(finer) = finer {
-            finer
-                .grouping
-                .coarsen(keys.len(), |item, key| keys[key].get(start + item))
+            // A key every row of the finer grouping holds alike merges
+            // nothing apart.
+            let varying: Vec<&Values> = columns
+                .iter()
+                .zip(&keys)
+                .filter(|(column, _)| {
+                    !finer
+                        .grouping
+                        .constant
+                        .iter()
+                        .any(|&position| finer.columns[position] == **column)
+                })
+                .map(|(_, &key)| key)
+                .collect();
+            if varying.is_empty() && !rows.is_empty() {
+                Grouping::whole(rows.len())
+            } else {
+                finer
+                    .grouping
+                    .coarsen(varying.len(), |item, key| varying[key].get(start + item))
+            }
         } else {
-            Grouping::partition(rows.len(), keys.len(), |item, key| {
-                keys[key].get(start + item)
-            })
+            Grouping::runs(&keys, rows.clone())
         };
         let grouping = Arc::new(built?);
         self.groupings.push(Shared {
@@ -99,21 +115,29 @@ impl Runs {
     }
 }
 
-/// A small cached answer: never a cloned payload.
-#[derive(Clone, Copy)]
-enum Answer {
-    Missing,
-    Flag,
-    AmbiguousBaseline {
-        row: usize,
-        date: usize,
-        count: usize,
-    },
-    Number(i64),
-    Cell {
-        row: usize,
-        column: usize,
-    },
+/// The answer of each position of a window's scope, one word each, written
+/// a partition at a time and read by the window's kind: never a cloned
+/// payload. A numbering kind holds the number, a row value or `locf` its
+/// donor position plus one, and a baseline [`FLAG`] or, on every eligible
+/// row of an ambiguous partition, its latest row plus two. Zero is no
+/// answer: a missing value.
+#[derive(Default)]
+struct Answers {
+    words: Vec<usize>,
+    /// How many eligible rows of an ambiguous baseline partition share its
+    /// latest date, by that latest row.
+    ambiguous: IdentityMap<usize, usize>,
+}
+
+/// A baseline's flagged row.
+const FLAG: usize = 1;
+
+/// The member lists one partition is numbered with, kept from one partition
+/// to the next.
+#[derive(Default)]
+struct Scratch {
+    members: Vec<usize>,
+    eligible: Vec<usize>,
 }
 
 /// One window over the rows of its scope: frame rows `start..start + len`,
@@ -123,11 +147,14 @@ struct WindowRun {
     window: Window,
     start: usize,
     width: usize,
-    collected: Vec<Vec<Value>>,
+    /// A context window's collected driver fields, one buffer per field,
+    /// indexed by position.
+    collected: Vec<Values>,
     schema: Option<TableSchema>,
     grouping: Arc<Grouping>,
-    /// Whether each group's partition is complete.
+    /// Whether each group's partition is complete, and how many are not.
     completed: Vec<bool>,
+    remaining: usize,
     /// The filter's truth at each position, from its column program; none
     /// when there is no filter or a position evaluates through the row
     /// evaluator.
@@ -135,21 +162,32 @@ struct WindowRun {
     /// Whether every two values of each order term compare across the whole
     /// scope, so no partition's sort can fail and none checks again.
     admitted: bool,
-    answers: Vec<Answer>,
+    answers: Answers,
+    /// How each group's partition stands to the order terms, found for
+    /// every group when the first partition is completed ([`standings`]).
+    standings: Option<Vec<Standing>>,
+    scratch: Scratch,
 }
 
 impl WindowRun {
+    /// The buffer holding a column of the scope, and the index of its first
+    /// position in it: a frame column, or a collected driver field.
+    fn lane<'f>(&'f self, cx: &'f Cx<'_, impl Sized>, column: usize) -> (&'f Values, usize) {
+        if column < self.width {
+            (cx.frame.column(column), self.start)
+        } else {
+            (&self.collected[column - self.width], 0)
+        }
+    }
+
     fn get<'f>(
         &'f self,
         cx: &'f Cx<'_, impl Sized>,
         position: usize,
         column: usize,
     ) -> ValueRef<'f> {
-        if column < self.width {
-            cx.frame.get(self.start + position, column)
-        } else {
-            ValueRef::from(&self.collected[position][column - self.width])
-        }
+        let (values, first) = self.lane(cx, column);
+        values.get(first + position)
     }
 }
 
@@ -187,6 +225,109 @@ pub(super) fn prepare<E>(
     Ok(())
 }
 
+/// A context window's driver fields at every position of its scope, in
+/// position order and, at each position, in field order, as the row
+/// evaluator reads them; each field's readings in one buffer.
+fn collect<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    context: &crate::dataset::ContextWindow,
+    path: &str,
+) -> Result<Vec<Values>, Fail<E>> {
+    let start = cx.output.start;
+    let len = cx.output.len();
+    if let Some(gathered) = gather(cx, context)? {
+        return Ok(gathered);
+    }
+    let mut collected = Vec::new();
+    super::reserved(collected.try_reserve_exact(context.sources.len()))?;
+    collected.resize_with(context.sources.len(), || Values::missing(0));
+    for position in 0..len {
+        let row = start + position;
+        for ((name, column), values) in context.sources.iter().zip(&mut collected) {
+            let value = super::predicates::collect_lent(
+                run,
+                cx,
+                super::predicates::Collection {
+                    column: *column,
+                    identifier: name,
+                    filter: None,
+                    selection: None,
+                    path,
+                    site: None,
+                },
+                row,
+            )
+            .map_err(|mut error| {
+                // The collection's row is its position in the window's scope.
+                if let ExecutionError::MultipleValues {
+                    identity: Some(identity),
+                    ..
+                } = error.as_mut()
+                {
+                    identity.position = position;
+                }
+                error
+            })?;
+            values.push(value);
+        }
+    }
+    Ok(collected)
+}
+
+/// A context window's driver fields gathered a field at a time, when every
+/// row of the scope reads one record, whose reading is its one cell
+/// ([`super::predicates::collect_lent`]), and every field is a column the
+/// records' table holds: a donor frame's column or a port's typed storage.
+/// None otherwise, or when a record lies outside the column, and the fields
+/// are collected a row at a time, which reports any failure.
+fn gather<E>(
+    cx: &Cx<'_, E>,
+    context: &crate::dataset::ContextWindow,
+) -> Result<Option<Vec<Values>>, Fail<E>> {
+    let rows = cx.output.clone();
+    let Some(first) = rows.clone().next() else {
+        return Ok(None);
+    };
+    let table = cx.records(first).0;
+    let mut records = Vec::new();
+    super::reserved(records.try_reserve_exact(rows.len()))?;
+    for row in rows {
+        match cx.records(row).1 {
+            [record] => records.push(*record),
+            _ => return Ok(None),
+        }
+    }
+    let mut gathered = Vec::new();
+    super::reserved(gathered.try_reserve_exact(context.sources.len()))?;
+    for &(_, column) in &context.sources {
+        let values = match table {
+            Table::Source(_) => match table.storage(column) {
+                Some(storage) => match Values::from_column(storage, &records) {
+                    Some(values) => super::reserved(values)?,
+                    None => return Ok(None),
+                },
+                None => return Ok(None),
+            },
+            Table::Rows {
+                frame, start, rows, ..
+            } if column < frame.width() && records.iter().all(|&record| record < rows) => {
+                let at: Vec<usize> = records.iter().map(|&record| start + record).collect();
+                super::reserved(frame.column(column).gather(&at))?
+            }
+            Table::Input { frame, .. }
+                if column < frame.width()
+                    && records.iter().all(|&record| record < frame.rows()) =>
+            {
+                super::reserved(frame.column(column).gather(&records))?
+            }
+            Table::Rows { .. } | Table::Input { .. } => return Ok(None),
+        };
+        gathered.push(values);
+    }
+    Ok(Some(gathered))
+}
+
 fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<WindowRun, Fail<E>> {
     let plan = run.plan;
     let (window, context, _) = payload(plan, expr);
@@ -213,44 +354,17 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
                 spec_paths: vec![path.clone()],
             })
         })?;
-        collected.reserve(len);
-        for position in 0..len {
-            let row = start + position;
-            let mut values = Vec::with_capacity(context.sources.len());
-            for (name, column) in &context.sources {
-                let value = super::predicates::collect_row(
-                    run,
-                    cx,
-                    super::predicates::Collection {
-                        column: *column,
-                        identifier: name,
-                        filter: None,
-                        selection: None,
-                        path: &path,
-                        site: None,
-                    },
-                    row,
-                )
-                .map_err(|mut error| {
-                    // The collection's row is its position in the window's scope.
-                    if let ExecutionError::MultipleValues {
-                        identity: Some(identity),
-                        ..
-                    } = error.as_mut()
-                    {
-                        identity.position = position;
-                    }
-                    error
-                })?;
-                values.push(value);
-            }
-            collected.push(values);
-        }
+        collected = collect(run, cx, context, &path)?;
         schema = Some(augmented);
     }
     if i64::try_from(len).is_err() {
         return Err(Box::new(ExecutionError::Capacity));
     }
+    let allocation = |_| {
+        Box::new(ExecutionError::OutputGrouping(
+            crate::table_grouping::GroupingError::Allocation,
+        ))
+    };
     let grouping = if window.group_by.is_empty() {
         Arc::new(super::reserved(Grouping::whole(len))?)
     } else {
@@ -266,27 +380,31 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
             // output aggregates over the same keys share.
             run.windows
                 .grouping(cx.frame, &window.group_by, start..start + len)
-                .map_err(|_| {
-                    Box::new(ExecutionError::OutputGrouping(
-                        crate::table_grouping::GroupingError::Allocation,
-                    ))
-                })?
+                .map_err(allocation)?
+        } else if window
+            .group_by
+            .iter()
+            .all(|&column| column >= cx.frame.width())
+        {
+            // Collected driver fields only, each a buffer of the scope.
+            let keys: Vec<&Values> = window
+                .group_by
+                .iter()
+                .map(|&column| &collected[column - cx.frame.width()])
+                .collect();
+            Arc::new(Grouping::runs(&keys, 0..len).map_err(allocation)?)
         } else {
             let read = |position: usize, column: usize| {
                 if column < cx.frame.width() {
                     cx.frame.get(start + position, column)
                 } else {
-                    ValueRef::from(&collected[position][column - cx.frame.width()])
+                    collected[column - cx.frame.width()].get(position)
                 }
             };
             let grouping = Grouping::partition(len, window.group_by.len(), |position, key| {
                 read(position, window.group_by[key])
             })
-            .map_err(|_| {
-                Box::new(ExecutionError::OutputGrouping(
-                    crate::table_grouping::GroupingError::Allocation,
-                ))
-            })?;
+            .map_err(allocation)?;
             Arc::new(grouping)
         }
     };
@@ -297,26 +415,31 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
         width,
         collected,
         schema,
+        remaining: grouping.groups.len(),
         grouping,
         completed,
         truths: None,
         admitted: false,
-        answers: super::filled(len, Answer::Missing)?,
+        answers: Answers {
+            words: super::filled(len, 0usize)?,
+            ambiguous: IdentityMap::default(),
+        },
+        standings: None,
+        scratch: Scratch::default(),
     };
     if !matches!(window.kind, WindowKind::BaselineFlag { .. }) && !window.order_by.is_empty() {
-        // A typed frame column holds present values of one type, which
-        // compare unless they are truth values (VALUE-19).
+        // A typed buffer holds present values of one type, which compare
+        // unless they are truth values (VALUE-19).
         let typed = window.order_by.iter().all(|term| {
-            term.column < width
-                && matches!(
-                    cx.frame.column(term.column),
-                    Values::Missing(_)
-                        | Values::Int(..)
-                        | Values::Float(..)
-                        | Values::Date(..)
-                        | Values::DateTime(..)
-                        | Values::Str(..)
-                )
+            matches!(
+                built.lane(cx, term.column).0,
+                Values::Missing(_)
+                    | Values::Int(..)
+                    | Values::Float(..)
+                    | Values::Date(..)
+                    | Values::DateTime(..)
+                    | Values::Str(..)
+            )
         });
         let positions: Vec<usize> = if typed {
             Vec::new()
@@ -344,11 +467,12 @@ fn filter_truths<E>(
     built: &WindowRun,
     cx: &Cx<'_, E>,
 ) -> Option<Vec<Truth>> {
-    let len = built.answers.len();
+    let len = built.answers.words.len();
     if len < 2 {
         return None;
     }
     let rows: Vec<usize> = (built.start..built.start + len).collect();
+    let positions: Vec<usize> = (0..len).collect();
     let records: Vec<usize> = rows
         .iter()
         .map(|&row| cx.frame.members(row).first().copied())
@@ -357,11 +481,8 @@ fn filter_truths<E>(
         if column < built.width {
             super::predicates::Operand::Frame(cx.frame.column(column), &rows)
         } else {
-            let mut values = Values::missing(0);
-            for position in 0..len {
-                values.push(built.get(cx, position, column));
-            }
-            super::predicates::Operand::Values(values)
+            // A collected field is lent, as its buffer is indexed by position.
+            super::predicates::Operand::Frame(&built.collected[column - built.width], &positions)
         }
     })
 }
@@ -399,6 +520,8 @@ pub(super) fn value<E>(
     answers(run, cx, expr, id, rows)
 }
 
+/// The answers at `rows`: the partitions are completed first, then the
+/// answers are written in bulk, each by the window's kind.
 fn answers<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -413,91 +536,250 @@ fn answers<E>(
         .remove(&id)
         .expect("the reached window has a run");
     let result = (|| {
-        let mut values = Values::missing(0);
-        for &row in rows {
-            let position = row - built.start;
-            complete(&mut built, cx, position)?;
-            match built.answers[position] {
-                // A cell is lent, never owned on its way into the buffer.
-                Answer::Cell { row, column } => values.push(built.get(cx, row, column)),
-                _ => values.push_value(answer(plan, &built, cx, expr, position)?),
+        if rows.len() > 1 {
+            // A batch completes every partition, in group order, whatever
+            // rows it reads: a failure replays the unit a row at a time,
+            // which completes only the partitions it reaches, in row order.
+            if built.remaining > 0 {
+                for group in 0..built.completed.len() {
+                    complete(&mut built, cx, group)?;
+                }
             }
+        } else if let Some(&row) = rows.first() {
+            let group = built.grouping.group_of[row - built.start];
+            complete(&mut built, cx, group)?;
         }
-        Ok(values)
+        write(plan, &built, cx, expr, rows)
     })();
     run.windows.runs.insert(id, built);
     result
 }
 
-/// Complete the partition of one position, sorting it and evaluating every
-/// filter in sorted order before numbering any row.
-fn complete<E>(built: &mut WindowRun, cx: &Cx<'_, E>, position: usize) -> Result<(), Fail<E>> {
-    let group = built.grouping.group_of[position];
+/// The completed answers at `rows`, as pushing each row's answer in turn
+/// leaves the buffer; a cell is lent, never owned on its way in.
+fn write<E>(
+    plan: &crate::dataset::resolved::ResolvedPlan,
+    built: &WindowRun,
+    cx: &Cx<'_, E>,
+    expr: ExprId,
+    rows: &[usize],
+) -> Result<Values, Fail<E>> {
+    let words = &built.answers.words;
+    if !rows.is_empty()
+        && matches!(
+            built.window.kind,
+            WindowKind::RowNumber | WindowKind::Competition | WindowKind::Dense
+        )
+        && rows.iter().all(|&row| words[row - built.start] != 0)
+    {
+        // Every row numbered: the buffer pushing each number leaves.
+        let mut numbers = Vec::new();
+        super::reserved(numbers.try_reserve_exact(rows.len()))?;
+        // A number is at most the scope's length, which fits.
+        numbers.extend(rows.iter().map(|&row| words[row - built.start] as i64));
+        return Ok(Values::Int(numbers, Bits::new(rows.len(), true)));
+    }
+    if matches!(built.window.kind, WindowKind::BaselineFlag { .. })
+        && rows.iter().all(|&row| words[row - built.start] <= FLAG)
+    {
+        // Flags and missing values: the text once, lent by every flagged
+        // row, as pushing each row's answer reads.
+        if rows.iter().all(|&row| words[row - built.start] == 0) {
+            return Ok(Values::missing(rows.len()));
+        }
+        let mut values = Values::repeat(ValueRef::Str("Y"), rows.len());
+        if let Values::Str(_, valid) = &mut values {
+            for (index, &row) in rows.iter().enumerate() {
+                if words[row - built.start] == 0 {
+                    valid.set(index, false);
+                }
+            }
+        }
+        return Ok(values);
+    }
+    let mut values = Values::missing(0);
+    let mut reserved = false;
+    for (index, &row) in rows.iter().enumerate() {
+        let position = row - built.start;
+        let word = words[position];
+        let value = match built.window.kind {
+            _ if word == 0 => ValueRef::Missing,
+            WindowKind::RowNumber | WindowKind::Competition | WindowKind::Dense => {
+                // A number is at most the scope's length, which fits.
+                ValueRef::Int(word as i64)
+            }
+            WindowKind::RowValue { column, .. } | WindowKind::Locf { column, .. } => {
+                built.get(cx, word - 1, column)
+            }
+            WindowKind::BaselineFlag { .. } if word == FLAG => ValueRef::Str("Y"),
+            WindowKind::BaselineFlag { .. } => {
+                return Err(ambiguity(plan, built, cx, expr, position, word - 2));
+            }
+        };
+        values.push(value);
+        // The buffer is typed at its first value: room for the rest then.
+        if !reserved && !matches!(values, Values::Missing(_)) {
+            super::reserved(values.try_reserve(rows.len() - index - 1))?;
+            reserved = true;
+        }
+    }
+    Ok(values)
+}
+
+/// Complete one group's partition, sorting it and evaluating every filter
+/// in sorted order before numbering any row.
+fn complete<E>(built: &mut WindowRun, cx: &Cx<'_, E>, group: usize) -> Result<(), Fail<E>> {
     if std::mem::replace(&mut built.completed[group], true) {
         return Ok(());
     }
-    let mut members = built.grouping.groups.group(group).to_vec();
-    // The answers are written apart from the run, which the window and the
-    // values it reads are borrowed from.
+    built.remaining -= 1;
+    if built.standings.is_none() {
+        built.standings = Some(standings(built, cx)?);
+    }
+    // The answers and member lists are written apart from the run, which
+    // the window and the values it reads are borrowed from.
     let mut answers = std::mem::take(&mut built.answers);
-    let result = partition(built, cx, &mut members, &mut answers);
+    let mut scratch = std::mem::take(&mut built.scratch);
+    scratch.members.clear();
+    scratch
+        .members
+        .extend_from_slice(built.grouping.groups.group(group));
+    let result = partition(built, cx, group, &mut scratch, &mut answers);
     built.answers = answers;
+    built.scratch = scratch;
     result
 }
 
-/// Number one partition, `members` in construction order: sort it, then
-/// evaluate every filter in sorted order before numbering any row.
+/// How a partition's members, in construction order, stand to the order of
+/// the window's terms.
+#[derive(Clone, Copy, PartialEq)]
+enum Standing {
+    /// No pair out of order: the stable sort leaves them as they are.
+    InOrder,
+    /// Every pair strictly out of order, so no two tie: the stable sort
+    /// reverses them.
+    Reversed,
+    Unordered,
+}
+
+/// How every group's partition stands to the window's order terms, when
+/// the scope is admitted, so every pair compares: each member is compared
+/// with the member before it in its partition, in construction order, term
+/// by term until one decides. The pairs are compared a term at a time over
+/// the positions in order, so each buffer is read front to back and the
+/// member before is most often the position before, read just now. Nothing
+/// here fails, but for room, or counts, so a row-mode replay finds them all
+/// as a batch does.
+/// Empty for a baseline, a window without order terms or a scope not
+/// admitted, which no partition asks.
+fn standings<E>(built: &WindowRun, cx: &Cx<'_, E>) -> Result<Vec<Standing>, Fail<E>> {
+    let window = &built.window;
+    if matches!(window.kind, WindowKind::BaselineFlag { .. })
+        || window.order_by.is_empty()
+        || !built.admitted
+    {
+        return Ok(Vec::new());
+    }
+    let len = built.answers.words.len();
+    let groups = &built.grouping.groups;
+    let group_of = &built.grouping.group_of;
+    // Each position's order after the member before it, and whether a term
+    // has decided it: a pair that fails to compare counts as a tie and
+    // stops there, as the sort counts it. Members are in position order, so
+    // the member before a position is the last position of its group read.
+    let mut order = super::filled(len, Ordering::Equal)?;
+    let mut decided = super::filled(len, false)?;
+    let mut last = super::filled(groups.len(), usize::MAX)?;
+    for term in &window.order_by {
+        let (values, first) = built.lane(cx, term.column);
+        let mut previous = ValueRef::Missing;
+        last.fill(usize::MAX);
+        for position in 0..len {
+            let current = values.get(first + position);
+            let member = std::mem::replace(&mut last[group_of[position]], position);
+            if member != usize::MAX && !decided[position] {
+                let left = if member + 1 == position {
+                    previous
+                } else {
+                    values.get(first + member)
+                };
+                match super::relations::compare(left, current, term) {
+                    Ok(Ordering::Equal) => {}
+                    Ok(decision) => {
+                        order[position] = decision;
+                        decided[position] = true;
+                    }
+                    Err(_) => decided[position] = true,
+                }
+            }
+            previous = current;
+        }
+    }
+    let mut standings = Vec::new();
+    super::reserved(standings.try_reserve_exact(groups.len()))?;
+    standings.extend(groups.iter().map(|members| {
+        let after = members.get(1..).unwrap_or(&[]);
+        if after
+            .iter()
+            .all(|&member| order[member] != Ordering::Greater)
+        {
+            Standing::InOrder
+        } else if after
+            .iter()
+            .all(|&member| order[member] == Ordering::Greater)
+        {
+            Standing::Reversed
+        } else {
+            Standing::Unordered
+        }
+    }));
+    Ok(standings)
+}
+
+/// Number one partition, `scratch.members` in construction order: sort it,
+/// then evaluate every filter in sorted order before numbering any row.
 fn partition<E>(
     built: &WindowRun,
     cx: &Cx<'_, E>,
-    members: &mut Vec<usize>,
-    answers: &mut [Answer],
+    group: usize,
+    scratch: &mut Scratch,
+    answers: &mut Answers,
 ) -> Result<(), Fail<E>> {
     let window = &built.window;
+    let Scratch { members, eligible } = scratch;
     // A baseline's tie-break terms compare only eligible rows sharing the
     // latest date; its partition keeps construction order.
     let baseline = matches!(window.kind, WindowKind::BaselineFlag { .. });
     if !baseline && !window.order_by.is_empty() {
         // Members are in construction order, which a tie keeps (VALUE-23).
         if built.admitted {
-            // Every pair compares; a frame column's buffer is read directly.
-            let lanes: Vec<_> = window
-                .order_by
-                .iter()
-                .map(|term| {
-                    (
-                        term,
-                        (term.column < built.width).then(|| cx.frame.column(term.column)),
-                    )
-                })
-                .collect();
-            let order = |left: usize, right: usize| {
-                for (term, values) in &lanes {
-                    let pair = match values {
-                        Some(values) => (
-                            values.get(built.start + left),
-                            values.get(built.start + right),
-                        ),
-                        None => (
-                            built.get(cx, left, term.column),
-                            built.get(cx, right, term.column),
-                        ),
-                    };
-                    match super::relations::compare(pair.0, pair.1, term) {
-                        Ok(Ordering::Equal) => {}
-                        Ok(order) => return order,
-                        Err(_) => return Ordering::Equal,
+            // Every pair compares; each buffer is read directly. A
+            // partition already in order, as rows built in order often are,
+            // or in strictly reverse order, is left as the stable sort would
+            // leave it.
+            let standing = built
+                .standings
+                .as_ref()
+                .map_or(Standing::Unordered, |standings| standings[group]);
+            if standing == Standing::Reversed {
+                members.reverse();
+            } else if standing == Standing::Unordered {
+                let lanes: Vec<_> = window
+                    .order_by
+                    .iter()
+                    .map(|term| (term, built.lane(cx, term.column)))
+                    .collect();
+                members.sort_by(|&left, &right| {
+                    for (term, (values, first)) in &lanes {
+                        let pair = (values.get(first + left), values.get(first + right));
+                        match super::relations::compare(pair.0, pair.1, term) {
+                            Ok(Ordering::Equal) => {}
+                            Ok(order) => return order,
+                            Err(_) => return Ordering::Equal,
+                        }
                     }
-                }
-                Ordering::Equal
-            };
-            // A partition already in order, as rows built in order often
-            // are, is left as the stable sort would leave it.
-            if members
-                .windows(2)
-                .any(|pair| order(pair[0], pair[1]) == Ordering::Greater)
-            {
-                members.sort_by(|&left, &right| order(left, right));
+                    Ordering::Equal
+                });
             }
         } else {
             super::relations::sort(members, &window.order_by, |&member, term| {
@@ -507,7 +789,7 @@ fn partition<E>(
         }
     }
     if let Some(filter) = &window.filter {
-        let mut eligible = Vec::with_capacity(members.len());
+        eligible.clear();
         for &member in members.iter() {
             let truth = match &built.truths {
                 Some(truths) => truths[member],
@@ -529,9 +811,10 @@ fn partition<E>(
                 eligible.push(member);
             }
         }
-        *members = eligible;
+        std::mem::swap(members, eligible);
     }
     let members = &members[..];
+    let words = &mut answers.words;
     match window.kind {
         WindowKind::BaselineFlag {
             date,
@@ -539,51 +822,70 @@ fn partition<E>(
             value,
             inclusive,
         } => {
-            let mut latest: Option<usize> = None;
-            let mut count = 0;
-            for &member in members {
-                let candidate = built.get(cx, member, date);
-                let reference = built.get(cx, member, reference_date);
-                if matches!(candidate, ValueRef::Missing)
-                    || matches!(reference, ValueRef::Missing)
-                    || matches!(built.get(cx, member, value), ValueRef::Missing)
-                {
-                    continue;
-                }
-                match temporal_order(candidate, reference)? {
-                    Ordering::Greater => continue,
-                    Ordering::Equal if !inclusive => continue,
-                    _ => {}
-                }
-                let order = match latest {
-                    None => Ordering::Greater,
-                    Some(best) => match temporal_order(candidate, built.get(cx, best, date))? {
-                        Ordering::Equal => ordered(built, cx, window, member, best)?,
-                        order => order,
+            let (dates, at) = built.lane(cx, date);
+            let (references, reference_at) = built.lane(cx, reference_date);
+            let (sources, source_at) = built.lane(cx, value);
+            let tie = |member, best| ordered(built, cx, window, member, best);
+            // Typed dates read from their buffers; anything else is lent,
+            // and a pair of two kinds fails.
+            let (latest, count) = match (dates, references) {
+                (Values::Date(dates, valid), Values::Date(references, known)) => latest(
+                    members,
+                    inclusive,
+                    |member| {
+                        let (date, reference) = (at + member, reference_at + member);
+                        (valid.get(date)
+                            && known.get(reference)
+                            && present(sources, source_at + member))
+                        .then(|| (dates[date], references[reference]))
                     },
-                };
-                if order == Ordering::Greater {
-                    latest = Some(member);
-                    count = 1;
-                } else if order == Ordering::Equal {
-                    count += 1;
-                }
-            }
+                    |left, right| Ok(left.cmp(&right)),
+                    tie,
+                )?,
+                (Values::DateTime(dates, valid), Values::DateTime(references, known)) => latest(
+                    members,
+                    inclusive,
+                    |member| {
+                        let (date, reference) = (at + member, reference_at + member);
+                        (valid.get(date)
+                            && known.get(reference)
+                            && present(sources, source_at + member))
+                        .then(|| (dates[date], references[reference]))
+                    },
+                    |left, right| Ok(left.cmp(&right)),
+                    tie,
+                )?,
+                _ => latest(
+                    members,
+                    inclusive,
+                    |member| {
+                        let candidate = dates.get(at + member);
+                        let reference = references.get(reference_at + member);
+                        (!matches!(candidate, ValueRef::Missing)
+                            && !matches!(reference, ValueRef::Missing)
+                            && present(sources, source_at + member))
+                        .then_some((candidate, reference))
+                    },
+                    temporal_order,
+                    tie,
+                )?,
+            };
             if let Some(row) = latest {
                 if count > 1 {
                     for &member in members {
-                        answers[member] = Answer::AmbiguousBaseline { row, date, count };
+                        words[member] = row + 2;
                     }
+                    answers.ambiguous.insert(row, count);
                 } else {
-                    answers[row] = Answer::Flag;
+                    words[row] = FLAG;
                 }
             }
         }
-        WindowKind::RowValue { column, offset } => {
+        WindowKind::RowValue { offset, .. } => {
             for (index, &member) in members.iter().enumerate() {
                 let target = usize::try_from(index as i128 + i128::from(offset)).ok();
                 if let Some(&row) = target.and_then(|target| members.get(target)) {
-                    answers[member] = Answer::Cell { row, column };
+                    words[member] = row + 1;
                 }
             }
         }
@@ -591,16 +893,17 @@ fn partition<E>(
             column,
             include_current,
         } => {
+            let (sources, first) = built.lane(cx, column);
             let mut previous = None;
             for &member in members {
-                let present = !matches!(built.get(cx, member, column), ValueRef::Missing);
+                let present = !matches!(sources.get(first + member), ValueRef::Missing);
                 let donor = if present && include_current {
                     Some(member)
                 } else {
                     previous
                 };
                 if let Some(row) = donor {
-                    answers[member] = Answer::Cell { row, column };
+                    words[member] = row + 1;
                 }
                 if present {
                     previous = Some(member);
@@ -617,63 +920,111 @@ fn partition<E>(
                     rank = if window.kind == WindowKind::Dense {
                         rank + 1
                     } else {
-                        index as i64 + 1
+                        index + 1
                     };
                 }
-                answers[member] = Answer::Number(rank);
+                words[member] = rank;
             }
         }
     }
     Ok(())
 }
 
-fn answer<E>(
+/// A baseline partition's latest eligible row, and how many eligible rows
+/// share its date: `read(member)` is a member's date and reference date when
+/// both and its value are present, `order` puts two dates in order, and
+/// `tie` orders two members of one date by the window's terms.
+fn latest<T: Copy, E>(
+    members: &[usize],
+    inclusive: bool,
+    read: impl Fn(usize) -> Option<(T, T)>,
+    order: impl Fn(T, T) -> Result<Ordering, Fail<E>>,
+    tie: impl Fn(usize, usize) -> Result<Ordering, Fail<E>>,
+) -> Result<(Option<usize>, usize), Fail<E>> {
+    let mut latest: Option<(usize, T)> = None;
+    let mut count = 0;
+    for &member in members {
+        let Some((candidate, reference)) = read(member) else {
+            continue;
+        };
+        match order(candidate, reference)? {
+            Ordering::Greater => continue,
+            Ordering::Equal if !inclusive => continue,
+            _ => {}
+        }
+        let decided = match latest {
+            None => Ordering::Greater,
+            Some((best, date)) => match order(candidate, date)? {
+                Ordering::Equal => tie(member, best)?,
+                decided => decided,
+            },
+        };
+        if decided == Ordering::Greater {
+            latest = Some((member, candidate));
+            count = 1;
+        } else if decided == Ordering::Equal {
+            count += 1;
+        }
+    }
+    Ok((latest.map(|(member, _)| member), count))
+}
+
+/// Whether a buffer holds a value at `index`, read from its validity when
+/// it is typed.
+fn present(values: &Values, index: usize) -> bool {
+    match values {
+        Values::Missing(_) => false,
+        Values::Int(_, valid)
+        | Values::Float(_, valid)
+        | Values::Bool(_, valid)
+        | Values::Date(_, valid)
+        | Values::DateTime(_, valid)
+        | Values::Str(_, valid) => valid.get(index),
+        Values::Mixed(_) => !matches!(values.get(index), ValueRef::Missing),
+    }
+}
+
+/// The failure of reading position `position` of an ambiguous baseline
+/// partition, whose latest row is `donor`.
+fn ambiguity<E>(
     plan: &crate::dataset::resolved::ResolvedPlan,
     built: &WindowRun,
     cx: &Cx<'_, E>,
     expr: ExprId,
     position: usize,
-) -> Result<Value, Fail<E>> {
-    Ok(match built.answers[position] {
-        Answer::Missing => Value::Missing,
-        Answer::Flag => Value::Str("Y".into()),
-        Answer::AmbiguousBaseline {
-            row: donor,
-            date,
-            count,
-        } => {
-            let (window, _, column) = payload(plan, expr);
-            let path = plan.expr(expr).path.to_string();
-            let column_name = cx
-                .schema
-                .columns()
-                .get(column)
-                .map(|column| column.name.clone())
-                .unwrap_or_else(|| {
-                    path.rsplit_once(".key.")
-                        .and_then(|(_, value)| value.split('.').next())
-                        .map_or_else(|| path.clone(), |field| format!("key[{field}]"))
-                });
-            let schema = built.schema.as_ref().unwrap_or(cx.schema);
-            return Err(Box::new(ExecutionError::BaselineAmbiguity {
-                path,
-                column: column_name,
-                date: super::eval::owned(built.get(cx, donor, date)),
-                match_count: count,
-                partition: window
-                    .group_by
-                    .iter()
-                    .map(|&group| {
-                        (
-                            schema.columns()[group].name.clone(),
-                            super::eval::owned(built.get(cx, position, group)),
-                        )
-                    })
-                    .collect(),
-            }));
-        }
-        Answer::Number(value) => Value::Int(value),
-        Answer::Cell { row, column } => super::eval::owned(built.get(cx, row, column)),
+    donor: usize,
+) -> Fail<E> {
+    let (window, _, column) = payload(plan, expr);
+    let WindowKind::BaselineFlag { date, .. } = window.kind else {
+        unreachable!("an ambiguous answer is a baseline's")
+    };
+    let path = plan.expr(expr).path.to_string();
+    let column_name = cx
+        .schema
+        .columns()
+        .get(column)
+        .map(|column| column.name.clone())
+        .unwrap_or_else(|| {
+            path.rsplit_once(".key.")
+                .and_then(|(_, value)| value.split('.').next())
+                .map_or_else(|| path.clone(), |field| format!("key[{field}]"))
+        });
+    let schema = built.schema.as_ref().unwrap_or(cx.schema);
+    Box::new(ExecutionError::BaselineAmbiguity {
+        path,
+        column: column_name,
+        date: super::eval::owned(built.get(cx, donor, date)),
+        match_count: built.answers.ambiguous[&donor],
+        partition: window
+            .group_by
+            .iter()
+            .map(|&group| {
+                (
+                    schema.columns()[group].name.clone(),
+                    super::eval::owned(built.get(cx, position, group)),
+                )
+            })
+            .collect(),
     })
 }
 
@@ -717,7 +1068,8 @@ mod tests {
     // The groupings the windows and output aggregates of a window stage or
     // of the column phase share (`Runs::grouping`), a seam no specification
     // reaches: which grouping a later unit reuses, merges from one by more
-    // keys, or builds again once a key column is written. The groups follow
+    // keys, or builds again once a key column is written, and that a key the
+    // rows hold alike merges nothing apart. The groups follow
     // ROW-4, derived by hand: first occurrence, members in row order.
     use super::*;
     use crate::dataset::columnar::frame::Identity;
@@ -768,6 +1120,16 @@ mod tests {
             groups(&both),
             [vec![0], vec![1], vec![2, 3]],
             "both keys, built again"
+        );
+        // Rows 0 and 1 hold the first key alike: merged from both keys, the
+        // grouping by it is one group.
+        let pair = runs.grouping(&frame, &[0, 1], 0..2).unwrap();
+        assert_eq!(groups(&pair), [vec![0], vec![1]], "both keys, rows 0 and 1");
+        let alike = runs.grouping(&frame, &[0], 0..2).unwrap();
+        assert_eq!(
+            (groups(&alike), alike.group_of.clone()),
+            (vec![vec![0, 1]], vec![0, 0]),
+            "the first key, rows 0 and 1"
         );
     }
 }

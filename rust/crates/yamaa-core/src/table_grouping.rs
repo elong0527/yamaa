@@ -255,9 +255,31 @@ impl Groups {
     ) -> Result<Self, TryReserveError> {
         let mut offsets = Vec::new();
         offsets.try_reserve_exact(groups + 1)?;
+        // Groups that are runs of consecutive items, numbered in item order,
+        // as items in key order form them, hold the items in order: each
+        // group starts where the number moves on.
+        if group_of.first().is_none_or(|&group| group == 0)
+            && group_of.last().map_or(0, |&group| group + 1) == groups
+            && group_of
+                .windows(2)
+                .all(|pair| pair[1] == pair[0] || pair[1] == pair[0] + 1)
+        {
+            let mut members = Vec::new();
+            members.try_reserve_exact(group_of.len())?;
+            members.extend(0..group_of.len());
+            offsets.extend(
+                (0..group_of.len())
+                    .filter(|&item| item == 0 || group_of[item] != group_of[item - 1]),
+            );
+            offsets.push(group_of.len());
+            return Ok(Self { offsets, members });
+        }
+        // Otherwise each group's items are counted, then placed in item
+        // order; a run of consecutive items of one group, as groups merged
+        // from runs hold them, is counted and placed at once.
         offsets.resize(groups + 1, 0usize);
-        for &group in group_of {
-            offsets[group + 1] += 1;
+        for (group, items) in group_runs(group_of) {
+            offsets[group + 1] += items.len();
         }
         for group in 0..groups {
             offsets[group + 1] += offsets[group];
@@ -268,9 +290,12 @@ impl Groups {
         let mut members = Vec::new();
         members.try_reserve_exact(group_of.len())?;
         members.resize(group_of.len(), 0usize);
-        for (item, &group) in group_of.iter().enumerate() {
-            members[cursor[group]] = item;
-            cursor[group] += 1;
+        for (group, items) in group_runs(group_of) {
+            let at = cursor[group];
+            cursor[group] += items.len();
+            for (member, item) in members[at..at + items.len()].iter_mut().zip(items) {
+                *member = item;
+            }
         }
         Ok(Self { offsets, members })
     }
@@ -293,6 +318,22 @@ impl Groups {
             .map(|group| self.group(group).to_vec())
             .collect()
     }
+}
+
+/// Each run of consecutive items of one group, in item order: its group and
+/// its items.
+fn group_runs(group_of: &[usize]) -> impl Iterator<Item = (usize, std::ops::Range<usize>)> + '_ {
+    let mut start = 0;
+    std::iter::from_fn(move || {
+        let group = *group_of.get(start)?;
+        let end = group_of[start..]
+            .iter()
+            .position(|&other| other != group)
+            .map_or(group_of.len(), |length| start + length);
+        let run = (group, start..end);
+        start = end;
+        Some(run)
+    })
 }
 
 /// Partition items `0..count`; `key(item, position)` is the item's key at a
@@ -511,7 +552,8 @@ mod tests {
     // The seam is the crate-private grouping core (#4211): items in key
     // order group as runs without hashing, items out of order hash, and
     // either way the groups are ROW-4's, written here by hand: groups in
-    // first-occurrence order, a missing value a key of its own, the float
+    // first-occurrence order, members in item order (#4209: counted and
+    // placed a run at a time), a missing value a key of its own, the float
     // zero signs and a date's precision ignored.
     use super::*;
     use crate::table::ColumnValues;
@@ -565,6 +607,42 @@ mod tests {
         ];
         for (label, keys, expected) in cases {
             assert_eq!(groups(&keys), expected, "{label}");
+        }
+    }
+
+    #[test]
+    fn group_members_follow_item_order_whether_groups_are_runs_or_interleave() {
+        // A label, each item's group, how many groups, and their members.
+        type Case = (&'static str, &'static [usize], usize, Vec<Vec<usize>>);
+        let cases: [Case; 4] = [
+            (
+                "runs numbered in item order",
+                &[0, 0, 1, 2, 2],
+                3,
+                vec![vec![0, 1], vec![2], vec![3, 4]],
+            ),
+            (
+                "runs of groups that recur",
+                &[0, 0, 1, 1, 0, 0, 2],
+                3,
+                vec![vec![0, 1, 4, 5], vec![2, 3], vec![6]],
+            ),
+            (
+                "single items that alternate",
+                &[0, 1, 0, 1],
+                2,
+                vec![vec![0, 2], vec![1, 3]],
+            ),
+            ("no item", &[], 0, vec![]),
+        ];
+        for (label, group_of, groups, expected) in cases {
+            assert_eq!(
+                Groups::from_assignment(group_of, groups)
+                    .unwrap()
+                    .into_vecs(),
+                expected,
+                "{label}"
+            );
         }
     }
 
