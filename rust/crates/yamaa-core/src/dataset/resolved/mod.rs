@@ -159,6 +159,7 @@ pub struct Region {
     conversions: Vec<HandlerSiteId>,
     /// Column-phase columns in the compiler's order.
     column_order: Vec<ColumnId>,
+    recurrences: Vec<RecurrenceNode>,
     /// The region's output schema, in declaration order.
     pub output: TableSchema,
     /// Inputs whose every implicit join must find a record (LOOKUP-24).
@@ -194,6 +195,13 @@ pub struct ColumnNode {
     /// The column-phase bindings of this column: each column binding of the
     /// bound plan in turn, its templates split by driver context.
     column_bindings: Range<u32>,
+}
+
+/// An admitted causal component, executed as one column-phase unit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RecurrenceNode {
+    pub columns: Vec<ColumnId>,
+    pub window: ExprId,
 }
 
 /// Which phase completes a column, decided from the templates' row bindings (#2754).
@@ -1004,6 +1012,23 @@ impl ResolvedPlan {
     /// first template each serves (#2829).
     pub fn column_bindings(&self, id: ColumnId) -> impl Iterator<Item = BindingId> {
         range(&self.column(id).column_bindings).map(|index| BindingId(index as u32))
+    }
+    pub(crate) fn recurrence(&self, column: ColumnId) -> Option<&RecurrenceNode> {
+        self.region(RegionId::DATASET)
+            .recurrences
+            .iter()
+            .find(|group| group.columns.first() == Some(&column))
+    }
+    pub(crate) fn step_columns(&self, column: ColumnId) -> impl Iterator<Item = ColumnId> + '_ {
+        let group = self.recurrence(column);
+        group
+            .into_iter()
+            .flat_map(|group| group.columns.iter().copied())
+            .chain(group.is_none().then_some(column))
+    }
+    pub(crate) fn step_bindings(&self, column: ColumnId) -> impl Iterator<Item = BindingId> + '_ {
+        self.step_columns(column)
+            .flat_map(|column| self.column_bindings(column))
     }
     /// The conversion handler sites a region declares, in declared order.
     pub fn conversions(&self, id: RegionId) -> &[HandlerSiteId] {

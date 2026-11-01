@@ -502,7 +502,8 @@ contributed `output` fails as `missing_required_field` at `output`
 ### LAYER-13. A layered specification's resolved columns follow dependency order with a stable tie-break
 
 When a specification declares a `parent` or includes a fragment, each
-resolved column comes after every column its derivation reads, after pruning;
+resolved column comes after every column its derivation reads at the current
+position, after pruning;
 when more than one column can come next, the one with the earliest
 contribution position comes first, which keeps an ancestor's independent
 columns before its descendants'. A specification that does neither keeps its
@@ -518,9 +519,15 @@ input. A row template's qualified read of its own driver reads the row's own
 record ([LOOKUP-1](lookup.md#lookup-1)), so it adds no read of the driver's
 key columns.
 
-A derivation that reads an undeclared column, or that reads itself directly or
-through other columns, fails under the
-[Column derivation](columns.md); ordering repairs neither.
+Within a causal calculated-history component admitted by
+[WINDOW-12](windows.md#window-12), strictly backward source reads do not
+order the current position. Its current-position dependencies still order
+the columns, and its grouping and ordering fields must be independent.
+An undeclared column or a noncausal dependency cycle still fails under
+[Column derivation](columns.md); ordering repairs neither. The authored
+calculated-history cases in
+`rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json`
+cover empty children of admitted and refused components.
 `output.columns` alone defines artifact membership and column order under
 [Output](output.md#output-1).
 

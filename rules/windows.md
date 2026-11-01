@@ -84,6 +84,10 @@ and [COLUMN-6](columns.md#column-6). A window in a column-level derivation
 partitions the rows of every row template, and
 [WINDOW-11](#window-11) limits the driver fields it reads.
 
+A column-level backward `row_value` may instead read calculated history under
+[WINDOW-12](#window-12), after its partition and order are independently
+complete.
+
 <a id="window-11"></a>
 
 ### WINDOW-11. A column-level window reads a driver field only when every row template has that driver
@@ -225,6 +229,45 @@ Evidence: `schema-window-functions`, `negative-row-no-prior`.
 
 The current row's own value is `source`, and a window must not be a second
 spelling of it.
+
+<a id="window-12"></a>
+
+### WINDOW-12. Strictly backward row_value reads can carry calculated history in one independently ordered column group
+
+A column-level `row_value` with a negative `offset` may name a calculated
+column, including itself or one declared later. A feedback group is admitted
+when removing its backward source dependencies leaves an acyclic current-row
+graph, every member has one typed column binding for all output rows, and all
+its window reads are backward `row_value` operations over the same partition
+keys and order terms, without a window filter. Its partition and order columns
+are completed outside the group. An unsupported cycle still fails.
+
+Fails: `dependency_cycle`, `forward_reference`.
+Evidence: `adam-advs-dosing-weight`, `negative-row-value-self`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json`.
+
+Keys, row derivations, intermediate donor derivations, context windows,
+lookups, aggregates and project functions cannot participate in a feedback
+group.
+
+The group completes after all its external dependencies. Partitions run in
+first-occurrence order and their rows in the declared stable window order;
+within each row, current-row dependencies determine the column order. Each
+value is evaluated, converted and handled before the next value reads it
+([COLUMN-8](columns.md#column-8)). A backward read selects that completed
+value, including its being missing. A position before the partition starts
+returns missing; it does not initialize state, skip a missing result, or
+search a preceding partition. Initialization and missing-observation policies
+belong to the ordinary expressions that use the read.
+
+The first failure in that causal order stops the group, with only the handler
+firings preceding it counted. Whole-column verifications run after the group
+completes, before an outside consumer proceeds, in the ordinary declared check
+order. Unrelated columns keep their existing evaluation and failure order.
+
+Every attempt owns its calculated values and window positions. No state is
+retained by a prepared plan or a previous run. Calculated-history groups run
+whole-table; they are not admitted to partitioned input execution. Ordinary
+windows over completed columns retain their existing partition support.
 
 <a id="window-8"></a>
 

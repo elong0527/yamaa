@@ -326,8 +326,12 @@ impl Implicit {
                 );
             }
         }
-        let analysis = column_dependencies::analyze(&dependencies, keys, false)
-            .map_err(BindError::DependencyPolicy)?;
+        let programs = (0..dependencies.len())
+            .map(|column| assignments.get(&column))
+            .collect::<Vec<_>>();
+        let (analysis, recurrences) =
+            crate::dataset::recurrence::analyze(&dependencies, &programs, keys, false)
+                .map_err(BindError::DependencyPolicy)?;
         if !analysis.diagnostics.is_empty() {
             findings.push(BindFinding::Dependencies {
                 columns: prepared
@@ -427,6 +431,7 @@ impl Implicit {
             keys.clone(),
             verifications,
         )
+        .with_recurrences(recurrences)
         .with_conversion_handlers(
             self.declarations
                 .iter()
@@ -1481,7 +1486,7 @@ impl Templates {
                 declared.push(template);
             }
         }
-        let columns = self.bind_column_phase(
+        let (columns, recurrences) = self.bind_column_phase(
             &cx,
             &catalog,
             &phases,
@@ -1540,7 +1545,9 @@ impl Templates {
                 }
             })
             .collect();
-        let plan = plan.with_row_contexts(contexts);
+        let plan = plan
+            .with_row_contexts(contexts)
+            .with_recurrences(recurrences);
         // Repeated defaults in several templates share one declaration and
         // one counter. Only effective row declarations register handlers.
         let mut seen = std::collections::BTreeSet::new();
@@ -1575,7 +1582,13 @@ impl Templates {
         templates: &[RowTemplate],
         positions: &[Option<usize>],
         findings: &mut Vec<BindFinding>,
-    ) -> Result<Vec<ColumnBinding>, BindError> {
+    ) -> Result<
+        (
+            Vec<ColumnBinding>,
+            Vec<crate::dataset::recurrence::Recurrence>,
+        ),
+        BindError,
+    > {
         let prepared = cx.prepared;
         let (source, name) = (cx.source(), cx.name());
         let (output, keys) = (&prepared.output, &prepared.keys);
@@ -1713,8 +1726,20 @@ impl Templates {
             }
             dependencies[declaration.column] = Some(edges);
         }
-        let analyzed = column_dependencies::analyze(&dependencies, keys, true)
-            .map_err(|_| BindError::Internal)?;
+        let programs = (0..dependencies.len())
+            .map(|column| {
+                let mut bindings = columns
+                    .iter()
+                    .filter(|binding| binding.assignment.column == column);
+                let binding = bindings.next()?;
+                (bindings.next().is_none() && binding.templates.len() == templates.len())
+                    .then_some(&binding.assignment)
+            })
+            .collect::<Vec<_>>();
+        let (analyzed, recurrences) =
+            crate::dataset::recurrence::analyze(&dependencies, &programs, keys, true)
+                .map_err(|_| BindError::Internal)?;
+        let order = analyzed.order.clone();
         if !analyzed.diagnostics.is_empty() {
             let mut paths = std::vec![String::new(); output.columns().len()];
             for declaration in &self.columns {
@@ -1726,7 +1751,12 @@ impl Templates {
                 diagnostics: analyzed.diagnostics,
             });
         }
-        Ok(columns)
+        columns.sort_by_key(|binding| {
+            order
+                .iter()
+                .position(|&column| column == binding.assignment.column)
+        });
+        Ok((columns, recurrences))
     }
 }
 

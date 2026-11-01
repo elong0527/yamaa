@@ -41,9 +41,8 @@ columns:
     label: Analysis Value
     derivation: VS.VSSTRESN
 
-  # The defect: AVALF reads PRIORF, and PRIORF reads the previous row's
-  # AVALF, so each column waits on the other and the specification is
-  # rejected before any data is read.
+  # The defect: the proposed prior value reads a future filled result.
+  # Unlike a backward read, that cycle has no earlier completed value.
   - name: AVALF
     type: float
     label: Filled Analysis Value
@@ -57,7 +56,7 @@ columns:
     derivation:
       row_value:
         source: AVALF
-        offset: -1
+        offset: 1
         window:
           group_by: [STUDYID, USUBJID, PARAMCD]
           order_by: [ADT, VSSEQ]

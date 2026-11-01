@@ -77,6 +77,7 @@ mod row_drivers;
 mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
 mod cut;
+pub(crate) mod recurrence;
 pub use cut::PartitionCut;
 pub mod resolved;
 pub use resolved::{ResolutionError, ResolvedPlan};
@@ -690,6 +691,7 @@ pub struct DatasetPlan {
     output_order: Vec<OrderTerm>,
     /// Inputs whose every implicit join must find a record (LOOKUP-24).
     required_matches: std::collections::BTreeSet<String>,
+    pub(crate) recurrences: Vec<recurrence::Recurrence>,
 }
 impl DatasetPlan {
     /// A single-source plan whose column bindings serve every template.
@@ -826,11 +828,16 @@ impl DatasetPlan {
             conversion_sites: BTreeMap::new(),
             output_order: Vec::new(),
             required_matches: Default::default(),
+            recurrences: Vec::new(),
         }
     }
 }
 
 impl DatasetPlan {
+    pub(crate) fn with_recurrences(mut self, recurrences: Vec<recurrence::Recurrence>) -> Self {
+        self.recurrences = recurrences;
+        self
+    }
     /// Presentation terms, separate from derivation and window order.
     pub(crate) fn with_output_order(mut self, terms: Vec<OrderTerm>) -> Self {
         self.output_order = terms;
