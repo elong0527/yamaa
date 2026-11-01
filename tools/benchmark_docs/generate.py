@@ -582,14 +582,15 @@ def render_review_queue(entries, saved):
     need one more review to settle, then those nobody has reviewed."""
     reviews = saved["reviews"] if saved else []
     counted = review_status.tally(review_queue(entries), reviews)
+    current = [(name, history[-1][0]) for name, history in counted.items()]
     queue = {
         "doneKey": REVIEW_DONE_KEY,
         "started": [
             name
-            for name, (count, _) in counted.items()
+            for name, count in current
             if 0 < count < review_status.REQUIRED_REVIEWS
         ],
-        "open": [name for name, (count, _) in counted.items() if not count],
+        "open": [name for name, count in current if not count],
     }
     template = Template((HERE / "review-queue.html").read_text(encoding="utf-8"))
     result = template.substitute(
@@ -607,27 +608,50 @@ def render_review_status(entries, saved):
     counted = review_status.tally(review_queue(entries), saved["reviews"])
     categories = {name: category for name, _, category in entries}
     columns = review_status.STATUSES
+
+    def summary(heading, labelled):
+        rows = "".join(
+            f"| {label} | {len(found)} | "
+            + " | ".join(str(found.count(column)) for column in columns)
+            + " |\n"
+            for label, found in labelled
+        )
+        head = f"| {heading} | Benchmarks | " + " | ".join(columns) + " |\n"
+        return head + "|---|---|---|---|---|---|\n" + rows
+
+    by_round = [
+        (
+            f"Round {index + 1}",
+            [row[index][1] for row in counted.values() if len(row) > index],
+        )
+        for index in range(max(map(len, counted.values()), default=0))
+    ]
     groups = [(f"`{key}`", key) for key in REVIEW_GROUPS] + [("**All**", None)]
-    totals = []
-    for label, key in groups:
-        found = [
-            found
-            for name, (_, found) in counted.items()
-            if key in (None, benchmark_group(name))
-        ]
-        cells = [str(found.count(column)) for column in columns]
-        totals.append(f"| {label} | {len(found)} | " + " | ".join(cells) + " |\n")
+    by_group = [
+        (
+            label,
+            [
+                history[-1][1]
+                for name, history in counted.items()
+                if key in (None, benchmark_group(name))
+            ],
+        )
+        for label, key in groups
+    ]
     rows = [
         f'| <a href="../{escape(name)}.html">{escape(name)}</a> '
-        f"| {escape(categories[name])} | {reviews} | {found} |\n"
-        for name, (reviews, found) in counted.items()
+        f"| {escape(categories[name])} | {len(history)} | {history[-1][0]} "
+        f"| {history[-1][1]} |\n"
+        for name, history in counted.items()
     ]
     return (
         f"Updated {escape(saved['updated'])}.\n\n"
-        "| Group | Benchmarks | " + " | ".join(columns) + " |\n"
-        "|---|---|---|---|---|---|\n" + "".join(totals) + "\n"
-        f"| Benchmark | Domain | Reviews ({review_status.REQUIRED_REVIEWS} needed) "
-        "| Status |\n|---|---|---|---|\n" + "".join(rows)
+        + summary("Round", by_round)
+        + "\n"
+        + summary("Group", by_group)
+        + "\n"
+        + f"| Benchmark | Domain | Round | Reviews ({review_status.REQUIRED_REVIEWS} "
+        "needed) | Status |\n|---|---|---|---|---|\n" + "".join(rows)
     )
 
 

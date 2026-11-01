@@ -905,14 +905,66 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(
             review_status.tally(names, reviews),
             {
-                "none": (0, "Not reviewed"),
-                "one": (1, "In review"),
-                "agreed": (2, "Approved"),
-                "split": (2, "Needs rework"),
-                "changed": (2, "Approved"),
-                "repeated": (1, "In review"),
+                "none": [(0, "Not reviewed")],
+                "one": [(1, "In review")],
+                "agreed": [(2, "Approved")],
+                "split": [(2, "Needs rework")],
+                "changed": [(2, "Approved")],
+                "repeated": [(1, "In review")],
             },
         )
+
+    def test_review_rounds_keep_approvals_and_restart_after_rework(self):
+        def review(reviewer, posted, overall):
+            return {
+                "reviewer": reviewer,
+                "posted": f"2026-11-{posted:02}T10:00:00Z",
+                "overall": overall,
+            }
+
+        approve, reject = "Approve", "Not approve"
+        cases = (
+            (
+                "an approval stands against a later review",
+                [
+                    review("a", 1, approve),
+                    review("b", 2, approve),
+                    review("c", 6, reject),
+                ],
+                [(2, "Approved")],
+            ),
+            (
+                "rework waits for the next round",
+                [review("a", 1, approve), review("b", 2, reject)],
+                [(2, "Needs rework"), (0, "Not reviewed")],
+            ),
+            (
+                "rework passes on new reviews",
+                [
+                    review("a", 1, reject),
+                    review("b", 1, reject),
+                    review("a", 6, approve),
+                    review("b", 7, approve),
+                ],
+                [(2, "Needs rework"), (2, "Approved")],
+            ),
+            (
+                "a review short of settling carries over",
+                [review("a", 1, approve), review("b", 6, approve)],
+                [(1, "In review"), (2, "Approved")],
+            ),
+            ("no reviews", [], [(0, "Not reviewed"), (0, "Not reviewed")]),
+            (
+                "a review on the first day counts in the new round",
+                [review("a", 5, approve)],
+                [(0, "Not reviewed"), (1, "In review")],
+            ),
+        )
+        for label, reviews, expected in cases:
+            with self.subTest(case=label):
+                self.assertEqual(
+                    review_status.rounds(reviews, ("2026-11-05",)), expected, label
+                )
 
     def test_review_page_states_the_status_of_each_benchmark(self):
         entries = [
@@ -934,16 +986,54 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(
             generate.render_review_status(entries, saved),
             "Updated 2026-11-02 10:00 UTC.\n\n"
+            "| Round | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+            "|---|---|---|---|---|---|\n"
+            "| Round 1 | 2 | 0 | 0 | 1 | 1 |\n\n"
             "| Group | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
             "|---|---|---|---|---|---|\n"
             "| `sdtm` | 1 | 0 | 0 | 1 | 0 |\n"
             "| `adam` | 1 | 0 | 0 | 0 | 1 |\n"
             "| **All** | 2 | 0 | 0 | 1 | 1 |\n\n"
-            "| Benchmark | Domain | Reviews (2 needed) | Status |\n"
-            "|---|---|---|---|\n"
-            '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | In review |\n'
-            '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 0 | Not reviewed |\n',
+            "| Benchmark | Domain | Round | Reviews (2 needed) | Status |\n"
+            "|---|---|---|---|---|\n"
+            '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | 1 | In review |\n'
+            '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 1 | 0 | Not reviewed |\n',
         )
+        settled = {
+            "updated": "2026-11-06 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": benchmark,
+                    "reviewer": reviewer,
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": overall,
+                }
+                for benchmark, reviewer, overall in (
+                    ("sdtm-dm-basic", "a", "Approve"),
+                    ("sdtm-dm-basic", "b", "Approve"),
+                    ("adam-adsl-age", "a", "Approve"),
+                    ("adam-adsl-age", "b", "Not approve"),
+                )
+            ],
+        }
+        with mock.patch.object(review_status, "ROUND_STARTS", ("2026-11-05",)):
+            self.assertEqual(
+                generate.render_review_status(entries, settled),
+                "Updated 2026-11-06 10:00 UTC.\n\n"
+                "| Round | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+                "|---|---|---|---|---|---|\n"
+                "| Round 1 | 2 | 1 | 1 | 0 | 0 |\n"
+                "| Round 2 | 1 | 0 | 0 | 0 | 1 |\n\n"
+                "| Group | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+                "|---|---|---|---|---|---|\n"
+                "| `sdtm` | 1 | 1 | 0 | 0 | 0 |\n"
+                "| `adam` | 1 | 0 | 0 | 0 | 1 |\n"
+                "| **All** | 2 | 1 | 0 | 0 | 1 |\n\n"
+                "| Benchmark | Domain | Round | Reviews (2 needed) | Status |\n"
+                "|---|---|---|---|---|\n"
+                '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | 2 | Approved |\n'
+                '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 2 | 0 | Not reviewed |\n',
+            )
         page = generate.render_review_page(entries, saved).decode("ascii")
         self.assertIn("| Reviewers | `a` |\n", page)
         page = generate.render_review_page(entries, None).decode("ascii")

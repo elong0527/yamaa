@@ -23,6 +23,9 @@ OVERALL = re.compile(
     r"^\| \*\*Overall\*\* \| (Approve|Not approve) \|\s*$", re.MULTILINE
 )
 REQUIRED_REVIEWS = 2
+# The UTC date each later round opens, oldest first. The coordinator adds one
+# when the rework of the round before it is done.
+ROUND_STARTS = ()
 APPROVED = "Approved"
 NEEDS_REWORK = "Needs rework"
 IN_REVIEW = "In review"
@@ -63,17 +66,32 @@ def status(verdicts):
     return APPROVED if set(verdicts) == {"Approve"} else NEEDS_REWORK
 
 
+def rounds(reviews, starts):
+    """A benchmark's (reviewers, status) in each round it took part in. Only a
+    person's latest review counts. An approval stands for good, rework starts the
+    next round with no reviews, and any other reviews carry over."""
+    history, verdicts = [], {}
+    pending = sorted(reviews, key=lambda review: review["posted"])
+    for end in (*starts, None):
+        while pending and (end is None or pending[0]["posted"] < end):
+            review = pending.pop(0)
+            verdicts[review["reviewer"]] = review["overall"]
+        found = status(list(verdicts.values()))
+        history.append((len(verdicts), found))
+        if found == APPROVED:
+            break
+        if found == NEEDS_REWORK:
+            verdicts = {}
+    return history
+
+
 def tally(names, reviews):
-    """Each benchmark's number of reviewers and status. Only a person's latest
-    review of a benchmark counts."""
-    verdicts = {name: {} for name in names}
-    for review in sorted(reviews, key=lambda review: review["posted"]):
-        if review["benchmark"] in verdicts:
-            verdicts[review["benchmark"]][review["reviewer"]] = review["overall"]
-    return {
-        name: (len(found), status(list(found.values())))
-        for name, found in verdicts.items()
-    }
+    """Each benchmark's rounds, from the reviews of the benchmarks in `names`."""
+    found = {name: [] for name in names}
+    for review in reviews:
+        if review["benchmark"] in found:
+            found[review["benchmark"]].append(review)
+    return {name: rounds(items, ROUND_STARTS) for name, items in found.items()}
 
 
 def fetch(token):

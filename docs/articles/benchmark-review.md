@@ -41,8 +41,9 @@ the coordinator confirms the reviewers before a benchmark is finalized.
 
 Reviews are public, so use public or invented data only.
 
-A benchmark is finalized when two reviewers approve it and nobody disagrees.
-Otherwise it is reworked and reviewed again in the next round.
+A benchmark passes when two reviewers approve it and nobody disagrees. It then
+stays approved and does not come back. Otherwise it is reworked and goes to the
+next round, which starts with no reviews for it.
 
 ## Status
 
