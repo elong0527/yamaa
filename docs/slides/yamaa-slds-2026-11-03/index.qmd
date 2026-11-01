@@ -265,8 +265,6 @@ Scroll inside the frame to explore the spec, inputs, and golden output.
 :::
 :::
 
-<div class="small" style="margin-top: 1rem;">yamaa main 90424d5 and Pilot 5's R programs, one core of a 4-vCPU container, median of 3 runs.</div>
-
 ::: {.notes}
 The task is R Submission Pilot 5: CDISC Pilot 01 SDTM to five ADaM datasets (ADSL, ADAE, ADADAS, ADTTE, ADLBC). The comparison is the R programs Pilot 5 submitted, built on admiral, against the yamaa specifications for the same datasets.
 
@@ -274,7 +272,7 @@ At real size, 254 subjects, both match Pilot 5's reference ADaM in all 2,291,147
 
 For the stress test every subject is copied ten times under a new USUBJID: 2,540 subjects and 2.95 million SDTM rows. yamaa and R agree in all 22,911,470 derived cells. yamaa takes 12.62 s against 181.70 s, 14 times faster, and peaks at 1.93 GB against 4.13 GB.
 
-Method: yamaa ran with one thread; R ran Pilot 5's programs in one session on R 4.3.3 with its locked packages (admiral 1.3.0, metacore 0.2.0, metatools 0.1.6, datasetjson 0.3.0). Wall time includes start-up and file input and output; memory is peak resident set size. Pilot 5's adadas.r writes an undefined adas, renamed to adadas so the program finishes.
+Method: yamaa main 90424d5 and Pilot 5's R programs, each on one core of a 4-vCPU container, median of 3 runs. yamaa ran with one thread; R ran Pilot 5's programs in one session on R 4.3.3 with its locked packages (admiral 1.3.0, metacore 0.2.0, metatools 0.1.6, datasetjson 0.3.0). Wall time includes start-up and file input and output; memory is peak resident set size. Pilot 5's adadas.r writes an undefined adas, renamed to adadas so the program finishes.
 
 The point is not a race between data frame libraries: adding a reviewed specification layer costs nothing in speed or memory against the R programs that produced the same submission datasets.
 :::
