@@ -341,29 +341,98 @@ impl Plans {
 
 /// One member of a producer graph: the specification to build, with its
 /// project, and what decides whether it builds.
-struct Node<'a> {
+pub(crate) struct Node<'a> {
     /// The specification's name in its project, when it has one.
-    name: Option<String>,
+    pub(crate) name: Option<String>,
     /// What a project run names the member by: its listed name, or the path
     /// the project file lists when the listing could not be read. A
     /// specification run has none and names its dataset or the path as
     /// given.
-    label: Option<String>,
-    identity: Option<String>,
-    request: Request<'a>,
+    pub(crate) label: Option<String>,
+    pub(crate) identity: Option<String>,
+    pub(crate) request: Request<'a>,
     /// What the request resolves to now, for a kept plan.
-    plan: Option<PlanKey>,
+    pub(crate) plan: Option<PlanKey>,
     /// Findings that stop the member before it builds.
-    refused: Vec<Diagnostic>,
+    pub(crate) refused: Vec<Diagnostic>,
     /// The producers it reads, by node, each with the finding the member
     /// reports when that producer did not complete.
-    producers: Vec<(usize, Diagnostic)>,
+    pub(crate) producers: Vec<(usize, Diagnostic)>,
     /// The producer identity and location under which consumers read the
     /// member's artifact.
-    artifact: Option<(String, String)>,
+    pub(crate) artifact: Option<(String, String)>,
     /// What locates the findings that stop the member before it builds: the
     /// project's documents, or none for a specification run.
-    locator: Arc<Locator>,
+    pub(crate) locator: Arc<Locator>,
+}
+
+/// Whether one member of a producer graph builds.
+pub(crate) enum Admission {
+    /// It builds.
+    Builds,
+    /// It does not: these findings refuse it, its own or one for each
+    /// producer that did not complete.
+    Refused(Vec<Diagnostic>),
+    /// A producer before it has not finished.
+    Waiting,
+}
+
+impl Node<'_> {
+    /// Whether the member at `position` builds, given whether each producer
+    /// `completed`, or none for one that has not finished. Its own findings
+    /// refuse it first; a producer that is not before it in run order has
+    /// not completed when it builds.
+    pub(crate) fn admission(
+        &self,
+        position: usize,
+        completed: impl Fn(usize) -> Option<bool>,
+    ) -> Admission {
+        if !self.refused.is_empty() {
+            return Admission::Refused(self.refused.clone());
+        }
+        let mut blocked = Vec::new();
+        for (producer, finding) in &self.producers {
+            match (*producer < position).then(|| completed(*producer)) {
+                Some(None) => return Admission::Waiting,
+                Some(Some(true)) => {}
+                Some(Some(false)) | None => blocked.push(finding.clone()),
+            }
+        }
+        if blocked.is_empty() {
+            Admission::Builds
+        } else {
+            Admission::Refused(blocked)
+        }
+    }
+
+    /// What its progress events and timings name it by.
+    pub(crate) fn observed_name(&self) -> &str {
+        self.label.as_deref().unwrap_or(self.request.specification)
+    }
+
+    /// The member as its outcome holds `build`: a project run names it by
+    /// its label.
+    pub(crate) fn member(&self, build: Build) -> Member {
+        let build = match &self.label {
+            Some(label) => build.with_subject(label),
+            None => build,
+        };
+        Member {
+            name: self.name.clone(),
+            identity: self.identity.clone(),
+            work: Work::Built(Box::new(Run { build })),
+            measured: None,
+        }
+    }
+
+    /// The build of the member that `issues` refuse.
+    pub(crate) fn refused_build(&self, engine: &Engine, issues: Vec<Diagnostic>) -> Build {
+        engine.refused_build(
+            issues,
+            self.request.specification,
+            Arc::clone(&self.locator),
+        )
+    }
 }
 
 impl Engine {
@@ -398,14 +467,21 @@ impl Engine {
         }
     }
 
-    /// Build every member of a producer graph once, in order. A producer
-    /// hands its artifact to its consumers in memory; a member whose own
-    /// findings refuse it, or whose producer did not complete, does not
-    /// build. Only cancellation fails the call: `token` is polled before
-    /// each member and as each builds, and a user interrupt in project code
-    /// cancels the call too (D46), so no later member builds or calls
-    /// project code. Each build reports its progress to `reporter`, and once
-    /// its callback has failed no later member builds (#3762).
+    /// Build every member of a producer graph once, publishing them in
+    /// order. A producer hands its artifact to its consumers in memory; a
+    /// member whose own findings refuse it, or whose producer did not
+    /// complete, does not build. Only cancellation fails the call: `token`
+    /// is polled before each member and as each builds, and a user
+    /// interrupt in project code cancels the call too (D46), so no later
+    /// member builds or calls project code. Each build reports its progress
+    /// to `reporter`, and once its callback has failed no later member is
+    /// published (#3762).
+    ///
+    /// A graph of more than one member, on an engine whose partitions take
+    /// more than one thread and that reads through no caller resolver,
+    /// builds its members at once on those threads ([`crate::members`]);
+    /// any other builds them one at a time on the calling thread. Either
+    /// way the outcome and the progress events are the same.
     fn run_graph(
         &self,
         nodes: Vec<Node<'_>>,
@@ -413,60 +489,65 @@ impl Engine {
         reporter: &Reporter,
         token: &CancellationToken,
     ) -> Result<Outcome, Cancelled> {
-        let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
-        let mut succeeded = vec![false; nodes.len()];
-        let mut members = Vec::with_capacity(nodes.len());
-        for (position, node) in nodes.into_iter().enumerate() {
-            if token.is_cancelled() {
-                return Err(Cancelled);
-            }
-            let blocked = node
-                .producers
-                .into_iter()
-                .filter(|(producer, _)| !succeeded[*producer])
-                .map(|(_, finding)| finding)
-                .collect::<Vec<_>>();
-            if reporter.failed() {
-                break;
-            }
-            let build = if !node.refused.is_empty() {
-                self.refused_build(node.refused, node.request.specification, node.locator)
-            } else if !blocked.is_empty() {
-                self.refused_build(blocked, node.request.specification, node.locator)
-            } else {
-                let name = node.label.as_deref().unwrap_or(node.request.specification);
-                self.build_reusing(
-                    plans,
-                    &node.request,
-                    node.plan,
-                    Some(Arc::new(held.clone())),
-                    &reporter.observe(name),
-                    token,
-                )?
-            };
-            let artifact = build.artifact();
-            succeeded[position] = artifact.is_some();
-            if let (Some(bytes), Some((producer, location))) = (artifact, node.artifact) {
-                held.insert(producer, location, bytes);
-            }
-            // A project run names each member by its label.
-            let build = match &node.label {
-                Some(label) => build.with_subject(label),
-                None => build,
-            };
-            members.push(Member {
-                name: node.name,
-                identity: node.identity,
-                work: Work::Built(Box::new(Run { build })),
-                measured: None,
+        let threads = self
+            .shared()
+            .partitioning
+            .map_or(std::num::NonZeroUsize::MIN, |partitioning| {
+                partitioning.threads
             });
-        }
+        let members = if nodes.len() > 1 && threads.get() > 1 && self.shared().resolver.is_none() {
+            crate::members::build(self, &nodes, plans, reporter, token, threads)?
+        } else {
+            self.build_serially(&nodes, plans, reporter, token)?
+        };
         Ok(Outcome {
             members,
             issues: Vec::new(),
             locator: Arc::new(Locator::none()),
             progress_cause: reporter.cause(),
         })
+    }
+
+    /// The members of [`Engine::run_graph`], built one at a time on the
+    /// calling thread, in order.
+    fn build_serially(
+        &self,
+        nodes: &[Node<'_>],
+        plans: &Plans,
+        reporter: &Reporter,
+        token: &CancellationToken,
+    ) -> Result<Vec<Member>, Cancelled> {
+        let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
+        let mut succeeded = vec![false; nodes.len()];
+        let mut members = Vec::with_capacity(nodes.len());
+        for (position, node) in nodes.iter().enumerate() {
+            if token.is_cancelled() {
+                return Err(Cancelled);
+            }
+            let admission = node.admission(position, |producer| Some(succeeded[producer]));
+            if reporter.failed() {
+                break;
+            }
+            let build = match admission {
+                Admission::Refused(issues) => node.refused_build(self, issues),
+                Admission::Waiting => unreachable!("every producer before it has finished"),
+                Admission::Builds => self.build_reusing(
+                    plans,
+                    &node.request,
+                    node.plan.clone(),
+                    Some(Arc::new(held.clone())),
+                    &reporter.observe(node.observed_name()),
+                    token,
+                )?,
+            };
+            let artifact = build.artifact();
+            succeeded[position] = artifact.is_some();
+            if let (Some(bytes), Some((producer, location))) = (artifact, &node.artifact) {
+                held.insert(producer.clone(), location.clone(), bytes);
+            }
+            members.push(node.member(build));
+        }
+        Ok(members)
     }
 }
 

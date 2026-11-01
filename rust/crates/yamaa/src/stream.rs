@@ -372,7 +372,11 @@ impl Streamed {
             .map_or(NonZeroUsize::MAX, |partitioning| partitioning.rows);
         let state = if plan.report().is_empty() {
             State::Unread(Box::new(Pending {
-                inputs: crate::internal::RunInputs { held: None, frames },
+                inputs: crate::internal::RunInputs {
+                    held: None,
+                    frames,
+                    threads: None,
+                },
                 shared,
                 plan,
                 measured,

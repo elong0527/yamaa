@@ -426,12 +426,44 @@ impl Reporter {
     }
 
     /// The observer of work `measured` already holds, such as a streamed
-    /// run's build after its compilation.
-    #[cfg(feature = "arrow")]
+    /// run's build after its compilation, or a project run member that
+    /// compiled on another thread and runs on this one (#4193).
     pub(crate) fn resume(&self, measured: Measured) -> Observed<'_> {
         Observed {
             reporter: self,
             measured,
+        }
+    }
+
+    /// A reporter for work on another thread (#4193): it counts from the
+    /// start of this one's operation, and keeps, in order, the events this
+    /// one's callback would hear, which the calling thread then hands to
+    /// [`Reporter::replay`]. Without a callback it keeps none.
+    pub(crate) fn deferred(&self) -> (Reporter, Heard) {
+        let heard = Heard::default();
+        let kept = Arc::clone(&heard.0);
+        let callback = self.callback.as_ref().map(|_| {
+            Arc::new(move |event: &ProgressEvent| {
+                kept.lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .push(event.clone());
+                Ok(())
+            }) as ProgressCallback
+        });
+        let reporter = Reporter {
+            callback,
+            origin: self.origin,
+            failure: Mutex::new(None),
+        };
+        (reporter, heard)
+    }
+
+    /// Report the events another thread's [`Reporter::deferred`] kept, in
+    /// order, as this reporter reports its own: none once its callback has
+    /// failed.
+    pub(crate) fn replay(&self, events: Vec<ProgressEvent>) {
+        for event in events {
+            self.send(move || event);
         }
     }
 
@@ -507,6 +539,17 @@ impl Reporter {
             number: Some(number),
             rows: Some(rows),
         });
+    }
+}
+
+/// The events a [`Reporter::deferred`] kept.
+#[derive(Default)]
+pub(crate) struct Heard(Arc<Mutex<Vec<ProgressEvent>>>);
+
+impl Heard {
+    /// The events kept so far, in order, leaving none.
+    pub(crate) fn take(&self) -> Vec<ProgressEvent> {
+        std::mem::take(&mut *self.0.lock().unwrap_or_else(|error| error.into_inner()))
     }
 }
 

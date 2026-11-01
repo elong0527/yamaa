@@ -354,7 +354,10 @@ A run passes the phases from `preparation` to `output` in that order, with
 `activation` only when its specification calls a project function; a run of
 a plan an earlier `run()` of the object kept starts at `input`. A check is
 one `preparation` of each specification it checks, and a submission one
-`composition` of each section. The function runs on the thread that called
+`composition` of each section. A project run reports its specifications in
+run order, each one's events together; with specifications building at once
+on several threads, a specification's events arrive once it has built. The
+function runs on the thread that called
 the method, so it can show progress, and it may call yamaa itself, on the
 same object too. In Python, a call releases the global interpreter lock while
 the engine works and takes it again to call the function or a project
@@ -1132,11 +1135,16 @@ A run derives up to four of its partitions at once, each on a thread of its
 own, or fewer when the process may use fewer cores. `check()`, `run()` and
 `submission()` take `threads` to set that number, a positive whole number, as
 in `run(threads = 1)` in R and `run(threads=1)` in Python, and the command
-line takes `--threads N`. A `threads` of 1 derives one partition at a time,
-and a value that is neither a positive whole number nor the default, `NULL`
-in R and `None` in Python, fails the call. The output, its issues, its
-report and the progress events are the same for every value; only the time
-and the peak memory change.
+line takes `--threads N`. A project run also builds its specifications at
+once on those threads: a specification starts once every specification whose
+output it reads has finished, and the specifications building at once and
+their partitions share the `threads`, so a project run never uses more. A
+specification that calls a project function runs on the thread that called
+the method. A `threads` of 1 derives one partition and builds one
+specification at a time, and a value that is neither a positive whole number
+nor the default, `NULL` in R and `None` in Python, fails the call. The
+output, its issues, its report and the progress events are the same for every
+value; only the time and the peak memory change.
 
 A relative path resolves from the YAML file that writes it, so
 `../edc/odm.xml` in `sdtm/dm.yaml` is the study's `edc/odm.xml`. A path you
@@ -1226,7 +1234,8 @@ whose parent is the template the flag names, as `check(parent = )` does, so
 `check` takes `--spec` or `--parent`, not both. `--created TIME` gives the ISO 8601 creation time that a
 submission's documents carry; without it, the submission reads the clock once
 for every section and prints the time it read. `--threads N` sets how many
-partitions of one run derive at once, as `threads` does in R and Python
+partitions of one run derive at once, and how many threads a project run's
+specifications and their partitions share, as `threads` does in R and Python
 ([Inputs, outputs and paths](#inputs-outputs-and-paths)); an `N` of 0 is a
 usage error. A command's flags follow it,
 before or after its arguments, each at most once, and `--` ends the flags, so

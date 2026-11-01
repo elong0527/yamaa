@@ -84,6 +84,7 @@ pub mod table;
 pub mod text;
 
 mod internal;
+mod members;
 mod outcome;
 mod plan;
 

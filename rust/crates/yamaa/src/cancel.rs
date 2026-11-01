@@ -83,6 +83,16 @@ impl CancellationToken {
             _ => false,
         }
     }
+
+    /// A token for work on another thread (#4193): cancelled once this
+    /// token's flag is, or once it or a clone of it is cancelled, which
+    /// leaves this token as it is. It never asks this token's probe, which
+    /// a host answers on the calling thread alone; the calling thread polls
+    /// this token, and so raises the flag the follower reads.
+    pub(crate) fn follower(&self) -> Self {
+        let leader = Arc::clone(&self.cancelled);
+        Self::with_probe(move || leader.load(Ordering::SeqCst))
+    }
 }
 
 #[cfg(test)]
@@ -123,5 +133,30 @@ mod tests {
         let never = CancellationToken::with_probe(|| panic!("asked"));
         never.cancel();
         assert!(never.is_cancelled());
+    }
+
+    /// A follower reads its leader's flag and never asks the leader's probe;
+    /// cancelling a follower, or a clone of it, leaves the leader as it is.
+    #[test]
+    fn a_follower_reads_its_leader_s_flag_and_never_its_probe() {
+        let leader = CancellationToken::with_probe(|| panic!("a follower asked the probe"));
+        let follower = leader.follower();
+        assert!(!follower.is_cancelled(), "an uncancelled leader");
+        let stopped = leader.follower();
+        stopped.clone().cancel();
+        assert!(
+            stopped.is_cancelled(),
+            "a follower cancelled through a clone"
+        );
+        assert!(!follower.is_cancelled(), "a sibling follower");
+        assert!(
+            !leader.cancelled.load(Ordering::SeqCst),
+            "the leader of a cancelled follower"
+        );
+        leader.cancel();
+        assert!(
+            follower.is_cancelled(),
+            "the follower of a cancelled leader"
+        );
     }
 }
