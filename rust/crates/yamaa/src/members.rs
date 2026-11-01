@@ -328,6 +328,11 @@ impl Schedule {
         let mut position = self.members.len();
         while position < nodes.len() {
             let node = &nodes[position];
+            // A failed callback publishes no later member, whether or not it
+            // is done, so the run stops starting members at once.
+            if reporter.failed() {
+                return Ok(true);
+            }
             let ready = match &self.slots[position] {
                 Slot::Done(Sent::Host { .. }) => self.free > 0,
                 Slot::Done(_) => true,
@@ -335,9 +340,6 @@ impl Schedule {
             };
             if !ready {
                 return Ok(false);
-            }
-            if reporter.failed() {
-                return Ok(true);
             }
             let Slot::Done(sent) = std::mem::replace(&mut self.slots[position], Slot::Published)
             else {
