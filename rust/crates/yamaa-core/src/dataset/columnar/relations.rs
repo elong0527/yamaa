@@ -8,16 +8,13 @@
 //! scan that compares every pair on every record; the range, the filter and
 //! the selection then run on those records in stored order. An index over a
 //! SELF relation is dropped at each template barrier (LOOKUP-12).
-use super::buffer::Values;
 use super::donor::{self, Built, Donor};
 use super::eval::owned;
 use super::frame::{Frame, Identity, IdentityMap};
 use super::index::{self, Index};
 use super::{Cx, Fail, Run, Table};
 use crate::dataset::execution::{CheckRecord, ExecutionError, RowIdentity};
-use crate::dataset::resolved::{
-    ExprId, KeyValue, Read, RegionId, RelationId, RelationKey, ResolvedPlan,
-};
+use crate::dataset::resolved::{ExprId, KeyValue, RegionId, RelationId, RelationKey, ResolvedPlan};
 use crate::dataset::{
     CurrentField, CurrentRead, Intermediate, IntermediateSource, Keep, MatchRead, MatchValue,
     Nearest, OrderTerm, RelationPredicate, SourceSelection, VerificationSeverity,
@@ -31,6 +28,7 @@ use std::cmp::Ordering;
 pub(super) use super::aggregates::{aggregate, Record};
 pub(super) use super::joins::{join, joined_value, JoinSite};
 pub(super) use super::odm::odm;
+pub(super) use super::reads::read;
 
 /// A row's match values: each key's donor column and the value it must equal.
 pub(super) type MatchValues = Vec<(usize, Value)>;
@@ -38,7 +36,7 @@ pub(super) type MatchValues = Vec<(usize, Value)>;
 /// One row's record choice: immutable donor coordinates and whether
 /// several records competed.
 #[derive(Clone, Copy, Debug)]
-enum Choice {
+pub(super) enum Choice {
     Record { row: usize, multiple: bool },
     Absent,
 }
@@ -73,20 +71,65 @@ struct Named {
     /// The key index over the source's stored keys that selects the records
     /// derivations reading the current record augment (LOOKUP-15).
     source_index: Option<Option<Index>>,
-    choices: IdentityMap<Identity, Choice>,
-    /// The choices of the last selection read whole, in its order. It
-    /// repeats entries of `choices`, so it goes whenever one of them does.
-    batch: Option<Batch>,
+    choices: Choices,
     materialized: IdentityMap<Option<Identity>, Built>,
     /// Whether derivations reading the current record augment only the
     /// matched records (LOOKUP-15), decided on first use.
     matched: Option<bool>,
 }
 
-/// The choices of a selection's rows, in its order, under their identities.
-struct Batch {
-    identities: Vec<Identity>,
-    choices: Vec<Choice>,
+/// Each row identity's record choice: a candidate's by its number, so a
+/// read over any rows finds theirs without hashing, and any other identity's
+/// in a map.
+#[derive(Default)]
+struct Choices {
+    candidates: Vec<Option<Choice>>,
+    others: IdentityMap<Identity, Choice>,
+}
+
+impl Choices {
+    fn get(&self, identity: Identity) -> Option<Choice> {
+        match identity {
+            Identity::Candidate(number) => self.candidates.get(number).copied().flatten(),
+            other => self.others.get(&other).copied(),
+        }
+    }
+
+    fn insert<E>(&mut self, identity: Identity, choice: Choice) -> Result<(), Fail<E>> {
+        match identity {
+            Identity::Candidate(number) => {
+                if number >= self.candidates.len() {
+                    let more = number + 1 - self.candidates.len();
+                    super::reserved(self.candidates.try_reserve(more))?;
+                    self.candidates.resize(number + 1, None);
+                }
+                self.candidates[number] = Some(choice);
+            }
+            other => {
+                super::reserved(self.others.try_reserve(1))?;
+                self.others.insert(other, choice);
+            }
+        }
+        Ok(())
+    }
+
+    fn remove(&mut self, identity: Identity) {
+        match identity {
+            Identity::Candidate(number) => {
+                if let Some(slot) = self.candidates.get_mut(number) {
+                    *slot = None;
+                }
+            }
+            other => {
+                self.others.remove(&other);
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        self.candidates.clear();
+        self.others.clear();
+    }
 }
 
 /// A cache entry a batch unit added, removed if the unit replays.
@@ -101,6 +144,9 @@ pub(super) struct State {
     first: usize,
     named: Vec<Named>,
     journal: Vec<Entry>,
+    /// The records the last shareable join reads chose for their
+    /// selections, the latest last.
+    joined: Vec<super::joins::Shared>,
 }
 
 /// The journal position before a batch unit.
@@ -119,7 +165,28 @@ impl State {
             first,
             named,
             journal: Vec::new(),
+            joined: Vec::new(),
         }
+    }
+
+    /// The records a recent shareable join read chose that `matches`, taken
+    /// out until they are kept again.
+    pub(super) fn take_joined(
+        &mut self,
+        matches: impl Fn(&super::joins::Shared) -> bool,
+    ) -> Option<super::joins::Shared> {
+        let position = self.joined.iter().position(matches)?;
+        Some(self.joined.remove(position))
+    }
+
+    /// Keep the records a join read chose, dropping the oldest beyond the
+    /// few selections a column's bindings or templates read in turn.
+    pub(super) fn keep_joined(&mut self, shared: super::joins::Shared) {
+        const KEPT: usize = 8;
+        if self.joined.len() == KEPT {
+            self.joined.remove(0);
+        }
+        self.joined.push(shared);
     }
 
     fn named(&mut self, relation: RelationId) -> &mut Named {
@@ -140,20 +207,35 @@ impl State {
     }
 
     pub(super) fn restore(&mut self, mark: Mark) {
+        self.joined.clear();
         while self.journal.len() > mark.0 {
             match self.journal.pop().expect("a journal entry") {
                 Entry::Choice(relation, identity) => {
-                    let named = self.named(relation);
-                    named.choices.remove(&identity);
-                    named.batch = None;
+                    self.named(relation).choices.remove(identity);
                 }
                 Entry::Materialized(relation, key) => {
-                    let named = self.named(relation);
-                    named.materialized.remove(&key);
-                    named.batch = None;
+                    self.named(relation).materialized.remove(&key);
                 }
             }
         }
+    }
+
+    /// A row identity's cached record choice of a relation, if any.
+    pub(super) fn choice(&mut self, relation: RelationId, identity: Identity) -> Option<Choice> {
+        self.named(relation).choices.get(identity)
+    }
+
+    /// Cache a row identity's record choice, removed if the unit replays.
+    pub(super) fn insert_choice<E>(
+        &mut self,
+        relation: RelationId,
+        identity: Identity,
+        choice: Choice,
+    ) -> Result<(), Fail<E>> {
+        self.named(relation).choices.insert(identity, choice)?;
+        super::reserved(self.journal.try_reserve(1))?;
+        self.journal.push(Entry::Choice(relation, identity));
+        Ok(())
     }
 
     /// A donor materialized for a key, if any.
@@ -179,6 +261,7 @@ impl State {
     /// finish: choices and correlated materializations from template-local
     /// windows cannot identify a choice in the complete output relation.
     pub(super) fn begin_columns(&mut self, plan: &ResolvedPlan) {
+        self.joined.clear();
         let items: Vec<&Intermediate> = (0..self.named.len())
             .map(|index| {
                 plan.relation(RelationId::try_from(self.first + index).expect("a slot"))
@@ -217,6 +300,7 @@ impl State {
 
     /// Every completed template changes only SELF eligibility and match choices.
     pub(super) fn publish_self(&mut self, plan: &ResolvedPlan) {
+        self.joined.clear();
         for index in 0..self.named.len() {
             let relation = RelationId::try_from(self.first + index).expect("a slot");
             let item = plan
@@ -230,7 +314,6 @@ impl State {
                 named.index = None;
                 named.source_index = None;
                 named.choices.clear();
-                named.batch = None;
                 named.materialized.clear();
             }
         }
@@ -246,7 +329,7 @@ pub(super) fn item(plan: &ResolvedPlan, relation: RelationId) -> &Intermediate {
 }
 
 /// The dataset a named intermediate reads, as diagnostics name it.
-fn source_name<'i>(
+pub(super) fn source_name<'i>(
     item: &'i Intermediate,
     secondary: &'i [crate::dataset::SecondarySource],
 ) -> &'i str {
@@ -557,186 +640,9 @@ pub(super) fn verify<'a: 's, 's, E>(
     }
 }
 
-/// An intermediate read node over rows, as one column: each row's record
-/// choice, then the read column's value copied from the chosen record
-/// straight into one buffer, text included, as the row's handler counts.
-/// Rows are visited in order, so choices, firings and the first failure keep
-/// the order of one-row reads.
-///
-/// A choice is resolved once per row identity and cached for every read of
-/// the relation. When every row reads the same records, the choices of a
-/// whole selection are also kept in selection order, and the next read of
-/// the relation over the same rows, such as another of its columns, takes
-/// them without visiting the cache row by row.
-pub(super) fn read<E>(
-    run: &mut Run<'_, '_, E>,
-    cx: &Cx<'_, E>,
-    expr: ExprId,
-    rows: &[usize],
-    observe: bool,
-) -> Result<Values, Fail<E>> {
-    let plan = run.plan;
-    let Read::Relation(relation, column) = plan.reads(expr)[0] else {
-        unreachable!("an intermediate node reads its relation")
-    };
-    let site = Site::node(plan, expr);
-    prepare_matched(run, cx, site, relation, rows);
-    let enclosing;
-    let cx = match enclosed(cx) {
-        Some(outer) => {
-            enclosing = outer;
-            &enclosing
-        }
-        None => cx,
-    };
-    let item = item(plan, relation);
-    let mut gather = Gather::new(item, column as usize, rows.len(), site, observe);
-    // Derivations that read the current record build records per row, so
-    // only another relation's choices are kept for the selection; a row-mode
-    // read of one row keeps none.
-    let kept = match rows {
-        [first, _, ..] if shared_records(item) => Some(*first),
-        _ => None,
-    };
-    let identities: Vec<Identity> = match kept {
-        Some(_) => rows.iter().map(|&row| cx.frame.identity(row)).collect(),
-        None => Vec::new(),
-    };
-    if let Some(first) = kept {
-        let held = run
-            .relations
-            .named(relation)
-            .batch
-            .take()
-            .filter(|batch| batch.identities == identities);
-        if let Some(batch) = held {
-            let prepared = donor::materialize(run, cx, relation, Some(site), Some(first))?;
-            let table = prepared
-                .as_ref()
-                .map_or_else(|| source_table(item, cx), Built::table);
-            for &choice in &batch.choices {
-                gather.push(run, table, choice)?;
-            }
-            run.relations.named(relation).batch = Some(batch);
-            return Ok(gather.values);
-        }
-    }
-    let mut choices = Vec::new();
-    if kept.is_some() {
-        super::reserved(choices.try_reserve_exact(rows.len()))?;
-    }
-    for &row in rows {
-        let (prepared, choice) = choose(run, cx, site, relation, row)?;
-        let table = prepared
-            .as_ref()
-            .map_or_else(|| source_table(item, cx), Built::table);
-        gather.push(run, table, choice)?;
-        if kept.is_some() {
-            choices.push(choice);
-        }
-    }
-    if kept.is_some() {
-        run.relations.named(relation).batch = Some(Batch {
-            identities,
-            choices,
-        });
-    }
-    Ok(gather.values)
-}
-
-/// Whether every row of a relation chooses among the same records: those of
-/// its source, of its pairs, or of a donor built once. Derivations that read
-/// the current record build them per row instead.
-fn shared_records(item: &Intermediate) -> bool {
-    item.source.pairs().is_some()
-        || item
-            .derivations
-            .as_ref()
-            .is_none_or(|derived| derived.current.is_empty())
-}
-
-/// One read column under construction: each row's value copied from its
-/// chosen record, or the absent value, into a buffer reserved for the
-/// selection once its type is known, and each row's handler counted under
-/// the read's site.
-struct Gather<'i, 's> {
-    item: &'i Intermediate,
-    column: usize,
-    values: Values,
-    rows: usize,
-    reserved: bool,
-    firings: Option<Firings<'s>>,
-}
-
-impl<'i, 's> Gather<'i, 's> {
-    fn new(
-        item: &'i Intermediate,
-        column: usize,
-        rows: usize,
-        site: Site<'s>,
-        observe: bool,
-    ) -> Self {
-        Self {
-            item,
-            column,
-            values: Values::missing(0),
-            rows,
-            reserved: false,
-            firings: observe.then(|| Firings::new(site)),
-        }
-    }
-
-    /// The next row's value, read from `table` by its choice.
-    fn push<E>(
-        &mut self,
-        run: &mut Run<'_, '_, E>,
-        table: Table<'_, E>,
-        choice: Choice,
-    ) -> Result<(), Fail<E>> {
-        let (value, handler) = chosen(table, self.item, self.column, choice)?;
-        self.values.push(value);
-        if !self.reserved && !matches!(self.values, Values::Missing(_)) {
-            let rest = self.rows.saturating_sub(self.values.len());
-            super::reserved(self.values.try_reserve(rest))?;
-            self.reserved = true;
-        }
-        if let (Some(handler), Some(firings)) = (handler, self.firings.as_mut()) {
-            let site = firings.site.expr;
-            run.fire_at(site, firings.path(handler), handler)?;
-        }
-        Ok(())
-    }
-}
-
-/// The full site paths of a read's handlers, each formatted once.
-struct Firings<'s> {
-    site: Site<'s>,
-    absent: Option<String>,
-    multiple: Option<String>,
-}
-
-impl<'s> Firings<'s> {
-    fn new(site: Site<'s>) -> Self {
-        Self {
-            site,
-            absent: None,
-            multiple: None,
-        }
-    }
-
-    fn path(&mut self, handler: HandlerKind) -> &str {
-        let slot = match handler {
-            HandlerKind::Absent => &mut self.absent,
-            _ => &mut self.multiple,
-        };
-        let path = self.site.path;
-        slot.get_or_insert_with(|| format!("{path}.{}", handler.name()))
-    }
-}
-
 /// An aggregate derivation keeps its donor record apart from the current
 /// row: a named, kept selection reads the enclosing row on the primary.
-fn enclosed<'c, E>(cx: &Cx<'c, E>) -> Option<Cx<'c, E>> {
+pub(super) fn enclosed<'c, E>(cx: &Cx<'c, E>) -> Option<Cx<'c, E>> {
     cx.record.is_some().then(|| Cx {
         record: None,
         table: cx.primary,
@@ -778,7 +684,7 @@ pub(super) fn named_value<E>(
 
 /// A row's value of a named intermediate's column by its choice, read from
 /// the records it chose among, and the handler the read fires.
-fn chosen<'v, E>(
+pub(super) fn chosen<'v, E>(
     table: Table<'v, E>,
     item: &'v Intermediate,
     column: usize,
@@ -803,7 +709,7 @@ fn chosen<'v, E>(
 /// One row's record choice, from the relation's cache or resolved now and
 /// cached under the row's identity, with the records it chose among: a
 /// materialized donor's, or none for the source's own.
-fn choose<E>(
+pub(super) fn choose<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     site: Site<'_>,
@@ -813,12 +719,7 @@ fn choose<E>(
     let plan = run.plan;
     let item = item(plan, relation);
     let identity = cx.frame.identity(row);
-    let cached = run
-        .relations
-        .named(relation)
-        .choices
-        .get(&identity)
-        .copied();
+    let cached = run.relations.choice(relation, identity);
     let secondary = &plan.region(cx.region).secondary;
     let name = source_name(item, secondary);
     let reading = Reading {
@@ -923,7 +824,7 @@ fn matched_attempt<E>(
 /// column by column. As for one row, only derivations that read nothing but
 /// their record and the current one, in a unit that cannot call the host,
 /// are resolved this way.
-fn prepare_matched<E>(
+pub(super) fn prepare_matched<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     site: Site<'_>,
@@ -973,7 +874,7 @@ fn prepare_rows<E>(
         .iter()
         .map(|&row| (row, cx.frame.identity(row)))
         .filter(|(_, identity)| {
-            !run.relations.named(relation).choices.contains_key(identity) && seen.insert(*identity)
+            run.relations.choice(relation, *identity).is_none() && seen.insert(*identity)
         })
         .collect();
     if pending.len() < 2 {
@@ -1038,15 +939,10 @@ fn prepare_rows<E>(
 /// Retain exact key values separately from output-row identity in join diagnostics.
 fn matched_key(
     table: &dyn TableAccess<Error = impl Sized>,
-    keys: &[(usize, Value)],
+    keys: &[(usize, ValueRef<'_>)],
 ) -> Vec<(String, Value)> {
     keys.iter()
-        .map(|(column, value)| {
-            (
-                table.schema().columns()[*column].name.clone(),
-                value.clone(),
-            )
-        })
+        .map(|&(column, value)| (table.schema().columns()[column].name.clone(), owned(value)))
         .collect()
 }
 
@@ -1055,18 +951,18 @@ fn matched_key(
 /// intermediate, the name its dataset is known by, and the row with its
 /// identity, under which the choice is kept.
 #[derive(Clone, Copy)]
-struct Reading<'r> {
-    site: Site<'r>,
-    relation: RelationId,
-    item: &'r Intermediate,
-    name: &'r str,
-    row: usize,
-    identity: Identity,
+pub(super) struct Reading<'r> {
+    pub site: Site<'r>,
+    pub relation: RelationId,
+    pub item: &'r Intermediate,
+    pub name: &'r str,
+    pub row: usize,
+    pub identity: Identity,
 }
 
 /// Resolve and cache the record choice for one read: match the records on
 /// the resolved keys and range, narrow them by the filter, then select.
-fn resolve_choice<E>(
+pub(super) fn resolve_choice<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     reading: Reading<'_>,
@@ -1078,12 +974,10 @@ fn resolve_choice<E>(
         site,
         relation,
         item,
-        name: source_name,
         row,
         identity,
+        ..
     } = reading;
-    let plan = run.plan;
-    let secondary = &plan.region(cx.region).secondary;
     let keys = match keys {
         Some(keys) => keys,
         None => match_values(run, cx, relation, item, row)?,
@@ -1107,22 +1001,59 @@ fn resolve_choice<E>(
         .iter()
         .map(|(column, value)| (*column, ValueRef::from(value)))
         .collect();
-    let kinds: Vec<Option<ValueType>> = keys
+    let sought = Sought {
+        keys: &probe_keys,
+        range: range_value.as_ref().map(ValueRef::from),
+        reference: reference.as_ref(),
+    };
+    let choice = resolve_sought(run, cx, &reading, table, donor, &sought)?;
+    run.relations.insert_choice(relation, identity, choice)?;
+    Ok(choice)
+}
+
+/// One row's side of a named intermediate's match: its match values, each
+/// a donor column and the value it must equal, its range value and the
+/// reference of a nearest selection.
+pub(super) struct Sought<'v> {
+    pub keys: &'v [(usize, ValueRef<'v>)],
+    pub range: Option<ValueRef<'v>>,
+    pub reference: Option<&'v Value>,
+}
+
+/// Match the records on a row's sought values, narrow them by the filter,
+/// then select (LOOKUP-25): the row's record choice, not yet cached.
+pub(super) fn resolve_sought<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    reading: &Reading<'_>,
+    table: Table<'_, E>,
+    donor: Option<&Donor>,
+    sought: &Sought<'_>,
+) -> Result<Choice, Fail<E>> {
+    let Reading {
+        relation,
+        item,
+        name: source_name,
+        row,
+        ..
+    } = *reading;
+    let plan = run.plan;
+    let secondary = &plan.region(cx.region).secondary;
+    let probe_keys = sought.keys;
+    let reference = sought.reference;
+    let kinds: Vec<Option<ValueType>> = probe_keys
         .iter()
         .map(|(column, _)| item.source_kind(secondary, *column).map(Into::into))
         .collect();
     let probe = Probe {
-        keys: &probe_keys,
+        keys: probe_keys,
         kinds: &kinds,
-        range: item
-            .range
-            .as_ref()
-            .zip(range_value.as_ref().map(ValueRef::from)),
+        range: item.range.as_ref().zip(sought.range),
     };
     let mut count = 0;
     let mut selected = None;
     if !probe.incomplete() && !matches!(reference, Some(Value::Missing)) {
-        let indexed = key_bucket(run, relation, item, table, donor, &probe_keys)?;
+        let indexed = key_bucket(run, relation, item, table, donor, probe_keys)?;
         // A bucket's records already equal the match values on every key
         // pair; the range still holds or not per record.
         let bucket = Probe {
@@ -1140,6 +1071,9 @@ fn resolve_choice<E>(
             .derivations
             .as_ref()
             .is_none_or(|derived| derived.current.is_empty());
+        if reusable {
+            narrow_all(run, relation, item, table)?;
+        }
         let found = candidates(
             candidates_rows.into_iter(),
             probe_used,
@@ -1150,7 +1084,7 @@ fn resolve_choice<E>(
                 };
                 if filter.correlated() {
                     return Ok(
-                        correlated(run, cx, &reading, filter, table, source_row)? == Truth::True
+                        correlated(run, cx, reading, filter, table, source_row)? == Truth::True
                     );
                 }
                 if reusable {
@@ -1182,12 +1116,12 @@ fn resolve_choice<E>(
             },
             run,
         )
-        .map_err(|found| refusal(found, item, table, &keys))?;
+        .map_err(|found| refusal(found, item, table, probe_keys))?;
         count = found.rows.len();
         selected = found.rows.first().copied();
         // A nearest selection chooses among the candidates with a distance,
         // and one candidate without a distance is not chosen either.
-        if let (Some(choice), Some(reference)) = (&item.nearest, &reference) {
+        if let (Some(choice), Some(reference)) = (&item.nearest, reference) {
             (selected, count) = nearest(&found.rows, choice, reference, |source_row, column| {
                 cell(table, item, source_row, column)
             })?;
@@ -1202,36 +1136,61 @@ fn resolve_choice<E>(
                     dataset: source_name.into(),
                     intermediate: item.identifier.clone(),
                     match_count: count,
-                    matched_key: matched_key(&table, &keys),
+                    matched_key: matched_key(&table, probe_keys),
                     identity: run.failure_identity(cx, row),
                 }));
             }
         }
     }
-    let choice = if let Some(row) = selected {
-        Choice::Record {
+    if let Some(row) = selected {
+        Ok(Choice::Record {
             row,
             multiple: count > 1,
-        }
+        })
     } else if !item.require_match {
-        Choice::Absent
+        Ok(Choice::Absent)
     } else {
-        return Err(Box::new(ExecutionError::UnmatchedKey {
+        Err(Box::new(ExecutionError::UnmatchedKey {
             path: item.path.clone(),
             dataset: source_name.into(),
             intermediate: item.identifier.clone(),
-            matched_key: matched_key(&table, &keys),
+            matched_key: matched_key(&table, probe_keys),
             identity: run.failure_identity(cx, row),
-        }));
+        }))
+    }
+}
+
+/// LOOKUP-8 over every record at once, the first time a match narrows: a
+/// filter that reads only the donor records keeps each record or not, as
+/// the column program (#4199) answers for all of them. A program that does
+/// not answer every record leaves each to be decided when it first matches,
+/// where its failure, if any, is reported.
+fn narrow_all<E>(
+    run: &mut Run<'_, '_, E>,
+    relation: RelationId,
+    item: &Intermediate,
+    table: Table<'_, E>,
+) -> Result<(), Fail<E>> {
+    let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) else {
+        return Ok(());
     };
-    run.relations
-        .named(relation)
-        .choices
-        .insert(identity, choice);
-    run.relations
-        .journal
-        .push(Entry::Choice(relation, identity));
-    Ok(choice)
+    if run.relations.named(relation).narrowed.is_some() {
+        return Ok(());
+    }
+    let count = table.row_count();
+    let mut records = Vec::new();
+    super::reserved(records.try_reserve_exact(count))?;
+    records.extend(0..count);
+    let truths = super::predicates::record_truths(filter.predicate(), table, &records, |_| {
+        super::predicates::Operand::Values(super::buffer::Values::missing(count))
+    });
+    if let Some(truths) = truths {
+        let mut narrowed = Vec::new();
+        super::reserved(narrowed.try_reserve_exact(count))?;
+        narrowed.extend(truths.iter().map(|&truth| Some(truth == Truth::True)));
+        run.relations.named(relation).narrowed = Some(narrowed);
+    }
+    Ok(())
 }
 
 /// The current row's match values: the current references of expression
@@ -1258,7 +1217,7 @@ pub(super) fn match_values<E>(
 /// a key's match value is, or none without one (LOOKUP-26). A value whose
 /// type is not its source's fails, as a key pair whose types cannot compare
 /// does.
-fn reference_value<E>(
+pub(super) fn reference_value<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     relation: RelationId,
@@ -1359,7 +1318,7 @@ pub(super) fn matched_records<E>(
         |_, _: &mut ()| Ok(true),
         &mut (),
     )
-    .map_err(|found| refusal(found, item, table, keys))?;
+    .map_err(|found| refusal(found, item, table, &probe_keys))?;
     records.extend(found.rows);
     Ok(())
 }
@@ -1370,7 +1329,7 @@ fn refusal<E>(
     refusal: Refusal<E>,
     item: &Intermediate,
     table: Table<'_, E>,
-    keys: &[(usize, Value)],
+    keys: &[(usize, ValueRef<'_>)],
 ) -> Fail<E> {
     match refusal {
         Refusal::Failed(error) => error,

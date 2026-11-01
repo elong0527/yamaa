@@ -18,10 +18,9 @@ use crate::value::{comparable_types, ValueType};
 use std::collections::HashMap;
 
 /// The records of a donor grouped by the values of some of its columns.
-#[derive(Default)]
 pub(super) struct Index {
     columns: Vec<usize>,
-    buckets: HashMap<Vec<u8>, Bucket>,
+    buckets: HashMap<Vec<u8>, Bucket, ahash::RandomState>,
     /// Reused to encode a probe without allocating.
     probe: std::cell::RefCell<Vec<u8>>,
 }
@@ -51,7 +50,7 @@ impl Bucket {
 impl Index {
     /// An empty index with room for `rows` keys.
     fn new<E>(columns: &[usize], rows: usize) -> Result<Self, Fail<E>> {
-        let mut buckets = HashMap::new();
+        let mut buckets = HashMap::with_hasher(Key::hasher());
         super::reserved(buckets.try_reserve(rows))?;
         Ok(Self {
             columns: columns.to_vec(),
@@ -187,13 +186,27 @@ impl Index {
 /// Indexes and filter answers over source ports, shared for the attempt by
 /// every read that matches the same columns of the same port, in any region.
 /// A port is known by its address: it outlives the attempt.
-#[derive(Default)]
 pub(super) struct Ports {
-    keys: HashMap<(usize, Vec<usize>), Option<Index>>,
-    texts: HashMap<(usize, Vec<usize>), Option<Index>>,
+    /// Per port, each key index by its columns: found without allocating.
+    keys: HashMap<usize, Indexes, ahash::RandomState>,
+    texts: HashMap<usize, Indexes, ahash::RandomState>,
     /// Per reading node and port, whether its filter keeps each record.
-    filters: HashMap<(ExprId, usize), Vec<Option<bool>>>,
+    filters: HashMap<(ExprId, usize), Vec<Option<bool>>, ahash::RandomState>,
 }
+
+impl Default for Ports {
+    fn default() -> Self {
+        Self {
+            keys: HashMap::with_hasher(Key::hasher()),
+            texts: HashMap::with_hasher(Key::hasher()),
+            filters: HashMap::with_hasher(Key::hasher()),
+        }
+    }
+}
+
+/// A port's indexes, each with the columns it indexes, or none where a
+/// record cannot be indexed exactly.
+type Indexes = Vec<(Vec<usize>, Option<Index>)>;
 
 /// The address of a source port; none for frame rows, which change.
 pub(super) fn port<E>(table: Table<'_, E>) -> Option<usize> {
@@ -214,22 +227,27 @@ impl Ports {
         let Some(port) = port(table) else {
             return Ok(None);
         };
-        let key = (port, columns.to_vec());
-        if !self.keys.contains_key(&key) {
-            let kinds: Vec<Option<ValueType>> = columns
-                .iter()
-                .map(|&column| {
-                    table
-                        .schema()
-                        .columns()
-                        .get(column)
-                        .map(|field| field.kind.into())
-                })
-                .collect();
-            let built = Index::keys(columns, &kinds, 0..table.row_count(), read)?;
-            self.keys.insert(key.clone(), built);
-        }
-        Ok(self.keys.get(&key).and_then(Option::as_ref))
+        let indexes = self.keys.entry(port).or_default();
+        let held = indexes.iter().position(|(indexed, _)| indexed == columns);
+        let position = match held {
+            Some(position) => position,
+            None => {
+                let kinds: Vec<Option<ValueType>> = columns
+                    .iter()
+                    .map(|&column| {
+                        table
+                            .schema()
+                            .columns()
+                            .get(column)
+                            .map(|field| field.kind.into())
+                    })
+                    .collect();
+                let built = Index::keys(columns, &kinds, 0..table.row_count(), read)?;
+                indexes.push((columns.to_vec(), built));
+                indexes.len() - 1
+            }
+        };
+        Ok(indexes[position].1.as_ref())
     }
 
     /// The text index over `columns` of a port, built on first use.
@@ -242,12 +260,16 @@ impl Ports {
         let Some(port) = port(table) else {
             return Ok(None);
         };
-        let key = (port, columns.to_vec());
-        if !self.texts.contains_key(&key) {
-            let built = Index::texts(columns, 0..table.row_count(), read)?;
-            self.texts.insert(key.clone(), built);
-        }
-        Ok(self.texts.get(&key).and_then(Option::as_ref))
+        let indexes = self.texts.entry(port).or_default();
+        let position = match indexes.iter().position(|(indexed, _)| indexed == columns) {
+            Some(position) => position,
+            None => {
+                let built = Index::texts(columns, 0..table.row_count(), read)?;
+                indexes.push((columns.to_vec(), built));
+                indexes.len() - 1
+            }
+        };
+        Ok(indexes[position].1.as_ref())
     }
 
     /// Whether the filter of the reading node `expr` keeps record `row` of a
@@ -280,6 +302,95 @@ impl Ports {
             *slot = Some(kept);
         }
         Ok(kept)
+    }
+}
+
+/// The answer of each distinct combination of match values a read over
+/// several rows has met, so a row whose values equal an earlier row's takes
+/// its answer without matching again: the previous row's combination first,
+/// then every earlier one, until the combinations prove mostly distinct.
+/// Combinations compare as their values' [`Key`]s, under grouping equality:
+/// values of one type and equal value, the same match.
+pub(super) struct Combinations<'k, V> {
+    combination: Vec<Key<'k>>,
+    /// The previous row's values, which compare as their keys do, and
+    /// their answer once known.
+    previous: Vec<ValueRef<'k>>,
+    answer: Option<V>,
+    seen: Option<HashMap<Vec<Key<'k>>, V, ahash::RandomState>>,
+    hashing: bool,
+    remembered: usize,
+    found: usize,
+}
+
+impl<'k, V: Copy> Combinations<'k, V> {
+    /// Combinations remembered before their hit rate is judged.
+    const TRIAL: usize = 1024;
+
+    pub(super) fn new(width: usize) -> Self {
+        Self {
+            combination: Vec::with_capacity(width),
+            previous: Vec::with_capacity(width),
+            answer: None,
+            seen: None,
+            hashing: true,
+            remembered: 0,
+            found: 0,
+        }
+    }
+
+    /// The answer remembered for the combination of `values`, which stays
+    /// the current one for [`Self::remember`].
+    pub(super) fn find(&mut self, values: impl Iterator<Item = ValueRef<'k>> + Clone) -> Option<V> {
+        if let Some(answer) = self.answer {
+            if self.previous.iter().copied().eq(values.clone()) {
+                return Some(answer);
+            }
+        }
+        self.previous.clear();
+        self.previous.extend(values.clone());
+        if !self.hashing {
+            self.answer = None;
+            return None;
+        }
+        self.combination.clear();
+        self.combination.extend(values.map(Key::from));
+        self.answer = self
+            .seen
+            .as_ref()
+            .and_then(|seen| seen.get(self.combination.as_slice()).copied());
+        if self.answer.is_some() {
+            self.found += 1;
+        }
+        self.answer
+    }
+
+    /// The previous row's answer, for a row whose values are known to
+    /// repeat its values.
+    pub(super) fn again(&self) -> Option<V> {
+        self.answer
+    }
+
+    /// Remember the answer of the current combination, the one `find` last
+    /// found none for.
+    pub(super) fn remember<E>(&mut self, answer: V) -> Result<(), Fail<E>> {
+        self.answer = Some(answer);
+        if self.hashing {
+            let seen = self
+                .seen
+                .get_or_insert_with(|| HashMap::with_hasher(Key::hasher()));
+            super::reserved(seen.try_reserve(1))?;
+            seen.insert(self.combination.clone(), answer);
+            self.remembered += 1;
+            // Combinations met once, or only on consecutive rows, cost a copy
+            // and a hash each and repay neither; only the previous row's is
+            // kept from then on.
+            if self.remembered == Self::TRIAL && self.found < Self::TRIAL / 2 {
+                self.hashing = false;
+                self.seen = None;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -438,6 +549,43 @@ mod tests {
         assert_eq!(group(&Value::Int(1)), [0, 3]);
         assert_eq!(group(&Value::float(1.0)), [1]);
         assert_eq!(group(&Value::Missing), [2, 4]);
+    }
+
+    // The seam is the memory of a read over several rows (#4210): a
+    // combination met before answers without a match, the previous row's
+    // first, and combinations compare as grouping keys, so an int and a float
+    // of equal value stay two.
+    #[test]
+    fn a_combination_met_before_answers_again() {
+        let mut met: Combinations<'_, char> = Combinations::new(1);
+        let find = |met: &mut Combinations<'_, char>, value: ValueRef<'static>| {
+            met.find(std::iter::once(value))
+        };
+        assert_eq!(
+            find(&mut met, ValueRef::Int(1)),
+            None,
+            "the first combination"
+        );
+        met.remember::<std::convert::Infallible>('a').unwrap();
+        assert_eq!(
+            find(&mut met, ValueRef::Int(1)),
+            Some('a'),
+            "the previous row's"
+        );
+        assert_eq!(
+            find(&mut met, ValueRef::Str("x")),
+            None,
+            "a second combination"
+        );
+        met.remember::<std::convert::Infallible>('b').unwrap();
+        assert_eq!(
+            find(&mut met, ValueRef::Int(1)),
+            Some('a'),
+            "an earlier row's"
+        );
+        let float = ValueRef::Float(crate::value::FiniteFloat::new(1.0).unwrap());
+        assert_eq!(find(&mut met, float), None, "a float equal to the int");
+        assert_eq!(met.again(), None, "no answer for the float yet");
     }
 
     #[test]

@@ -99,6 +99,33 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         }
     }
 
+    /// Count `firings` firings at a full site path, through the node's site
+    /// when it lists one: what as many one-row firings count. No firing
+    /// counts nothing, and registers no site.
+    pub(super) fn fire_many(
+        &mut self,
+        expr: Option<ExprId>,
+        path: &str,
+        kind: HandlerKind,
+        firings: u64,
+    ) -> Result<(), Fail<E>> {
+        if firings == 0 {
+            return Ok(());
+        }
+        let plan = self.plan;
+        let site = expr.and_then(|expr| {
+            plan.sites(expr).iter().map(|site| site.site).find(|&site| {
+                let entry = plan.handler(site);
+                entry.kind == kind && &*entry.path == path
+            })
+        });
+        match site {
+            Some(site) => self.handlers.fire(plan, site, firings),
+            None => self.handlers.fire_path(plan, path, kind, firings),
+        }
+        .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))
+    }
+
     /// Count one firing at a full site path, through the node's site when
     /// it lists one.
     pub(super) fn fire_at(
