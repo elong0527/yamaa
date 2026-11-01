@@ -152,6 +152,26 @@ fn compare_floats(left: f64, right: f64) -> Ordering {
     }
 }
 
+/// A present number of either numeric type, as a comparison orders it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Numeric {
+    Int(i64),
+    Float(f64),
+}
+
+/// Order two present numbers by exact mathematical value: the numeric
+/// ordering of [`compare_present_refs`], which the column form's typed loops
+/// share (#4218).
+#[inline]
+pub(crate) fn compare_numeric(left: Numeric, right: Numeric) -> Ordering {
+    match (left, right) {
+        (Numeric::Int(a), Numeric::Int(b)) => a.cmp(&b),
+        (Numeric::Int(a), Numeric::Float(b)) => compare_int_float(a, b),
+        (Numeric::Float(a), Numeric::Int(b)) => compare_int_float(b, a).reverse(),
+        (Numeric::Float(a), Numeric::Float(b)) => compare_floats(a, b),
+    }
+}
+
 /// Compare present ordered values; never invent null placement or coerce text.
 /// Boolean predicate truth is handled separately from ordered column values.
 pub fn compare_present(left: &Value, right: &Value) -> Result<Ordering, ComparisonError> {
@@ -180,10 +200,17 @@ pub fn compare_present_refs(
     }
     match (left, right) {
         (Value::Missing, _) | (_, Value::Missing) => Err(ComparisonError::MissingOperand),
-        (Value::Int(a), Value::Int(b)) => Ok(a.cmp(&b)),
-        (Value::Int(a), Value::Float(b)) => Ok(compare_int_float(a, b.get())),
-        (Value::Float(a), Value::Int(b)) => Ok(compare_int_float(b, a.get()).reverse()),
-        (Value::Float(a), Value::Float(b)) => Ok(compare_floats(a.get(), b.get())),
+        (Value::Int(a), Value::Int(b)) => Ok(compare_numeric(Numeric::Int(a), Numeric::Int(b))),
+        (Value::Int(a), Value::Float(b)) => {
+            Ok(compare_numeric(Numeric::Int(a), Numeric::Float(b.get())))
+        }
+        (Value::Float(a), Value::Int(b)) => {
+            Ok(compare_numeric(Numeric::Float(a.get()), Numeric::Int(b)))
+        }
+        (Value::Float(a), Value::Float(b)) => Ok(compare_numeric(
+            Numeric::Float(a.get()),
+            Numeric::Float(b.get()),
+        )),
         (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
         (Value::Date(a), Value::Date(b)) => Ok(a.cmp(&b)),
         (Value::DateTime(a), Value::DateTime(b)) => Ok(a.cmp(&b)),

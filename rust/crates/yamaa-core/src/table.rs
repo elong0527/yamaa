@@ -252,6 +252,12 @@ impl<'a> ColumnRef<'a> {
         self.start
     }
 
+    /// The bitmap over [`ColumnRef::values`], bit `i` set when payload `i`
+    /// holds a value, or `None` while every row does.
+    pub(crate) fn validity(&self) -> Option<&'a [u64]> {
+        self.validity
+    }
+
     /// Whether row `row`, which must be below [`ColumnRef::len`], holds a
     /// value by the bitmap.
     #[inline]

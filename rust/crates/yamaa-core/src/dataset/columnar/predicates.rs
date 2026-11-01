@@ -18,7 +18,7 @@ use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{ExprId, Op, Read, RelationKind};
 use crate::dataset::{FlagRead, SourceSelection};
 use crate::expression::{
-    Column, ColumnResolver, ErrorKind, EvaluationError, Resolved, Resolver, Stop, Truth,
+    Column, ColumnResolver, ErrorKind, EvaluationError, Lent, Resolved, Resolver, Stop, Truth,
 };
 use crate::numeric_lifecycle::HandlerKind;
 use crate::table::{CellError, ColumnRef, ValueRef};
@@ -154,6 +154,26 @@ impl Column for Operand<'_> {
             } => values.get(start + records[row]),
             Self::Storage(column, rows) => column.get(rows[row]),
         }
+    }
+
+    /// The buffer or storage the values are read from, at the same rows
+    /// (#4218).
+    fn lend(&self) -> Option<Lent<'_>> {
+        let (view, rows, offset) = match self {
+            Self::Values(values) => return values.lend(),
+            Self::Frame(values, rows) => (values.column()?, *rows, 0),
+            Self::Records {
+                values,
+                records,
+                start,
+            } => (values.column()?, *records, *start),
+            Self::Storage(column, rows) => (*column, rows.as_slice(), 0),
+        };
+        Some(Lent {
+            view,
+            rows: Some(rows),
+            offset,
+        })
     }
 }
 

@@ -16,10 +16,11 @@ mod bind;
 mod columns;
 mod evaluate;
 mod syntax;
+mod typed;
 mod types;
 
 pub use bind::{compile, AggregateResult, CompiledExpression, Reduction, ReductionOperand};
-pub use columns::{Column, ColumnResolver, Stop};
+pub use columns::{Column, ColumnResolver, Lent, Stop};
 pub use evaluate::{Condition, ErrorKind, EvaluationError, Resolved, Resolver, Step, Truth};
 pub use syntax::{
     parse, Comparison, Node, NodeKind, Parsed, SourcePosition, SourceSpan, TemporalKind, RESERVED,

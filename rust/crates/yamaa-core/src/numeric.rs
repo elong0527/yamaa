@@ -29,7 +29,7 @@ impl Number {
     }
 
     /// Promote a present number to binary64, retaining missing as None.
-    fn as_float(self) -> Option<f64> {
+    pub(crate) fn as_float(self) -> Option<f64> {
         match self {
             Self::Int(value) => Some(value as f64),
             Self::Float(value) => Some(value.get()),
@@ -179,7 +179,7 @@ pub fn binary(
     let (Some(a), Some(b)) = (left.as_float(), right.as_float()) else {
         return Ok(Number::Missing);
     };
-    if matches!(operator, BinaryOperator::Divide | BinaryOperator::Modulo) && b == 0.0 {
+    if zero_divisor(operator, b) {
         return Err(ArithmeticError {
             expression: expression.to_string(),
             kind: ArithmeticErrorKind::DivisionByZero,
@@ -200,14 +200,35 @@ pub fn binary(
             return checked_integer(value, expression);
         }
     }
-    let result = match operator {
+    Ok(float_binary(operator, a, b))
+}
+
+/// Whether `operator` refuses its divisor `b`: `/` and `MOD` refuse zero.
+#[inline]
+pub(crate) fn zero_divisor(operator: BinaryOperator, b: f64) -> bool {
+    matches!(operator, BinaryOperator::Divide | BinaryOperator::Modulo) && b == 0.0
+}
+
+/// The binary64 result of `operator` over two operands whose divisor
+/// [`zero_divisor`] admits, missing when it is not finite: the float
+/// arithmetic of [`binary`], which the column form's loops over floats
+/// share (#4218).
+#[inline]
+pub(crate) fn float_binary(operator: BinaryOperator, a: f64, b: f64) -> Number {
+    Number::float(float_operation(operator, a, b))
+}
+
+/// The binary64 operation of `operator`, before [`float_binary`] maps a
+/// result that is not finite to missing.
+#[inline]
+pub(crate) fn float_operation(operator: BinaryOperator, a: f64, b: f64) -> f64 {
+    match operator {
         BinaryOperator::Add => a + b,
         BinaryOperator::Subtract => a - b,
         BinaryOperator::Multiply => a * b,
         BinaryOperator::Divide => a / b,
         BinaryOperator::Modulo => a % b,
-    };
-    Ok(Number::float(result))
+    }
 }
 
 /// Apply a unary primitive, preserving numeric type and missing; reject i64 overflow.
