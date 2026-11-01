@@ -664,7 +664,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertNotIn("<select", single)
 
-    def test_review_survey_asks_three_questions_with_fixed_choices(self):
+    def test_review_survey_asks_two_questions_with_agree_or_disagree(self):
         def survey(name):
             page = generate.render_benchmark(generate.BENCHMARKS / name).decode("ascii")
             questions = [
@@ -685,14 +685,7 @@ class DashboardTests(unittest.TestCase):
             ]
             return page, questions
 
-        agreement = ("Agree", "Disagree", "Need clarification")
-        readiness = (
-            "readiness",
-            generate.REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle",
-            "Overall",
-            "Would you agree that the benchmark is ready to finalize?",
-            ("Ready", "Ready after minor fixes", "Needs major changes", "Unsure"),
-        )
+        agreement = ("Agree", "Disagree")
         inputs = (
             "inputs",
             "#inputs",
@@ -712,10 +705,10 @@ class DashboardTests(unittest.TestCase):
         )
 
         cases = (
-            (BENCHMARK.name, [task, inputs, readiness]),
-            ("sdtm-mh-ongoing-conditions", [task, inputs, readiness]),
-            ("send-bw-sendig311", [task, inputs, readiness]),
-            ("schema-source-ordinal", [task, inputs, readiness]),
+            (BENCHMARK.name, [task, inputs]),
+            ("sdtm-mh-ongoing-conditions", [task, inputs]),
+            ("send-bw-sendig311", [task, inputs]),
+            ("schema-source-ordinal", [task, inputs]),
             (
                 "negative-ambiguous-type",
                 [
@@ -736,7 +729,6 @@ class DashboardTests(unittest.TestCase):
                         "summary gives?",
                         agreement,
                     ),
-                    readiness,
                 ],
             ),
         )
@@ -746,19 +738,24 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(questions, expected, name)
                 if name == "negative-ambiguous-type":
                     self.assertIn(
-                        "Your review</a>: the task, the inputs, and whether this "
-                        "benchmark is ready to finalize.",
+                        "Your review</a>: the task and the inputs. Agreeing with "
+                        "both approves this benchmark;",
                         page,
                     )
-                # One free-text box, a script-only form, and GitHub's composer.
-                self.assertEqual(page.count('name="suggestions"'), 1, name)
+                # One free-text box, a script-only form, GitHub's composer, and
+                # the queue that takes the reviewer on from this benchmark.
+                self.assertEqual(page.count('name="comments"'), 1, name)
                 self.assertIn(
-                    'placeholder="Suggestions to finalize the benchmark"', page, name
+                    'placeholder="What should change to finalize the benchmark"',
+                    page,
+                    name,
                 )
                 self.assertIn(
                     f'<form class="review-form" data-benchmark="{name}" '
                     'data-review-url="https://github.com/elong0527/yamaa/'
-                    'discussions/new?category=comments" novalidate hidden>',
+                    'discussions/new?category=comments" '
+                    f'data-next-url="review/?after={name}" data-approve="Agree" '
+                    'data-done-key="yamaa-benchmark-reviewed:" novalidate hidden>',
                     page,
                 )
 
@@ -766,13 +763,13 @@ class DashboardTests(unittest.TestCase):
         ask = page.split('<div class="review-ask-body">', 1)[1].split("</div>", 1)[0]
         self.assertEqual(
             ask,
-            "<p>As a clinical trial statistician or programmer, answer three short "
-            'questions in <a href="#your-review">Your review</a>: the task, the '
-            "inputs and outputs, and whether this benchmark is ready to finalize. "
-            "Propose a fix with the <strong>Edit</strong> button on any source "
-            'file, or add a suggestion to your review.</p><p class="review-ask-note">'
-            "The other tabs beside Your review are background for assessment, not "
-            "under review.</p>",
+            "<p>As a clinical trial statistician or programmer, answer two short "
+            'questions in <a href="#your-review">Your review</a>: the task and the '
+            "inputs and outputs. Agreeing with both approves this benchmark; "
+            "disagreeing with either needs a comment. Propose a fix with the "
+            "<strong>Edit</strong> button on any source file, or add it to your "
+            'comments.</p><p class="review-ask-note">The other tabs beside Your '
+            "review are background for assessment, not under review.</p>",
         )
         # The summary is challenged too, so it carries the chip with the data.
         self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 3)
@@ -781,6 +778,33 @@ class DashboardTests(unittest.TestCase):
             '<span class="panel-caption">What this benchmark means</span>',
             page,
         )
+
+    def test_review_queue_walks_sdtm_then_adam_in_gallery_order(self):
+        entries = [
+            ("adam-adsl-second", "Second", "ADSL"),
+            ("adam-adsl-first", "First", "ADSL"),
+            ("adam-adae-event", "Event", "ADAE"),
+            ("negative-refused", "Refused", "ADSL"),
+            ("schema-field", "Field", "Schema"),
+            ("sdtm-dm-basic", "Basic", "DM"),
+            ("send-bw-weight", "Weight", "BW"),
+        ]
+        page = generate.render_review_queue(entries).decode("ascii")
+        queue = html_tree.fromstring(page).xpath('//*[@id="review-queue"]/text()')
+        self.assertEqual(
+            json.loads(queue[0]),
+            {
+                "doneKey": "yamaa-benchmark-reviewed:",
+                "names": [
+                    "send-bw-weight",
+                    "sdtm-dm-basic",
+                    "adam-adae-event",
+                    "adam-adsl-first",
+                    "adam-adsl-second",
+                ],
+            },
+        )
+        self.assertIn("all 5 benchmarks under review", page)
 
     def test_every_source_shown_has_an_edit_link_to_a_file_that_exists(self):
         """The review ask points at the Edit buttons, so no source may lack one."""

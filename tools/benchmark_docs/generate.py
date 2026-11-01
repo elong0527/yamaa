@@ -47,10 +47,17 @@ REPOSITORY = "https://github.com/elong0527/yamaa"
 # one free-text box. Submitting opens GitHub's new-discussion composer with the
 # answers filled in, so the static page holds no credentials; the reviewer
 # still selects Start discussion. Each review is its own discussion in the
-# Comments category.
+# Comments category. A reviewer who agrees with every question approves the
+# benchmark, and a disagreement needs a comment.
 REVIEW_URL = REPOSITORY + "/discussions/new?category=comments"
-AGREEMENT = ("Agree", "Disagree", "Need clarification")
-READINESS = ("Ready", "Ready after minor fixes", "Needs major changes", "Unsure")
+AGREEMENT = ("Agree", "Disagree")
+# Submitting or skipping a review leaves for the queue page, which holds the
+# order and sends the reviewer on. It walks these gallery groups, so one dataset
+# type is reviewed together. The form marks each benchmark done in the browser
+# under this key, and the queue page reads the same key.
+REVIEW_GROUPS = ("sdtm", "adam")
+REVIEW_QUEUE_URL = "review/"
+REVIEW_DONE_KEY = "yamaa-benchmark-reviewed:"
 LIFECYCLE_URL = REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle"
 # This order is shared by the overview table, jump links and gallery sections.
 # SEND uses the SDTM model, so its nonclinical examples join the tabulation
@@ -453,13 +460,14 @@ def page_link(name, label, relation):
     return f'<a href="{escape(name)}.html" rel="{relation}">{label}</a>'
 
 
-def render_review_form(name, questions, suggestion_hint):
+def render_review_form(name, questions, comment_hint):
     """The survey: one fieldset per question, then a free-text box. The script
     reads the labels, prompts and choices back from these elements to write
     the discussion body, so each question is declared once."""
     discussions_url = (
         REPOSITORY + "/discussions?discussions_q=" + quote(f'"{name}" in:title')
     )
+    next_url = f"{REVIEW_QUEUE_URL}?after={quote(name)}"
     fieldsets = []
     for key, target, label, prompt, choices in questions:
         options = "".join(
@@ -475,25 +483,32 @@ def render_review_form(name, questions, suggestion_hint):
         )
     return (
         '<div class="material-toolbar"><h3 class="material-title">Your review</h3>'
-        '<p class="material-provenance">Three questions and your suggestions '
+        '<p class="material-provenance">Two questions and your comments '
         f'&middot; <a href="{escape(discussions_url)}">View benchmark discussions</a></p>'
         "</div>"
         f'<form class="review-form" data-benchmark="{escape(name)}" '
-        f'data-review-url="{escape(REVIEW_URL)}" novalidate hidden>'
+        f'data-review-url="{escape(REVIEW_URL)}" '
+        f'data-next-url="{escape(next_url)}" '
+        f'data-approve="{escape(AGREEMENT[0])}" '
+        f'data-done-key="{escape(REVIEW_DONE_KEY)}" novalidate hidden>'
         + "".join(fieldsets)
-        + '<label class="review-suggestions-label" for="review-suggestions">'
-        "Suggestions <small>Optional</small></label>"
-        '<textarea id="review-suggestions" name="suggestions" rows="4" '
-        f'maxlength="10000" placeholder="{escape(suggestion_hint)}"></textarea>'
+        + '<label class="review-comments-label" for="review-comments">'
+        "Comments <small>Required if you disagree</small></label>"
+        '<textarea id="review-comments" name="comments" rows="4" '
+        f'maxlength="10000" placeholder="{escape(comment_hint)}"></textarea>'
         '<p class="review-feedback" role="status" aria-live="polite" hidden></p>'
         '<div class="review-actions"><p class="review-note">Drafts save '
         "automatically in this browser. Submitting opens GitHub with your review "
-        "filled in; select <strong>Start discussion</strong> there to publish it "
-        'under your account.</p><button type="submit" class="review-submit">'
-        "Submit review on GitHub</button></div>"
+        "filled in and moves this page to the next benchmark; select "
+        "<strong>Start discussion</strong> on GitHub to publish your review "
+        "under your account. Skip any benchmark you cannot judge.</p>"
+        '<div class="review-buttons"><button type="button" class="review-skip">'
+        'Skip</button><button type="submit" class="review-submit">'
+        "Submit and next</button></div></div>"
         '<div class="review-prepared" hidden><label for="review-prepared-text">'
         'Review text to copy</label><textarea id="review-prepared-text" rows="8" '
-        "readonly></textarea></div></form>"
+        f'readonly></textarea><a href="{escape(next_url)}">Next benchmark</a>'
+        "</div></form>"
         "<noscript><p>The review form needs JavaScript. Leave your review in "
         f'<a href="{escape(REPOSITORY)}/discussions">GitHub Discussions</a>.</p>'
         "</noscript>"
@@ -540,6 +555,37 @@ def curated_links(template_text):
     return sorted(set(re.findall(r"\]\(([a-z0-9-]+)\.html\)", template_text)))
 
 
+def gallery_families(entries):
+    """Sort the entries into the gallery's groups, then its dataset types."""
+    families = {key: {} for key in GROUP_NOTES}
+    for name, title, category in entries:
+        families[benchmark_group(name)].setdefault(category, []).append((name, title))
+    return families
+
+
+def review_queue(entries):
+    """The benchmarks under review, in the order the gallery lists them."""
+    families = gallery_families(entries)
+    return [
+        name
+        for key in REVIEW_GROUPS
+        for category in sorted(families[key])
+        for name, _ in sorted(families[key][category])
+    ]
+
+
+def render_review_queue(entries):
+    """The page that sends a reviewer to their next benchmark."""
+    queue = {"doneKey": REVIEW_DONE_KEY, "names": review_queue(entries)}
+    template = Template((HERE / "review-queue.html").read_text(encoding="utf-8"))
+    result = template.substitute(
+        queue=json.dumps(queue),
+        total=plural(len(queue["names"]), "benchmark"),
+        script=(HERE / "review-queue.js").read_text(encoding="utf-8"),
+    )
+    return result.encode("ascii", "xmlcharrefreplace")
+
+
 def render_index(entries):
     """Render the gallery page linking every generated dashboard.
 
@@ -558,9 +604,7 @@ def render_index(entries):
     Its totals are substituted from the directories rather than typed, and its
     curated links are checked against the suite, so neither can go stale.
     """
-    families = {key: {} for key in GROUP_NOTES}
-    for name, title, category in entries:
-        families[benchmark_group(name)].setdefault(category, []).append((name, title))
+    families = gallery_families(entries)
     blocks, jumps = [], []
     for key in GROUP_NOTES:
         groups = families[key]
@@ -1004,8 +1048,8 @@ def render_benchmark(benchmark, previous=None, next=None):
             output_caption = "Expected artifacts"
 
     # What reviewers are asked to challenge, the task included: a short survey
-    # on the use case and the data structures, then whether it is ready to
-    # finalize. Everything in the tabs beside Your review is background.
+    # on the use case and the data structures, where agreeing with both approves
+    # the benchmark. Everything in the tabs beside Your review is background.
     if is_failure:
         questions = (
             (
@@ -1049,27 +1093,18 @@ def render_benchmark(benchmark, previous=None, next=None):
                 AGREEMENT,
             ),
         )
-    questions += (
-        (
-            "readiness",
-            LIFECYCLE_URL,
-            "Overall",
-            "Would you agree that the benchmark is ready to finalize?",
-            READINESS,
-        ),
-    )
     data_scope = "inputs" if is_failure else "inputs and outputs"
     review_ask = (
-        "<p>As a clinical trial statistician or programmer, answer three short "
-        'questions in <a href="#your-review">Your review</a>: the task, the '
-        f"{data_scope}, and whether this benchmark is ready to finalize. "
-        "Propose a fix with the <strong>Edit</strong> button on any source file, "
-        'or add a suggestion to your review.</p><p class="review-ask-note">The '
-        "other tabs beside Your review are background for assessment, not under "
-        "review.</p>"
+        "<p>As a clinical trial statistician or programmer, answer two short "
+        'questions in <a href="#your-review">Your review</a>: the task and the '
+        f"{data_scope}. Agreeing with both approves this benchmark; disagreeing "
+        "with either needs a comment. Propose a fix with the "
+        "<strong>Edit</strong> button on any source file, or add it to your "
+        'comments.</p><p class="review-ask-note">The other tabs beside Your '
+        "review are background for assessment, not under review.</p>"
     )
     review_form = render_review_form(
-        benchmark.name, questions, "Suggestions to finalize the benchmark"
+        benchmark.name, questions, "What should change to finalize the benchmark"
     )
 
     def metric_cell(count, label, cls):
@@ -1265,18 +1300,26 @@ def main(argv=None):
             if not args.quiet:
                 print(f"Generated: {destination}")
     if write_index:
-        index = render_index(entries)
-        destination = args.output_dir / "index.md"
-        if args.check:
-            if not destination.is_file() or destination.read_bytes() != index:
-                failures.append("index")
-                print(f"Stale or missing: {destination}", file=sys.stderr)
-            elif not args.quiet:
-                print("Current: index")
-        else:
-            destination.write_bytes(index)
-            if not args.quiet:
-                print(f"Generated: {destination}")
+        pages = (
+            ("index", args.output_dir / "index.md", render_index(entries)),
+            (
+                "review queue",
+                args.output_dir / REVIEW_QUEUE_URL / "index.html",
+                render_review_queue(entries),
+            ),
+        )
+        for label, destination, page in pages:
+            if args.check:
+                if not destination.is_file() or destination.read_bytes() != page:
+                    failures.append(label)
+                    print(f"Stale or missing: {destination}", file=sys.stderr)
+                elif not args.quiet:
+                    print(f"Current: {label}")
+            else:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(page)
+                if not args.quiet:
+                    print(f"Generated: {destination}")
     return 1 if failures else 0
 
 
