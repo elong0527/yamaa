@@ -319,6 +319,28 @@ impl Frame {
         );
     }
 
+    /// The rows of each of `templates` templates, in template order:
+    /// contiguous, since a run builds one template's rows after another's.
+    /// The key grain's candidates are its one template's.
+    pub(super) fn blocks(&self, templates: usize) -> Vec<std::ops::Range<usize>> {
+        let mut row = 0;
+        (0..templates.max(1))
+            .map(|template| {
+                let start = row;
+                while row < self.rows() && self.template(row).unwrap_or(0) == template {
+                    row += 1;
+                }
+                start..row
+            })
+            .collect()
+    }
+
+    /// Every row's values, a buffer per column, in row order: the frame's
+    /// columns kept as they are, and the rest of it dropped (#4219).
+    pub(super) fn into_values(self) -> Vec<Values> {
+        self.columns
+    }
+
     /// The rows `order` names, in that order, as columns, consuming the
     /// frame a column at a time (#3870): a column moves whole when `order`
     /// keeps every row in place, and is otherwise gathered and dropped before

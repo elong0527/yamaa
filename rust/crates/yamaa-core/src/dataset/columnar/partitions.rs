@@ -22,6 +22,16 @@
 //! and orders the candidates of every partition once, after the last
 //! partition.
 //!
+//! A run whose partitions no output key group spans, and whose plan
+//! declares no column or dataset check, publishes each partition as it is
+//! instead (#4219): each partition's run checks its own output keys as it
+//! ends, orders its own rows, and keeps only its columns, which the dataset
+//! reads partition by partition, in the whole-table run's order. The run
+//! adds up the partitions' key findings, moved to the whole output's
+//! positions; an order that the partitions' own orders do not give, one
+//! partition's rows after another's, is the whole output's, over their
+//! columns joined.
+//!
 //! The first failure, the handler counts, the check records and the template
 //! rows are the whole-table run's. A partition's run passes the same
 //! numbered marks in the same order whatever its records hold ([`Marks`]):
@@ -37,14 +47,15 @@
 //! whole input's and the whole output's.
 //!
 //! A cancelled run keeps nothing any partition built.
+use super::buffer::Values;
 use super::checks;
 use super::frame::Frame;
 use super::handlers::{HandlerMark, Handlers};
 use super::{reserved, row_completed, Fail, Found, Run};
 use crate::dataset::cut::{consecutive, PartitionCut};
 use crate::dataset::execution::{
-    CheckRecord, ExecutionAttempt, ExecutionError, ExecutionEvent, ExecutionPhase, RowIdentity,
-    TemplateRows,
+    CheckRecord, Dataset, Execution, ExecutionAttempt, ExecutionError, ExecutionEvent,
+    ExecutionPhase, RowIdentity, TemplateRows,
 };
 use crate::dataset::resolved::{
     FilterPlacement, Op, RegionId, ResolvedPlan, Stage, Step, TemplateId,
@@ -333,12 +344,49 @@ impl<E> Run<'_, '_, E> {
     }
 }
 
+/// How the partitions of a run that publishes them (#4219) group their own
+/// output keys: each template's rows apart, when no two templates' rows
+/// share a key ([`ResolvedPlan::templates_apart`]), or all of them at once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Units {
+    Templates,
+    Partition,
+}
+
+/// How a published partition's rows are ordered (#4219).
+#[derive(Debug)]
+enum Ordered {
+    /// In construction order: the output has no order terms.
+    Construction,
+    /// The partition's rows in the output's order, by their positions.
+    Sorted(Vec<usize>),
+    /// The order terms could not order its rows, which the whole output's
+    /// order then refuses as well.
+    Refused,
+}
+
+/// One partition's candidates as a run that publishes them keeps them
+/// (#4219): a buffer per output column, in construction order, what its
+/// output key check found, and its own order.
+#[derive(Debug)]
+struct Published {
+    values: Vec<super::buffer::Values>,
+    keys: Result<checks::KeyFindings, checks::KeyFault>,
+    ordered: Ordered,
+}
+
 /// One partition's run (#3830).
 struct Part<E> {
     /// The position of the partition's first record in the whole input.
     records: usize,
-    /// The candidate rows it built, each template's after the one before.
+    /// The candidate rows it built, each template's after the one before;
+    /// empty once they are published.
     frame: Frame,
+    /// The rows of each template among its candidates, in template order.
+    blocks: Vec<Range<usize>>,
+    /// Its candidates as the run publishes them, once it ended without a
+    /// failure in a run that publishes its partitions (#4219).
+    published: Option<Published>,
     templates: Vec<TemplateRows>,
     /// Its check records: the intermediates' over the other inputs, which
     /// the first partition's run verifies.
@@ -355,10 +403,12 @@ struct Part<E> {
 
 impl<E> Part<E> {
     /// A partition after a failure at the first mark, which runs nothing.
-    fn passed(records: usize, width: usize, counts: HandlerMark) -> Self {
+    fn passed(records: usize, (width, templates): (usize, usize), counts: HandlerMark) -> Self {
         Self {
             records,
             frame: Frame::new(width),
+            blocks: vec![0..0; templates.max(1)],
+            published: None,
             templates: Vec::new(),
             checked: Vec::new(),
             marks: Marks::new(0, false),
@@ -395,22 +445,6 @@ impl<E> Part<E> {
             .partition_point(|(mark, _)| *mark <= position);
         &self.marks.snapshots[index - 1].1
     }
-
-    /// Its candidate rows of each template, in template order: contiguous,
-    /// since a run builds one template's rows after another's. The key
-    /// grain's candidates are its one template's.
-    fn blocks(&self, templates: usize) -> Vec<Range<usize>> {
-        let mut row = 0;
-        (0..templates.max(1))
-            .map(|template| {
-                let start = row;
-                while row < self.frame.rows() && self.frame.template(row).unwrap_or(0) == template {
-                    row += 1;
-                }
-                start..row
-            })
-            .collect()
-    }
 }
 
 /// What a partitioned run reads (#3830).
@@ -445,6 +479,9 @@ struct Placement {
     limit: usize,
     /// The most rows one partition of the output holds (D264).
     output_partition: Option<NonZeroUsize>,
+    /// How the partition groups its output keys, when the run publishes
+    /// its partitions (#4219).
+    publish: Option<Units>,
 }
 
 /// Where a partition's failure is in the whole run: the partition and the
@@ -652,6 +689,7 @@ impl ResolvedPlan {
             .and_then(NonZeroUsize::new)
             .unwrap_or(NonZeroUsize::MIN);
         outer.output_partition = (!input.whole_output).then_some(largest);
+        outer.publish = self.publishing(input.keys, ranges.len());
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
@@ -732,7 +770,8 @@ impl ResolvedPlan {
     /// decodes nor reports.
     fn passed<E, F>(&self, outer: &Run<'_, '_, F>, records: usize) -> Part<E> {
         let width = self.region(RegionId::DATASET).output.columns().len();
-        Part::passed(records, width, outer.handlers.mark())
+        let templates = self.region_templates(RegionId::DATASET).count();
+        Part::passed(records, (width, templates), outer.handlers.mark())
     }
 
     /// Decode partition `index` and run it on the calling thread, stopping
@@ -769,6 +808,7 @@ impl ResolvedPlan {
             first,
             limit,
             output_partition: outer.output_partition,
+            publish: outer.publish,
         };
         self.run_partition(
             (table, outer.secondary),
@@ -796,6 +836,7 @@ impl ResolvedPlan {
             first,
             limit,
             output_partition,
+            publish,
         } = placement;
         let mut run = Run::new(self, (primary, secondary), functions, cancelled);
         run.output_partition = output_partition;
@@ -811,22 +852,68 @@ impl ResolvedPlan {
         }
         let mut marks = run.marks.take().expect("a partition's run has marks");
         marks.opened = None;
+        let ended = result.is_ok();
         let failure = match result {
             Ok(()) => None,
             Err(_) if marks.limited => None,
             Err(error) if matches!(*error, ExecutionError::Cancelled) => return None,
             Err(error) => Some((error, marks.coordinates)),
         };
+        let blocks = frame.blocks(self.region_templates(RegionId::DATASET).count());
+        let mut key_groups = run.key_groups.take();
+        // A run that publishes its partitions keeps none of their frames:
+        // one that ended checks its output keys and orders its rows now, as
+        // its run ends, and keeps its columns (#4219).
+        let mut published = None;
+        if let Some(units) = publish {
+            let frame = std::mem::take(&mut frame);
+            if ended {
+                published = Some(self.publish(frame, key_groups.take(), &blocks, units));
+            }
+        }
         Some(Part {
             records,
             frame,
+            blocks,
+            published,
             templates,
             checked,
             counts: run.handlers.mark(),
-            key_groups: run.key_groups.take(),
+            key_groups,
             marks,
             failure,
         })
+    }
+
+    /// The candidates `frame` of a partition whose run ended, as a run that
+    /// publishes its partitions keeps them (#4219): its output keys checked
+    /// in `units`, with the key grain's `key_groups` when it kept them, its
+    /// rows in the output's order, and its columns.
+    fn publish(
+        &self,
+        frame: Frame,
+        key_groups: Option<Vec<usize>>,
+        blocks: &[Range<usize>],
+        units: Units,
+    ) -> Published {
+        let units: Vec<Vec<Range<usize>>> = match units {
+            Units::Templates => blocks.iter().map(|block| vec![block.clone()]).collect(),
+            Units::Partition => vec![vec![0..frame.rows()]],
+        };
+        let keys = checks::partition_keys(self, &frame, key_groups, &units);
+        let ordered = if self.output_order().is_empty() {
+            Ordered::Construction
+        } else {
+            match checks::output_order::<std::convert::Infallible>(self, &frame) {
+                Ok(order) => Ordered::Sorted(order),
+                Err(_) => Ordered::Refused,
+            }
+        };
+        Published {
+            values: frame.into_values(),
+            keys,
+            ordered,
+        }
     }
 
     /// The whole-table run's attempt, from every partition's run (#3830):
@@ -857,9 +944,7 @@ impl ResolvedPlan {
                 cancelled: false,
             });
         }
-        let templates = self.region_templates(RegionId::DATASET).count();
-        let blocks: Vec<Vec<Range<usize>>> =
-            parts.iter().map(|part| part.blocks(templates)).collect();
+        let blocks: Vec<Vec<Range<usize>>> = parts.iter().map(|part| part.blocks.clone()).collect();
         // The failing partition entered every mark the whole-table run
         // reached; without a failure, every partition entered every mark.
         let end = failure.map_or(usize::MAX, |(_, mark)| mark);
@@ -872,7 +957,11 @@ impl ResolvedPlan {
             .filter(|&(position, _)| position <= end)
             .collect();
         let mut records = std::mem::take(&mut parts[0].checked);
-        let frame = if failure.is_none() || !checks.is_empty() {
+        // A run that publishes its partitions declares no column check, so
+        // none of the checks' places checks anything, and it merges nothing
+        // (#4219).
+        let publishing = outer.publish.is_some();
+        let frame = if !publishing && (failure.is_none() || !checks.is_empty()) {
             merged(
                 &mut parts,
                 &blocks,
@@ -884,6 +973,7 @@ impl ResolvedPlan {
         };
         let mut completed = row_completed(self);
         let mut next = 0;
+        let checks = if publishing { Vec::new() } else { checks };
         for &(position, column) in &checks {
             if let Some(column) = column {
                 completed[column] = true;
@@ -921,6 +1011,16 @@ impl ResolvedPlan {
             .handlers
             .restore(compose(&parts, |_, part| &part.counts));
         let templates = template_rows(&parts, reference, end);
+        if publishing {
+            let result = self.finish_published(outer, &mut parts, &blocks, &mut records, observer);
+            return Ok(Found {
+                result,
+                handler_counts: outer.handlers.snapshot(self),
+                records,
+                templates,
+                cancelled: outer.stopped.get(),
+            });
+        }
         // The output key check groups what no key group leaves on its own:
         // each partition's key grain, each template's rows, or each
         // partition's rows (#4211).
@@ -1033,6 +1133,308 @@ impl ResolvedPlan {
                 };
                 Some((entered - 1, error))
             })
+    }
+}
+
+impl ResolvedPlan {
+    /// How the partitions of a run over `partitions` partitions,
+    /// key-bounded over the leading `keys` declared keys when there are
+    /// any, group their own output keys when the run publishes them
+    /// (#4219); none when the run merges their candidates into one frame.
+    /// A run publishes its partitions when no output key group spans two
+    /// of them ([`Self::keeps_key_groups`]), so that each partition's run
+    /// can check its own keys, and its plan declares no column or dataset
+    /// check, which read every partition's candidates as one frame.
+    fn publishing(&self, keys: usize, partitions: usize) -> Option<Units> {
+        let checked = self.checks().iter().any(|check| {
+            matches!(
+                check.scope,
+                crate::dataset::resolved::CheckScope::Column(_)
+                    | crate::dataset::resolved::CheckScope::Dataset
+            )
+        });
+        (!checked && self.keeps_key_groups(keys, partitions)).then(|| {
+            if self.templates_apart() {
+                Units::Templates
+            } else {
+                Units::Partition
+            }
+        })
+    }
+
+    /// Check, key and order the candidates each partition's run published
+    /// (#4219), as [`Run::finish`] checks, keys and orders them merged into
+    /// one frame. The output key check adds up what each partition's run
+    /// found, its rows moved to the whole output's, and the dataset reads
+    /// each partition's columns: in the whole-table run's order without
+    /// order terms; in each partition's own order, one partition after
+    /// another, when every partition's rows come before the next one's; or
+    /// else in the whole output's order over their columns joined.
+    fn finish_published<E>(
+        &self,
+        outer: &mut Run<'_, '_, E>,
+        parts: &mut [Part<E>],
+        blocks: &[Vec<Range<usize>>],
+        records: &mut Vec<CheckRecord>,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> Result<Execution, Fail<E>> {
+        super::relations::check_unobserved_filter_types(self)?;
+        let layout = Layout::new(blocks);
+        let published: Vec<&Published> = parts
+            .iter()
+            .map(|part| part.published.as_ref().expect("a published partition"))
+            .collect();
+        let keys = checks::key_columns(self);
+        let width = self.region(RegionId::DATASET).output.columns().len();
+        let partition = outer.output_partition;
+        checks::verify_published(
+            outer,
+            layout.rows,
+            |_| self.published_keys(&published, &layout, (&keys, width), partition),
+            |positions| {
+                positions
+                    .into_iter()
+                    .map(|position| {
+                        let (part, row) = layout.locate(position);
+                        RowIdentity {
+                            position,
+                            values: keys
+                                .iter()
+                                .map(|&key| published[part].values[key].value(row))
+                                .collect(),
+                        }
+                    })
+                    .collect()
+            },
+            records,
+            observer,
+        )?;
+        outer.poll(Step::Order)?;
+        let dataset = self.published_dataset(parts, &layout)?;
+        Ok(Execution {
+            dataset,
+            verifications: std::mem::take(records),
+            partition_rows: outer.output_partition,
+        })
+    }
+
+    /// What the output key check finds over every partition's published
+    /// candidates (#4219): each partition's missing keys and repeated keys,
+    /// moved to the whole output's positions in order, and its groups added
+    /// up, since no key group spans two partitions. The grouping is
+    /// admitted over the whole output, as the check over one frame admits
+    /// it, before any partition's refusal of memory counts.
+    fn published_keys<E>(
+        &self,
+        published: &[&Published],
+        layout: &Layout,
+        (keys, width): (&[usize], usize),
+        partition: Option<NonZeroUsize>,
+    ) -> Result<checks::KeyFindings, Fail<E>> {
+        let mut missing = vec![Vec::new(); keys.len()];
+        let mut groups = 0usize;
+        let mut repeated = Vec::new();
+        let mut fault = None;
+        for (index, part) in published.iter().enumerate() {
+            match &part.keys {
+                Ok(found) => {
+                    for (rows, local) in missing.iter_mut().zip(&found.missing) {
+                        rows.extend(local.iter().map(|&row| layout.position(index, row)));
+                    }
+                    groups += found.groups;
+                    repeated.extend(
+                        found
+                            .repeated
+                            .iter()
+                            .map(|&row| layout.position(index, row)),
+                    );
+                }
+                Err(error) => {
+                    fault.get_or_insert(*error);
+                }
+            }
+        }
+        for rows in &mut missing {
+            rows.sort_unstable();
+        }
+        super::group::admit(keys, width, layout.rows, partition)
+            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+        if let Some(fault) = fault {
+            return Err(fault.failure());
+        }
+        repeated.sort_unstable();
+        Ok(checks::KeyFindings {
+            missing,
+            groups,
+            repeated,
+        })
+    }
+
+    /// The dataset of every partition's published columns (#4219), in the
+    /// output's order: without order terms, the whole-table run's order,
+    /// read from each partition's columns as they are; in each partition's
+    /// own order, one partition after another, when that is the output's
+    /// order ([`Self::ordered_apart`]); or else the whole output's order
+    /// over their columns joined in the whole-table run's order, each
+    /// partition's column dropped once joined.
+    fn published_dataset<E>(
+        &self,
+        parts: &mut [Part<E>],
+        layout: &Layout,
+    ) -> Result<Dataset, Fail<E>> {
+        let schema = self.region(RegionId::DATASET).output.clone();
+        let width = schema.columns().len();
+        let mut published: Vec<Published> = parts
+            .iter_mut()
+            .map(|part| part.published.take().expect("a published partition"))
+            .collect();
+        if self.output_order().is_empty() {
+            let values = published.into_iter().map(|part| part.values).collect();
+            let runs = layout.runs.iter().map(|run| (run.part, run.rows.clone()));
+            return Ok(Dataset::from_parts(schema, values, runs));
+        }
+        if self.ordered_apart(&published) {
+            let mut values = Vec::with_capacity(published.len());
+            let mut runs = Vec::with_capacity(published.len());
+            for (index, part) in published.into_iter().enumerate() {
+                let Ordered::Sorted(order) = part.ordered else {
+                    unreachable!("ordered apart: every partition sorted")
+                };
+                runs.push((index, 0..order.len()));
+                values.push(gathered(part.values, &order)?);
+            }
+            return Ok(Dataset::from_parts(schema, values, runs));
+        }
+        let mut columns = Vec::with_capacity(width);
+        for column in 0..width {
+            let mut joined = Values::missing(0);
+            for run in &layout.runs {
+                joined.extend_from(&published[run.part].values[column], run.rows.clone());
+            }
+            for part in &mut published {
+                part.values[column] = Values::default();
+            }
+            columns.push(joined);
+        }
+        let order = checks::order_rows(self, layout.rows, |row, column| columns[column].get(row))?;
+        let columns = gathered(columns, &order)?;
+        Ok(Dataset::from_columns(schema, columns, layout.rows))
+    }
+
+    /// Whether every published partition's rows, each partition sorted in
+    /// the output's order, come strictly before the next nonempty
+    /// partition's (#4219): the last of one precedes the first of the next
+    /// on the order terms. Then the whole output's order, which keeps the
+    /// construction order only of rows it ties (VALUE-23), is each
+    /// partition's own order, one partition after another, whatever their
+    /// templates. A partition whose rows did not sort orders nothing apart.
+    fn ordered_apart(&self, published: &[Published]) -> bool {
+        let mut last: Option<(&[Values], usize)> = None;
+        for part in published {
+            let Ordered::Sorted(order) = &part.ordered else {
+                return false;
+            };
+            let (Some(&first), Some(&end)) = (order.first(), order.last()) else {
+                continue;
+            };
+            if let Some((before, row)) = last {
+                let after = &part.values;
+                if !checks::precedes(
+                    self,
+                    |column| before[column].get(row),
+                    |column| after[column].get(first),
+                ) {
+                    return false;
+                }
+            }
+            last = Some((&part.values, end));
+        }
+        true
+    }
+}
+
+/// `values`, each column's rows in `order`, a permutation of its rows:
+/// moved whole when `order` keeps every row in place, and otherwise gathered
+/// a column at a time, each column dropped once gathered (#3870).
+fn gathered<E>(values: Vec<Values>, order: &[usize]) -> Result<Vec<Values>, Fail<E>> {
+    if order
+        .iter()
+        .enumerate()
+        .all(|(position, &row)| position == row)
+    {
+        return Ok(values);
+    }
+    let mut ordered = Vec::new();
+    reserved(ordered.try_reserve_exact(values.len()))?;
+    for column in values {
+        ordered.push(reserved(column.gather(order))?);
+    }
+    Ok(ordered)
+}
+
+/// The candidates of every partition's run in the whole-table run's order
+/// (#4219): each template's rows, partition after partition, before the
+/// next template's.
+struct Layout {
+    /// Each nonempty run of one partition's rows, in that order.
+    runs: Vec<LayoutRun>,
+    /// For each partition, the rows of each template among its candidates.
+    blocks: Vec<Vec<Range<usize>>>,
+    /// For each partition, the output row each template's rows start at.
+    starts: Vec<Vec<usize>>,
+    rows: usize,
+}
+
+/// Rows `rows` of partition `part`, the output's from row `at` on.
+struct LayoutRun {
+    part: usize,
+    rows: Range<usize>,
+    at: usize,
+}
+
+impl Layout {
+    /// The order of every partition's candidates, `blocks` holding each
+    /// partition's rows of each template.
+    fn new(blocks: &[Vec<Range<usize>>]) -> Self {
+        let templates = blocks.first().map_or(0, Vec::len);
+        let mut runs = Vec::new();
+        let mut starts = vec![vec![0; templates]; blocks.len()];
+        let mut at = 0;
+        for template in 0..templates {
+            for (part, local) in blocks.iter().enumerate() {
+                let rows = local[template].clone();
+                starts[part][template] = at;
+                if !rows.is_empty() {
+                    runs.push(LayoutRun {
+                        part,
+                        rows: rows.clone(),
+                        at,
+                    });
+                }
+                at += rows.len();
+            }
+        }
+        Self {
+            runs,
+            blocks: blocks.to_vec(),
+            starts,
+            rows: at,
+        }
+    }
+
+    /// The output row of row `row` of partition `part`'s candidates.
+    fn position(&self, part: usize, row: usize) -> usize {
+        let blocks = &self.blocks[part];
+        let template = blocks.partition_point(|block| block.end <= row);
+        self.starts[part][template] + (row - blocks[template].start)
+    }
+
+    /// The partition and row among its candidates of output row `position`.
+    fn locate(&self, position: usize) -> (usize, usize) {
+        let run = &self.runs[self
+            .runs
+            .partition_point(|run| run.at + run.rows.len() <= position)];
+        (run.part, run.rows.start + (position - run.at))
     }
 }
 

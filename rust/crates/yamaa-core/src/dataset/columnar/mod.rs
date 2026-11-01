@@ -270,6 +270,11 @@ struct Run<'p, 'a, E> {
     /// Where one partition's run of a partitioned run has reached (#3830);
     /// none in a whole-table run.
     pub marks: Option<partitions::Marks>,
+    /// How a partitioned run whose partitions each check their own output
+    /// keys groups them, so that the run publishes each partition's rows as
+    /// they are (#4219); none when the run checks, keys and orders the
+    /// partitions' candidates merged into one frame, or runs whole.
+    pub publish: Option<partitions::Units>,
     /// The group of each frame row under the output keys, once the key
     /// grain has built the frame's rows (#4188), or composed from the key
     /// grain of each partition no key group spans (#4211), so the output
@@ -314,6 +319,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             stopped: std::cell::Cell::new(false),
             output_partition: None,
             marks: None,
+            publish: None,
             key_groups: None,
             key_partitions: None,
         }
