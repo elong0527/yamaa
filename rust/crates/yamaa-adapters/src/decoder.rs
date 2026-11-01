@@ -269,16 +269,17 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         crate::source_decoding::source_schema(source, bytes, interpretation)
     }
     /// A CSV or Parquet input scans a partition at a time, each table
-    /// visited (#3830), and the first Parquet partitions kept for the run
-    /// within the limits of one partition (#4212); every other profile is
-    /// read whole.
+    /// visited (#3830), a Parquet input's decoding up to `threads` at once
+    /// (#4220), and the first Parquet partitions kept for the run within
+    /// the limits of one partition (#4212); every other profile is read
+    /// whole.
     fn partitioned(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         interpretation: yamaa_core::specification::SourceInterpretation,
         contract: Option<&yamaa_core::producer_contract::Contract>,
-        rows: std::num::NonZeroUsize,
+        (rows, threads): (std::num::NonZeroUsize, std::num::NonZeroUsize),
         visit: &mut dyn FnMut(&Snapshot<E>, usize),
     ) -> Option<Result<Snapshot<E>, Error>> {
         let scanned = crate::source_decoding::scan_partitions(
@@ -286,7 +287,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
             bytes,
             interpretation,
             contract,
-            rows,
+            (rows, threads),
             &mut |table, first| visit(&Snapshot::whole(table.clone()), first),
         )?;
         Some(scanned.map(Snapshot::scanned))

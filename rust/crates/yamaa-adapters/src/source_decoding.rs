@@ -357,8 +357,11 @@ const ORDINAL: u8 = 2;
 /// partitions of `rows` records, the last holding the rest, and a Parquet
 /// source in runs of whole row groups of at most `rows` records, a larger
 /// row group being a partition of its own. Each partition's table is decoded
-/// once, in order, given to `visit` with the position of its first record
-/// among the input's records, and dropped (#3830). `None` for any other
+/// once, given to `visit` on the calling thread, in order, with the position
+/// of its first record among the input's records, and dropped (#3830). A
+/// Parquet source's partitions decode up to `threads` at once, each on a
+/// thread of its own (#4220); a CSV source's convert on the calling thread
+/// in turn, since its records are not row groups. `None` for any other
 /// profile, which is read whole.
 ///
 /// Every finding [`decode_source`] reports is reported in the same order, at
@@ -374,7 +377,7 @@ pub(crate) fn scan_partitions(
     bytes: &[u8],
     interpretation: yamaa_core::specification::SourceInterpretation,
     contract: Option<&yamaa_core::producer_contract::Contract>,
-    rows: std::num::NonZeroUsize,
+    (rows, threads): (std::num::NonZeroUsize, std::num::NonZeroUsize),
     visit: &mut dyn FnMut(&ColumnTable, usize),
 ) -> Option<Result<(Scanned, Kept), Error>> {
     use yamaa_core::specification::SourceProfile;
@@ -386,18 +389,17 @@ pub(crate) fn scan_partitions(
     let mut admitted = Vec::new();
     let mut partition = 0usize;
     // The checks the whole read makes once the table has decoded, each
-    // partition's on its own, and its visit.
-    let mut finish = |table: ColumnTable, start: usize, first: &mut First| {
-        let table = match source.profile {
-            SourceProfile::Parquet => match empty_string_convention(source, table) {
-                Ok(table) => table,
-                Err(error) => {
-                    first.offer(CONVENTION, partition, error);
-                    partition += 1;
-                    return;
-                }
-            },
-            _ => table,
+    // partition's on its own, and its visit. A Parquet partition's table
+    // comes with the empty-string convention applied, on the thread that
+    // built it (#4220), or with the convention's finding.
+    let mut finish = |converted: Result<ColumnTable, Error>, start: usize, first: &mut First| {
+        let table = match converted {
+            Ok(table) => table,
+            Err(error) => {
+                first.offer(CONVENTION, partition, error);
+                partition += 1;
+                return;
+            }
         };
         if partition == 0 {
             if let Some(contract) = contract {
@@ -456,7 +458,7 @@ pub(crate) fn scan_partitions(
                         }
                     };
                     let count = table.row_count();
-                    finish(table, start, &mut first);
+                    finish(Ok(table), start, &mut first);
                     start += count;
                 }
                 Ok((
@@ -474,10 +476,21 @@ pub(crate) fn scan_partitions(
         }
         SourceProfile::Parquet => {
             let mut start = 0usize;
-            let scanned = crate::parquet_source::scan(bytes, odm, rows, &mut |table, at| {
-                start = at + table.row_count();
-                finish(table, at, &mut first);
-            });
+            let convention = |table| empty_string_convention(source, table);
+            let mut visited = |converted: Result<ColumnTable, Error>, at: usize| {
+                // A partition the convention refuses ends the scan, whose
+                // records are then not needed.
+                if let Ok(table) = &converted {
+                    start = at + table.row_count();
+                }
+                finish(converted, at, &mut first);
+            };
+            let scanned = crate::parquet_source::scan(
+                bytes,
+                odm,
+                (rows, threads),
+                (&convention, &mut visited),
+            );
             match scanned {
                 Ok(scanned) => (Reader::Parquet(scanned), start),
                 Err(error) => return Some(Err(parquet_error(error))),
@@ -829,16 +842,21 @@ mod kept_scan_tests {
     }
 
     /// The first record and the records of each table `bytes` keeps when
-    /// scanned as `profile` in partitions of `rows` records.
-    fn kept(profile: SourceProfile, bytes: &[u8], rows: usize) -> Vec<(usize, usize)> {
-        let rows = std::num::NonZeroUsize::new(rows).unwrap();
+    /// scanned as `profile` in partitions of `rows` records, `threads` at
+    /// once.
+    fn kept(
+        profile: SourceProfile,
+        bytes: &[u8],
+        (rows, threads): (usize, usize),
+    ) -> Vec<(usize, usize)> {
+        let count = |count| std::num::NonZeroUsize::new(count).unwrap();
         let declaration = declaration(profile);
         let scanned = scan_partitions(
             &declaration,
             bytes,
             SourceInterpretation::Ordinary,
             None,
-            rows,
+            (count(rows), count(threads)),
             &mut |_, _| {},
         );
         let (_, kept) = scanned
@@ -855,8 +873,9 @@ mod kept_scan_tests {
     /// they fit in a partition's records, and the scan keeps the first
     /// partitions while together they hold no more than one partition's
     /// records: in partitions of 6 (6, 6, 3) the first; of 3 (five of 3)
-    /// the first; of 9 (9, 6) the first; of 15 the one. A CSV input's
-    /// partitions are all decoded again, so its scan keeps none.
+    /// the first; of 9 (9, 6) the first; of 15 the one, whether the scan
+    /// runs on one thread or on four (#4220). A CSV input's partitions are
+    /// all decoded again, so its scan keeps none.
     #[test]
     fn a_scan_keeps_a_parquet_inputs_first_partitions_up_to_one_partitions_records() {
         let parquet = fifteen();
@@ -901,7 +920,13 @@ mod kept_scan_tests {
             ),
         ];
         for (label, profile, bytes, rows, expected) in cases {
-            assert_eq!(kept(profile, bytes, rows), expected, "{label}");
+            for threads in [1, 4] {
+                assert_eq!(
+                    kept(profile, bytes, (rows, threads)),
+                    expected,
+                    "{label}, {threads} threads"
+                );
+            }
         }
     }
 }
