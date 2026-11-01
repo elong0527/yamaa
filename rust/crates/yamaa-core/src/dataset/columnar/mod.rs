@@ -46,6 +46,7 @@ mod partitions;
 pub use partitions::{PartitionSource, SharedDecode};
 mod predicates;
 mod reads;
+mod recurrence;
 mod relations;
 mod scalar;
 #[cfg(test)]
@@ -1251,6 +1252,19 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         self.check_columns(frame, (&completed, None), &mut next, records)?;
         let order = plan.column_order(region).to_vec();
         for column in order {
+            if let Some(group) = plan.recurrence(column) {
+                self.complete_recurrence(frame, secondary, group)?;
+                for member in &group.columns {
+                    completed[member.index() - columns[0].index()] = true;
+                }
+                self.check_columns(
+                    frame,
+                    (&completed, Some(column.index() - columns[0].index())),
+                    &mut next,
+                    records,
+                )?;
+                continue;
+            }
             let local = column.index() - columns[0].index();
             let step = super::resolved::Step::Column(column);
             self.mark(partitions::Coordinates::Frame)?;

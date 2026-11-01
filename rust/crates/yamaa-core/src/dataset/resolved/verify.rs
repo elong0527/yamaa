@@ -64,9 +64,16 @@ fn topology(plan: &ResolvedPlan, region: RegionId) -> Result<(), ResolutionError
                 }
             }
             Step::Column(column) => {
-                for binding in plan.column_bindings(column) {
-                    let node = plan.binding(binding);
-                    check.expr(step, node.expr, Scope::Cells(&node.templates))?;
+                for member in plan.step_columns(column) {
+                    for binding in plan.column_bindings(member) {
+                        let node = plan.binding(binding);
+                        check.expr(step, node.expr, Scope::Cells(&node.templates))?;
+                        for &template in &node.templates {
+                            let offset = check.offset(member).expect("same region");
+                            let row = check.row(template);
+                            check.complete[row * check.width + offset] = position;
+                        }
+                    }
                 }
             }
             Step::Checks(id) => {
@@ -145,7 +152,7 @@ impl Topology<'_> {
     fn complete_step(&mut self, step: Step) -> Result<(), ResolutionError> {
         let bindings: Vec<BindingId> = match step {
             Step::Row(binding) | Step::Window(binding) => vec![binding],
-            Step::Column(column) => self.plan.column_bindings(column).collect(),
+            Step::Column(column) => self.plan.step_bindings(column).collect(),
             _ => return Ok(()),
         };
         for binding in bindings {
@@ -268,11 +275,23 @@ impl Topology<'_> {
         let reads = node
             .group_by
             .iter()
-            .chain(node.order_by.iter().map(|term| &term.read))
-            .chain(&node.operands);
+            .chain(node.order_by.iter().map(|term| &term.read));
         for read in reads {
             if let Read::Column(column) = read {
                 self.cell(step, *column, &rows)?;
+            }
+        }
+        let delayed = match (step, node.function) {
+            (Step::Column(column), WindowFunction::RowValue { offset }) if offset < 0 => {
+                self.plan.recurrence(column)
+            }
+            _ => None,
+        };
+        for read in &node.operands {
+            if let Read::Column(column) = read {
+                if !delayed.is_some_and(|group| group.columns.contains(column)) {
+                    self.cell(step, *column, &rows)?;
+                }
             }
         }
         if let Some(filter) = node.filter {

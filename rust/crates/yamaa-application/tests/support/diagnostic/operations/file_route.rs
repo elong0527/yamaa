@@ -34,6 +34,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("aggregate_key_reads.json"),
     fixture!("aggregate_record_operations.json"),
     fixture!("case_item_order.json"),
+    fixture!("calculated_history.json"),
     fixture!("check_keyless_donor.json"),
     fixture!("check_output_validation.json"),
     fixture!("check_row_phase_boundaries.json"),

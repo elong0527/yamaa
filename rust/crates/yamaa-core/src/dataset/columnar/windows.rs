@@ -736,17 +736,14 @@ fn standings<E>(built: &WindowRun, cx: &Cx<'_, E>) -> Result<Vec<Standing>, Fail
     Ok(standings)
 }
 
-/// Number one partition, `scratch.members` in construction order: sort it,
-/// then evaluate every filter in sorted order before numbering any row.
-fn partition<E>(
+/// Stable positions shared by ordinary windows and causal components.
+fn sort_members<E>(
     built: &WindowRun,
     cx: &Cx<'_, E>,
     group: usize,
-    scratch: &mut Scratch,
-    answers: &mut Answers,
+    members: &mut [usize],
 ) -> Result<(), Fail<E>> {
     let window = &built.window;
-    let Scratch { members, eligible } = scratch;
     // A baseline's tie-break terms compare only eligible rows sharing the
     // latest date; its partition keeps construction order.
     let baseline = matches!(window.kind, WindowKind::BaselineFlag { .. });
@@ -788,6 +785,46 @@ fn partition<E>(
             .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
         }
     }
+    Ok(())
+}
+
+/// The members of every partition in window order. Its position answers are
+/// independent of source values, so a backward read can lend a result only
+/// when the component has completed its earlier row.
+pub(super) fn row_order<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    expr: ExprId,
+) -> Result<Vec<usize>, Fail<E>> {
+    let mut built = build(run, cx, expr)?;
+    built.standings = Some(standings(&built, cx)?);
+    let mut order = Vec::new();
+    super::reserved(order.try_reserve_exact(cx.output.len()))?;
+    let mut members = Vec::new();
+    for (group, positions) in built.grouping.groups.iter().enumerate() {
+        members.clear();
+        super::reserved(members.try_reserve(positions.len()))?;
+        members.extend_from_slice(positions);
+        sort_members(&built, cx, group, &mut members)?;
+        order.extend(members.iter().map(|position| built.start + position));
+    }
+    let id = window_id(run.plan, expr).expect("admitted recurrence window");
+    run.windows.runs.insert(id, built);
+    Ok(order)
+}
+
+/// Number one partition, `scratch.members` in construction order: sort it,
+/// then evaluate every filter in sorted order before numbering any row.
+fn partition<E>(
+    built: &WindowRun,
+    cx: &Cx<'_, E>,
+    group: usize,
+    scratch: &mut Scratch,
+    answers: &mut Answers,
+) -> Result<(), Fail<E>> {
+    let window = &built.window;
+    let Scratch { members, eligible } = scratch;
+    sort_members(built, cx, group, members)?;
     if let Some(filter) = &window.filter {
         eligible.clear();
         for &member in members.iter() {

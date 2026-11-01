@@ -1,0 +1,89 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADVS
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  VS:
+    path: input/vs.csv
+    types: {VSSEQ: int, VISITNUM: int, VSDTC: date, VSSTRESN: float}
+  ADSL:
+    path: input/adsl.csv
+    types: {HEIGHTBL: float}
+    key: [STUDYID, USUBJID]
+base: VS
+
+output:
+  path: advs.csv
+  decimals: 2
+  columns: [STUDYID, USUBJID, ASEQ, AVISITN, ADT, AVAL, ANCHORWT, BSA]
+  order_by: [STUDYID, USUBJID, AVISITN]
+
+windows:
+  CYCLES:
+    group_by: [STUDYID, USUBJID]
+    order_by: [AVISITN, ASEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation: VS.VSSEQ
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit Number
+    derivation: VS.VISITNUM
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: VS.VSDTC
+
+  - name: AVAL
+    type: float
+    label: Collected Weight (kg)
+    derivation: VS.VSSTRESN
+
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height (cm)
+    derivation: ADSL.HEIGHTBL
+
+  # A backward read of the calculated anchor, not the previous observation.
+  - name: PREVANCH
+    type: float
+    label: Previous Dosing Weight
+    derivation:
+      row_value:
+        source: ANCHORWT
+        offset: -1
+        window: CYCLES
+
+  - name: ANCHORWT
+    type: float
+    label: Weight Used for Dosing (kg)
+    derivation:
+      case:
+        - when: "PREVANCH IS NULL"
+          then: AVAL
+        - when: "AVAL IS NULL"
+          then: PREVANCH
+        - when: "ABS(AVAL - PREVANCH) / PREVANCH >= 0.10"
+          then: AVAL
+        - otherwise: PREVANCH
+
+  - name: BSA
+    type: float
+    label: Body Surface Area (m2)
+    derivation: "SQRT(ANCHORWT * HEIGHTBL / 3600)"

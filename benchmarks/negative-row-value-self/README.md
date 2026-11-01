@@ -1,4 +1,4 @@
-# Reject Self-Filled Weight
+# Reject Future-Filled Weight
 
 **Goal:** fill a missing weight from the most recent earlier
 weight, carrying `ADT`, `AVAL`, and `AVALF` for each measurement.
@@ -14,14 +14,11 @@ weight, carrying `ADT`, `AVAL`, and `AVALF` for each measurement.
 - `AVAL` would be the collected weight taken from the collected
   result, and missing when no measurement was taken.
 - `AVALF` would be the current weight or, when it is missing, the
-  filled weight of the previous measurement in date order. After
-  two gaps in a row, the second would read a weight that was
-  itself filled in, so the filled weight is stated in terms of
-  itself.
+  filled weight of a later measurement in date order. That later
+  measurement's filled value is itself being calculated.
 
-**Note:** filling one gap and stopping, or resolving the records
-in an order nothing states, would each give a different answer
-from the same data, so the run is rejected before any data is
+**Note:** the requested fill depends on a future calculated value rather
+than an earlier completed result. The run is rejected before any data is
 read and no artifact is accepted.
 
 ## How to fix

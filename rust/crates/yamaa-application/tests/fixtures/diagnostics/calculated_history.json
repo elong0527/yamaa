@@ -1,0 +1,408 @@
+{
+  "about": "Causal backward row_value dependencies (WINDOW-12, COLUMN-5/6/8). Authored examples prove lag-n, independent partitions, causal ordering, missing stored results, nested self reads and converted handler substitutions. Unsupported future, filtered, state-ordered and mixed-window cycles retain dependency_cycle. Expected values and failures are independently specified.",
+  "documents": {},
+  "cases": [
+    {
+      "case": "lag_one_and_two_read_calculated_values_in_each_partition_window_order",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - G\n  - SEQ\n  - P1\n  - P2\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P1\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: P2\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -2\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P1 IS NULL\n      then: X\n    - when: P2 IS NULL\n      then: X + P1\n    - otherwise: X + P1 + P2\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,3,3\n2,B,2,20\n3,A,1,1\n4,B,1,10\n5,A,4,4\n6,A,2,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,G,SEQ,P1,P2,STATE\n1,A,3,3,1,7\n2,B,2,10,,30\n3,A,1,,,1\n4,B,1,,,10\n5,A,4,7,3,14\n6,A,2,1,,3\n"
+      }
+    },
+    {
+      "case": "a_missing_calculated_result_is_not_skipped_by_the_next_backward_read",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: X IS NULL\n      then: null\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,5\n2,A,2,\n3,A,3,7\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE\n1,,5\n2,5,\n3,,7\n"
+      }
+    },
+    {
+      "case": "empty_calculated_history_completes_without_entering_a_partition",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: X IS NULL\n      then: null\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n",
+          "input.csv": "ID,G,SEQ,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE\n"
+      }
+    },
+    {
+      "case": "column_feedback_remains_available_after_explicit_row_construction",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: X IS NULL\n      then: null\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\nrows:\n- id: observations\n  dataset: SRC\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,2\n2,A,2,3\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE\n1,,2\n2,2,5\n"
+      }
+    },
+    {
+      "case": "a_selected_case_result_reads_its_own_earlier_completed_value",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: SEQ = 1\n      then: X\n    - otherwise:\n        row_value:\n          source: STATE\n          offset: -1\n          window: VISITS\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,2,8\n2,A,1,5\n3,A,3,9\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,STATE\n1,5\n2,5\n3,5\n"
+      }
+    },
+    {
+      "case": "the_next_row_reads_the_converted_substitute_and_the_handler_fires_once",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\n      RAW: str\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\n  decimals: 1\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: float\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: float\n  derivation:\n    value:\n      case:\n      - when: SEQ = 1\n        then: SRC.RAW\n      - otherwise: P + 1\n    unconvertible: 2.0\n",
+          "input.csv": "ID,G,SEQ,X,RAW\n1,A,3,1,unused\n2,A,1,1,bad\n3,A,2,1,unused\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE\n1,3.0,4.0\n2,,2.0\n3,2.0,3.0\n"
+      },
+      "report": {
+        "handler": [
+          [
+            "SPEC_PATH",
+            "NAME",
+            "COUNT"
+          ],
+          [
+            "columns.STATE.derivation.unconvertible",
+            "unconvertible",
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "case": "a_future_dependency_is_not_admitted_as_calculated_history",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: 1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "rule": "COLUMN-6",
+          "spec_paths": [
+            "columns.P.derivation.row_value",
+            "columns.STATE.derivation.case"
+          ],
+          "context": {
+            "cycle": [
+              "P",
+              "STATE",
+              "P"
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    },
+    {
+      "case": "a_filtered_dependency_is_not_admitted_as_calculated_history",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\n    filter: X IS NOT NULL\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "rule": "COLUMN-6",
+          "spec_paths": [
+            "columns.P.derivation.row_value",
+            "columns.STATE.derivation.case"
+          ],
+          "context": {
+            "cycle": [
+              "P",
+              "STATE",
+              "P"
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    },
+    {
+      "case": "a_own_order_dependency_is_not_admitted_as_calculated_history",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - STATE\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "rule": "COLUMN-6",
+          "spec_paths": [
+            "columns.P.derivation.row_value",
+            "columns.STATE.derivation.case"
+          ],
+          "context": {
+            "cycle": [
+              "P",
+              "STATE",
+              "P"
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    },
+    {
+      "case": "feedback_reading_two_different_window_orders_is_refused",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\n  OTHER:\n    group_by:\n    - G\n    order_by:\n    - variable: SEQ\n      direction: desc\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: Q\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: OTHER\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - when: Q IS NULL\n      then: P\n    - otherwise: P + Q\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "rule": "COLUMN-6",
+          "spec_paths": [
+            "columns.P.derivation.row_value",
+            "columns.STATE.derivation.case"
+          ],
+          "context": {
+            "cycle": [
+              "P",
+              "STATE",
+              "P"
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    },
+    {
+      "case": "an_ordinary_self_reference_is_not_hidden_by_a_backward_reference",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation: STATE + P\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "rule": "COLUMN-6",
+          "spec_paths": [
+            "columns.P.derivation.row_value",
+            "columns.STATE.derivation"
+          ],
+          "context": {
+            "cycle": [
+              "P",
+              "STATE",
+              "P"
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    },
+    {
+      "case": "feedback_fails_at_the_first_causal_row_rather_than_the_first_stored_row",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: float\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: float\n  derivation:\n    case:\n    - when: SEQ = 1\n      then: 1.0\n    - otherwise: P / X\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,3,0\n2,A,1,1\n3,A,2,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "derivation",
+          "condition": "division_by_zero",
+          "rule": "FORMULA-15",
+          "spec_paths": [
+            "columns.STATE.derivation.case[1].otherwise"
+          ],
+          "context": {
+            "expr": "P / X",
+            "keys": [
+              {
+                "ID": 3
+              }
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    },
+    {
+      "case": "a_backward_read_may_precede_an_independent_calculated_source",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation: X\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,2,9\n2,A,1,4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE\n1,4,9\n2,,4\n"
+      }
+    },
+    {
+      "case": "independent_feedback_components_keep_separate_calculated_histories",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\n  - Q\n  - SECOND\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n- name: Q\n  type: int\n  derivation:\n    row_value:\n      source: SECOND\n      offset: -1\n      window: VISITS\n- name: SECOND\n  type: int\n  derivation:\n    case:\n    - when: Q IS NULL\n      then: X * 2\n    - otherwise: Q + X * 2\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,2,2\n2,A,1,1\n3,A,3,3\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE,Q,SECOND\n1,1,3,2,6\n2,,1,,2\n3,3,6,6,12\n"
+      }
+    },
+    {
+      "case": "an_admitted_component_does_not_hide_an_unrelated_current_row_cycle",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\n  - BAD\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n- name: BAD\n  type: int\n  derivation: BAD + 1\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "rule": "COLUMN-6",
+          "spec_paths": [
+            "columns.BAD.derivation"
+          ],
+          "context": {
+            "cycle": [
+              "BAD",
+              "BAD"
+            ]
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
+    }
+  ]
+}

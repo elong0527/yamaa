@@ -246,6 +246,7 @@ impl<'p> Builder<'p> {
             cells: 0,
             conversions: Vec::new(),
             column_order: Vec::new(),
+            recurrences: Vec::new(),
             output: plan.output().clone(),
             required_matches: plan.required_matches().clone(),
             secondary: plan.secondary().to_vec(),
@@ -352,6 +353,31 @@ impl<'p> Builder<'p> {
             }
         }
         self.fill_cells(&cx, first_binding)?;
+        for group in &plan.recurrences {
+            let columns = group
+                .columns
+                .iter()
+                .map(|&column| cx.column(column))
+                .collect::<Result<Vec<_>, _>>()?;
+            let window = self
+                .out
+                .exprs
+                .iter()
+                .enumerate()
+                .find_map(|(index, node)| {
+                    let ExprKind::Window(window) = node.kind else {
+                        return None;
+                    };
+                    (self.out.window(window).path.as_ref() == group.window_path)
+                        .then_some(ExprId(index as u32))
+                })
+                .ok_or_else(|| ResolutionError::Unsupported("missing recurrence window".into()))?;
+            let entry = &mut self.out.regions[region.index()];
+            entry
+                .column_order
+                .retain(|column| !columns.contains(column) || Some(column) == columns.first());
+            entry.recurrences.push(RecurrenceNode { columns, window });
+        }
         let conversions = plan
             .conversion_handlers()
             .iter()

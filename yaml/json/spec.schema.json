@@ -2757,7 +2757,7 @@
           "properties": {
             "source": {
               "$ref": "#/$defs/variable",
-              "description": "Variable read from the offset row (WINDOW-7).",
+              "description": "Variable read from the offset row; a strictly backward read can name calculated history under WINDOW-12 (WINDOW-7).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
@@ -5221,7 +5221,7 @@
           "properties": {
             "source": {
               "$ref": "#/$defs/variable",
-              "description": "Variable read from the offset row (WINDOW-7).",
+              "description": "Variable read from the offset row; a strictly backward read can name calculated history under WINDOW-12 (WINDOW-7).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },

@@ -100,11 +100,13 @@ A row dependency on such a value fails as `phase_boundary`.
 
 <a id="column-5"></a>
 
-### COLUMN-5. Columns evaluate in declaration order, each depending only on columns declared earlier
+### COLUMN-5. Columns follow declaration order except for causal backward row reads
 
-After row construction, the column dependency graph is built. Every dependency
-must refer to a column declared earlier, and columns evaluate in declaration
-order. Composition orders the resolved columns
+After row construction, the column dependency graph is built. A dependency
+refers to a column declared earlier, except a strictly backward `row_value`
+read admitted by [WINDOW-12](windows.md#window-12). Causal feedback columns
+complete together; their external dependencies complete before that group.
+Other columns follow declaration order. Composition orders the resolved columns
 ([LAYER-13](inheritance.md#layer-13)) only when a specification declares a
 `parent` or includes a fragment; otherwise declaration order is the resolved
 order.
@@ -116,8 +118,9 @@ Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/
 these rules apply: a specification that declares no `parent` and includes no
 fragment is a composition of one layer and is pruned on the same terms as a
 composition of several.
-An unresolved variable or predicate reference fails. A reference to a later
-declared column fails as `forward_reference` and reports both columns.
+An unresolved variable or predicate reference fails. Outside the causal
+backward reads and feedback groups above, a reference to a later declared
+column fails as `forward_reference` and reports both columns.
 
 A column derivation completes the rows of the row templates that leave the
 column to it, each row from the record that built it
@@ -129,15 +132,15 @@ evaluates once, over all of their rows in row order.
 
 <a id="column-6"></a>
 
-### COLUMN-6. A column that reaches its own value, directly or through another row, is a dependency cycle
+### COLUMN-6. A column dependency cycle fails unless every cycle crosses a causal backward row read
 
-The column dependency graph is over columns, not over rows: a column reading
-another row in its own window partition depends on the whole named column. A
-column that reaches its own value through another row is a cycle rather than an
-iteration, and a dependency cycle fails.
+The column dependency graph is over columns. A cycle is admitted only when
+[WINDOW-12](windows.md#window-12) gives every feedback read a strictly earlier
+row in one independently ordered partition and the remaining current-row
+dependencies are acyclic. Every other dependency cycle fails.
 
 Fails: `dependency_cycle`.
-Evidence: `negative-adlb-computed-param`, `negative-first-available-self`, `negative-row-value-self`.
+Evidence: `negative-adlb-computed-param`, `negative-first-available-self`, `negative-row-value-self`, `adam-advs-dosing-weight`.
 
 `locf` with `include_current: false` crosses any number of missing rows by
 searching a separate completed source column; with the default

@@ -55,6 +55,59 @@ pub(crate) fn analyze_admitted(mut graph: Vec<Vec<usize>>) -> Analysis {
     }
 }
 
+/// Strongly connected components, with members and components in declaration
+/// order. The caller has already admitted the graph's indices.
+pub(crate) fn components(graph: &[Vec<usize>]) -> Vec<Vec<usize>> {
+    let mut seen = vec![false; graph.len()];
+    let mut finish = Vec::new();
+    for root in 0..graph.len() {
+        if seen[root] {
+            continue;
+        }
+        seen[root] = true;
+        let mut stack = vec![(root, 0)];
+        while let Some((node, next)) = stack.last_mut() {
+            if *next == graph[*node].len() {
+                finish.push(*node);
+                stack.pop();
+            } else {
+                let child = graph[*node][*next];
+                *next += 1;
+                if !std::mem::replace(&mut seen[child], true) {
+                    stack.push((child, 0));
+                }
+            }
+        }
+    }
+    let mut reverse = vec![Vec::new(); graph.len()];
+    for (node, edges) in graph.iter().enumerate() {
+        for &edge in edges {
+            reverse[edge].push(node);
+        }
+    }
+    seen.fill(false);
+    let mut result = Vec::new();
+    for root in finish.into_iter().rev() {
+        if std::mem::replace(&mut seen[root], true) {
+            continue;
+        }
+        let mut members = Vec::new();
+        let mut pending = vec![root];
+        while let Some(node) = pending.pop() {
+            members.push(node);
+            for &child in &reverse[node] {
+                if !std::mem::replace(&mut seen[child], true) {
+                    pending.push(child);
+                }
+            }
+        }
+        members.sort_unstable();
+        result.push(members);
+    }
+    result.sort_by_key(|members| members[0]);
+    result
+}
+
 /// Reproduce declaration-ordered DFS with an explicit stack rather than host recursion.
 fn first_cycle(graph: &[Vec<usize>]) -> Option<Vec<usize>> {
     let mut states = vec![0u8; graph.len()];
