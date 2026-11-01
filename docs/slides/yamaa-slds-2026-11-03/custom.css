@@ -336,3 +336,96 @@ img.title-logo {
   margin: 0;
   line-height: 1.4;
 }
+
+/* performance slide: horizontal bars, one scale per group */
+:root {
+  --perf-winner: #c2410c;
+  --perf-other: #b8bec9;
+}
+
+.perf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  margin-top: 0.4rem;
+}
+
+.perf-title {
+  color: var(--yamaa-blue);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.perf-group {
+  color: var(--yamaa-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0.15rem;
+}
+
+.perf-row {
+  display: grid;
+  grid-template-columns: 5.4em 1fr 7.8em;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.perf-label {
+  color: var(--yamaa-muted);
+}
+
+.perf-track {
+  height: 0.85em;
+}
+
+.perf-bar {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 3px;
+  background: var(--perf-other);
+}
+
+.perf-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-row.yamaa .perf-label {
+  color: var(--yamaa-blue);
+  font-weight: 700;
+}
+
+.perf-row.yamaa .perf-bar {
+  background: var(--yamaa-blue);
+}
+
+.perf-row.winner .perf-label,
+.perf-row.winner .perf-value {
+  color: var(--perf-winner);
+  font-weight: 700;
+}
+
+.perf-row.winner .perf-bar {
+  background: var(--perf-winner);
+}
+
+.perf-callouts {
+  display: flex;
+  gap: 2rem;
+  border-top: 1px solid #dce4f0;
+  margin-top: 0.6rem;
+  padding-top: 0.4rem;
+}
+
+.perf-callouts .big-number {
+  font-size: 2.6rem;
+  font-weight: 700;
+}
+
+.perf-callouts .metric-label {
+  font-size: 0.95rem;
+  margin-top: 0.15rem;
+}
