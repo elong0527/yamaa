@@ -36,7 +36,7 @@ expressions:
         - source:
             type: variable
             required: true
-            description: Variable read from the offset row (WINDOW-7).
+            description: Variable read from the offset row; a strictly backward read can name calculated history under WINDOW-12 (WINDOW-7).
         - offset:
             type: int
             required: true

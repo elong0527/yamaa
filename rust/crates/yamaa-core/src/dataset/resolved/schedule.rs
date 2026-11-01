@@ -155,10 +155,12 @@ fn column_phase(
             }
         })
         .collect();
-    for (position, column) in order.iter().enumerate() {
-        let slot = &mut done[column.index() - first];
-        if *slot == NEVER {
-            *slot = position + 1;
+    for (position, &column) in order.iter().enumerate() {
+        for member in plan.step_columns(column) {
+            let slot = &mut done[member.index() - first];
+            if *slot == NEVER {
+                *slot = position + 1;
+            }
         }
     }
     let completed = |read: &Read| match read {
@@ -277,7 +279,7 @@ pub(super) fn annotate(plan: &mut ResolvedPlan) {
                 Step::Row(binding) | Step::Window(binding) if converts(binding) => {
                     effects = Effects::Handlers
                 }
-                Step::Column(column) if plan.column_bindings(column).any(converts) => {
+                Step::Column(column) if plan.step_bindings(column).any(converts) => {
                     effects = Effects::Handlers
                 }
                 // A named driver materializes its donor rows in its driver step.
@@ -295,6 +297,11 @@ pub(super) fn annotate(plan: &mut ResolvedPlan) {
                 let (reached, effect) = classes.expr(expr, scope);
                 class = class.max(reached);
                 effects = effects.max(effect);
+            }
+            // A feedback unit has its own causal failure order. Until the
+            // partition reconciler represents that order it runs whole-table.
+            if matches!(step, Step::Column(column) if plan.recurrence(column).is_some()) {
+                class = Class::of(PartitionClass::Global);
             }
             annotations.push((checkpoint, class, effects));
         }
@@ -789,7 +796,7 @@ pub(super) fn step_exprs(plan: &ResolvedPlan, step: Step) -> Vec<ExprId> {
             .collect(),
         Step::Column(column) => {
             let mut exprs: Vec<ExprId> = Vec::new();
-            for binding in plan.column_bindings(column) {
+            for binding in plan.step_bindings(column) {
                 let expr = plan.binding(binding).expr;
                 if !exprs.contains(&expr) {
                     exprs.push(expr);
