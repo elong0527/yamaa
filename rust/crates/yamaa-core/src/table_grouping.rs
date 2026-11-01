@@ -2,7 +2,7 @@
 
 use crate::limits::{LimitExceeded, Limits};
 use crate::{
-    table::{CellError, TableAccess, ValueRef},
+    table::{CellError, ColumnRef, TableAccess, ValueRef},
     temporal::{Date, DateTime},
 };
 use std::collections::hash_map::Entry;
@@ -297,14 +297,12 @@ impl Groups {
 
 /// Partition items `0..count`; `key(item, position)` is the item's key at a
 /// key position, for `width` positions. Groups follow first occurrence and
-/// members item order. Each item is hashed once and compared with its
-/// group's first item, so no key is copied. The buffers sized by the item
-/// count are reserved first.
+/// members item order. No key is copied. The buffers sized by the item count
+/// are reserved first.
 ///
-/// The hash only finds an item's candidate groups; equality decides, and the
-/// groups follow first occurrence, so no output depends on the hasher. It is
-/// aHash under fixed seeds rather than `std`'s SipHash: no key comes from an
-/// adversary the engine must resist, and grouping is on every run's path.
+/// Items whose keys never decrease, as records sorted by their keys arrive,
+/// group without hashing ([`assign_keys`]); any others hash. Either way the
+/// groups are the same, so no output depends on the path or on the hasher.
 pub(crate) fn partition_keys<'v>(
     count: usize,
     width: usize,
@@ -316,54 +314,296 @@ pub(crate) fn partition_keys<'v>(
 
 /// The group of each item `0..count` that [`partition_keys`] forms, and how
 /// many groups there are.
+///
+/// Each item's key is first compared with the one before, position by
+/// position, in [`Key`]'s order, which agrees with its equality: two keys
+/// compare equal exactly when they are equal. While no key is less than the
+/// one before, a key greater than the one before is greater than every
+/// earlier key, so each run of equal keys is a group of its own, the runs
+/// follow first occurrence, and no hash table is built. At the first key
+/// less than the one before, the groups found so far, each at its first
+/// item, seed a hash table and the remaining items hash: the groups a hash
+/// of every item finds.
 pub(crate) fn assign_keys<'v>(
     count: usize,
     width: usize,
     key: impl Fn(usize, usize) -> Key<'v>,
 ) -> Result<(Vec<usize>, usize), TryReserveError> {
-    let mut first: HashMap<u64, usize, BuildHasherDefault<Prehashed>> = HashMap::default();
-    first.try_reserve(count)?;
-    let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-    // Groups sharing a hash, chained by group.
-    let mut chain: Vec<usize> = Vec::new();
-    let mut representative: Vec<usize> = Vec::new();
     let mut group_of = Vec::new();
     group_of.try_reserve_exact(count)?;
-    let equal = |left: usize, right: usize| {
-        (0..width).all(|position| key(left, position) == key(right, position))
-    };
-    for item in 0..count {
-        let mut hasher = state.build_hasher();
+    let runs = ascending(count, width, &key, &mut group_of)?;
+    let start = group_of.len();
+    if start == count {
+        return Ok((group_of, runs));
+    }
+    let mut hashed = Hashed::new(count, width, &key)?;
+    // Each run takes its own number again, at its first item: no two runs
+    // are equal.
+    for item in 0..start {
+        if item == 0 || group_of[item] != group_of[item - 1] {
+            hashed.group(item);
+        }
+    }
+    for item in start..count {
+        group_of.push(hashed.group(item));
+    }
+    Ok((group_of, hashed.representative.len()))
+}
+
+/// Push onto `group_of` the run of equal keys of each item before the first
+/// whose key is less than the one before it, and answer how many runs there
+/// are.
+fn ascending<'v>(
+    count: usize,
+    width: usize,
+    key: &impl Fn(usize, usize) -> Key<'v>,
+    group_of: &mut Vec<usize>,
+) -> Result<usize, TryReserveError> {
+    if count == 0 {
+        return Ok(0);
+    }
+    let mut previous = Vec::new();
+    previous.try_reserve_exact(width)?;
+    previous.extend((0..width).map(|position| key(0, position)));
+    group_of.push(0);
+    let mut runs = 1;
+    for item in 1..count {
+        let mut order = std::cmp::Ordering::Equal;
+        for (position, kept) in previous.iter_mut().enumerate() {
+            let current = key(item, position);
+            if order.is_eq() {
+                order = current.cmp(kept);
+                if order.is_lt() {
+                    return Ok(runs);
+                }
+            }
+            *kept = current;
+        }
+        if order.is_gt() {
+            runs += 1;
+        }
+        group_of.push(runs - 1);
+    }
+    Ok(runs)
+}
+
+/// The group of each of `rows` of `columns`, numbered from the first row,
+/// and how many groups there are, when the rows' keys never decrease: the
+/// groups [`assign_keys`] forms, read a column at a time, so each column's
+/// storage is read in one pass, each row compared with the one before in
+/// [`Key`]'s order only while the columns before were equal (#4211). None at
+/// the first row whose key is less than the one before it. Every row must
+/// lie within every column.
+pub(crate) fn ascending_columns(
+    columns: &[ColumnRef<'_>],
+    rows: std::ops::Range<usize>,
+) -> Result<Option<(Vec<usize>, usize)>, TryReserveError> {
+    let count = rows.len();
+    if count == 0 {
+        return Ok(Some((Vec::new(), 0)));
+    }
+    // Whether each row's key equals the one before it in the columns read
+    // so far; the first row begins a group.
+    let mut equal = Vec::new();
+    equal.try_reserve_exact(count)?;
+    equal.resize(count, true);
+    equal[0] = false;
+    for column in columns {
+        let mut previous = Key::from(column.get(rows.start));
+        for (index, row) in rows.clone().enumerate().skip(1) {
+            let current = Key::from(column.get(row));
+            if equal[index] {
+                match current.cmp(&previous) {
+                    std::cmp::Ordering::Less => return Ok(None),
+                    std::cmp::Ordering::Greater => equal[index] = false,
+                    std::cmp::Ordering::Equal => {}
+                }
+            }
+            previous = current;
+        }
+    }
+    let mut group_of = Vec::new();
+    group_of.try_reserve_exact(count)?;
+    let mut groups = 0;
+    for same in equal {
+        groups += usize::from(!same);
+        group_of.push(groups - 1);
+    }
+    Ok(Some((group_of, groups)))
+}
+
+/// The hash grouping of items: each item is hashed once and compared with
+/// the first item of each group that shares its hash.
+///
+/// The hash only finds an item's candidate groups; equality decides, and
+/// the groups follow first occurrence, so no output depends on the hasher.
+/// It is aHash under fixed seeds rather than `std`'s SipHash: no key comes
+/// from an adversary the engine must resist, and grouping is on every
+/// run's path.
+struct Hashed<'k, K> {
+    /// The first group of each hash, reserved for every item.
+    first: HashMap<u64, usize, BuildHasherDefault<Prehashed>>,
+    state: ahash::RandomState,
+    /// Groups sharing a hash, chained by group.
+    chain: Vec<usize>,
+    /// The first item of each group.
+    representative: Vec<usize>,
+    width: usize,
+    /// Borrowed, so a key is the closure's own call, which inlines.
+    key: &'k K,
+}
+
+impl<'k, 'v, K: Fn(usize, usize) -> Key<'v>> Hashed<'k, K> {
+    fn new(count: usize, width: usize, key: &'k K) -> Result<Self, TryReserveError> {
+        let mut first: HashMap<u64, usize, BuildHasherDefault<Prehashed>> = HashMap::default();
+        first.try_reserve(count)?;
+        Ok(Self {
+            first,
+            state: ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]),
+            chain: Vec::new(),
+            representative: Vec::new(),
+            width,
+            key,
+        })
+    }
+
+    /// The group of `item`: a new one when no earlier item equals it.
+    fn group(&mut self, item: usize) -> usize {
+        let (key, width) = (self.key, self.width);
+        let mut hasher = self.state.build_hasher();
         for position in 0..width {
             key(item, position).hash(&mut hasher);
         }
         let hash = hasher.finish();
-        let group = match first.entry(hash) {
+        let equal = |left: usize, right: usize| {
+            (0..width).all(|position| key(left, position) == key(right, position))
+        };
+        match self.first.entry(hash) {
             Entry::Vacant(entry) => {
-                let group = representative.len();
+                let group = self.representative.len();
                 entry.insert(group);
-                representative.push(item);
-                chain.push(usize::MAX);
+                self.representative.push(item);
+                self.chain.push(usize::MAX);
                 group
             }
             Entry::Occupied(entry) => {
                 let mut group = *entry.get();
                 loop {
-                    if equal(representative[group], item) {
+                    if equal(self.representative[group], item) {
                         break group;
                     }
-                    if chain[group] == usize::MAX {
-                        let created = representative.len();
-                        representative.push(item);
-                        chain.push(usize::MAX);
-                        chain[group] = created;
+                    if self.chain[group] == usize::MAX {
+                        let created = self.representative.len();
+                        self.representative.push(item);
+                        self.chain.push(usize::MAX);
+                        self.chain[group] = created;
                         break created;
                     }
-                    group = chain[group];
+                    group = self.chain[group];
                 }
             }
-        };
-        group_of.push(group);
+        }
     }
-    Ok((group_of, representative.len()))
+}
+
+#[cfg(test)]
+mod tests {
+    // The seam is the crate-private grouping core (#4211): items in key
+    // order group as runs without hashing, items out of order hash, and
+    // either way the groups are ROW-4's, written here by hand: groups in
+    // first-occurrence order, a missing value a key of its own, the float
+    // zero signs and a date's precision ignored.
+    use super::*;
+    use crate::table::ColumnValues;
+    use crate::temporal::Precision;
+    use crate::value::FiniteFloat;
+
+    /// The groups of one key per item, by both paths of [`assign_keys`].
+    fn groups(keys: &[ValueRef<'_>]) -> (Vec<usize>, usize) {
+        assign_keys(keys.len(), 1, |item, _| Key::from(keys[item])).unwrap()
+    }
+
+    #[test]
+    fn items_group_as_runs_in_key_order_and_by_first_occurrence_out_of_it() {
+        let zero = |value: f64| ValueRef::Float(FiniteFloat::new(value).unwrap());
+        let day = |precision| ValueRef::Date(Date::new(2024, 2, 29, precision).unwrap());
+        let cases = [
+            (
+                "in key order, missing first",
+                vec![
+                    ValueRef::Missing,
+                    ValueRef::Missing,
+                    ValueRef::Int(1),
+                    ValueRef::Int(1),
+                    ValueRef::Int(2),
+                ],
+                (vec![0, 0, 1, 1, 2], 3),
+            ),
+            (
+                "in key order, equal under grouping equality",
+                vec![zero(-0.0), zero(0.0), zero(1.5)],
+                (vec![0, 0, 1], 2),
+            ),
+            (
+                "a date's precision ignored",
+                vec![day(Precision::Year), day(Precision::Day)],
+                (vec![0, 0], 1),
+            ),
+            (
+                "in key order, then a decrease",
+                vec![
+                    ValueRef::Int(1),
+                    ValueRef::Int(2),
+                    ValueRef::Int(2),
+                    ValueRef::Int(3),
+                    ValueRef::Int(1),
+                    ValueRef::Int(3),
+                    ValueRef::Int(4),
+                ],
+                (vec![0, 1, 1, 2, 0, 2, 3], 4),
+            ),
+        ];
+        for (label, keys, expected) in cases {
+            assert_eq!(groups(&keys), expected, "{label}");
+        }
+    }
+
+    #[test]
+    fn columns_in_key_order_group_as_runs_and_out_of_order_give_way() {
+        // Rows (1, a), (1, a), (1, b), (2, missing), (2, missing); then the
+        // second column decreasing while the first stays equal.
+        let words = [0b00111u64];
+        let ids = ColumnRef::new(ColumnValues::Int(&[1, 1, 1, 2, 2]), None).unwrap();
+        let text = ColumnRef::new(
+            ColumnValues::Str {
+                offsets: &[0, 1, 2, 3, 3, 3],
+                bytes: "aab",
+            },
+            Some(&words),
+        )
+        .unwrap();
+        assert_eq!(
+            ascending_columns(&[ids, text], 0..5).unwrap(),
+            Some((vec![0, 0, 1, 2, 2], 3)),
+            "in key order"
+        );
+        assert_eq!(
+            ascending_columns(&[ids, text], 1..4).unwrap(),
+            Some((vec![0, 1, 2], 3)),
+            "rows 1 to 3, numbered from the first"
+        );
+        let reversed = ColumnRef::new(
+            ColumnValues::Str {
+                offsets: &[0, 1, 2, 3, 3, 3],
+                bytes: "baa",
+            },
+            Some(&words),
+        )
+        .unwrap();
+        assert_eq!(
+            ascending_columns(&[ids, reversed], 0..5).unwrap(),
+            None,
+            "b before a under an equal first column"
+        );
+    }
 }

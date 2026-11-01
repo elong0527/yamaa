@@ -1,12 +1,13 @@
 //! The key grain of a specification without rows: the source filter over
 //! every record, every key derived before any other column, then one
 //! candidate per distinct key with its complete feeding records.
+use super::buffer::Values;
 use super::frame::{Frame, Identity, NO_TEMPLATE};
 use super::partitions::Coordinates;
 use super::{reserved, Fail, Footprint, Run, Table};
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{BindingId, RegionId, Step};
-use crate::table::{TableAccess, ValueRef};
+use crate::table::{ColumnRef, TableAccess, ValueRef};
 use crate::table_grouping::GroupingError;
 
 /// Build the candidates of the key-grain template into `frame`. A
@@ -62,13 +63,39 @@ pub(super) fn construct<'a: 's, 's, E>(
         }
         retained.push(row);
     }
-    // One probe row per source record, so a probe's position is its record.
+    let keys: Vec<usize> = plan
+        .keys()
+        .iter()
+        .map(|&key| run.local_column(region, key))
+        .collect();
+    // When every key copies a driver field unchanged and the port lends each
+    // field's storage (#4202), the keys read that storage: their bindings
+    // would convert nothing and count no handler, so the run neither
+    // completes nor gathers them again. Otherwise every key binding
+    // completes over the probes, where a binding may read another key.
+    let stored: Option<Vec<ColumnRef<'s>>> = plan
+        .keys()
+        .iter()
+        .map(|&key| {
+            plan.copied_field(template, key)
+                .and_then(|field| table.storage(field))
+        })
+        .collect();
+    let bindings = if stored.is_some() {
+        Vec::new()
+    } else {
+        bindings
+    };
+    // One probe row per source record, so a probe's position is its record,
+    // for the keys their bindings complete.
     let mut probes = Frame::new(frame.width());
-    reserved(probes.try_reserve(rows, rows))?;
-    probes.extend(NO_TEMPLATE, rows, |row, records| {
-        records.push(row);
-        Identity::Probe(row)
-    });
+    if !bindings.is_empty() {
+        reserved(probes.try_reserve(rows, rows))?;
+        probes.extend(NO_TEMPLATE, rows, |row, records| {
+            records.push(row);
+            Identity::Probe(row)
+        });
+    }
     let callbacks = bindings
         .iter()
         .any(|&binding| run.step_callbacks(region, Step::Row(binding)));
@@ -81,37 +108,51 @@ pub(super) fn construct<'a: 's, 's, E>(
         columns: &key_columns,
         rows: &retained,
     };
-    run.run_unit(
-        &mut probes,
-        footprint,
-        callbacks,
-        |run, probes, row_mode| {
-            if row_mode {
-                for &row in &retained {
+    if !bindings.is_empty() {
+        run.run_unit(
+            &mut probes,
+            footprint,
+            callbacks,
+            |run, probes, row_mode| {
+                if row_mode {
+                    for &row in &retained {
+                        for &binding in &bindings {
+                            complete(run, probes, binding, table, secondary, &[row])?;
+                        }
+                    }
+                } else {
                     for &binding in &bindings {
-                        complete(run, probes, binding, table, secondary, &[row])?;
+                        complete(run, probes, binding, table, secondary, &retained)?;
                     }
                 }
-            } else {
-                for &binding in &bindings {
-                    complete(run, probes, binding, table, secondary, &retained)?;
-                }
-            }
-            Ok(())
-        },
-    )?;
+                Ok(())
+            },
+        )?;
+    }
     run.mark(Coordinates::Frame)?;
     run.poll(Step::KeyGrain)?;
-    let keys: Vec<usize> = plan
-        .keys()
-        .iter()
-        .map(|&key| run.local_column(region, key))
-        .collect();
-    let value = |position: usize, key: usize| probes.get(retained[position], keys[key]);
+    // Key `key` of record `record`.
+    let at = |record: usize, key: usize| match &stored {
+        Some(columns) => columns[key].get(record),
+        None => probes.get(record, keys[key]),
+    };
+    let value = |position: usize, key: usize| at(retained[position], key);
     // Partition the retained records by their keys, in first-occurrence
-    // order.
-    let partitions = super::group::partition(retained.len(), keys.len(), value)
-        .map_err(|_| Box::new(ExecutionError::Grouping(GroupingError::Allocation)))?;
+    // order: without hashing while they arrive in key order, a column at a
+    // time when the keys read storage and every record is retained.
+    let allocation = |_| Box::new(ExecutionError::Grouping(GroupingError::Allocation));
+    let ordered = match &stored {
+        Some(columns) if retained.len() == rows => {
+            crate::table_grouping::ascending_columns(columns, 0..rows).map_err(allocation)?
+        }
+        _ => None,
+    };
+    let partitions = match ordered {
+        Some((group_of, groups)) => {
+            super::group::Groups::from_assignment(&group_of, groups).map_err(allocation)?
+        }
+        None => super::group::partition(retained.len(), keys.len(), value).map_err(allocation)?,
+    };
     // Each candidate is a whole group, at its first member, or, for a group
     // with a missing key, one member: each missing-key record survives
     // independently for the output gate. Candidates follow their first
@@ -122,9 +163,7 @@ pub(super) fn construct<'a: 's, 's, E>(
     reserved(candidates.try_reserve(partitions.len()))?;
     for (group, members) in partitions.iter().enumerate() {
         let first = retained[members[0]];
-        let missing = keys
-            .iter()
-            .any(|&key| matches!(probes.get(first, key), ValueRef::Missing));
+        let missing = (0..keys.len()).any(|key| matches!(at(first, key), ValueRef::Missing));
         split.push(missing);
         if missing {
             reserved(candidates.try_reserve(members.len() - 1))?;
@@ -143,7 +182,7 @@ pub(super) fn construct<'a: 's, 's, E>(
     let mut key_groups = Vec::new();
     reserved(key_groups.try_reserve_exact(candidates.len()))?;
     let start = frame.rows();
-    // The probe row each candidate takes its keys from.
+    // The record each candidate takes its keys from.
     let mut firsts = Vec::new();
     reserved(firsts.try_reserve_exact(candidates.len()))?;
     frame.extend(NO_TEMPLATE, candidates.len(), |index, records| {
@@ -163,11 +202,16 @@ pub(super) fn construct<'a: 's, 's, E>(
         key_groups.push(group);
         Identity::Candidate(start + index)
     });
-    // Each key column is gathered from the probes in one pass (#4190).
+    // Each key column is gathered in one pass (#4190), from the field's
+    // storage or from the probes.
     let rows: Vec<usize> = (start..frame.rows()).collect();
-    for &key in &keys {
-        let values = reserved(probes.column(key).gather(&firsts))?;
-        frame.complete_rows(&rows, key, values);
+    for (index, &key) in keys.iter().enumerate() {
+        let values = match &stored {
+            Some(columns) => Values::from_column(columns[index], &firsts)
+                .expect("every record is a row of its input"),
+            None => probes.column(key).gather(&firsts),
+        };
+        frame.complete_rows(&rows, key, reserved(values)?);
     }
     run.key_groups = (start == 0).then_some(key_groups);
     Ok(())

@@ -46,6 +46,18 @@ pub(super) fn partition<'v>(
     })
 }
 
+/// The group of each item `0..count`, as [`partition`] forms the groups,
+/// and how many groups there are.
+pub(super) fn assign<'v>(
+    count: usize,
+    width: usize,
+    value: impl Fn(usize, usize) -> ValueRef<'v>,
+) -> Result<(Vec<usize>, usize), TryReserveError> {
+    crate::table_grouping::assign_keys(count, width, |item, position| {
+        Key::from(value(item, position))
+    })
+}
+
 /// The groups of items `0..count`, as [`partition`] forms them, and the
 /// group of each item.
 pub(super) struct Grouping {
@@ -71,10 +83,7 @@ impl Grouping {
         width: usize,
         value: impl Fn(usize, usize) -> ValueRef<'v>,
     ) -> Result<Self, TryReserveError> {
-        let (group_of, groups) =
-            crate::table_grouping::assign_keys(count, width, |item, position| {
-                Key::from(value(item, position))
-            })?;
+        let (group_of, groups) = assign(count, width, value)?;
         Ok(Self {
             groups: Groups::from_assignment(&group_of, groups)?,
             group_of,

@@ -271,9 +271,14 @@ struct Run<'p, 'a, E> {
     /// none in a whole-table run.
     pub marks: Option<partitions::Marks>,
     /// The group of each frame row under the output keys, once the key
-    /// grain has built the frame's rows (#4188), so the output key check
-    /// does not group the same keys again.
+    /// grain has built the frame's rows (#4188), or composed from the key
+    /// grain of each partition no key group spans (#4211), so the output
+    /// key check does not group the same keys again.
     pub key_groups: Option<Vec<usize>>,
+    /// The frame rows of each template, or of each partition, of a
+    /// partitioned run, when no output key group spans two of them (#4211):
+    /// the output key check groups each one's rows on its own.
+    pub key_partitions: Option<Vec<Vec<std::ops::Range<usize>>>>,
 }
 
 /// What a batch unit restores before it replays in row mode.
@@ -310,6 +315,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             output_partition: None,
             marks: None,
             key_groups: None,
+            key_partitions: None,
         }
     }
 
