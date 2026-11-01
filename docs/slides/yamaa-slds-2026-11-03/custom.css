@@ -340,7 +340,7 @@ img.title-logo {
 /* performance slide: horizontal bars, one scale per group */
 :root {
   --perf-winner: #c2410c;
-  --perf-other: #b8bec9;
+  --perf-other: #7c8596;
 }
 
 .perf-grid {
