@@ -403,10 +403,9 @@ impl ColumnTable {
             return Err(TableError::SchemaMismatch { batch: 0 });
         }
         let schema = pieces[0].0.schema.clone();
-        if let Some(batch) = pieces
-            .iter()
-            .position(|(table, range)| table.schema != schema || range.end > table.rows)
-        {
+        if let Some(batch) = pieces.iter().position(|(table, range)| {
+            table.schema != schema || range.start > range.end || range.end > table.rows
+        }) {
             return Err(TableError::SchemaMismatch { batch });
         }
         let rows = pieces.iter().map(|(_, range)| range.len()).sum();

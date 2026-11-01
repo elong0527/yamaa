@@ -10,7 +10,7 @@
 //! output, never one cell against another.
 mod table {
     mod column_storage {
-        use yamaa_adapters::column_table::{Column, ColumnTable};
+        use yamaa_adapters::column_table::{Column, ColumnTable, TableError};
         use yamaa_adapters::columns::{Text, Values};
         use yamaa_core::table::{Column as Field, TableAccess, TableSchema, ValueRef};
         use yamaa_core::temporal::{Date, DateTime, Precision};
@@ -234,6 +234,20 @@ mod table {
                         "{label}: column {column} layout"
                     );
                 }
+            }
+            // A piece past its table's records, or a reversed one, is no
+            // range of its records.
+            for (label, range) in [
+                ("past the end", 140..151),
+                ("reversed", std::ops::Range { start: 2, end: 1 }),
+            ] {
+                assert!(
+                    matches!(
+                        ColumnTable::concat(vec![(table(), 0..3), (table(), range)]),
+                        Err(TableError::SchemaMismatch { batch: 1 })
+                    ),
+                    "{label}"
+                );
             }
         }
     }
