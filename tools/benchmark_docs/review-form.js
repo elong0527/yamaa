@@ -19,6 +19,8 @@
   const feedback = form.querySelector(".review-feedback");
   const prepared = form.querySelector(".review-prepared");
   const preparedText = prepared.querySelector("textarea");
+  const storageUnavailable =
+    new URLSearchParams(window.location.search).get("review-storage") === "unavailable";
 
   function answer(fieldset) {
     const checked = fieldset.querySelector("input:checked");
@@ -46,7 +48,8 @@
         input.checked = saved[input.name] === input.value;
       });
     });
-    if (typeof saved.comments === "string") comments.value = saved.comments;
+    const text = typeof saved.comments === "string" ? saved.comments : saved.suggestions;
+    if (typeof text === "string") comments.value = text;
   } catch (error) { /* Start from an empty form. */ }
 
   function save() {
@@ -59,13 +62,22 @@
 
   // The queue reads this mark; without storage it moves on by position alone.
   function remember(outcome) {
-    try { window.localStorage.setItem(form.dataset.doneKey + name, outcome); }
-    catch (error) { /* Nothing to keep. */ }
+    try {
+      window.localStorage.setItem(form.dataset.doneKey + name, outcome);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function nextUrl(stored) {
+    const url = new URL(form.dataset.nextUrl, window.location.href);
+    if (storageUnavailable || !stored) url.searchParams.set("review-storage", "unavailable");
+    return url.href;
   }
 
   function leave(outcome) {
-    remember(outcome);
-    window.location.href = form.dataset.nextUrl;
+    window.location.href = nextUrl(remember(outcome));
   }
 
   form.querySelector(".review-skip").addEventListener("click", () => leave("skipped"));
@@ -140,7 +152,7 @@
       return;
     }
     // The text is still here to copy, so this page stays until it has been.
-    remember("submitted");
+    prepared.querySelector("a").href = nextUrl(remember("submitted"));
     preparedText.value = text;
     prepared.hidden = false;
     show("Your review is longer than a prefilled link allows, so GitHub opened with the title only. Paste the text below into the discussion, select Start discussion, then go to the next benchmark.");

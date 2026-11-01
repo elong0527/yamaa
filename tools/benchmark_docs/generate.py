@@ -463,6 +463,12 @@ def page_link(name, label, relation):
     return f'<a href="{escape(name)}.html" rel="{relation}">{label}</a>'
 
 
+def review_done_key():
+    """A new round cannot reuse the browser's completion marks from rework."""
+    starts = review_status.ROUND_STARTS
+    return REVIEW_DONE_KEY + (starts[-1] + ":" if starts else "")
+
+
 def render_review_form(name, questions, comment_hint):
     """The survey: one fieldset per question, then a free-text box. The script
     reads the labels, prompts and choices back from these elements to write
@@ -493,7 +499,7 @@ def render_review_form(name, questions, comment_hint):
         f'data-review-url="{escape(REVIEW_URL)}" '
         f'data-next-url="{escape(next_url)}" '
         f'data-approve="{escape(AGREEMENT[0])}" '
-        f'data-done-key="{escape(REVIEW_DONE_KEY)}" novalidate hidden>'
+        f'data-done-key="{escape(review_done_key())}" novalidate hidden>'
         + "".join(fieldsets)
         + '<label class="review-comments-label" for="review-comments">'
         "Comments <small>Required if you disagree</small></label>"
@@ -584,7 +590,7 @@ def render_review_queue(entries, saved):
     counted = review_status.tally(review_queue(entries), reviews)
     current = [(name, history[-1][0]) for name, history in counted.items()]
     queue = {
-        "doneKey": REVIEW_DONE_KEY,
+        "doneKey": review_done_key(),
         "started": [
             name
             for name, count in current

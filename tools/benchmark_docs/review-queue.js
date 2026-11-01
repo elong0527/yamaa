@@ -14,8 +14,9 @@
     try {
       const probe = doneKey + "probe";
       window.localStorage.setItem(probe, "1");
+      const readable = window.localStorage.getItem(probe) === "1";
       window.localStorage.removeItem(probe);
-      return window.localStorage;
+      return readable ? window.localStorage : null;
     } catch (error) {
       return null;
     }
@@ -31,10 +32,11 @@
     return chosen;
   }
 
-  const marks = storage();
+  const params = new URLSearchParams(window.location.search);
+  const marks = params.get("review-storage") === "unavailable" ? null : storage();
   const offset = marks ? Math.floor(startingPlace(marks) * open.length) : 0;
   const names = started.concat(open.slice(offset), open.slice(0, offset));
-  const after = new URLSearchParams(window.location.search).get("after");
+  const after = params.get("after");
   const position = names.indexOf(after);
   const ahead = names.slice(position + 1);
   const order = marks ? started.concat(ahead, names.slice(0, position + 1)) : ahead;
@@ -42,7 +44,9 @@
     (name) => name !== after && (!marks || marks.getItem(doneKey + name) === null),
   );
   if (next) {
-    window.location.replace("../../" + encodeURIComponent(next) + ".html");
+    const url = new URL("../../" + encodeURIComponent(next) + ".html", window.location.href);
+    if (!marks) url.searchParams.set("review-storage", "unavailable");
+    window.location.replace(url.href);
   } else {
     document.querySelector(".queue-status").hidden = true;
     document.querySelector(".queue-done").hidden = false;

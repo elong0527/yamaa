@@ -824,6 +824,45 @@ class DashboardTests(unittest.TestCase):
             },
         )
 
+    def test_a_new_round_reopens_a_previously_completed_benchmark(self):
+        # The seam is the form/queue completion protocol, outside fixture readers.
+        name = "adam-adsl-reworked"
+        entries = [(name, "Reworked", "ADSL")]
+        saved = {
+            "updated": "2026-11-06 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": name,
+                    "reviewer": reviewer,
+                    "posted": "2026-11-02T10:00:00Z",
+                    "overall": "Not approve",
+                }
+                for reviewer in ("a", "b")
+            ],
+        }
+        queues, keys = [], []
+        for starts in ((), ("2026-11-05",)):
+            with mock.patch.object(review_status, "ROUND_STARTS", starts):
+                queue = html_tree.fromstring(
+                    generate.render_review_queue(entries, saved)
+                )
+                queues.append(
+                    json.loads(queue.xpath('//*[@id="review-queue"]/text()')[0])
+                )
+                form = html_tree.fromstring(generate.render_review_form(name, (), ""))
+                keys.append(form.xpath("//form/@data-done-key")[0])
+        self.assertEqual(
+            (
+                queues[0]["open"],
+                queues[1]["open"],
+                queues[0]["doneKey"] == keys[0],
+                queues[1]["doneKey"] == keys[1],
+                keys[0] != keys[1],
+            ),
+            ([], [name], True, True, True),
+            "rework clears votes and previous browser completion in the next round",
+        )
+
     def test_review_is_read_from_a_discussion_the_dashboard_wrote(self):
         body = "Review of it.\r\n\r\n| **Overall** | Not approve |\r\n\r\n### Comments"
         author = {"login": "reviewer-a"}

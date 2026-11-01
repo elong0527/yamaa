@@ -75,6 +75,8 @@ without that file says the status is not available. `review_status.py` also
 holds the date each later round opens: an approved benchmark stays approved, a
 benchmark that needs rework starts the next round with no reviews, and other
 reviews carry over.
+Each new round uses fresh browser completion marks, so a reworked benchmark is
+offered again even to someone who reviewed it before.
 
 The summary, inputs, and expected output carry an "Under review"
 chip, and every source file has an Edit button for proposing a fix. Under the
