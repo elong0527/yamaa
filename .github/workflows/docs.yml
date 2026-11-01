@@ -3,6 +3,8 @@ name: Docs
 on:
   push:
     branches: [main]
+  discussion:
+    types: [created, edited, deleted]
   workflow_dispatch:
 
 permissions:
@@ -11,12 +13,16 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: docs-deployment
-  cancel-in-progress: false
-
 jobs:
   deploy:
+    # Editing a review title away from Review: also removes a counted review.
+    if: >-
+      github.event_name != 'discussion' ||
+      startsWith(github.event.discussion.title, 'Review: ') ||
+      startsWith(github.event.changes.title.from, 'Review: ')
+    concurrency:
+      group: docs-deployment
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:

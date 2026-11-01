@@ -146,6 +146,11 @@ class DashboardContent(HTMLParser):
 
 
 class DashboardTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(review_status, "ROUND_STARTS", ())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_transport_files_have_no_preview_panes(self):
         # The display seam omits transport bytes without changing the fixtures.
         benchmark = generate.BENCHMARKS / "send-bw-sendig311"

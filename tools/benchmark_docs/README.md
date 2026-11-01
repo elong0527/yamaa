@@ -69,7 +69,9 @@ GitHub published the review.
 
 `review/` is the page to circulate: its purpose, people and how-to are authored
 in `docs/articles/benchmark-review.md`, and the generator adds the status.
-The Docs workflow runs `review_status.py` first, which saves the published
+The Docs workflow refreshes the site when a `Review:` discussion is created,
+edited or deleted, as well as after a main push or manual dispatch. It runs
+`review_status.py` first, which saves the published
 reviews beside the page, because the Discussions API needs a token. A build
 without that file says the status is not available. `review_status.py` also
 holds the date each later round opens: an approved benchmark stays approved, a
