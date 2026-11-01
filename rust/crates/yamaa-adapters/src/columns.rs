@@ -167,6 +167,53 @@ impl Validity {
     }
 }
 
+impl Validity {
+    /// Every one of `len` slots present, as a bitmap.
+    fn present_words(len: usize) -> Vec<u64> {
+        let mut words = vec![u64::MAX; len / 64];
+        if len % 64 != 0 {
+            words.push((1u64 << (len % 64)) - 1);
+        }
+        words
+    }
+
+    /// Append slots `range` of `other`, a word at a time: still no bitmap
+    /// while every slot holds a value (#4212).
+    pub fn extend_from(&mut self, other: &Self, range: std::ops::Range<usize>) {
+        let len = range.len();
+        let added = other.slice(range);
+        let Some(added) = added.words else {
+            match self.words {
+                Some(_) => self.append_words(&Self::present_words(len), len),
+                None => self.len += len,
+            }
+            return;
+        };
+        if self.words.is_none() {
+            self.words = Some(Self::present_words(self.len));
+        }
+        self.append_words(&added, len);
+    }
+
+    /// Append `len` slots whose bits `added` holds, least significant first,
+    /// to a validity that keeps a bitmap.
+    fn append_words(&mut self, added: &[u64], len: usize) {
+        let words = self.words.as_mut().expect("a bitmap to append to");
+        let shift = self.len % 64;
+        for &word in added {
+            match (shift, words.last_mut()) {
+                (0, _) | (_, None) => words.push(word),
+                (_, Some(last)) => {
+                    *last |= word << shift;
+                    words.push(word >> (64 - shift));
+                }
+            }
+        }
+        self.len += len;
+        words.truncate(self.len.div_ceil(64));
+    }
+}
+
 /// Fixed-width values with their validity. A missing slot holds
 /// `T::default()`, so a slot's payload never outlives its value.
 #[derive(Clone, Debug, Default)]
@@ -232,6 +279,12 @@ impl<T: Copy + Default> Values<T> {
             validity: self.validity.slice(range.clone()),
             values: self.values[range].to_vec(),
         }
+    }
+
+    /// Append slots `range` of `other`, copied whole (#4212).
+    pub fn extend_from(&mut self, other: &Self, range: std::ops::Range<usize>) {
+        self.validity.extend_from(&other.validity, range.clone());
+        self.values.extend_from_slice(&other.values[range]);
     }
 }
 
@@ -401,6 +454,20 @@ impl Text {
         }
     }
 
+    /// Append slots `range` of `other`, their text copied as one run of
+    /// its arena (#4212).
+    pub fn extend_from(&mut self, other: &Self, range: std::ops::Range<usize>) {
+        let (base, end) = (other.offsets[range.start], other.offsets[range.end]);
+        let at = self.bytes.len();
+        self.bytes.push_str(&other.bytes[base..end]);
+        self.offsets.extend(
+            other.offsets[range.start + 1..=range.end]
+                .iter()
+                .map(|&offset| offset - base + at),
+        );
+        self.validity.extend_from(&other.validity, range);
+    }
+
     /// The same values, missing wherever `missing` holds for a present one.
     /// `None` when no present value is, and the column stays as it is.
     pub fn missing_where(&self, missing: impl Fn(&str) -> bool) -> Option<Self> {
@@ -510,6 +577,38 @@ mod tests {
         for range in [0..150, 3..130, 64..71, 71..150, 0..70, 70..70] {
             let built = range.clone().map(|index| index != 70).collect::<Validity>();
             assert_eq!(validity.slice(range.clone()), built, "slots {range:?}");
+        }
+    }
+
+    #[test]
+    fn a_validity_extended_from_another_equals_the_one_its_slots_build() {
+        // Slots of a validity whose only missing slot is 70, appended after
+        // none, after 5 with the third missing, and after 64 all present:
+        // ranges with and without slot 70, starting and ending inside a
+        // word and on its boundaries, so each case either keeps no bitmap
+        // or shifts whole words into one (#4212).
+        let from = (0..150).map(|slot| slot != 70).collect::<Validity>();
+        for before in [0, 5, 64] {
+            for range in [
+                0..150,
+                3..130,
+                64..71,
+                71..150,
+                0..70,
+                70..70,
+                70..71,
+                1..65,
+            ] {
+                let mut extended = (0..before)
+                    .map(|slot| before != 5 || slot != 2)
+                    .collect::<Validity>();
+                let mut pushed = extended.clone();
+                extended.extend_from(&from, range.clone());
+                for slot in range.clone() {
+                    pushed.push(slot != 70);
+                }
+                assert_eq!(extended, pushed, "slots {range:?} after {before}");
+            }
         }
     }
 

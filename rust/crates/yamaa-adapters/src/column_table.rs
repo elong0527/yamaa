@@ -389,6 +389,77 @@ impl ColumnTable {
             .collect();
         Self::new(self.schema.clone(), columns, rows)
     }
+
+    /// Records `range` of each of `pieces`, tables of one schema, in order,
+    /// copied into one table of their own (#4212). Each text column fits
+    /// [`UTF8_OFFSETS`] as a whole, and the table is admitted within the
+    /// fixed limits as [`ColumnTable::new`] admits one. A first piece that
+    /// is its table whole lends its columns, extended in place where no
+    /// other table shares them, so its records are not copied.
+    pub fn concat(
+        mut pieces: Vec<(ColumnTable, std::ops::Range<usize>)>,
+    ) -> Result<Self, TableError> {
+        if pieces.is_empty() {
+            return Err(TableError::SchemaMismatch { batch: 0 });
+        }
+        let schema = pieces[0].0.schema.clone();
+        if let Some(batch) = pieces.iter().position(|(table, range)| {
+            table.schema != schema || range.start > range.end || range.end > table.rows
+        }) {
+            return Err(TableError::SchemaMismatch { batch });
+        }
+        let rows = pieces.iter().map(|(_, range)| range.len()).sum();
+        Limits::table(rows, schema.columns().len()).map_err(limit)?;
+        for index in 0..schema.columns().len() {
+            let bytes = pieces.iter().fold(0usize, |total, (table, range)| {
+                match table.columns[index].as_ref() {
+                    Column::Str(text) => total.saturating_add(text.bytes_in(range.clone())),
+                    _ => total,
+                }
+            });
+            if i32::try_from(bytes).is_err() {
+                return Err(TableError::Representation {
+                    representation: UTF8_OFFSETS,
+                });
+            }
+        }
+        let lent = pieces[0].1 == (0..pieces[0].0.rows);
+        let mut columns: Vec<Column> = if lent {
+            let (first, _) = pieces.remove(0);
+            first
+                .columns
+                .into_iter()
+                .map(|column| Arc::try_unwrap(column).unwrap_or_else(|shared| (*shared).clone()))
+                .collect()
+        } else {
+            schema
+                .columns()
+                .iter()
+                .map(|field| Column::empty(field.kind))
+                .collect()
+        };
+        for (table, range) in &pieces {
+            for (column, from) in columns.iter_mut().zip(&table.columns) {
+                column.extend_from(from, range.clone());
+            }
+        }
+        Self::new(schema, columns, rows)
+    }
+}
+
+impl Column {
+    /// Append rows `range` of `other`, a column of the same type, copied
+    /// whole (#4212).
+    fn extend_from(&mut self, other: &Self, range: std::ops::Range<usize>) {
+        match (self, other) {
+            (Self::Str(into), Self::Str(from)) => into.extend_from(from, range),
+            (Self::Int(into), Self::Int(from)) => into.extend_from(from, range),
+            (Self::Float(into), Self::Float(from)) => into.extend_from(from, range),
+            (Self::Date(into), Self::Date(from)) => into.extend_from_slice(&from[range]),
+            (Self::DateTime(into), Self::DateTime(from)) => into.extend_from_slice(&from[range]),
+            _ => unreachable!("the columns of one schema have one type"),
+        }
+    }
 }
 
 /// Decode each present value of `values`, a column of a table whose rows

@@ -2,8 +2,11 @@
 //! input is scanned once and decoded a range of records at a time, a Parquet
 //! input a run of whole row groups at a time, each partition admitted on its
 //! own; the partitions hold the whole read's table, and every finding is the
-//! whole read's. The scan decodes each partition once and drops it, and any
-//! range of records then decodes again from the held bytes (#3830).
+//! whole read's. The scan decodes each partition once and drops it, but for
+//! a Parquet input's first partitions of up to one partition's records,
+//! which it keeps for the run (#4212), and any range of records then
+//! decodes from what it kept and, for the rest, again from the held bytes
+//! (#3830).
 //!
 //! The seam is the decoder port's read by partition, which neither the
 //! benchmark reader nor the host fixtures reach: no host runs partitioned
@@ -627,6 +630,82 @@ mod table {
                         )
                         .unwrap();
                     assert_eq!(cells(&part), expected[range.clone()], "records {range:?}");
+                }
+            }
+
+            /// A run's partitions read the records the scan kept, the first
+            /// partition of six records in row groups of three (#4212), and
+            /// decode the rest again: a division whose ranges start and end
+            /// inside the kept partition and the row groups, decoded in
+            /// either order, on the calling thread or through the decode
+            /// threads share, gives the whole read's records, with `NAME`
+            /// missing for every third `ID`. A range decoded once more, as
+            /// a partition that did not decode on its thread is, gives
+            /// them again from the held bytes.
+            #[test]
+            fn a_division_reads_the_kept_partition_and_decodes_the_rest_as_the_whole_read() {
+                let name = |id: i64| (id % 3 != 0).then(|| format!("r{id}"));
+                let bytes = written(
+                    vec![
+                        ("ID", Arc::new(Int64Array::from_iter_values(1..=15))),
+                        ("NAME", Arc::new(StringArray::from_iter((1..=15).map(name)))),
+                    ],
+                    3,
+                );
+                let names: Vec<Option<String>> = (1..=15).map(name).collect();
+                let expected: Vec<Vec<ValueRef<'_>>> = (1..=15i64)
+                    .map(|id| {
+                        let name = names[id as usize - 1].as_deref();
+                        vec![
+                            ValueRef::Int(id),
+                            name.map_or(ValueRef::Missing, ValueRef::Str),
+                        ]
+                    })
+                    .collect();
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let interpretation = SourceInterpretation::Ordinary;
+                let divisions: [(&str, Vec<std::ops::Range<usize>>); 4] = [
+                    ("in order", vec![0..4, 4..9, 9..15]),
+                    ("later first", vec![4..9, 9..15, 0..4]),
+                    ("the kept partition whole", vec![0..6, 6..15]),
+                    ("a range across every partition", vec![0..14, 14..15]),
+                ];
+                for (label, ranges) in divisions {
+                    for shared in [false, true] {
+                        let mut decoder = Decoder::<Infallible>::default();
+                        let scanned = decoder
+                            .partitioned(
+                                &source,
+                                &bytes,
+                                interpretation,
+                                None,
+                                size(6),
+                                &mut |_, _| {},
+                            )
+                            .unwrap()
+                            .unwrap();
+                        let mut decode = |range: std::ops::Range<usize>| match shared {
+                            true => decoder
+                                .shared_partition(&scanned, &source, &bytes, interpretation, None)
+                                .unwrap()(range),
+                            false => decoder.partition(
+                                &scanned,
+                                &source,
+                                &bytes,
+                                interpretation,
+                                None,
+                                range,
+                            ),
+                        };
+                        for range in ranges.iter().chain(ranges.first()) {
+                            let part = decode(range.clone()).unwrap();
+                            assert_eq!(
+                                cells(&part),
+                                expected[range.clone()],
+                                "{label}, shared {shared}: records {range:?}"
+                            );
+                        }
+                    }
                 }
             }
 

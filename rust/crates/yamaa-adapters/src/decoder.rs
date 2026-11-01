@@ -7,7 +7,7 @@
 //! partitions' tables. Snapshot cells remain infallible; the error type is
 //! only the engine's shared callback boundary. This grants no host access or
 //! activation authority.
-use crate::source_decoding::Scanned;
+use crate::source_decoding::{Kept, Scanned};
 use crate::{
     column_table::ColumnTable,
     document::Closures,
@@ -23,15 +23,19 @@ use yamaa_core::{
     table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef},
 };
 
-/// One decoded input: a table, or an input read by partition (#3792), which
-/// holds no record: its scan's schema and record count, and what decodes any
-/// range of its records again from the held bytes (#3830).
+/// One decoded input: a table, or an input read by partition (#3792): its
+/// scan's schema and record count, what decodes any range of its records
+/// again from the held bytes (#3830), and the partitions the scan kept for
+/// the run (#4212). The snapshot alone holds them, so the report and its
+/// observation of the input never do. A run that fails after the scan,
+/// before its partitions take them, keeps them with its attempt while the
+/// report is built: about two partitions at the most.
 pub struct Snapshot<E> {
     storage: Storage<E>,
 }
 enum Storage<E> {
     Whole(ColumnTable, PhantomData<fn() -> E>),
-    Scanned(Arc<Scanned>, PhantomData<fn() -> E>),
+    Scanned(Arc<Scanned>, Kept, PhantomData<fn() -> E>),
 }
 impl<E> Snapshot<E> {
     fn whole(table: ColumnTable) -> Self {
@@ -39,9 +43,9 @@ impl<E> Snapshot<E> {
             storage: Storage::Whole(table, PhantomData),
         }
     }
-    fn scanned(scanned: Scanned) -> Self {
+    fn scanned((scanned, kept): (Scanned, Kept)) -> Self {
         Self {
-            storage: Storage::Scanned(Arc::new(scanned), PhantomData),
+            storage: Storage::Scanned(Arc::new(scanned), kept, PhantomData),
         }
     }
     /// The table of an input read whole; `None` for one read by partition.
@@ -64,7 +68,24 @@ impl<E> Snapshot<E> {
     pub fn scan(&self) -> Option<&Arc<Scanned>> {
         match &self.storage {
             Storage::Whole(..) => None,
-            Storage::Scanned(scanned, _) => Some(scanned),
+            Storage::Scanned(scanned, ..) => Some(scanned),
+        }
+    }
+    /// Decode records `range` of an input read by partition for a run's
+    /// partition: from the partitions its scan kept, and the rest from
+    /// `bytes`, the held bytes the scan read (#4212).
+    fn partition(
+        &self,
+        name: &str,
+        bytes: &[u8],
+        range: std::ops::Range<usize>,
+    ) -> Result<Self, Error> {
+        match &self.storage {
+            Storage::Scanned(scanned, kept, _) => {
+                crate::source_decoding::decode_partition(scanned, kept, bytes, range)
+                    .map(Snapshot::whole)
+            }
+            Storage::Whole(..) => unreachable!("{name} was not scanned by partition"),
         }
     }
 }
@@ -73,13 +94,13 @@ impl<E> TableAccess for Snapshot<E> {
     fn schema(&self) -> &TableSchema {
         match &self.storage {
             Storage::Whole(table, _) => table.schema(),
-            Storage::Scanned(scanned, _) => &scanned.schema,
+            Storage::Scanned(scanned, ..) => &scanned.schema,
         }
     }
     fn row_count(&self) -> usize {
         match &self.storage {
             Storage::Whole(table, _) => table.row_count(),
-            Storage::Scanned(scanned, _) => scanned.records,
+            Storage::Scanned(scanned, ..) => scanned.records,
         }
     }
     /// A cell of an input read whole. An input read by partition holds no
@@ -248,7 +269,9 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         crate::source_decoding::source_schema(source, bytes, interpretation)
     }
     /// A CSV or Parquet input scans a partition at a time, each table
-    /// visited and dropped (#3830); every other profile is read whole.
+    /// visited (#3830), and the first Parquet partitions kept for the run
+    /// within the limits of one partition (#4212); every other profile is
+    /// read whole.
     fn partitioned(
         &mut self,
         source: &SourceDeclaration,
@@ -277,13 +300,10 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         _: Option<&yamaa_core::producer_contract::Contract>,
         range: std::ops::Range<usize>,
     ) -> Result<Snapshot<E>, Error> {
-        let scan = scanned
-            .scan()
-            .unwrap_or_else(|| unreachable!("{} was not scanned by partition", source.name));
-        crate::source_decoding::decode_range(scan, bytes, range).map(Snapshot::whole)
+        scanned.partition(&source.name, bytes, range)
     }
-    /// A range decodes from the scan and the held bytes alone, so any
-    /// thread may decode it (#4193).
+    /// A range decodes from the scan, its kept partitions and the held
+    /// bytes alone, so any thread may decode it (#4193, #4212).
     fn shared_partition<'a>(
         &self,
         scanned: &'a Snapshot<E>,
@@ -292,11 +312,8 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         _: yamaa_core::specification::SourceInterpretation,
         _: Option<&'a yamaa_core::producer_contract::Contract>,
     ) -> Option<yamaa_core::decoder::RangeDecode<'a, Snapshot<E>, Error>> {
-        let scan = scanned
-            .scan()
-            .unwrap_or_else(|| unreachable!("{} was not scanned by partition", source.name));
         Some(Box::new(move |range| {
-            crate::source_decoding::decode_range(scan, bytes, range).map(Snapshot::whole)
+            scanned.partition(&source.name, bytes, range)
         }))
     }
 }
