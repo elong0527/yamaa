@@ -437,9 +437,7 @@ pub(super) fn verify_output<'a: 's, 's, E>(
     };
     let mut failures = Vec::new();
     for (position, &column) in keys.iter().enumerate() {
-        let missing: Vec<usize> = (0..rows)
-            .filter(|&row| matches!(frame.get(row, column), ValueRef::Missing))
-            .collect();
+        let missing = frame.column(column).missing_rows();
         if !missing.is_empty() {
             failures.push(CheckRecord {
                 path: format!("keys[{position}]"),
@@ -456,8 +454,13 @@ pub(super) fn verify_output<'a: 's, 's, E>(
             });
         }
     }
-    let (evaluated, duplicates) = match run.key_groups.take() {
-        Some(key_groups) if key_groups.len() == rows => repeated_keys(&key_groups)?,
+    let (evaluated, duplicates) = match (run.key_groups.take(), run.key_partitions.take()) {
+        (Some(key_groups), _) if key_groups.len() == rows => repeated_keys(&key_groups)?,
+        (_, Some(partitions)) => {
+            let key_groups = partition_apart(frame, &keys, &partitions, run.output_partition)
+                .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+            repeated_keys(&key_groups)?
+        }
         _ => {
             let groups = partition(frame, &keys, run.output_partition)
                 .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
@@ -938,11 +941,65 @@ pub(super) fn partition(
     .map_err(|_| crate::table_grouping::GroupingError::Allocation)
 }
 
+/// The group of each frame row by `columns`, admitted as [`partition`]
+/// admits the rows, when no group spans two of `units`, each the frame rows
+/// of a template or of a partition (#4211). Each unit is grouped on its
+/// own: a column at a time without hashing when it is one range of rows in
+/// key order, or else hashed in a table sized to it; its groups are
+/// numbered after every earlier unit's. These are the groups [`partition`]
+/// forms over every row.
+fn partition_apart(
+    frame: &Frame,
+    columns: &[usize],
+    units: &[Vec<std::ops::Range<usize>>],
+    partition: Option<std::num::NonZeroUsize>,
+) -> Result<Vec<usize>, crate::table_grouping::GroupingError<Infallible>> {
+    use crate::table_grouping::GroupingError;
+    super::group::admit(columns, frame.width(), frame.rows(), partition)?;
+    let allocation = |_| GroupingError::Allocation;
+    let mut key_groups = Vec::new();
+    key_groups
+        .try_reserve_exact(frame.rows())
+        .map_err(allocation)?;
+    key_groups.resize(frame.rows(), 0usize);
+    // Each key column's typed storage, when every one has it.
+    let typed: Option<Vec<_>> = columns
+        .iter()
+        .map(|&column| frame.column(column).column())
+        .collect();
+    let mut rows = Vec::new();
+    let mut offset = 0;
+    for ranges in units {
+        rows.clear();
+        rows.extend(ranges.iter().cloned().flatten());
+        let ordered = match (&typed, ranges.as_slice()) {
+            (Some(typed), [range]) => {
+                crate::table_grouping::ascending_columns(typed, range.clone())
+                    .map_err(allocation)?
+            }
+            _ => None,
+        };
+        let (local, groups) = match ordered {
+            Some(assigned) => assigned,
+            None => super::group::assign(rows.len(), columns.len(), |item, position| {
+                frame.get(rows[item], columns[position])
+            })
+            .map_err(allocation)?,
+        };
+        for (&row, group) in rows.iter().zip(local) {
+            key_groups[row] = offset + group;
+        }
+        offset += groups;
+    }
+    Ok(key_groups)
+}
+
 /// The output key groups the key grain found (#4188), given the group of
 /// each row: how many there are, and the first row of each that repeats a
 /// key, in row order, as `partition` over the keys would answer. A key-grain
 /// candidate repeats its key only when the key is missing, as each
-/// missing-key record is its own candidate.
+/// missing-key record is its own candidate. Groups formed apart in units
+/// that no group spans, numbered after each other, count the same (#4211).
 fn repeated_keys<E>(key_groups: &[usize]) -> Result<(usize, Vec<usize>), Fail<E>> {
     let groups = key_groups.iter().max().map_or(0, |&group| group + 1);
     let mut sizes = super::filled(groups, 0usize)?;

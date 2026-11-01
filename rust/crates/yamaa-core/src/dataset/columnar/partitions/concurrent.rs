@@ -113,6 +113,7 @@ impl<E> Part<E> {
             checked: self.checked,
             marks: self.marks,
             counts: self.counts,
+            key_groups: self.key_groups,
             failure: None,
         });
         (part, failed)
@@ -130,6 +131,7 @@ impl Part<Infallible> {
             checked: self.checked,
             marks: self.marks,
             counts: self.counts,
+            key_groups: self.key_groups,
             failure: None,
         }
     }

@@ -46,7 +46,9 @@ use crate::dataset::execution::{
     CheckRecord, ExecutionAttempt, ExecutionError, ExecutionEvent, ExecutionPhase, RowIdentity,
     TemplateRows,
 };
-use crate::dataset::resolved::{FilterPlacement, RegionId, ResolvedPlan, Stage, Step, TemplateId};
+use crate::dataset::resolved::{
+    FilterPlacement, Op, RegionId, ResolvedPlan, Stage, Step, TemplateId,
+};
 use crate::dataset::Partitioning;
 use crate::function_invocation::FunctionPort;
 use crate::table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef};
@@ -344,6 +346,8 @@ struct Part<E> {
     marks: Marks,
     /// Its handler counts where it ended.
     counts: HandlerMark,
+    /// The key grain's group of each of its candidates (#4211).
+    key_groups: Option<Vec<usize>>,
     /// Its failure, at the last mark it entered, and what its positions
     /// count.
     failure: Option<(Fail<E>, Coordinates)>,
@@ -359,6 +363,7 @@ impl<E> Part<E> {
             checked: Vec::new(),
             marks: Marks::new(0, false),
             counts,
+            key_groups: None,
             failure: None,
         }
     }
@@ -677,7 +682,10 @@ impl ResolvedPlan {
             _ => self.derive_serially(outer, work, observer)?,
         };
         match derived {
-            Some((parts, failure)) => self.combine(outer, parts, failure, observer),
+            Some((parts, failure)) => {
+                let whole = self.keeps_key_groups(input.keys, ranges.len());
+                self.combine(outer, (parts, whole), failure, observer)
+            }
             None => Ok(Found::cancelled()),
         }
     }
@@ -815,6 +823,7 @@ impl ResolvedPlan {
             templates,
             checked,
             counts: run.handlers.mark(),
+            key_groups: run.key_groups.take(),
             marks,
             failure,
         })
@@ -827,7 +836,7 @@ impl ResolvedPlan {
     fn combine<E>(
         &self,
         outer: &mut Run<'_, '_, E>,
-        mut parts: Vec<Part<E>>,
+        (mut parts, whole): (Vec<Part<E>>, bool),
         failure: Failure,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Found<E>, Fail<E>> {
@@ -912,6 +921,16 @@ impl ResolvedPlan {
             .handlers
             .restore(compose(&parts, |_, part| &part.counts));
         let templates = template_rows(&parts, reference, end);
+        // The output key check groups what no key group leaves on its own:
+        // each partition's key grain, each template's rows, or each
+        // partition's rows (#4211).
+        if whole {
+            outer.key_groups = composed_key_groups(&parts, &blocks);
+        }
+        if outer.key_groups.is_none() {
+            let apart = self.templates_apart();
+            outer.key_partitions = (apart || whole).then(|| merged_rows(&blocks, apart));
+        }
         drop(parts);
         let inputs = outer.inputs();
         let result = outer.finish(frame, &inputs, &mut records, observer);
@@ -926,6 +945,63 @@ impl ResolvedPlan {
 }
 
 impl ResolvedPlan {
+    /// Whether no output key group of a run over `partitions` partitions,
+    /// key-bounded over the leading `keys` declared keys when there are
+    /// any, spans two partitions (#4211). One partition holds every group.
+    /// Key-bounded partitions are cut between runs of the fields the
+    /// leading keys copy unchanged in every template that reads the driver
+    /// input ([`ResolvedPlan::partition_fields`]), and the cut finds no cut
+    /// when a run of those fields recurs after it ended (`dataset::cut`),
+    /// so two records of different partitions differ in those fields. When
+    /// every template reads the driver input, each output row's leading
+    /// keys are its records' fields, so two rows of different partitions
+    /// differ in a key: no key group spans them. A template that does not
+    /// read the driver input builds its rows in the first partition's run
+    /// with keys of any value, and consecutive partitions keep nothing
+    /// whole, so their output keys group over every partition at once.
+    fn keeps_key_groups(&self, keys: usize, partitions: usize) -> bool {
+        partitions == 1
+            || (keys > 0
+                && self
+                    .region_templates(RegionId::DATASET)
+                    .all(|template| self.reads_driver(template)))
+    }
+
+    /// Whether no two templates' rows share an output key (#4211): the
+    /// dataset has at most one template, or every template binds some key
+    /// to a present literal of the key's type, each template's distinct, so
+    /// rows of two templates differ in that key, as the templates of a BDS
+    /// specification bind PARAMCD.
+    fn templates_apart(&self) -> bool {
+        use crate::value::{ColumnType, Value};
+        let templates: Vec<TemplateId> = self.region_templates(RegionId::DATASET).collect();
+        templates.len() < 2
+            || self.keys().iter().any(|&key| {
+                let kind = self.column(key).kind;
+                let mut seen: Vec<crate::table_grouping::Key<'_>> = Vec::new();
+                templates.iter().all(|&template| {
+                    let Some(binding) = self.cell(template, key) else {
+                        return false;
+                    };
+                    let Op::Literal(value) = &self.expr(self.binding(binding).expr).op else {
+                        return false;
+                    };
+                    let typed = matches!(
+                        (value, kind),
+                        (Value::Str(_), Some(ColumnType::Str))
+                            | (Value::Int(_), Some(ColumnType::Int))
+                            | (Value::Float(_), Some(ColumnType::Float))
+                            | (Value::Date(_), Some(ColumnType::Date))
+                            | (Value::DateTime(_), Some(ColumnType::DateTime))
+                    );
+                    let literal = crate::table_grouping::Key::from(ValueRef::from(value));
+                    let distinct = typed && !seen.contains(&literal);
+                    seen.push(literal);
+                    distinct
+                })
+            })
+    }
+
     /// The first capacity check of an output admitted whole that the whole
     /// table fails, every partition's rows added up (#3830), in a step
     /// before the first partition's failure: the mark it fails at, after
@@ -993,6 +1069,68 @@ fn merged<E>(
         }
     }
     Ok(frame)
+}
+
+/// The output key group of each row of the merged frame, from the key
+/// grain's groups of every partition's candidates (#4211), when every
+/// partition kept them: each partition's groups numbered after every
+/// earlier partition's. Only for partitions that no key group spans
+/// ([`ResolvedPlan::keeps_key_groups`]).
+fn composed_key_groups<E>(parts: &[Part<E>], blocks: &[Vec<Range<usize>>]) -> Option<Vec<usize>> {
+    let mut offsets = Vec::with_capacity(parts.len());
+    let mut groups = 0usize;
+    for part in parts {
+        offsets.push(groups);
+        groups += part
+            .key_groups
+            .as_ref()?
+            .iter()
+            .max()
+            .map_or(0, |&group| group + 1);
+    }
+    let rows = parts
+        .iter()
+        .map(|part| part.key_groups.as_ref().map_or(0, Vec::len))
+        .sum();
+    let mut composed = Vec::new();
+    composed.try_reserve_exact(rows).ok()?;
+    let templates = blocks.first().map_or(0, Vec::len);
+    for template in 0..templates {
+        for ((part, blocks), &offset) in parts.iter().zip(blocks).zip(&offsets) {
+            let local = part.key_groups.as_ref()?;
+            composed.extend(
+                local[blocks[template].clone()]
+                    .iter()
+                    .map(|&group| group + offset),
+            );
+        }
+    }
+    Some(composed)
+}
+
+/// The rows of each template in the merged frame ([`merged`]), every
+/// partition's in one range, with `by_template`; or else the rows of each
+/// partition, its templates' blocks in order.
+fn merged_rows(blocks: &[Vec<Range<usize>>], by_template: bool) -> Vec<Vec<Range<usize>>> {
+    let templates = blocks.first().map_or(0, Vec::len);
+    let mut rows: Vec<Vec<Range<usize>>> =
+        vec![Vec::new(); if by_template { templates } else { blocks.len() }];
+    let mut start = 0;
+    for template in 0..templates {
+        for (part, blocks) in blocks.iter().enumerate() {
+            let len = blocks[template].len();
+            if by_template {
+                match rows[template].last_mut() {
+                    Some(range) => range.end += len,
+                    None => rows[template].push(start..start + len),
+                }
+            } else {
+                rows[part].push(start..start + len);
+            }
+            start += len;
+        }
+    }
+    rows
 }
 
 /// The handler counts of every partition's run, each at the point `at`

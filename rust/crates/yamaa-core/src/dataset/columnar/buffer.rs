@@ -156,6 +156,19 @@ impl Bits {
         }
     }
 
+    /// The unset bits below the length, ascending, found a word at a time.
+    fn zeros(&self) -> Vec<usize> {
+        let mut zeros = Vec::new();
+        for (index, &word) in self.words.iter().enumerate() {
+            let mut unset = !word & low_mask(self.len.saturating_sub(index * 64));
+            while unset != 0 {
+                zeros.push(index * 64 + unset.trailing_zeros() as usize);
+                unset &= unset - 1;
+            }
+        }
+        zeros
+    }
+
     /// The first set bit, found a word at a time.
     fn first_set(&self) -> Option<usize> {
         self.words
@@ -761,6 +774,23 @@ impl Values {
                 }
             }
             Self::Mixed(values) => ValueRef::from(&values[index]),
+        }
+    }
+
+    /// The rows that hold no value, ascending: read from a typed buffer's
+    /// bitmap a word at a time (#4211).
+    pub(super) fn missing_rows(&self) -> Vec<usize> {
+        match self {
+            Self::Missing(len) => (0..*len).collect(),
+            Self::Int(_, valid)
+            | Self::Float(_, valid)
+            | Self::Bool(_, valid)
+            | Self::Date(_, valid)
+            | Self::DateTime(_, valid)
+            | Self::Str(_, valid) => valid.zeros(),
+            Self::Mixed(values) => (0..values.len())
+                .filter(|&row| matches!(values[row], Value::Missing))
+                .collect(),
         }
     }
 
@@ -1409,6 +1439,33 @@ mod tests {
     /// Every row's value of a buffer.
     fn read(values: &Values) -> Vec<ValueRef<'_>> {
         (0..values.len()).map(|row| values.get(row)).collect()
+    }
+
+    // The seam is the output key check's missing rows (#4211), read from a
+    // buffer's bitmap a word at a time: they must be the rows that read
+    // missing, across word boundaries and up to the buffer's length.
+    #[test]
+    fn missing_rows_are_the_rows_that_read_missing() {
+        let mut ints = Values::missing(0);
+        for row in 0..130 {
+            ints.push(if [0, 63, 64, 129].contains(&row) {
+                ValueRef::Missing
+            } else {
+                ValueRef::Int(row as i64)
+            });
+        }
+        let cases = [
+            ("ints over three words", ints, vec![0, 63, 64, 129]),
+            ("every row missing", Values::missing(3), vec![0, 1, 2]),
+            (
+                "mixed values",
+                Values::Mixed(vec![Value::Int(1), Value::Missing, Value::Str("a".into())]),
+                vec![1],
+            ),
+        ];
+        for (label, values, expected) in cases {
+            assert_eq!(values.missing_rows(), expected, "{label}");
+        }
     }
 
     // The seam is the bulk paths of a crate-private buffer (#4190): each
