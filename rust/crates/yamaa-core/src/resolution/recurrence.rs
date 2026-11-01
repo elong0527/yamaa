@@ -2,7 +2,6 @@
 //! The bound column policy still admits and schedules feedback components.
 use super::{dependency_analysis, ExprKind, Live, Scope, Step};
 use crate::ast::{Direction, ExprId, Nulls, Window};
-use crate::expression_table::WindowFunction;
 use std::collections::BTreeSet;
 
 pub(super) fn order(
@@ -77,8 +76,10 @@ fn delayed(
         spec.walk(root, Scope::Row, |at, _| {
             match &spec.expr(at).kind {
                 ExprKind::Window(window) => {
-                    let backward = matches!(&window.function,
-                        WindowFunction::RowValue { offset } if offset.parse::<i64>().is_ok_and(|n| n < 0));
+                    let backward = window
+                        .function
+                        .row_value_offset()
+                        .is_some_and(|offset| offset < 0);
                     if !backward
                         || window.filter.is_some()
                         || window.order_by.is_empty()
@@ -92,7 +93,9 @@ fn delayed(
                             .iter()
                             .copied()
                             .chain(window.order_by.iter().map(|term| term.variable))
-                            .any(|field| reference(live, field).is_none_or(|name| names.contains(name)))
+                            .any(|field| {
+                                reference(live, field).is_none_or(|name| names.contains(name))
+                            })
                     {
                         safe = false;
                         return Step::Stop;
@@ -100,7 +103,9 @@ fn delayed(
                     shared = Some(window);
                     sources.extend(window.operands.iter().map(|operand| operand.expr));
                 }
-                ExprKind::Ref(name) if name.owner().is_some_and(|owner| Some(owner) != live.driver) => {
+                ExprKind::Ref(name)
+                    if name.owner().is_some_and(|owner| Some(owner) != live.driver) =>
+                {
                     safe = false;
                 }
                 ExprKind::Source(source)

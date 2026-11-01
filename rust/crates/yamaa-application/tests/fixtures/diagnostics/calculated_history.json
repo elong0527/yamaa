@@ -678,6 +678,41 @@
         "spec_paths",
         "context"
       ]
+    },
+    {
+      "case": "a_column_outside_the_group_reading_a_later_feedback_member_is_a_forward_reference",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - EARLY\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: EARLY\n  type: int\n  derivation: STATE * 2\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\n",
+          "input.csv": "ID,G,SEQ,X\n1,A,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "forward_reference",
+          "rule": "COLUMN-5",
+          "spec_paths": [
+            "columns.EARLY.derivation"
+          ],
+          "context": {
+            "column": "EARLY",
+            "dependency": "STATE"
+          }
+        }
+      ],
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ]
     }
   ]
 }
