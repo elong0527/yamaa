@@ -1,0 +1,113 @@
+"""Save the published benchmark reviews, and count them for the review page.
+
+GitHub's Discussions API needs a token, so the static page cannot ask it. The
+Docs workflow runs this module before the build, and the generator reads the
+file it saves. The dashboards write each review's title and Overall row, and
+these patterns read them back.
+"""
+
+import json
+import os
+import re
+import sys
+import urllib.request
+from datetime import UTC, datetime
+
+from tools.paths import ROOT
+
+API = "https://api.github.com/graphql"
+DESTINATION = ROOT / "docs/benchmark/review/reviews.json"
+TITLE = re.compile(r"Review: ([a-z0-9-]+)")
+# GitHub can store a submitted form's line breaks as CRLF.
+OVERALL = re.compile(
+    r"^\| \*\*Overall\*\* \| (Approve|Not approve) \|\s*$", re.MULTILINE
+)
+REQUIRED_REVIEWS = 2
+APPROVED = "Approved"
+NEEDS_REWORK = "Needs rework"
+IN_REVIEW = "In review"
+NOT_REVIEWED = "Not reviewed"
+STATUSES = (APPROVED, NEEDS_REWORK, IN_REVIEW, NOT_REVIEWED)
+QUERY = """
+query ($cursor: String) {
+  repository(owner: "elong0527", name: "yamaa") {
+    discussions(first: 100, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { title body createdAt author { login } }
+    }
+  }
+}
+"""
+
+
+def read_review(discussion):
+    """One review from a discussion, or None for any other discussion."""
+    title = TITLE.fullmatch(discussion["title"])
+    overall = OVERALL.search(discussion["body"])
+    if not title or not overall or not discussion["author"]:
+        return None
+    return {
+        "benchmark": title.group(1),
+        "reviewer": discussion["author"]["login"],
+        "posted": discussion["createdAt"],
+        "overall": overall.group(1),
+    }
+
+
+def status(verdicts):
+    """A benchmark settles only once enough people have reviewed it."""
+    if not verdicts:
+        return NOT_REVIEWED
+    if len(verdicts) < REQUIRED_REVIEWS:
+        return IN_REVIEW
+    return APPROVED if set(verdicts) == {"Approve"} else NEEDS_REWORK
+
+
+def tally(names, reviews):
+    """Each benchmark's number of reviewers and status. Only a person's latest
+    review of a benchmark counts."""
+    verdicts = {name: {} for name in names}
+    for review in sorted(reviews, key=lambda review: review["posted"]):
+        if review["benchmark"] in verdicts:
+            verdicts[review["benchmark"]][review["reviewer"]] = review["overall"]
+    return {
+        name: (len(found), status(list(found.values())))
+        for name, found in verdicts.items()
+    }
+
+
+def fetch(token):
+    """Every review published in the repository's discussions."""
+    reviews, cursor = [], None
+    while True:
+        request = urllib.request.Request(
+            API,
+            data=json.dumps({"query": QUERY, "variables": {"cursor": cursor}}).encode(),
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "yamaa-docs"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            answer = json.load(response)
+        if "errors" in answer:
+            raise RuntimeError(answer["errors"])
+        discussions = answer["data"]["repository"]["discussions"]
+        found = (read_review(item) for item in discussions["nodes"])
+        reviews.extend(review for review in found if review)
+        if not discussions["pageInfo"]["hasNextPage"]:
+            return reviews
+        cursor = discussions["pageInfo"]["endCursor"]
+
+
+def main():
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        sys.exit("GITHUB_TOKEN is required to read the discussions")
+    saved = {
+        "updated": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        "reviews": fetch(token),
+    }
+    DESTINATION.parent.mkdir(parents=True, exist_ok=True)
+    DESTINATION.write_text(json.dumps(saved, indent=2) + "\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()

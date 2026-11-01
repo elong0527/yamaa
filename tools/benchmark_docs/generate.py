@@ -16,7 +16,7 @@ import yaml
 from evaluations.harbor.brief import brief
 from tools.benchmark import LIFECYCLES, load_metadata, specification_name
 from tools.benchmark import entries as benchmark_entries
-from tools.benchmark_docs import define_doc, mapping_doc
+from tools.benchmark_docs import define_doc, mapping_doc, review_status
 from tools.conformance.public_conformance import plan
 from tools.paths import ROOT
 
@@ -31,6 +31,8 @@ DESTINATION = ROOT / "docs/benchmark"
 # `exclude_docs` in mkdocs.yml keeps it out of the built site; the generated
 # docs/benchmark/index.md is the page readers see.
 OVERVIEW = ROOT / "docs/articles/benchmark.md"
+# The review page is authored the same way, and only its status is generated.
+REVIEW_PAGE = ROOT / "docs/articles/benchmark-review.md"
 # The agent evaluation keeps each benchmark's prompts and its reference
 # solutions written without yamaa, keyed by benchmark directory name. The
 # dashboard shows them as assessment materials beside the comments.
@@ -53,10 +55,11 @@ REVIEW_URL = REPOSITORY + "/discussions/new?category=comments"
 AGREEMENT = ("Agree", "Disagree")
 # Submitting or skipping a review leaves for the queue page, which holds the
 # order and sends the reviewer on. It walks these gallery groups, so one dataset
-# type is reviewed together. The form marks each benchmark done in the browser
-# under this key, and the queue page reads the same key.
+# type is reviewed together. Nobody assigns benchmarks, so the page spreads
+# reviewers itself. The form marks each benchmark done in the browser under this
+# key, and the queue page reads the same key.
 REVIEW_GROUPS = ("sdtm", "adam")
-REVIEW_QUEUE_URL = "review/"
+REVIEW_QUEUE_URL = "review/next/"
 REVIEW_DONE_KEY = "yamaa-benchmark-reviewed:"
 LIFECYCLE_URL = REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle"
 # This order is shared by the overview table, jump links and gallery sections.
@@ -574,14 +577,72 @@ def review_queue(entries):
     ]
 
 
-def render_review_queue(entries):
-    """The page that sends a reviewer to their next benchmark."""
-    queue = {"doneKey": REVIEW_DONE_KEY, "names": review_queue(entries)}
+def render_review_queue(entries, saved):
+    """The page that sends a reviewer to their next benchmark: first those that
+    need one more review to settle, then those nobody has reviewed."""
+    reviews = saved["reviews"] if saved else []
+    counted = review_status.tally(review_queue(entries), reviews)
+    queue = {
+        "doneKey": REVIEW_DONE_KEY,
+        "started": [
+            name
+            for name, (count, _) in counted.items()
+            if 0 < count < review_status.REQUIRED_REVIEWS
+        ],
+        "open": [name for name, (count, _) in counted.items() if not count],
+    }
     template = Template((HERE / "review-queue.html").read_text(encoding="utf-8"))
     result = template.substitute(
         queue=json.dumps(queue),
-        total=plural(len(queue["names"]), "benchmark"),
         script=(HERE / "review-queue.js").read_text(encoding="utf-8"),
+    )
+    return result.encode("ascii", "xmlcharrefreplace")
+
+
+def render_review_status(entries, saved):
+    """The Status section of the review page, from the saved reviews. Votes stay
+    out of it: a benchmark shows how many people reviewed it until it settles."""
+    if saved is None:
+        return "Status is not available in this build."
+    counted = review_status.tally(review_queue(entries), saved["reviews"])
+    categories = {name: category for name, _, category in entries}
+    columns = review_status.STATUSES
+    groups = [(f"`{key}`", key) for key in REVIEW_GROUPS] + [("**All**", None)]
+    totals = []
+    for label, key in groups:
+        found = [
+            found
+            for name, (_, found) in counted.items()
+            if key in (None, benchmark_group(name))
+        ]
+        cells = [str(found.count(column)) for column in columns]
+        totals.append(f"| {label} | {len(found)} | " + " | ".join(cells) + " |\n")
+    rows = [
+        f'| <a href="../{escape(name)}.html">{escape(name)}</a> '
+        f"| {escape(categories[name])} | {reviews} | {found} |\n"
+        for name, (reviews, found) in counted.items()
+    ]
+    return (
+        f"Updated {escape(saved['updated'])}.\n\n"
+        "| Group | Benchmarks | " + " | ".join(columns) + " |\n"
+        "|---|---|---|---|---|---|\n" + "".join(totals) + "\n"
+        f"| Benchmark | Domain | Reviews ({review_status.REQUIRED_REVIEWS} needed) "
+        "| Status |\n|---|---|---|---|\n" + "".join(rows)
+    )
+
+
+def render_review_page(entries, saved):
+    """The page that says what the review is for, and how far it has come."""
+    names = review_queue(entries)
+    reviews = saved["reviews"] if saved else []
+    logins = sorted(
+        {item["reviewer"] for item in reviews if item["benchmark"] in names}
+    )
+    template = Template(REVIEW_PAGE.read_text(encoding="utf-8"))
+    result = template.substitute(
+        total=plural(len(names), "benchmark"),
+        reviewers=", ".join(f"`{escape(login)}`" for login in logins) or "None yet",
+        status=render_review_status(entries, saved),
     )
     return result.encode("ascii", "xmlcharrefreplace")
 
@@ -1202,6 +1263,12 @@ def render_benchmark(benchmark, previous=None, next=None):
     return result.encode("ascii", "xmlcharrefreplace")
 
 
+def saved_reviews(output_dir):
+    """The reviews saved beside the page, or None when a build has none."""
+    path = output_dir / "review" / review_status.DESTINATION.name
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1300,12 +1367,18 @@ def main(argv=None):
             if not args.quiet:
                 print(f"Generated: {destination}")
     if write_index:
+        saved = saved_reviews(args.output_dir)
         pages = (
             ("index", args.output_dir / "index.md", render_index(entries)),
             (
+                "review page",
+                args.output_dir / "review" / "index.md",
+                render_review_page(entries, saved),
+            ),
+            (
                 "review queue",
                 args.output_dir / REVIEW_QUEUE_URL / "index.html",
-                render_review_queue(entries),
+                render_review_queue(entries, saved),
             ),
         )
         for label, destination, page in pages:

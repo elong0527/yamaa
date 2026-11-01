@@ -58,12 +58,20 @@ keeps a draft in the browser, and opens GitHub's new-discussion composer in the
 Comments category with the answers filled in, so the static page holds no
 credentials. A reviewer must be signed in to GitHub to publish a review.
 
-Submitting or skipping a review moves the page to `review/`, the review queue
-`generate.py` writes beside the dashboards. `review-queue.js` holds no state of
-its own: it sends the reviewer to the next `sdtm` or `adam` benchmark, in gallery
-order, that this browser has not marked done, so the same link also resumes a
-review. The mark records that the reviewer left the page, not that GitHub
-published the review.
+Submitting or skipping a review moves the page to `review/next/`, the review
+queue `generate.py` writes beside the dashboards. Nobody assigns benchmarks. The
+queue lists the `sdtm` and `adam` benchmarks that one more review would settle,
+then those nobody has reviewed, and `review-queue.js` starts each browser at its
+own place among the second list so reviewers spread out. It sends the reviewer
+to the next benchmark this browser has not marked done, so the same link also
+resumes a review. The mark records that the reviewer left the page, not that
+GitHub published the review.
+
+`review/` is the page to circulate: its purpose, people and how-to are authored
+in `docs/articles/benchmark-review.md`, and the generator adds the status.
+The Docs workflow runs `review_status.py` first, which saves the published
+reviews beside the page, because the Discussions API needs a token. A build
+without that file says the status is not available.
 
 The summary, inputs, and expected output carry an "Under review"
 chip, and every source file has an Edit button for proposing a fix. Under the

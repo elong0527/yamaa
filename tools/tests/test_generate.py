@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from lxml import html as html_tree
 
 import yaml
-from tools.benchmark_docs import generate
+from tools.benchmark_docs import generate, review_status
 from tools.tests import support
 
 HERE = Path(__file__).resolve().parent
@@ -754,7 +754,7 @@ class DashboardTests(unittest.TestCase):
                     f'<form class="review-form" data-benchmark="{name}" '
                     'data-review-url="https://github.com/elong0527/yamaa/'
                     'discussions/new?category=comments" '
-                    f'data-next-url="review/?after={name}" data-approve="Agree" '
+                    f'data-next-url="review/next/?after={name}" data-approve="Agree" '
                     'data-done-key="yamaa-benchmark-reviewed:" novalidate hidden>',
                     page,
                 )
@@ -779,7 +779,7 @@ class DashboardTests(unittest.TestCase):
             page,
         )
 
-    def test_review_queue_walks_sdtm_then_adam_in_gallery_order(self):
+    def test_review_queue_offers_started_benchmarks_before_open_ones(self):
         entries = [
             ("adam-adsl-second", "Second", "ADSL"),
             ("adam-adsl-first", "First", "ADSL"),
@@ -789,22 +789,167 @@ class DashboardTests(unittest.TestCase):
             ("sdtm-dm-basic", "Basic", "DM"),
             ("send-bw-weight", "Weight", "BW"),
         ]
-        page = generate.render_review_queue(entries).decode("ascii")
+        saved = {
+            "updated": "2026-11-02 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": "adam-adsl-first",
+                    "reviewer": "a",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Approve",
+                },
+                {
+                    "benchmark": "adam-adae-event",
+                    "reviewer": "a",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Approve",
+                },
+                {
+                    "benchmark": "adam-adae-event",
+                    "reviewer": "b",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Approve",
+                },
+            ],
+        }
+        page = generate.render_review_queue(entries, saved).decode("ascii")
         queue = html_tree.fromstring(page).xpath('//*[@id="review-queue"]/text()')
         self.assertEqual(
             json.loads(queue[0]),
             {
                 "doneKey": "yamaa-benchmark-reviewed:",
-                "names": [
-                    "send-bw-weight",
-                    "sdtm-dm-basic",
-                    "adam-adae-event",
-                    "adam-adsl-first",
-                    "adam-adsl-second",
-                ],
+                "started": ["adam-adsl-first"],
+                "open": ["send-bw-weight", "sdtm-dm-basic", "adam-adsl-second"],
             },
         )
-        self.assertIn("all 5 benchmarks under review", page)
+
+    def test_review_is_read_from_a_discussion_the_dashboard_wrote(self):
+        body = "Review of it.\r\n\r\n| **Overall** | Not approve |\r\n\r\n### Comments"
+        author = {"login": "reviewer-a"}
+        posted = "2026-11-02T10:00:00Z"
+        cases = (
+            (
+                "crlf body",
+                {
+                    "title": "Review: adam-adae-death",
+                    "body": body,
+                    "createdAt": posted,
+                    "author": author,
+                },
+                {
+                    "benchmark": "adam-adae-death",
+                    "reviewer": "reviewer-a",
+                    "posted": posted,
+                    "overall": "Not approve",
+                },
+            ),
+            (
+                "giscus thread",
+                {
+                    "title": "yaml/examples/adam-adae-death",
+                    "body": body,
+                    "createdAt": posted,
+                    "author": author,
+                },
+                None,
+            ),
+            (
+                "no overall row",
+                {
+                    "title": "Review: adam-adae-death",
+                    "body": "| **Overall:** Ready |",
+                    "createdAt": posted,
+                    "author": author,
+                },
+                None,
+            ),
+            (
+                "deleted account",
+                {
+                    "title": "Review: adam-adae-death",
+                    "body": body,
+                    "createdAt": posted,
+                    "author": None,
+                },
+                None,
+            ),
+        )
+        for label, discussion, expected in cases:
+            with self.subTest(case=label):
+                self.assertEqual(review_status.read_review(discussion), expected, label)
+
+    def test_review_tally_settles_a_benchmark_after_two_people_review_it(self):
+        def review(benchmark, reviewer, posted, overall):
+            return {
+                "benchmark": benchmark,
+                "reviewer": reviewer,
+                "posted": f"2026-11-0{posted}T10:00:00Z",
+                "overall": overall,
+            }
+
+        names = ["none", "one", "agreed", "split", "changed", "repeated"]
+        reviews = [
+            review("one", "a", 1, "Not approve"),
+            review("agreed", "a", 1, "Approve"),
+            review("agreed", "b", 2, "Approve"),
+            review("split", "a", 1, "Approve"),
+            review("split", "b", 2, "Not approve"),
+            # Newest first, so the tally must order by time, not by list.
+            review("changed", "a", 2, "Approve"),
+            review("changed", "a", 1, "Not approve"),
+            review("changed", "b", 1, "Approve"),
+            review("repeated", "a", 1, "Approve"),
+            review("repeated", "a", 2, "Approve"),
+            review("not-in-the-queue", "a", 1, "Approve"),
+        ]
+        self.assertEqual(
+            review_status.tally(names, reviews),
+            {
+                "none": (0, "Not reviewed"),
+                "one": (1, "In review"),
+                "agreed": (2, "Approved"),
+                "split": (2, "Needs rework"),
+                "changed": (2, "Approved"),
+                "repeated": (1, "In review"),
+            },
+        )
+
+    def test_review_page_states_the_status_of_each_benchmark(self):
+        entries = [
+            ("adam-adsl-age", "Age", "ADSL"),
+            ("sdtm-dm-basic", "Basic", "DM"),
+            ("negative-refused", "Refused", "ADSL"),
+        ]
+        saved = {
+            "updated": "2026-11-02 10:00 UTC",
+            "reviews": [
+                {
+                    "benchmark": "sdtm-dm-basic",
+                    "reviewer": "a",
+                    "posted": "2026-11-02T09:00:00Z",
+                    "overall": "Not approve",
+                }
+            ],
+        }
+        self.assertEqual(
+            generate.render_review_status(entries, saved),
+            "Updated 2026-11-02 10:00 UTC.\n\n"
+            "| Group | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
+            "|---|---|---|---|---|---|\n"
+            "| `sdtm` | 1 | 0 | 0 | 1 | 0 |\n"
+            "| `adam` | 1 | 0 | 0 | 0 | 1 |\n"
+            "| **All** | 2 | 0 | 0 | 1 | 1 |\n\n"
+            "| Benchmark | Domain | Reviews (2 needed) | Status |\n"
+            "|---|---|---|---|\n"
+            '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | In review |\n'
+            '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 0 | Not reviewed |\n',
+        )
+        page = generate.render_review_page(entries, saved).decode("ascii")
+        self.assertIn("| Reviewers | `a` |\n", page)
+        page = generate.render_review_page(entries, None).decode("ascii")
+        self.assertIn("| Reviewers | None yet |\n", page)
+        self.assertIn("It covers\n2 benchmarks.", page)
+        self.assertIn("## Status\n\nStatus is not available in this build.\n", page)
 
     def test_every_source_shown_has_an_edit_link_to_a_file_that_exists(self):
         """The review ask points at the Edit buttons, so no source may lack one."""

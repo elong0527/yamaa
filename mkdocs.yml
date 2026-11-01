@@ -9,12 +9,14 @@ copyright: Copyright &copy; 2026 yamaa contributors
 
 docs_dir: docs
 site_dir: site
-# requirements.txt is not a page. articles/benchmark.md is the source the
-# benchmark dashboard generator substitutes into docs/benchmark/index.md, so
-# it holds placeholders and is not a page either.
+# requirements.txt is not a page. articles/benchmark.md and
+# articles/benchmark-review.md are the sources the benchmark dashboard generator
+# substitutes into docs/benchmark/index.md and docs/benchmark/review/index.md,
+# so they hold placeholders and are not pages either.
 exclude_docs: |
   requirements.txt
   articles/benchmark.md
+  articles/benchmark-review.md
   # The rendered slide decks (docs/slides/<deck>/index.html, built by Quarto in
   # CI) already occupy slides/<deck>/index.html; building each folder README
   # as a page would conflict with it and fail --strict.
@@ -114,3 +116,4 @@ nav:
       - Codelists and terminology: articles/terminology.md
       - Supported standards: articles/supported-standards.md
   - Benchmark: benchmark/index.md
+  - Benchmark review: benchmark/review/index.md
