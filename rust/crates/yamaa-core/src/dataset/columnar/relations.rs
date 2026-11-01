@@ -232,8 +232,8 @@ impl State {
         identity: Identity,
         choice: Choice,
     ) -> Result<(), Fail<E>> {
-        self.named(relation).choices.insert(identity, choice)?;
         super::reserved(self.journal.try_reserve(1))?;
+        self.named(relation).choices.insert(identity, choice)?;
         self.journal.push(Entry::Choice(relation, identity));
         Ok(())
     }
