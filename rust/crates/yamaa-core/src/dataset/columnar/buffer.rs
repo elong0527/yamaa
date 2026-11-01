@@ -3,7 +3,7 @@
 //! varies by row. A buffer changes layout, never a value: every read lends
 //! the same `ValueRef` a table port would.
 use crate::{
-    expression::Column,
+    expression::{Column, Lent},
     numeric::Number,
     table::{ColumnRef, ColumnValues, ValueRef},
     temporal::{Date, DateTime},
@@ -478,6 +478,15 @@ impl Default for Values {
 impl Column for Values {
     fn get(&self, row: usize) -> ValueRef<'_> {
         Values::get(self, row)
+    }
+
+    /// Its typed storage, every row in order (#4218).
+    fn lend(&self) -> Option<Lent<'_>> {
+        self.column().map(|view| Lent {
+            view,
+            rows: None,
+            offset: 0,
+        })
     }
 }
 

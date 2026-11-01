@@ -14,19 +14,42 @@
 //! read fails, the evaluation stops, and the site evaluates the selection
 //! through the row evaluator, which reports the first failure where it
 //! meets it.
+//!
+//! An operator whose operands are literals, computed numbers or columns
+//! that lend their typed storage runs one loop specialised to their layouts
+//! (`typed.rs`, #4218); any other operator applies cell by cell.
 
 use super::bind::CompiledExpression;
 use super::evaluate::{
-    between, compare, contains_truth, is_null, like_truth, Arithmetic, Condition, Truth,
+    between, compare, contains_truth, is_null, like_truth, Arithmetic, Condition, LikePattern,
+    Truth,
 };
 use super::syntax::{Comparison, NodeKind};
-use crate::numeric::{ArithmeticError, Number};
-use crate::table::ValueRef;
+use super::typed::{self, Floats, Other, Typed};
+use crate::numeric::{float_binary, zero_divisor, ArithmeticError, Number};
+use crate::table::{ColumnRef, ValueRef};
 use std::collections::TryReserveError;
 
 /// One identifier occurrence's values over the selection, one per row.
 pub trait Column {
     fn get(&self, row: usize) -> ValueRef<'_>;
+
+    /// The typed storage the values are read from, when the column holds
+    /// it, so that an operator reads the payloads without a `ValueRef` per
+    /// cell; a column that answers None is read through [`Column::get`].
+    fn lend(&self) -> Option<Lent<'_>> {
+        None
+    }
+}
+
+/// A column's typed storage over the selection: selected row `row` is row
+/// `offset + rows[row]` of `view`, or `offset + row` without `rows`, and
+/// lends the value [`Column::get`] gives for it.
+#[derive(Clone, Copy, Debug)]
+pub struct Lent<'c> {
+    pub view: ColumnRef<'c>,
+    pub rows: Option<&'c [usize]>,
+    pub offset: usize,
 }
 
 /// The owning site reads each occurrence over the whole selection.
@@ -94,16 +117,18 @@ impl CompiledExpression {
         };
         match columns.number(self.syntax.root())? {
             Numbers::Rows(numbers) => Ok(numbers),
+            Numbers::Floats(floats) => Ok(floats.numbers()?),
             Numbers::Scalar(number) => columns.each(|_| Ok::<_, Condition>(number)),
         }
     }
 }
 
 /// A numeric operand: one number for every row, as a literal is, or one
-/// per row.
+/// per row, as numbers of either type or as floats with their presence.
 enum Numbers {
     Scalar(Number),
     Rows(Vec<Number>),
+    Floats(Floats),
 }
 
 impl Numbers {
@@ -111,7 +136,16 @@ impl Numbers {
         match self {
             Self::Scalar(number) => *number,
             Self::Rows(numbers) => numbers[row],
+            Self::Floats(floats) => floats.number(row),
         }
+    }
+
+    /// The same numbers as a scalar or one number per row.
+    fn listed(self) -> Result<Self, TryReserveError> {
+        Ok(match self {
+            Self::Floats(floats) => Self::Rows(floats.numbers()?),
+            numbers => numbers,
+        })
     }
 }
 
@@ -129,6 +163,17 @@ impl<C: Column> Lane<'_, C> {
             Self::Literal(value) => *value,
             Self::Column(column) => column.get(row),
             Self::Numbers(numbers) => numbers.at(row).into(),
+        }
+    }
+
+    /// The operand's layout, when the typed loops cover it.
+    fn typed(&self) -> Option<Typed<'_>> {
+        match self {
+            Self::Literal(value) => Typed::literal(*value),
+            Self::Column(column) => column.lend().map(Typed::lent),
+            Self::Numbers(Numbers::Rows(numbers)) => Some(Typed::computed(numbers)),
+            Self::Numbers(Numbers::Floats(floats)) => Some(floats.typed()),
+            Self::Numbers(Numbers::Scalar(number)) => Typed::literal((*number).into()),
         }
     }
 }
@@ -200,10 +245,19 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
             } => {
                 let left = self.lane(*left)?;
                 let right = self.lane(*right)?;
+                let typed = left.typed().zip(right.typed());
+                if let Some(truths) = typed
+                    .and_then(|(left, right)| typed::compare(self.rows, *operator, left, right))
+                {
+                    return Ok(truths?);
+                }
                 self.each(|row| compare(*operator, left.get(row), right.get(row)))
             }
             NodeKind::IsNull { value, negated } => {
                 let value = self.lane(*value)?;
+                if let Some(typed) = value.typed() {
+                    return Ok(typed::is_null(self.rows, typed, *negated)?);
+                }
                 self.each(|row| Ok::<_, Condition>(is_null(value.get(row), *negated)))
             }
             NodeKind::In {
@@ -216,6 +270,14 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
                     .iter()
                     .map(|&item| self.lane(item))
                     .collect::<Result<Vec<_>, _>>()?;
+                let typed = value
+                    .typed()
+                    .zip(items.iter().map(Lane::typed).collect::<Option<Vec<_>>>());
+                if let Some(truths) = typed
+                    .and_then(|(value, items)| typed::member(self.rows, value, &items, *negated))
+                {
+                    return Ok(truths?);
+                }
                 self.each(|row| {
                     let value = value.get(row);
                     let mut truth = Truth::False;
@@ -237,6 +299,11 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
                 let lower = self.lane(*lower)?;
                 let second = self.lane(*value)?;
                 let upper = self.lane(*upper)?;
+                if let Some(truths) =
+                    self.typed_between([&first, &lower, &second, &upper], *negated)
+                {
+                    return Ok(truths?);
+                }
                 self.each(|row| {
                     between(
                         [first.get(row), lower.get(row)],
@@ -253,15 +320,52 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
             } => {
                 let value = self.lane(*value)?;
                 let pattern = self.lane(*pattern)?;
+                // A literal pattern is read once; one that does not read
+                // leaves its refusal to the per-cell loop.
+                if let (Some(typed), Lane::Literal(ValueRef::Str(text))) = (value.typed(), &pattern)
+                {
+                    if let Ok(mut read) = LikePattern::new(text, *escape) {
+                        if let Some(truths) = typed::like(self.rows, typed, &mut read, *negated) {
+                            return Ok(truths?);
+                        }
+                    }
+                }
                 self.each(|row| like_truth(value.get(row), pattern.get(row), *escape, *negated))
             }
             NodeKind::Call { arguments, .. } => {
                 let value = self.lane(arguments[0])?;
                 let pattern = compiled.patterns[id].as_ref().expect("admitted pattern");
+                let typed = value.typed();
+                if let Some(truths) =
+                    typed.and_then(|typed| typed::contains(self.rows, typed, pattern))
+                {
+                    return Ok(truths?);
+                }
                 self.each(|row| contains_truth(value.get(row), pattern))
             }
             _ => unreachable!("the binder admits only truth values here"),
         }
+    }
+
+    /// `BETWEEN` over its subject and bounds through the typed loops, its
+    /// two comparisons joined as [`between`] joins them; None when either
+    /// comparison's pair of layouts is not covered.
+    fn typed_between(
+        &self,
+        [first, lower, second, upper]: [&Lane<'a, R::Column>; 4],
+        negated: bool,
+    ) -> Option<Result<Vec<Truth>, TryReserveError>> {
+        let (first, lower) = (first.typed()?, lower.typed()?);
+        let (second, upper) = (second.typed()?, upper.typed()?);
+        let low = typed::compare(self.rows, Comparison::GreaterEqual, first, lower)?;
+        let high = typed::compare(self.rows, Comparison::LessEqual, second, upper)?;
+        Some(low.and_then(|mut truths| {
+            for (truth, high) in truths.iter_mut().zip(high?) {
+                let both = truth.and(high);
+                *truth = if negated { both.negate() } else { both };
+            }
+            Ok(truths)
+        }))
     }
 
     /// A comparison operand: a name keeps its type; arithmetic is numeric.
@@ -298,6 +402,14 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
             }
             NodeKind::Identifier => {
                 let column = self.read(id)?;
+                if let Some(typed) = column.lend().map(Typed::lent) {
+                    if let Some(floats) = Floats::read(self.rows, typed) {
+                        return Ok(Numbers::Floats(floats?));
+                    }
+                    if let Some(numbers) = typed::numbers(self.rows, typed) {
+                        return Ok(Numbers::Rows(numbers?));
+                    }
+                }
                 self.each(|row| Number::try_from(column.get(row)).map_err(|_| Stop::Refused))
                     .map(Numbers::Rows)
             }
@@ -316,32 +428,118 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
 }
 
 /// One operation over its operand columns, each row's result written over
-/// an operand's own buffer, so no buffer is allocated for it.
+/// an operand's own buffer, so no buffer is allocated for it. A binary
+/// operator over floats and a present number or other floats stays over
+/// floats ([`Floats::binary`]); any other operation reads them as numbers.
 fn arithmetic<E>(
     operation: Arithmetic,
     left: Numbers,
     right: Option<Numbers>,
     expression: &str,
 ) -> Result<Numbers, Stop<E>> {
+    let floats = match (operation, left, right) {
+        (Arithmetic::Binary(operator), Numbers::Floats(left), Some(right)) => match right {
+            Numbers::Floats(right) => Ok(left.binary(operator, Other::Floats(&right), false)),
+            Numbers::Scalar(right) if right.as_float().is_some() => {
+                let right = right.as_float().expect("a present number");
+                Ok(left.binary(operator, Other::Number(right), false))
+            }
+            right => Err((Numbers::Floats(left), Some(right))),
+        },
+        (Arithmetic::Binary(operator), Numbers::Scalar(left), Some(Numbers::Floats(right)))
+            if left.as_float().is_some() =>
+        {
+            let left = left.as_float().expect("a present number");
+            Ok(right.binary(operator, Other::Number(left), true))
+        }
+        (_, left, right) => Err((left, right)),
+    };
+    let (left, right) = match floats {
+        Ok(floats) => return floats.map(Numbers::Floats).ok_or(Stop::Refused),
+        Err((left, right)) => (left.listed()?, right.map(Numbers::listed).transpose()?),
+    };
     Ok(match (left, right) {
         (Numbers::Scalar(left), None) => Numbers::Scalar(operation.apply(left, None, expression)?),
         (Numbers::Scalar(left), Some(Numbers::Scalar(right))) => {
             Numbers::Scalar(operation.apply(left, Some(right), expression)?)
         }
-        (Numbers::Rows(mut numbers), right) => {
-            for (row, number) in numbers.iter_mut().enumerate() {
-                let right = right.as_ref().map(|right| right.at(row));
-                *number = operation.apply(*number, right, expression)?;
-            }
+        (Numbers::Rows(mut numbers), None) => {
+            in_place(
+                operation,
+                &mut numbers,
+                |_, number| (number, None),
+                expression,
+            )?;
+            Numbers::Rows(numbers)
+        }
+        (Numbers::Rows(mut numbers), Some(Numbers::Scalar(right))) => {
+            in_place(
+                operation,
+                &mut numbers,
+                |_, number| (number, Some(right)),
+                expression,
+            )?;
+            Numbers::Rows(numbers)
+        }
+        (Numbers::Rows(mut numbers), Some(Numbers::Rows(right))) => {
+            in_place(
+                operation,
+                &mut numbers,
+                |row, number| (number, Some(right[row])),
+                expression,
+            )?;
             Numbers::Rows(numbers)
         }
         (Numbers::Scalar(left), Some(Numbers::Rows(mut numbers))) => {
-            for number in &mut numbers {
-                *number = operation.apply(left, Some(*number), expression)?;
-            }
+            in_place(
+                operation,
+                &mut numbers,
+                |_, number| (left, Some(number)),
+                expression,
+            )?;
             Numbers::Rows(numbers)
         }
+        (Numbers::Floats(_), _) | (_, Some(Numbers::Floats(_))) => {
+            unreachable!("floats are listed as numbers first")
+        }
     })
+}
+
+/// Apply `operation` to each row's operands, which `operands` gives from
+/// the row and the buffer's own number, writing the result over that
+/// number. A binary operator over two present numbers that are not both
+/// ints applies the float arithmetic `numeric::binary` applies to them
+/// (#4218), each result stored in its branch; every other pair goes through
+/// `Arithmetic::apply`.
+#[inline]
+fn in_place<E>(
+    operation: Arithmetic,
+    numbers: &mut [Number],
+    operands: impl Fn(usize, Number) -> (Number, Option<Number>),
+    expression: &str,
+) -> Result<(), Stop<E>> {
+    if let Arithmetic::Binary(operator) = operation {
+        for (row, number) in numbers.iter_mut().enumerate() {
+            let (left, right) = operands(row, *number);
+            match (left.as_float(), right.and_then(Number::as_float)) {
+                (Some(a), Some(b))
+                    if !matches!((left, right), (Number::Int(_), Some(Number::Int(_)))) =>
+                {
+                    if zero_divisor(operator, b) {
+                        return Err(Stop::Refused);
+                    }
+                    *number = float_binary(operator, a, b);
+                }
+                _ => *number = operation.apply(left, right, expression)?,
+            }
+        }
+        return Ok(());
+    }
+    for (row, number) in numbers.iter_mut().enumerate() {
+        let (left, right) = operands(row, *number);
+        *number = operation.apply(left, right, expression)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

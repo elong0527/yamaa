@@ -508,14 +508,20 @@ pub(super) fn compare(
         left: left.value_type().expect("present"),
         right: right.value_type().expect("present"),
     })?;
-    Ok(Truth::from_bool(match operator {
+    Ok(Truth::from_bool(holds(operator, ordering)))
+}
+
+/// Whether two present operands in `ordering` satisfy `operator`.
+#[inline]
+pub(super) fn holds(operator: Comparison, ordering: Ordering) -> bool {
+    match operator {
         Comparison::Equal => ordering == Ordering::Equal,
         Comparison::NotEqual => ordering != Ordering::Equal,
         Comparison::Less => ordering == Ordering::Less,
         Comparison::LessEqual => ordering != Ordering::Greater,
         Comparison::Greater => ordering == Ordering::Greater,
         Comparison::GreaterEqual => ordering != Ordering::Less,
-    }))
+    }
 }
 
 /// `IS NULL`, or `IS NOT NULL` when negated.
@@ -655,44 +661,77 @@ enum Pattern {
     Literal(char),
 }
 
-/// Full matching scalar by scalar, in time linear in the value and pattern.
-/// Every pattern token is checked first, including a trailing escape.
-fn like(value: &str, pattern: &str, escape: Option<char>) -> Result<Truth, Condition> {
-    let mut tokens = Vec::new();
-    let mut escaped = false;
-    for character in pattern.chars() {
+/// A `LIKE` pattern read into its tokens once, with the two rows of
+/// matching state it reuses for every value it matches.
+pub(super) struct LikePattern {
+    tokens: Vec<Pattern>,
+    previous: Vec<bool>,
+    next: Vec<bool>,
+}
+
+impl LikePattern {
+    /// Every pattern token is checked first, including a trailing escape.
+    pub(super) fn new(pattern: &str, escape: Option<char>) -> Result<Self, Condition> {
+        let mut tokens = Vec::new();
+        let mut escaped = false;
+        for character in pattern.chars() {
+            if escaped {
+                tokens.push(Pattern::Literal(character));
+                escaped = false;
+            } else if Some(character) == escape {
+                escaped = true;
+            } else {
+                tokens.push(match character {
+                    '%' => Pattern::Any,
+                    '_' => Pattern::One,
+                    _ => Pattern::Literal(character),
+                });
+            }
+        }
         if escaped {
-            tokens.push(Pattern::Literal(character));
-            escaped = false;
-        } else if Some(character) == escape {
-            escaped = true;
-        } else {
-            tokens.push(match character {
-                '%' => Pattern::Any,
-                '_' => Pattern::One,
-                _ => Pattern::Literal(character),
-            });
+            return Err(Condition::DanglingEscape);
         }
+        let states = tokens.len() + 1;
+        Ok(Self {
+            tokens,
+            previous: vec![false; states],
+            next: vec![false; states],
+        })
     }
-    if escaped {
-        return Err(Condition::DanglingEscape);
-    }
-    let mut previous = vec![false; tokens.len() + 1];
-    let mut next = vec![false; tokens.len() + 1];
-    previous[0] = true;
-    for (index, token) in tokens.iter().enumerate() {
-        previous[index + 1] = matches!(token, Pattern::Any) && previous[index];
-    }
-    for character in value.chars() {
-        next[0] = false;
+
+    /// Full matching scalar by scalar, in time linear in the value and
+    /// pattern.
+    pub(super) fn matches(&mut self, value: &str) -> bool {
+        let Self {
+            tokens,
+            previous,
+            next,
+        } = self;
+        previous[0] = true;
         for (index, token) in tokens.iter().enumerate() {
-            next[index + 1] = match token {
-                Pattern::Any => next[index] || previous[index + 1],
-                Pattern::One => previous[index],
-                Pattern::Literal(literal) => *literal == character && previous[index],
-            };
+            previous[index + 1] = matches!(token, Pattern::Any) && previous[index];
         }
-        std::mem::swap(&mut previous, &mut next);
+        for character in value.chars() {
+            next[0] = false;
+            let mut alive = false;
+            for (index, token) in tokens.iter().enumerate() {
+                next[index + 1] = match token {
+                    Pattern::Any => next[index] || previous[index + 1],
+                    Pattern::One => previous[index],
+                    Pattern::Literal(literal) => *literal == character && previous[index],
+                };
+                alive |= next[index + 1];
+            }
+            // Once no prefix of the pattern matches, none ever will again.
+            if !alive {
+                return false;
+            }
+            std::mem::swap(previous, next);
+        }
+        previous[tokens.len()]
     }
-    Ok(Truth::from_bool(previous[tokens.len()]))
+}
+
+fn like(value: &str, pattern: &str, escape: Option<char>) -> Result<Truth, Condition> {
+    LikePattern::new(pattern, escape).map(|mut pattern| Truth::from_bool(pattern.matches(value)))
 }
