@@ -26,7 +26,8 @@
     const kept = marks.getItem(key);
     if (kept !== null) return Number(kept);
     const chosen = Math.random();
-    marks.setItem(key, String(chosen));
+    try { marks.setItem(key, String(chosen)); }
+    catch (error) { /* The place then changes on each visit. */ }
     return chosen;
   }
 
@@ -36,8 +37,10 @@
   const after = new URLSearchParams(window.location.search).get("after");
   const position = names.indexOf(after);
   const ahead = names.slice(position + 1);
-  const order = marks ? ahead.concat(names.slice(0, position + 1)) : ahead;
-  const next = order.find((name) => !marks || marks.getItem(doneKey + name) === null);
+  const order = marks ? started.concat(ahead, names.slice(0, position + 1)) : ahead;
+  const next = order.find(
+    (name) => name !== after && (!marks || marks.getItem(doneKey + name) === null),
+  );
   if (next) {
     window.location.replace("../../" + encodeURIComponent(next) + ".html");
   } else {

@@ -43,6 +43,7 @@ jobs:
       # The site still builds without the reviews; the review page says so.
       - name: Save the published benchmark reviews
         continue-on-error: true
+        timeout-minutes: 2
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: uv run --project python --no-sync python -m tools.benchmark_docs.review_status

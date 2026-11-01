@@ -1,6 +1,7 @@
 import csv
 import functools
 import html
+import io
 import json
 import re
 import shutil
@@ -877,6 +878,28 @@ class DashboardTests(unittest.TestCase):
         for label, discussion, expected in cases:
             with self.subTest(case=label):
                 self.assertEqual(review_status.read_review(discussion), expected, label)
+
+    def test_reading_reviews_stops_when_the_cursor_does_not_advance(self):
+        # The seam is the GitHub answer, which no fixture home can reach.
+        for label, cursor in (("no cursor", None), ("same cursor", "same")):
+            page = {
+                "data": {
+                    "repository": {
+                        "discussions": {
+                            "pageInfo": {"hasNextPage": True, "endCursor": cursor},
+                            "nodes": [],
+                        }
+                    }
+                }
+            }
+            with self.subTest(case=label):
+                with mock.patch.object(
+                    review_status.urllib.request,
+                    "urlopen",
+                    side_effect=lambda *_, **__: io.BytesIO(json.dumps(page).encode()),
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "did not advance"):
+                        review_status.fetch("token")
 
     def test_review_tally_settles_a_benchmark_after_two_people_review_it(self):
         def review(benchmark, reviewer, posted, overall):

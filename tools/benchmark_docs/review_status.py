@@ -110,9 +110,12 @@ def fetch(token):
         discussions = answer["data"]["repository"]["discussions"]
         found = (read_review(item) for item in discussions["nodes"])
         reviews.extend(review for review in found if review)
-        if not discussions["pageInfo"]["hasNextPage"]:
+        page = discussions["pageInfo"]
+        if not page["hasNextPage"]:
             return reviews
-        cursor = discussions["pageInfo"]["endCursor"]
+        if page["endCursor"] in (None, cursor):
+            raise RuntimeError("the discussions cursor did not advance")
+        cursor = page["endCursor"]
 
 
 def main():
