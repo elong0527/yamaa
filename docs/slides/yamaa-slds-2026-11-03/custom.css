@@ -339,7 +339,6 @@ img.title-logo {
 
 /* performance slide: horizontal bars, one scale per group */
 :root {
-  --perf-winner: #c2410c;
   --perf-other: #7c8596;
 }
 
@@ -400,16 +399,6 @@ img.title-logo {
 
 .perf-row.yamaa .perf-bar {
   background: var(--yamaa-blue);
-}
-
-.perf-row.winner .perf-label,
-.perf-row.winner .perf-value {
-  color: var(--perf-winner);
-  font-weight: 700;
-}
-
-.perf-row.winner .perf-bar {
-  background: var(--perf-winner);
 }
 
 .perf-callouts {
