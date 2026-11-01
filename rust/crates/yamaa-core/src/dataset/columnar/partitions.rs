@@ -958,10 +958,14 @@ impl ResolvedPlan {
     /// differ in a key: no key group spans them. A template that does not
     /// read the driver input builds its rows in the first partition's run
     /// with keys of any value, and consecutive partitions keep nothing
-    /// whole, so their output keys group over every partition at once.
+    /// whole, so their output keys group over every partition at once. A
+    /// plan whose leading keys copy no fields has no key-bounded cut: its
+    /// output keys group over every partition too, whatever ranges a
+    /// caller passed.
     fn keeps_key_groups(&self, keys: usize, partitions: usize) -> bool {
         partitions == 1
             || (keys > 0
+                && self.partition_fields(keys).is_some()
                 && self
                     .region_templates(RegionId::DATASET)
                     .all(|template| self.reads_driver(template)))
