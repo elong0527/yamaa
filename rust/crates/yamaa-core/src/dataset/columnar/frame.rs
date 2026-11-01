@@ -234,6 +234,7 @@ impl Frame {
         &self.records[self.offsets[row]..self.offsets[row + 1]]
     }
 
+    #[inline]
     pub(super) fn get(&self, row: usize, column: usize) -> ValueRef<'_> {
         self.columns[column].get(row)
     }

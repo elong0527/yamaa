@@ -575,6 +575,14 @@ impl ResolvedPlan {
         })
     }
 
+    /// The driver field `template` copies into output column `key`
+    /// unchanged: a plain read of the field, whose type is the column's, so
+    /// its binding converts nothing and counts no handler. The key grain
+    /// takes such a key's values from the field's storage (#4211).
+    pub(crate) fn copied_field(&self, template: TemplateId, key: ColumnId) -> Option<usize> {
+        key_field(self, template, key).map(|field| field as usize)
+    }
+
     /// The driver fields that key-bounded partitions over the leading `keys`
     /// declared keys cut the driver input by (#3763): for each of those keys,
     /// the field that every template reading the driver input copies into it

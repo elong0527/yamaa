@@ -102,11 +102,15 @@ fn identity(position: usize, key: i64) -> RowIdentity {
     }
 }
 
-/// A snapshot of typed rows that counts its cell reads.
+/// A snapshot of typed rows that counts its cell reads, and that lends its
+/// integer columns as typed storage once [`Rows::lending`] holds them, as
+/// the adapters' column tables do (#4202).
 struct Rows {
     schema: TableSchema,
     rows: Vec<Vec<Value>>,
     reads: AtomicUsize,
+    /// Each lent column's payloads and presence bits, by column.
+    lent: Vec<Option<(Vec<i64>, Vec<u64>)>>,
 }
 impl Rows {
     fn new(schema: TableSchema, rows: Vec<Vec<Value>>) -> Self {
@@ -114,7 +118,34 @@ impl Rows {
             schema,
             rows,
             reads: AtomicUsize::new(0),
+            lent: Vec::new(),
         }
+    }
+
+    /// The same rows, each integer column lent as storage.
+    fn lending(mut self) -> Self {
+        let rows = &self.rows;
+        self.lent = (0..self.schema.columns().len())
+            .map(|column| {
+                if self.schema.columns()[column].kind != ColumnType::Int {
+                    return None;
+                }
+                let mut words = vec![0u64; rows.len().div_ceil(64)];
+                let values = rows
+                    .iter()
+                    .enumerate()
+                    .map(|(row, values)| match values[column] {
+                        Value::Int(value) => {
+                            words[row / 64] |= 1 << (row % 64);
+                            value
+                        }
+                        _ => 0,
+                    })
+                    .collect();
+                Some((values, words))
+            })
+            .collect();
+        self
     }
 }
 impl TableAccess for Rows {
@@ -132,6 +163,10 @@ impl TableAccess for Rows {
             .and_then(|values| values.get(column))
             .map(ValueRef::from)
             .ok_or(CellError::OutOfBounds { row, column })
+    }
+    fn column(&self, column: usize) -> Option<crate::table::ColumnRef<'_>> {
+        let (values, words) = self.lent.get(column)?.as_ref()?;
+        crate::table::ColumnRef::new(crate::table::ColumnValues::Int(values), Some(words))
     }
     fn shared(&self) -> Option<&(dyn TableAccess<Error = Infallible> + Sync)> {
         Some(self)
@@ -828,6 +863,206 @@ fn the_key_grain_output_keys_repeat_only_its_missing_keys() {
             "partitions of at most {rows} records"
         );
     }
+}
+
+/// Key-bounded partitions keep every key group whole (#4211), so the output
+/// key check counts each partition's key-grain groups, numbered after the
+/// earlier partitions', instead of grouping the output again. Over IDs
+/// missing, missing, 1, 1, 2, grouped by ID, each missing record is its own
+/// candidate and the 1s are one, so the candidates are missing, missing, 1,
+/// 2: the two missing keys fail OUTPUT-2 and form the one repeated key of
+/// OUTPUT-3, named by its first candidate, of three key groups, whole and
+/// over key-bounded partitions of at most one record (the runs missing,
+/// missing / 1, 1 / 2) or of the whole input, read cell by cell and from
+/// lent storage.
+#[test]
+fn key_bounded_partitions_count_the_output_keys_from_each_key_grain() {
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let plan = DatasetPlan::new(
+        source.clone(),
+        source.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        Vec::new(),
+        vec![0],
+        Vec::new(),
+    );
+    let input = Rows::new(
+        source,
+        vec![
+            vec![Value::Missing],
+            vec![Value::Missing],
+            vec![int(1)],
+            vec![int(1)],
+            vec![int(2)],
+        ],
+    );
+    let missing = |position| RowIdentity {
+        position,
+        values: vec![Value::Missing],
+    };
+    let mut absent = record("keys[0]", ConditionCode::OutputMissingKeyFailed, (4, 2, 4));
+    absent.offending_rows = vec![missing(0), missing(1)];
+    let mut duplicates = record("keys", ConditionCode::OutputDuplicateKeyFailed, (3, 1, 4));
+    duplicates.offending_rows = vec![missing(0)];
+    let expected = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::KeyFailures(vec![
+            absent, duplicates,
+        ]))),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: vec![TemplateRows {
+            emitted: 4,
+            read: 5,
+        }],
+    };
+    let resolved = plan.resolve().unwrap();
+    // Read cell by cell, and from storage the port lends, which the key
+    // grain's keys then read without completing their bindings.
+    let ported = Rows::new(input.schema.clone(), input.rows.clone()).lending();
+    for (port, input) in [("cells", &input), ("storage", &ported)] {
+        let whole = resolved.execute(input, &[], &mut NoFunctions::new(), None, &|| false);
+        assert_eq!(whole, expected, "{port}: the whole-table run");
+        for rows in [1, 5] {
+            let attempt = divided_run(&resolved, input, by_keys(1, rows, false), &|| false);
+            assert_eq!(
+                as_stated(attempt),
+                expected,
+                "{port}: key-bounded partitions of at most {rows} records"
+            );
+        }
+    }
+}
+
+/// The output keys of two templates that bind P to literals (#4211): rows of
+/// templates whose literals differ never share a key, so each template's
+/// rows group on their own; rows of templates that bind the same literal
+/// group together, whole or within each key-bounded partition. Over IDs 1,
+/// 1, 2, each template builds (1, P), (1, P), (2, P), its rows after the
+/// first template's. With P bound to A and B the key groups are (1, A),
+/// (2, A), (1, B) and (2, B), and (1, A) and (1, B) repeat, named by rows 0
+/// and 3. With P bound to A in both, the groups are (1, A), of rows 0, 1, 3
+/// and 4, and (2, A), of rows 2 and 5: both repeat, named by rows 0 and 2.
+/// Each attempt holds whole and over every division of the input, and over
+/// key-bounded partitions of at most one record (the runs 1, 1 / 2) or of
+/// the whole input.
+#[test]
+fn templates_binding_distinct_literals_group_their_output_keys_apart() {
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let output = schema(&[("ID", ColumnType::Int), ("P", ColumnType::Str)]);
+    let template = |literal: &str| RowTemplate {
+        mode: RowMode::Records,
+        assignments: vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Literal(text(literal))),
+        ],
+        filter: None,
+    };
+    let input = Rows::new(
+        source.clone(),
+        vec![vec![int(1)], vec![int(1)], vec![int(2)]],
+    );
+    let named = |position, id, p: &str| RowIdentity {
+        position,
+        values: vec![int(id), text(p)],
+    };
+    let cases = [
+        (["A", "B"], 4, vec![named(0, 1, "A"), named(3, 1, "B")]),
+        (["A", "A"], 2, vec![named(0, 1, "A"), named(2, 2, "A")]),
+    ];
+    for (literals, groups, offending) in cases {
+        let plan = DatasetPlan::new(
+            source.clone(),
+            output.clone(),
+            literals.iter().map(|&literal| template(literal)).collect(),
+            Vec::new(),
+            vec![0, 1],
+            Vec::new(),
+        );
+        let mut duplicates = record(
+            "keys",
+            ConditionCode::OutputDuplicateKeyFailed,
+            (groups, 2, 6),
+        );
+        duplicates.offending_rows = offending;
+        let rows = TemplateRows {
+            emitted: 3,
+            read: 3,
+        };
+        let expected = ExecutionAttempt {
+            result: Err(Box::new(ExecutionError::KeyFailures(vec![duplicates]))),
+            handler_counts: Vec::new(),
+            retained_verifications: Vec::new(),
+            template_rows: vec![rows, rows],
+        };
+        assert_every_division(&plan, &input, &[], &expected);
+        let resolved = plan.resolve().unwrap();
+        for rows in [1, 3] {
+            let attempt = divided_run(&resolved, &input, by_keys(1, rows, false), &|| false);
+            assert_eq!(
+                as_stated(attempt),
+                expected,
+                "P bound to {literals:?}, key-bounded partitions of at most {rows} records"
+            );
+        }
+    }
+}
+
+/// A caller that passes leading keys with ranges no cut by them made
+/// (#4211): a plan whose leading key copies no driver field has no
+/// key-bounded cut, so its output keys group over every partition. Two
+/// templates bind ID to the literal 1 over three records, so the six rows
+/// are one key group, repeated, named by row 0, over ranges of one record
+/// each passed with one leading key, as over the whole table.
+#[test]
+fn leading_keys_without_a_cut_group_the_output_keys_over_every_partition() {
+    let source = schema(&[("V", ColumnType::Int)]);
+    let output = schema(&[("ID", ColumnType::Int)]);
+    let template = || RowTemplate {
+        mode: RowMode::Records,
+        assignments: vec![assign(0, Expression::Literal(int(1)))],
+        filter: None,
+    };
+    let plan = DatasetPlan::new(
+        source.clone(),
+        output,
+        vec![template(), template()],
+        Vec::new(),
+        vec![0],
+        Vec::new(),
+    );
+    let input = Rows::new(source, vec![vec![int(5)], vec![int(6)], vec![int(7)]]);
+    let mut duplicates = record("keys", ConditionCode::OutputDuplicateKeyFailed, (1, 1, 6));
+    duplicates.offending_rows = vec![identity(0, 1)];
+    let rows = TemplateRows {
+        emitted: 3,
+        read: 3,
+    };
+    let expected = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::KeyFailures(vec![duplicates]))),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: vec![rows, rows],
+    };
+    let resolved = plan.resolve().unwrap();
+    let whole = resolved.execute(&input, &[], &mut NoFunctions::new(), None, &|| false);
+    assert_eq!(whole, expected, "the whole-table run");
+    let attempt = resolved.execute_partitioned(
+        (&mut Source::new(&input, &[1, 1, 1]), None),
+        &[],
+        &mut NoFunctions::new(),
+        None,
+        &|| false,
+        (1, NonZeroUsize::MIN),
+    );
+    assert_eq!(
+        as_stated(attempt),
+        expected,
+        "ranges of one record passed with one leading key"
+    );
 }
 
 /// A conversion of 1.5 to an integer, which `conversion::integral` refuses.
