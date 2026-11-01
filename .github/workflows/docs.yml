@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  discussions: read
   pages: write
   id-token: write
 
@@ -37,10 +38,16 @@ jobs:
           for deck in docs/slides/*/index.qmd; do
             quarto render "$deck"
           done
+      - name: Install the site tooling
+        run: uv sync --project python --locked --group tooling --no-install-package yamaa
+      # The site still builds without the reviews; the review page says so.
+      - name: Save the published benchmark reviews
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uv run --project python --no-sync python -m tools.benchmark_docs.review_status
       - name: Build the strict site from current sources
-        run: |
-          uv sync --project python --locked --group tooling --no-install-package yamaa
-          make docs
+        run: make docs
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
