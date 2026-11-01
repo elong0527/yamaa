@@ -97,7 +97,7 @@ pub fn partitioned_reads_match_the_whole_read(
                 bytes,
                 interpretation,
                 None,
-                rows,
+                (rows, NonZeroUsize::MIN),
                 &mut |part, first| visited.push(first..first + part.row_count()),
             )
             .expect("a CSV or Parquet input scans by partition");
