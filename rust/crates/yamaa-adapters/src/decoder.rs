@@ -26,8 +26,10 @@ use yamaa_core::{
 /// One decoded input: a table, or an input read by partition (#3792): its
 /// scan's schema and record count, what decodes any range of its records
 /// again from the held bytes (#3830), and the partitions the scan kept for
-/// the run (#4212), which the snapshot alone holds, not the report's
-/// observation of the input.
+/// the run (#4212). The snapshot alone holds them, so the report and its
+/// observation of the input never do. A run that fails after the scan,
+/// before its partitions take them, keeps them with its attempt while the
+/// report is built: about two partitions at the most.
 pub struct Snapshot<E> {
     storage: Storage<E>,
 }

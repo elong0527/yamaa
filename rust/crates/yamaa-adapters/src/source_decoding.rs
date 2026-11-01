@@ -782,6 +782,130 @@ mod kept_tests {
     }
 }
 
+/// The budget a scan keeps partitions within (#4212): the seam is
+/// `scan_partitions`, whose kept tables no read by partition exposes.
+#[cfg(all(test, feature = "parquet"))]
+mod kept_scan_tests {
+    use super::*;
+    use arrow_array::{Int64Array, RecordBatch};
+    use arrow_schema::{DataType, Field, Schema};
+    use parquet::{arrow::ArrowWriter, file::properties::WriterProperties};
+    use yamaa_core::specification::{SourceInterpretation, SourceProfile};
+    use yamaa_core::table::TableAccess;
+
+    fn declaration(profile: SourceProfile) -> SourceDeclaration {
+        SourceDeclaration {
+            name: "SRC".into(),
+            path: match profile {
+                SourceProfile::Parquet => "input.parquet".into(),
+                _ => "input.csv".into(),
+            },
+            types: vec![("ID".into(), yamaa_core::value::ColumnType::Int)],
+            profile,
+            encoding: None,
+            byte_order_mark: false,
+            empty_string_present: false,
+            ordinal: None,
+        }
+    }
+
+    /// `ID` 1 to 15 in five row groups of three.
+    fn fifteen() -> Vec<u8> {
+        let schema =
+            std::sync::Arc::new(Schema::new(vec![Field::new("ID", DataType::Int64, true)]));
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![std::sync::Arc::new(Int64Array::from_iter_values(1..=15))],
+        )
+        .unwrap();
+        let properties = WriterProperties::builder()
+            .set_max_row_group_size(3)
+            .build();
+        let mut bytes = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut bytes, schema, Some(properties)).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+        bytes
+    }
+
+    /// The first record and the records of each table `bytes` keeps when
+    /// scanned as `profile` in partitions of `rows` records.
+    fn kept(profile: SourceProfile, bytes: &[u8], rows: usize) -> Vec<(usize, usize)> {
+        let rows = std::num::NonZeroUsize::new(rows).unwrap();
+        let declaration = declaration(profile);
+        let scanned = scan_partitions(
+            &declaration,
+            bytes,
+            SourceInterpretation::Ordinary,
+            None,
+            rows,
+            &mut |_, _| {},
+        );
+        let (_, kept) = scanned
+            .expect("a scan by partition")
+            .expect("an admitted input");
+        let tables = kept.tables.into_inner().unwrap();
+        tables
+            .iter()
+            .map(|kept| (kept.start, kept.table.row_count()))
+            .collect()
+    }
+
+    /// A Parquet input's partitions take whole row groups of three while
+    /// they fit in a partition's records, and the scan keeps the first
+    /// partitions while together they hold no more than one partition's
+    /// records: in partitions of 6 (6, 6, 3) the first; of 3 (five of 3)
+    /// the first; of 9 (9, 6) the first; of 15 the one. A CSV input's
+    /// partitions are all decoded again, so its scan keeps none.
+    #[test]
+    fn a_scan_keeps_a_parquet_inputs_first_partitions_up_to_one_partitions_records() {
+        let parquet = fifteen();
+        let csv = (1..=15).fold(String::from("ID\n"), |text, id| format!("{text}{id}\n"));
+        // A label, the input, its partitions' records, the kept tables.
+        type Case<'a> = (&'a str, SourceProfile, &'a [u8], usize, Vec<(usize, usize)>);
+        let cases: [Case; 5] = [
+            (
+                "Parquet in partitions of 6",
+                SourceProfile::Parquet,
+                &parquet,
+                6,
+                vec![(0, 6)],
+            ),
+            (
+                "Parquet in partitions of 3",
+                SourceProfile::Parquet,
+                &parquet,
+                3,
+                vec![(0, 3)],
+            ),
+            (
+                "Parquet in partitions of 9",
+                SourceProfile::Parquet,
+                &parquet,
+                9,
+                vec![(0, 9)],
+            ),
+            (
+                "Parquet in one partition",
+                SourceProfile::Parquet,
+                &parquet,
+                15,
+                vec![(0, 15)],
+            ),
+            (
+                "CSV in partitions of 6",
+                SourceProfile::Csv,
+                csv.as_bytes(),
+                6,
+                vec![],
+            ),
+        ];
+        for (label, profile, bytes, rows, expected) in cases {
+            assert_eq!(kept(profile, bytes, rows), expected, "{label}");
+        }
+    }
+}
+
 /// Host frames decode as their input declares: the empty-string convention
 /// and the `odm` projection.
 #[cfg(all(test, feature = "arrow"))]
