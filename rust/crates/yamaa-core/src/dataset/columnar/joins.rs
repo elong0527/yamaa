@@ -707,7 +707,7 @@ fn resolve<E>(
         });
         match held {
             Some(Err(found)) => return Ok(found),
-            Some(Ok(rows)) => return pick(run, cx, owner, shape, probe, rows, row),
+            Some(Ok(rows)) => return pick(run, cx, owner, shape, keys, rows, row),
             None => (),
         }
     }
@@ -772,7 +772,7 @@ fn resolve<E>(
             types.diagnostic_for(range.map_or("", |(range, _)| range.path()), None),
         )),
     })?;
-    pick(run, cx, owner, shape, probe, found.rows, row)
+    pick(run, cx, owner, shape, keys, found.rows, row)
 }
 
 /// The record a row's candidates give (LOOKUP-25): none, the one, or the
@@ -783,7 +783,7 @@ fn pick<E>(
     cx: &Cx<'_, E>,
     owner: Site<'_>,
     shape: &Shape<'_, '_, E>,
-    probe: &Probe<'_>,
+    keys: &[(usize, ValueRef<'_>)],
     candidates: Vec<usize>,
     row: usize,
 ) -> Result<Pick, Fail<E>> {
@@ -803,7 +803,7 @@ fn pick<E>(
             dataset: name.clone(),
             intermediate: format!("intermediate({name})"),
             match_count: count,
-            matched_key: matched_key(donor.table, probe.keys),
+            matched_key: matched_key(donor.table, keys),
             identity: run.failure_identity(cx, row),
         }));
     };
