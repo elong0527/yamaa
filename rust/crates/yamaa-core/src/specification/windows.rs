@@ -132,18 +132,10 @@ impl Declaration {
                 },
                 &window.order_by[..],
             ),
-            WindowFunction::RowValue { offset } => (
+            function @ WindowFunction::RowValue { .. } => (
                 Kind::RowValue {
                     source: name(operand(Slot::Source)?)?,
-                    // Execution admits at most i64::MAX context rows, so every
-                    // larger magnitude is an absent neighbor.
-                    offset: offset.parse().unwrap_or_else(|_| {
-                        if offset.starts_with('-') {
-                            i64::MIN
-                        } else {
-                            i64::MAX
-                        }
-                    }),
+                    offset: function.row_value_offset().ok_or(PrepareError::Internal)?,
                 },
                 &window.order_by[..],
             ),

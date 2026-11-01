@@ -264,6 +264,24 @@ pub struct Window {
     pub window_order_by: Vec<OrderTerm>,
 }
 
+impl WindowFunction {
+    /// A `row_value`'s offset as the rows it crosses. Execution admits at
+    /// most `i64::MAX` context rows, so a larger magnitude is an absent
+    /// neighbour on the written side. `None` for every other verb.
+    pub fn row_value_offset(&self) -> Option<i64> {
+        let Self::RowValue { offset } = self else {
+            return None;
+        };
+        Some(offset.parse().unwrap_or_else(|_| {
+            if offset.starts_with('-') {
+                i64::MIN
+            } else {
+                i64::MAX
+            }
+        }))
+    }
+}
+
 /// A reduction over the records of one relation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Aggregate {
