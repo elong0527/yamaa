@@ -52,10 +52,18 @@ fn insert_input(resolver: &MemoryResolver) {
 
 /// An engine over `resolver`, with partitions of `rows` records when given.
 fn engine(resolver: Arc<MemoryResolver>, rows: Option<usize>) -> Engine {
+    partitioned(
+        resolver,
+        rows.map(|rows| Partitions::new(NonZeroUsize::new(rows).unwrap())),
+    )
+}
+
+/// An engine over `resolver`, with `partitions` when given.
+fn partitioned(resolver: Arc<MemoryResolver>, partitions: Option<Partitions>) -> Engine {
     let options =
         EngineOptions::new(HostLanguage::Python, "test".into(), "0".into()).with_resolver(resolver);
-    Engine::new(match rows {
-        Some(rows) => options.with_partitions(Partitions::new(NonZeroUsize::new(rows).unwrap())),
+    Engine::new(match partitions {
+        Some(partitions) => options.with_partitions(partitions),
         None => options,
     })
 }
@@ -193,6 +201,10 @@ fn a_streamed_run_reads_its_input_at_its_first_pull() {
 /// The pull is the backpressure: the run polls its token once before each
 /// batch it builds, beyond the polls of the build, and a reader released
 /// after its first batch builds nothing more and cancels the run.
+///
+/// The partitions derive on one thread: on several, the first pull's build
+/// also polls each time it waits for a partition's thread, so its count
+/// would depend on timing (#4227).
 #[test]
 fn a_consumer_that_stops_pulling_stops_production() {
     let polls = Arc::new(AtomicUsize::new(0));
@@ -201,9 +213,15 @@ fn a_consumer_that_stops_pulling_stops_production() {
         counted.fetch_add(1, Ordering::SeqCst);
         false
     });
+    let serial = || {
+        partitioned(
+            resolver(true),
+            Some(Partitions::new(NonZeroUsize::MIN).with_threads(NonZeroUsize::MIN)),
+        )
+    };
     // The polls of the build and of the first batch, counted on a stream
     // that is read whole.
-    let read = engine(resolver(true), Some(1))
+    let read = serial()
         .spec("spec.yaml")
         .cancel_with(&token)
         .stream()
@@ -217,7 +235,7 @@ fn a_consumer_that_stops_pulling_stops_production() {
         4,
         "one poll per later batch"
     );
-    let streamed = engine(resolver(true), Some(1))
+    let streamed = serial()
         .spec("spec.yaml")
         .cancel_with(&token)
         .stream()
