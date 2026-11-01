@@ -432,10 +432,9 @@ impl PublicTable {
                 let len = rows.len();
                 let column = match field.kind {
                     ColumnType::Str => {
-                        // The arena's size, from the present text a view lends.
-                        let bytes = reader
-                            .view()
-                            .map_or(0, |view| rows.clone().map(|row| view.text_len(row)).sum());
+                        // The arena's size, from the present text the
+                        // column's views lend.
+                        let bytes = reader.text_bytes(rows.clone());
                         let mut text = Text::with_capacity(len, bytes);
                         fill(&reader, rows.clone(), |value| {
                             text.push(match value {

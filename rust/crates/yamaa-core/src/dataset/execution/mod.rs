@@ -122,6 +122,11 @@ pub enum Resource {
 /// arena, so the dataset takes about what its values do. A clone shares
 /// them, so one output's encoders and observations, and the build of its
 /// host view, read one copy.
+///
+/// A partitioned run that publishes a partition at a time (#4219) keeps
+/// each partition's columns as its run built them, and the dataset reads
+/// the output's rows as runs of one partition's rows, in output order: no
+/// partition's rows are copied into another's.
 #[derive(Clone)]
 pub struct Dataset {
     inner: std::sync::Arc<Columns>,
@@ -129,20 +134,36 @@ pub struct Dataset {
 
 struct Columns {
     schema: TableSchema,
-    columns: Vec<super::columnar::buffer::Values>,
+    /// The columns of each stored part: the whole output's, or each
+    /// partition's.
+    parts: Vec<Vec<super::columnar::buffer::Values>>,
+    /// The output's rows in order, as runs of one part's rows.
+    runs: Vec<PartRun>,
     rows: usize,
+    /// The run the last cell read was in, where the next read of a pass in
+    /// row order looks first. A hint only: any value reads the same cells.
+    hint: std::sync::atomic::AtomicUsize,
+}
+
+/// Rows `rows` of part `part`, the output's from row `at` on.
+struct PartRun {
+    part: usize,
+    rows: std::ops::Range<usize>,
+    at: usize,
 }
 
 impl Dataset {
     /// Every accepted row in template/group/source order and declared column
     /// order, each an owned copy.
     pub fn rows(&self) -> Vec<Vec<Value>> {
+        let width = self.inner.schema.columns().len();
         (0..self.inner.rows)
             .map(|row| {
-                self.inner
-                    .columns
-                    .iter()
-                    .map(|column| column.value(row))
+                (0..width)
+                    .map(|column| {
+                        let (values, index) = self.inner.locate(row, column);
+                        values.value(index)
+                    })
                     .collect()
             })
             .collect()
@@ -169,30 +190,94 @@ impl Dataset {
         rows: usize,
     ) -> Self {
         debug_assert!(columns.iter().all(|column| column.len() == rows));
+        Self::from_parts(schema, vec![columns], std::iter::once((0, 0..rows)))
+    }
+    /// The columns of each of `parts`, read as `runs`, in output order:
+    /// each run rows of one part (#4219). Empty runs hold no row, and a run
+    /// that continues the one before it in the same part joins it.
+    pub(crate) fn from_parts(
+        schema: TableSchema,
+        parts: Vec<Vec<super::columnar::buffer::Values>>,
+        runs: impl IntoIterator<Item = (usize, std::ops::Range<usize>)>,
+    ) -> Self {
+        let mut joined: Vec<PartRun> = Vec::new();
+        let mut rows = 0;
+        for (part, range) in runs {
+            debug_assert!(parts[part].iter().all(|column| range.end <= column.len()));
+            if range.is_empty() {
+                continue;
+            }
+            match joined.last_mut() {
+                Some(last) if last.part == part && last.rows.end == range.start => {
+                    last.rows.end = range.end;
+                }
+                _ => joined.push(PartRun {
+                    part,
+                    rows: range.clone(),
+                    at: rows,
+                }),
+            }
+            rows += range.len();
+        }
         Self {
             inner: std::sync::Arc::new(Columns {
                 schema,
-                columns,
+                parts,
+                runs: joined,
                 rows,
+                hint: std::sync::atomic::AtomicUsize::new(0),
             }),
         }
     }
 }
 
+impl Columns {
+    /// The run that holds output row `row`, which must be below `rows`.
+    #[inline]
+    fn run(&self, row: usize) -> &PartRun {
+        use std::sync::atomic::Ordering::Relaxed;
+        let hint = self.hint.load(Relaxed);
+        if let Some(run) = self
+            .runs
+            .get(hint)
+            .filter(|run| run.at <= row && row - run.at < run.rows.len())
+        {
+            return run;
+        }
+        let index = self
+            .runs
+            .partition_point(|run| run.at + run.rows.len() <= row);
+        self.hint.store(index, Relaxed);
+        &self.runs[index]
+    }
+
+    /// The buffer and position of output row `row` of column `column`,
+    /// both in bounds.
+    #[inline]
+    fn locate(&self, row: usize, column: usize) -> (&super::columnar::buffer::Values, usize) {
+        let run = self.run(row);
+        (
+            &self.parts[run.part][column],
+            run.rows.start + (row - run.at),
+        )
+    }
+}
+
 impl PartialEq for Dataset {
-    /// Two datasets are equal when their schemas and every cell are.
+    /// Two datasets are equal when their schemas and every cell are,
+    /// however each holds its rows.
     fn eq(&self, other: &Self) -> bool {
         let (left, right) = (&*self.inner, &*other.inner);
+        let width = left.schema.columns().len();
         left.schema == right.schema
             && left.rows == right.rows
-            && left.columns.len() == right.columns.len()
-            && left
-                .columns
-                .iter()
-                .zip(&right.columns)
-                .all(|(left, right)| {
-                    (0..self.inner.rows).all(|row| left.get(row) == right.get(row))
+            && (0..width).all(|column| {
+                (0..left.rows).all(|row| {
+                    let (values, index) = left.locate(row, column);
+                    let (others, at) = right.locate(row, column);
+                    values.get(index) == others.get(at)
                 })
+            })
     }
 }
 
@@ -218,21 +303,50 @@ impl TableAccess for Dataset {
     }
     /// Borrow a checked owned cell; missing is never an out-of-bounds substitute.
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
-        self.inner
-            .columns
-            .get(column)
-            .filter(|_| row < self.inner.rows)
-            .map(|values| values.get(row))
-            .ok_or(CellError::OutOfBounds { row, column })
+        if row >= self.inner.rows || column >= self.inner.schema.columns().len() {
+            return Err(CellError::OutOfBounds { row, column });
+        }
+        let (values, index) = self.inner.locate(row, column);
+        Ok(values.get(index))
     }
     /// Lend a typed column's buffer whole, so that the output's encoders,
-    /// host view and report read it without a call per cell (#4201).
+    /// host view and report read it without a call per cell (#4201): the
+    /// rows of one part, which a dataset of several runs does not have.
     fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
-        self.inner
-            .columns
-            .get(column)?
-            .column()
-            .filter(|view| view.len() == self.inner.rows)
+        let inner = &*self.inner;
+        match inner.runs.as_slice() {
+            [] => inner
+                .parts
+                .first()?
+                .get(column)?
+                .column()
+                .filter(ColumnRef::is_empty),
+            [run] => inner.parts[run.part]
+                .get(column)?
+                .column()?
+                .slice(run.rows.clone()),
+            _ => None,
+        }
+    }
+    /// Lend each run's rows of a typed column, for a dataset of several
+    /// runs (#4219): what [`Dataset::column`] lends a dataset of one.
+    fn column_runs(&self, column: usize) -> Option<Vec<crate::table::ColumnRun<'_>>> {
+        let inner = &*self.inner;
+        if inner.runs.len() < 2 || column >= inner.schema.columns().len() {
+            return None;
+        }
+        Some(
+            inner
+                .runs
+                .iter()
+                .map(|run| {
+                    let view = inner.parts[run.part][column]
+                        .column()
+                        .and_then(|view| view.slice(run.rows.clone()));
+                    (run.at..run.at + run.rows.len(), view)
+                })
+                .collect(),
+        )
     }
 }
 
@@ -493,3 +607,132 @@ impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {
     }
 }
 impl<E: std::fmt::Debug> std::error::Error for ExecutionError<E> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dataset::columnar::buffer::Values;
+    use crate::table::{Column, ColumnReader};
+    use crate::value::ColumnType;
+
+    /// A buffer of `values`, pushed one row at a time.
+    fn pushed(values: &[ValueRef<'_>]) -> Values {
+        let mut buffer = Values::missing(0);
+        for &value in values {
+            buffer.push(value);
+        }
+        buffer
+    }
+
+    // The seam is the dataset of a run that publishes its partitions
+    // (#4219): its rows are runs of its parts' rows, which its cells, its
+    // column reader and its equality read in output order, as a dataset of
+    // one buffer per column reads them. Part 1's text is all missing, so it
+    // lends no storage and its runs read through cells.
+    #[test]
+    fn a_dataset_of_parts_reads_its_runs_in_output_order() {
+        use ValueRef::{Int, Missing, Str};
+        let schema = TableSchema::new(vec![
+            Column {
+                name: "N".into(),
+                kind: ColumnType::Int,
+            },
+            Column {
+                name: "T".into(),
+                kind: ColumnType::Str,
+            },
+        ])
+        .unwrap();
+        let parts = vec![
+            vec![
+                pushed(&[Int(1), Int(2), Int(3)]),
+                pushed(&[Str("a"), Missing, Str("c")]),
+            ],
+            vec![pushed(&[Int(10), Int(20)]), pushed(&[Missing, Missing])],
+        ];
+        // Part 1's first row, part 0's first two, an empty run, part 1's
+        // second row and part 0's third.
+        let runs = [(1, 0..1), (0, 0..2), (1, 1..1), (1, 1..2), (0, 2..3)];
+        let dataset = Dataset::from_parts(schema.clone(), parts, runs);
+        let expected: [[ValueRef<'_>; 2]; 5] = [
+            [Int(10), Missing],
+            [Int(1), Str("a")],
+            [Int(2), Missing],
+            [Int(20), Missing],
+            [Int(3), Str("c")],
+        ];
+        let whole = Dataset::from_rows(
+            schema.clone(),
+            expected
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|value| match *value {
+                            Int(value) => Value::Int(value),
+                            Str(value) => Value::Str(value.into()),
+                            _ => Value::Missing,
+                        })
+                        .collect()
+                })
+                .collect(),
+        );
+        assert_eq!(
+            dataset, whole,
+            "the parts' runs against one buffer per column"
+        );
+        for column in 0..2 {
+            let reader = ColumnReader::new(&dataset, column);
+            let mut read = Vec::new();
+            for start in 0..=5 {
+                for end in start..=5 {
+                    let mut values = Vec::new();
+                    reader
+                        .try_for_each(
+                            start..end,
+                            |value| {
+                                values.push(value);
+                                Ok::<_, ()>(())
+                            },
+                            |_| (),
+                        )
+                        .unwrap();
+                    read.push(values);
+                }
+            }
+            let mut wanted = Vec::new();
+            for start in 0..=5 {
+                for end in start..=5 {
+                    wanted.push(expected[start..end].iter().map(|row| row[column]).collect());
+                }
+            }
+            let rows: Vec<_> = (0..5).map(|row| reader.get(row).unwrap()).collect();
+            let past = reader.try_for_each(3..6, |_| Ok(()), |error| error);
+            assert_eq!(
+                (read, rows, past, dataset.column(column).is_some()),
+                (
+                    wanted,
+                    expected.iter().map(|row| row[column]).collect::<Vec<_>>(),
+                    Err(CellError::OutOfBounds { row: 5, column }),
+                    false,
+                ),
+                "column {column}: every range of rows, each row, a range past the end, and no whole view"
+            );
+        }
+        let joined = Dataset::from_parts(
+            schema,
+            vec![vec![
+                pushed(&[Int(1), Int(2)]),
+                pushed(&[Str("a"), Str("b")]),
+            ]],
+            [(0, 0..1), (0, 1..2)],
+        );
+        assert_eq!(
+            (
+                joined.column(0).map(|view| view.len()),
+                joined.column_runs(0).is_some()
+            ),
+            (Some(2), false),
+            "consecutive runs of one part join, and lend the part's storage whole"
+        );
+    }
+}

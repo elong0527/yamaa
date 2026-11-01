@@ -109,6 +109,8 @@ impl<E> Part<E> {
         let part = Box::new(Part {
             records: self.records,
             frame: self.frame,
+            blocks: self.blocks,
+            published: self.published,
             templates: self.templates,
             checked: self.checked,
             marks: self.marks,
@@ -127,6 +129,8 @@ impl Part<Infallible> {
         Part {
             records: self.records,
             frame: self.frame,
+            blocks: self.blocks,
+            published: self.published,
             templates: self.templates,
             checked: self.checked,
             marks: self.marks,
@@ -415,6 +419,7 @@ impl ResolvedPlan {
             first: index == 0,
             limit,
             output_partition: outer.output_partition,
+            publish: outer.publish,
         };
         let handed = match c.work.shared {
             Some(_) => Handed::Records(range),

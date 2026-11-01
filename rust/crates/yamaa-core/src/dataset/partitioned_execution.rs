@@ -1011,6 +1011,217 @@ fn templates_binding_distinct_literals_group_their_output_keys_apart() {
     }
 }
 
+/// Two templates over (ID, V), each copying both and binding P to its own
+/// literal, A then B, with the output keys ID and P and the output order
+/// `order` (#4219).
+fn ordered_templates(order: Vec<OrderTerm>) -> DatasetPlan {
+    let template = |literal: &str| RowTemplate {
+        mode: RowMode::Records,
+        assignments: vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Literal(text(literal))),
+            assign(2, Expression::Source(1)),
+        ],
+        filter: None,
+    };
+    DatasetPlan::new(
+        schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("P", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ]),
+        vec![template("A"), template("B")],
+        Vec::new(),
+        vec![0, 1],
+        Vec::new(),
+    )
+    .with_output_order(order)
+}
+
+/// The output order of a run that publishes its key-bounded partitions
+/// (#4219) is the whole-table run's, whether each partition's rows, in its
+/// own order, come before the next partition's or not. Over the records
+/// (ID, V) (1, 30), (2, 10), (3, 40), (4, 20), each template builds a row
+/// per record, so the construction order is A1, A2, A3, A4, B1, B2, B3, B4.
+/// Derived by hand from OUTPUT-11 and VALUE-23, ties keeping that order:
+///
+/// - without order terms, that construction order, each template's rows of
+///   every partition before the next template's;
+/// - by ID, the cut field in its own direction: A1, B1, A2, B2, A3, B3, A4,
+///   B4, which is each partition's rows in order, one partition after
+///   another;
+/// - by ID descending: A4, B4, A3, B3, A2, B2, A1, B1, which puts later
+///   partitions first;
+/// - by V, another column: A2, B2 (10), A4, B4 (20), A1, B1 (30), A3, B3
+///   (40), which interleaves the partitions.
+///
+/// Each holds whole, over every division of the input, and over key-bounded
+/// partitions of at most one, two or four records.
+#[test]
+fn a_published_output_is_ordered_as_the_whole_table_run_orders_it() {
+    let input = Rows::new(
+        schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+        [(1, 30), (2, 10), (3, 40), (4, 20)]
+            .iter()
+            .map(|&(id, v)| vec![int(id), int(v)])
+            .collect(),
+    );
+    let term = |column, descending| OrderTerm {
+        column,
+        descending,
+        nulls_first: false,
+    };
+    let cases = [
+        (
+            "without order terms",
+            Vec::new(),
+            [
+                (1, "A"),
+                (2, "A"),
+                (3, "A"),
+                (4, "A"),
+                (1, "B"),
+                (2, "B"),
+                (3, "B"),
+                (4, "B"),
+            ],
+        ),
+        (
+            "by ID",
+            vec![term(0, false)],
+            [
+                (1, "A"),
+                (1, "B"),
+                (2, "A"),
+                (2, "B"),
+                (3, "A"),
+                (3, "B"),
+                (4, "A"),
+                (4, "B"),
+            ],
+        ),
+        (
+            "by ID descending",
+            vec![term(0, true)],
+            [
+                (4, "A"),
+                (4, "B"),
+                (3, "A"),
+                (3, "B"),
+                (2, "A"),
+                (2, "B"),
+                (1, "A"),
+                (1, "B"),
+            ],
+        ),
+        (
+            "by V",
+            vec![term(2, false)],
+            [
+                (2, "A"),
+                (2, "B"),
+                (4, "A"),
+                (4, "B"),
+                (1, "A"),
+                (1, "B"),
+                (3, "A"),
+                (3, "B"),
+            ],
+        ),
+    ];
+    let output = schema(&[
+        ("ID", ColumnType::Int),
+        ("P", ColumnType::Str),
+        ("V", ColumnType::Int),
+    ]);
+    let v = |id: i64| [30, 10, 40, 20][id as usize - 1];
+    let built = TemplateRows {
+        emitted: 4,
+        read: 4,
+    };
+    for (label, order, rows) in cases {
+        let plan = ordered_templates(order);
+        let resolved = plan.resolve().unwrap();
+        let expected = ExecutionAttempt {
+            result: Ok(Execution {
+                partition_rows: None,
+                dataset: Dataset::from_rows(
+                    output.clone(),
+                    rows.iter()
+                        .map(|&(id, p)| vec![int(id), text(p), int(v(id))])
+                        .collect(),
+                ),
+                verifications: Vec::new(),
+            }),
+            handler_counts: Vec::new(),
+            retained_verifications: Vec::new(),
+            template_rows: vec![built, built],
+        };
+        assert_every_division(&plan, &input, &[], &expected);
+        for records in [1, 2, 4] {
+            let attempt = divided_run(&resolved, &input, by_keys(1, records, false), &|| false);
+            assert_eq!(
+                as_stated(attempt),
+                expected,
+                "{label}, key-bounded partitions of at most {records} records"
+            );
+        }
+    }
+}
+
+/// Missing output keys of a run that publishes its key-bounded partitions
+/// (#4219) are named at their whole-output rows. Over the records with ID
+/// 1, missing and 2, the two templates of [`ordered_templates`] build A1,
+/// A-, A2, B1, B-, B2: by hand from OUTPUT-2, ID is missing at rows 1 and
+/// 4, of the six, the rows (missing, A) and (missing, B), which repeat no
+/// key, since P tells them apart. Over key-bounded partitions of one
+/// record, the missing ID is a partition of its own, whose rows are the
+/// second of each template's.
+#[test]
+fn missing_output_keys_of_a_published_partition_are_named_at_their_whole_output_rows() {
+    let input = Rows::new(
+        schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+        vec![
+            vec![int(1), int(5)],
+            vec![Value::Missing, int(6)],
+            vec![int(2), int(7)],
+        ],
+    );
+    let plan = ordered_templates(Vec::new());
+    let mut missing = record("keys[0]", ConditionCode::OutputMissingKeyFailed, (6, 2, 6));
+    missing.offending_rows = vec![
+        RowIdentity {
+            position: 1,
+            values: vec![Value::Missing, text("A")],
+        },
+        RowIdentity {
+            position: 4,
+            values: vec![Value::Missing, text("B")],
+        },
+    ];
+    let built = TemplateRows {
+        emitted: 3,
+        read: 3,
+    };
+    let expected = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::KeyFailures(vec![missing]))),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: vec![built, built],
+    };
+    assert_every_division(&plan, &input, &[], &expected);
+    let resolved = plan.resolve().unwrap();
+    for records in [1, 3] {
+        let attempt = divided_run(&resolved, &input, by_keys(1, records, false), &|| false);
+        assert_eq!(
+            as_stated(attempt),
+            expected,
+            "key-bounded partitions of at most {records} records"
+        );
+    }
+}
+
 /// A caller that passes leading keys with ranges no cut by them made
 /// (#4211): a plan whose leading key copies no driver field has no
 /// key-bounded cut, so its output keys group over every partition. Two

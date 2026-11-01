@@ -24,7 +24,10 @@
 //! A run with a row per record holds its output once (#3870): the dataset,
 //! a column at a time, the host view built from it and the encoded file,
 //! while its observations defer their copies. The third test states that as
-//! two relations between figures measured on the same input, below.
+//! two relations between figures measured on the same input, below. The
+//! fourth states the peak of a run that publishes its partitions (#4219):
+//! the dataset reads each partition's columns as they are, so the run never
+//! holds a merged copy of its output.
 //!
 //! The seam is the facade's partitioned engine mode with an allocator that
 //! counts, which neither the benchmark reader nor the host fixtures have.
@@ -178,14 +181,34 @@ fn a_run_over_an_input_beyond_whole_holds_no_more_than_one_partition_at_a_time()
 /// keyed so that the two leading keys keep a subject's records together.
 const PER_RECORD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID, SEQ]\ninput: {LB: {path: input.csv, types: {SEQ: int, AVAL: float}}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: LB.STUDYID}\n  - {name: USUBJID, type: str, derivation: LB.USUBJID}\n  - {name: SEQ, type: int, derivation: LB.SEQ}\n  - {name: AVAL, type: float, derivation: LB.AVAL}\n";
 
+/// Each record's subject, SEQ and AVAL copied by two templates, each binding
+/// P to its own literal: two rows per record, keyed so that the two leading
+/// keys keep a subject's records together, each template's rows of every
+/// partition before the next template's.
+const TWICE: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID, SEQ, P]\ninput: {LB: {path: input.csv, types: {SEQ: int, AVAL: float}}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, P, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: LB.STUDYID}\n  - {name: USUBJID, type: str, derivation: LB.USUBJID}\n  - {name: SEQ, type: int, derivation: LB.SEQ}\n  - {name: P, type: str}\n  - {name: AVAL, type: float, derivation: LB.AVAL}\nrows:\n  - {id: a, dataset: LB, derivations: {P: \"'A'\"}}\n  - {id: b, dataset: LB, derivations: {P: \"'B'\"}}\n";
+
+/// What a run of a specification over 100,000 records in partitions of
+/// 10,000 takes beyond the input's bytes, measured by [`footprint`].
+#[cfg(feature = "arrow")]
+struct Footprint {
+    /// Its peak from the admission poll on, until its output has been read.
+    peak: isize,
+    /// Its peak from the admission poll on, until it returned.
+    ran: isize,
+    /// What it holds once it has returned and its output has been read.
+    held: isize,
+    /// The length of the file its save writes.
+    file: isize,
+}
+
 /// What a run of `spec` over 100,000 records in partitions of 10,000 takes
-/// beyond the input's bytes: its peak from the admission poll on, what it
-/// holds once it has returned and its output has been read, which builds the
-/// host view (#4201), and the length of the file its save writes.
+/// beyond the input's bytes: its peak from the admission poll on, until it
+/// returned and until its output has been read, which builds the host view
+/// (#4201), what it then holds, and the length of the file its save writes.
 /// Read as a stream when `streamed`, it is held once its first batch has
 /// been read and dropped, with its reader still open, and saves nothing.
 #[cfg(feature = "arrow")]
-fn footprint(spec: &str, streamed: bool) -> (isize, isize, isize) {
+fn footprint(spec: &str, streamed: bool) -> Footprint {
     let scratch = Scratch::new("partitioned-memory-output");
     let (path, bytes) = stage(&scratch, 100_000);
     scratch.write("spec.yaml", spec);
@@ -195,17 +218,24 @@ fn footprint(spec: &str, streamed: bool) -> (isize, isize, isize) {
     peak::take_peak();
     if streamed {
         let streamed = engine.spec(&path).cancel_with(&token).stream().unwrap();
+        let returned = peak::take_peak();
         let mut reader = streamed.reader();
         drop(reader.next().unwrap().unwrap());
-        let last = peak::take_peak();
+        let last = peak::take_peak().max(returned);
         let held = peak::live() - start;
         let polls = polls.lock().unwrap();
-        return (beyond_input(&polls, start, bytes, last), held, 0);
+        return Footprint {
+            peak: beyond_input(&polls, start, bytes, last),
+            ran: beyond_input(&polls, start, bytes, returned),
+            held,
+            file: 0,
+        };
     }
     let mut run = engine.spec(&path).cancel_with(&token).run().unwrap();
+    let returned = peak::take_peak();
     // The host view is built when first read (#4201).
     assert!(run.output().is_some(), "an output");
-    let last = peak::take_peak();
+    let last = peak::take_peak().max(returned);
     let held = peak::live() - start;
     let saved = run.save(&CancellationToken::new()).unwrap();
     let file = saved
@@ -214,11 +244,12 @@ fn footprint(spec: &str, streamed: bool) -> (isize, isize, isize) {
         .map(|path| std::fs::metadata(path).unwrap().len())
         .unwrap();
     let polls = polls.lock().unwrap();
-    (
-        beyond_input(&polls, start, bytes, last),
+    Footprint {
+        peak: beyond_input(&polls, start, bytes, last),
+        ran: beyond_input(&polls, start, bytes, returned),
         held,
-        isize::try_from(file).unwrap(),
-    )
+        file: isize::try_from(file).unwrap(),
+    }
 }
 
 /// A run with a row per record holds its output once (#3870). Each figure
@@ -247,11 +278,12 @@ fn footprint(spec: &str, streamed: bool) -> (isize, isize, isize) {
 #[test]
 #[cfg(feature = "arrow")]
 fn a_run_with_a_row_per_record_holds_its_output_once() {
-    let (working, baseline, _) = footprint(SPEC, false);
-    let (peak, held, file) = footprint(PER_RECORD, false);
-    let (_, streamed_baseline, _) = footprint(SPEC, true);
-    let (_, streamed, _) = footprint(PER_RECORD, true);
-    let kept = held - baseline;
+    let grouped = footprint(SPEC, false);
+    let run = footprint(PER_RECORD, false);
+    let streamed_baseline = footprint(SPEC, true).held;
+    let streamed = footprint(PER_RECORD, true).held;
+    let (working, peak, file) = (grouped.peak, run.peak, run.file);
+    let kept = run.held - grouped.held;
     let alone = streamed - streamed_baseline;
     let figures = format!(
         "kept {kept}, dataset and file alone {alone}, peak {peak}, working set {working}, file {file}"
@@ -259,5 +291,30 @@ fn a_run_with_a_row_per_record_holds_its_output_once() {
     assert!(
         kept <= 2 * alone && peak <= kept + working + file,
         "{figures}"
+    );
+}
+
+/// A run publishes its partitions without a merged copy of its output
+/// (#4219). Measured as above, on two rows per record, which two templates
+/// build, each template's rows of every partition before the next
+/// template's: until it returns, the run holds each partition's columns,
+/// which the dataset the streamed run keeps reads as they are, then the
+/// encoded file and the copy its views share, besides one partition's
+/// working set. So its peak beyond the input, until it returns, is at most
+/// what the streamed run keeps, the grouped run's peak and one more copy of
+/// the file. A run that merged every partition's candidates into one frame
+/// held each template's rows of every partition and the merged frame at
+/// once, which takes more.
+#[test]
+#[cfg(feature = "arrow")]
+fn a_run_publishes_its_partitions_without_a_merged_copy_of_its_output() {
+    let working = footprint(SPEC, false).peak;
+    let run = footprint(TWICE, false);
+    let streamed_baseline = footprint(SPEC, true).held;
+    let alone = footprint(TWICE, true).held - streamed_baseline;
+    let (ran, file) = (run.ran, run.file);
+    assert!(
+        ran <= alone + working + file,
+        "peak until it returned {ran}, dataset and file alone {alone}, working set {working}, file {file}"
     );
 }

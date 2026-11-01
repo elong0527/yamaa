@@ -61,7 +61,7 @@ fn inventory_selects(scope: &InventoryScope, frame: &Frame, row: usize) -> bool 
 }
 
 /// The output keys of the dataset region, as frame columns.
-fn key_columns(plan: &ResolvedPlan) -> Vec<usize> {
+pub(super) fn key_columns(plan: &ResolvedPlan) -> Vec<usize> {
     let first = plan
         .region_columns(RegionId::DATASET)
         .next()
@@ -411,6 +411,37 @@ fn column_check<E>(
     Ok(())
 }
 
+/// What the output key check finds over the output's rows: the rows each
+/// key is missing at, ascending, key by key (OUTPUT-2); how many key groups
+/// the rows form, and the first row of each group that repeats a key,
+/// ascending (OUTPUT-3).
+#[derive(Debug, Default)]
+pub(super) struct KeyFindings {
+    pub missing: Vec<Vec<usize>>,
+    pub groups: usize,
+    pub repeated: Vec<usize>,
+}
+
+/// Why one partition's run could not group its output keys (#4219): its
+/// grouping, or the table of its groups' sizes, was refused memory.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum KeyFault {
+    Grouping,
+    Allocation,
+}
+
+impl KeyFault {
+    /// The run's failure, as the output key check over every row fails.
+    pub(super) fn failure<E>(self) -> Fail<E> {
+        Box::new(match self {
+            Self::Grouping => {
+                ExecutionError::OutputGrouping(crate::table_grouping::GroupingError::Allocation)
+            }
+            Self::Allocation => ExecutionError::Allocation,
+        })
+    }
+}
+
 /// Check output key completeness and uniqueness, then run every declared
 /// dataset check over the completed rows.
 pub(super) fn verify_output<'a: 's, 's, E>(
@@ -421,80 +452,21 @@ pub(super) fn verify_output<'a: 's, 's, E>(
     observer: &mut dyn FnMut(ExecutionEvent),
 ) -> Result<(), Fail<E>> {
     let plan = run.plan;
-    observer(ExecutionEvent::Exit {
-        phase: ExecutionPhase::Derivation,
-        outcome: crate::application_observer::Outcome::Succeeded,
-    });
-    observer(ExecutionEvent::Phase(ExecutionPhase::OutputKeys));
-    run.poll(crate::dataset::resolved::Step::OutputKeys)?;
     let keys = key_columns(plan);
     let rows = frame.rows();
+    check_keys(
+        run,
+        rows,
+        observer,
+        |run| frame_keys(run, frame, &keys),
+        |positions| identities(frame, &keys, positions),
+    )?;
     let schema = &plan.region(RegionId::DATASET).output;
     let dataset = Completed { frame, schema };
     let checked = CheckRows {
         dataset: &dataset,
         secondary,
     };
-    let mut failures = Vec::new();
-    for (position, &column) in keys.iter().enumerate() {
-        let missing = frame.column(column).missing_rows();
-        if !missing.is_empty() {
-            failures.push(CheckRecord {
-                path: format!("keys[{position}]"),
-                code: crate::diagnostic::ConditionCode::OutputMissingKeyFailed,
-                evaluated_count: rows,
-                failed_count: missing.len(),
-                output_rows: rows,
-                codelist: None,
-                inventory: None,
-                row_count: None,
-                offending_rows: identities(frame, &keys, missing),
-                entries: None,
-                denominator: None,
-            });
-        }
-    }
-    let (evaluated, duplicates) = match (run.key_groups.take(), run.key_partitions.take()) {
-        (Some(key_groups), _) if key_groups.len() == rows => repeated_keys(&key_groups)?,
-        (_, Some(partitions)) => {
-            let key_groups = partition_apart(frame, &keys, &partitions, run.output_partition)
-                .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
-            repeated_keys(&key_groups)?
-        }
-        _ => {
-            let groups = partition(frame, &keys, run.output_partition)
-                .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
-            let duplicates = groups
-                .iter()
-                .filter(|members| members.len() > 1)
-                .map(|members| members[0])
-                .collect();
-            (groups.len(), duplicates)
-        }
-    };
-    if !duplicates.is_empty() {
-        failures.push(CheckRecord {
-            path: "keys".into(),
-            code: crate::diagnostic::ConditionCode::OutputDuplicateKeyFailed,
-            evaluated_count: evaluated,
-            failed_count: duplicates.len(),
-            output_rows: rows,
-            codelist: None,
-            inventory: None,
-            row_count: None,
-            offending_rows: identities(frame, &keys, duplicates),
-            entries: None,
-            denominator: None,
-        });
-    }
-    if !failures.is_empty() {
-        return Err(Box::new(ExecutionError::KeyFailures(failures)));
-    }
-    observer(ExecutionEvent::Exit {
-        phase: ExecutionPhase::OutputKeys,
-        outcome: crate::application_observer::Outcome::Succeeded,
-    });
-    observer(ExecutionEvent::Phase(ExecutionPhase::Verification));
     let checks: Vec<CheckId> = plan
         .checks()
         .iter()
@@ -657,6 +629,172 @@ pub(super) fn verify_output<'a: 's, 's, E>(
         };
         records.push(record);
     }
+    fail_on_errors(plan, records)
+}
+
+/// Check the output keys of a run that published its partitions (#4219),
+/// whose plan declares no dataset check: `findings` gives what the check
+/// finds over the output's `rows` rows, and `identities` the output keys of
+/// rows by their positions. Then the verification phase checks the records
+/// the run already holds, as [`verify_output`] does once its dataset checks
+/// are done.
+pub(super) fn verify_published<'p, 'a, E>(
+    run: &mut Run<'p, 'a, E>,
+    rows: usize,
+    findings: impl FnOnce(&mut Run<'p, 'a, E>) -> Result<KeyFindings, Fail<E>>,
+    identities: impl Fn(Vec<usize>) -> Vec<RowIdentity>,
+    records: &mut Vec<CheckRecord>,
+    observer: &mut dyn FnMut(ExecutionEvent),
+) -> Result<(), Fail<E>> {
+    check_keys(run, rows, observer, findings, identities)?;
+    fail_on_errors(run.plan, records)
+}
+
+/// The output key check, in its phase: entered once the derivation has
+/// succeeded, and a checkpoint (#2822). `findings` gives what it finds over
+/// the output's `rows` rows, and `identities` the output keys of rows by
+/// their positions. A key missing from some row, or repeated, fails the
+/// run; otherwise the verification phase begins.
+fn check_keys<'p, 'a, E>(
+    run: &mut Run<'p, 'a, E>,
+    rows: usize,
+    observer: &mut dyn FnMut(ExecutionEvent),
+    findings: impl FnOnce(&mut Run<'p, 'a, E>) -> Result<KeyFindings, Fail<E>>,
+    identities: impl Fn(Vec<usize>) -> Vec<RowIdentity>,
+) -> Result<(), Fail<E>> {
+    observer(ExecutionEvent::Exit {
+        phase: ExecutionPhase::Derivation,
+        outcome: crate::application_observer::Outcome::Succeeded,
+    });
+    observer(ExecutionEvent::Phase(ExecutionPhase::OutputKeys));
+    run.poll(crate::dataset::resolved::Step::OutputKeys)?;
+    let KeyFindings {
+        missing,
+        groups,
+        repeated,
+    } = findings(run)?;
+    let mut failures = Vec::new();
+    for (position, missing) in missing.into_iter().enumerate() {
+        if !missing.is_empty() {
+            failures.push(CheckRecord {
+                path: format!("keys[{position}]"),
+                code: crate::diagnostic::ConditionCode::OutputMissingKeyFailed,
+                evaluated_count: rows,
+                failed_count: missing.len(),
+                output_rows: rows,
+                codelist: None,
+                inventory: None,
+                row_count: None,
+                offending_rows: identities(missing),
+                entries: None,
+                denominator: None,
+            });
+        }
+    }
+    if !repeated.is_empty() {
+        failures.push(CheckRecord {
+            path: "keys".into(),
+            code: crate::diagnostic::ConditionCode::OutputDuplicateKeyFailed,
+            evaluated_count: groups,
+            failed_count: repeated.len(),
+            output_rows: rows,
+            codelist: None,
+            inventory: None,
+            row_count: None,
+            offending_rows: identities(repeated),
+            entries: None,
+            denominator: None,
+        });
+    }
+    if !failures.is_empty() {
+        return Err(Box::new(ExecutionError::KeyFailures(failures)));
+    }
+    observer(ExecutionEvent::Exit {
+        phase: ExecutionPhase::OutputKeys,
+        outcome: crate::application_observer::Outcome::Succeeded,
+    });
+    observer(ExecutionEvent::Phase(ExecutionPhase::Verification));
+    Ok(())
+}
+
+/// What the output key check finds over the completed frame: its missing
+/// keys, then its groups, from the key grain's (#4188), grouped apart in
+/// the units no key group spans (#4211), or grouped over every row.
+fn frame_keys<E>(
+    run: &mut Run<'_, '_, E>,
+    frame: &Frame,
+    keys: &[usize],
+) -> Result<KeyFindings, Fail<E>> {
+    let rows = frame.rows();
+    let missing = keys
+        .iter()
+        .map(|&column| frame.column(column).missing_rows())
+        .collect();
+    let (groups, repeated) = match (run.key_groups.take(), run.key_partitions.take()) {
+        (Some(key_groups), _) if key_groups.len() == rows => {
+            super::reserved(repeated_keys(&key_groups))?
+        }
+        (_, Some(partitions)) => {
+            let key_groups = partition_apart(frame, keys, &partitions, run.output_partition)
+                .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+            super::reserved(repeated_keys(&key_groups))?
+        }
+        _ => {
+            let groups = partition(frame, keys, run.output_partition)
+                .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+            let repeated = groups
+                .iter()
+                .filter(|members| members.len() > 1)
+                .map(|members| members[0])
+                .collect();
+            (groups.len(), repeated)
+        }
+    };
+    Ok(KeyFindings {
+        missing,
+        groups,
+        repeated,
+    })
+}
+
+/// What the output key check finds over one partition's candidates
+/// (#4219), its rows numbered from 0, when no key group spans two
+/// partitions: its missing keys, then its groups, from the key grain's
+/// groups when it kept them (#4211), or else grouped in `units`, each the
+/// rows of a template or every row, that no key group spans. The admission
+/// of the grouping is the whole output's, which the run makes once.
+pub(super) fn partition_keys(
+    plan: &ResolvedPlan,
+    frame: &Frame,
+    key_groups: Option<Vec<usize>>,
+    units: &[Vec<std::ops::Range<usize>>],
+) -> Result<KeyFindings, KeyFault> {
+    let keys = key_columns(plan);
+    let missing = keys
+        .iter()
+        .map(|&column| frame.column(column).missing_rows())
+        .collect();
+    // Without keys, the admission refuses the check before any group.
+    if keys.is_empty() {
+        return Ok(KeyFindings {
+            missing,
+            ..KeyFindings::default()
+        });
+    }
+    let key_groups = match key_groups {
+        Some(key_groups) if key_groups.len() == frame.rows() => key_groups,
+        _ => group_apart(frame, &keys, units).map_err(|_| KeyFault::Grouping)?,
+    };
+    let (groups, repeated) = repeated_keys(&key_groups).map_err(|_| KeyFault::Allocation)?;
+    Ok(KeyFindings {
+        missing,
+        groups,
+        repeated,
+    })
+}
+
+/// Fail with every record the run holds once one of error severity failed.
+fn fail_on_errors<E>(plan: &ResolvedPlan, records: &mut Vec<CheckRecord>) -> Result<(), Fail<E>> {
     if records.iter().any(|record| {
         record.failed_count != 0 && severity(plan, &record.path) == VerificationSeverity::Error
     }) {
@@ -954,13 +1092,21 @@ fn partition_apart(
     units: &[Vec<std::ops::Range<usize>>],
     partition: Option<std::num::NonZeroUsize>,
 ) -> Result<Vec<usize>, crate::table_grouping::GroupingError<Infallible>> {
-    use crate::table_grouping::GroupingError;
     super::group::admit(columns, frame.width(), frame.rows(), partition)?;
-    let allocation = |_| GroupingError::Allocation;
+    group_apart(frame, columns, units).map_err(|_| crate::table_grouping::GroupingError::Allocation)
+}
+
+/// The group of each frame row by `columns`, a nonempty list of the
+/// frame's columns, when no group spans two of `units`, each grouped on its
+/// own as [`partition_apart`] groups it, without its admission. The units
+/// cover every row of the frame.
+fn group_apart(
+    frame: &Frame,
+    columns: &[usize],
+    units: &[Vec<std::ops::Range<usize>>],
+) -> Result<Vec<usize>, std::collections::TryReserveError> {
     let mut key_groups = Vec::new();
-    key_groups
-        .try_reserve_exact(frame.rows())
-        .map_err(allocation)?;
+    key_groups.try_reserve_exact(frame.rows())?;
     key_groups.resize(frame.rows(), 0usize);
     // Each key column's typed storage, when every one has it.
     let typed: Option<Vec<_>> = columns
@@ -974,8 +1120,7 @@ fn partition_apart(
         rows.extend(ranges.iter().cloned().flatten());
         let ordered = match (&typed, ranges.as_slice()) {
             (Some(typed), [range]) => {
-                crate::table_grouping::ascending_columns(typed, range.clone())
-                    .map_err(allocation)?
+                crate::table_grouping::ascending_columns(typed, range.clone())?
             }
             _ => None,
         };
@@ -983,8 +1128,7 @@ fn partition_apart(
             Some(assigned) => assigned,
             None => super::group::assign(rows.len(), columns.len(), |item, position| {
                 frame.get(rows[item], columns[position])
-            })
-            .map_err(allocation)?,
+            })?,
         };
         for (&row, group) in rows.iter().zip(local) {
             key_groups[row] = offset + group;
@@ -1000,9 +1144,13 @@ fn partition_apart(
 /// candidate repeats its key only when the key is missing, as each
 /// missing-key record is its own candidate. Groups formed apart in units
 /// that no group spans, numbered after each other, count the same (#4211).
-fn repeated_keys<E>(key_groups: &[usize]) -> Result<(usize, Vec<usize>), Fail<E>> {
+fn repeated_keys(
+    key_groups: &[usize],
+) -> Result<(usize, Vec<usize>), std::collections::TryReserveError> {
     let groups = key_groups.iter().max().map_or(0, |&group| group + 1);
-    let mut sizes = super::filled(groups, 0usize)?;
+    let mut sizes = Vec::new();
+    sizes.try_reserve_exact(groups)?;
+    sizes.resize(groups, 0usize);
     for &group in key_groups {
         sizes[group] += 1;
     }
@@ -1021,27 +1169,61 @@ fn repeated_keys<E>(key_groups: &[usize]) -> Result<(usize, Vec<usize>), Fail<E>
 /// each output column has its declared type, so every two of its values
 /// compare (VALUE-22).
 pub(super) fn output_order<E>(plan: &ResolvedPlan, frame: &Frame) -> Result<Vec<usize>, Fail<E>> {
-    let mut rows: Vec<usize> = (0..frame.rows()).collect();
-    let terms = plan.output_order();
-    if terms.is_empty() || rows.len() < 2 {
-        return Ok(rows);
+    order_rows(plan, frame.rows(), |row, column| frame.get(row, column))
+}
+
+/// [`output_order`] over `rows` rows in construction order, `value(row,
+/// column)` reading a row's value of an output column by its place in the
+/// region.
+pub(super) fn order_rows<'v, E>(
+    plan: &ResolvedPlan,
+    rows: usize,
+    value: impl Fn(usize, usize) -> ValueRef<'v>,
+) -> Result<Vec<usize>, Fail<E>> {
+    let mut order: Vec<usize> = (0..rows).collect();
+    let terms = order_terms(plan);
+    if terms.is_empty() || order.len() < 2 {
+        return Ok(order);
     }
+    // Rows are in construction order, which a tie keeps (VALUE-23).
+    super::relations::sort(&mut order, &terms, |&row, term| {
+        value(row, terms[term].column)
+    })
+    .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
+    Ok(order)
+}
+
+/// The output's order terms, each column by its place in the region.
+fn order_terms(plan: &ResolvedPlan) -> Vec<crate::dataset::OrderTerm> {
     let first = plan
         .region_columns(RegionId::DATASET)
         .next()
         .map_or(0, |column| column.index());
-    let terms: Vec<crate::dataset::OrderTerm> = terms
+    plan.output_order()
         .iter()
         .map(|term| crate::dataset::OrderTerm {
             column: term.column.index() - first,
             descending: term.descending,
             nulls_first: term.nulls_first,
         })
-        .collect();
-    // Rows are in construction order, which a tie keeps (VALUE-23).
-    super::relations::sort(&mut rows, &terms, |&row, term| {
-        frame.get(row, terms[term].column)
-    })
-    .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
-    Ok(rows)
+        .collect()
+}
+
+/// Whether a row whose values `left` reads comes strictly before one whose
+/// values `right` reads in the output's order (VALUE-22): the first order
+/// term on which they differ puts it first. Rows equal on every term, or
+/// with values that do not compare, are not ordered so.
+pub(super) fn precedes<'l, 'r>(
+    plan: &ResolvedPlan,
+    left: impl Fn(usize) -> ValueRef<'l>,
+    right: impl Fn(usize) -> ValueRef<'r>,
+) -> bool {
+    for term in order_terms(plan) {
+        match super::relations::compare(left(term.column), right(term.column), &term) {
+            Ok(std::cmp::Ordering::Less) => return true,
+            Ok(std::cmp::Ordering::Equal) => {}
+            Ok(std::cmp::Ordering::Greater) | Err(_) => return false,
+        }
+    }
+    false
 }

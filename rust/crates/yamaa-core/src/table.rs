@@ -366,31 +366,83 @@ impl<'a> ColumnRef<'a> {
     }
 }
 
+/// One run of consecutive rows of a column that a port holds in several
+/// stored parts (#4219): the rows, and their typed storage when the port
+/// holds them so, or `None` for rows read through [`TableAccess::cell`].
+pub type ColumnRun<'a> = (std::ops::Range<usize>, Option<ColumnRef<'a>>);
+
 /// One column of a table, read a row at a time: through the column view
 /// its port lends (#4190), so that a pass over a column makes no call per
-/// cell (#4201), or else through [`TableAccess::cell`]. Each read lends the
-/// value `cell` would, and refuses a row the table does not hold as `cell`
-/// does.
+/// cell (#4201), through the views of the runs of rows a port holds in
+/// parts (#4219), or else through [`TableAccess::cell`]. Each read lends
+/// the value `cell` would, and refuses a row the table does not hold as
+/// `cell` does.
 pub enum ColumnReader<'a, T: TableAccess + ?Sized> {
-    View { view: ColumnRef<'a>, column: usize },
-    Cells { table: &'a T, column: usize },
+    View {
+        view: ColumnRef<'a>,
+        column: usize,
+    },
+    Runs {
+        table: &'a T,
+        runs: Vec<ColumnRun<'a>>,
+        column: usize,
+    },
+    Cells {
+        table: &'a T,
+        column: usize,
+    },
 }
 
 impl<'a, T: TableAccess + ?Sized> ColumnReader<'a, T> {
     /// Column `column` of `table`; a view that does not cover every row of
-    /// the table is read through its cells instead.
+    /// the table, or runs that do not cover them in order, each view its
+    /// run's rows, are read through its cells instead.
     pub fn new(table: &'a T, column: usize) -> Self {
-        match table.column(column) {
-            Some(view) if view.len() == table.row_count() => Self::View { view, column },
+        let rows = table.row_count();
+        if let Some(view) = table.column(column).filter(|view| view.len() == rows) {
+            return Self::View { view, column };
+        }
+        match table.column_runs(column) {
+            Some(runs) if covers(&runs, rows) => Self::Runs {
+                table,
+                runs,
+                column,
+            },
             _ => Self::Cells { table, column },
         }
     }
 
-    /// The column view, when the port lends one.
+    /// The column view, when the port lends the whole column as one.
     pub fn view(&self) -> Option<ColumnRef<'a>> {
         match self {
             Self::View { view, .. } => Some(*view),
-            Self::Cells { .. } => None,
+            Self::Runs { .. } | Self::Cells { .. } => None,
+        }
+    }
+
+    /// The bytes of the present text of rows `rows` that the column's
+    /// views lend; 0 for rows read through their cells, or for a column of
+    /// another type. A size to reserve, never a value.
+    pub fn text_bytes(&self, rows: std::ops::Range<usize>) -> usize {
+        match self {
+            Self::View { view, .. } => rows
+                .filter(|&row| row < view.len())
+                .map(|row| view.text_len(row))
+                .sum(),
+            Self::Runs { runs, .. } => runs
+                .iter()
+                .filter_map(|(range, view)| {
+                    let view = view.as_ref()?;
+                    let start = rows.start.max(range.start);
+                    let end = rows.end.min(range.end);
+                    Some(
+                        (start..end)
+                            .map(|row| view.text_len(row - range.start))
+                            .sum::<usize>(),
+                    )
+                })
+                .sum(),
+            Self::Cells { .. } => 0,
         }
     }
 
@@ -403,6 +455,14 @@ impl<'a, T: TableAccess + ?Sized> ColumnReader<'a, T> {
                 row,
                 column: *column,
             }),
+            Self::Runs {
+                table,
+                runs,
+                column,
+            } => match runs.get(runs.partition_point(|(range, _)| range.end <= row)) {
+                Some((range, Some(view))) if range.start <= row => Ok(view.get(row - range.start)),
+                _ => table.cell(row, *column),
+            },
             Self::Cells { table, column } => table.cell(row, *column),
         }
     }
@@ -430,6 +490,36 @@ impl<'a, T: TableAccess + ?Sized> ColumnReader<'a, T> {
                 }
                 Ok(())
             }
+            Self::Runs {
+                table,
+                runs,
+                column,
+            } => {
+                let mut row = rows.start;
+                let first = runs.partition_point(|(range, _)| range.end <= row);
+                for (range, view) in &runs[first..] {
+                    if row >= rows.end {
+                        break;
+                    }
+                    let end = rows.end.min(range.end);
+                    match view {
+                        Some(view) => {
+                            view.try_for_each(row - range.start..end - range.start, &mut visit)?
+                        }
+                        None => {
+                            for row in row..end {
+                                visit(table.cell(row, *column).map_err(&refused)?)?;
+                            }
+                        }
+                    }
+                    row = end;
+                }
+                // Rows past the last run, which the table refuses.
+                for row in row..rows.end {
+                    visit(table.cell(row, *column).map_err(&refused)?)?;
+                }
+                Ok(())
+            }
             Self::Cells { table, column } => {
                 for row in rows {
                     visit(table.cell(row, *column).map_err(&refused)?)?;
@@ -438,6 +528,22 @@ impl<'a, T: TableAccess + ?Sized> ColumnReader<'a, T> {
             }
         }
     }
+}
+
+/// Whether `runs` cover rows `0..rows` in order, each view lending exactly
+/// its run's rows.
+fn covers(runs: &[ColumnRun<'_>], rows: usize) -> bool {
+    let mut next = 0;
+    for (range, view) in runs {
+        if range.start != next || range.end < range.start {
+            return false;
+        }
+        if view.is_some_and(|view| view.len() != range.len()) {
+            return false;
+        }
+        next = range.end;
+    }
+    next == rows
 }
 
 /// Immutable snapshot with normalized runtime values and stable schema/row order.
@@ -458,6 +564,17 @@ pub trait TableAccess {
     /// as typed storage (#4190); `None` for a port that does not, or for a
     /// column out of bounds, whose reads go through [`TableAccess::cell`].
     fn column(&self, column: usize) -> Option<ColumnRef<'_>> {
+        let _ = column;
+        None
+    }
+    /// Lend column `column` as runs of consecutive rows that cover every
+    /// row in order, each with its typed storage where the port holds it so
+    /// (#4219): for a port that holds its rows in several stored parts, such
+    /// as an output a partitioned run keeps a partition at a time.
+    /// `None`, the default, for a port that holds each column whole, which
+    /// [`TableAccess::column`] lends when it can, or for a column out of
+    /// bounds.
+    fn column_runs(&self, column: usize) -> Option<Vec<ColumnRun<'_>>> {
         let _ = column;
         None
     }
