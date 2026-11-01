@@ -450,6 +450,10 @@ pub(crate) fn compile(
 pub(crate) struct RunInputs {
     pub(crate) held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     pub(crate) frames: std::collections::BTreeMap<String, crate::InputFrame>,
+    /// The partitions of this run that derive at once, when a project run
+    /// gives the member a share of its threads (#4193); otherwise the
+    /// engine's partitions say.
+    pub(crate) threads: Option<std::num::NonZeroUsize>,
 }
 
 /// The Build and Finished half: one run of a compiled request in its own
@@ -522,9 +526,15 @@ fn run_with(
     rows: Option<std::num::NonZeroUsize>,
 ) -> (Build, Option<PublicBatches>) {
     let cancelled = || token.is_cancelled();
+    let partitioning = shared
+        .partitioning
+        .map(|partitioning| yamaa_core::dataset::Partitioning {
+            threads: inputs.threads.unwrap_or(partitioning.threads),
+            ..partitioning
+        });
     let scope = yamaa_core::application_observer::Scope::new(observed)
         .cancellable(&cancelled)
-        .partitioned(shared.partitioning);
+        .partitioned(partitioning);
     let measured = observed.measured().clone();
     let locator = Arc::clone(compiled.locator());
     let prepared = match compiled {

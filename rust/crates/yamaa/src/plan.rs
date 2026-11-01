@@ -147,6 +147,15 @@ impl Plan {
         }
     }
 
+    /// Whether a run of this plan calls the engine's project functions: its
+    /// specification calls one, and the engine has functions to call
+    /// (FUNC-8). Such a run activates and calls them on the calling thread.
+    pub(crate) fn calls_functions(&self, shared: &EngineShared) -> bool {
+        shared.functions.is_some()
+            && matches!(&self.compiled.state, Compiled::Ready(prepared, _)
+                if !prepared.run().compiled().called_functions().is_empty())
+    }
+
     /// Whether a run of this plan can call its host: an engine with project
     /// functions runs a specification with a project, whose activation and
     /// derivations call them.

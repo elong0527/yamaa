@@ -115,7 +115,8 @@ pub struct Partitions {
     /// instead of refusing the run.
     pub whole_table_fallback: bool,
     /// How many partitions of one run derive at once, each on a thread of
-    /// its own (#4193); see [`Partitions::with_threads`].
+    /// its own, and how many threads a project run's members and their
+    /// partitions share (#4193); see [`Partitions::with_threads`].
     pub threads: NonZeroUsize,
 }
 
@@ -188,6 +189,18 @@ impl Partitions {
     /// and the progress events, in order, are those of a run on one thread.
     /// A run with a step that calls a project function runs on the calling
     /// thread alone, as does a run with one partition.
+    ///
+    /// A project run builds its members at once on the same threads: a
+    /// member starts once every member whose artifact it reads has
+    /// finished, while a thread is free, and its partitions take an equal
+    /// share of the free threads among the members ready to start, at least
+    /// one, so the members and their partitions never hold more than
+    /// `threads`. The calling thread publishes the members in run order,
+    /// so the result, its issues, its reports and the progress events, in
+    /// order, are those of a run on one thread; a member's events reach the
+    /// callback once it has built. A member that calls a project function
+    /// runs on the calling thread in its turn, as does every member of a
+    /// run that reads through a caller resolver.
     ///
     /// Without it, up to four partitions derive at once, and no more than
     /// the threads the process may run on
@@ -480,6 +493,7 @@ impl Engine {
             crate::internal::RunInputs {
                 held,
                 frames: request.inputs.cloned().unwrap_or_default(),
+                threads: None,
             },
             observed,
             token,
@@ -487,6 +501,20 @@ impl Engine {
         if compiled {
             self.keep(plans, request, identity, &plan);
         }
+        Self::finish(build, &plan, request, observed, token)
+    }
+
+    /// The end of a build of `plan` for `request`: a build that `token`
+    /// finds cancelled, or whose project function raised the host's
+    /// interrupt, stops the call as [`Cancelled`]; any other completes its
+    /// measurements and is named by its dataset, or else by the path.
+    pub(crate) fn finish(
+        build: Build,
+        plan: &Plan,
+        request: &Request<'_>,
+        observed: &Observed<'_>,
+        token: &CancellationToken,
+    ) -> Result<Build, Cancelled> {
         if build.interrupted() || token.is_cancelled() {
             return Err(Cancelled);
         }
