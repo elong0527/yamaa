@@ -548,12 +548,10 @@ impl Chain {
     /// apart compare. An issue spells the path with forward slashes, which
     /// on Windows is not the staged path's own spelling.
     fn issue_values(&self) -> Vec<Vec<ContextValue>> {
-        fn unstaged(value: ContextValue, staged: &[String; 2]) -> ContextValue {
+        fn unstaged(value: ContextValue, staged: &str) -> ContextValue {
             match value {
                 ContextValue::Text(text) => ContextValue::Text(
-                    staged
-                        .iter()
-                        .fold(text, |text, spelling| text.replace(spelling, "<staged>")),
+                    crate::support::scratch::replace_scratch_root(text, staged, "<staged>"),
                 ),
                 ContextValue::List(items) => ContextValue::List(
                     items
@@ -570,14 +568,13 @@ impl Chain {
                 other => other,
             }
         }
-        let native = self.staged.to_str().unwrap();
-        let staged = [native.to_owned(), native.replace('\\', "/")];
+        let staged = self.staged.to_str().unwrap();
         self.issues
             .iter()
             .map(|issues| {
                 issues
                     .iter()
-                    .map(|issue| unstaged(issue.to_value(), &staged))
+                    .map(|issue| unstaged(issue.to_value(), staged))
                     .collect()
             })
             .collect()

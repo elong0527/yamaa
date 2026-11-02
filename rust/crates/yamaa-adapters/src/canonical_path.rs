@@ -48,7 +48,7 @@ pub fn strip_verbatim_prefix(path: &str) -> Option<String> {
 /// `\\server\share\x`). Other verbatim shapes and paths without the prefix
 /// have none. Only `\` introduces the prefix: `//?/` is not a verbatim path
 /// on Windows.
-pub(crate) fn without_verbatim_prefix(path: &str) -> Option<String> {
+pub fn without_verbatim_prefix(path: &str) -> Option<String> {
     let rest = path.strip_prefix(r"\\?\")?;
     if let Some(unc) = rest.strip_prefix(r"UNC\") {
         let mut parts = unc.split('\\');

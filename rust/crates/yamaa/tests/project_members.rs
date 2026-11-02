@@ -31,7 +31,45 @@ use yamaa::{
     ProjectFunctions, ProjectRun, Status,
 };
 
+use crate::support::scratch::replace_scratch_root;
 use crate::support::Scratch;
+
+#[test]
+fn the_study_root_is_replaced_without_changing_suffixes_or_unrelated_text() {
+    // The normalization seam must cover Windows spellings on every test host.
+    for (label, root, text, expected) in [
+        (
+            "Windows native and diagnostic paths",
+            r"C:\tmp\study",
+            r"C:\tmp\study\project.yaml | C:/tmp/study/raw/missing.csv | C:\other\file | \n",
+            r"<study>\project.yaml | <study>/raw/missing.csv | C:\other\file | \n",
+        ),
+        (
+            "Windows verbatim drive and resource identities",
+            r"\\?\C:\tmp\study",
+            r"\\?\C:\tmp\study\project.yaml | //?/C:/tmp/study/raw/missing.csv | C:\tmp\study\project.yaml | C:/tmp/study/raw/missing.csv | C:\other\file | \n",
+            r"<study>\project.yaml | <study>/raw/missing.csv | <study>\project.yaml | <study>/raw/missing.csv | C:\other\file | \n",
+        ),
+        (
+            "Windows verbatim share and resource identities",
+            r"\\?\UNC\server\share\study",
+            r"\\?\UNC\server\share\study\project.yaml | //?/UNC/server/share/study/raw/missing.csv | \\server\share\study\project.yaml | //server/share/study/raw/missing.csv | \\other\share\file | \n",
+            r"<study>\project.yaml | <study>/raw/missing.csv | <study>\project.yaml | <study>/raw/missing.csv | \\other\share\file | \n",
+        ),
+        (
+            "POSIX paths",
+            "/tmp/study",
+            r"/tmp/study/project.yaml | /tmp/study/raw/missing.csv | /other/file | \n",
+            r"<study>/project.yaml | <study>/raw/missing.csv | /other/file | \n",
+        ),
+    ] {
+        assert_eq!(
+            replace_scratch_root(text.to_owned(), root, "<study>"),
+            expected,
+            "{label}"
+        );
+    }
+}
 
 /// The members of the study in run order, with the status each run gives.
 const STATUSES: [(&str, Status); 9] = [
@@ -283,7 +321,7 @@ fn engine(
 
 /// The outcome of `run`, saved, with the study's path written `<study>`.
 fn outcome(study: &Scratch, mut run: ProjectRun) -> Outcome {
-    let unstudied = |text: String| text.replace(study.to_str().unwrap(), "<study>");
+    let unstudied = |text: String| replace_scratch_root(text, study.to_str().unwrap(), "<study>");
     let members = run
         .members()
         .into_iter()
