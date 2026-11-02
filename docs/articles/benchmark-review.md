@@ -35,8 +35,8 @@ the coordinator confirms the reviewers before a benchmark is finalized.
 3. Read the Summary, Inputs and Expected output.
 4. Answer Task and Inputs with Agree or Disagree. If you disagree, say why in
    the comments.
-5. Select **Submit and next**. In the GitHub tab, select **Start discussion**,
-   then close the tab.
+5. Select **Submit and next**. In the GitHub tab, tick the search box if GitHub
+   shows it, select **Start discussion**, then close the tab.
 6. Select **Skip** for any benchmark you cannot judge.
 
 Reviews are public, so use public or invented data only.

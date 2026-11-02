@@ -55,7 +55,7 @@ question takes Agree or Disagree: agreeing with both approves the benchmark, and
 a disagreement needs a comment. The questions and their fixed choices are
 declared once in `generate.py`; `review-form.js` reads them back from the page,
 keeps a draft in the browser, and opens GitHub's new-discussion composer in the
-Comments category with the answers filled in, so the static page holds no
+General category with the answers filled in, so the static page holds no
 credentials. A reviewer must be signed in to GitHub to publish a review.
 
 Submitting or skipping a review moves the page to `review/next/`, the review

@@ -49,9 +49,10 @@ REPOSITORY = "https://github.com/elong0527/yamaa"
 # one free-text box. Submitting opens GitHub's new-discussion composer with the
 # answers filled in, so the static page holds no credentials; the reviewer
 # still selects Start discussion. Each review is its own discussion in the
-# Comments category. A reviewer who agrees with every question approves the
+# General category, because only maintainers can start one in Comments, an
+# announcement category. A reviewer who agrees with every question approves the
 # benchmark, and a disagreement needs a comment.
-REVIEW_URL = REPOSITORY + "/discussions/new?category=comments"
+REVIEW_URL = REPOSITORY + "/discussions/new?category=general"
 AGREEMENT = ("Agree", "Disagree")
 # Submitting or skipping a review leaves for the queue page, which holds the
 # order and sends the reviewer on. It walks these gallery groups, so one dataset
@@ -508,9 +509,10 @@ def render_review_form(name, questions, comment_hint):
         '<p class="review-feedback" role="status" aria-live="polite" hidden></p>'
         '<div class="review-actions"><p class="review-note">Drafts save '
         "automatically in this browser. Submitting opens GitHub with your review "
-        "filled in and moves this page to the next benchmark; select "
-        "<strong>Start discussion</strong> on GitHub to publish your review "
-        "under your account. Skip any benchmark you cannot judge.</p>"
+        "filled in and moves this page to the next benchmark. On GitHub, tick "
+        "the search box if it appears, then select <strong>Start discussion"
+        "</strong> to publish your review under your account. Skip any benchmark "
+        "you cannot judge.</p>"
         '<div class="review-buttons"><button type="button" class="review-skip">'
         'Skip</button><button type="submit" class="review-submit">'
         "Submit and next</button></div></div>"
