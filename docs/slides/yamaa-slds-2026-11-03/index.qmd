@@ -149,6 +149,12 @@ Read the source datasets from /app/input and save the completed dataset as /app/
 - Capture business rules that AI agents can apply.
 - Move human and AI agents collaboration at the planning stage.
 
+## yamaa: collaboration at the planning stage
+
+![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
+
+Human and AI review the specification during planning; the engine executes the agreed rules.
+
 ## yamaa: YAML specification example
 
 ```yaml
@@ -233,7 +239,7 @@ Scroll inside the frame to explore the spec, inputs, and golden output.
 
 ## yamaa reproduces R Submission Pilot 5 {.perf}
 
-* [Pilot 5 dashboard](https://rconsortium.github.io/submissions-pilot7-synthetic-data/studies/submission-pilot5/#submission-pilot5/datasets/ADSL) 
+* [Pilot 5 dashboard](https://rconsortium.github.io/submissions-pilot7-synthetic-data/studies/submission-pilot5/#submission-pilot5/datasets/ADSL)
 
 ::: {.perf-grid}
 ::: {.perf-panel}
