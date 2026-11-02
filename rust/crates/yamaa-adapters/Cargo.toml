@@ -57,10 +57,11 @@ flatbuffers = { version = "=25.12.19", default-features = false, optional = true
 # only tests compile; both zstd-safe copies link the one zstd-sys (#4066).
 # flate2 decompresses with its zlib-rs backend, as it did while
 # Parquet 55, which selects it, was in the engine's build (#3878).
+# Select only that backend; rust_backend would also compile unused miniz_oxide.
 bytes = { version = "1.12.1", optional = true }
 base64 = { version = "0.22.1", optional = true }
 brotli = { version = "8.0.4", default-features = false, features = ["std"], optional = true }
-flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend", "zlib-rs"], optional = true }
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs"], optional = true }
 lz4_flex = { version = "0.11.6", optional = true }
 zstd = { version = "0.14.3", default-features = false, optional = true }
 snap = { version = "1.1.2", optional = true }
