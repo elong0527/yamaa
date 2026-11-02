@@ -34,6 +34,31 @@ use yamaa::{
 use crate::support::scratch::replace_scratch_root;
 use crate::support::Scratch;
 
+#[test]
+fn the_study_root_is_replaced_without_changing_suffixes_or_unrelated_text() {
+    // The normalization seam must cover Windows spellings on every test host.
+    for (label, root, text, expected) in [
+        (
+            "Windows native and diagnostic paths",
+            r"C:\tmp\study",
+            r"C:\tmp\study\project.yaml | C:/tmp/study/raw/missing.csv | C:\other\file | \n",
+            r"<study>\project.yaml | <study>/raw/missing.csv | C:\other\file | \n",
+        ),
+        (
+            "POSIX paths",
+            "/tmp/study",
+            r"/tmp/study/project.yaml | /tmp/study/raw/missing.csv | /other/file | \n",
+            r"<study>/project.yaml | <study>/raw/missing.csv | /other/file | \n",
+        ),
+    ] {
+        assert_eq!(
+            replace_scratch_root(text.to_owned(), root, "<study>"),
+            expected,
+            "{label}"
+        );
+    }
+}
+
 /// The members of the study in run order, with the status each run gives.
 const STATUSES: [(&str, Status); 9] = [
     ("DM", Status::Succeeded),
