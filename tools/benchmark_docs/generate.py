@@ -509,9 +509,10 @@ def render_review_form(name, questions, comment_hint):
         '<p class="review-feedback" role="status" aria-live="polite" hidden></p>'
         '<div class="review-actions"><p class="review-note">Drafts save '
         "automatically in this browser. Submitting opens GitHub with your review "
-        "filled in and moves this page to the next benchmark; select "
-        "<strong>Start discussion</strong> on GitHub to publish your review "
-        "under your account. Skip any benchmark you cannot judge.</p>"
+        "filled in and moves this page to the next benchmark. On GitHub, tick "
+        "the search box if it appears, then select <strong>Start discussion"
+        "</strong> to publish your review under your account. Skip any benchmark "
+        "you cannot judge.</p>"
         '<div class="review-buttons"><button type="button" class="review-skip">'
         'Skip</button><button type="submit" class="review-submit">'
         "Submit and next</button></div></div>"
