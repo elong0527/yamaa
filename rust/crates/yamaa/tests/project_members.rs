@@ -31,6 +31,7 @@ use yamaa::{
     ProjectFunctions, ProjectRun, Status,
 };
 
+use crate::support::scratch::replace_scratch_root;
 use crate::support::Scratch;
 
 /// The members of the study in run order, with the status each run gives.
@@ -283,7 +284,7 @@ fn engine(
 
 /// The outcome of `run`, saved, with the study's path written `<study>`.
 fn outcome(study: &Scratch, mut run: ProjectRun) -> Outcome {
-    let unstudied = |text: String| text.replace(study.to_str().unwrap(), "<study>");
+    let unstudied = |text: String| replace_scratch_root(text, study.to_str().unwrap(), "<study>");
     let members = run
         .members()
         .into_iter()

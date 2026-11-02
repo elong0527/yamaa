@@ -10,6 +10,39 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
+/// Replace a scratch root in native paths and diagnostic paths, which use
+/// forward slashes on every platform. Leave suffixes and other text intact.
+pub fn replace_scratch_root(text: String, root: &str, replacement: &str) -> String {
+    [root.to_owned(), root.replace('\\', "/")]
+        .iter()
+        .fold(text, |text, spelling| text.replace(spelling, replacement))
+}
+
+#[test]
+fn replacing_a_scratch_root_preserves_suffixes_and_unrelated_text() {
+    // The normalization seam must cover Windows spellings on every test host.
+    for (label, root, text, expected) in [
+        (
+            "Windows native and diagnostic paths",
+            r"C:\tmp\study",
+            r"C:\tmp\study\project.yaml | C:/tmp/study/raw/missing.csv | C:\other\file | \n",
+            r"<study>\project.yaml | <study>/raw/missing.csv | C:\other\file | \n",
+        ),
+        (
+            "POSIX paths",
+            "/tmp/study",
+            r"/tmp/study/project.yaml | /tmp/study/raw/missing.csv | /other/file | \n",
+            r"<study>/project.yaml | <study>/raw/missing.csv | /other/file | \n",
+        ),
+    ] {
+        assert_eq!(
+            replace_scratch_root(text.to_owned(), root, "<study>"),
+            expected,
+            "{label}"
+        );
+    }
+}
+
 pub struct Scratch(PathBuf);
 
 impl Scratch {
