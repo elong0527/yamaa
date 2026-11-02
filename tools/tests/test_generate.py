@@ -759,7 +759,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertIn(
                     f'<form class="review-form" data-benchmark="{name}" '
                     'data-review-url="https://github.com/elong0527/yamaa/'
-                    'discussions/new?category=comments" '
+                    'discussions/new?category=general" '
                     f'data-next-url="review/next/?after={name}" data-approve="Agree" '
                     'data-done-key="yamaa-benchmark-reviewed:" novalidate hidden>',
                     page,

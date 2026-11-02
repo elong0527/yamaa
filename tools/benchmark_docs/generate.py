@@ -49,9 +49,10 @@ REPOSITORY = "https://github.com/elong0527/yamaa"
 # one free-text box. Submitting opens GitHub's new-discussion composer with the
 # answers filled in, so the static page holds no credentials; the reviewer
 # still selects Start discussion. Each review is its own discussion in the
-# Comments category. A reviewer who agrees with every question approves the
+# General category, because only maintainers can start one in Comments, an
+# announcement category. A reviewer who agrees with every question approves the
 # benchmark, and a disagreement needs a comment.
-REVIEW_URL = REPOSITORY + "/discussions/new?category=comments"
+REVIEW_URL = REPOSITORY + "/discussions/new?category=general"
 AGREEMENT = ("Agree", "Disagree")
 # Submitting or skipping a review leaves for the queue page, which holds the
 # order and sends the reviewer on. It walks these gallery groups, so one dataset
