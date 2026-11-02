@@ -388,6 +388,51 @@ class NativeWorkflowContract(unittest.TestCase):
                     [source],
                 )
 
+    def test_r_source_filename_follows_the_build_output_in_every_native_lane(self):
+        # GitHub's step-output wiring is outside the static matrix reader.
+        workflow = support.workflow("native.yml")
+        producer = workflow["jobs"]["r-dist"]
+        build = next(
+            step
+            for step in producer["steps"]
+            if step.get("name") == "Build R source package"
+        )
+        upload = next(
+            step
+            for step in producer["steps"]
+            if step.get("name") == "Preserve source archive"
+        )
+        consumers = {
+            step["name"]: step.get("env", {}).get("R_SOURCE_ARCHIVE")
+            for step in workflow["jobs"]["r"]["steps"]
+            if "${R_SOURCE_ARCHIVE}" in step.get("run", "")
+        }
+        literal_names = re.findall(
+            r"\byamaa_\d+\.\d+\.\d+\.tar\.gz",
+            (ROOT / ".github/workflows/native.yml").read_text(),
+        )
+        self.assertEqual(
+            {
+                "build": build.get("id"),
+                "outputs": producer.get("outputs"),
+                "upload": upload["with"]["path"],
+                "consumers": consumers,
+                "literal_names": literal_names,
+            },
+            {
+                "build": "build_r",
+                "outputs": {"archive": "${{ steps.build_r.outputs.archive }}"},
+                "upload": "${{ runner.temp }}/${{ steps.build_r.outputs.archive }}",
+                "consumers": {
+                    "Install R outside checkout": "${{ needs.r-dist.outputs.archive }}",
+                    "Run installed R supplemental suites outside checkout": "${{ needs.r-dist.outputs.archive }}",
+                    "Check R source package outside checkout": "${{ needs.r-dist.outputs.archive }}",
+                },
+                "literal_names": [],
+            },
+            "native R archive paths use the built filename",
+        )
+
     def offline_source_jobs(self):
         """List each offline source lane's job name with its host."""
         return [

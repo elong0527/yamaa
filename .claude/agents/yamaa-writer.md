@@ -20,7 +20,7 @@ first.
   conditions only, and its Evidence line cites what exists on main,
   preferring a benchmark or a host-fixture case, which both hosts prove,
   to a Rust test name. A behaviour change that users can see gets one line in
-  the notes of the release in development, `docs/releases/0.7.0.md`, by
+  the notes of the release in development, `docs/releases/1.0.0.md`, by
   area, and nothing is said about migration from 0.4.0 (D35, D222).
 - Check with `make quick` for rules, schemas or docs generators, or
   `make docs-test docs` for a docs-only change. Both need `make setup`
