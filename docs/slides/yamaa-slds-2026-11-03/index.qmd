@@ -196,7 +196,7 @@ The design of yamaa is a contract between human and AI agents.
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
 | Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Runs specifications in Python, R and CLI consistently following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
+| Engine | Runs specifications in Python, R and CLI consistently following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) / [CLI](https://github.com/elong0527/yamaa/tree/main/rust/crates/yamaa-cli) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## yamaa: inheritance
@@ -216,11 +216,11 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 ::: {.column width="48%"}
 <div class="big-number">3</div>
-<div class="metric-label">executables (Python, R, CLI)</div>
+<div class="metric-label">execution interfaces (Python, R, CLI)</div>
 :::
 :::
 
-* [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/)
+* [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/) — Python and R runners.
 
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
