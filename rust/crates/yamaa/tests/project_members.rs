@@ -45,6 +45,18 @@ fn the_study_root_is_replaced_without_changing_suffixes_or_unrelated_text() {
             r"<study>\project.yaml | <study>/raw/missing.csv | C:\other\file | \n",
         ),
         (
+            "Windows verbatim drive and resource identities",
+            r"\\?\C:\tmp\study",
+            r"\\?\C:\tmp\study\project.yaml | //?/C:/tmp/study/raw/missing.csv | C:\tmp\study\project.yaml | C:/tmp/study/raw/missing.csv | C:\other\file | \n",
+            r"<study>\project.yaml | <study>/raw/missing.csv | <study>\project.yaml | <study>/raw/missing.csv | C:\other\file | \n",
+        ),
+        (
+            "Windows verbatim share and resource identities",
+            r"\\?\UNC\server\share\study",
+            r"\\?\UNC\server\share\study\project.yaml | //?/UNC/server/share/study/raw/missing.csv | \\server\share\study\project.yaml | //server/share/study/raw/missing.csv | \\other\share\file | \n",
+            r"<study>\project.yaml | <study>/raw/missing.csv | <study>\project.yaml | <study>/raw/missing.csv | \\other\share\file | \n",
+        ),
+        (
             "POSIX paths",
             "/tmp/study",
             r"/tmp/study/project.yaml | /tmp/study/raw/missing.csv | /other/file | \n",

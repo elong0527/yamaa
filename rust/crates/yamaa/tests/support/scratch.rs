@@ -11,11 +11,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 /// Replace a scratch root in native paths and diagnostic paths, which use
-/// forward slashes on every platform. Leave suffixes and other text intact.
+/// forward slashes and omit Windows verbatim prefixes even for long roots.
+/// Leave suffixes and other text intact.
 pub fn replace_scratch_root(text: String, root: &str, replacement: &str) -> String {
-    [root.to_owned(), root.replace('\\', "/")]
-        .iter()
-        .fold(text, |text, spelling| text.replace(spelling, replacement))
+    let mut roots = vec![root.to_owned()];
+    if let Some(plain) = yamaa_adapters::canonical_path::without_verbatim_prefix(root) {
+        roots.push(plain);
+    }
+    roots.into_iter().fold(text, |text, spelling| {
+        text.replace(&spelling, replacement)
+            .replace(&spelling.replace('\\', "/"), replacement)
+    })
 }
 
 pub struct Scratch(PathBuf);
