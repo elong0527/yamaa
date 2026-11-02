@@ -69,9 +69,9 @@ release:
 install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
-0.7.0 is not submitted to CRAN, so install it from the GitHub release
-(#4064 D304). `install.packages("yamaa")` installs the older version that
-CRAN serves.
+0.7.0 and 0.8.0 are not submitted to CRAN, so install them from the GitHub
+release (#4064 D304, #4251). `install.packages("yamaa")` installs the older
+version that CRAN serves.
 
 Installing the source package compiles the Rust engine, so it needs R 4.2.0
 or later, a C compiler, and Cargo and rustc 1.82 or later, from

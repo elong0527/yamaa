@@ -60,14 +60,15 @@ you convert its tables to theirs.
 ### A CRAN mirror
 
 CRAN receives final releases from 0.6.0 on, never a candidate (#3673 D289),
-except 0.7.0, which is not submitted (#4064 D304). Once CRAN has published one, a CRAN mirror serves yamaa as it serves any CRAN
+except 0.7.0 and 0.8.0, which are not submitted (#4064 D304, #4251). Once CRAN
+has published one, a CRAN mirror serves yamaa as it serves any CRAN
 package: Posit Package Manager's CRAN repository follows CRAN, so
 `install.packages("yamaa")` with the mirror as the repository installs it,
 and a curated repository serves it once an administrator adds it. On Windows and macOS, CRAN provides binary
 packages for R-release and R-oldrel; elsewhere the source package builds with
 no network, as [the next section](#from-files-carried-in) describes.
 
-Before then, for 0.7.0 and for every candidate, the R packages are release
+Before then, for 0.7.0, 0.8.0 and every candidate, the R packages are release
 assets only:
 add them to a local repository that the mirror hosts, or carry them in.
 
@@ -78,7 +79,7 @@ When no mirror has the version you need, the assets of its
 fallback: the wheels, the Python source archive, the R source package, the R
 binary packages and the command-line archives. The wheels and the Python
 source archive are the files that PyPI serves, a final release's R source
-package is the file that CRAN receives (0.7.0's goes nowhere else), and the R
+package is the file that CRAN receives (0.7.0 and 0.8.0 stay on GitHub), and the R
 binary packages and the
 command-line archives are published only there. Download them on a connected
 machine and carry them in; installing them needs no network.

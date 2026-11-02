@@ -1282,7 +1282,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
 name = "yamaa"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",
@@ -1293,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "yamaa-adapters"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "ahash",
  "arrow-array",
@@ -1323,7 +1323,7 @@ dependencies = [
 
 [[package]]
 name = "yamaa-application"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -1341,14 +1341,14 @@ dependencies = [
 
 [[package]]
 name = "yamaa-boundary"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "yamaa-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "libc",
  "serde_json",
@@ -1358,7 +1358,7 @@ dependencies = [
 
 [[package]]
 name = "yamaa-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "ahash",
  "libm",
@@ -1370,7 +1370,7 @@ dependencies = [
 
 [[package]]
 name = "yamaa-python"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "arrow-ipc",
  "num-bigint",
@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "yamaa-r"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "arrow-array",
  "extendr-api",

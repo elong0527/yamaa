@@ -549,8 +549,8 @@ matrix by `tools.validation.check_supported_platforms`.
 5. For a final release that goes to CRAN, check the unchanged
    `yamaa_X.Y.Z.tar.gz` asset on win-builder (R-devel) and the macOS
    builder, record the results in `R/yamaa/cran-comments.md`, and submit it
-   through CRAN's web form. A candidate never goes to CRAN, and 0.7.0 does
-   not (#4064 D304).
+   through CRAN's web form. A candidate never goes to CRAN; 0.7.0
+   (#4064 D304) and 0.8.0 (#4251) are not submitted either.
 6. Announce the release once the PyPI check and install workflow pass.
 
 ## Documentation
