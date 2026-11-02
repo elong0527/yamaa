@@ -1,8 +1,11 @@
-## Update from 0.7.0
+## Update from 0.6.2
 
-This update adds calculated history through backward row reads, concurrent
-partition and project execution with a threads argument, and compressed
-Parquet output. The specification language remains 1.0.
+This update adds in-memory data-frame inputs, codelist decoding, project
+inheritance and additional Define-XML support, and fixes input handling and
+host error reporting. It also adds calculated history through backward row
+reads, concurrent partition and project execution with a threads argument,
+and compressed Parquet output. The Windows build fixes from 0.6.2 are retained,
+and the specification language remains 1.0.
 
 ## Submission timing
 

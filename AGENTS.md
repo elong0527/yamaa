@@ -53,7 +53,7 @@ The whole of this guide is the contract; this list is the order of work.
   that breaks the specification language, the Python or R API, saved outputs
   or diagnostic identity follows a D-decision ([Decisions](#decisions)) or
   an owner decision on its own issue. It gets a one-line entry in the notes
-  of the release in development, `docs/releases/0.7.0.md`, and no
+  of the release in development, `docs/releases/1.0.0.md`, and no
   step-by-step migration text. Internal interfaces, including the
   unpublished Rust crates, may change freely, except the `yamaa` facade's
   public items, frozen from 1.0.0. Remove obsolete interfaces and callers
