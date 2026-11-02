@@ -2,12 +2,15 @@
 
 This update adds in-memory data-frame inputs, codelist decoding, project
 inheritance and additional Define-XML support, and fixes input handling and
-host error reporting. The Windows build fixes from 0.6.2 are retained.
+host error reporting. It also adds calculated history through backward row
+reads, concurrent partition and project execution with a threads argument,
+and compressed Parquet output. The Windows build fixes from 0.6.2 are retained,
+and the specification language remains 1.0.
 
 ## Submission timing
 
-The 0.7.0 release is published on GitHub and PyPI only, and is not
-submitted to CRAN. Before a later release is submitted, the maintainer
+The 0.7.0 and 0.8.0 releases are published on GitHub and PyPI only, and are
+not submitted to CRAN. Before a later release is submitted, the maintainer
 checks its unchanged release source archive with win-builder (R-devel) and
 the macOS builder, and records their results with the release qualification.
 
