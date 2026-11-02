@@ -1,10 +1,10 @@
 # yamaa for Python <img src="https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.8.0/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
-[![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
-[![Regular build](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&event=schedule&label=regular%20build)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
-[![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
-[![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/yamaa-v0.8.0/LICENSE)
+[![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
+[![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
+[![Release checks](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=release%20checks)](https://github.com/elong0527/yamaa/actions/workflows/native.yml "Builds and tests Python and R release packages on Linux, macOS, and Windows, and runs CRAN's incoming checks on the R source package")
+[![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 
 Python package for yamaa, a domain-specific language for clinical trial data
 standardization.
