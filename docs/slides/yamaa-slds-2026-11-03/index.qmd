@@ -220,7 +220,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 :::
 
-* [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/) — Python and R runners.
+* [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/).
 
 <iframe class="benchmark-embed" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
@@ -294,7 +294,7 @@ Scroll inside the frame to explore the spec, inputs, and golden output.
 
 * RConsortium / BBSW
   - [Submission working group Pilot7](https://rconsortium.github.io/submissions-wg/pilot7.html)
-  - [Review guide, now focused on Pilot 5](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/171) - review one study, co-authorship opportunity
+  - [Review guide, now focused on Pilot 5](https://github.com/RConsortium/submissions-pilot7-synthetic-data/pull/171)
   - [Slack channel / Regular Meetings](https://rconsortium.github.io/submissions-wg/join.html)
 
 * Public benchmarks
