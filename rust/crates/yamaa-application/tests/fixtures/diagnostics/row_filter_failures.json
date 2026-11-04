@@ -1,5 +1,5 @@
 {
-  "about": "A row template's filter runs after its candidate's derivations (COLUMN-9, #4272). Subject B's group has no lookup record, so the template's filter would discard it, but the string template that reads the missing label fails first; when the template declares a filter, the finding names it as template_filter, and without one it does not. A string template that answers a missing value with missing: null lets the filter discard subject B, and the saved bytes hold subject A alone. Every value is authored from COLUMN-9 and COLUMN-10.",
+  "about": "A row template's filter runs after its candidate's derivations (COLUMN-9, #4272). Subject B's group has no lookup record, so the template's filter would discard it, but the string template that reads the missing label fails first; when the template declares a filter, the finding names it as template_filter, and without one it does not. A derivation that reads a window result runs in the window pass, after an ungrouped template's filter, so subject A's missing previous subject fails there and names no filter. A string template that answers a missing value with missing: null lets the filter discard subject B, and the saved bytes hold subject A alone. Every value is authored from COLUMN-9 and COLUMN-10.",
   "cases": [
     {
       "case": "a_template_derivation_failing_before_its_filter_names_the_filter",
@@ -100,6 +100,43 @@
       "saved": {
         "output.csv": "SUBJ,TAGGED\nA,hello-tag\n"
       }
+    },
+    {
+      "case": "a_window_derivation_failing_after_its_filter_names_no_filter",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\noutput: {path: output.csv, columns: [SUBJ, TAGGED]}\nwindows:\n  BY_SUBJECT:\n    order_by: [SUBJ]\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: PREV, type: str}\n  - {name: TAGGED, type: str}\nrows:\n  - id: matched_only\n    dataset: I\n    filter: \"I.GRP IS NOT NULL\"\n    derivations:\n      PREV: {row_value: {source: SUBJ, offset: -1, window: BY_SUBJECT}}\n      TAGGED:\n        str_template: '{PREV}-tag'\n",
+          "input.csv": "SUBJ,GRP\nA,x\nB,y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "mapping",
+          "condition": "missing_input",
+          "rule": "COLUMN-10",
+          "spec_paths": [
+            "rows.matched_only.derivations.TAGGED.str_template"
+          ],
+          "context": {
+            "keys": [
+              {
+                "SUBJ": "A"
+              }
+            ],
+            "variable": "PREV"
+          }
+        }
+      ],
+      "saved": {}
     }
   ]
 }

@@ -105,18 +105,6 @@ pub(crate) fn condition(run: &PreparedRun, condition: &Condition) -> Result<Diag
             .context
             .insert("intermediate_key".into(), Value::Object(fields(matched)));
     }
-    // A candidate row's derivation fails before its template's filter could
-    // discard the row, so the finding names that filter (COLUMN-9).
-    if let Some(filter) = condition
-        .identity
-        .as_ref()
-        .and(diagnostic.spec_paths.first())
-        .and_then(|path| run.compiled().template_filter(path))
-    {
-        diagnostic
-            .context
-            .insert("template_filter".into(), json!(filter));
-    }
     if let Some(partition) = &condition.partition {
         diagnostic
             .context

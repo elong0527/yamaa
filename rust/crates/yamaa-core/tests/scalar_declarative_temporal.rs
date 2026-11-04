@@ -727,6 +727,30 @@ mod scalar {
             }
             let date: Date = "2024-02-29".parse().unwrap();
             let datetime: DateTime = "2024-02-29T12:13".parse().unwrap();
+            // A bound moves only the supplied time, within the date's day, and
+            // a bound outside that day is ignored; the date's collected
+            // precision stays (TIME-8, TIME-9).
+            let bounded = operation(datetime_kind(TimeRule::First), true, None);
+            for (bound, expected) in [
+                ("2024-02-29T08:30:00", "2024-02-29T08:30:00"),
+                ("2024-03-01T08:30:00", "2024-02-29T00:00:00"),
+            ] {
+                let S::Bound(pending) = bounded
+                    .source_value(ValueRef::Date(date.with_precision(P::Month)))
+                    .unwrap()
+                else {
+                    panic!("a bounded date source waits for its bounds")
+                };
+                let bound: DateTime = bound.parse().unwrap();
+                let (Value::DateTime(value), false) = bounded
+                    .apply_bounds(pending, ValueRef::DateTime(bound), ValueRef::Missing)
+                    .unwrap()
+                else {
+                    panic!("an uncrossed datetime")
+                };
+                assert_eq!(value.to_string(), expected, "{bound}");
+                assert_eq!(value.collected_precision(), P::Month, "{bound}");
+            }
             let op = operation(datetime_kind(TimeRule::First), false, None);
             assert_eq!(
                 op.source_value(ValueRef::DateTime(datetime)),
