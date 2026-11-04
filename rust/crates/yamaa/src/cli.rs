@@ -50,7 +50,7 @@ use std::ffi::OsString;
 use std::io::Write;
 use std::sync::Arc;
 
-use crate::{CancellationToken, EngineOptions, Host};
+use crate::{CancellationToken, EngineOptions, Host, HostLanguage};
 
 use arguments::{Format, Invocation, Usage, COMMANDS};
 use commands::Execution;
@@ -65,6 +65,18 @@ pub const NOT_RUN: u8 = 2;
 /// Where a command's progress lines go under `--verbose`, as they happen.
 pub type Reporter = Arc<dyn Fn(&str) + Send + Sync>;
 
+/// The project functions a `run` of a project asks a runtime that settles
+/// them for ([`Runtime::settles_functions`]): the host language the command
+/// settled on, from `--host` or the project file
+/// ([`crate::ProjectRequest::host_languages`]), and the interpreter the user
+/// named with `--interpreter`, if any.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Functions<'a> {
+    pub language: HostLanguage,
+    pub interpreter: Option<&'a str>,
+}
+
 /// What differs between the clients that run the commands: the binary, and
 /// each host package's entry.
 pub trait Runtime: Send + Sync {
@@ -73,20 +85,38 @@ pub trait Runtime: Send + Sync {
     /// interpreter's.
     fn host(&self) -> (Host, Option<String>);
 
+    /// Whether a `run` of a project settles the language of the project
+    /// functions it may call and asks the runtime for them: true for a
+    /// runtime whose engine claims no host language of its own, the
+    /// standalone binary's, which then takes `--host` and `--interpreter`;
+    /// false, the default, for a host package, which runs its own functions
+    /// in its own language and refuses both flags as a usage error.
+    fn settles_functions(&self) -> bool {
+        false
+    }
+
     /// The options of every engine the commands build: the host language,
     /// the runtime identity and the project functions. The commands add the
-    /// partitions, `--threads` and the `--verbose` progress callback.
-    fn options(&self) -> EngineOptions;
+    /// partitions, `--threads` and the `--verbose` progress callback. A
+    /// `run` of a project gives a runtime that settles functions the ones it
+    /// settled on, or none when the project names no one language; the
+    /// other commands, and every command of a host package, give none. A
+    /// runtime that cannot run the functions asked of it says why: a usage
+    /// error, which exits 2.
+    fn options(&self, functions: Option<&Functions<'_>>) -> Result<EngineOptions, String>;
 
     /// Where `--verbose` writes each progress line as it happens.
     fn reporter(&self) -> Reporter;
 }
 
-/// The runtime of the `yamaa` binary: an engine that claims no host
-/// language (#3030 section 2.10, D123), so it reads no project's
-/// `environments.<host>` entry, verifies no lock and activates nothing, and
-/// a build that calls a project function is refused before it reads data
-/// (D110). Its progress lines go to the process's standard error.
+/// The neutral runtime: an engine that claims no host language (#3030
+/// section 2.10, D123), so it reads no project's `environments.<host>`
+/// entry, verifies no lock and activates nothing, and a build that calls a
+/// project function is refused before it reads data (D110). It settles the
+/// functions of a `run`, as the binary's runtime does, but runs none: the
+/// binary's own runtime runs them through an interpreter's worker, and
+/// answers for a project that settles on a language where this refuses. Its
+/// progress lines go to the process's standard error.
 pub struct Neutral;
 
 impl Runtime for Neutral {
@@ -94,8 +124,21 @@ impl Runtime for Neutral {
         (Host::Cli, None)
     }
 
-    fn options(&self) -> EngineOptions {
-        EngineOptions::neutral(Host::Cli.as_str().to_owned(), String::new())
+    fn settles_functions(&self) -> bool {
+        true
+    }
+
+    fn options(&self, functions: Option<&Functions<'_>>) -> Result<EngineOptions, String> {
+        match functions {
+            Some(functions) => Err(format!(
+                "this command line runs no {} project function",
+                functions.language.as_str()
+            )),
+            None => Ok(EngineOptions::neutral(
+                Host::Cli.as_str().to_owned(),
+                String::new(),
+            )),
+        }
     }
 
     fn reporter(&self) -> Reporter {
@@ -277,8 +320,12 @@ mod tests {
             (Host::Python, Some("3.12.4".to_owned()))
         }
 
-        fn options(&self) -> EngineOptions {
-            EngineOptions::neutral("python".to_owned(), "3.12.4".to_owned())
+        fn options(&self, functions: Option<&Functions<'_>>) -> Result<EngineOptions, String> {
+            assert!(functions.is_none(), "a host runtime settles no functions");
+            Ok(EngineOptions::neutral(
+                "python".to_owned(),
+                "3.12.4".to_owned(),
+            ))
         }
 
         fn reporter(&self) -> Reporter {

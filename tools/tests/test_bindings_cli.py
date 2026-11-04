@@ -42,7 +42,7 @@ def text(literal):
 
 def field(entry, name, pattern):
     """The value of one field of a `COMMANDS` entry."""
-    found = re.search(rf"\b{name}: {pattern}", entry, re.S)
+    found = re.search(rf"\b{name}:\s*{pattern}", entry, re.S)
     if found is None:
         raise AssertionError(f"no {name} in the COMMANDS entry {entry.strip()[:40]!r}")
     return found[1]

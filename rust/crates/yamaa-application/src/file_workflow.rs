@@ -142,6 +142,24 @@ pub struct CapturedProject {
     pub(crate) environment: crate::project_source::OwnedEnvironment,
 }
 
+impl CapturedProject {
+    /// The project file as declared: its environments, function files,
+    /// codelists and sections, whichever host language captured it.
+    pub fn project(&self) -> Option<&yamaa_core::ast::Project> {
+        self.environment.project()
+    }
+
+    /// The admitted function definitions the project lists, in listing
+    /// order, with the implementations each declares for every host
+    /// language; none when the project lists no `functions`.
+    pub fn functions(&self) -> Option<&[yamaa_core::project_function::Function]> {
+        self.environment
+            .environment()
+            .functions_present()
+            .then(|| self.environment.environment().functions())
+    }
+}
+
 /// Capture a project file with the path policy, schemas and environment
 /// admission that a specification build applies to the same project file.
 /// A caller's resolver serves the project file and everything it declares

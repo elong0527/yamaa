@@ -1205,7 +1205,7 @@ usage whatever else is given. Both exit 0.
 
 ```text
 yamaa check PATH [--spec NAME | --parent PATH] [--threads N] [--verbose]
-yamaa run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]
+yamaa run PATH [--spec NAME | --section SECTION] [--host python|r] [--interpreter PATH] [--threads N] [--verbose]
 yamaa submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]
 yamaa resolve PATH [--spec NAME]
 yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
@@ -1218,7 +1218,7 @@ yamaa selftest
 | Command | What it does | In R and Python |
 |---|---|---|
 | `check` | Checks a specification or a project without reading data, or with `--parent` a fragment on a template | `check()`, `check(parent = )` |
-| `run` | Builds a specification or a project, then saves what it built and prints each path written | `run()`, then `save()` |
+| `run` | Builds a specification or a project, then saves what it built and prints each path written; with `--host` or a project that names one language, calls its project functions through that language's worker | `run()`, then `save()` |
 | `submission` | Composes a project's define.xml and transport files, then saves them and prints each path written | `submission()`, then `save()` |
 | `resolve` | Prints the resolved specification as canonical JSON | `resolve()` |
 | `read-odm` | Reads SOURCE, an ODM XML file or a TAR archive that holds one, and saves its items to OUT | `read_odm()` |
@@ -1228,7 +1228,9 @@ yamaa selftest
 | `selftest` | Runs the cases built into the engine and compares each with its expected files | `selftest()` |
 
 `check`, `run` and `resolve` take a specification or a project, whichever
-PATH declares in its `type:`, and `submission` takes a project. For a
+PATH declares in its `type:`, and `submission` takes a project. `run`'s
+`--host LANGUAGE` and `--interpreter PATH` settle the project functions a
+project run calls ([Project functions from the standalone binary](#project-functions-from-the-standalone-binary)). For a
 project, `--spec NAME` selects one of its specifications, as `spec(name)`
 does, and `--section SECTION` one of its sections, `sdtm`, `adam` or `send`;
 without them, `check` and `run` cover the whole project, and `submission`
@@ -1257,15 +1259,20 @@ names the archive member to read, and `--max-archive-members N` (default
 and the depth of element nesting
 ([ODM-1](../../rules/reference/odm.md#odm-1)). Each N is a whole number.
 
-The standalone binary runs no project function. It reads no project's
-`environments` entry, so it checks no lock, and a run of a specification
-that calls a project function fails before it reads any input, with
+The standalone binary runs on no interpreter, so a `run` of a project that
+calls project functions starts one, a worker of the host package, and runs
+them there ([Project functions from the standalone binary](#project-functions-from-the-standalone-binary)).
+`--host` names the language, `python` or `r`, and `--interpreter` the
+interpreter; without `--host`, the one language the project names runs
+them. A project that names no one language, or a run of a specification
+alone, runs no project function: it reads no project's `environments`
+entry, so it checks no lock, and a run of a specification that calls a
+project function fails before it reads any input, with
 `unsupported_operation` at the first derivation that calls one, in the
 order a formatted file writes them (the intermediates', then the columns',
-then the row templates'): run that specification from R or Python, or run
-the command as the host ([Run the command line as a host](#run-the-command-line-as-a-host)).
-Every other build runs as it does in R and Python, and `check` checks every
-specification, since it runs no project code.
+then the row templates'). Every other build runs as it does in R and
+Python, and `check` checks every specification, since it runs no project
+code.
 
 ```sh
 yamaa check project.yaml
@@ -1277,6 +1284,48 @@ yamaa submission project.yaml --section sdtm --created 2026-10-21T12:00:00
 yamaa read-odm edc/export.tar.gz edc/odm.parquet --archive-member odm.xml
 yamaa lint --fix project.yaml sdtm/ adam/
 yamaa schema spec > spec.schema.json
+```
+
+### Project functions from the standalone binary
+
+A `run` of a project whose specifications call project functions needs the
+language they run in and an interpreter with the host package and the
+function packages installed, the ones the project's lock names. The binary
+settles the language first: `--host python` or `--host r`, or, without the
+flag, the one language the project declares an `environments` entry for,
+or, when it declares none, the one language its function files implement.
+A project that names both languages is ambiguous, so without `--host` the
+run calls no project function and refuses a call of one as
+`unsupported_operation`; `--interpreter` alone is then a usage error. The
+JSON document's `host` is the language settled on, or null.
+
+The functions run in a worker of the host package, `python -m yamaa._worker`
+or `Rscript` running the R package's worker, which the binary starts the
+first time a run asks for a function and ends with the run. `--interpreter
+PATH` names the interpreter; without it, the binary starts `python3`, or
+`python` where that is not found, or `Rscript`, from `PATH`, so a virtual
+environment or an renv project that is active in the shell is the one used.
+The worker verifies the lock, binds and calls each function as the
+package's own `run()` does, so the result, the issues and the activation
+tests are the host's, and a function's warnings reach the terminal through
+the worker's standard error. Its standard output carries the binary's
+protocol: the Python worker moves `sys.stdout` to standard error before any
+project code runs, and an R function must not write to standard output.
+
+The lock pins yamaa because the engine is part of what the functions were
+tested with ([Project configuration](#project-configuration)), so a declared
+lock is verified against the worker's installation, and the worker's
+package must carry the binary's engine version: a difference fails the run
+with `runtime_artifact_mismatch` for the package `yamaa`, naming both
+versions. Without a lock, the installed functions run unchecked, as they do
+in the hosts. A worker that cannot start, or that ends, fails the run
+before it reads data; the engine keeps such a host failure opaque in the
+issue, so the reason is written to standard error as `yamaa: <message>`.
+
+```sh
+yamaa run project.yaml                              # the one language the project names
+yamaa run project.yaml --host python --interpreter .venv/bin/python
+yamaa run project.yaml --host r --spec ADSL
 ```
 
 ### Run the command line as a host
@@ -1296,7 +1345,8 @@ every call of the package does ([Interrupts](#interrupts)).
 `python -m yamaa` runs the Python entry from a shell, with the binary's
 arguments and exit status, from the interpreter whose packages the project's
 lock names; R has no such entry point, so a shell runs `Rscript` with the
-arguments after the expression:
+arguments after the expression. A host runs its own functions, so `--host`
+and `--interpreter` are usage errors there:
 
 ```sh
 python -m yamaa run project.yaml --spec ADSL
@@ -1341,7 +1391,10 @@ one line, with its members in key order ([JSON documents](#json-documents)).
 
 Standard error carries only the refusals of exit status 2, each as
 `yamaa: <message>` and then `run 'yamaa --help' for usage`, which a failed
-write to standard output leaves out. There are two exceptions. A `selftest`
+write to standard output leaves out. There are three exceptions. A run's
+worker writes there what the functions it runs write to standard error,
+and the binary writes `yamaa: <message>` there for a worker that cannot
+start or that ends. A `selftest`
 case that panics fails, and the panic message, which shows where the engine
 panicked, goes to standard error. And `check`, `run` and `submission` with
 `--verbose` write each progress event there as it happens, as
@@ -1384,7 +1437,7 @@ same keys, except where the table names a refusal's.
 | Command | Keys |
 |---|---|
 | `check` | `command`, `path`, `spec`, `status`, `issues` |
-| `run` | `command`, `path`, `spec`, `section`, `status`, `members`, `issues`, `paths` |
+| `run` | `command`, `path`, `spec`, `section`, `host`, `status`, `members`, `issues`, `paths` |
 | `submission` | `command`, `path`, `section`, `created`, `status`, `issues`, `paths` |
 | `resolve` | the resolved specification; a refusal: `command`, `path`, `spec`, `status`, `issues` |
 | `read-odm` | `command`, `path`, `rows`, `status`, `issues`, `paths` |
@@ -1397,7 +1450,9 @@ same keys, except where the table names a refusal's.
 * `command` is the command's name. `path`, `spec`, `section` and `type` are
   its arguments as given, null for a flag not given; `read-odm`'s `path` is
   SOURCE, and a check with `--parent` prints the same keys, its `path` the
-  fragment.
+  fragment. A run's `host` is the language its project functions run in,
+  `python` or `r`, as `--host` gave it or the project named it, and null
+  for a run that calls none.
 * `status` is the result's status, which a refused save keeps, and `failed`
   for a call refused before it has a result. `lint`'s is `failed` when a
   finding remains, and `selftest`'s when a case failed; `conditions`' is

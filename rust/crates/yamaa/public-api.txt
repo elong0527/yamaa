@@ -127,6 +127,7 @@ yamaa::api::ProjectRequest: impl<'a> ProjectRequest<'a>
 yamaa::api::ProjectRequest: pub struct ProjectRequest<'a> [derive(Clone)] [non_exhaustive]
 yamaa::api::ProjectRequest::cancel_with: pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self
 yamaa::api::ProjectRequest::check: pub fn check(&self) -> Result<Check, Failure>
+yamaa::api::ProjectRequest::host_languages: pub fn host_languages(&self) -> Result<Vec<HostLanguage>, Failure>
 yamaa::api::ProjectRequest::names: pub fn names(&self) -> Result<Vec<String>, Failure>
 yamaa::api::ProjectRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
 yamaa::api::ProjectRequest::run: pub fn run(&self) -> Result<ProjectRun, Failure>
@@ -202,14 +203,18 @@ yamaa::cancel::CancellationToken::is_cancelled: pub fn is_cancelled(&self) -> bo
 yamaa::cancel::CancellationToken::new: pub fn new() -> Self
 yamaa::cancel::CancellationToken::with_probe: pub fn with_probe(probe: impl Fn() -> bool + Send + Sync + 'static) -> Self
 yamaa::cli::FINDINGS: pub const FINDINGS: u8
+yamaa::cli::Functions: pub struct Functions<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::cli::Functions::interpreter: pub interpreter: Option<&'a str>
+yamaa::cli::Functions::language: pub language: HostLanguage
 yamaa::cli::NOT_RUN: pub const NOT_RUN: u8
 yamaa::cli::Neutral: impl Runtime for Neutral
 yamaa::cli::Neutral: pub struct Neutral
 yamaa::cli::Reporter: pub type Reporter = Arc<dyn Fn(&str) + Send + Sync>
 yamaa::cli::Runtime: pub trait Runtime: Send + Sync
 yamaa::cli::Runtime::host: fn host(&self) -> (Host, Option<String>) [required]
-yamaa::cli::Runtime::options: fn options(&self) -> EngineOptions [required]
+yamaa::cli::Runtime::options: fn options(&self, functions: Option<&Functions<'_>>) -> Result<EngineOptions, String> [required]
 yamaa::cli::Runtime::reporter: fn reporter(&self) -> Reporter [required]
+yamaa::cli::Runtime::settles_functions: fn settles_functions(&self) -> bool [default]
 yamaa::cli::SUCCEEDED: pub const SUCCEEDED: u8
 yamaa::cli::cooperative: pub fn cooperative(arguments: &[OsString]) -> bool
 yamaa::cli::run: pub fn run(arguments: &[OsString], runtime: &dyn Runtime, stdout: &mut dyn Write, stderr: &mut dyn Write, token: &CancellationToken) -> u8
@@ -419,6 +424,8 @@ yamaa::host::functions::HostLanguage: impl HostLanguage
 yamaa::host::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::host::functions::HostLanguage::Python: Python
 yamaa::host::functions::HostLanguage::R: R
+yamaa::host::functions::HostLanguage::as_str: pub fn as_str(self) -> &'static str
+yamaa::host::functions::HostLanguage::parse: pub fn parse(text: &str) -> Option<Self>
 yamaa::host::functions::HostPayload: impl Clone for HostPayload
 yamaa::host::functions::HostPayload: impl HostPayload
 yamaa::host::functions::HostPayload: impl std::fmt::Debug for HostPayload

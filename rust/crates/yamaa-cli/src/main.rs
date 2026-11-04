@@ -3,9 +3,12 @@
 //!
 //! The commands, what they print on which stream and their exit statuses
 //! are the facade's `yamaa::cli`, which the Python and R packages run too,
-//! over their own engines. This binary runs them over the neutral runtime,
-//! `yamaa::cli::Neutral`: an engine that claims no host language (D110,
-//! D123), on the process's standard streams, with its Ctrl+C handler.
+//! over their own engines. This binary runs them over [`Standalone`]: an
+//! engine that claims no host language (D110, D123) until a `run` of a
+//! project settles the language of the project functions it calls, with
+//! `--host` or from the project file, which an interpreter's worker then
+//! runs ([`worker`]); on the process's standard streams, with its Ctrl+C
+//! handler.
 //!
 //! Ctrl+C stops `check`, `run` and `submission` at the facade's next
 //! cancellation checkpoint, so they print nothing and a save writes every
@@ -20,11 +23,48 @@
 // The process's signal/console boundary is the only code that calls OS APIs.
 #[allow(unsafe_code)]
 mod interrupt;
+mod worker;
 
 use std::io::{self, Write};
 use std::process::ExitCode;
+use std::sync::Arc;
 
-use yamaa::cli::{self, Neutral, NOT_RUN};
+use yamaa::cli::{self, Functions, Neutral, Reporter, Runtime, NOT_RUN};
+use yamaa::{EngineOptions, Host};
+
+/// The binary's runtime: the neutral runtime, which runs no project
+/// function, except for a `run` that settled on a language, whose
+/// functions a [`worker::Worker`] of that language runs.
+struct Standalone;
+
+impl Runtime for Standalone {
+    fn host(&self) -> (Host, Option<String>) {
+        Neutral.host()
+    }
+
+    fn settles_functions(&self) -> bool {
+        true
+    }
+
+    fn options(&self, functions: Option<&Functions<'_>>) -> Result<EngineOptions, String> {
+        let Some(functions) = functions else {
+            return Neutral.options(None);
+        };
+        Ok(EngineOptions::new(
+            functions.language,
+            Host::Cli.as_str().to_owned(),
+            String::new(),
+        )
+        .with_functions(Arc::new(worker::Worker::new(
+            functions.language,
+            functions.interpreter.map(str::to_owned),
+        ))))
+    }
+
+    fn reporter(&self) -> Reporter {
+        Neutral.reporter()
+    }
+}
 
 fn main() -> ExitCode {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
@@ -47,7 +87,7 @@ fn main() -> ExitCode {
     };
     let status = cli::run(
         &arguments,
-        &Neutral,
+        &Standalone,
         &mut io::stdout().lock(),
         &mut io::stderr().lock(),
         &token,

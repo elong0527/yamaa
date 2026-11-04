@@ -1139,10 +1139,14 @@ impl yamaa::cli::Runtime for CommandLine {
         (yamaa::Host::R, Some(self.version.clone()))
     }
 
-    fn options(&self) -> EngineOptions {
+    /// The engine every call builds, with the installed project functions;
+    /// a run never settles functions here, so none are asked for.
+    fn options(&self, _: Option<&yamaa::cli::Functions<'_>>) -> Result<EngineOptions, String> {
         let functions: Arc<dyn yamaa::ProjectFunctions> = Arc::clone(&self.functions);
-        EngineOptions::new(HostLanguage::R, "r".into(), self.version.clone())
-            .with_functions(functions)
+        Ok(
+            EngineOptions::new(HostLanguage::R, "r".into(), self.version.clone())
+                .with_functions(functions),
+        )
     }
 
     /// A `--verbose` line goes to R's standard error as it happens, on the

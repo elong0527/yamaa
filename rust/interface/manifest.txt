@@ -168,8 +168,12 @@ cli.synopsis: yamaa --version [--format text|json]
 cli.synopsis: yamaa --help
 cli.entries.python: python -m yamaa COMMAND [ARGUMENTS], or yamaa.cli(arguments)
 cli.entries.r: yamaa_cli(arguments), as Rscript -e 'quit(status = yamaa_cli(commandArgs(TRUE)))' COMMAND [ARGUMENTS] once the package is attached
+cli.worker.python: python -m yamaa._worker, in the interpreter --interpreter names or python3, then python, on PATH
+cli.worker.r: Rscript -e running the package's internal .yamaa_worker(), in the Rscript --interpreter names or Rscript on PATH
 cli.values.output_format.text
 cli.values.output_format.json
+cli.values.host_language.python
+cli.values.host_language.r
 cli.global_flags.--format: values output_format; default text
 cli.global_flags.--version: flag
 cli.global_flags.--help: flag
@@ -187,16 +191,19 @@ cli.commands.check.json_keys.path
 cli.commands.check.json_keys.spec
 cli.commands.check.json_keys.status
 cli.commands.check.json_keys.issues
-cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]
+cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION] [--host python|r] [--interpreter PATH] [--threads N] [--verbose]
 cli.commands.run.args[0]: PATH: path
 cli.commands.run.flags.--spec: NAME
 cli.commands.run.flags.--section: SECTION; values section
+cli.commands.run.flags.--host: LANGUAGE; values host_language
+cli.commands.run.flags.--interpreter: PATH
 cli.commands.run.flags.--threads: N
 cli.commands.run.flags.--verbose: flag
 cli.commands.run.json_keys.command
 cli.commands.run.json_keys.path
 cli.commands.run.json_keys.spec
 cli.commands.run.json_keys.section
+cli.commands.run.json_keys.host
 cli.commands.run.json_keys.status
 cli.commands.run.json_keys.members
 cli.commands.run.json_keys.issues

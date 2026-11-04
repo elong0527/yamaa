@@ -91,10 +91,10 @@ use std::num::NonZeroUsize;
 use yamaa_core::limits::Limits;
 
 use crate::cli::arguments::{Call, Format, Usage};
-use crate::cli::{Runtime, FINDINGS, SUCCEEDED};
+use crate::cli::{Functions, Runtime, FINDINGS, SUCCEEDED};
 use crate::{
     CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Failure,
-    FileType, Info, LintFinding, OdmOptions, Partitions, ProgressEvent, ProgressKind,
+    FileType, HostLanguage, Info, LintFinding, OdmOptions, Partitions, ProgressEvent, ProgressKind,
     ProjectRequest, ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
 };
 
@@ -411,35 +411,50 @@ fn not_taken(call: &Call, path: &str, file_type: FileType, how: Option<&str>) ->
     )))
 }
 
-/// The command line's engine over `runtime`: its options, with the
-/// partitions every build runs over (#3794, D264), key-bounded over the
-/// specification's two leading declared keys, of at most
-/// `Limits::PARTITION_ROWS` driver records each, with the whole-table
-/// fallback. The binary's runtime claims no host language (#3030 section
-/// 2.10, D123): it reads no project's `environments.<host>` entry, so it
-/// verifies no lock and activates nothing, a build that calls a project
-/// function is refused before it reads data, and every other build runs as a
-/// host runs it (section 2.3, D110). A host's runtime brings its installed
-/// project functions, so the same command runs them as the host does.
-fn engine(runtime: &dyn Runtime) -> Engine {
-    Engine::new(options(runtime))
+/// The command line's engine over `runtime` for a command that calls no
+/// project function: its options, with the partitions every build runs over
+/// (#3794, D264), key-bounded over the specification's two leading declared
+/// keys, of at most `Limits::PARTITION_ROWS` driver records each, with the
+/// whole-table fallback. The binary's runtime claims no host language (#3030
+/// section 2.10, D123): it reads no project's `environments.<host>` entry,
+/// so it verifies no lock and activates nothing, a build that calls a
+/// project function is refused before it reads data, and every other build
+/// runs as a host runs it (section 2.3, D110). A host's runtime brings its
+/// installed project functions, so the same command runs them as the host
+/// does.
+fn engine(call: &Call, runtime: &dyn Runtime) -> Result<Engine, Execution> {
+    options(call, runtime, None).map(Engine::new)
 }
 
-/// The options of every engine the command line builds over `runtime`.
-fn options(runtime: &dyn Runtime) -> EngineOptions {
+/// The options of every engine the command line builds over `runtime`, with
+/// the `functions` a `run` settled on. A runtime that cannot run them says
+/// why, which is a usage error.
+fn options(
+    call: &Call,
+    runtime: &dyn Runtime,
+    functions: Option<&Functions<'_>>,
+) -> Result<EngineOptions, Execution> {
     let [keys, rows] = [Limits::PARTITION_KEYS, Limits::PARTITION_ROWS]
         .map(|count| NonZeroUsize::new(count).expect("nonzero"));
     runtime
-        .options()
-        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
+        .options(functions)
+        .map(|options| {
+            options.with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
+        })
+        .map_err(|reason| Execution::Refused(Usage(format!("{}: {reason}", call.name))))
 }
 
 /// The command line's [`engine`], deriving up to `--threads N` partitions
 /// of one run at once when `call` gives it (#4193), and which under
 /// `--verbose` writes each progress event through the runtime's reporter as
 /// it happens (#3762). An `N` of 0 is an argument the facade cannot take.
-fn reporting(call: &Call, verbose: &Verbose, runtime: &dyn Runtime) -> Result<Engine, Execution> {
-    let mut options = options(runtime);
+fn reporting(
+    call: &Call,
+    verbose: &Verbose,
+    runtime: &dyn Runtime,
+    functions: Option<&Functions<'_>>,
+) -> Result<Engine, Execution> {
+    let mut options = options(call, runtime, functions)?;
     if let Some(count) = call.count("--threads") {
         let count = ContextValue::Int(i64::try_from(count).unwrap_or(i64::MAX));
         let partitions = options
@@ -498,7 +513,7 @@ fn check(
     let name = flag(call, "--spec")?;
     let parent = flag(call, "--parent")?;
     let document = document("check", [("path", text(path)), ("spec", optional(name))]);
-    let engine = reporting(call, verbose, runtime)?;
+    let engine = reporting(call, verbose, runtime, None)?;
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -541,6 +556,16 @@ fn check(
 /// `yamaa run PATH`: `s.run()` of a spec, `p.run()` of a project, or, with
 /// `--spec NAME` or `--section SECTION`, `p.spec(name).run()` or
 /// `p.run(section)`; then `save()`.
+///
+/// A run of a project over a runtime that settles the project functions a
+/// run calls, the binary's, settles their language first: `--host`, or else
+/// the one language the project file names
+/// ([`ProjectRequest::host_languages`]), with `--interpreter` naming the
+/// interpreter that runs them; a project that names no one language runs
+/// as a build without project functions does, and refuses a call of one.
+/// The `host` of the JSON document is the language settled on, or null. A
+/// host package's runtime runs its own functions, so `--host` and
+/// `--interpreter` are usage errors there, as both are with a spec PATH.
 fn run(
     call: &Call,
     token: &CancellationToken,
@@ -550,20 +575,40 @@ fn run(
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let section = flag(call, "--section")?;
+    let host = flag(call, "--host")?;
+    let interpreter = flag(call, "--interpreter")?;
     let mut document = document(
         "run",
         [
             ("path", text(path)),
             ("spec", optional(name)),
             ("section", optional(section)),
+            ("host", ContextValue::Null),
             ("members", ContextValue::List(Vec::new())),
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = reporting(call, verbose, runtime)?;
-    let file_type = match engine.file_type(path) {
+    // The arguments are checked, `--threads` among them, before the file is
+    // read; the engine that reads the file's type and settles the language
+    // calls no project function.
+    let plain = reporting(call, verbose, runtime, None)?;
+    let file_type = match plain.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
+    };
+    let language = match settle(call, &plain, path, file_type, host, interpreter, runtime) {
+        Ok(Ok(language)) => language,
+        Ok(Err(failure)) => return Ok(refusal(document, failure)),
+        Err(execution) => return Err(execution),
+    };
+    document.insert("host".into(), optional(language.map(HostLanguage::as_str)));
+    let functions = language.map(|language| Functions {
+        language,
+        interpreter,
+    });
+    let engine = match functions {
+        Some(functions) => reporting(call, verbose, runtime, Some(&functions))?,
+        None => plain,
     };
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
@@ -606,6 +651,81 @@ fn run(
         }
         (other, ..) => return Err(not_taken(call, path, other, None)),
     })
+}
+
+/// The language of the project functions a `run` of `path` calls, for a
+/// runtime that settles them: `--host`, or the one language the project
+/// names, read with `plain`; none for a project that names no one language,
+/// and for every run of a runtime that settles none. `--host` and
+/// `--interpreter` are usage errors with a spec PATH, which calls no project
+/// function, with a runtime that settles none, and, for `--interpreter`
+/// alone, with a project that names no one language.
+fn settle(
+    call: &Call,
+    plain: &Engine,
+    path: &str,
+    file_type: FileType,
+    host: Option<&str>,
+    interpreter: Option<&str>,
+    runtime: &dyn Runtime,
+) -> Result<Result<Option<HostLanguage>, Failure>, Execution> {
+    let given = [("--host", host), ("--interpreter", interpreter)]
+        .into_iter()
+        .find_map(|(flag, value)| value.map(|_| flag));
+    if !runtime.settles_functions() {
+        return match given {
+            Some(flag) => Err(Execution::Refused(Usage(format!(
+                "{}: {flag} is taken only by the standalone yamaa command line; this host runs \
+                 its own project functions",
+                call.name
+            )))),
+            None => Ok(Ok(None)),
+        };
+    }
+    if file_type != FileType::Project {
+        return match given {
+            Some(flag) => Err(not_taken(
+                call,
+                path,
+                file_type,
+                Some(&format!("with {flag}")),
+            )),
+            None => Ok(Ok(None)),
+        };
+    }
+    if let Some(host) = host {
+        return match HostLanguage::parse(host) {
+            Some(language) => Ok(Ok(Some(language))),
+            None => Err(Execution::Refused(Usage(format!(
+                "{}: --host takes python or r, not {host}",
+                call.name
+            )))),
+        };
+    }
+    let languages = match plain.project(path).host_languages() {
+        Ok(languages) => languages,
+        Err(failure) => return Ok(Err(failure)),
+    };
+    match languages.as_slice() {
+        [language] => Ok(Ok(Some(*language))),
+        _ if interpreter.is_some() => Err(Execution::Refused(Usage(format!(
+            "{}: --interpreter needs --host, since {path} names {}",
+            call.name,
+            if languages.is_empty() {
+                "no host language".to_owned()
+            } else {
+                format!(
+                    "both {}",
+                    languages
+                        .iter()
+                        .map(|language| language.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" and ")
+                )
+            }
+        )))),
+        _ => Ok(Ok(None)),
+    }
 }
 
 /// One specification's run, then its save, which polls `token`; a refusal of
@@ -679,7 +799,7 @@ fn submission(
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = reporting(call, verbose, runtime)?;
+    let engine = reporting(call, verbose, runtime, None)?;
     match engine.file_type(path) {
         Ok(FileType::Project) => {}
         Ok(other) => return Err(not_taken(call, path, other, None)),
@@ -718,7 +838,7 @@ fn resolve(call: &Call, runtime: &dyn Runtime) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let document = document("resolve", [("path", text(path)), ("spec", optional(name))]);
-    let engine = engine(runtime);
+    let engine = engine(call, runtime)?;
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -789,7 +909,7 @@ fn read_odm(call: &Call, runtime: &dyn Runtime) -> Result<Printed, Execution> {
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = engine(runtime);
+    let engine = engine(call, runtime)?;
     let table = match engine.read_odm(source, &options) {
         Ok(table) => table,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -988,7 +1108,7 @@ mod tests {
         // the cancellation's error text alone.
         let token = CancellationToken::new();
         token.cancel();
-        let failure = engine(&crate::cli::Neutral)
+        let failure = Engine::new(crate::cli::Neutral.options(None).unwrap())
             .spec("odm.xml")
             .cancel_with(&token)
             .check()

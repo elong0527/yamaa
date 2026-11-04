@@ -707,9 +707,13 @@ impl yamaa::cli::Runtime for CommandLine {
         (yamaa::Host::Python, Some(self.host_version.clone()))
     }
 
-    fn options(&self) -> EngineOptions {
-        EngineOptions::new(HostLanguage::Python, "python".into(), self.version.clone())
-            .with_functions(Arc::new(Port))
+    /// The engine every call builds, with the installed project functions;
+    /// a run never settles functions here, so none are asked for.
+    fn options(&self, _: Option<&yamaa::cli::Functions<'_>>) -> Result<EngineOptions, String> {
+        Ok(
+            EngineOptions::new(HostLanguage::Python, "python".into(), self.version.clone())
+                .with_functions(Arc::new(Port)),
+        )
     }
 
     /// A `--verbose` line goes to `sys.stderr` as it happens; one that

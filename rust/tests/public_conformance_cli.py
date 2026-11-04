@@ -13,9 +13,10 @@ Run it with python -I: it needs the standard library alone, and the comparator
 stays the only reader of expected truth.
 
 The plan excludes, for the command line, each benchmark whose project supplies
-project functions: the binary has no project-function implementation, so a
-specification that calls one fails before it reads data (#3030 section 2.3).
-Each excluded benchmark still gets a record that names the reason.
+project functions: these runs start no interpreter worker, the binary's way
+to a project function, so a specification that calls one fails before it
+reads data (#3030 section 2.3). Each excluded benchmark still gets a record
+that names the reason.
 
 Each call is `yamaa run SPEC`, or `yamaa run PROJECT --spec NAME` for a
 benchmark with a project. The binary dispatches on the type a PATH declares

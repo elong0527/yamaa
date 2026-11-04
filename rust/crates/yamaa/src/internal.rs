@@ -154,6 +154,22 @@ pub(crate) fn read_project(
     .map_err(|(issues, locator)| (issues, Arc::new(locator)))
 }
 
+/// Capture a project file as declared, with no host language, through the
+/// engine's resolver: what the project declares for every host, which
+/// [`crate::ProjectRequest::host_languages`] reads.
+pub(crate) fn capture_project(
+    shared: &EngineShared,
+    project: &str,
+) -> Result<yamaa_application::file_workflow::CapturedProject, Unread> {
+    yamaa_application::file_workflow::capture_project(project, None, resolver_bridge(shared))
+        .map_err(|error| {
+            (
+                yamaa_application::project_application::workflow_rejection(&error),
+                Arc::new(yamaa_application::issue_location::workflow(&error)),
+            )
+        })
+}
+
 /// Read a project file and the name of each listed specification, as far as
 /// selecting one by name needs, through the engine's resolver.
 pub(crate) fn read_names(
