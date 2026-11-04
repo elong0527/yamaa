@@ -371,12 +371,11 @@ returned unchanged. Text carrying every field of the type stands as collected,
 and with `type: date` text carrying a complete date gives that date, whatever
 time follows. Otherwise `month` and `day` supply the missing date fields and,
 for a datetime, `time: first` or `last` the missing time fields. A source
-missing a field that no declared rule supplies gives missing. With `type: datetime`, a `date`
-source is a datetime whose time of day was not collected, and `time` supplies
-it. The result keeps the source's collected precision.
+missing a field that no declared rule supplies gives missing. The result keeps
+the source's collected precision.
 
 Fails: `incompatible_input_type`.
-Evidence: `adam-adae-partial-dates`, `adam-adae-partial-times`, `adam-adsl-alive-date`, `adam-adsl-treatment-datetimes-from-dates`, `schema-birth-date`, `schema-impute-text-with-time`, `schema-imputation-flags`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_impute_refuses_a_source_that_is_neither_text_nor_a_date_nor_a_datetime`.
+Evidence: `adam-adae-partial-dates`, `adam-adae-partial-times`, `adam-adsl-alive-date`, `schema-impute-datetime-from-date`, `schema-birth-date`, `schema-impute-text-with-time`, `schema-imputation-flags`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_impute_refuses_a_source_that_is_neither_text_nor_a_date_nor_a_datetime`.
 
 `time: first` supplies hour `00`, minute `00` and second `00`, and `time: last`
 supplies `23`, `59` and `59`: the earliest or latest civil moment the collected

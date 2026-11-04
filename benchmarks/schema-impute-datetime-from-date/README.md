@@ -5,10 +5,10 @@
 dates (`TRTSDT`, `TRTEDT`), and a flag (`TRTSTMF`) marking that the start's
 time of day was supplied.
 
-**Input:** subject-level records carrying the study, the subject and the
-treatment start and end dates, held as dates rather than as collected text. A
-subject may still be on treatment, with no end date, or never treated, with
-neither date.
+**Input:** one `spec.yaml` over subject-level records carrying the study, the
+subject and the treatment start and end dates, held as dates rather than as
+collected text. A subject may still be on treatment, with no end date, or
+never treated, with neither date.
 
 **Variables:**
 
