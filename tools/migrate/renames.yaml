@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 668
-  changes: 99
+  entries: 669
+  changes: 100
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 53
+    new, decided: 54
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7691,6 +7691,19 @@ entries:
   reason: 'An addition to the approved table under D27, with new.project.parent: the inherited values a
     project file removes before its own fields compose, each named by its path as a specification layer
     names one (LAYER-9, PROJECT-16). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.intermediate_class.key=none
+  file_type: spec
+  path: intermediates[].key
+  today: null
+  kind: new
+  proposed: none
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4271): `key: none` pairs nothing, so every record
+    of the intermediate''s dataset matches every current row, for a one-record table that shares no column
+    with the rows that read it (LOOKUP-5). An intermediate without `key` still fails as D23 requires. No
+    0.5 file declares it, so the converter wrote none.'
   field_kind: value
   convert: {action: none}
 conditions:

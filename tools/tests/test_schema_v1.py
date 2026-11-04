@@ -178,7 +178,7 @@ EXPECTED = {
     # template, which a class field cannot condition: the description and
     # LOOKUP-3 state the requirement, and the field stays optional.
     "spec.intermediate_class.key": [
-        Field("intermediate_class", "key", "match_key", required=False)
+        Field("intermediate_class", "key", "intermediate_key", required=False)
     ],
     "spec.row_class.derivations": [
         Field("row_class", "derivations", "dict[identifier, derivation]")
@@ -362,6 +362,11 @@ EXPECTED = {
     # D264: str_case writes proper case as SAS PROPCASE does, after the
     # delimiters a declared list names (TEXT-5).
     "new.spec.str_case.to=proper": [Values("expressions.str_case", "to", ("proper",))],
+    # #4271: key: none matches every record of an intermediate's dataset
+    # (LOOKUP-5).
+    "new.spec.intermediate_class.key=none": [
+        Values("intermediate_class", "key", ("none",))
+    ],
     "new.spec.str_case.delimiters": [
         Field("expressions.str_case", "delimiters", "str")
     ],
