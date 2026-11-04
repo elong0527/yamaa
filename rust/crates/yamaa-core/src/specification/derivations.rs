@@ -10,6 +10,7 @@ fn unsupported(path: &str, operation: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
         operation: operation.into(),
         path: path.into(),
+        hint: None,
     }])
 }
 

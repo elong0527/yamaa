@@ -105,9 +105,7 @@ fn compile_failure(run: &crate::specification_run::RejectedRun) -> Failure {
         }
         PrepareError::Unsupported(features) => features
             .iter()
-            .flat_map(|feature| {
-                file_application::unsupported(&feature.operation, Some(&feature.path))
-            })
+            .map(yamaa_core::specification::UnsupportedFeature::diagnostic)
             .collect(),
         error => diagnostics::preparation(error).into_issues(),
     }

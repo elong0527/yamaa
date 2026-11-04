@@ -466,6 +466,7 @@ fn declaration(
                 PrepareError::Unsupported(vec![UnsupportedFeature {
                     operation: crate::expression_table::Verb::Function.name().into(),
                     path: checks::path(spec, expr),
+                    hint: None,
                 }])
             })?;
             project.call(expr).ok_or(PrepareError::Internal)?;
@@ -1398,6 +1399,7 @@ impl Templates {
                     unaddressable.push(UnsupportedFeature {
                         operation: "intermediate_driver_column_read".into(),
                         path: declaration.path.clone(),
+                        hint: Some("derive the column in the derivations of each row template the intermediate drives"),
                     });
                     break;
                 }

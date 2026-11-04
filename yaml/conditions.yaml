@@ -687,6 +687,9 @@ conditions:
   unsupported_operation:
     phases: [planning]
     message: "{operation} is not supported by this engine"
+    message_variants:
+      - when: hint
+        message: "{operation} is not supported by this engine ({hint})"
   untransportable_text:
     phases: [validation]
     message: "{spec_path} holds a {whitespace} character, which define.xml cannot carry there"

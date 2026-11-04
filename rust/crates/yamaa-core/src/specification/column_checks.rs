@@ -26,6 +26,7 @@ fn constant(value: &Literal, path: &str) -> Result<Value, PrepareError> {
             return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
                 operation: "literal".into(),
                 path: path.into(),
+                hint: None,
             }]))
         }
     })

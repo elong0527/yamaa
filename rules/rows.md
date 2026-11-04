@@ -39,7 +39,7 @@ column type ([EXPR-14](expressions.md#expr-14)). A pair relation
 inputs through its sides, and its `key` matches its sides, not the current row.
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-application/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type`, `schema-intermediate-driver-columns`, `schema-lookup-inner-join-pairs`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-application/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type`, `schema-intermediate-driver-columns`, `schema-lookup-inner-join-pairs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/intermediate_driver_columns.json`.
 
 The intermediate's `columns` list, when present, limits the fields the row
 template may read; otherwise all stored and derived fields are visible. Its
@@ -63,6 +63,25 @@ are the relation's exposed derivations, read through the relation's id, and
 the template may group them. The sides of a pair relation are read as a driver
 intermediate is, so a side that names an intermediate obeys this rule
 ([LOOKUP-27](lookup.md#lookup-27)).
+
+The template's own `derivations` read every field the intermediate exposes,
+derived fields included. A column-level derivation completed for the rows the
+intermediate builds reads each row's driver record from the input the
+intermediate reads, where no derived field exists, so this engine does not
+support it reading a derived field, by itself, in a window order or in an
+imputation bound, nor reading the driver beside a qualified aggregate. Each
+fails as `unsupported_operation` ([COLUMN-15](columns.md#column-15)) at the
+column's derivation before any input is read, its `hint` naming the remedy:
+derive the column in the derivations of each row template the intermediate
+drives.
+
+```yaml
+rows:
+  - id: all
+    dataset: DRV
+    derivations:
+      SCALED: DRV.SCALED_SRC
+```
 
 <a id="row-3"></a>
 

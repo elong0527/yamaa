@@ -74,6 +74,21 @@ mod value_level;
 pub struct UnsupportedFeature {
     pub operation: String,
     pub path: String,
+    /// What a specification writes instead, when the refusal knows it.
+    pub hint: Option<&'static str>,
+}
+impl UnsupportedFeature {
+    /// The public `unsupported_operation` issue, with the hint in its context
+    /// when the refusal names one (COLUMN-15).
+    pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
+        let mut issue = crate::application_issue::unsupported(&self.operation, Some(&self.path));
+        if let Some(hint) = self.hint {
+            issue
+                .context
+                .insert("hint".into(), crate::json::Value::String(hint.into()));
+        }
+        issue
+    }
 }
 #[derive(Debug, thiserror::Error)]
 pub enum PrepareError {
@@ -455,6 +470,7 @@ fn refused_literal(literal: &ast::Literal, path: &str) -> PrepareError {
         _ => PrepareError::Unsupported(vec![UnsupportedFeature {
             operation: "literal".into(),
             path: path.into(),
+            hint: None,
         }]),
     }
 }
@@ -482,6 +498,7 @@ pub(super) fn refused_verb(refusal: crate::scalar_verb::Refusal) -> PrepareError
             PrepareError::Unsupported(vec![UnsupportedFeature {
                 operation: operation.into(),
                 path,
+                hint: None,
             }])
         }
         Refusal::Internal => PrepareError::Internal,
@@ -510,6 +527,7 @@ fn reject(extra: &mut Vec<UnsupportedFeature>, operation: &str, path: String) {
     extra.push(UnsupportedFeature {
         operation: operation.into(),
         path,
+        hint: None,
     });
 }
 type BuiltSources = (
