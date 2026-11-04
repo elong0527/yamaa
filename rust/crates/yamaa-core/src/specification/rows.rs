@@ -1399,7 +1399,7 @@ impl Templates {
                     unaddressable.push(UnsupportedFeature {
                         operation: "intermediate_driver_column_read".into(),
                         path: declaration.path.clone(),
-                        hint: Some("derive the column in the derivations of each row template the intermediate drives"),
+                        hint: Some("derive the field into a column in each row template the intermediate drives, then read that column"),
                     });
                     break;
                 }

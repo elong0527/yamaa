@@ -249,28 +249,53 @@ mod tests {
     }
 
     /// Seam: variant selection, which the diagnostic replay does not reach
-    /// because it compares no message. A `missing_input` record holding
-    /// `template_filter` takes its variant, and one without keeps the
-    /// default (`yaml/conditions.yaml`, COLUMN-9).
+    /// because it compares no message. A record holding its condition's
+    /// variant key takes the variant, and one without keeps the default
+    /// (`yaml/conditions.yaml`): `missing_input` on `template_filter`
+    /// (COLUMN-9) and `unsupported_operation` on `hint` (ROW-2).
     #[test]
     fn a_variant_replaces_the_default_message_when_its_key_is_present() {
-        let path = ["rows.matched_only.derivations.TAGGED.str_template"];
+        let template = ["rows.matched_only.derivations.TAGGED.str_template"];
         let variable = ("variable", text("LK.LBL"));
-        for (context, expected) in [
+        let column = ["columns.R.derivation.source"];
+        let operation = ("operation", text("intermediate_driver_column_read"));
+        for (code, path, context, expected) in [
             (
+                ConditionCode::TemplateMissing,
+                &template,
                 vec![variable.clone()],
                 "the string template reads LK.LBL, which is missing",
             ),
             (
+                ConditionCode::TemplateMissing,
+                &template,
                 vec![
                     variable.clone(),
                     ("template_filter", text("rows.matched_only.filter")),
                 ],
                 "the string template reads LK.LBL, which is missing, and rows.matched_only.filter runs only after the row's derivations, so it cannot discard the row first",
             ),
+            (
+                ConditionCode::ApplicationUnsupported,
+                &column,
+                vec![operation.clone()],
+                "intermediate_driver_column_read is not supported by this engine",
+            ),
+            (
+                ConditionCode::ApplicationUnsupported,
+                &column,
+                vec![
+                    operation.clone(),
+                    (
+                        "hint",
+                        text("derive the field into a column in each row template the intermediate drives, then read that column"),
+                    ),
+                ],
+                "intermediate_driver_column_read is not supported by this engine (derive the field into a column in each row template the intermediate drives, then read that column)",
+            ),
         ] {
-            let missing = record(ConditionCode::TemplateMissing, &path, &context);
-            assert_eq!(missing.checked_message().unwrap(), expected, "{context:?}");
+            let issue = record(code, path, &context);
+            assert_eq!(issue.checked_message().unwrap(), expected, "{context:?}");
         }
     }
 

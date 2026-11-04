@@ -72,8 +72,10 @@ support it reading a derived field, by itself, in a window order or in an
 imputation bound, nor reading the driver beside a qualified aggregate. Each
 fails as `unsupported_operation` ([COLUMN-15](columns.md#column-15)) at the
 column's derivation before any input is read, its `hint` naming the remedy:
-derive the column in the derivations of each row template the intermediate
-drives.
+derive the field into a column in each row template the intermediate drives,
+then read that column. A column-level window or aggregate that reads the
+column keeps its scope over every template's rows, which moving the window or
+aggregate itself into each template would narrow to that template's rows.
 
 ```yaml
 rows:
