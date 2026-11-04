@@ -273,6 +273,16 @@ struct Collected {
 }
 
 impl Collected {
+    /// A complete date's fields, its time of day not collected.
+    fn of_date(date: Date) -> Self {
+        let (year, month, day) = date.fields();
+        Self {
+            year,
+            month: Some(month),
+            day: Some(day),
+            time: [None; 3],
+        }
+    }
     fn precision(self) -> Precision {
         match (self.month, self.day, self.time) {
             (_, _, [_, _, Some(_)]) => Precision::Second,
@@ -514,6 +524,10 @@ impl Imputation {
     }
     pub fn expected(&self) -> &'static str {
         match self.kind {
+            ImputationKind::Impute(Completion {
+                target: TemporalType::DateTime,
+                ..
+            }) => "str, date or datetime",
             ImputationKind::Impute(Completion { target, .. })
             | ImputationKind::Precision { target } => match target {
                 TemporalType::Date => "str or date",
@@ -534,6 +548,11 @@ impl Imputation {
     pub fn accepts(&self, kind: ColumnType) -> bool {
         use ColumnType as T;
         match self.kind {
+            // A datetime impute also completes a date's time of day (TIME-8).
+            ImputationKind::Impute(Completion {
+                target: TemporalType::DateTime,
+                ..
+            }) => matches!(kind, T::Str | T::Date | T::DateTime),
             ImputationKind::Impute(Completion { target, .. })
             | ImputationKind::Precision { target } => {
                 kind == T::Str || kind == target.column_type()
@@ -641,6 +660,29 @@ impl Imputation {
                 if completion.target == TemporalType::DateTime =>
             {
                 Value::DateTime(moment)
+            }
+            // A date is a datetime whose time of day was not collected: `time`
+            // supplies it, bounds move only that time within the day, and the
+            // result keeps the date's collected precision (TIME-8).
+            (K::Impute(completion), ValueRef::Date(date))
+                if completion.target == TemporalType::DateTime =>
+            {
+                let precision = date.collected_precision();
+                return Ok(match self.complete(completion, Collected::of_date(date))? {
+                    ImputationStep::Value(Value::DateTime(moment)) => {
+                        ImputationStep::Value(Value::DateTime(moment.with_precision(precision)))
+                    }
+                    ImputationStep::Bound(Pending::DateTime {
+                        completed,
+                        earliest,
+                        latest,
+                    }) => ImputationStep::Bound(Pending::DateTime {
+                        completed: completed.with_precision(precision),
+                        earliest,
+                        latest,
+                    }),
+                    step => step,
+                });
             }
             (K::Impute(completion), ValueRef::Str(text)) => {
                 return match collected(text) {

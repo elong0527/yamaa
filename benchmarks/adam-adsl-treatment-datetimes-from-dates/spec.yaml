@@ -1,0 +1,73 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SL:
+    path: input/sl.csv
+    types: {TRTSDT: date, TRTEDT: date}
+base: SL
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT, TRTEDT, TRTSDTM, TRTSTMF, TRTEDTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SL.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SL.USUBJID
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: SL.TRTSDT
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation: SL.TRTEDT
+
+  # A date carries no time of day, so the first moment of the day is
+  # supplied; the start keeps the date's collected precision.
+  - name: TRTSDTM
+    type: datetime
+    label: Datetime of First Exposure to Treatment
+    derivation:
+      impute:
+        type: datetime
+        source: TRTSDT
+        time: first
+
+  - name: TRTSTMF
+    type: str
+    label: Time of First Exposure Imputation Flag
+    derivation:
+      imputation_flag:
+        source: TRTSDTM
+        part: time
+
+  # The last moment of the day is supplied to the end date.
+  - name: TRTEDTM
+    type: datetime
+    label: Datetime of Last Exposure to Treatment
+    derivation:
+      impute:
+        type: datetime
+        source: TRTEDT
+        time: last
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3
+  - assert:
+      id: a-start-date-gives-a-start-datetime
+      when: "TRTSDT IS NOT NULL"
+      require: "TRTSDTM IS NOT NULL"
