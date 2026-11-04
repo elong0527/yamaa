@@ -436,10 +436,10 @@
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "str or date", "actual": "int"}}]
     },
     {
-      "case": "a_datetime_impute_refuses_a_source_that_is_neither_text_nor_a_datetime",
+      "case": "a_datetime_impute_refuses_a_source_that_is_neither_text_nor_a_date_nor_a_datetime",
       "operation": "impute",
       "input": {"kind": {"impute": {"type": "datetime", "time": "first", "path": "impute"}}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": 1},
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-8", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "str or datetime", "actual": "int"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-8", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "str, date or datetime", "actual": "int"}}]
     },
     {
       "case": "a_datetime_precision_refuses_a_source_that_is_neither_text_nor_a_datetime",

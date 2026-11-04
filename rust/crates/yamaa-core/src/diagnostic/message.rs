@@ -248,6 +248,32 @@ mod tests {
         }
     }
 
+    /// Seam: variant selection, which the diagnostic replay does not reach
+    /// because it compares no message. A `missing_input` record holding
+    /// `template_filter` takes its variant, and one without keeps the
+    /// default (`yaml/conditions.yaml`, COLUMN-9).
+    #[test]
+    fn a_variant_replaces_the_default_message_when_its_key_is_present() {
+        let path = ["rows.matched_only.derivations.TAGGED.str_template"];
+        let variable = ("variable", text("LK.LBL"));
+        for (context, expected) in [
+            (
+                vec![variable.clone()],
+                "the string template reads LK.LBL, which is missing",
+            ),
+            (
+                vec![
+                    variable.clone(),
+                    ("template_filter", text("rows.matched_only.filter")),
+                ],
+                "the string template reads LK.LBL, which is missing, and rows.matched_only.filter runs only after the row's derivations, so it cannot discard the row first",
+            ),
+        ] {
+            let missing = record(ConditionCode::TemplateMissing, &path, &context);
+            assert_eq!(missing.checked_message().unwrap(), expected, "{context:?}");
+        }
+    }
+
     #[test]
     fn placeholders_take_the_record_values() {
         let forward = record(

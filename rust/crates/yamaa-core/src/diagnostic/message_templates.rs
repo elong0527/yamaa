@@ -229,4 +229,5 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
 #[rustfmt::skip]
 pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("engine_rejected", "host_error", "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"),
+    ("missing_input", "template_filter", "the string template reads {variable}, which is missing, and {template_filter} runs only after the row's derivations, so it cannot discard the row first"),
 ];

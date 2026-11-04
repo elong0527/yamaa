@@ -507,6 +507,7 @@ Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-tim
 | parsed text | `date`: `day`; `datetime`: `second` |
 | `impute` from text | the finest field the text carried, at most `day` for a `date` |
 | `impute` from a value of its type | unchanged |
+| `impute` with `type: datetime` from a `date` | the date's |
 | `impute`'s `fallback` | `none` |
 | `to_date` | from text, `day`; from a `datetime`, its precision capped at `day` |
 | selecting an existing value | unchanged; the property follows the selected value |
@@ -576,7 +577,10 @@ the artifact records like any other.
 ### VALUE-18. A date and a datetime never convert into each other or enter arithmetic
 
 A `date` and a `datetime` do not convert in either direction; such a
-conversion fails and chooses neither value. A temporal value never enters
+conversion fails and chooses neither value. An explicit operation names what
+it changes instead: `to_date` drops a datetime's time of day
+([TIME-2](temporal.md#time-2)), and `impute` with `type: datetime` supplies a
+date's, first or last ([TIME-8](temporal.md#time-8)). A temporal value never enters
 arithmetic, whose grammar under [Formulas](formulas.md) is numeric. Differences
 and shifts are the named operations of [Dates and times](temporal.md), with
 explicit units and input contracts.

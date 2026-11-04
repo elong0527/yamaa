@@ -2380,7 +2380,7 @@
             },
             "source": {
               "$ref": "#/$defs/variable",
-              "description": "Collected ISO 8601 date or datetime text, read up to its first unknown field, or a value of the declared type (TIME-7).",
+              "description": "Collected ISO 8601 date or datetime text, read up to its first unknown field, a value of the declared type, or with type datetime a date whose time of day time supplies (TIME-7, TIME-8).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
@@ -4800,7 +4800,7 @@
             },
             "source": {
               "$ref": "#/$defs/variable",
-              "description": "Collected ISO 8601 date or datetime text, read up to its first unknown field, or a value of the declared type (TIME-7).",
+              "description": "Collected ISO 8601 date or datetime text, read up to its first unknown field, a value of the declared type, or with type datetime a date whose time of day time supplies (TIME-7, TIME-8).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },

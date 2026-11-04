@@ -59,6 +59,43 @@ use handlers::{HandlerMark, Handlers};
 
 type Fail<E> = Box<ExecutionError<E>>;
 
+/// A row binding's failure on a candidate row that its template's filter has
+/// yet to read names that filter, `rows.<id>.filter`, as `template_filter`
+/// (COLUMN-9). The schedule runs a pre-window filter after the pre-window
+/// bindings and a post-window filter after every binding, so a window
+/// binding fails after a pre-window filter and names none.
+fn before_filter<E>(plan: &ResolvedPlan, binding: BindingId, mut error: Fail<E>) -> Fail<E> {
+    use super::resolved::FilterPlacement;
+    let bound = plan.binding(binding);
+    let precedes = bound.templates.first().is_some_and(|&template| {
+        match plan
+            .template(template)
+            .filter
+            .map(|filter| filter.placement)
+        {
+            Some(FilterPlacement::Postwindow) => true,
+            Some(FilterPlacement::Prewindow) => bound.stage == Stage::Prewindow,
+            Some(FilterPlacement::BeforeKeys) | None => false,
+        }
+    });
+    if let (
+        true,
+        ExecutionError::SemanticDiagnostic {
+            diagnostic,
+            identity: Some(_),
+        },
+    ) = (precedes, error.as_mut())
+    {
+        if let Some((template, _)) = bound.path.split_once(".derivations.") {
+            diagnostic.context.insert(
+                "template_filter".into(),
+                crate::json::Value::String(format!("{template}.filter")),
+            );
+        }
+    }
+    error
+}
+
 /// A refused reservation fails the run as `ExecutionError::Allocation`, as
 /// today's executor's reservations do, instead of aborting the process.
 fn reserved<T, E>(reservation: Result<T, std::collections::TryReserveError>) -> Result<T, Fail<E>> {
@@ -951,7 +988,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                             first,
                             &[row],
                             None,
-                        )?;
+                        )
+                        .map_err(|error| before_filter(plan, binding, error))?;
                     }
                     if let Some(filter) = filter {
                         let cx = run.template_cx(frame, region, table, secondary, first);
@@ -968,7 +1006,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 });
                 let rows: Vec<usize> = (start..frame.rows()).collect();
                 for &binding in &prewindow {
-                    run.complete_binding(frame, binding, (table, secondary), first, &rows, None)?;
+                    run.complete_binding(frame, binding, (table, secondary), first, &rows, None)
+                        .map_err(|error| before_filter(plan, binding, error))?;
                 }
                 if let Some(filter) = filter {
                     let cx = run.template_cx(frame, region, table, secondary, first);
@@ -1020,7 +1059,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                             first,
                             &[row],
                             Some(output.clone()),
-                        )?;
+                        )
+                        .map_err(|error| before_filter(plan, binding, error))?;
                     }
                     Ok(())
                 } else {
@@ -1032,6 +1072,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                         &rows,
                         Some(output.clone()),
                     )
+                    .map_err(|error| before_filter(plan, binding, error))
                 }
             })?;
         }

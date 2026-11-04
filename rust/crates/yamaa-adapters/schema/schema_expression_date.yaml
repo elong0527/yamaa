@@ -32,7 +32,7 @@ expressions:
         - source:
             type: variable
             required: true
-            description: Collected ISO 8601 date or datetime text, read up to its first unknown field, or a value of the declared type (TIME-7).
+            description: Collected ISO 8601 date or datetime text, read up to its first unknown field, a value of the declared type, or with type datetime a date whose time of day time supplies (TIME-7, TIME-8).
         - month:
             type: int
             description: Month supplied to a source collected only to the year, 1 to 12, declared only beside day; without it such a source gives missing (TIME-10).

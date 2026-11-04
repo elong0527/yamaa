@@ -683,8 +683,8 @@ mod scalar {
             );
         }
 
-        /// Seam: completed datetimes, precision words and converted dates; its type refusals are
-        /// asserted only as refusals.
+        /// Seam: completed datetimes, from text and from a date, precision words and converted
+        /// dates; its type refusals are asserted only as refusals.
         #[test]
         fn datetime_edges_precision_and_explicit_date_conversion_are_field_copies() {
             for (rule, expected) in [
@@ -711,11 +711,47 @@ mod scalar {
                 };
                 assert_eq!(date.to_string(), "2024-02-29");
                 assert_eq!(date.collected_precision(), P::Day);
+                // A date source receives the same time of day, and keeps the
+                // date's collected precision, `month` here (TIME-8).
+                for (precision, word) in [(P::Day, "day"), (P::Month, "month")] {
+                    let S::Value(Value::DateTime(value)) =
+                        operation(datetime_kind(rule), false, None)
+                            .source_value(ValueRef::Date(date.with_precision(precision)))
+                            .unwrap()
+                    else {
+                        panic!("datetime from a date")
+                    };
+                    assert_eq!(value.to_string(), expected, "{word}");
+                    assert_eq!(value.collected_precision(), precision, "{word}");
+                }
             }
             let date: Date = "2024-02-29".parse().unwrap();
             let datetime: DateTime = "2024-02-29T12:13".parse().unwrap();
+            // A bound moves only the supplied time, within the date's day, and
+            // a bound outside that day is ignored; the date's collected
+            // precision stays (TIME-8, TIME-9).
+            let bounded = operation(datetime_kind(TimeRule::First), true, None);
+            for (bound, expected) in [
+                ("2024-02-29T08:30:00", "2024-02-29T08:30:00"),
+                ("2024-03-01T08:30:00", "2024-02-29T00:00:00"),
+            ] {
+                let S::Bound(pending) = bounded
+                    .source_value(ValueRef::Date(date.with_precision(P::Month)))
+                    .unwrap()
+                else {
+                    panic!("a bounded date source waits for its bounds")
+                };
+                let bound: DateTime = bound.parse().unwrap();
+                let (Value::DateTime(value), false) = bounded
+                    .apply_bounds(pending, ValueRef::DateTime(bound), ValueRef::Missing)
+                    .unwrap()
+                else {
+                    panic!("an uncrossed datetime")
+                };
+                assert_eq!(value.to_string(), expected, "{bound}");
+                assert_eq!(value.collected_precision(), P::Month, "{bound}");
+            }
             let op = operation(datetime_kind(TimeRule::First), false, None);
-            assert!(op.source_value(ValueRef::Date(date)).is_err());
             assert_eq!(
                 op.source_value(ValueRef::DateTime(datetime)),
                 Ok(S::Value(Value::DateTime(datetime)))

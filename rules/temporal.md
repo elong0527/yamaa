@@ -31,7 +31,7 @@ Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negati
 | `diff`, `type: datetime` | `start` and `end` are `datetime`; an elapsed `unit` |
 | `study_day` | `source` and `reference` are `date` |
 | `impute`, `type: date` | `source` is collected date text or a `date`; `not_before`, `not_after` and `fallback` are `date` |
-| `impute`, `type: datetime` | `source` is collected date text or a `datetime`; `not_before`, `not_after` and `fallback` are `datetime` |
+| `impute`, `type: datetime` | `source` is collected date text, a `date` or a `datetime`; `not_before`, `not_after` and `fallback` are `datetime` |
 | `precision` | `source` is collected date text or a value of the declared type |
 | `imputation_flag` | `source` is a `date` or a `datetime`, and a `datetime` with `part: time` |
 | `to_date` | `source` is a `datetime` or collected date text |
@@ -82,7 +82,10 @@ duration fails with `interval_or_duration_text` and other text with
 `invalid_date_text`; `to_date` declares no handler for either.
 
 A `datetime` is produced by converting datetime text, by `impute` with
-`type: datetime` ([TIME-8](#time-8)) and by `shift` ([TIME-14](#time-14)). It
+`type: datetime` ([TIME-8](#time-8)), from text or from a `date`, and by
+`shift` ([TIME-14](#time-14)). A `date` never becomes a `datetime` by
+conversion ([VALUE-18](values.md#value-18)): `impute` names the time of day it
+supplies, as `to_date` names the time of day it drops. It
 is consumed by `diff`, `shift`, comparisons, `precision`, `imputation_flag` and
 `to_date`. The `datetime` value space is zone-free
 ([VALUE-14](values.md#value-14)).
@@ -255,8 +258,8 @@ column, or ingested as one, follows [VALUE-15](values.md#value-15): there
 `2025-03` is not a `date`. A specification that must keep how much of a value
 was collected keeps the text as `str` and reads it with `impute` or
 `precision`. A `datetime` source to `precision` with `type: date`, and a `date`
-source with `type: datetime`, are incompatible inputs ([TIME-1](#time-1)). A
-missing source and invalid text follow [TIME-13](#time-13).
+source to `precision` with `type: datetime`, are incompatible inputs
+([TIME-1](#time-1)). A missing source and invalid text follow [TIME-13](#time-13).
 
 <a id="time-22"></a>
 
@@ -372,7 +375,7 @@ missing a field that no declared rule supplies gives missing. The result keeps
 the source's collected precision.
 
 Fails: `incompatible_input_type`.
-Evidence: `adam-adae-partial-dates`, `adam-adae-partial-times`, `adam-adsl-alive-date`, `schema-birth-date`, `schema-impute-text-with-time`, `schema-imputation-flags`.
+Evidence: `adam-adae-partial-dates`, `adam-adae-partial-times`, `adam-adsl-alive-date`, `schema-impute-datetime-from-date`, `schema-birth-date`, `schema-impute-text-with-time`, `schema-imputation-flags`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_impute_refuses_a_source_that_is_neither_text_nor_a_date_nor_a_datetime`.
 
 `time: first` supplies hour `00`, minute `00` and second `00`, and `time: last`
 supplies `23`, `59` and `59`: the earliest or latest civil moment the collected
@@ -398,14 +401,25 @@ With `type: date`, `month: 6` and `day: first`, `1975` completes to
 `2025-03-04T08:59:59`. Text carrying seconds, and a value of the declared type,
 are returned unchanged.
 
+A `date` source with `type: datetime` completes as text carrying that complete
+date does, except that the result keeps the date's own collected precision:
+under `time: first` the date `2025-03-04` gives `2025-03-04T00:00:00` and
+under `time: last` `2025-03-04T23:59:59`. A date that `impute` completed from
+`2025-03`, collected precision `month`, gives a datetime with collected
+precision `month`, so [TIME-18](#time-18) flags its supplied day and time
+alike. `month` and `day` never apply to a date, which carries both. The
+bounds of [TIME-9](#time-9) move only the supplied time, within the date's
+day. Nothing converts a date to a datetime implicitly
+([VALUE-18](values.md#value-18)); naming the time of day is what admits it.
+
 The text completed is the prefix [TIME-7](#time-7) reads, so an unknown field
 and every field after it are completed as if not collected: `2025---15`
 completes as `2025` does, and with `type: datetime` and `time: first`,
 `2025-03-15T-:30` completes to `2025-03-15T00:00:00` with `day`. Text whose
 year is unknown gives missing, as a source coarser than the minimum does.
 
-A source whose type is neither `str` nor the declared type is an incompatible
-input under [TIME-1](#time-1).
+A source whose type is neither `str` nor the declared type, nor a `date` with
+`type: datetime`, is an incompatible input under [TIME-1](#time-1).
 
 The parameters apply in this order: a missing source, then invalid text, then
 the minimum precision, then completion from `month`, `day` and `time`, then
