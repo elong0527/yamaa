@@ -1059,6 +1059,11 @@ impl PreparedSpecification {
     pub fn source_contract(&self, index: usize) -> Option<&crate::producer_contract::Contract> {
         self.source_contracts.get(index).and_then(Option::as_ref)
     }
+    /// The `filter` path of the row template that owns the derivation at
+    /// `path`, when it declares one (COLUMN-9).
+    pub fn template_filter(&self, path: &str) -> Option<String> {
+        self.rows.deferred_filter(path)
+    }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.keys
             .iter()

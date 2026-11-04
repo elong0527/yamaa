@@ -1,0 +1,105 @@
+{
+  "about": "A row template's filter runs after its candidate's derivations (COLUMN-9, #4272). Subject B's group has no lookup record, so the template's filter would discard it, but the string template that reads the missing label fails first; when the template declares a filter, the finding names it as template_filter, and without one it does not. A string template that answers a missing value with missing: null lets the filter discard subject B, and the saved bytes hold subject A alone. Every value is authored from COLUMN-9 and COLUMN-10.",
+  "cases": [
+    {
+      "case": "a_template_derivation_failing_before_its_filter_names_the_filter",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\noutput: {path: output.csv, columns: [SUBJ, TAGGED]}\nintermediates:\n  - id: LK\n    dataset: L\n    key: {GRP: GRP}\n    absent: null\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: GRP, type: str, derivation: I.GRP}\n  - {name: TAGGED, type: str}\nrows:\n  - id: matched_only\n    dataset: I\n    filter: \"LK.LBL IS NOT NULL\"\n    derivations:\n      TAGGED:\n        str_template: '{LK.LBL}-tag'\n",
+          "input.csv": "SUBJ,GRP\nA,x\nB,y\n",
+          "lookup.csv": "GRP,LBL\nx,hello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "mapping",
+          "condition": "missing_input",
+          "rule": "COLUMN-10",
+          "spec_paths": [
+            "rows.matched_only.derivations.TAGGED.str_template"
+          ],
+          "context": {
+            "keys": [
+              {
+                "SUBJ": "B"
+              }
+            ],
+            "variable": "LK.LBL",
+            "template_filter": "rows.matched_only.filter"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_template_derivation_failing_without_a_filter_names_no_filter",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\noutput: {path: output.csv, columns: [SUBJ, TAGGED]}\nintermediates:\n  - id: LK\n    dataset: L\n    key: {GRP: GRP}\n    absent: null\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: GRP, type: str, derivation: I.GRP}\n  - {name: TAGGED, type: str}\nrows:\n  - id: matched_only\n    dataset: I\n    derivations:\n      TAGGED:\n        str_template: '{LK.LBL}-tag'\n",
+          "input.csv": "SUBJ,GRP\nA,x\nB,y\n",
+          "lookup.csv": "GRP,LBL\nx,hello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "mapping",
+          "condition": "missing_input",
+          "rule": "COLUMN-10",
+          "spec_paths": [
+            "rows.matched_only.derivations.TAGGED.str_template"
+          ],
+          "context": {
+            "keys": [
+              {
+                "SUBJ": "B"
+              }
+            ],
+            "variable": "LK.LBL"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_total_template_derivation_lets_the_filter_discard_the_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\noutput: {path: output.csv, columns: [SUBJ, TAGGED]}\nintermediates:\n  - id: LK\n    dataset: L\n    key: {GRP: GRP}\n    absent: null\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: GRP, type: str, derivation: I.GRP}\n  - {name: TAGGED, type: str}\nrows:\n  - id: matched_only\n    dataset: I\n    filter: \"LK.LBL IS NOT NULL\"\n    derivations:\n      TAGGED:\n        str_template: {template: '{LK.LBL}-tag', missing: null}\n",
+          "input.csv": "SUBJ,GRP\nA,x\nB,y\n",
+          "lookup.csv": "GRP,LBL\nx,hello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "output.csv": "SUBJ,TAGGED\nA,hello-tag\n"
+      }
+    }
+  ]
+}

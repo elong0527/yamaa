@@ -120,6 +120,25 @@ impl<'a> Context<'a> {
 }
 
 impl Rows {
+    /// The `filter` path of the row template whose own derivation is at
+    /// `path`, when that template declares one. The filter runs after the
+    /// candidate's derivations, so it never discards a candidate before one
+    /// of them fails (COLUMN-9).
+    pub(super) fn deferred_filter(&self, path: &str) -> Option<String> {
+        let Rows::Templates(templates) = self else {
+            return None;
+        };
+        templates
+            .templates
+            .iter()
+            .find(|template| {
+                template.filter.is_some()
+                    && path
+                        .strip_prefix(template.path.as_str())
+                        .is_some_and(|rest| rest.starts_with(".derivations."))
+            })
+            .map(|template| format!("{}.filter", template.path))
+    }
     /// Bind every derivation over the rows, after the intermediates: the
     /// implicit template's columns in declaration order, or each row
     /// template's derivations and then the column phase. The inputs follow

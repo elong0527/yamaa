@@ -290,6 +290,9 @@ conditions:
   missing_input:
     phases: [mapping]
     message: "the string template reads {variable}, which is missing"
+    message_variants:
+      - when: template_filter
+        message: "the string template reads {variable}, which is missing, and {template_filter} runs only after the row's derivations, so it cannot discard the row first"
   missing_key:
     phases: [output]
     message: "key column {column} is missing in {missing_count} of the rows"

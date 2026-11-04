@@ -218,7 +218,18 @@ enters the completed dataset, and stage 4 column verifications do not include
 it. An error reached while deriving the candidate still fails the run; the
 filter does not retroactively hide a failed derivation.
 
-Evidence: `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/row_filters.json`.
+Evidence: `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/row_filters.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/row_filter_failures.json`.
+
+A failure at one of a template's own derivations, `rows.<id>.derivations`,
+that is reported with the candidate row's `keys` names the template's filter
+as `template_filter`, `rows.<id>.filter`, in its context when the template
+declares one, so a failure on a candidate the filter would discard says why
+the filter did not discard it. A derivation
+that must not fail on such a candidate answers the value it cannot use, such
+as a missing value with `missing:` ([COLUMN-10](#column-10)); the filter then
+discards the candidate. The filter is not evaluated to decide this: the
+context key states that the filter exists and runs later, not that it would
+have discarded the candidate.
 
 For a grouped template, the values the filter may read are those of every row
 derivation. For an ungrouped template, they are those of every derivation that
