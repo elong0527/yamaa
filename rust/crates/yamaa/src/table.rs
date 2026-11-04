@@ -94,6 +94,12 @@ impl Table {
         self.inner.rows()
     }
 
+    /// Count the columns, in any build: the Arrow fields of
+    /// [`Table::columns`] need the `arrow` feature.
+    pub fn width(&self) -> usize {
+        self.inner.width()
+    }
+
     /// Export one stream with an independent cursor and shared buffers.
     #[cfg(feature = "arrow")]
     pub fn stream(&self) -> FFI_ArrowArrayStream {

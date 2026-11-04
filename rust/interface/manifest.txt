@@ -166,8 +166,14 @@ records.progress_event.fields[5]: rows: optional<int>
 cli.synopsis: yamaa [--format text|json] COMMAND [ARGUMENTS]
 cli.synopsis: yamaa --version [--format text|json]
 cli.synopsis: yamaa --help
+cli.entries.python: python -m yamaa COMMAND [ARGUMENTS], or yamaa.cli(arguments)
+cli.entries.r: yamaa_cli(arguments), as Rscript -e 'quit(status = yamaa_cli(commandArgs(TRUE)))' COMMAND [ARGUMENTS] once the package is attached
+cli.worker.python: python -m yamaa._worker, in the interpreter --interpreter names or python3, then python, on PATH
+cli.worker.r: Rscript -e running the package's internal .yamaa_worker(), in the Rscript --interpreter names or Rscript on PATH
 cli.values.output_format.text
 cli.values.output_format.json
+cli.values.host_language.python
+cli.values.host_language.r
 cli.global_flags.--format: values output_format; default text
 cli.global_flags.--version: flag
 cli.global_flags.--help: flag
@@ -185,16 +191,19 @@ cli.commands.check.json_keys.path
 cli.commands.check.json_keys.spec
 cli.commands.check.json_keys.status
 cli.commands.check.json_keys.issues
-cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]
+cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION] [--host python|r] [--interpreter PATH] [--threads N] [--verbose]
 cli.commands.run.args[0]: PATH: path
 cli.commands.run.flags.--spec: NAME
 cli.commands.run.flags.--section: SECTION; values section
+cli.commands.run.flags.--host: LANGUAGE; values host_language
+cli.commands.run.flags.--interpreter: PATH
 cli.commands.run.flags.--threads: N
 cli.commands.run.flags.--verbose: flag
 cli.commands.run.json_keys.command
 cli.commands.run.json_keys.path
 cli.commands.run.json_keys.spec
 cli.commands.run.json_keys.section
+cli.commands.run.json_keys.host
 cli.commands.run.json_keys.status
 cli.commands.run.json_keys.members
 cli.commands.run.json_keys.issues
@@ -321,6 +330,8 @@ public.types.file_type: python str, one of values.file_type; r character(1), one
 public.types.host_condition: python BaseException | None; r condition or NULL
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
+public.types.arguments: python list[str], the words after the program name; r character(), the words after the program name
+public.types.exit_status: python int, the exit status: 0, 1 or 2 (cli.exit_status); r integer(1), the exit status: 0, 1 or 2 (cli.exit_status), invisibly
 public.types.pickle: python tuple[object, tuple[bytes]]
 public.types.rows: python list[dict[str, object]], one dict per row, keyed by the column names in order
 public.types.arrow_capsule: python PyCapsule named arrow_array_stream, a fresh Arrow C stream
@@ -352,6 +363,8 @@ public.functions.schema.args[0]: file_type: file_type
 public.functions.conditions: python yamaa.conditions; r yamaa_conditions; returns table; table conditions
 public.functions.info: python yamaa.info; r yamaa_info; returns info; record info
 public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
+public.functions.cli: python yamaa.cli; r yamaa_cli; returns exit_status; raises refusal
+public.functions.cli.args[0]: arguments: arguments
 public.classes.Check: python yamaa.Check; r yamaa_check
 public.classes.Check.status: property; returns status
 public.classes.Check.issues: property; returns table; table issues; raises refusal
@@ -450,6 +463,7 @@ public.python.exports.Error
 public.python.exports.StateError
 public.python.exports.Table
 public.python.exports.__version__
+public.python.exports.cli
 public.python.exports.conditions
 public.python.exports.info
 public.python.exports.lint
@@ -466,6 +480,7 @@ public.r.exports.yamaa_schema
 public.r.exports.yamaa_conditions
 public.r.exports.yamaa_info
 public.r.exports.yamaa_selftest
+public.r.exports.yamaa_cli
 public.r.s3methods.yamaa_check.names: status, issues, timings
 public.r.s3methods.yamaa_check.length
 public.r.s3methods.yamaa_check.print

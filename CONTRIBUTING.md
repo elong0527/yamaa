@@ -47,7 +47,7 @@ refreshes the base image to the newest R release.
 | `rust/crates/yamaa-application/` | The use cases that prepare, bind, execute, report and save over core's ports, through the adapters, and the integration suite that runs them on the file route. |
 | `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings and the census of live native handles. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |
-| `rust/crates/yamaa-cli/` | The `yamaa` command line over the facade alone, with the notices and component inventory of its release archives. |
+| `rust/crates/yamaa-cli/` | The `yamaa` executable over the facade alone: the process's streams and Ctrl+C handler around the facade's `cli` module, with the notices and component inventory of its release archives. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
 | `benchmarks/` | Authored specifications, inputs, metadata and expected results. |
 | `evaluations/harbor/` | Agent tasks, reference solutions and grading. |

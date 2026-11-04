@@ -325,3 +325,7 @@ yamaa_conditions <- function() .reply(.native_conditions())
 yamaa_info <- function() .reply(.native_info(.version()))
 
 yamaa_selftest <- function() .self_test(.reply(.native_selftest(.version())))
+
+yamaa_cli <- function(arguments) {
+  invisible(.reply(.native_cli(.texts(arguments, "arguments"), .version(), .capabilities())))
+}

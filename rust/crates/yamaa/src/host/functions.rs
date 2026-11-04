@@ -29,6 +29,26 @@ pub enum HostLanguage {
 }
 
 impl HostLanguage {
+    /// The language's key, `python` or `r`: the key of its `environments`
+    /// entry and of its `implementations` entry in a function file, and the
+    /// value the command line's `--host` takes.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Python => "python",
+            Self::R => "r",
+        }
+    }
+
+    /// The language whose key is `text`, as [`HostLanguage::as_str`] spells
+    /// it; none for any other text.
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "python" => Some(Self::Python),
+            "r" => Some(Self::R),
+            _ => None,
+        }
+    }
+
     pub(crate) fn into_core(self) -> yamaa_core::project_function::Language {
         use yamaa_core::project_function::Language;
         match self {

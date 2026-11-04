@@ -76,6 +76,9 @@ _PY_ANNOTATION = {
     "info": "dict",
     "host_condition": "BaseException | None",
     "nothing": "None",
+    # The command line's arguments and exit status (cli.entries).
+    "arguments": "list[str]",
+    "exit_status": "int",
     # Tokens with only a Python projection, which only the members of a
     # Python-only class use; the generator writes no annotation with them.
     "pickle": "tuple[object, tuple[bytes]]",
@@ -108,6 +111,7 @@ _ARGUMENT_TOKENS = {
     "flag",
     "file_type",
     "schema_request",
+    "arguments",
 }
 _DEFAULTS = {
     "optional_path": {"None"},
@@ -130,6 +134,7 @@ _PY_ARGUMENT = {
     "optional_text": "_optional_text",
     "file_type": "_text",
     "flag": "_flag",
+    "arguments": "_texts",
 }
 _R_ARGUMENT = {
     "path": ".path",
@@ -141,6 +146,7 @@ _R_ARGUMENT = {
     "progress": ".progress",
     "input_frames": ".input_frames",
     "flag": ".flag",
+    "arguments": ".texts",
 }
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 # The members of R's native `settings` (#4214) that the host supplies rather
@@ -839,7 +845,7 @@ class Public:
             _Call(
                 helper,
                 [name, f'"{name}"']
-                if helper in {"_text", "_optional_text", "_flag"}
+                if helper in {"_text", "_optional_text", "_flag", "_texts"}
                 else [name],
             )
             if helper
@@ -1167,6 +1173,7 @@ class Public:
                 "_optional_fspath",
                 "_optional_text",
                 "_text",
+                "_texts",
             )
             if re.search(rf"(?<![\w.]){name}\b", text)
         ]
@@ -1248,8 +1255,10 @@ class Public:
         for native in target["args"]:
             if native == "handle" and handle:
                 values.append(handle)
-            elif native == "version":
-                values.append(_Call(".version"))
+            elif native in _R_HOST_SETTINGS:
+                # R's version, or the project host capabilities, which the
+                # host supplies to a call outside `settings` too.
+                values.append(_Call(_R_HOST_SETTINGS[native]))
             elif native == "settings":
                 values.append(self._r_settings(args, used, converted, what))
             elif native == "plans" and class_name and self.plans(class_name):
@@ -1330,8 +1339,9 @@ class Public:
             return self._r_construct(
                 returns, call, class_name, self._r_args(entry), what, handle
             )
-        # A method that writes returns its result invisibly, as `save()` does.
-        if returns in {"nothing", "paths_written"}:
+        # A method that writes returns its result invisibly, as `save()` does,
+        # and so does the command line, which has printed its result.
+        if returns in {"nothing", "paths_written", "exit_status"}:
             return _Call("invisible", [call])
         return call
 

@@ -1,6 +1,7 @@
 //! The commands that run on the `yamaa` facade (#3030 section 2.8, D12):
-//! each calls the facade as a host does and prints the facade's own words
-//! (D37, D39, D103), so the command line and the hosts say the same thing.
+//! each calls the facade as a host does, over the engine its [`Runtime`]
+//! configures, and prints the facade's own words (D37, D39, D103), so the
+//! command line and the hosts say the same thing.
 //!
 //! - **Text.** A result prints its summary line, a project run's member
 //!   lines and every issue's line, then the files its save wrote, one
@@ -72,9 +73,8 @@
 //! `schema_version`, or a `type` naming no file type. A PATH whose type the
 //! command does not take, at all or with the flags given, such as `--spec`
 //! with a spec or `--parent` with a project, is a usage error, which exits 2.
-//! `selftest` takes no PATH: it runs the cases the facade carries on an
-//! engine like the command line's, which claims no host language (D108,
-//! D123). `read-odm SOURCE OUT` reads SOURCE as the hosts' `read_odm()` reads
+//! `selftest` takes no PATH: it runs the cases the facade carries as the
+//! runtime's host, the binary's claiming no host language (D108, D123). `read-odm SOURCE OUT` reads SOURCE as the hosts' `read_odm()` reads
 //! it, then saves the item table to OUT, whose extension selects CSV or
 //! Parquet (D134). The facade decides both: a SOURCE it cannot read, a bound
 //! below its minimum, and an OUT with another extension, which it refuses
@@ -86,17 +86,17 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::io::Write;
 use std::num::NonZeroUsize;
 
-use yamaa::{
+use yamaa_core::limits::Limits;
+
+use crate::cli::arguments::{Call, Format, Usage};
+use crate::cli::{Functions, Runtime, FINDINGS, SUCCEEDED};
+use crate::{
     CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Failure,
-    FileType, Host, Info, LintFinding, OdmOptions, Partitions, ProgressEvent, ProgressKind,
+    FileType, HostLanguage, Info, LintFinding, OdmOptions, Partitions, ProgressEvent, ProgressKind,
     ProjectRequest, ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
 };
-
-use crate::arguments::{Call, Format, Usage};
-use crate::{FINDINGS, SUCCEEDED};
 
 /// What became of a command.
 #[derive(Debug, PartialEq, Eq)]
@@ -113,22 +113,27 @@ pub(crate) enum Execution {
     Refused(Usage),
 }
 
-/// Run `call` and render what it prints in `format`.
-pub(crate) fn execute(call: &Call, format: Format, token: &CancellationToken) -> Execution {
+/// Run `call` over `runtime` and render what it prints in `format`.
+pub(crate) fn execute(
+    call: &Call,
+    format: Format,
+    token: &CancellationToken,
+    runtime: &dyn Runtime,
+) -> Execution {
     let verbose = Verbose {
         on: call.has("--verbose"),
         timings: RefCell::new(Vec::new()),
     };
     let printed = match call.name {
-        "check" => check(call, token, &verbose),
-        "run" => run(call, token, &verbose),
-        "submission" => submission(call, token, &verbose),
-        "resolve" => resolve(call),
-        "read-odm" => read_odm(call),
+        "check" => check(call, token, &verbose, runtime),
+        "run" => run(call, token, &verbose, runtime),
+        "submission" => submission(call, token, &verbose, runtime),
+        "resolve" => resolve(call, runtime),
+        "read-odm" => read_odm(call, runtime),
         "lint" => lint(call),
         "schema" => schema(call),
         "conditions" => Ok(conditions()),
-        "selftest" => Ok(selftest()),
+        "selftest" => Ok(selftest(runtime)),
         other => unreachable!("the arguments admit no command {other}"),
     };
     match printed {
@@ -254,7 +259,8 @@ fn object<const N: usize>(members: [(&str, ContextValue); N]) -> ContextValue {
 
 /// The engine information as one object with `cli.json.info_keys`, as
 /// `--version` prints it and `selftest` reports it. The command line runs on
-/// no interpreter, so its `host_version` is null.
+/// no interpreter, so its `host_version` is null; a host package's entry
+/// names its interpreter's.
 pub(crate) fn info(info: &Info) -> ContextValue {
     object([
         ("version", text(info.version)),
@@ -405,37 +411,50 @@ fn not_taken(call: &Call, path: &str, file_type: FileType, how: Option<&str>) ->
     )))
 }
 
-/// The partitions every build runs over (#3794, D264): key-bounded over the
-/// specification's two leading declared keys, of at most 624,640 driver
-/// records each, with the whole-table fallback. The command line depends on
-/// the facade alone, so it spells core's `Limits::PARTITION_KEYS` and
-/// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
-const PARTITIONS: [usize; 2] = [2, 624_640];
-
-/// The command line's engine: the local file resolver, no host language
-/// (#3030 section 2.10, D123) and [`PARTITIONS`]. It reads no project's
-/// `environments.<host>` entry, so it verifies no lock and activates
-/// nothing: a build that calls a project function is refused before it
-/// reads data, and every other build runs as a host runs it (section 2.3,
-/// D110).
-fn engine() -> Engine {
-    Engine::new(options())
+/// The command line's engine over `runtime` for a command that calls no
+/// project function: its options, with the partitions every build runs over
+/// (#3794, D264), key-bounded over the specification's two leading declared
+/// keys, of at most `Limits::PARTITION_ROWS` driver records each, with the
+/// whole-table fallback. The binary's runtime claims no host language (#3030
+/// section 2.10, D123): it reads no project's `environments.<host>` entry,
+/// so it verifies no lock and activates nothing, a build that calls a
+/// project function is refused before it reads data, and every other build
+/// runs as a host runs it (section 2.3, D110). A host's runtime brings its
+/// installed project functions, so the same command runs them as the host
+/// does.
+fn engine(call: &Call, runtime: &dyn Runtime) -> Result<Engine, Execution> {
+    options(call, runtime, None).map(Engine::new)
 }
 
-/// The options of every engine the command line builds.
-fn options() -> EngineOptions {
-    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
-    EngineOptions::neutral(Host::Cli.as_str().to_owned(), String::new())
-        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
+/// The options of every engine the command line builds over `runtime`, with
+/// the `functions` a `run` settled on. A runtime that cannot run them says
+/// why, which is a usage error.
+fn options(
+    call: &Call,
+    runtime: &dyn Runtime,
+    functions: Option<&Functions<'_>>,
+) -> Result<EngineOptions, Execution> {
+    let [keys, rows] = [Limits::PARTITION_KEYS, Limits::PARTITION_ROWS]
+        .map(|count| NonZeroUsize::new(count).expect("nonzero"));
+    runtime
+        .options(functions)
+        .map(|options| {
+            options.with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
+        })
+        .map_err(|reason| Execution::Refused(Usage(format!("{}: {reason}", call.name))))
 }
 
 /// The command line's [`engine`], deriving up to `--threads N` partitions
 /// of one run at once when `call` gives it (#4193), and which under
-/// `--verbose` writes each progress event to standard error as it happens
-/// (#3762). A line that cannot be written is lost, and the command goes on.
-/// An `N` of 0 is an argument the facade cannot take.
-fn reporting(call: &Call, verbose: &Verbose) -> Result<Engine, Execution> {
-    let mut options = options();
+/// `--verbose` writes each progress event through the runtime's reporter as
+/// it happens (#3762). An `N` of 0 is an argument the facade cannot take.
+fn reporting(
+    call: &Call,
+    verbose: &Verbose,
+    runtime: &dyn Runtime,
+    functions: Option<&Functions<'_>>,
+) -> Result<Engine, Execution> {
+    let mut options = options(call, runtime, functions)?;
     if let Some(count) = call.count("--threads") {
         let count = ContextValue::Int(i64::try_from(count).unwrap_or(i64::MAX));
         let partitions = options
@@ -453,10 +472,13 @@ fn reporting(call: &Call, verbose: &Verbose) -> Result<Engine, Execution> {
         options = options.with_partitions(partitions);
     }
     Ok(Engine::new(match verbose.on {
-        true => options.with_progress(|event: &ProgressEvent| {
-            let _ = writeln!(std::io::stderr(), "{}", progress_line(event));
-            Ok(())
-        }),
+        true => {
+            let report = runtime.reporter();
+            options.with_progress(move |event: &ProgressEvent| {
+                report(&progress_line(event));
+                Ok(())
+            })
+        }
         false => options,
     }))
 }
@@ -481,12 +503,17 @@ fn project_request<'a>(
 /// `s.check(parent)` of a spec, a fragment checked on the spec that flag
 /// names as its parent (#3694). The arguments give `--spec` or `--parent`,
 /// not both.
-fn check(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Printed, Execution> {
+fn check(
+    call: &Call,
+    token: &CancellationToken,
+    verbose: &Verbose,
+    runtime: &dyn Runtime,
+) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let parent = flag(call, "--parent")?;
     let document = document("check", [("path", text(path)), ("spec", optional(name))]);
-    let engine = reporting(call, verbose)?;
+    let engine = reporting(call, verbose, runtime, None)?;
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -529,24 +556,59 @@ fn check(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Pr
 /// `yamaa run PATH`: `s.run()` of a spec, `p.run()` of a project, or, with
 /// `--spec NAME` or `--section SECTION`, `p.spec(name).run()` or
 /// `p.run(section)`; then `save()`.
-fn run(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Printed, Execution> {
+///
+/// A run of a project over a runtime that settles the project functions a
+/// run calls, the binary's, settles their language first: `--host`, or else
+/// the one language the project file names
+/// ([`ProjectRequest::host_languages`]), with `--interpreter` naming the
+/// interpreter that runs them; a project that names no one language runs
+/// as a build without project functions does, and refuses a call of one.
+/// The `host` of the JSON document is the language settled on, or null. A
+/// host package's runtime runs its own functions, so `--host` and
+/// `--interpreter` are usage errors there, as both are with a spec PATH.
+fn run(
+    call: &Call,
+    token: &CancellationToken,
+    verbose: &Verbose,
+    runtime: &dyn Runtime,
+) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let section = flag(call, "--section")?;
+    let host = flag(call, "--host")?;
+    let interpreter = flag(call, "--interpreter")?;
     let mut document = document(
         "run",
         [
             ("path", text(path)),
             ("spec", optional(name)),
             ("section", optional(section)),
+            ("host", ContextValue::Null),
             ("members", ContextValue::List(Vec::new())),
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = reporting(call, verbose)?;
-    let file_type = match engine.file_type(path) {
+    // The arguments are checked, `--threads` among them, before the file is
+    // read; the engine that reads the file's type and settles the language
+    // calls no project function.
+    let plain = reporting(call, verbose, runtime, None)?;
+    let file_type = match plain.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
+    };
+    let language = match settle(call, &plain, path, file_type, host, interpreter, runtime) {
+        Ok(Ok(language)) => language,
+        Ok(Err(failure)) => return Ok(refusal(document, failure)),
+        Err(execution) => return Err(execution),
+    };
+    document.insert("host".into(), optional(language.map(HostLanguage::as_str)));
+    let functions = language.map(|language| Functions {
+        language,
+        interpreter,
+    });
+    let engine = match functions {
+        Some(functions) => reporting(call, verbose, runtime, Some(&functions))?,
+        None => plain,
     };
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
@@ -591,6 +653,81 @@ fn run(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Prin
     })
 }
 
+/// The language of the project functions a `run` of `path` calls, for a
+/// runtime that settles them: `--host`, or the one language the project
+/// names, read with `plain`; none for a project that names no one language,
+/// and for every run of a runtime that settles none. `--host` and
+/// `--interpreter` are usage errors with a spec PATH, which calls no project
+/// function, with a runtime that settles none, and, for `--interpreter`
+/// alone, with a project that names no one language.
+fn settle(
+    call: &Call,
+    plain: &Engine,
+    path: &str,
+    file_type: FileType,
+    host: Option<&str>,
+    interpreter: Option<&str>,
+    runtime: &dyn Runtime,
+) -> Result<Result<Option<HostLanguage>, Failure>, Execution> {
+    let given = [("--host", host), ("--interpreter", interpreter)]
+        .into_iter()
+        .find_map(|(flag, value)| value.map(|_| flag));
+    if !runtime.settles_functions() {
+        return match given {
+            Some(flag) => Err(Execution::Refused(Usage(format!(
+                "{}: {flag} is taken only by the standalone yamaa command line; this host runs \
+                 its own project functions",
+                call.name
+            )))),
+            None => Ok(Ok(None)),
+        };
+    }
+    if file_type != FileType::Project {
+        return match given {
+            Some(flag) => Err(not_taken(
+                call,
+                path,
+                file_type,
+                Some(&format!("with {flag}")),
+            )),
+            None => Ok(Ok(None)),
+        };
+    }
+    if let Some(host) = host {
+        return match HostLanguage::parse(host) {
+            Some(language) => Ok(Ok(Some(language))),
+            None => Err(Execution::Refused(Usage(format!(
+                "{}: --host takes python or r, not {host}",
+                call.name
+            )))),
+        };
+    }
+    let languages = match plain.project(path).host_languages() {
+        Ok(languages) => languages,
+        Err(failure) => return Ok(Err(failure)),
+    };
+    match languages.as_slice() {
+        [language] => Ok(Ok(Some(*language))),
+        _ if interpreter.is_some() => Err(Execution::Refused(Usage(format!(
+            "{}: --interpreter needs --host, since {path} names {}",
+            call.name,
+            if languages.is_empty() {
+                "no host language".to_owned()
+            } else {
+                format!(
+                    "both {}",
+                    languages
+                        .iter()
+                        .map(|language| language.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" and ")
+                )
+            }
+        )))),
+        _ => Ok(Ok(None)),
+    }
+}
+
 /// One specification's run, then its save, which polls `token`; a refusal of
 /// the run names the specification's path.
 fn saved(
@@ -625,14 +762,14 @@ fn members(runs: &ProjectRun) -> ContextValue {
             .into_iter()
             .map(|(name, run)| {
                 let output = run.output();
-                let size = |measure: fn(&yamaa::Table) -> usize| {
+                let size = |measure: fn(&crate::Table) -> usize| {
                     output.map_or(ContextValue::Null, |table| count(measure(table)))
                 };
                 object([
                     ("name", text(name)),
                     ("status", text(run.status().as_str())),
-                    ("rows", size(yamaa::Table::rows)),
-                    ("columns", size(|table| table.columns().len())),
+                    ("rows", size(crate::Table::rows)),
+                    ("columns", size(crate::Table::width)),
                     ("issue_count", count(run.diagnostics().len())),
                 ])
             })
@@ -648,6 +785,7 @@ fn submission(
     call: &Call,
     token: &CancellationToken,
     verbose: &Verbose,
+    runtime: &dyn Runtime,
 ) -> Result<Printed, Execution> {
     let path = path(call)?;
     let section = flag(call, "--section")?;
@@ -661,13 +799,13 @@ fn submission(
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = reporting(call, verbose)?;
+    let engine = reporting(call, verbose, runtime, None)?;
     match engine.file_type(path) {
         Ok(FileType::Project) => {}
         Ok(other) => return Err(not_taken(call, path, other, None)),
         Err(failure) => return Ok(refusal(document, failure)),
     }
-    let mut options = SubmissionOptions::new(yamaa::VERSION);
+    let mut options = SubmissionOptions::new(crate::VERSION);
     options.created = created.map(str::to_owned);
     let composed = project_request(&engine, path, section, token).submission(&options);
     Ok(match composed {
@@ -696,11 +834,11 @@ fn submission(
 /// `p.spec(name).resolve()` of a project, printed as canonical JSON in both
 /// formats. A project has no resolved form of its own, so it needs
 /// `--spec`.
-fn resolve(call: &Call) -> Result<Printed, Execution> {
+fn resolve(call: &Call, runtime: &dyn Runtime) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let document = document("resolve", [("path", text(path)), ("spec", optional(name))]);
-    let engine = engine();
+    let engine = engine(call, runtime)?;
     let file_type = match engine.file_type(path) {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -744,7 +882,7 @@ fn verbatim(json: String) -> Printed {
 /// follows the read: `succeeded` once the items are read, even when the save
 /// is then refused, which its issues and exit status 1 report, and `failed`
 /// only for a refused read (D169).
-fn read_odm(call: &Call) -> Result<Printed, Execution> {
+fn read_odm(call: &Call, runtime: &dyn Runtime) -> Result<Printed, Execution> {
     let source = utf8(call, "SOURCE", &call.arguments[0])?;
     let out = utf8(call, "OUT", &call.arguments[1])?;
     let mut options = OdmOptions::new();
@@ -771,7 +909,7 @@ fn read_odm(call: &Call) -> Result<Printed, Execution> {
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let engine = engine();
+    let engine = engine(call, runtime)?;
     let table = match engine.read_odm(source, &options) {
         Ok(table) => table,
         Err(failure) => return Ok(refusal(document, failure)),
@@ -810,7 +948,7 @@ fn lint(call: &Call) -> Result<Printed, Execution> {
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    Ok(match yamaa::lint(&paths, call.has("--fix")) {
+    Ok(match crate::lint(&paths, call.has("--fix")) {
         Ok(lint) => {
             let findings = lint.findings();
             let status = lint.status();
@@ -841,7 +979,7 @@ fn lint(call: &Call) -> Result<Printed, Execution> {
 /// and `spec` (D169).
 fn schema(call: &Call) -> Result<Printed, Execution> {
     let file_type = utf8(call, "TYPE", &call.arguments[0])?;
-    Ok(match yamaa::schema(file_type) {
+    Ok(match crate::schema(file_type) {
         Ok(json) => verbatim(json),
         Err(failure) => refusal(document("schema", [("type", text(file_type))]), failure),
     })
@@ -853,7 +991,7 @@ fn schema(call: &Call) -> Result<Printed, Execution> {
 /// and each condition with `cli.json.condition_keys`, in name order. It
 /// exits 0.
 fn conditions() -> Printed {
-    let catalogue = yamaa::conditions();
+    let catalogue = crate::conditions();
     let mut document = document("conditions", []);
     document.insert("status".into(), text(Status::Succeeded.as_str()));
     document.insert(
@@ -873,14 +1011,16 @@ fn conditions() -> Printed {
     }
 }
 
-/// `yamaa selftest`: `selftest()`, for the command line, which runs on no
-/// interpreter (D28, D108, D123). It prints the facade's report line for
-/// line, the same words as the hosts (D37, D119); its JSON holds the status,
-/// each case with `cli.json.case_keys` in list order, and the engine
-/// information. It exits 0 when no case failed: a case this build does not
-/// cover is `skipped`, which fails nothing (D119).
-fn selftest() -> Printed {
-    let selftest = yamaa::selftest(Host::Cli, None);
+/// `yamaa selftest`: `selftest()`, for the runtime's host: the command
+/// line, which runs on no interpreter (D28, D108, D123), or a host package
+/// on its interpreter. It prints the facade's report line for line, the same
+/// words as the hosts (D37, D119); its JSON holds the status, each case with
+/// `cli.json.case_keys` in list order, and the engine information. It exits 0
+/// when no case failed: a case this build does not cover is `skipped`, which
+/// fails nothing (D119).
+fn selftest(runtime: &dyn Runtime) -> Printed {
+    let (host, host_version) = runtime.host();
+    let selftest = crate::selftest(host, host_version.as_deref());
     let cases = selftest
         .cases()
         .iter()
@@ -968,7 +1108,7 @@ mod tests {
         // the cancellation's error text alone.
         let token = CancellationToken::new();
         token.cancel();
-        let failure = engine()
+        let failure = Engine::new(crate::cli::Neutral.options(None).unwrap())
             .spec("odm.xml")
             .cancel_with(&token)
             .check()

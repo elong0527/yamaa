@@ -28,6 +28,7 @@ use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::{context_value_from_core, ContextValue, Locator, Report};
 use crate::engine::{Build, Engine, Request};
 use crate::error::Failure;
+use crate::host::functions::HostLanguage;
 use crate::outcome::{fails, DefineBuild, Member, Outcome, Work};
 use crate::plan::Plan;
 use crate::progress::{Measured, Reporter, Timings};
@@ -1372,6 +1373,52 @@ impl<'a> ProjectRequest<'a> {
             .steps()
             .iter()
             .filter_map(|step| read.listed()[step.listed()].name().map(str::to_owned))
+            .collect())
+    }
+
+    /// The host languages a run of the project could call its project
+    /// functions in, read from the project file and its function files with
+    /// no study data: the languages the project declares an `environments`
+    /// entry for, in the order python, r, or, when it declares none, the
+    /// languages its listed function files name an implementation for. A
+    /// project with neither names no language, and one that declares both is
+    /// ambiguous: the command line's `--host` settles it, and a host package
+    /// runs its own language whatever the project declares. Every file the
+    /// read needs is admitted as a check admits it, so a function file that
+    /// cannot be admitted refuses the read.
+    ///
+    /// Every refusal names the call as `cannot read <project>` (D39), with
+    /// the issues a check of the project would report for its files.
+    pub fn host_languages(&self) -> Result<Vec<HostLanguage>, Failure> {
+        let action = Action::Read(self.path);
+        let captured = crate::internal::capture_project(self.engine.shared(), self.path).map_err(
+            |(issues, locator)| Failure::rejected(action, &Report::located(&issues, &locator)),
+        )?;
+        let languages = [HostLanguage::Python, HostLanguage::R];
+        let declared = captured
+            .project()
+            .map(|project| {
+                languages
+                    .into_iter()
+                    .filter(|language| project.environment(language.into_core()).is_some())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if !declared.is_empty() {
+            return Ok(declared);
+        }
+        let functions = captured.functions().unwrap_or_default();
+        Ok(languages
+            .into_iter()
+            .filter(|language| {
+                functions.iter().any(|function| {
+                    function
+                        .definition()
+                        .implementations
+                        .iter()
+                        .any(|implementation| implementation.language == language.into_core())
+                })
+            })
             .collect())
     }
 

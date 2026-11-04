@@ -42,7 +42,7 @@ EXACT_DOUBLE = 2**53
 # Why the command line runs no benchmark whose project supplies project
 # functions: the binary cannot call Python or R code (#3030 section 2.3).
 CLI_FUNCTION_EXCLUSION = (
-    "the command line has no project-function implementation, so a "
+    "the command line's conformance runs start no interpreter worker, so a "
     "specification that calls a project function fails before it reads data "
     "(#3030 section 2.3)"
 )

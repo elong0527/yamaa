@@ -210,6 +210,8 @@ CALLS = {
     "_conditions": [],
     "_info": [],
     "_selftest": [],
+    # A usage error, which prints only on standard error once accepted.
+    "_cli": [["bogus"]],
     "_live_handles": [],
 }
 

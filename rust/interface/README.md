@@ -206,12 +206,17 @@ or `optional<T>`.
 ### Command line
 
 `cli` declares the `yamaa` binary of `rust/crates/yamaa-cli` (#3060), which
-calls the facade directly and so pairs no native export. It has `binary`
-(`yamaa`), `crate` (`rust/crates/yamaa-cli`), `synopsis`, `global_flags`,
-`exit_status` (integer statuses 0 to 125 and what each means) and `commands`,
-and may have `depends_on`, `inputs`, `values`, `streams`, `interrupt` and
-`json` (named lists of JSON keys: those of the objects the documents hold,
-such as an issue). `values` holds the command line's own closed vocabularies,
+calls the facade directly and so pairs no native export. Its commands are the
+facade's `cli` module, which the binary runs over its own runtime and the
+host packages run over their own engines, through `python -m yamaa` and
+`yamaa_cli()`, the one public function the hosts pair for it, `cli`. It has
+`binary` (`yamaa`), `crate` (`rust/crates/yamaa-cli`), `synopsis`,
+`global_flags`, `exit_status` (integer statuses 0 to 125 and what each
+means) and `commands`, and may have `depends_on`, `inputs`, `entries` (how
+each host runs the commands as itself), `worker` (the host package's worker
+a standalone run calls its project functions through, in each language),
+`values`, `streams`, `interrupt` and `json` (named lists of JSON keys: those
+of the objects the documents hold, such as an issue). `values` holds the command line's own closed vocabularies,
 which no facade constant owns, such as the output formats: each lists its
 values, and none shares a name with a vocabulary of the top-level `values`. A
 command has a `name`, a `synopsis` starting with `yamaa <name>`, the
@@ -223,9 +228,9 @@ from `json_keys`. A flag's name starts with `--`; a flag or argument may name
 the vocabulary its values come from, in either `values`. A command's
 `operations` are the only record of what the command line reaches:
 `operations` and `host_only` pair Python and R exports alone.
-`tools/tests/test_bindings_cli.py` reads the binary's parser table and usage
-text, and keeps the commands, their arguments and flags, the global flags, the
-output formats and the exit statuses equal to them.
+`tools/tests/test_bindings_cli.py` reads the parser table and usage text of
+the facade's `cli` module, and keeps the commands, their arguments and flags,
+the global flags, the output formats and the exit statuses equal to them.
 
 ### Native registrations
 
