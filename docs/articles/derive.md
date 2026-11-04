@@ -239,6 +239,14 @@ and each kind of read treats them in its own way:
   own `key`, here the same columns, with `order_by` and `keep` choosing the
   first exposure. The exceptions are an intermediate that drives a row
   template and one that is a side of a pair relation, which declare no key.
+  Its `id` shares one list of names with the inputs, the other intermediates
+  and the `domain`, so it cannot repeat the name of the input it reads: an
+  intermediate `EX` over the input `EX` fails with `duplicate_identifier`
+  ([LOOKUP-3](../../rules/lookup.md#lookup-3)). Name it for the record it
+  chooses, as `FIRSTEX` names the first exposure, and `FIRSTEX.EXSTDT` and
+  `EX.EXDOSE` then read as what they are. An intermediate that would only
+  repeat its input under another name is not needed: declare the `key` on the
+  input and read it directly ([LOOKUP-4](../../rules/lookup.md#lookup-4)).
   Its `derivations` add a field to each `EX` record: `EXSTDT`, the date
   `to_date` reads from `EXSTDTC`, missing for a partial start, which `filter`
   and `order_by` read as `EX.EXSTDT`. `EXSTDTC` itself stays text, as
