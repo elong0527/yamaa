@@ -576,14 +576,16 @@ falls back to its input's key ([LOOKUP-3](#lookup-3)).
 
 A written `key` names at least one pair. An empty list or mapping names no
 match and fails as `invalid_field_type`, on a named intermediate, an
-aggregate and an input alike.
+aggregate and an input alike. A named intermediate's or an input's list names
+each column once; a column listed again fails as `invalid_field_type` at that
+entry, reporting the column.
 
 A named intermediate that writes `key: none` pairs nothing, so every record of
 its dataset matches every current row, and selection and absence answer as
-for any lookup: a dataset of one record is read by every row, a dataset of no
-record gives the absence answer, or fails under `require_match`
-([LOOKUP-24](#lookup-24)), and a dataset of several fails as
-`multiple_matches` unless `order_by` and `keep` choose one
+for any lookup: with no candidate left after `between` and `filter`, the
+absence answer is given, or `require_match` fails ([LOOKUP-24](#lookup-24));
+one candidate is read by every row; and several fail as `multiple_matches`
+unless `order_by` and `keep`, or `nearest`, choose one
 ([LOOKUP-10](#lookup-10)). It serves a trial-level constant or a one-row
 reference table, which shares no column with the rows that read it. `none` is
 written, never implied: an intermediate without `key` still fails as
@@ -597,9 +599,7 @@ intermediates:
   - id: TRIAL
     dataset: TRIAL_SETTINGS
     key: none
-``` A named intermediate's or an input's list names
-each column once; a column listed again fails as `invalid_field_type` at that
-entry, reporting the column.
+```
 
 A `key` column the lookup's relation does not have fails as `unknown_field`.
 Every match value must read a known current-row value: a variable must name

@@ -1,5 +1,5 @@
 {
-  "about": "A named intermediate that writes key: none pairs nothing, so every record of its dataset matches every current row (LOOKUP-5, #4271). Selection and absence then answer as for any lookup: one record is read by every row, no record gives the absence answer or fails under require_match (LOOKUP-24), and two records fail as multiple_matches unless order_by and keep choose one (LOOKUP-10). Every value is authored from those rules. key: none is refused where it cannot mean every record: on a pair relation, whose key pairs its two sides (LOOKUP-27), on a row driver, which declares no key (ROW-2), and on an aggregate, whose key admits no none (SCHEMA-12).",
+  "about": "A named intermediate that writes key: none pairs nothing, so every record of its dataset matches every current row (LOOKUP-5, #4271). Selection and absence then answer as for any lookup: one record is read by every row, no record gives the absence answer, missing when none is declared, or fails under require_match (LOOKUP-24), and two records fail as multiple_matches unless order_by and keep choose one, whatever order they are stored in (LOOKUP-10). Every value is authored from those rules. key: none is refused where it cannot mean every record: on a pair relation, whose key pairs its two sides (LOOKUP-27), on a row driver, which declares no key (ROW-2), and on an aggregate, whose key admits no none (SCHEMA-12).",
   "cases": [
     {
       "case": "every_row_reads_the_one_record_of_a_lookup_without_a_key",
@@ -45,6 +45,29 @@
       "issues": [],
       "saved": {
         "output.csv": "SUBJ,LBL\nA,none-found\nB,none-found\n"
+      }
+    },
+    {
+      "case": "a_lookup_without_a_key_over_no_record_answers_missing_by_default",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
+          "input.csv": "SUBJ\nA\nB\n",
+          "lookup.csv": "LBL\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "output.csv": "SUBJ,LBL\nA,\nB,\n"
       }
     },
     {
@@ -96,7 +119,7 @@
         "files": {
           "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\n    order_by: [L.LBL]\n    keep: last\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
           "input.csv": "SUBJ\nA\nB\n",
-          "lookup.csv": "LBL\nhello\nworld\n"
+          "lookup.csv": "LBL\nworld\nhello\n"
         },
         "specification": "spec.yaml"
       },
