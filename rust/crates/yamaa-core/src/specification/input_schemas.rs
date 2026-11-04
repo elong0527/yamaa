@@ -269,7 +269,7 @@ fn key_fields(key: Option<&JoinKey>) -> Vec<&str> {
             .iter()
             .map(|(column, _)| column.name.as_str())
             .collect(),
-        Some(JoinKey::FromInput) | None => Vec::new(),
+        Some(JoinKey::FromInput | JoinKey::Every { .. }) | None => Vec::new(),
     }
 }
 

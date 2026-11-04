@@ -251,7 +251,7 @@ impl<'a> Phases<'a> {
                         .filter_map(|column| self.output(&column.name)),
                 );
             }
-            Some(JoinKey::Pairs { .. }) | Some(JoinKey::FromInput) => {}
+            Some(JoinKey::Pairs { .. } | JoinKey::FromInput | JoinKey::Every { .. }) => {}
             None => {
                 out.extend(
                     self.spec

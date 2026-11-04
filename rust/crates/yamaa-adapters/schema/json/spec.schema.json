@@ -1655,10 +1655,10 @@
           "x-yamaa-type": "identifier"
         },
         "key": {
-          "$ref": "#/$defs/fragment.match_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).",
+          "$ref": "#/$defs/fragment.intermediate_key",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); none matches every record of the dataset (LOOKUP-5); a pair relation's key pairs its two sides (LOOKUP-27).",
           "x-yamaa-kind": "expression",
-          "x-yamaa-type": "match_key"
+          "x-yamaa-type": "intermediate_key"
         },
         "between": {
           "$ref": "#/$defs/fragment.record_between_class",
@@ -1746,6 +1746,17 @@
           "$ref": "#/$defs/fragment.intermediate_binding_class"
         }
       ]
+    },
+    "fragment.intermediate_key": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/fragment.match_key"
+        },
+        {
+          "$ref": "#/$defs/none_key"
+        }
+      ],
+      "description": "A named intermediate's match key, or none to match every record (LOOKUP-5)."
     },
     "fragment.intermediate_unique_arguments": {
       "type": "object",
@@ -3761,10 +3772,10 @@
           "x-yamaa-type": "identifier"
         },
         "key": {
-          "$ref": "#/$defs/match_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).",
+          "$ref": "#/$defs/intermediate_key",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); none matches every record of the dataset (LOOKUP-5); a pair relation's key pairs its two sides (LOOKUP-27).",
           "x-yamaa-kind": "expression",
-          "x-yamaa-type": "match_key"
+          "x-yamaa-type": "intermediate_key"
         },
         "between": {
           "$ref": "#/$defs/record_between_class",
@@ -3858,6 +3869,17 @@
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
       "description": "Identifier of a lookup, unique among dataset identifiers, other lookups and the output domain (LOOKUP-3)."
+    },
+    "intermediate_key": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/match_key"
+        },
+        {
+          "$ref": "#/$defs/none_key"
+        }
+      ],
+      "description": "A named intermediate's match key, or none to match every record (LOOKUP-5)."
     },
     "intermediate_unique_arguments": {
       "type": "object",
@@ -4195,6 +4217,13 @@
         "unit"
       ],
       "additionalProperties": false
+    },
+    "none_key": {
+      "type": "string",
+      "enum": [
+        "none"
+      ],
+      "description": "A lookup with no match pair, so every record of its dataset matches every current row (LOOKUP-5)."
     },
     "odm_class": {
       "type": "object",

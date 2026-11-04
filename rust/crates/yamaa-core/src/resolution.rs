@@ -729,7 +729,8 @@ impl<'a> Live<'a> {
 fn rename_only(spec: &Spec, item: &Intermediate) -> bool {
     let joins_as_input = match &item.key {
         Some(JoinKey::Columns { .. }) => spec.keys_as_input(item),
-        Some(JoinKey::Pairs { .. }) => false,
+        // `key: none` reads every record, which no implicit join does.
+        Some(JoinKey::Pairs { .. } | JoinKey::Every { .. }) => false,
         Some(JoinKey::FromInput) | None => true,
     };
     joins_as_input
