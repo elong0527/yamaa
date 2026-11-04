@@ -36,6 +36,53 @@ have the same key combination. A key therefore names only columns every row
 carries: an analysis date such as ADT, missing on a record collected without
 one, would fail the build on that record.
 
+A sponsor's key variables often include one that may be missing, such as the
+end date of an ongoing medication. Keep it out of `keys`. Declare a
+non-missing identity there instead, such as `--SEQ` or `ASEQ`, and list the
+sponsor's key variables in `output.order_by` with a `unique` verification
+over them ([OUTPUT-3](../../rules/output.md#output-3)). The rows then come out
+in the sponsor's order, a missing end date stays missing, and two records
+that repeat the sponsor's key fail the verification.
+
+When the source carries no identity, derive one. A key computed by a window
+numbers each base record, so every record builds its own row
+([ROW-8](../../rules/rows.md#row-8)):
+
+```yaml
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADCM
+keys: [USUBJID, ASEQ]
+input:
+  CM: source/cm.csv
+
+output:
+  path: adcm.csv
+  columns: [USUBJID, ASEQ, CMTRT, ASTDT, AENDT]
+  order_by: [USUBJID, CMTRT, ASTDT, AENDT]
+
+columns:
+  - {name: USUBJID, type: str, derivation: CM.USUBJID}
+  - {name: CMTRT, type: str, derivation: CM.CMTRT}
+  - {name: ASTDT, type: date, derivation: {to_date: {source: CM.CMSTDTC}}}
+  - {name: AENDT, type: date, derivation: {to_date: {source: CM.CMENDTC}}}
+  # Each subject's records numbered by treatment and start date.
+  - name: ASEQ
+    type: int
+    derivation:
+      row_number:
+        window: {group_by: [USUBJID], order_by: [CM.CMTRT, CM.CMSTDTC]}
+
+verifications:
+  - unique: {columns: [USUBJID, CMTRT, ASTDT, AENDT], id: sponsor-keys}
+```
+
+A key's window orders by fields of the base record, `CM.CMSTDTC` here, not by
+columns derived from them: ordering by `ASTDT` fails validation as
+`key_dependency` ([COLUMN-7](../../rules/columns.md#column-7)), because a key
+is computed from one base record and the keys before it.
+
 ## Without `rows`: distinct keys construct the rows
 
 Omit `rows` when the desired output has one row per distinct key combination

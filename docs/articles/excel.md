@@ -127,7 +127,7 @@ and must not carry a governed key such as `core`, `codelist`, `length`, or
 | The workbook itself: an SDTM, SEND or ADaM specification | `model` | `SDTM`, `SEND` or `ADaM`; required once the spec declares submission metadata or a project section lists it, and a section lists only specs of its own model (SUB-3) |
 | Dataset Label / Class / Structure | `submission.label` / `submission.class` / `submission.structure` | Governed dataset metadata, written under `submission:`; reserved in `metadata:`, which rejects them with `reserved_metadata_key` (SUB-2) |
 | Standards and versions (SDTMIG 3.4, ADaMIG 1.3), on a Standards or Study sheet | the project section's `standards` list, and `submission.standard` | A section lists one or more implementation guides, and the first is the default; a dataset bound to another names it in `submission.standard` |
-| Key Variables | `keys` | Non-missing and unique are enforced |
+| Key Variables | `keys` | Non-missing and unique are enforced. A key variable that may be missing, such as an end date, goes to `output.order_by` with a `unique` verification instead, and `keys` takes a non-missing identity such as `--SEQ` or `ASEQ` (OUTPUT-3) |
 | Sort Order (submission sort) | `output.order_by` | A presentation order applied after every check |
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named; an input read by a join declares the columns it joins on in `key` |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
