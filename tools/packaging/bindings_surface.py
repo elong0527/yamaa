@@ -271,7 +271,16 @@ _CLI_REQUIRED = {
     "exit_status",
     "commands",
 }
-_CLI_OPTIONAL = {"depends_on", "inputs", "values", "streams", "interrupt", "json"}
+_CLI_OPTIONAL = {
+    "depends_on",
+    "inputs",
+    "entries",
+    "worker",
+    "values",
+    "streams",
+    "interrupt",
+    "json",
+}
 _FLAG_OPTIONAL = {
     "value",
     "values",
@@ -373,6 +382,16 @@ def validate_cli(cli, values, operations):
         streams = _keys(entry["streams"], "cli.streams", {"stdout", "stderr"})
         for name, text in streams.items():
             _text(text, f"cli.streams.{name}")
+    if "entries" in entry:
+        # The hosts that run the commands as themselves, each by its entry.
+        entries = _keys(entry["entries"], "cli.entries", {"python", "r"})
+        for name, text in entries.items():
+            _text(text, f"cli.entries.{name}")
+    if "worker" in entry:
+        # The worker of each language a standalone run calls functions in.
+        workers = _keys(entry["worker"], "cli.worker", {"python", "r"})
+        for name, text in workers.items():
+            _text(text, f"cli.worker.{name}")
     _flags(entry["global_flags"], "cli.global_flags", values)
     statuses = _mapping(entry["exit_status"], "cli.exit_status")
     if not statuses:
@@ -461,6 +480,12 @@ def manifest_lines(definition):
     if not cli:
         return lines
     lines.extend(f"cli.synopsis: {line}" for line in cli["synopsis"])
+    lines.extend(
+        f"cli.entries.{host}: {entry}" for host, entry in cli.get("entries", {}).items()
+    )
+    lines.extend(
+        f"cli.worker.{host}: {worker}" for host, worker in cli.get("worker", {}).items()
+    )
     for name, listed in cli.get("values", {}).items():
         lines.extend(f"cli.values.{name}.{value}" for value in listed)
     lines.extend(

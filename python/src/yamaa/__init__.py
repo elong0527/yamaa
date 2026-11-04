@@ -88,6 +88,7 @@ from yamaa._support import (  # noqa: E402
     _optional_fspath,
     _optional_text,
     _text,
+    _texts,
 )
 
 __all__ = [
@@ -95,6 +96,7 @@ __all__ = [
     "StateError",
     "Table",
     "__version__",
+    "cli",
     "conditions",
     "info",
     "lint",
@@ -501,6 +503,11 @@ def info() -> dict:
 def selftest() -> SelfTest:
     """Run the bundled selftest cases through this installation's engine, comparing each with its expected files."""
     return SelfTest(_native._selftest())
+
+
+def cli(arguments: list[str]) -> int:
+    """Run one command of the command line as this host, with its project functions, printing what it prints; return its exit status."""
+    return _native._cli(_texts(arguments, "arguments"))
 
 
 setattr(

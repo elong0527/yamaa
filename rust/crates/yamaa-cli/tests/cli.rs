@@ -169,7 +169,8 @@ fn help_prints_every_command_and_wins_over_other_arguments() {
     ));
     for synopsis in [
         "  check PATH [--spec NAME | --parent PATH] [--threads N] [--verbose]\n",
-        "  run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]\n",
+        "  run PATH [--spec NAME | --section SECTION] [--host python|r] [--interpreter PATH] \
+         [--threads N] [--verbose]\n",
         "  submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]\n",
         "  resolve PATH [--spec NAME]\n",
         "  read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] \
@@ -531,7 +532,7 @@ fn a_spec_path_is_checked_run_and_resolved_alone() {
         printed(
             0,
             format!(
-                "{{\"command\":\"run\",\"issues\":[],\"members\":[],\"path\":\"sdtm/dm.yaml\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[],\"path\":\"sdtm/dm.yaml\",\
                  \"paths\":[\"{report}\",\"{dm}\"],\"section\":null,\"spec\":null,\
                  \"status\":\"succeeded\"}}\n"
             )
@@ -714,7 +715,7 @@ fn a_project_path_is_checked_and_run_whole() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[\
                  {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}},\
                  {{\"columns\":null,\"issue_count\":1,\"name\":\"ADAE\",\"rows\":null,\"status\":\"failed\"}},\
                  {{\"columns\":null,\"issue_count\":1,\"name\":\"ADTTE\",\"rows\":null,\"status\":\"skipped\"}}],\
@@ -899,7 +900,7 @@ fn a_file_written_in_language_version_0_5_is_refused_with_exit_status_1() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{spec}\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{spec}\",\
                  \"paths\":[],\"section\":null,\"spec\":null,\"status\":\"failed\"}}\n",
                 json(&refused.diagnostics)
             )
@@ -1043,7 +1044,7 @@ fn run_of_a_listed_specification_prints_its_summary_and_the_files_it_saved() {
         printed(
             0,
             format!(
-                "{{\"command\":\"run\",\"issues\":[],\"members\":[],\"path\":\"project.yaml\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[],\"path\":\"project.yaml\",\
                  \"paths\":[\"{report}\",\"{dm}\"],\"section\":null,\"spec\":\"DM\",\
                  \"status\":\"succeeded\"}}\n"
             )
@@ -1085,7 +1086,7 @@ fn a_failed_run_prints_its_issues_and_the_report_it_saved() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{project}\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
                  \"paths\":[\"{report}\"],\"section\":null,\"spec\":\"ADAE\",\
                  \"status\":\"failed\"}}\n",
                 json(&issues)
@@ -1126,7 +1127,7 @@ fn a_section_run_prints_its_members_every_issue_and_the_files_it_saved() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[\
                  {{\"columns\":null,\"issue_count\":1,\"name\":\"ADAE\",\"rows\":null,\"status\":\"failed\"}},\
                  {{\"columns\":null,\"issue_count\":1,\"name\":\"ADTTE\",\"rows\":null,\"status\":\"skipped\"}}],\
                  \"path\":\"{project}\",\"paths\":[\"{report}\"],\"section\":\"adam\",\"spec\":null,\
@@ -1151,7 +1152,7 @@ fn a_section_run_prints_its_members_every_issue_and_the_files_it_saved() {
         printed(
             0,
             format!(
-                "{{\"command\":\"run\",\"issues\":[],\"members\":[\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[\
                  {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}}],\
                  \"path\":\"{project}\",\"paths\":[\"{report}\",\"{dm}\"],\"section\":\"sdtm\",\
                  \"spec\":null,\"status\":\"succeeded\"}}\n"
@@ -1198,7 +1199,7 @@ fn a_member_whose_listing_cannot_be_read_is_named_by_its_path() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[\
                  {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}},\
                  {{\"columns\":null,\"issue_count\":1,\"name\":\"sdtm/missing.yaml\",\"rows\":null,\
                  \"status\":\"failed\"}}],\
@@ -1251,7 +1252,7 @@ fn a_save_with_nothing_to_write_prints_its_issue_and_exits_1() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{project}\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
                  \"paths\":[],\"section\":\"send\",\"spec\":null,\"status\":\"succeeded\"}}\n",
                 json(&refusal.diagnostics)
             )
@@ -1294,7 +1295,7 @@ fn a_save_that_cannot_write_its_target_prints_why_and_exits_1() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{project}\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
                  \"paths\":[],\"section\":null,\"spec\":\"DM\",\"status\":\"succeeded\"}}\n",
                 json(&issues)
             )
@@ -1407,7 +1408,7 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
         (
             "run",
             format!(
-                "{{\"command\":\"run\",\"issues\":{issues},\"members\":[],\"path\":\"{project}\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{issues},\"members\":[],\"path\":\"{project}\",\
                  \"paths\":[],\"section\":null,\"spec\":\"ADXX\",\"status\":\"failed\"}}"
             ),
         ),
@@ -1442,7 +1443,7 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
         (
             "run",
             format!(
-                "{{\"command\":\"run\",\"issues\":{issues},\"members\":[],\"path\":\"{project}\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{issues},\"members\":[],\"path\":\"{project}\",\
                  \"paths\":[],\"section\":\"sdtn\",\"spec\":null,\"status\":\"failed\"}}"
             ),
         ),
@@ -2155,13 +2156,14 @@ fn lint_prints_each_finding_then_its_summary() {
     );
 }
 
-/// The binary's engine claims no host language (#3030 section 2.10, D123):
-/// it reads no project's `environments.<host>` entry, so through a 1.0
-/// project whose Python lock does not exist it checks both specifications
-/// and runs the one that calls no function. A run of the one that calls a
-/// project function is refused before it reads any input, which does not
-/// exist either, as `unsupported_operation` with operation `environment`
-/// (D110), and writes nothing.
+/// The binary's engine claims no host language (#3030 section 2.10, D123)
+/// for a project that names no one language, here both: it reads neither
+/// `environments.<host>` entry, so through a 1.0 project whose locks do not
+/// exist it checks both specifications and runs the one that calls no
+/// function. A run of the one that calls a project function is refused
+/// before it reads any input, which does not exist either, as
+/// `unsupported_operation` with operation `environment` (D110), and writes
+/// nothing.
 #[test]
 fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
     let study = Study::empty();
@@ -2180,7 +2182,7 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
     );
     study.write(
         "project.yaml",
-        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/shout.yaml]\nenvironments:\n  python: {lock: missing/uv.lock}\nadam: {specs: [plain.yaml, calls.yaml]}\n",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/shout.yaml]\nenvironments:\n  python: {lock: missing/uv.lock}\n  r: {lock: missing/renv.lock}\nadam: {specs: [plain.yaml, calls.yaml]}\n",
     );
     let project = study.path("project.yaml");
     let engine = engine();
@@ -2252,7 +2254,7 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
         printed(
             1,
             format!(
-                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{project}\",\
+                "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
                  \"paths\":[],\"section\":null,\"spec\":\"CALLS\",\"status\":\"failed\"}}\n",
                 json(&issues)
             )
@@ -2345,4 +2347,171 @@ fn a_value_that_is_not_utf8_exits_with_status_2() {
             "{what}"
         );
     }
+}
+
+/// The study of [`a_run_settles_the_language_of_its_functions`]: one
+/// project function, implemented in Python alone, with no lock.
+fn settling_study() -> Study {
+    let study = Study::empty();
+    study.write("raw.csv", "ID,V\n1,a\n");
+    study.write(
+        "functions/shout.yaml",
+        "yamaa: \"1.0\"\ntype: function\nname: shout\ndescription: The value in capitals.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.shout}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: A}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    );
+    study.write(
+        "calls.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: CALLS\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: calls.csv, columns: [ID, LOUD]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: LOUD, type: str, label: Loud, derivation: {function: {name: shout, args: {x: RAW.V}}}}\n",
+    );
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/shout.yaml]\nadam: {specs: [calls.yaml]}\n",
+    );
+    study
+}
+
+/// A run of a project settles the language of the project functions it
+/// calls: `--host`, or the one language the project names, here Python,
+/// which its function file alone implements. Its worker is the interpreter
+/// `--interpreter` names, and one that cannot start fails the run before
+/// it reads data, naming the interpreter on standard error, where the
+/// engine's own issue keeps the host failure opaque. `--host` takes
+/// `python` or `r`; with a spec PATH, which calls no project function, both
+/// flags are usage errors, and `--interpreter` alone needs a project that
+/// names one language.
+#[test]
+fn a_run_settles_the_language_of_its_functions() {
+    let study = settling_study();
+    let project = study.path("project.yaml");
+    let calls = study.path("calls.yaml");
+    for (arguments, message) in [
+        (
+            vec!["run", &calls, "--host", "python"],
+            format!("run: {calls} declares type spec, which run does not take with --host\n"),
+        ),
+        (
+            vec!["run", &calls, "--interpreter", "python3"],
+            format!(
+                "run: {calls} declares type spec, which run does not take with --interpreter\n"
+            ),
+        ),
+        (
+            vec!["run", &project, "--host", "julia"],
+            "run: --host takes python or r, not julia\n".to_owned(),
+        ),
+    ] {
+        assert_eq!(
+            outcome(&yamaa(&arguments)),
+            (Some(2), String::new(), format!("yamaa: {message}{HINT}")),
+            "{arguments:?}"
+        );
+    }
+    // The project names Python, so the run settles on it without --host and
+    // starts the interpreter named; one that does not exist fails the run.
+    for arguments in [
+        vec![
+            "run",
+            &project,
+            "--interpreter",
+            "yamaa-no-such-interpreter",
+        ],
+        vec![
+            "run",
+            &project,
+            "--host",
+            "python",
+            "--interpreter",
+            "yamaa-no-such-interpreter",
+        ],
+    ] {
+        let (status, stdout, stderr) = outcome(&yamaa(&arguments));
+        assert_eq!(status, Some(1), "{arguments:?}: {stdout}{stderr}");
+        assert!(
+            stdout.starts_with(&format!(
+                "yamaa project run of {project}: failed, 1 specification, 1 issue\n  CALLS  failed     no output, 1 issue\n"
+            )),
+            "{arguments:?}: {stdout}"
+        );
+        assert!(
+            stderr
+                .starts_with("yamaa: cannot start the python worker: yamaa-no-such-interpreter: "),
+            "{arguments:?}: {stderr}"
+        );
+        assert!(!study.exists("calls.csv"));
+    }
+    let (status, stdout, _) = outcome(&yamaa(&[
+        "--format",
+        "json",
+        "run",
+        &project,
+        "--interpreter",
+        "yamaa-no-such-interpreter",
+    ]));
+    assert_eq!(status, Some(1));
+    assert!(
+        stdout.contains("\"host\":\"python\",") && stdout.contains("\"status\":\"failed\""),
+        "{stdout}"
+    );
+    // A project that names no host language at all runs over the neutral
+    // engine, whose JSON host is null.
+    let (status, stdout, _) = outcome(&yamaa(&["--format", "json", "run", &calls]));
+    assert_eq!(status, Some(1), "{stdout}");
+    assert!(
+        stdout.contains("\"host\":null,") && stdout.contains("project_binding_missing"),
+        "{stdout}"
+    );
+}
+
+/// With `YAMAA_CLI_PYTHON` naming an interpreter whose packages hold yamaa
+/// at this engine's version and the `yamaa_benchmarks` project programs,
+/// the binary runs the `schema-functions` study through that worker and
+/// saves the authored bytes; without it, the case is skipped, since the
+/// test suite installs no Python package.
+#[test]
+fn a_python_worker_runs_the_schema_functions_study_when_an_interpreter_is_named() {
+    let Some(interpreter) = std::env::var_os("YAMAA_CLI_PYTHON") else {
+        eprintln!("skipped: YAMAA_CLI_PYTHON names no interpreter with yamaa installed");
+        return;
+    };
+    let interpreter = interpreter.to_str().unwrap().to_owned();
+    let benchmark =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/schema-functions");
+    let study = Study::empty();
+    for name in [
+        "project.yaml",
+        "spec.yaml",
+        "functions/project_ratio.yaml",
+        "input/source.csv",
+    ] {
+        study.write(name, std::fs::read(benchmark.join(name)).unwrap());
+    }
+    // The project declares both locks; the Python one is the repository's.
+    study.write(
+        "python/uv.lock",
+        std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../python/uv.lock"))
+            .unwrap(),
+    );
+    let project = study.path("project.yaml");
+    let (status, stdout, stderr) = outcome(&yamaa(&[
+        "run",
+        &project,
+        "--host",
+        "python",
+        "--interpreter",
+        &interpreter,
+    ]));
+    assert_eq!(
+        (status, stdout),
+        (
+            Some(0),
+            format!(
+                "yamaa project run of {project}: succeeded, 1 specification, 0 issues\n  TEST  succeeded  7 rows x 6 columns, 0 issues\n{}\n",
+                study.path("test.csv")
+            )
+        ),
+        "{stderr}"
+    );
+    assert_eq!(
+        std::fs::read(study.0.join("test.csv")).unwrap(),
+        std::fs::read(benchmark.join("expected/test.csv")).unwrap()
+    );
 }

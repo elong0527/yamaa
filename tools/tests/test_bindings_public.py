@@ -54,6 +54,7 @@ class RenderingTests(unittest.TestCase):
             "StateError",
             "Table",
             "__version__",
+            "cli",
             "conditions",
             "info",
             "lint",
@@ -111,6 +112,7 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_conditions)",
                 "export(yamaa_info)",
                 "export(yamaa_selftest)",
+                "export(yamaa_cli)",
                 "S3method(names, yamaa_check)",
                 "S3method(length, yamaa_check)",
                 "S3method(print, yamaa_check)",
@@ -351,7 +353,7 @@ class RenderingTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertIn(expected, r)
         for removed in (
-            ".texts(",
+            ".texts(paths, ",
             ".text(path, ",
             ".text(source, ",
             ".optional_text(parent, ",
@@ -381,7 +383,7 @@ class RenderingTests(unittest.TestCase):
         )
         self.assertIn('    "spec",\n]\n', text)
         candidate = copy.deepcopy(self.definition)
-        for name in ("lint", "schema", "conditions", "info", "selftest"):
+        for name in ("lint", "schema", "conditions", "info", "selftest", "cli"):
             candidate["public"]["functions"].remove(function(candidate, name))
         short = public.Public(candidate).render_python([])
         self.assertIn(
@@ -408,6 +410,7 @@ class RenderingTests(unittest.TestCase):
             "_optional_fspath",
             "_optional_text",
             "_text",
+            "_texts",
         ]
         self.assertEqual(imported(self.public.render_python([])), expected)
         candidate = copy.deepcopy(self.definition)

@@ -82,6 +82,15 @@
   lapply(.expanded_paths(value), function(value) .text(value, what))
 }
 
+# A character vector of any length, such as the command line's arguments,
+# each element as written.
+.texts <- function(value, what) {
+  if (!is.character(value) || anyNA(value)) {
+    .refuse_argument(sprintf("`%s` must be a character vector without missing values", what))
+  }
+  lapply(unname(value), function(value) .text(value, what))
+}
+
 .version <- function() charToRaw(as.character(getRversion()))
 
 .capabilities <- function() {

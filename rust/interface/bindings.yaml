@@ -395,6 +395,10 @@ public:
     host_condition: {python: "BaseException | None", r: "condition or NULL"}
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
     nothing: {python: None, r: "NULL, invisibly"}
+    # The command line run as this host (cli.entries): its arguments are the
+    # words after the program name, and it answers the binary's exit status.
+    arguments: {python: "list[str], the words after the program name", r: "character(), the words after the program name"}
+    exit_status: {python: "int, the exit status: 0, 1 or 2 (cli.exit_status)", r: "integer(1), the exit status: 0, 1 or 2 (cli.exit_status), invisibly"}
     # Python-only projections, which only yamaa.Table's members use.
     pickle: {python: "tuple[object, tuple[bytes]]"}
     rows: {python: "list[dict[str, object]], one dict per row, keyed by the column names in order"}
@@ -484,6 +488,17 @@ public:
       returns: SelfTest
       calls: selftest
       doc: Run the bundled selftest cases through this installation's engine, comparing each with its expected files.
+    # The command line run as this host (cli.entries): one command, over
+    # this host's engine and installed project functions, printing what the
+    # binary prints on this host's standard streams.
+    - name: cli
+      python: yamaa.cli
+      r: yamaa_cli
+      args: {arguments: arguments}
+      returns: exit_status
+      raises: refusal
+      calls: cli
+      doc: Run one command of the command line as this host, with its project functions, printing what it prints; return its exit status.
 
   # Result and lazy classes, in definition order: a class is defined before
   # any class that returns it. Every result has a `status` (D36, P-STATUS-1)
@@ -848,9 +863,28 @@ cli:
     - yamaa --version [--format text|json]
     - yamaa --help
   inputs: "only the command line: no configuration file, environment variable or colour changes what it does"
+  # The same commands run as a host, over that host's engine and installed
+  # project functions, through the public function `cli` of each package:
+  # python -m yamaa and yamaa.cli() in Python, and yamaa_cli() in R. Each
+  # prints what the binary prints on the host's standard streams and returns
+  # the exit status; --version and selftest name that host and its version.
+  entries:
+    python: "python -m yamaa COMMAND [ARGUMENTS], or yamaa.cli(arguments)"
+    r: "yamaa_cli(arguments), as Rscript -e 'quit(status = yamaa_cli(commandArgs(TRUE)))' COMMAND [ARGUMENTS] once the package is attached"
+  # The project functions of a standalone run: an interpreter's worker,
+  # which the binary starts for a run of a project that settles their
+  # language (run's --host) and talks to over its standard input and output,
+  # through the protocol rust/crates/yamaa-cli/src/worker.rs describes. The
+  # worker is the host package's, so a function runs as the package's run()
+  # runs it. With a declared lock, the package's engine version must be the
+  # binary's (FUNC-3); without a lock, the installed functions run unchecked.
+  worker:
+    python: "python -m yamaa._worker, in the interpreter --interpreter names or python3, then python, on PATH"
+    r: "Rscript -e running the package's internal .yamaa_worker(), in the Rscript --interpreter names or Rscript on PATH"
   # The command line's own vocabularies, which no facade constant owns.
   values:
     output_format: [text, json]
+    host_language: [python, r]
   global_flags:
     - {name: --format, values: output_format, default: text, position: before or after COMMAND}
     - name: --version
@@ -928,7 +962,7 @@ cli:
       text: the summary line, then each issue's line
       json_keys: [command, path, spec, status, issues]
     - name: run
-      synopsis: yamaa run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]
+      synopsis: yamaa run PATH [--spec NAME | --section SECTION] [--host python|r] [--interpreter PATH] [--threads N] [--verbose]
       args:
         - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
       flags:
@@ -941,12 +975,25 @@ cli:
           values: section
           valid_when: "PATH declares type: project, without --spec"
           host: Project.run(section)
+        # The project functions of a standalone run (worker): the language
+        # they run in, which the project file settles when it names one, and
+        # the interpreter that runs them, python3 or python, or Rscript, on
+        # PATH by default. A host package's entry takes neither.
+        - name: --host
+          value: LANGUAGE
+          values: host_language
+          meaning: "the language of the project functions the run calls, verifying that language's lock; without it, the one language the project names an environments entry for, or else the one its function files implement"
+          valid_when: "PATH declares type: project, from the standalone binary"
+        - name: --interpreter
+          value: PATH
+          meaning: "the interpreter that runs the project functions, as the worker of --host's language"
+          valid_when: "PATH declares type: project, from the standalone binary, with --host or a project that names one language"
         - {name: --threads, value: N, meaning: "the most partitions of one run that derive at once, at least 1", host: Spec.run(threads)}
         - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Spec.run(progress)}
       operations: [spec_run, run_save, project_spec, project_run, project_run_save]
       effect: "runs, then saves; a failed run saves only its report (OUTPUT-10, PROJECT-12)"
       text: "the summary line, a project run's member lines, each issue's line, then each written path"
-      json_keys: [command, path, spec, section, status, members, issues, paths]
+      json_keys: [command, path, spec, section, host, status, members, issues, paths]
     # D129: without --created, the submission reads the clock once for every
     # section and prints the time it read.
     - name: submission
@@ -1300,6 +1347,11 @@ python:
       rust: api_entry::_selftest
       args: {}
       returns: _SelfTest
+    - kind: function
+      name: _cli
+      rust: api_entry::_cli
+      args: {arguments: "list<text>"}
+      returns: index
     # The interface handshake and the census of live handles.
     - kind: function
       name: _interface_handshake
@@ -1404,6 +1456,7 @@ r:
         - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
         - {name: selftest_info, args: {handle: robj}, returns: r_reply}
         - {name: selftest_summary, args: {handle: robj}, returns: r_reply}
+        - {name: cli, args: {arguments: robj, version: raw, capabilities: robj}, returns: r_reply}
     - module: interface
       source: rust/crates/yamaa-r/src/interface.rs
       functions:
@@ -1471,6 +1524,7 @@ operations:
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}
   selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
+  cli: {python: [_cli], r: [cli]}
   interface_handshake: {python: [_interface_handshake], r: [interface_handshake]}
   live_handles: {python: [_live_handles], r: [live_handles]}
 # Host transport: both hosts check interrupts inside their native calls.

@@ -1125,6 +1125,74 @@ fn selftest_summary(handle: Robj) -> List {
     reply(|| read_selftest(&handle, |selftest| Ok(lines(&selftest.summary()))))
 }
 
+/// The command line run as the R host (`cli.entries`): the runtime of
+/// `yamaa_cli()`, which names this host and R's version, and whose engines
+/// are the ones every other call builds, with the installed project
+/// functions.
+struct CommandLine {
+    version: String,
+    functions: Arc<Functions>,
+}
+
+impl yamaa::cli::Runtime for CommandLine {
+    fn host(&self) -> (yamaa::Host, Option<String>) {
+        (yamaa::Host::R, Some(self.version.clone()))
+    }
+
+    /// The engine every call builds, with the installed project functions;
+    /// a run never settles functions here, so none are asked for.
+    fn options(&self, _: Option<&yamaa::cli::Functions<'_>>) -> Result<EngineOptions, String> {
+        let functions: Arc<dyn yamaa::ProjectFunctions> = self.functions.clone();
+        Ok(
+            EngineOptions::new(HostLanguage::R, "r".into(), self.version.clone())
+                .with_functions(functions),
+        )
+    }
+
+    /// A `--verbose` line goes to R's standard error as it happens, on the
+    /// calling thread, which reports every progress event.
+    fn reporter(&self) -> yamaa::cli::Reporter {
+        Arc::new(|line: &str| {
+            extendr_api::reprintln!("{line}");
+        })
+    }
+}
+
+/// One command of the command line, run as the R host (`cli.entries`):
+/// `arguments` are the words after the program name, as the `yamaa` binary
+/// takes them. The command runs over this R's engine, with the project
+/// functions installed here, and prints what the binary prints on R's
+/// standard output and standard error once it ran, except `--verbose`
+/// progress lines, which reach standard error as they happen. It answers
+/// the binary's exit status, 0, 1 or 2. A cancelled command prints nothing
+/// and signals the interrupt, as every call does.
+#[extendr]
+fn cli(arguments: Robj, version: Raw, capabilities: Robj) -> List {
+    reply(|| {
+        let arguments = texts(&arguments)?
+            .into_iter()
+            .map(std::ffi::OsString::from)
+            .collect::<Vec<_>>();
+        let version = text(&version)?;
+        let capabilities = capabilities
+            .as_list()
+            .ok_or("project host capabilities must be a list")?;
+        let runtime = CommandLine {
+            version,
+            functions: Arc::new(parse_capabilities(capabilities)?),
+        };
+        let token = crate::interrupt::token();
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, &token);
+        if token.is_cancelled() {
+            return Err("the call was cancelled".into());
+        }
+        extendr_api::rprint!("{}", String::from_utf8_lossy(&stdout));
+        extendr_api::reprint!("{}", String::from_utf8_lossy(&stderr));
+        Ok(r!(i32::from(status)))
+    })
+}
+
 #[extendr]
 fn empty_issues() -> List {
     reply(|| Ok(crate::public_table::frame(&yamaa::diagnostic::issues(&[]))?))
