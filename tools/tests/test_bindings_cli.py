@@ -1,10 +1,11 @@
 """The command line's section of the host interface stays true to the binary.
 
 `cli` in rust/interface/bindings.yaml declares what the `yamaa` binary takes
-(#3060). These tests read the same facts from the binary's own sources: the
-parser table `COMMANDS` and its flag constants in
-rust/crates/yamaa-cli/src/arguments.rs, and the usage text and exit statuses
-in main.rs. Neither side can then change alone. The JSON objects the commands
+(#3060). These tests read the same facts from the command line's own
+sources, the facade's `cli` module, which the binary and the host packages'
+entries run: the parser table `COMMANDS` and its flag constants in
+rust/crates/yamaa/src/cli/arguments.rs, and the usage text and exit statuses
+in the module file, cli.rs. Neither side can then change alone. The JSON objects the commands
 print are the facade's issue, lint finding, selftest case, catalogue
 condition and engine information records, so their keys are the columns and
 fields the hosts return.
@@ -17,7 +18,7 @@ from tools.packaging import bindings_surface as surface
 from tools.packaging import generate_bindings as generator
 from tools.paths import WORKSPACE
 
-SOURCES = WORKSPACE / "crates" / "yamaa-cli" / "src"
+SOURCES = WORKSPACE / "crates" / "yamaa" / "src" / "cli"
 # A flag constant, such as `const SPEC: Flag = flag("--spec", Takes::Text);`.
 FLAG = re.compile(r'const (\w+): Flag = flag\("([^"]+)", Takes::(\w+)\);')
 TABLE = re.compile(r"static COMMANDS: \[Command; (\d+)\] = \[(.*?)\n\];", re.S)
@@ -133,7 +134,7 @@ class CommandLineTests(unittest.TestCase):
         )
 
     def test_the_synopses_are_the_usage_the_binary_prints(self):
-        rust = source("main.rs")
+        rust = source("../cli.rs")
         usage = text(
             re.search(r"fn help\(\).*?String::from\(\s*" + STRING, rust, re.S)[1]
         )
@@ -143,7 +144,7 @@ class CommandLineTests(unittest.TestCase):
         )
 
     def test_the_exit_statuses_are_the_binarys(self):
-        statuses = re.findall(r"const [A-Z_]+: u8 = (\d+);", source("main.rs"))
+        statuses = re.findall(r"const [A-Z_]+: u8 = (\d+);", source("../cli.rs"))
         self.assertEqual(sorted(map(int, statuses)), sorted(self.cli["exit_status"]))
 
     def test_the_json_objects_hold_the_columns_and_fields_the_hosts_return(self):

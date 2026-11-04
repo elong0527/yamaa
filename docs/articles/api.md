@@ -35,6 +35,7 @@ project functions.
 | Conditions and their history | `yamaa_conditions()` | `yamaa.conditions()` |
 | Engine version and platform | `yamaa_info()` | `yamaa.info()` |
 | Check an installation | `yamaa_selftest()` | `yamaa.selftest()` |
+| Run a command line as this host | `yamaa_cli(arguments)` | `yamaa.cli(arguments)`, `python -m yamaa` |
 
 Examples in R and Python are shown in tabs, R first; pick a language once and
 every tab on the page follows. From 1.0.0, every 1.x release keeps the
@@ -1183,6 +1184,9 @@ as one standalone binary that needs no Python, R or Rust. Each command makes
 the calls described above and prints the engine's own text, so a result, an
 issue or an error reads as it does in R and Python. Only its arguments change
 what it does: no configuration file, environment variable or colour does.
+Each package also runs the same commands as itself
+([Run the command line as a host](#run-the-command-line-as-a-host)), which is
+how a command reaches project functions.
 
 ```text
 yamaa [--format text|json] COMMAND [ARGUMENTS]
@@ -1253,13 +1257,14 @@ names the archive member to read, and `--max-archive-members N` (default
 and the depth of element nesting
 ([ODM-1](../../rules/reference/odm.md#odm-1)). Each N is a whole number.
 
-The command line runs no project function. It reads no project's
+The standalone binary runs no project function. It reads no project's
 `environments` entry, so it checks no lock, and a run of a specification
 that calls a project function fails before it reads any input, with
 `unsupported_operation` at the first derivation that calls one, in the
 order a formatted file writes them (the intermediates', then the columns',
-then the row templates'): run that specification from R or Python. Every
-other build runs as it does in R and Python, and `check` checks every
+then the row templates'): run that specification from R or Python, or run
+the command as the host ([Run the command line as a host](#run-the-command-line-as-a-host)).
+Every other build runs as it does in R and Python, and `check` checks every
 specification, since it runs no project code.
 
 ```sh
@@ -1273,6 +1278,42 @@ yamaa read-odm edc/export.tar.gz edc/odm.parquet --archive-member odm.xml
 yamaa lint --fix project.yaml sdtm/ adam/
 yamaa schema spec > spec.schema.json
 ```
+
+### Run the command line as a host
+
+`yamaa_cli(arguments)` in R and `yamaa.cli(arguments)` in Python run one
+command of the command line as that package: `arguments` are the words after
+`yamaa`, as the binary takes them. The command runs over the package's own
+engine, so it verifies the project's lock and calls the project functions
+installed in that R or Python, as `run()` does, and it prints what the binary
+prints on the package's standard output and standard error, then returns the
+binary's exit status, 0, 1 or 2, invisibly in R. `--version` and `selftest`
+name the host, `r` or `python`, with its version on a `host version:` line.
+Under `--verbose`, each progress line reaches standard error as it happens.
+Ctrl+C raises `KeyboardInterrupt` in Python and signals R's interrupt, as
+every call of the package does ([Interrupts](#interrupts)).
+
+`python -m yamaa` runs the Python entry from a shell, with the binary's
+arguments and exit status, from the interpreter whose packages the project's
+lock names; R has no such entry point, so a shell runs `Rscript` with the
+arguments after the expression:
+
+```sh
+python -m yamaa run project.yaml --spec ADSL
+Rscript -e 'quit(status = yamaa::yamaa_cli(commandArgs(TRUE)))' run project.yaml --spec ADSL
+```
+
+=== "R"
+
+    ```r
+    status <- yamaa_cli(c("--format", "json", "run", "project.yaml", "--spec", "ADSL"))
+    ```
+
+=== "Python"
+
+    ```python
+    status = yamaa.cli(["--format", "json", "run", "project.yaml", "--spec", "ADSL"])
+    ```
 
 ### Output
 

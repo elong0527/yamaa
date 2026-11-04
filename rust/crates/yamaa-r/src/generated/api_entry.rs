@@ -59,4 +59,5 @@ extendr_module! {
     fn selftest_cases;
     fn selftest_info;
     fn selftest_summary;
+    fn cli;
 }

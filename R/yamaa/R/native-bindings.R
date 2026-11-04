@@ -233,6 +233,10 @@
   .Call(wrap__selftest_summary, handle)
 }
 
+.native_cli <- function(arguments, version, capabilities) {
+  .Call(wrap__cli, arguments, version, capabilities)
+}
+
 .native_interface_handshake <- function(request) {
   .Call(wrap__interface_handshake, request)
 }

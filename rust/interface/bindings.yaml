@@ -395,6 +395,10 @@ public:
     host_condition: {python: "BaseException | None", r: "condition or NULL"}
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
     nothing: {python: None, r: "NULL, invisibly"}
+    # The command line run as this host (cli.entries): its arguments are the
+    # words after the program name, and it answers the binary's exit status.
+    arguments: {python: "list[str], the words after the program name", r: "character(), the words after the program name"}
+    exit_status: {python: "int, the exit status: 0, 1 or 2 (cli.exit_status)", r: "integer(1), the exit status: 0, 1 or 2 (cli.exit_status), invisibly"}
     # Python-only projections, which only yamaa.Table's members use.
     pickle: {python: "tuple[object, tuple[bytes]]"}
     rows: {python: "list[dict[str, object]], one dict per row, keyed by the column names in order"}
@@ -484,6 +488,17 @@ public:
       returns: SelfTest
       calls: selftest
       doc: Run the bundled selftest cases through this installation's engine, comparing each with its expected files.
+    # The command line run as this host (cli.entries): one command, over
+    # this host's engine and installed project functions, printing what the
+    # binary prints on this host's standard streams.
+    - name: cli
+      python: yamaa.cli
+      r: yamaa_cli
+      args: {arguments: arguments}
+      returns: exit_status
+      raises: refusal
+      calls: cli
+      doc: Run one command of the command line as this host, with its project functions, printing what it prints; return its exit status.
 
   # Result and lazy classes, in definition order: a class is defined before
   # any class that returns it. Every result has a `status` (D36, P-STATUS-1)
@@ -848,6 +863,14 @@ cli:
     - yamaa --version [--format text|json]
     - yamaa --help
   inputs: "only the command line: no configuration file, environment variable or colour changes what it does"
+  # The same commands run as a host, over that host's engine and installed
+  # project functions, through the public function `cli` of each package:
+  # python -m yamaa and yamaa.cli() in Python, and yamaa_cli() in R. Each
+  # prints what the binary prints on the host's standard streams and returns
+  # the exit status; --version and selftest name that host and its version.
+  entries:
+    python: "python -m yamaa COMMAND [ARGUMENTS], or yamaa.cli(arguments)"
+    r: "yamaa_cli(arguments), as Rscript -e 'quit(status = yamaa_cli(commandArgs(TRUE)))' COMMAND [ARGUMENTS] once the package is attached"
   # The command line's own vocabularies, which no facade constant owns.
   values:
     output_format: [text, json]
@@ -1300,6 +1323,11 @@ python:
       rust: api_entry::_selftest
       args: {}
       returns: _SelfTest
+    - kind: function
+      name: _cli
+      rust: api_entry::_cli
+      args: {arguments: "list<text>"}
+      returns: index
     # The interface handshake and the census of live handles.
     - kind: function
       name: _interface_handshake
@@ -1404,6 +1432,7 @@ r:
         - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
         - {name: selftest_info, args: {handle: robj}, returns: r_reply}
         - {name: selftest_summary, args: {handle: robj}, returns: r_reply}
+        - {name: cli, args: {arguments: robj, version: raw, capabilities: robj}, returns: r_reply}
     - module: interface
       source: rust/crates/yamaa-r/src/interface.rs
       functions:
@@ -1471,6 +1500,7 @@ operations:
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}
   selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
+  cli: {python: [_cli], r: [cli]}
   interface_handshake: {python: [_interface_handshake], r: [interface_handshake]}
   live_handles: {python: [_live_handles], r: [live_handles]}
 # Host transport: both hosts check interrupts inside their native calls.

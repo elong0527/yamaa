@@ -11,6 +11,10 @@
 //! use cases carry runnable examples, and `examples/memory.rs` runs one
 //! specification entirely from memory.
 //!
+//! The command line's commands are a facade use case too: [`cli`] holds what
+//! the `yamaa` binary and the host packages' command-line entries run, over
+//! an engine their [`cli::Runtime`] configures.
+//!
 //! An embedder looks at the crate root, which re-exports what configures an
 //! engine or comes back from one: the engine, its options and requests, the
 //! results, tables and diagnostics, the [`CancellationToken`], the
@@ -65,6 +69,7 @@
 
 pub mod api;
 pub mod cancel;
+pub mod cli;
 pub mod conditions;
 pub mod diagnostic;
 pub mod engine;

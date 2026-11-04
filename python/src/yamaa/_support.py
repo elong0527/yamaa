@@ -20,6 +20,7 @@ __all__ = [
     "_fspath",
     "_fspaths",
     "_optional_fspath",
+    "_texts",
     "_Lazy",
 ]
 
@@ -59,6 +60,16 @@ def _fspaths(paths) -> list[str]:
         return [_fspath(path) for path in paths]
     except TypeError as error:
         raise _native.Error(str(error), _native._empty_issues(), []) from None
+
+
+def _texts(values, what) -> list[str]:
+    """A list of strings, such as the command line's arguments; a string
+    alone, which a list would read letter by letter, is refused."""
+    if isinstance(values, str) or not isinstance(values, (list, tuple)):
+        raise _native.Error(
+            f"{what} must be a list of text", _native._empty_issues(), []
+        )
+    return [_text(value, what) for value in values]
 
 
 def _optional_fspath(path) -> str | None:

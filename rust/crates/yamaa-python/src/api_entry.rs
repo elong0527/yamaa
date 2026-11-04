@@ -12,6 +12,7 @@
 //! (#4072): its progress callback, project functions and interrupt probe
 //! attach again, and its refusal is raised once it has attached.
 use pyo3::{prelude::*, types::PyDict};
+use std::ffi::OsString;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa::{
@@ -690,6 +691,81 @@ pub fn _selftest(py: Python<'_>) -> PyResult<SelfTest> {
         selftest,
         _live: CENSUS.hold(HandleKind::SelfTest),
     })
+}
+
+/// The command line run as the Python host (`cli.entries`): the runtime of
+/// `python -m yamaa` and `yamaa.cli()`, which names this host and the running
+/// interpreter, and whose engines are the ones every other call builds, with
+/// the installed project functions.
+struct CommandLine {
+    version: String,
+    host_version: String,
+}
+
+impl yamaa::cli::Runtime for CommandLine {
+    fn host(&self) -> (yamaa::Host, Option<String>) {
+        (yamaa::Host::Python, Some(self.host_version.clone()))
+    }
+
+    fn options(&self) -> EngineOptions {
+        EngineOptions::new(HostLanguage::Python, "python".into(), self.version.clone())
+            .with_functions(Arc::new(Port))
+    }
+
+    /// A `--verbose` line goes to `sys.stderr` as it happens; one that
+    /// cannot be written is lost, and the command goes on.
+    fn reporter(&self) -> yamaa::cli::Reporter {
+        Arc::new(|line: &str| {
+            Python::attach(|py| {
+                let _ = write_stream(py, "stderr", &format!("{line}\n"));
+            });
+        })
+    }
+}
+
+/// Write `text` to `sys.stdout` or `sys.stderr`, as the command line's
+/// output reaches the interpreter's own streams, redirected or not; an
+/// interpreter without that stream, such as a windowed one, drops it.
+fn write_stream(py: Python<'_>, name: &str, text: &str) -> PyResult<()> {
+    if text.is_empty() {
+        return Ok(());
+    }
+    let stream = py.import("sys")?.getattr(name)?;
+    if stream.is_none() {
+        return Ok(());
+    }
+    stream.call_method1("write", (text,))?;
+    stream.call_method0("flush")?;
+    Ok(())
+}
+
+/// One command of the command line, run as the Python host (`cli.entries`):
+/// `arguments` are the words after the program name, as the `yamaa` binary
+/// takes them. The command runs over this interpreter's engine, with the
+/// project functions installed here, and prints what the binary prints on
+/// `sys.stdout` and `sys.stderr` once it ran, except `--verbose` progress
+/// lines, which reach `sys.stderr` as they happen. It answers the binary's
+/// exit status, 0, 1 or 2. A cancelled command prints nothing and raises
+/// the interrupt, as every call does.
+#[pyfunction]
+pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
+    gate()?;
+    let runtime = CommandLine {
+        version: runtime(py),
+        host_version: python_version(py),
+    };
+    let arguments = arguments
+        .into_iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+    let (status, stdout, stderr) = cancellable(py, |token| {
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, token);
+        Ok((status, stdout, stderr))
+    })?;
+    write_stream(py, "stdout", &String::from_utf8_lossy(&stdout))?;
+    write_stream(py, "stderr", &String::from_utf8_lossy(&stderr))?;
+    Ok(usize::from(status))
 }
 
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]

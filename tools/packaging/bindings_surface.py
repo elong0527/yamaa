@@ -271,7 +271,15 @@ _CLI_REQUIRED = {
     "exit_status",
     "commands",
 }
-_CLI_OPTIONAL = {"depends_on", "inputs", "values", "streams", "interrupt", "json"}
+_CLI_OPTIONAL = {
+    "depends_on",
+    "inputs",
+    "entries",
+    "values",
+    "streams",
+    "interrupt",
+    "json",
+}
 _FLAG_OPTIONAL = {
     "value",
     "values",
@@ -373,6 +381,11 @@ def validate_cli(cli, values, operations):
         streams = _keys(entry["streams"], "cli.streams", {"stdout", "stderr"})
         for name, text in streams.items():
             _text(text, f"cli.streams.{name}")
+    if "entries" in entry:
+        # The hosts that run the commands as themselves, each by its entry.
+        entries = _keys(entry["entries"], "cli.entries", {"python", "r"})
+        for name, text in entries.items():
+            _text(text, f"cli.entries.{name}")
     _flags(entry["global_flags"], "cli.global_flags", values)
     statuses = _mapping(entry["exit_status"], "cli.exit_status")
     if not statuses:
@@ -461,6 +474,9 @@ def manifest_lines(definition):
     if not cli:
         return lines
     lines.extend(f"cli.synopsis: {line}" for line in cli["synopsis"])
+    lines.extend(
+        f"cli.entries.{host}: {entry}" for host, entry in cli.get("entries", {}).items()
+    )
     for name, listed in cli.get("values", {}).items():
         lines.extend(f"cli.values.{name}.{value}" for value in listed)
     lines.extend(

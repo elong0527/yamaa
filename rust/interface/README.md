@@ -206,7 +206,11 @@ or `optional<T>`.
 ### Command line
 
 `cli` declares the `yamaa` binary of `rust/crates/yamaa-cli` (#3060), which
-calls the facade directly and so pairs no native export. It has `binary`
+calls the facade directly and so pairs no native export. Its commands are the
+facade's `cli` module, which the binary runs over the neutral runtime and the
+host packages run over their own engines, through `python -m yamaa` and
+`yamaa_cli()`, the one public function the hosts pair for it, `cli`. It has
+`binary`
 (`yamaa`), `crate` (`rust/crates/yamaa-cli`), `synopsis`, `global_flags`,
 `exit_status` (integer statuses 0 to 125 and what each means) and `commands`,
 and may have `depends_on`, `inputs`, `values`, `streams`, `interrupt` and
@@ -223,9 +227,9 @@ from `json_keys`. A flag's name starts with `--`; a flag or argument may name
 the vocabulary its values come from, in either `values`. A command's
 `operations` are the only record of what the command line reaches:
 `operations` and `host_only` pair Python and R exports alone.
-`tools/tests/test_bindings_cli.py` reads the binary's parser table and usage
-text, and keeps the commands, their arguments and flags, the global flags, the
-output formats and the exit statuses equal to them.
+`tools/tests/test_bindings_cli.py` reads the parser table and usage text of
+the facade's `cli` module, and keeps the commands, their arguments and flags,
+the global flags, the output formats and the exit statuses equal to them.
 
 ### Native registrations
 
