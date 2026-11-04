@@ -185,23 +185,31 @@ class Worker(unittest.TestCase):
         )
         self.assertEqual(replies[4], "error\tKeyError\t7")
 
-    def test_project_code_that_prints_reaches_standard_error_not_the_protocol(self):
+    def test_project_code_that_prints_reaches_standard_error_not_the_protocol(
+        self,
+    ):
+        # A callable the worker binds from the json module, planted in the
+        # worker's own process before the worker starts: it prints, as a
+        # project function must not, and its print reaches standard error.
         code = (
-            "import sys; sys.argv = ['python', '-m', 'yamaa._worker']; "
-            "import runpy; print('hello from stdout', flush=True); "
+            "import json, runpy, sys; "
+            "json.shout = lambda x: (print('shouting ' + x), x.upper())[1]; "
+            "sys.argv = ['python', '-m', 'yamaa._worker']; "
             "runpy.run_module('yamaa._worker', run_name='__main__')"
         )
         completed = subprocess.run(
             [sys.executable, "-c", code],
-            input="info\nexit\n",
+            input="bind\t"
+            + enc("json.shout")
+            + "\tstr\tx\ninvoke\t1\tx=s:hello\nexit\n",
             capture_output=True,
             text=True,
             check=True,
         )
         self.assertEqual(
-            completed.stdout.split("\n"),
-            ["hello from stdout", "ok\t" + enc(yamaa.info()["version"]), "ok", ""],
+            completed.stdout.split("\n"), ["ok\t1", "ok\ts:HELLO", "ok", ""]
         )
+        self.assertEqual(completed.stderr, "shouting hello\n")
         self.assertEqual(platform.python_version(), yamaa.info()["host_version"])
 
 

@@ -60,6 +60,14 @@ replies <- worker("info")
 expect_identical(replies, paste0("ok\t", enc(yamaa:::.core_version())), "the worker names the installed engine")
 cat("the worker names the installed engine\n")
 
+installed <- as.character(utils::packageVersion("yamaa"))
+replies <- worker(paste("verify", "1", enc("base::signif"), paste0(enc("yamaa"), "=", enc("0.0.0")), sep = "\t"))
+expect_identical(replies, paste0("ok\t", enc("yamaa"), "|", enc("version_mismatch"), "|", enc("0.0.0"), "|", enc(installed)),
+  "the worker reports a locked yamaa version that differs from the installed one")
+expect_identical(worker(paste("verify", "1", enc("base::signif"), paste0(enc("yamaa"), "=", enc(installed)), sep = "\t")),
+  "ok", "a lock that matches the installation has no finding")
+cat("the worker reports the renv lock findings\n")
+
 replies <- worker(c(
   paste("bind", enc("base::signif"), "float", "x", "digits", sep = "\t"),
   "invoke\t1\tx=f:2.375\tdigits=i:3",

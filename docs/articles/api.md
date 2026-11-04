@@ -1450,9 +1450,11 @@ same keys, except where the table names a refusal's.
 * `command` is the command's name. `path`, `spec`, `section` and `type` are
   its arguments as given, null for a flag not given; `read-odm`'s `path` is
   SOURCE, and a check with `--parent` prints the same keys, its `path` the
-  fragment. A run's `host` is the language its project functions run in,
-  `python` or `r`, as `--host` gave it or the project named it, and null
-  for a run that calls none.
+  fragment. A run's `host` is the language the run settled on for its
+  project functions, `python` or `r`, as `--host` gave it or the project
+  named it, whether or not a function was called, and null when it settled
+  on none: a specification run alone, a project that names no one language,
+  or a host package's entry.
 * `status` is the result's status, which a refused save keeps, and `failed`
   for a call refused before it has a result. `lint`'s is `failed` when a
   finding remains, and `selftest`'s when a case failed; `conditions`' is

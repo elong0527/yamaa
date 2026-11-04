@@ -876,7 +876,8 @@ cli:
   # language (run's --host) and talks to over its standard input and output,
   # through the protocol rust/crates/yamaa-cli/src/worker.rs describes. The
   # worker is the host package's, so a function runs as the package's run()
-  # runs it, and the package's engine version must be the binary's (FUNC-3).
+  # runs it. With a declared lock, the package's engine version must be the
+  # binary's (FUNC-3); without a lock, the installed functions run unchecked.
   worker:
     python: "python -m yamaa._worker, in the interpreter --interpreter names or python3, then python, on PATH"
     r: "Rscript -e running the package's internal .yamaa_worker(), in the Rscript --interpreter names or Rscript on PATH"

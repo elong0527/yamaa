@@ -98,6 +98,22 @@ class CommandLine(unittest.TestCase):
             stdout.startswith("usage: yamaa [--format text|json] COMMAND [ARGUMENTS]\n")
         )
 
+    def test_a_standard_output_that_cannot_be_written_exits_2(self):
+        class Closed:
+            def write(self, text):
+                raise OSError("the reader is gone")
+
+            def flush(self):
+                pass
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(Closed()), contextlib.redirect_stderr(stderr):
+            status = yamaa.cli(["--version"])
+        self.assertEqual(
+            (status, stderr.getvalue()),
+            (2, "yamaa: cannot write to standard output: the reader is gone\n"),
+        )
+
     def test_the_arguments_must_be_a_list_of_text(self):
         for arguments in ("--help", None, ["--format", 1], 3):
             with self.subTest(arguments=arguments):

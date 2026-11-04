@@ -749,8 +749,10 @@ fn write_stream(py: Python<'_>, name: &str, text: &str) -> PyResult<()> {
 /// project functions installed here, and prints what the binary prints on
 /// `sys.stdout` and `sys.stderr` once it ran, except `--verbose` progress
 /// lines, which reach `sys.stderr` as they happen. It answers the binary's
-/// exit status, 0, 1 or 2. A cancelled command prints nothing and raises
-/// the interrupt, as every call does.
+/// exit status, 0, 1 or 2: a `sys.stdout` that cannot be written exits 2
+/// with `yamaa: cannot write to standard output: <error>` on `sys.stderr`,
+/// as the binary's closed pipe does. A cancelled command prints nothing and
+/// raises the interrupt, as every call does.
 #[pyfunction]
 pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
     gate()?;
@@ -767,8 +769,21 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
         let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, token);
         Ok((status, stdout, stderr))
     })?;
-    write_stream(py, "stdout", &String::from_utf8_lossy(&stdout))?;
-    write_stream(py, "stderr", &String::from_utf8_lossy(&stderr))?;
+    // As the binary: a failed write to standard output exits 2 and says so
+    // on standard error, the last stream to report on, whose own failure is
+    // not reported.
+    if let Err(error) = write_stream(py, "stdout", &String::from_utf8_lossy(&stdout)) {
+        let _ = write_stream(
+            py,
+            "stderr",
+            &format!(
+                "yamaa: cannot write to standard output: {}\n",
+                error.value(py)
+            ),
+        );
+        return Ok(usize::from(yamaa::cli::NOT_RUN));
+    }
+    let _ = write_stream(py, "stderr", &String::from_utf8_lossy(&stderr));
     Ok(usize::from(status))
 }
 
