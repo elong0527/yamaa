@@ -1,0 +1,281 @@
+{
+  "about": "A named intermediate that writes key: none pairs nothing, so every record of its dataset matches every current row (LOOKUP-5, #4271). Selection and absence then answer as for any lookup: one record is read by every row, no record gives the absence answer, missing when none is declared, or fails under require_match (LOOKUP-24), and two records fail as multiple_matches unless order_by and keep choose one, whatever order they are stored in (LOOKUP-10). Every value is authored from those rules. key: none is refused where it cannot mean every record: on a pair relation, whose key pairs its two sides (LOOKUP-27), on a row driver, which declares no key (ROW-2), and on an aggregate, whose key admits no none (SCHEMA-12).",
+  "cases": [
+    {
+      "case": "every_row_reads_the_one_record_of_a_lookup_without_a_key",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\n    absent: null\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
+          "input.csv": "SUBJ\nA\nB\n",
+          "lookup.csv": "LBL\nhello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "output.csv": "SUBJ,LBL\nA,hello\nB,hello\n"
+      }
+    },
+    {
+      "case": "a_lookup_without_a_key_over_no_record_gives_its_absence_answer",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\n    absent: none-found\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
+          "input.csv": "SUBJ\nA\nB\n",
+          "lookup.csv": "LBL\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "output.csv": "SUBJ,LBL\nA,none-found\nB,none-found\n"
+      }
+    },
+    {
+      "case": "a_lookup_without_a_key_over_no_record_answers_missing_by_default",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
+          "input.csv": "SUBJ\nA\nB\n",
+          "lookup.csv": "LBL\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "output.csv": "SUBJ,LBL\nA,\nB,\n"
+      }
+    },
+    {
+      "case": "a_lookup_without_a_key_over_two_records_has_no_rule_to_choose",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
+          "input.csv": "SUBJ\nA\nB\n",
+          "lookup.csv": "LBL\nhello\nworld\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "multiple_matches",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "intermediates.TRIAL"
+          ],
+          "context": {
+            "intermediate": "TRIAL",
+            "dataset": "L",
+            "match_count": 2,
+            "keys": [
+              {
+                "SUBJ": "A"
+              }
+            ],
+            "key": [],
+            "intermediate_key": {}
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "keep_chooses_one_record_of_a_lookup_without_a_key",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\n    order_by: [L.LBL]\n    keep: last\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
+          "input.csv": "SUBJ\nA\nB\n",
+          "lookup.csv": "LBL\nworld\nhello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "output.csv": "SUBJ,LBL\nA,world\nB,world\n"
+      }
+    },
+    {
+      "case": "require_match_refuses_a_lookup_without_a_key_over_no_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: TRIAL\n    dataset: L\n    key: none\n    require_match: true\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: TRIAL.LBL}\n",
+          "input.csv": "SUBJ\nA\nB\n",
+          "lookup.csv": "LBL\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "unmatched_key",
+          "rule": "LOOKUP-24",
+          "spec_paths": [
+            "intermediates.TRIAL"
+          ],
+          "context": {
+            "intermediate": "TRIAL",
+            "dataset": "L",
+            "keys": [
+              {
+                "SUBJ": "A"
+              }
+            ],
+            "key": [],
+            "intermediate_key": {}
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_pair_relation_refuses_key_none_which_pairs_no_side",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: PAIRS\n    dataset: I\n    inner_join: L\n    key: none\n    derivations:\n      LBL: {type: str, derivation: L.LBL}\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - {name: LBL, type: str, derivation: PAIRS.LBL}\nrows:\n  - {id: each, dataset: PAIRS, derivations: {}}\n",
+          "input.csv": "SUBJ\nA\n",
+          "lookup.csv": "LBL\nhello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "rule": "LOOKUP-5",
+          "spec_paths": [
+            "intermediates.PAIRS.key"
+          ],
+          "context": {
+            "intermediate": "PAIRS",
+            "dataset": "I",
+            "expected": "at least one match pair"
+          }
+        }
+      ]
+    },
+    {
+      "case": "a_row_driver_refuses_key_none_as_any_key",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\noutput: {path: output.csv, columns: [SUBJ, LBL]}\nintermediates:\n  - id: DRV\n    dataset: I\n    key: none\ncolumns:\n  - {name: SUBJ, type: str, derivation: DRV.SUBJ}\n  - {name: LBL, type: str, derivation: \"'x'\"}\nrows:\n  - {id: all, dataset: DRV, derivations: {}}\n",
+          "input.csv": "SUBJ\nA\n",
+          "lookup.csv": "LBL\nhello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "invalid_intermediate_driver",
+          "rule": "ROW-2",
+          "spec_paths": [
+            "rows.all.dataset"
+          ],
+          "context": {
+            "intermediate": "DRV",
+            "fields": [
+              "key"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "an_aggregate_s_key_admits_no_none",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: input.csv\n  L: lookup.csv\nbase: I\noutput: {path: output.csv, columns: [SUBJ, LBL]}\ncolumns:\n  - {name: SUBJ, type: str, derivation: I.SUBJ}\n  - name: LBL\n    type: str\n    derivation:\n      aggregate: {expr: 'ONLY(L.LBL)', key: none}\n",
+          "input.csv": "SUBJ\nA\n",
+          "lookup.csv": "LBL\nhello\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context.expected"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "rule": "SCHEMA-12",
+          "spec_paths": [
+            "columns.LBL.derivation.aggregate.key"
+          ],
+          "context": {
+            "expected": "match_key"
+          }
+        }
+      ]
+    }
+  ]
+}

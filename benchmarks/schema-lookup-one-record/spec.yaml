@@ -1,0 +1,49 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SUBJ:
+    path: input/subjects.csv
+    types: {AGE: int}
+  STUDY: input/study.csv
+base: SUBJ
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, PHASE]
+
+intermediates:
+  # The study's one settings record, which every subject reads; it shares
+  # no column with the subject records.
+  - id: SETTINGS
+    dataset: STUDY
+    key: none
+    require_match: true
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SETTINGS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SUBJ.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: SUBJ.AGE
+
+  - name: PHASE
+    type: str
+    label: Trial Phase
+    derivation: SETTINGS.PHASE
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3

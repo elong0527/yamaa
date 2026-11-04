@@ -545,12 +545,12 @@ join's multiple match does.
 the current-row match value it must equal. A list of column names pairs each
 with the same-named current-row value; a mapping pairs each column, written as
 its key, with a variable or expression. A named intermediate states its own
-`key`; an implicit join, and a qualified aggregate without `key`, use the
-input's declared `key`. A lookup names at least one pair, every column must
-exist, and every match value must read a known current-row value.
+`key`, or `none` to match every record; an implicit join, and a qualified
+aggregate without `key`, use the input's declared `key`. Every pair's column
+must exist and its match value read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_key_reads.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`.
+Evidence: `negative-lookup-mismatched`, `schema-lookup-one-record`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_key_reads.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/keyless_lookups.json`.
 
 ```yaml
 intermediates:
@@ -579,6 +579,27 @@ match and fails as `invalid_field_type`, on a named intermediate, an
 aggregate and an input alike. A named intermediate's or an input's list names
 each column once; a column listed again fails as `invalid_field_type` at that
 entry, reporting the column.
+
+A named intermediate that writes `key: none` pairs nothing, so every record of
+its dataset matches every current row, and selection and absence answer as
+for any lookup: with no candidate left after `between` and `filter`, the
+absence answer is given, or `require_match` fails ([LOOKUP-24](#lookup-24));
+one candidate is read by every row; and several fail as `multiple_matches`
+unless `order_by` and `keep`, or `nearest`, choose one
+([LOOKUP-10](#lookup-10)). It serves a trial-level constant or a one-row
+reference table, which shares no column with the rows that read it. `none` is
+written, never implied: an intermediate without `key` still fails as
+[LOOKUP-3](#lookup-3) states. A pair relation's key pairs its two sides
+([LOOKUP-27](#lookup-27)), so its `key: none` names no match and fails as
+`invalid_field_type`; a row template's driver declares no key, `none`
+included ([ROW-2](rows.md#row-2)); and an aggregate's `key` admits no `none`.
+
+```yaml
+intermediates:
+  - id: TRIAL
+    dataset: TRIAL_SETTINGS
+    key: none
+```
 
 A `key` column the lookup's relation does not have fails as `unknown_field`.
 Every match value must read a known current-row value: a variable must name

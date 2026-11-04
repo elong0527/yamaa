@@ -1200,6 +1200,9 @@ impl Declarations {
                     }
                     Some(declared)
                 }
+                // `key: none` is a lookup with no pair: every record matches
+                // (LOOKUP-5).
+                Some(ast::JoinKey::Every { .. }) => Some(Vec::new()),
                 _ => None,
             };
             derivations::predicate_limits(spec, item.filter)?;

@@ -247,6 +247,9 @@ and each kind of read treats them in its own way:
   `EX.EXDOSE` then read as what they are. An intermediate that would only
   repeat its input under another name is not needed: declare the `key` on the
   input and read it directly ([LOOKUP-4](../../rules/lookup.md#lookup-4)).
+  An intermediate over a table of one record that shares no column with the
+  rows, such as the study's settings, writes `key: none`: every row reads that
+  record ([LOOKUP-5](../../rules/lookup.md#lookup-5)).
   Its `derivations` add a field to each `EX` record: `EXSTDT`, the date
   `to_date` reads from `EXSTDTC`, missing for a partial start, which `filter`
   and `order_by` read as `EX.EXSTDT`. `EXSTDTC` itself stays text, as

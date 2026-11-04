@@ -405,6 +405,9 @@ pub enum JoinKey {
     },
     /// The input's declared key (P-KEY-1).
     FromInput,
+    /// `key: none`: no pair, so every record of the relation matches every
+    /// current row (LOOKUP-5).
+    Every { meta: Meta },
 }
 
 #[derive(Clone, Debug, PartialEq)]

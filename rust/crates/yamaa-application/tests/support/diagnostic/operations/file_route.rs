@@ -54,6 +54,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("integer_literals.json"),
     fixture!("intermediate_driver_columns.json"),
     fixture!("key_selection.json"),
+    fixture!("keyless_lookups.json"),
     fixture!("language_header.json"),
     fixture!("layer_composition.json"),
     fixture!("local_paths.json"),

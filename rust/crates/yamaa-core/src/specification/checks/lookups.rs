@@ -295,6 +295,10 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
         let empty = match &item.key {
             Some(JoinKey::Pairs { pairs, .. }) => pairs.is_empty(),
             Some(JoinKey::Columns { columns, .. }) => columns.is_empty(),
+            // A pair relation's key pairs its two sides, so `key: none`, which
+            // pairs nothing, names no match for it (LOOKUP-27); any other
+            // intermediate reads every record (LOOKUP-5).
+            Some(JoinKey::Every { .. }) => item.pairs(),
             _ => false,
         };
         if empty {

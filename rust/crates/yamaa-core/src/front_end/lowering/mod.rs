@@ -21,8 +21,8 @@ use crate::ast::{
     Binding, Column, ColumnCheck, ColumnCheckKind, ColumnOrigin, ColumnSubmission, Comment,
     Comparator, Constant, DatasetCheck, DatasetCheckKind, DatasetSubmission, Derivation,
     DocumentRef, EmptyString, Expr, ExprId, ExprKind, FileRef, FormalExpression, Header, Input,
-    InputSource, Intermediate, KeyDecl, Literal, Meta, Method, Model, Named, Origin, Output,
-    PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity, Span, Spec,
+    InputSource, Intermediate, JoinKey, KeyDecl, Literal, Meta, Method, Model, Named, Origin,
+    Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity, Span, Spec,
     SubmissionMetadata, Template, Text, UniqueCheck, ValueLevel, WhereClause, Written,
 };
 use crate::cdisc_vocabulary::ModelKind;
@@ -570,7 +570,12 @@ impl<'d> Lower<'d> {
             // (LOOKUP-3, ROW-2).
             let key = self.field(item, "key").map(|node| {
                 let meta = self.field_meta(meta, "key", node);
-                self.join_key(node, meta)
+                // `key: none` pairs nothing: every record matches (LOOKUP-5).
+                if self.text(node) == Some("none") {
+                    JoinKey::Every { meta }
+                } else {
+                    self.join_key(node, meta)
+                }
             });
             let between = self.field(item, "between").map(|node| {
                 let meta = self.field_meta(meta, "between", node);
