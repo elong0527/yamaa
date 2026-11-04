@@ -199,6 +199,8 @@ check_gate <- function() {
       conditions = list(),
       info = list(r_version),
       selftest = list(r_version),
+      # A usage error, which prints only on standard error once accepted.
+      cli = list(list(charToRaw("bogus")), r_version, list()),
       live_handles = list()))
   input <- file.path(work, "input.rds")
   output <- file.path(work, "output.rds")

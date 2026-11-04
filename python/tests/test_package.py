@@ -33,6 +33,7 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
         "StateError",
         "Table",
         "__version__",
+        "cli",
         "conditions",
         "info",
         "lint",
@@ -115,8 +116,10 @@ def test_installed_distribution_contains_only_the_retained_modules() -> None:
     assert Path(next(iter(extensions))).suffix in {".so", ".pyd"}
     assert entries - extensions == {
         "__init__.py",
+        "__main__.py",
         "_locked_functions.py",
         "_native.pyi",
         "_support.py",
+        "_worker.py",
         "py.typed",
     }

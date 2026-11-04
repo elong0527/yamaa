@@ -29,6 +29,16 @@ def enc(text):
     return quote(text, safe=SAFE)
 
 
+def zero_division():
+    """The message this interpreter gives a float division by zero, which
+    Python 3.14 shortened."""
+    try:
+        1.0 / 0.0
+    except ZeroDivisionError as error:
+        return str(error)
+    raise AssertionError("division by zero raises")
+
+
 def worker(lines):
     """Send `lines`, then `exit`, and return the reply lines."""
     completed = subprocess.run(
@@ -108,7 +118,7 @@ class Worker(unittest.TestCase):
                 "ok\t1",
                 "ok\tf:2.5",
                 "ok\tf:0.33\tf:67.17",
-                "error\tZeroDivisionError\t" + enc("float division by zero"),
+                "error\tZeroDivisionError\t" + enc(zero_division()),
                 "ok",
             ],
         )
@@ -178,7 +188,8 @@ class Worker(unittest.TestCase):
     def test_project_code_that_prints_reaches_standard_error_not_the_protocol(self):
         code = (
             "import sys; sys.argv = ['python', '-m', 'yamaa._worker']; "
-            "import runpy; print('hello from stdout'); runpy.run_module('yamaa._worker', run_name='__main__')"
+            "import runpy; print('hello from stdout', flush=True); "
+            "runpy.run_module('yamaa._worker', run_name='__main__')"
         )
         completed = subprocess.run(
             [sys.executable, "-c", code],
