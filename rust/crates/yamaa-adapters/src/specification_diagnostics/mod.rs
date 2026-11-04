@@ -8,7 +8,7 @@ use crate::{
 use yamaa_core::application_issue::{self as issue, Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value;
-use yamaa_core::specification::{BindError, PrepareError, SourceDeclaration};
+use yamaa_core::specification::{BindError, PrepareError, SourceDeclaration, UnsupportedFeature};
 
 /// A refused preparation, typed from the failure site to the issues it
 /// reports. Callers that keep only some refusals choose by variant, never by
@@ -130,7 +130,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         return Rejection::Unsupported(
             features
                 .iter()
-                .map(|feature| issue::unsupported(&feature.operation, Some(&feature.path)))
+                .map(UnsupportedFeature::diagnostic)
                 .collect(),
         );
     }

@@ -1,5 +1,5 @@
 {
-  "about": "A column-level derivation completed only for rows a named intermediate drives (ROW-2). The column binds against that driver as its row template does: the driver qualifier reads the record that built the row, another input is an implicit join on the key it declares (LOOKUP-1), and a qualified aggregate still reduces its declared input, never the intermediate (LOOKUP-18). The column phase reads each row through its own template's driver port (#2829), so an intermediate over any input is addressable, and a grouped intermediate's driver is read only through its group key (NAME-4). A field the intermediate derives, read by the column, by its window order or by an imputation bound, or a driver read beside an aggregate, is refused as unsupported_operation before any data is read, by check and build alike; a field the intermediate's columns list leaves out, or one its filter names that AE lacks, is unknown_field, and a failed intermediate reports only its own finding. Moved from execution_intermediate_driver_columns.rs, whose saved() helper required a clean check, a domain without issues, Ok(true) from its save and the bytes of out.csv: each such specification is a case that checks clean and one that saves, and migrated_api_contracts.json keeps the route and the save result. Its issue() helper took the one issue of either route, so each such case builds and compares the fields its test read, in a complete list; its refused() helper also compared the check's issues with the build's, so each such case names both operations and compares the phase, condition and spec paths it read. The documents are the test's specifications: records is records(\"\", \"str\", \"AE.AETERM\"), grouped grouped(\"'X'\"), mixed mixed(\"'X'\"), grouped_mixed grouped_mixed(\"AE.AETERM\", \"subjects\") and secondary secondary(\"'X'\"), and each case edits the column R and whatever else its test's arguments or edits changed; ae and dm are the test's AE and DM, staged in every case as its fixture staged them, except where its test replaced ae.csv. A test that saved two specifications is two pairs of cases, the first suffixed by what it varied. No engine output supplied these values.",
+  "about": "A column-level derivation completed only for rows a named intermediate drives (ROW-2). The column binds against that driver as its row template does: the driver qualifier reads the record that built the row, another input is an implicit join on the key it declares (LOOKUP-1), and a qualified aggregate still reduces its declared input, never the intermediate (LOOKUP-18). The column phase reads each row through its own template's driver port (#2829), so an intermediate over any input is addressable, and a grouped intermediate's driver is read only through its group key (NAME-4). A field the intermediate derives, read by the column, by its window order or by an imputation bound, or a driver read beside an aggregate, is refused as unsupported_operation before any data is read, by check and build alike, its hint naming the remedy: the field derived into a column in the row template's own derivations is read there and, by a window or an aggregate beside it, at column level; a field the intermediate's columns list leaves out, or one its filter names that AE lacks, is unknown_field, and a failed intermediate reports only its own finding. Moved from execution_intermediate_driver_columns.rs, whose saved() helper required a clean check, a domain without issues, Ok(true) from its save and the bytes of out.csv: each such specification is a case that checks clean and one that saves, and migrated_api_contracts.json keeps the route and the save result. Its issue() helper took the one issue of either route, so each such case builds and compares the fields its test read, in a complete list; its refused() helper also compared the check's issues with the build's, so each such case names both operations and compares the phase, condition and spec paths it read. The documents are the test's specifications: records is records(\"\", \"str\", \"AE.AETERM\"), grouped grouped(\"'X'\"), mixed mixed(\"'X'\"), grouped_mixed grouped_mixed(\"AE.AETERM\", \"subjects\") and secondary secondary(\"'X'\"), and each case edits the column R and whatever else its test's arguments or edits changed; ae and dm are the test's AE and DM, staged in every case as its fixture staged them, except where its test replaced ae.csv. A test that saved two specifications is two pairs of cases, the first suffixed by what it varied. No engine output supplied these values.",
   "documents": {
     "ae": "USUBJID,AESEQ,AESER,AETERM\nS1,1,Y,HEADACHE\nS1,2,N,NAUSEA\nS2,1,Y,RASH\nS1,3,Y,DIZZINESS\n",
     "dm": "USUBJID,SEX\nS1,F\nS2,M\n",
@@ -10,6 +10,9 @@
     "secondary": "yamaa: \"1.0\"\ntype: spec\ndomain: XX\nkeys: [USUBJID, AESEQ, SRC]\noutput: {path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}\ninput:\n  DM: dm.csv\n  AE: {path: ae.csv, key: [USUBJID, AESEQ], types: {AESEQ: int}}\nintermediates:\n  - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\nrows:\n  - id: subjects\n    dataset: DM\n    derivations: {USUBJID: DM.USUBJID, AESEQ: 0, SRC: \"'DM'\", R: \"'OWN'\"}\n  - id: serious\n    dataset: SER\n    derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, SRC: \"'SER'\"}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - {name: SRC, type: str}\n  - {name: R, type: str, derivation: \"'X'\"}\n"
   },
   "cases": [
+    {"case": "a_window_orders_by_the_column_a_template_derives_from_a_derived_driver_field", "operation": "save", "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}", "to": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, LOWER: SER.LOWER}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: LOWER, type: str}\n  - {name: R, type: int, derivation: {row_number: {window: {group_by: [USUBJID], order_by: [LOWER]}}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"}, "issues": [], "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,2\nS2,1,1\nS1,3,1\n"}},
+    {"case": "an_aggregate_beside_the_column_a_template_derives_from_a_driver_field_is_read", "operation": "save", "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}", "to": "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, TERM: SER.AETERM}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: TERM, type: str}\n  - {name: R, type: int, derivation: {case: [{when: \"TERM = 'RASH'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: 0}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"}, "issues": [], "saved": {"out.csv": "USUBJID,AESEQ,R\nS1,1,0\nS2,1,1\nS1,3,0\n"}},
+    {"case": "a_derived_driver_field_is_read_in_the_row_template_it_drives", "operation": "save", "input": {"files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  I: {path: input.csv, types: {VAL: float}}\noutput: {path: output.csv, columns: [SUBJ, SCALED]}\nintermediates:\n  - id: DRV\n    dataset: I\n    derivations:\n      SCALED_SRC: {type: float, derivation: I.VAL}\ncolumns:\n  - {name: SUBJ, type: str, derivation: DRV.SUBJ}\n  - {name: SCALED, type: float}\nrows:\n  - id: all\n    dataset: DRV\n    derivations:\n      SCALED: DRV.SCALED_SRC\n", "input.csv": "SUBJ,VAL\nA,1.5\nB,2\n"}, "specification": "spec.yaml"}, "issues": [], "saved": {"output.csv": "SUBJ,SCALED\nA,1.5\nB,2\n"}},
     {
       "case": "underlying_input_is_an_implicit_join_on_the_output_keys_checks_clean",
       "operation": "check",
@@ -171,18 +174,18 @@
       "case": "derived_driver_field_is_refused_before_reading_data",
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: str, derivation: SER.LOWER}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
-      "compares": ["phase", "condition", "spec_paths"],
+      "compares": ["phase", "condition", "spec_paths", "context"],
       "issues": [
-        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.source"]}
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.source"], "context": {"operation": "intermediate_driver_column_read", "hint": "derive the field into a column in each row template the intermediate drives, then read that column"}}
       ]
     },
     {
       "case": "derived_driver_field_is_refused_before_reading_data_in_a_window_order",
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {row_number: {window: {group_by: [SER.USUBJID], order_by: [SER.LOWER]}}}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
-      "compares": ["phase", "condition", "spec_paths"],
+      "compares": ["phase", "condition", "spec_paths", "context"],
       "issues": [
-        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.row_number"]}
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.row_number"], "context": {"operation": "intermediate_driver_column_read", "hint": "derive the field into a column in each row template the intermediate drives, then read that column"}}
       ]
     },
     {
@@ -202,9 +205,9 @@
       "case": "derived_field_in_an_imputation_bound_is_refused",
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "types: {AESEQ: int}", "to": "types: {AESEQ: int, AESTDT: date}"}, {"from": "filter: \"AE.AESER = 'Y'\"}", "to": "filter: \"AE.AESER = 'Y'\", derivations: {FLOOR: AE.AESTDT}}"}, {"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: date, derivation: {impute: {type: date, source: SER.AEDTC, day: 15, not_before: SER.FLOOR}}}\n"}]}, "ae.csv": "USUBJID,AESEQ,AESER,AEDTC,AESTDT\nS1,1,Y,2024-03,2024-03-20\n", "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
-      "compares": ["phase", "condition", "spec_paths"],
+      "compares": ["phase", "condition", "spec_paths", "context"],
       "issues": [
-        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.impute"]}
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.impute"], "context": {"operation": "intermediate_driver_column_read", "hint": "derive the field into a column in each row template the intermediate drives, then read that column"}}
       ]
     },
     {
@@ -233,9 +236,9 @@
       "case": "driver_read_beside_an_aggregate_is_refused",
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "records", "edits": [{"from": "  - {name: R, type: str, derivation: AE.AETERM}\n", "to": "  - {name: R, type: int, derivation: {case: [{when: \"SER.AETERM = 'RASH'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: 0}]}}\n"}]}, "ae.csv": {"base": "ae"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
-      "compares": ["phase", "condition", "spec_paths"],
+      "compares": ["phase", "condition", "spec_paths", "context"],
       "issues": [
-        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.case"]}
+        {"phase": "planning", "condition": "unsupported_operation", "spec_paths": ["columns.R.derivation.case"], "context": {"operation": "intermediate_driver_column_read", "hint": "derive the field into a column in each row template the intermediate drives, then read that column"}}
       ]
     },
     {

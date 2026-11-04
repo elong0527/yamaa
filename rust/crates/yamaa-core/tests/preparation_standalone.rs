@@ -290,6 +290,7 @@ mod preparation {
             let unsupported = PrepareError::Unsupported(vec![UnsupportedFeature {
                 operation: "future_operation".into(),
                 path: "columns.X".into(),
+                hint: None,
             }]);
             assert!(matches!(
                 source_profile_inspection::refine(unsupported, |_, _| panic!(
