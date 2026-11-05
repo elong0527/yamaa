@@ -39,7 +39,7 @@
 
   <!-- Memory -->
   <rect x="850" y="300" width="170" height="80" rx="10" fill="#fffde7" stroke="#f9a825" stroke-width="2.5"/>
-  <text x="935" y="335" font-size="19" text-anchor="middle" font-weight="bold" fill="#f57f17">Memory</text>
+  <text x="935" y="335" font-size="19" text-anchor="middle" font-weight="bold" fill="#b45309">Memory</text>
   <text x="935" y="360" font-size="13" text-anchor="middle" fill="#555">knowledge graph</text>
 
   <!-- action -->
