@@ -121,6 +121,12 @@
   vertical-align: middle;
 }
 
+/* The call to action of an example slide, the first line under its title. */
+.reveal .slides a.try-it {
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
 /* A prompt typed into an agent, shown as a quoted input box. Long URLs wrap
    inside the box instead of running past the column. */
 .reveal .slides .column > .prompt {

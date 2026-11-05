@@ -13,8 +13,10 @@ The output is one self-contained HTML file (`embed-resources: true`).
 
 ## Outline
 
-The deck opens with a mental game on building an AI-native biometrics group
-and compares AI adoption, AI-first, and AI-native work. After a short
-preparation step in GitHub Codespaces and OpenCode, it explains AI agents,
-large language models, harnesses, and tool calls, and then states the goal:
-an AI-first workflow for CDISC data standardization.
+After a short preparation step in GitHub Codespaces and OpenCode, the deck
+opens with a mental game on building an AI-native biometrics group and
+compares AI adoption, AI-first, and AI-native work. It explains AI agents,
+large language models, and harnesses, shows two agents at work (a coding task
+on arena.ai and the personal agent Muse), and then states the goal: an
+AI-first workflow for CDISC data standardization. It closes with the parts of
+an agent this course covers: skills and tools.

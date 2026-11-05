@@ -32,8 +32,8 @@ organizations or institutions.
 ## Preparation [5 min]
 
 - [![Open GitHub Codespaces](https://github.com/codespaces/badge.svg){.codespaces-badge}](https://codespaces.new/elong0527/yamaa)
-  + R / Python / opensas
-  + opencode / claude code / codex
+  + R, Python, opensas
+  + OpenCode, Claude Code, Codex
 
 - Start [OpenCode](https://opencode.ai/) and configure a model provider
   + Select `opencode-go/muse-spark-1.3-contributor`.
@@ -41,7 +41,7 @@ organizations or institutions.
   + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
     or [Codex](https://learn.chatgpt.com/docs/codex/cli).
 
-## A Mental Game
+## A mental game
 
 :::: {.columns}
 
@@ -71,7 +71,7 @@ You have been hired by the CMO to build a biometrics group.
 
 > *Let's brainstorm the strategy for a small- to midsize biopharma company.*
 
-## What is AI-Native?
+## What is AI-native?
 
 ::: {.ai-levels}
 | AI-Adoption | AI-First | AI-Native |
@@ -81,7 +81,7 @@ You have been hired by the CMO to build a biometrics group.
 | *Example: Using ChatGPT to draft an email or summarize a document.* | *Example: Starting every analysis by prompting an AI agent before writing any code manually.* | *Example: Orchestrating multiple AI agents to handle data cleaning, analysis, reporting, and QC end-to-end.* |
 :::
 
-> **AI-Native is not just about tools** --- it is a mindset shift. Every team
+> **AI-native is not just about tools** --- it is a mindset shift. Every team
 > member becomes an orchestrator who manages AI agents, focuses on exception
 > handling, and continuously improves the system.
 
@@ -89,7 +89,22 @@ You have been hired by the CMO to build a biometrics group.
 
 ![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
 
+## What is a large language model?
+
+![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
+
+An LLM only predicts the next token from its context. It cannot open a file or
+run code: a harness does that and puts the results back into the context.
+
+## What is a harness?
+
+![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
+
+> The model is the CPU; the harness is the operating system.
+
 ## Example: arena.ai
+
+[Try it at arena.ai/agent](https://arena.ai/agent){.try-it}
 
 :::: {.columns}
 
@@ -100,8 +115,6 @@ using R and gtsummary.
 
 Data: <https://github.com/RConsortium/submissions-pilot7-synthetic-data/tree/main/submission-pilot5/data/adam>
 :::
-
-[Try it at arena.ai/agent](https://arena.ai/agent)
 :::
 
 ::: {.column width="50%"}
@@ -121,7 +134,9 @@ statistics, so the agent has to guess them. Do they match your table shell?
 
 ## Example: Muse
 
-Muse is a personal agent from Meta. "Give Muse a goal or task and it handles
+Muse is a personal agent from Meta.
+
+"Give Muse a goal or task and it handles
 the rest": sort email, book a dinner, or fill out a form.
 
 :::: {.columns}
@@ -131,9 +146,8 @@ the rest": sort email, book a dinner, or fill out a form.
 | ---------- | ------------------------------ |
 | Tools | Connected apps such as email and calendar, a full browser, and new tools it builds when one is missing |
 | Environment | A persistent, isolated Linux computer in the cloud |
-| Human checkpoints | You approve actions such as sending an email or making a purchase |
 | Memory | Long-term goals it keeps track of |
-| Interface | The Muse app on mobile or Mac, or WhatsApp |
+| Human checkpoints | You approve actions such as sending an email or making a purchase |
 :::
 
 ::: {.column width="40%"}
@@ -142,42 +156,19 @@ the rest": sort email, book a dinner, or fill out a form.
 
 ::::
 
-The same parts as a coding agent: a goal, tools, a sandbox, approvals, and a record.
-
-::: {.sources}
-Source: [Muse](https://muse.ai), a personal agent from Meta.
+::: {.notes}
+Source: Muse, a personal agent from Meta, https://muse.ai.
 :::
 
-## What is a large language model?
-
-![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
-
-An LLM only predicts the next token from its context. It cannot open a file or
-run code: a harness does that and puts the results back into the context.
-
-## What is a harness?
-
-![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
-
-> The model is the CPU; the harness is the operating system.
-
-## Agent Example 1:
-
-## Agent Example 2:
-
 ## Goal: AI-first workflow for CDISC data standardization
-
-Agents do structured work with tools; explicit rules, benchmarks, and human
-decisions govern it.
 
 | Work | Best done by | In CDISC data standardization |
 | ------------- | -------- | -------------------- |
 | Interpret requirements and draft changes | AI agent | Draft the study specification from templates, the protocol, and the SAP |
-| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with the yamaa engine and compare them with benchmarks |
+| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with code and compare them with benchmarks |
 | Exercise judgment and accept accountability | Human | Review and approve the specification and its evidence |
 
-> Move human and AI collaboration to the planning stage: agree on the
-> specification first, then let the engine execute it.
+> Agents execute structured work with tools; explicit rules, benchmarks, and human decisions govern it.
 
 ::: {.notes}
 Source: ai4csr, AI-first workflows in Biometrics,
@@ -188,17 +179,18 @@ https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
 
 | Part | What it does | In this course |
 | ------ | ------------------ | ------------------ |
+| Environment | The files, commands, and credentials the agent can reach | Provided: GitHub Codespaces |
 | Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
 | Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
 | **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
 | **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
 | Memory | Notes kept between sessions | Not covered |
-| Environment | The files, commands, and credentials the agent can reach | Provided: the Codespace |
 
-A skill tells the agent how to do the task; a tool does the exact part of it.
+> A skill tells the agent how to do the task; a tool does the exact part of it.
 
-::: {.sources}
-Sources: [OpenCode, Agent skills](https://opencode.ai/docs/skills/);
-[ai4csr, From one-file skill to maintainable rounding workflow](https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd);
-[yamaa, Host usage](https://elong0527.github.io/yamaa/articles/api/).
+::: {.notes}
+Sources: OpenCode, Agent skills, https://opencode.ai/docs/skills/;
+ai4csr, From one-file skill to maintainable rounding workflow,
+https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd;
+yamaa, Host usage, https://elong0527.github.io/yamaa/articles/api/.
 :::
