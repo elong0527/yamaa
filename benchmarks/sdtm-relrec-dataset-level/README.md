@@ -4,10 +4,11 @@
 relationships alongside record-level rows, carrying `IDVAR`,
 `IDVARVAL`, and `RELID`.
 
-**Input:** collected tumor identification (TU) and tumor results
-(TR) records each carrying a link identifier, plus adverse event
-(AE) and concomitant medication (CM) records, where an AE and a CM
-record sharing a link identifier are related. An AE or CM record
+**Input:** collected tumor identification (TU) records, one per
+tumor with its own link identifier, and tumor results (TR) records
+carrying the link identifier of the tumor they measure, plus adverse
+event (AE) and concomitant medication (CM) records, where an AE and a
+CM record sharing a link identifier are related. An AE or CM record
 without a link identifier gets no row.
 
 **Variables:**
