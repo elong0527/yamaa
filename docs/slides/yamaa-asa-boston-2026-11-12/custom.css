@@ -49,6 +49,51 @@
   width: 90%;
 }
 
+.reveal .slides .columns > .column > .scenario {
+  background: var(--course-blue);
+  border-radius: 0.3em;
+  color: white;
+  margin-right: 1.5em;
+  padding: 0.8em 1.1em;
+}
+
+/* The lead line is bold text, not a heading: a div that opens with a heading
+   becomes a nested section, which reveal.js treats as a vertical slide. */
+.reveal .scenario p:first-child {
+  font-size: 1.5em;
+  line-height: 1.25;
+  margin-top: 0;
+}
+
+/* AI levels: headers darken from adoption to native; the first row holds the
+   one-line definitions and the last row the examples. */
+.reveal .ai-levels th {
+  color: white;
+  text-align: center;
+}
+
+.reveal .ai-levels th:nth-child(1) {
+  background: #6d9eeb;
+}
+
+.reveal .ai-levels th:nth-child(2) {
+  background: #4a7fd0;
+}
+
+.reveal .ai-levels th:nth-child(3) {
+  background: var(--course-blue);
+}
+
+.reveal .ai-levels tbody tr:first-child td {
+  background: #e8f0fc;
+  text-align: center;
+}
+
+.reveal .ai-levels tbody tr:last-child td {
+  background: #f4f6f9;
+  color: var(--course-blue);
+}
+
 .reveal #title-slide h1,
 .reveal #title-slide .subtitle,
 .reveal #title-slide .quarto-title-author-name,
