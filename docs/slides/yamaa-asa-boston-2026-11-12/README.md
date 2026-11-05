@@ -1,7 +1,7 @@
 # yamaa-asa-boston-2026-11-12 slides
 
-"Building AI first clinical data workflows with yamaa" -- a short-course
-skeleton for ASA Boston (2026-11-12).
+"AI-First Workflow for CDISC Data Standardization" -- slides for the 2026
+Boston Pharmaceutical Statistics Symposium (2026-11-12).
 
 [View the rendered slides](https://elong0527.github.io/yamaa/slides/yamaa-asa-boston-2026-11-12/index.html)
 
@@ -11,9 +11,10 @@ The HTML is built by the Deploy docs GitHub Action and published with the
 docs site. To preview locally: `quarto render index.qmd` from this folder.
 The output is one self-contained HTML file (`embed-resources: true`).
 
-## Provisional agenda
+## Outline
 
-The proposed three-hour session covers opening and environment checks
-(15 minutes), agent components (20), workflow design (35), a break (10),
-benchmarks (30), study integration (30), deployment (20), and human review
-(20). Timing and exercises remain subject to rehearsal.
+The deck opens with a mental game on building an AI-native biometrics group
+and compares AI adoption, AI-first, and AI-native work. After a short
+preparation step in GitHub Codespaces and OpenCode, it explains AI agents,
+large language models, harnesses, and tool calls, and then states the goal:
+an AI-first workflow for CDISC data standardization.
