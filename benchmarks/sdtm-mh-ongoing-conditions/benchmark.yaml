@@ -2,7 +2,7 @@ lifecycle: draft
 standard: SDTM
 domain: MH
 review:
-  key_points:
+  concerns:
     - Medical history shows which conditions were still active at screening,
       as baseline tables and eligibility checks need.
     - The form collects only the start year and month, an end date, an

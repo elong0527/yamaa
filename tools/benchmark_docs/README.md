@@ -51,9 +51,10 @@ dashboards do: does the use case represent real data derivation in clinical
 trials, and do the inputs and outputs represent real trial data structures, plus
 a free-text box for comments. Failure benchmarks ask whether the specification
 error is realistic and whether the inputs trigger the stated failure. A
-benchmark whose `benchmark.yaml` declares `review.key_points` -- three points,
-each from its own angle of concern -- shows them in a Key points panel above
-the summary and asks a third question, whether the reviewer agrees with each.
+benchmark whose `benchmark.yaml` declares `review.concerns` -- three potential
+concerns from an AI-assisted review, each from its own angle -- asks a third
+question, the AI-assisted review, which lists them under its prompt and asks
+whether the reviewer agrees with how the benchmark handles each.
 Each question takes Agree or Disagree: agreeing with all of them approves the
 benchmark, and a disagreement needs a comment. The review ask suggests spending
 no more than 5 minutes on a review. The questions and their fixed choices are
@@ -61,9 +62,11 @@ declared once in `generate.py`; `review-form.js` reads them back from the page,
 keeps a draft in the browser, and opens GitHub's new-discussion composer in the
 General category with the answers filled in, so the static page holds no
 credentials. A reviewer must be signed in to GitHub to publish a review.
-Skipping opens the composer the same way, with `Skip` as the overall answer, so
-the review page can count how many reviewers skipped each benchmark; a skip
-decides nothing.
+Skipping publishes nothing: the browser keeps the skip, and the reviewer's next
+review names the benchmarks skipped since in a Skipped row (`review-skips.js`,
+which both review scripts start with). At the end of the queue, any skips left
+can be published as a `Review: skipped benchmarks` discussion. The review page
+counts how many reviewers skipped each benchmark; a skip decides nothing.
 
 Submitting or skipping a review moves the page to `review/next/`, the review
 queue `generate.py` writes beside the dashboards. Nobody assigns benchmarks. The
@@ -104,7 +107,7 @@ request that reworks the benchmark closes that issue, GitHub notifies the
 reviewer, and their next review replaces the one that opened the issue, so it
 can approve the benchmark within the round.
 
-The key points, summary, inputs, and expected output carry an "Under review"
+The summary, inputs, and expected output carry an "Under review"
 chip, and every source file has an Edit button for proposing a fix. Under the
 datasets, "Human review and assessment" holds the "Your review" survey in its
 first tab, with a link to earlier benchmark discussions, followed by assessment

@@ -36,14 +36,15 @@ finalized.
 
 1. Sign in to GitHub in your browser.
 2. Select **Start reviewing**.
-3. Read the Key points, where a benchmark has them, then the Summary, Inputs
-   and Expected output.
-4. Answer each question with Agree or Disagree: Task, Inputs, and Key points
-   where shown. If you disagree, say why in the comments.
+3. Read the Summary, Inputs and Expected output.
+4. Answer each question with Agree or Disagree: Task, Inputs, and, where
+   shown, the AI-assisted review of three potential concerns. If you disagree,
+   say why in the comments.
 5. Select **Submit and next**. In the GitHub tab, tick the search box if GitHub
    shows it, select **Start discussion**, then close the tab.
-6. Select **Skip** for any benchmark you cannot judge, and publish the skip
-   the same way, so the status below can count it. Your comments can say why.
+6. Select **Skip** for any benchmark you cannot judge. Your next review lists
+   the benchmarks you skipped, so the status below can count them. At the end
+   of the queue you can publish any skips that are left.
 
 Reviews are public, so use public or invented data only.
 

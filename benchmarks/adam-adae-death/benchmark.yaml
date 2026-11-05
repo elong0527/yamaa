@@ -2,7 +2,7 @@ lifecycle: reviewed
 standard: ADaM
 domain: ADAE
 review:
-  key_points:
+  concerns:
     - Every event of a subject who died carries the death flag, cause and
       date, so safety tables of fatal events read them from ADAE alone.
     - Seven subjects cover one fatal event, two fatal events on different

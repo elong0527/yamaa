@@ -160,20 +160,20 @@ def load_metadata(case):
             f"{label}: Harbor exclusions must state their reason",
         )
     if "review" in metadata:
-        # The dashboard asks reviewers to judge these as their third question.
+        # The dashboard's third question, the AI-assisted review, lists these.
         review = metadata["review"]
-        points = review.get("key_points") if isinstance(review, dict) else None
+        concerns = review.get("concerns") if isinstance(review, dict) else None
         require(
             isinstance(review, dict)
-            and set(review) == {"key_points"}
-            and isinstance(points, list)
-            and len(points) == 3
+            and set(review) == {"concerns"}
+            and isinstance(concerns, list)
+            and len(concerns) == 3
             and all(
-                isinstance(point, str) and point.strip() == point and point
-                for point in points
+                isinstance(concern, str) and concern.strip() == concern and concern
+                for concern in concerns
             )
-            and len(set(points)) == 3,
-            f"{label}: review key_points must be three distinct texts",
+            and len(set(concerns)) == 3,
+            f"{label}: review concerns must be three distinct texts",
         )
     return metadata
 

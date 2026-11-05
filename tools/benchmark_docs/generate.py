@@ -54,7 +54,8 @@ REPOSITORY = "https://github.com/elong0527/yamaa"
 # benchmark, and a disagreement needs a comment.
 REVIEW_URL = REPOSITORY + "/discussions/new?category=general"
 AGREEMENT = ("Agree", "Disagree")
-# A benchmark that declares key points in benchmark.yaml asks a third question.
+# A benchmark that declares review concerns in benchmark.yaml asks a third
+# question, the AI-assisted review.
 QUESTION_COUNTS = {2: ("two", "both", "either"), 3: ("three", "all three", "any")}
 # Submitting or skipping a review leaves for the queue page, which holds the
 # order and sends the reviewer on. It walks these gallery groups, so one dataset
@@ -475,23 +476,33 @@ def review_done_key():
 def render_review_form(name, questions, comment_hint):
     """The survey: one fieldset per question, then a free-text box. The script
     reads the labels, prompts and choices back from these elements to write
-    the discussion body, so each question is declared once."""
+    the discussion body, so each question is declared once. A question about
+    something the page shows elsewhere links to it; the AI-assisted review
+    lists its concerns under its prompt instead."""
     discussions_url = (
         REPOSITORY + "/discussions?discussions_q=" + quote(f'"{name}" in:title')
     )
     next_url = f"{REVIEW_QUEUE_URL}?after={quote(name)}"
+    markdown = MarkdownIt("commonmark", {"html": False})
     fieldsets = []
-    for key, target, label, prompt, choices in questions:
+    for key, target, label, prompt, choices, concerns in questions:
         options = "".join(
             '<label class="review-choice"><input type="radio" '
             f'name="{key}" value="{escape(choice)}"> {escape(choice)}</label>'
             for choice in choices
         )
+        heading = f"<strong>{escape(label)}:</strong>"
+        if target:
+            heading = f'<a href="{escape(target)}">{heading}</a>'
+        listed = "".join(
+            f"<li>{markdown.renderInline(concern)}</li>" for concern in concerns
+        )
         fieldsets.append(
             f'<fieldset class="review-question" data-label="{escape(label)}">'
-            f'<legend><a href="{escape(target)}"><strong>{escape(label)}:</strong></a> '
-            f'<span class="review-prompt">{escape(prompt)}</span></legend>'
-            f'<div class="review-choices">{options}</div></fieldset>'
+            f'<legend>{heading} <span class="review-prompt">{escape(prompt)}</span>'
+            "</legend>"
+            + (f'<ul class="review-concerns">{listed}</ul>' if listed else "")
+            + f'<div class="review-choices">{options}</div></fieldset>'
         )
     return (
         '<div class="material-toolbar"><h3 class="material-title">Your review</h3>'
@@ -515,8 +526,8 @@ def render_review_form(name, questions, comment_hint):
         "filled in and moves this page to the next benchmark. On GitHub, tick "
         "the search box if it appears, then select <strong>Start discussion"
         "</strong> to publish your review under your account. Skip any benchmark "
-        "you cannot judge: skipping opens GitHub the same way, so the review page "
-        "can count skips, and your comments can say why.</p>"
+        "you cannot judge: your next review lists the benchmarks you skipped, so "
+        "the review page can count them.</p>"
         '<div class="review-buttons"><button type="button" class="review-skip">'
         'Skip</button><button type="submit" class="review-submit">'
         "Submit and next</button></div></div>"
@@ -527,26 +538,6 @@ def render_review_form(name, questions, comment_hint):
         "<noscript><p>The review form needs JavaScript. Leave your review in "
         f'<a href="{escape(REPOSITORY)}/discussions">GitHub Discussions</a>.</p>'
         "</noscript>"
-    )
-
-
-def render_key_points(points, edit_url):
-    """The three points of benchmark.yaml that reviewers judge first, each from
-    its own angle of concern, or nothing when the benchmark declares none."""
-    if not points:
-        return ""
-    markdown = MarkdownIt("commonmark", {"html": False})
-    items = "".join(f"<li>{markdown.renderInline(point)}</li>" for point in points)
-    return (
-        '<section id="key-points" class="panel key-points-panel" '
-        'aria-labelledby="key-points-heading">'
-        '<header class="panel-header"><span class="panel-title">'
-        '<h2 id="key-points-heading">Key points</h2>'
-        f'<a class="edit-button" href="{edit_url}">Edit</a>'
-        '<span class="review-chip">Under review</span></span>'
-        '<span class="panel-caption">Three points to judge first</span></header>'
-        '<div class="source-path"><code>benchmark.yaml</code></div>'
-        f'<div class="prose prose-short"><ul>{items}</ul></div></section>'
     )
 
 
@@ -617,6 +608,7 @@ def render_review_queue(entries, saved):
     current = [(name, len(history[-1][0])) for name, history in counted.items()]
     queue = {
         "doneKey": review_done_key(),
+        "reviewUrl": REVIEW_URL,
         "started": [
             name
             for name, count in current
@@ -627,9 +619,18 @@ def render_review_queue(entries, saved):
     template = Template((HERE / "review-queue.html").read_text(encoding="utf-8"))
     result = template.substitute(
         queue=json.dumps(queue),
-        script=(HERE / "review-queue.js").read_text(encoding="utf-8"),
+        script=review_script("review-queue.js"),
     )
     return result.encode("ascii", "xmlcharrefreplace")
+
+
+def review_script(name):
+    """A review page's script after the skip bookkeeping it shares with the
+    other review page, so both read and report skips the same way."""
+    return "".join(
+        (HERE / script).read_text(encoding="utf-8")
+        for script in ("review-skips.js", name)
+    )
 
 
 def render_review_status(entries, saved):
@@ -641,7 +642,8 @@ def render_review_status(entries, saved):
         return "Status is not available in this build."
     names = review_queue(entries)
     counted = review_status.tally(names, saved["reviews"])
-    skipped = review_status.skips(names, saved["reviews"])
+    # Reviews saved before skips were reported carry none.
+    skipped = review_status.skips(names, saved.get("skips", []))
     categories = {name: category for name, _, category in entries}
     columns = review_status.STATUSES
 
@@ -779,11 +781,7 @@ def render_review_page(entries, saved):
     names = review_queue(entries)
     reviews = saved["reviews"] if saved else []
     logins = sorted(
-        {
-            item["reviewer"]
-            for item in reviews
-            if item["benchmark"] in names and item["overall"] in review_status.DECISIONS
-        }
+        {item["reviewer"] for item in reviews if item["benchmark"] in names}
     )
     template = Template(REVIEW_PAGE.read_text(encoding="utf-8"))
     result = template.substitute(
@@ -1256,9 +1254,9 @@ def render_benchmark(benchmark, previous=None, next=None):
             output_caption = "Expected artifacts"
 
     # What reviewers are asked to challenge, the task included: a short survey
-    # on the use case, the data structures and any key points, where agreeing
-    # with every question approves the benchmark. Everything in the tabs beside
-    # Your review is background.
+    # on the use case, the data structures and any concerns an AI-assisted review
+    # raised, where agreeing with every question approves the benchmark.
+    # Everything in the tabs beside Your review is background.
     if is_failure:
         questions = (
             (
@@ -1270,6 +1268,7 @@ def render_benchmark(benchmark, previous=None, next=None):
                     "make, and should the build stop on it rather than continue?"
                 ),
                 AGREEMENT,
+                (),
             ),
             (
                 "inputs",
@@ -1277,6 +1276,7 @@ def render_benchmark(benchmark, previous=None, next=None):
                 "Inputs",
                 "Do the inputs trigger the failure for the reason the summary gives?",
                 AGREEMENT,
+                (),
             ),
         )
     else:
@@ -1290,6 +1290,7 @@ def render_benchmark(benchmark, previous=None, next=None):
                     "data derivation in clinical trials?"
                 ),
                 AGREEMENT,
+                (),
             ),
             (
                 "inputs",
@@ -1300,22 +1301,27 @@ def render_benchmark(benchmark, previous=None, next=None):
                     "data structures collected in clinical trials?"
                 ),
                 AGREEMENT,
+                (),
             ),
         )
-    key_points = metadata.get("review", {}).get("key_points", [])
+    concerns = metadata.get("review", {}).get("concerns", [])
     data_scope = "inputs" if is_failure else "inputs and outputs"
     topics = f"the task and the {data_scope}"
-    if key_points:
+    if concerns:
         questions += (
             (
-                "points",
-                "#key-points",
-                "Key points",
-                "Would you agree with each of the three key points of this benchmark?",
+                "concerns",
+                None,
+                "AI-assisted review",
+                (
+                    "Would you agree with how this benchmark handles each potential "
+                    "concern below?"
+                ),
                 AGREEMENT,
+                tuple(concerns),
             ),
         )
-        topics = f"the task, the {data_scope}, and the key points"
+        topics = f"the task, the {data_scope}, and the AI-assisted review"
     count, every, any_ = QUESTION_COUNTS[len(questions)]
     review_ask = (
         f"<p>As a clinical trial statistician or programmer, answer {count} short "
@@ -1412,14 +1418,13 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_caption=spec_caption,
         spec_code=spec_code,
         review_ask=review_ask,
-        key_points=render_key_points(key_points, edit_base + "/benchmark.yaml"),
         review_form=review_form,
         material_tabs=material_tabs,
         material_panes=material_panes,
         panel_script=(HERE / "panel-tabs.js").read_text(encoding="utf-8"),
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
-        review_script=(HERE / "review-form.js").read_text(encoding="utf-8"),
+        review_script=review_script("review-form.js"),
     )
     # Stable bytes across machines, locales, time zones, and checkout locations.
     # Character references also keep generated pages compatible with repository ASCII lint.

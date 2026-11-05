@@ -240,17 +240,18 @@ Lifecycle, standard and domain belong in `benchmark.yaml`. Dashboards render
 that metadata; README files contain only the data contract. New benchmarks
 start at `draft`, as defined in `README.md`.
 
-An `sdtm` or `adam` benchmark under review may add `review.key_points` to
-`benchmark.yaml`: three distinct sentences that let a reviewer judge it in a
-few minutes, each from its own angle of concern. Write one on the clinical use
-(who needs this result and why), one on the data (what the inputs and outputs
-hold, and which cases they cover), and one on the judgement call a reviewer is
-most likely to question, naming a record that shows it. The dashboard shows
-them above the summary and asks whether the reviewer agrees with each. They
-follow the README's rule of naming effects, not schema constructs.
+An `sdtm` or `adam` benchmark under review may add `review.concerns` to
+`benchmark.yaml`: three distinct potential concerns from an AI-assisted review,
+written so a reviewer can judge them in a few minutes, each from its own angle.
+Write one on the clinical use (who needs this result and why), one on the data
+(what the inputs and outputs hold, and which cases they cover), and one on the
+judgement call a reviewer is most likely to question, naming a record that
+shows it. The dashboard lists them in its third question, the AI-assisted
+review, and asks whether the reviewer agrees with how the benchmark handles
+each. They follow the README's rule of naming effects, not schema constructs.
 
     review:
-      key_points:
+      concerns:
         - Every event of a subject who died carries the death flag, cause and
           date, so safety tables of fatal events read them from ADAE alone.
         - ...

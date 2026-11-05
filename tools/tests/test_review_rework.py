@@ -77,7 +77,7 @@ class ReworkIssue(unittest.TestCase):
     def test_other_discussions_open_no_issue(self):
         cases = (
             ("approval", discussion(overall="Approve")),
-            ("skip", discussion(overall="Skip")),
+            ("skips report", discussion(title="Review: skipped benchmarks")),
             ("unknown benchmark", discussion(title="Review: adam-no-such-benchmark")),
             ("not a review", discussion(title="Question about adam-adae-death")),
             ("deleted account", {**discussion(), "user": None}),
