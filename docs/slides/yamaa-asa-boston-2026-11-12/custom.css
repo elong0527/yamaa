@@ -120,3 +120,15 @@
   margin: 0;
   vertical-align: middle;
 }
+
+/* A prompt typed into an agent, shown as a quoted input box. Long URLs wrap
+   inside the box instead of running past the column. */
+.reveal .slides .column > .prompt {
+  background: #f5f7fa;
+  border-left: 0.18em solid var(--course-blue);
+  border-radius: 0.2em;
+  font-size: 0.8em;
+  margin-right: 1.2em;
+  overflow-wrap: anywhere;
+  padding: 0.6em 0.9em;
+}
