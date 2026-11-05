@@ -64,7 +64,7 @@ report_types <- c(ARTIFACT="str", KIND="str", SPEC_PATH="str", NAME="str", ID="s
   DETAILS="str")
 whole_text <- function(value, kind) {
   # An int is a whole double within 2^53, never negative zero; a temporal
-  # value is a whole count of days or seconds.
+  # value is a whole count of days or seconds, a time's since midnight.
   limit <- if (identical(kind, "int")) 2^53 else Inf
   if (!is.finite(value) || value != trunc(value) || abs(value) > limit || (value == 0 && 1 / value < 0))
     stop("public ", kind, " cell is not an exact whole value: ", format(value, digits=17L))
@@ -81,6 +81,7 @@ public_table <- function(frame, types) {
       int=, float=is.double(column) && is.null(attributes(column)),
       date=identical(class(column), "Date"),
       datetime=identical(class(column), c("POSIXct", "POSIXt")) && identical(attr(column, "tzone"), "UTC"),
+      time=identical(class(column), c("hms", "difftime")) && identical(attr(column, "units"), "secs"),
       stop("unknown declared column type: ", types[[index]]))
     if (!admitted) stop("public column ", names(frame)[[index]], " is not a ", types[[index]], " column: ",
       paste(class(column), collapse=","))
@@ -90,7 +91,8 @@ public_table <- function(frame, types) {
     if (is.na(value)) return(NULL)
     switch(kind, str=hex(charToRaw(enc2utf8(value))), int=whole_text(value, kind),
       float=hex(writeBin(value, raw(), size=8L, endian="big")),
-      date=whole_text(as.double(value), kind), datetime=whole_text(value, kind))
+      date=whole_text(as.double(value), kind), datetime=whole_text(value, kind),
+      time=whole_text(value, kind))
   }
   list(columns=lapply(seq_along(frame), function(index) as.list(c(names(frame)[[index]], types[[index]]))),
     rows=lapply(seq_len(nrow(frame)), function(row) lapply(seq_along(frame), function(column) cell(frame[[column]], row, types[[column]]))))
@@ -177,7 +179,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     engine_version=yamaa:::.core_version(), source_revision=args[[4L]],
     platform=R.version$platform, package_form=Sys.getenv("PUBLIC_CONFORMANCE_PACKAGE_FORM", "installed"),
     evidence=paste0(Sys.getenv("GITHUB_SERVER_URL"), "/", Sys.getenv("GITHUB_REPOSITORY"), "/actions/runs/", Sys.getenv("GITHUB_RUN_ID")),
-    table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds"))
+    table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds,time:day-seconds"))
   observe <- function(spec, built, case) {
     issues <- issue_rows(built$issues)
     output <- built$output

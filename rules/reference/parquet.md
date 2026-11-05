@@ -24,21 +24,22 @@ Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_tab
 | `float` | `DOUBLE` | none |
 | `date` | `INT32` | `Date` |
 | `datetime` | `INT64` | `Timestamp`, microseconds, not adjusted to UTC |
+| `time` | `INT64` | `Time`, microseconds, not adjusted to UTC |
 
 <a id="parquet-2"></a>
 
-### PARQUET-2. A date counts days and a datetime whole-second microseconds from 1970-01-01, with no zone
+### PARQUET-2. A date counts days from 1970-01-01, and a datetime and a time whole-second microseconds from 1970-01-01T00:00:00 and from midnight, with no zone
 
-A `date` is the count of days from 1970-01-01, and a `datetime` is the count
-of microseconds from 1970-01-01T00:00:00 on the same wall clock the value
-names; a source's may count milliseconds or nanoseconds instead
-([PARQUET-9](#parquet-9)). A [Values](../values.md) `datetime` carries no zone
-and no offset, so its Timestamp is not adjusted to UTC, and an implementation
-must not attach a zone when writing or reading. A `datetime` has whole-second
-resolution: it is written with the microsecond unit, and its microsecond part
-is always zero.
+A `date` is the count of days from 1970-01-01, a `datetime` the count of
+microseconds from 1970-01-01T00:00:00 on the wall clock the value names, and a
+`time` the count of microseconds from midnight; a source's may count
+milliseconds or nanoseconds instead ([PARQUET-9](#parquet-9)). Neither a
+`datetime` nor a `time` carries a zone, so neither is adjusted to UTC, and an
+implementation must not attach a zone when writing or reading. Both have
+whole-second resolution: each is written in microseconds, with no fraction of
+a second.
 
-Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
+Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::a_time_saves_as_a_zone_free_count_of_microseconds_since_midnight`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
 
 The same wall clock survives a write and a read. Shifting a value into or out
 of a machine timezone changes the value.
@@ -125,19 +126,19 @@ closed mapping of [PARQUET-7](#parquet-7).
 
 <a id="parquet-7"></a>
 
-### PARQUET-7. The embedded Parquet type supplies the field type through a closed mapping that inverts the write mapping and admits signed integers, single-precision floats and other timestamp units
+### PARQUET-7. The embedded Parquet type supplies the field type through a closed mapping that inverts the write mapping and admits signed integers, single-precision floats and other timestamp and time units
 
 The embedded Parquet type supplies the [Inputs](../inputs.md) field type
 through the closed mapping below: the inverse of [PARQUET-1](#parquet-1); an
 `INT32` or `INT64` field, unannotated or annotated as a signed integer whose
 width fits its physical type, which reads as `int`; a `FLOAT` field, as
-`float`; and a timestamp in milliseconds or nanoseconds, as `datetime`. The
-mapping is exact: a different physical type, logical type, integer sign or
-timezone is not converted or inferred, and fails. A timestamp adjusted to UTC
-and a `BOOLEAN` field fall outside it.
+`float`; and a millisecond or nanosecond timestamp or time, as `datetime` or
+`time`. The mapping is exact: a different physical type, logical
+type, integer sign or timezone is not converted or inferred, and fails. A
+value adjusted to UTC and a `BOOLEAN` field fall outside it.
 
 Fails: `source_field_type_unsupported`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::signed_integer_annotations_read_as_int_and_declare_their_width`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::signed_integer_fields_that_fit_their_physical_type_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/src/parquet_source/metadata.rs::a_null_fixed_size_list_row_has_no_size_and_another_size_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::the_pyarrow_int32_fixture_reads_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::duckdb_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unannotated_int32_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::logical_signed_integer_annotations_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsigned_annotations_stay_refused`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::a_stored_value_outside_its_declared_width_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::an_integer_annotation_its_physical_type_cannot_carry_is_invalid`, `python/tests/installed/installed_original_specifications.py::test_parquet_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::a_column_row_admits_its_annotations_and_layouts_alone`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::millisecond_and_nanosecond_timestamps_read_as_the_whole_seconds_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::single_precision_floats_widen_exactly_and_nonfinite_ones_are_missing`, `python/tests/installed/installed_parquet_writer_defaults.py::test_the_types_pyarrow_writes_by_default_read_and_save`, `schema-source-parquet-defaults`, `negative-source-boolean-field`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::signed_integer_annotations_read_as_int_and_declare_their_width`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::signed_integer_fields_that_fit_their_physical_type_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/src/parquet_source/metadata.rs::a_null_fixed_size_list_row_has_no_size_and_another_size_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::the_pyarrow_int32_fixture_reads_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::duckdb_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unannotated_int32_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::logical_signed_integer_annotations_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsigned_annotations_stay_refused`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::a_stored_value_outside_its_declared_width_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::an_integer_annotation_its_physical_type_cannot_carry_is_invalid`, `python/tests/installed/installed_original_specifications.py::test_parquet_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::a_column_row_admits_its_annotations_and_layouts_alone`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::millisecond_and_nanosecond_timestamps_read_as_the_whole_seconds_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::times_of_each_unit_read_as_the_whole_seconds_since_midnight_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::single_precision_floats_widen_exactly_and_nonfinite_ones_are_missing`, `python/tests/installed/installed_parquet_writer_defaults.py::test_the_types_pyarrow_writes_by_default_read_and_save`, `schema-source-parquet-defaults`, `negative-source-boolean-field`.
 
 | Parquet type | Column type |
 |---|---|
@@ -152,6 +153,9 @@ Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_sou
 | `INT64` annotated `Timestamp`, microseconds, no UTC adjustment | `datetime` |
 | `INT64` annotated `Timestamp`, milliseconds, no UTC adjustment | `datetime` |
 | `INT64` annotated `Timestamp`, nanoseconds, no UTC adjustment | `datetime` |
+| `INT64` annotated `Time`, microseconds, no UTC adjustment | `time` |
+| `INT32` annotated `Time`, milliseconds, no UTC adjustment | `time` |
+| `INT64` annotated `Time`, nanoseconds, no UTC adjustment | `time` |
 
 Nullable and non-nullable fields are both admitted; nullability states
 whether this particular file can store a missing value and does not change
@@ -183,7 +187,12 @@ that the file does not state. A `BOOLEAN` field falls outside it too: no
 column type holds a true-or-false value, and reading one as text or as a
 number would choose a spelling that the file does not state. A legacy
 `TIMESTAMP_MILLIS` or `TIMESTAMP_MICROS` converted type on a field without a
-logical type is adjusted to UTC, and falls outside the mapping with them.
+logical type is adjusted to UTC, and falls outside the mapping with them. A
+time reads the same way: its count of milliseconds, microseconds or
+nanoseconds from midnight reads as the time of that count when the count is a
+whole second within the day, and a time adjusted to UTC, or a legacy
+`TIME_MILLIS` or `TIME_MICROS` converted type on a field without a logical
+type, falls outside the mapping.
 
 The file's embedded Arrow schema can name one physical/logical pair in several
 Arrow layouts, and the layout does not change the column type. A `BYTE_ARRAY`
@@ -211,17 +220,19 @@ Evidence: `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::independent
 
 <a id="parquet-9"></a>
 
-### PARQUET-9. A stored date or timestamp names an in-range civil value on a whole second
+### PARQUET-9. A stored date, timestamp or time names an in-range civil value on a whole second
 
 A `Date` count must name a date from `0001-01-01` through `9999-12-31`. A
 `Timestamp` count, in its annotation's unit, must name a zone-free local
-datetime in the same calendar range and must be an exact whole second. The
-unit may be milliseconds, microseconds or nanoseconds; no timezone shift,
+datetime in the same calendar range and must be an exact whole second. A
+`Time` count, in its annotation's unit, must be an exact whole second from
+`00:00:00` through `23:59:59`. The unit may be milliseconds, microseconds or
+nanoseconds; no timezone shift,
 truncation or rounding is permitted. A temporal value outside this contract
 fails.
 
 Fails: `source_field_value_invalid`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::temporal_edges_are_integral_and_never_rounded_into_range`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::millisecond_and_nanosecond_timestamps_read_as_the_whole_seconds_they_count`, `schema-source-parquet-defaults`, `negative-source-fractional-second`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::temporal_edges_are_integral_and_never_rounded_into_range`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::millisecond_and_nanosecond_timestamps_read_as_the_whole_seconds_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::times_of_each_unit_read_as_the_whole_seconds_since_midnight_they_count`, `schema-source-parquet-defaults`, `negative-source-fractional-second`.
 
 The failure reports the field as `field`, the record as `record`, counted
 from one, and the stored integer value as `value`, in the field's own unit: a

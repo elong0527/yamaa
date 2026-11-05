@@ -25,6 +25,7 @@ where
         ValueRef::DateTime(d) => {
             json!({"datetime":{"text":d.to_string(),"precision":d.collected_precision().word()}})
         }
+        ValueRef::Time(t) => json!({"time":t.to_string()}),
     };
     let width = table.schema().columns().len();
     Value::Array(

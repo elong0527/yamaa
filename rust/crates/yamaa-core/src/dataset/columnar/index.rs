@@ -455,6 +455,13 @@ fn encode(key: &mut Vec<u8>, value: ValueRef<'_>, equality: Equality) {
             key.push(minute);
             key.push(second);
         }
+        Key::Time(value) => {
+            let (hour, minute, second) = value.fields();
+            key.push(7);
+            key.push(hour);
+            key.push(minute);
+            key.push(second);
+        }
     }
 }
 

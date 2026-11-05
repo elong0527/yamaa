@@ -69,6 +69,7 @@ fn plain(value: &Scalar) -> Value {
         Scalar::Bool(v) => json!(v),
         Scalar::Date(v) => json!(v.to_string()),
         Scalar::DateTime(v) => json!(v.to_string()),
+        Scalar::Time(v) => json!(v.to_string()),
     }
 }
 fn fields(values: &[(String, Scalar)]) -> Map<String, Value> {

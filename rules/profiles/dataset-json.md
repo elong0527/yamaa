@@ -263,14 +263,14 @@ change this metadata.
 
 <a id="json-10"></a>
 
-### JSON-10. `dataType` maps the resolved submission data type through a closed table, and an ADaM date targets an integer
+### JSON-10. `dataType` maps the resolved submission data type through a closed table, and an ADaM date, datetime or time targets an integer
 
 `dataType` maps the resolved submission data type of
 [Submission metadata](submission.md) through the closed table below; the eight
 collapsed types are carried as text and keep their submission type in the
-`ItemDef`. Under `adam`, a `date` or `datetime` the document describes as
-`integer` ([SUB-25](submission.md#sub-25)) keeps its ISO value with `dataType`
-`date` or `datetime` and `targetDataType` `integer`. No other column carries
+`ItemDef`. Under `adam`, a `date`, `datetime` or `time` the document
+describes as `integer` ([SUB-25](submission.md#sub-25)) keeps its ISO value
+with `dataType` `date`, `datetime` or `time` and `targetDataType` `integer`. No other column carries
 `targetDataType`, and `boolean`, `decimal` and `double` are never written.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::adam_dataset_json_targets_the_integer_its_document_submits`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
@@ -289,8 +289,9 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diag
 | `durationDatetime`, `intervalDatetime` | `string` |
 
 `targetDataType` asks the receiving system to convert the ISO value into the
-SAS date or datetime the document describes, and the column's `length` and
-`displayFormat` are that `ItemDef`'s `8` and `DATE9.` or `DATETIME20.`. The
+SAS date, datetime or time the document describes, and the column's `length`
+and `displayFormat` are that `ItemDef`'s `8` and `DATE9.`, `DATETIME20.` or
+`TIME8.`. The
 table is not a second type system: Dataset-JSON's set is smaller than
 Define-XML's. A reader that needs the finer type reads the document. `float` is
 written for a `float` column even though the value of [Values](../values.md) is
@@ -319,6 +320,7 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/src/submission_json.rs
 | `float` | a JSON number, [Values](../values.md)'s float text |
 | `date` | a JSON string, [Values](../values.md)'s canonical `date` text |
 | `datetime` | a JSON string, [Values](../values.md)'s canonical `datetime` text |
+| `time` | a JSON string, [Values](../values.md)'s canonical `time` text |
 
 The epoch counts of the [Parquet profile](../reference/parquet.md) are a
 property of that container and are not a second spelling here. A `parquet`
@@ -442,7 +444,7 @@ the `dataset_json` or `dataset_ndjson` source profile its extension selects
 [DSJSON-1](../reference/dataset-json.md#dsjson-1)). It reads back as its
 published table: the same fields in the same order, with the same types and
 values, under `empty_string: present`. A `str` column the document submits as
-`date` or `datetime` reads as that type unless the input declares it `str`
+`date`, `datetime` or `time` reads as that type unless the input declares it `str`
 ([DSJSON-2](../reference/dataset-json.md#dsjson-2)).
 
 Evidence: `rust/crates/yamaa-adapters/tests/table_dataset_json_source.rs::the_writers_output_for_a_published_table_reads_back_as_that_table`, `rust/crates/yamaa-adapters/tests/table_dataset_json_source.rs::a_written_empty_string_and_a_text_date_read_back_under_the_input_s_declarations`, `rust/crates/yamaa-adapters/tests/table_dataset_json_source.rs::every_dataset_json_golden_reads_back_as_its_published_rows`.

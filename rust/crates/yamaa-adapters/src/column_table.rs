@@ -8,12 +8,12 @@
 //! precision. Tables share columns, so a projection, an added field or a new
 //! validity copies no other column.
 use crate::columns::{Text, Values};
-use crate::epoch::{date_from_days, datetime_from_seconds};
+use crate::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
 use std::{convert::Infallible, sync::Arc};
 use yamaa_core::{
     limits::Limits,
     table::{CellError, ColumnRef, ColumnValues, TableAccess, TableSchema, ValueRef},
-    temporal::{Date, DateTime, Precision},
+    temporal::{Date, DateTime, Precision, Time},
     value::{ColumnType, FiniteFloat},
 };
 
@@ -80,6 +80,7 @@ pub enum Column {
     Float(Values<f64>),
     Date(Vec<Option<Date>>),
     DateTime(Vec<Option<DateTime>>),
+    Time(Vec<Option<Time>>),
 }
 
 impl Column {
@@ -91,6 +92,7 @@ impl Column {
             ColumnType::Float => Self::Float(Values::default()),
             ColumnType::Date => Self::Date(Vec::new()),
             ColumnType::DateTime => Self::DateTime(Vec::new()),
+            ColumnType::Time => Self::Time(Vec::new()),
         }
     }
 
@@ -111,6 +113,7 @@ impl Column {
             Self::Float(_) => ColumnType::Float,
             Self::Date(_) => ColumnType::Date,
             Self::DateTime(_) => ColumnType::DateTime,
+            Self::Time(_) => ColumnType::Time,
         }
     }
 
@@ -122,6 +125,7 @@ impl Column {
             Self::Float(values) => values.len(),
             Self::Date(values) => values.len(),
             Self::DateTime(values) => values.len(),
+            Self::Time(values) => values.len(),
         }
     }
 
@@ -153,6 +157,10 @@ impl Column {
                 ValueRef::DateTime(value) => Some(value),
                 _ => None,
             }),
+            Self::Time(values) => values.push(match value {
+                ValueRef::Time(value) => Some(value),
+                _ => None,
+            }),
         }
     }
 
@@ -165,6 +173,7 @@ impl Column {
                 .map(|value| ValueRef::Float(FiniteFloat::new(value).expect("admitted finite"))),
             Self::Date(values) => values[row].map(ValueRef::Date),
             Self::DateTime(values) => values[row].map(ValueRef::DateTime),
+            Self::Time(values) => values[row].map(ValueRef::Time),
         };
         value.unwrap_or(ValueRef::Missing)
     }
@@ -177,6 +186,7 @@ impl Column {
             Self::Float(values) => Self::Float(values.slice(range)),
             Self::Date(values) => Self::Date(values[range].to_vec()),
             Self::DateTime(values) => Self::DateTime(values[range].to_vec()),
+            Self::Time(values) => Self::Time(values[range].to_vec()),
         }
     }
 
@@ -200,6 +210,7 @@ impl Column {
             ),
             Self::Date(values) => (ColumnValues::Date(values), None),
             Self::DateTime(values) => (ColumnValues::DateTime(values), None),
+            Self::Time(values) => (ColumnValues::Time(values), None),
         };
         ColumnRef::new(values, validity)
     }
@@ -323,6 +334,11 @@ impl ColumnTable {
                     PublicColumn::DateTime(seconds) => {
                         Column::DateTime(located(seconds, table.chunks(), index, |seconds| {
                             datetime_from_seconds(seconds, Precision::Second)
+                        })?)
+                    }
+                    PublicColumn::Time(seconds) => {
+                        Column::Time(located(seconds, table.chunks(), index, |seconds| {
+                            time_from_seconds(i64::from(seconds))
                         })?)
                     }
                     PublicColumn::List(_) => unreachable!("a list column is refused above"),
@@ -457,6 +473,7 @@ impl Column {
             (Self::Float(into), Self::Float(from)) => into.extend_from(from, range),
             (Self::Date(into), Self::Date(from)) => into.extend_from_slice(&from[range]),
             (Self::DateTime(into), Self::DateTime(from)) => into.extend_from_slice(&from[range]),
+            (Self::Time(into), Self::Time(from)) => into.extend_from_slice(&from[range]),
             _ => unreachable!("the columns of one schema have one type"),
         }
     }

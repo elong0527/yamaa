@@ -15,18 +15,20 @@
 //! The seam is the encoder's saved file read by an independent reader; the
 //! benchmark reader and the host fixtures read Parquet through the engine's
 //! own reader.
+use arrow_array::{
+    Array, Date32Array, Float64Array, Int64Array, StringArray, Time64MicrosecondArray,
+    TimestampMicrosecondArray,
+};
 use bytes::Bytes;
 use parquet::{
+    arrow::arrow_reader::ParquetRecordBatchReaderBuilder,
     basic::{Compression, Encoding, PageType},
-    file::{
-        metadata::ParquetMetaData, reader::FileReader, serialized_reader::SerializedFileReader,
-    },
-    record::Field,
+    file::metadata::ParquetMetaData,
 };
 use std::{convert::Infallible, num::NonZeroUsize, ops::Range};
 use yamaa_adapters::{
     column_table::ColumnTable,
-    epoch::{date_from_days, datetime_from_seconds},
+    epoch::{date_from_days, datetime_from_seconds, time_from_seconds},
     parquet_artifact::{render, render_partitions},
 };
 use yamaa_core::{
@@ -36,7 +38,8 @@ use yamaa_core::{
 };
 
 /// One authored cell as a reader sees it: a date in days and a datetime in
-/// microseconds from 1970-01-01, and a float as its bits.
+/// microseconds from 1970-01-01, a time in microseconds from midnight, and a
+/// float as its bits.
 #[derive(Clone, Debug, PartialEq)]
 enum Cell {
     Missing,
@@ -45,6 +48,7 @@ enum Cell {
     Float(u64),
     Date(i32),
     DateTime(i64),
+    Time(i64),
 }
 
 impl Cell {
@@ -65,19 +69,36 @@ impl Cell {
             Cell::DateTime(micros) => Value::DateTime(
                 datetime_from_seconds(micros / 1_000_000, Precision::Second).unwrap(),
             ),
+            Cell::Time(micros) => Value::Time(time_from_seconds(micros / 1_000_000).unwrap()),
         }
     }
 
-    /// The cell a read field holds.
-    fn read(field: &Field) -> Self {
-        match field {
-            Field::Null => Cell::Missing,
-            Field::Str(value) => Cell::Str(value.clone()),
-            Field::Long(value) => Cell::Int(*value),
-            Field::Double(value) => Cell::float(*value),
-            Field::Date(days) => Cell::Date(*days),
-            Field::TimestampMicros(micros) => Cell::DateTime(*micros),
-            other => panic!("a field of no saved type: {other:?}"),
+    /// The cell row `row` of a read array holds, by the array's type.
+    fn read(array: &dyn Array, row: usize) -> Self {
+        fn at<T: 'static>(array: &dyn Array) -> &T {
+            array
+                .as_any()
+                .downcast_ref()
+                .expect("the array of its type")
+        }
+        if array.is_null(row) {
+            return Cell::Missing;
+        }
+        let any = array.as_any();
+        if any.is::<StringArray>() {
+            Cell::Str(at::<StringArray>(array).value(row).to_owned())
+        } else if any.is::<Int64Array>() {
+            Cell::Int(at::<Int64Array>(array).value(row))
+        } else if any.is::<Float64Array>() {
+            Cell::float(at::<Float64Array>(array).value(row))
+        } else if any.is::<Date32Array>() {
+            Cell::Date(at::<Date32Array>(array).value(row))
+        } else if any.is::<TimestampMicrosecondArray>() {
+            Cell::DateTime(at::<TimestampMicrosecondArray>(array).value(row))
+        } else if any.is::<Time64MicrosecondArray>() {
+            Cell::Time(at::<Time64MicrosecondArray>(array).value(row))
+        } else {
+            panic!("an array of no saved type: {}", array.data_type())
         }
     }
 }
@@ -132,38 +153,42 @@ const FOUR: NonZeroUsize = match NonZeroUsize::new(4) {
     None => unreachable!(),
 };
 
-/// The five column types that PARQUET-1 maps, in its order.
-const COLUMNS: [(&str, ColumnType); 5] = [
+/// The six column types that PARQUET-1 maps, in its order.
+const COLUMNS: [(&str, ColumnType); 6] = [
     ("str", ColumnType::Str),
     ("int", ColumnType::Int),
     ("float", ColumnType::Float),
     ("date", ColumnType::Date),
     ("datetime", ColumnType::DateTime),
+    ("time", ColumnType::Time),
 ];
 
 /// The field names and rows that a saved file reads back as, and its
 /// metadata.
 fn read_back(saved: Vec<u8>) -> (Vec<String>, Vec<Vec<Cell>>, ParquetMetaData) {
-    let reader = SerializedFileReader::new(Bytes::from(saved)).unwrap();
-    let names = reader
-        .metadata()
+    let builder = ParquetRecordBatchReaderBuilder::try_new(Bytes::from(saved)).unwrap();
+    let metadata = builder.metadata().as_ref().clone();
+    let names = metadata
         .file_metadata()
         .schema_descr()
         .columns()
         .iter()
         .map(|column| column.name().to_owned())
         .collect();
-    let rows = reader
-        .get_row_iter(None)
-        .unwrap()
-        .map(|row| {
-            row.unwrap()
-                .get_column_iter()
-                .map(|(_, field)| Cell::read(field))
-                .collect()
-        })
-        .collect();
-    (names, rows, reader.metadata().clone())
+    let mut rows = Vec::new();
+    for batch in builder.build().unwrap() {
+        let batch = batch.unwrap();
+        for row in 0..batch.num_rows() {
+            rows.push(
+                batch
+                    .columns()
+                    .iter()
+                    .map(|array| Cell::read(array.as_ref(), row))
+                    .collect(),
+            );
+        }
+    }
+    (names, rows, metadata)
 }
 
 /// Consecutive ranges of `size` rows over `rows`, the last holding the rest;
@@ -196,6 +221,7 @@ fn edges() -> Vec<Vec<Cell>> {
                 unless(13, 2, Cell::float(n as f64 * 0.125)),
                 unless(5, 3, Cell::Date((n * 97) as i32)),
                 unless(17, 4, Cell::DateTime(n * 3_196_861 * 1_000_000)),
+                unless(19, 5, Cell::Time((n * 997).rem_euclid(86_400) * 1_000_000)),
             ]
         })
         .collect::<Vec<_>>();
@@ -206,6 +232,7 @@ fn edges() -> Vec<Vec<Cell>> {
             Cell::float(-0.0),
             Cell::Date(-719_162),
             Cell::DateTime(-62_135_596_800 * 1_000_000),
+            Cell::Time(0),
         ],
         vec![
             Cell::Str("a\u{e9}\u{65e5}\u{1f600}".into()),
@@ -213,14 +240,16 @@ fn edges() -> Vec<Vec<Cell>> {
             Cell::float(f64::MAX),
             Cell::Date(2_932_896),
             Cell::DateTime(253_402_300_799 * 1_000_000),
+            Cell::Time(86_399 * 1_000_000),
         ],
-        vec![Cell::Missing; 5],
+        vec![Cell::Missing; 6],
         vec![
             Cell::Str("\0\t\n\"\\".into()),
             Cell::Int(0),
             Cell::Float(1),
             Cell::Date(0),
             Cell::DateTime(0),
+            Cell::Time(1_000_000),
         ],
         vec![
             Cell::Str(" ".into()),
@@ -228,6 +257,7 @@ fn edges() -> Vec<Vec<Cell>> {
             Cell::float(f64::MIN),
             Cell::Date(-1),
             Cell::DateTime(-1_000_000),
+            Cell::Time(86_398 * 1_000_000),
         ],
         vec![
             Cell::Str("x".repeat(300)),
@@ -235,6 +265,7 @@ fn edges() -> Vec<Vec<Cell>> {
             Cell::float(0.1),
             Cell::Date(11_016),
             Cell::DateTime(951_782_400 * 1_000_000),
+            Cell::Time(43_200 * 1_000_000),
         ],
     ]);
     rows
@@ -286,6 +317,7 @@ fn present(kind: ColumnType, row: usize) -> Cell {
         ColumnType::Float => Cell::float(n as f64 * 0.25),
         ColumnType::Date => Cell::Date((n * 31) as i32),
         ColumnType::DateTime => Cell::DateTime(n * 4_093 * 1_000_000),
+        ColumnType::Time => Cell::Time((n * 61).rem_euclid(86_400) * 1_000_000),
     }
 }
 
@@ -300,7 +332,7 @@ fn every_table_reads_back_as_authored_whole_and_a_partition_at_a_time() {
     for rows in [
         0, 1, 7, 8, 9, 15, 17, 503, 504, 505, 512, 1_023, 1_024, 1_025, 2_051,
     ] {
-        for patterns in (0..29).collect::<Vec<_>>().chunks(5) {
+        for patterns in (0..29).collect::<Vec<_>>().chunks(6) {
             let mut state = 0x9e37_79b9_7f4a_7c15 ^ rows as u64;
             let columns = &COLUMNS[..patterns.len()];
             let cells = (0..rows)
@@ -383,6 +415,7 @@ fn a_table_past_one_row_group_reads_back_in_order_from_two_row_groups() {
                 },
                 Cell::Date((n % 400) as i32),
                 Cell::DateTime(n * 60 * 1_000_000),
+                Cell::Time(n % 86_400 * 1_000_000),
             ]
         })
         .collect();

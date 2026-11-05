@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use super::{CompileError, Failure, Reducer, Resource};
 use crate::limits::Limits;
 use crate::numeric::{BinaryOperator, UnaryOperator};
-use crate::temporal::{Date, DateTime};
+use crate::temporal::{Date, DateTime, Time};
 
 /// Half-open UTF-8 byte offsets into the original expression.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,6 +30,27 @@ pub struct SourcePosition {
 pub enum TemporalKind {
     Date,
     DateTime,
+    Time,
+}
+
+impl TemporalKind {
+    /// The literal's type, as its column type is spelled.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Date => "date",
+            Self::DateTime => "datetime",
+            Self::Time => "time",
+        }
+    }
+
+    /// The type of the value the literal writes.
+    pub fn value_type(self) -> crate::value::ValueType {
+        match self {
+            Self::Date => crate::value::ValueType::Date,
+            Self::DateTime => crate::value::ValueType::DateTime,
+            Self::Time => crate::value::ValueType::Time,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -822,6 +843,8 @@ impl<'a> Parser<'a> {
             Some(TemporalKind::Date)
         } else if spelling.eq_ignore_ascii_case("DATETIME") {
             Some(TemporalKind::DateTime)
+        } else if spelling.eq_ignore_ascii_case("TIME") {
+            Some(TemporalKind::Time)
         } else {
             None
         };
@@ -832,6 +855,7 @@ impl<'a> Parser<'a> {
             let parsed = match kind {
                 TemporalKind::Date => value.parse::<Date>().map(|_| ()),
                 TemporalKind::DateTime => value.parse::<DateTime>().map(|_| ()),
+                TemporalKind::Time => value.parse::<Time>().map(|_| ()),
             };
             parsed.map_err(|error| {
                 invalid(
@@ -841,6 +865,7 @@ impl<'a> Parser<'a> {
                     match kind {
                         TemporalKind::Date => "invalid date literal",
                         TemporalKind::DateTime => "invalid datetime literal",
+                        TemporalKind::Time => "invalid time literal",
                     },
                 )
             })?;

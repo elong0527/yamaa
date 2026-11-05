@@ -247,7 +247,8 @@
         "int",
         "float",
         "date",
-        "datetime"
+        "datetime",
+        "time"
       ]
     },
     "column_verification": {
@@ -2626,6 +2627,18 @@
             "source": {
               "$ref": "#/$defs/variable",
               "description": "Datetime whose time of day is returned as whole seconds since midnight (TIME-20).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            }
+          },
+          "additionalProperties": false
+        },
+        "to_time": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Datetime whose time of day is returned as a time (TIME-23).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             }
@@ -5093,6 +5106,21 @@
             "source": {
               "$ref": "#/$defs/variable",
               "description": "Datetime whose time of day is returned as whole seconds since midnight (TIME-20).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "to_time": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Datetime whose time of day is returned as a time (TIME-23).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             }

@@ -98,6 +98,7 @@ Evidence: `adam-adlb-bds`, `rust/crates/yamaa-application/tests/table_arrow_tabl
 | `float` | [Values](../values.md)'s float text, or the fixed-point form of [CSV-7](#csv-7) |
 | `date` | [Values](../values.md)'s canonical `date` text |
 | `datetime` | [Values](../values.md)'s canonical `datetime` text |
+| `time` | [Values](../values.md)'s canonical `time` text |
 
 ## Display precision
 

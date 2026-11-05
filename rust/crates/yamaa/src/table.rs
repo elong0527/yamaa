@@ -29,7 +29,7 @@ pub use arrow_array::ffi_stream::FFI_ArrowArrayStream;
 #[cfg(feature = "arrow")]
 pub use arrow_array::{
     Array, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray, RecordBatch,
-    StringArray, StringViewArray, TimestampSecondArray,
+    StringArray, StringViewArray, Time32SecondArray, TimestampSecondArray,
 };
 #[cfg(feature = "arrow")]
 pub use arrow_schema::{DataType, Field, Fields, SchemaRef, TimeUnit};

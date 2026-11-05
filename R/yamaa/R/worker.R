@@ -32,7 +32,8 @@
 }
 
 # The plain R value of one argument, as the in-process port gives it: NA for
-# missing, doubles for numbers, a Date, and a POSIXct in UTC.
+# missing, doubles for numbers, a Date, a POSIXct in UTC, and an hms of
+# seconds since midnight.
 .worker_decode_value <- function(field) {
   if (identical(field, "-")) return(NA)
   kind <- substr(field, 1L, 1L)
@@ -48,6 +49,10 @@
     b = identical(text, "true"),
     d = as.Date(text, format = "%Y-%m-%d"),
     t = as.POSIXct(text, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"),
+    h = {
+      parts <- as.numeric(strsplit(text, ":", fixed = TRUE)[[1L]])
+      structure(sum(parts * c(3600, 60, 1)), units = "secs", class = c("hms", "difftime"))
+    },
     stop(sprintf("the protocol spells no value %s", field), call. = FALSE))
 }
 
@@ -99,6 +104,14 @@
       seconds <- unclass(value)
       if (!is.finite(seconds) || seconds != trunc(seconds)) reject("a POSIXct of whole seconds")
       paste0("t:", format(value, "%Y-%m-%dT%H:%M:%S", tz = "UTC"))
+    },
+    time = {
+      if (!identical(class(value), c("hms", "difftime")) || length(value) != 1L ||
+          !identical(attr(value, "units"), "secs")) reject("one hms of seconds")
+      seconds <- as.numeric(unclass(value))
+      if (!is.finite(seconds) || seconds != trunc(seconds)) reject("a whole number of seconds")
+      if (seconds < 0 || seconds >= 86400) reject("a time within one day")
+      sprintf("h:%02d:%02d:%02d", seconds %/% 3600, seconds %/% 60 %% 60, seconds %% 60)
     },
     reject("a value of a declared type"))
 }

@@ -51,6 +51,8 @@ pub enum TemporalKind {
     },
     /// `time_of_day`: a datetime's whole seconds since midnight.
     TimeOfDay,
+    /// `to_time`: a datetime's time of day.
+    ToTime,
 }
 /// The parts `dtc` assembles, coarsest first.
 pub static DATE_PARTS: [&str; 6] = ["year", "month", "day", "hour", "minute", "second"];
@@ -252,14 +254,10 @@ impl Temporal {
             ValueRef::Missing => Ok(None),
             ValueRef::Date(value) => Ok(Some(value)),
             other => {
-                let actual = match other {
-                    ValueRef::Str(_) => "str",
-                    ValueRef::Int(_) => "int",
-                    ValueRef::Float(_) => "float",
-                    ValueRef::Bool(_) => "bool",
-                    ValueRef::DateTime(_) => "datetime",
-                    _ => unreachable!("dates and missing handled above"),
-                };
+                let actual = other
+                    .value_type()
+                    .map(crate::value::ValueType::name)
+                    .expect("dates and missing handled above");
                 Err(Self::input_diagnostic(
                     source,
                     &self.operand_path(index).expect("admitted operand index"),
@@ -304,7 +302,8 @@ impl TemporalKind {
             Self::EpochDay
             | Self::DurationValue { .. }
             | Self::DurationText { .. }
-            | Self::TimeOfDay => &["source"],
+            | Self::TimeOfDay
+            | Self::ToTime => &["source"],
             Self::DateText { depth } => &DATE_PARTS[..usize::from(depth)],
         }
     }

@@ -122,8 +122,8 @@ pub use stream::{Batches, RunGuard, StreamProgress, Streamed};
 #[cfg(feature = "arrow")]
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, Int64Array,
-    LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray, TimeUnit,
-    TimestampSecondArray,
+    LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,
+    Time32SecondArray, TimeUnit, TimestampSecondArray,
 };
 pub use table::{InputFrame, Table};
 pub use text::Summary;

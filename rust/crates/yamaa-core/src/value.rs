@@ -2,7 +2,7 @@
 
 use std::cmp::Ordering;
 
-use crate::temporal::{Date, DateTime};
+use crate::temporal::{Date, DateTime, Time};
 
 /// A float which cannot carry NaN or infinity into a consumer (VALUE-4).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,9 +28,26 @@ pub enum ValueType {
     Bool,
     Date,
     DateTime,
+    Time,
 }
 
 impl ValueType {
+    /// Every runtime type, in the order VALUE-1 lists the column types.
+    pub const ALL: [Self; 7] = [
+        Self::Str,
+        Self::Int,
+        Self::Float,
+        Self::Date,
+        Self::DateTime,
+        Self::Time,
+        Self::Bool,
+    ];
+
+    /// The type a spelling names, or None for a spelling outside the language.
+    pub fn from_name(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == text)
+    }
+
     /// The type's spelling in specifications and diagnostic context.
     pub fn name(self) -> &'static str {
         match self {
@@ -40,6 +57,7 @@ impl ValueType {
             Self::Bool => "bool",
             Self::Date => "date",
             Self::DateTime => "datetime",
+            Self::Time => "time",
         }
     }
 }
@@ -52,12 +70,29 @@ pub enum ColumnType {
     Float,
     Date,
     DateTime,
+    Time,
 }
 
 impl ColumnType {
+    /// Every column type, in the order VALUE-1 lists them.
+    pub const ALL: [Self; 6] = [
+        Self::Str,
+        Self::Int,
+        Self::Float,
+        Self::Date,
+        Self::DateTime,
+        Self::Time,
+    ];
+
     /// The type's spelling in specifications and diagnostic context.
     pub fn name(self) -> &'static str {
         ValueType::from(self).name()
+    }
+
+    /// The column type a spelling names, or None for a spelling outside
+    /// VALUE-1's vocabulary.
+    pub fn from_name(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == text)
     }
 }
 impl From<ColumnType> for ValueType {
@@ -68,6 +103,7 @@ impl From<ColumnType> for ValueType {
             ColumnType::Float => Self::Float,
             ColumnType::Date => Self::Date,
             ColumnType::DateTime => Self::DateTime,
+            ColumnType::Time => Self::Time,
         }
     }
 }
@@ -85,6 +121,7 @@ pub enum Value {
     Bool(bool),
     Date(Date),
     DateTime(DateTime),
+    Time(Time),
 }
 
 impl Value {
@@ -103,6 +140,7 @@ impl Value {
             Self::Bool(_) => Some(ValueType::Bool),
             Self::Date(_) => Some(ValueType::Date),
             Self::DateTime(_) => Some(ValueType::DateTime),
+            Self::Time(_) => Some(ValueType::Time),
         }
     }
 }
@@ -183,7 +221,11 @@ pub(crate) fn comparable_types(left: ValueType, right: ValueType) -> bool {
     use ValueType::*;
     matches!(
         (left, right),
-        (Str, Str) | (Date, Date) | (DateTime, DateTime) | (Int | Float, Int | Float)
+        (Str, Str)
+            | (Date, Date)
+            | (DateTime, DateTime)
+            | (Time, Time)
+            | (Int | Float, Int | Float)
     )
 }
 
@@ -214,6 +256,7 @@ pub fn compare_present_refs(
         (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
         (Value::Date(a), Value::Date(b)) => Ok(a.cmp(&b)),
         (Value::DateTime(a), Value::DateTime(b)) => Ok(a.cmp(&b)),
+        (Value::Time(a), Value::Time(b)) => Ok(a.cmp(&b)),
         _ => Err(ComparisonError::IncompatibleTypes),
     }
 }
@@ -232,6 +275,7 @@ impl From<&Value> for crate::json::Value {
             Value::Bool(value) => Self::Bool(*value),
             Value::Date(value) => Self::String(value.to_string()),
             Value::DateTime(value) => Self::String(value.to_string()),
+            Value::Time(value) => Self::String(value.to_string()),
         }
     }
 }

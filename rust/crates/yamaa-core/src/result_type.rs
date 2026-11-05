@@ -12,16 +12,6 @@
 
 use crate::value::{ColumnType, Value, ValueType};
 
-/// Every runtime type, in the order VALUE-1 lists the column types.
-const TYPES: [ValueType; 6] = [
-    ValueType::Str,
-    ValueType::Int,
-    ValueType::Float,
-    ValueType::Date,
-    ValueType::DateTime,
-    ValueType::Bool,
-];
-
 const fn bit(kind: ValueType) -> u8 {
     match kind {
         ValueType::Str => 1,
@@ -30,6 +20,7 @@ const fn bit(kind: ValueType) -> u8 {
         ValueType::Date => 8,
         ValueType::DateTime => 16,
         ValueType::Bool => 32,
+        ValueType::Time => 64,
     }
 }
 
@@ -41,12 +32,13 @@ impl ResultType {
     /// Every result is missing, as `{literal: null}`'s is.
     pub const MISSING: Self = Self(0);
     /// A name no declaration types yet: any type.
-    pub const UNKNOWN: Self = Self(63);
+    pub const UNKNOWN: Self = Self(127);
     pub const STR: Self = Self::of(ValueType::Str);
     pub const INT: Self = Self::of(ValueType::Int);
     pub const FLOAT: Self = Self::of(ValueType::Float);
     pub const DATE: Self = Self::of(ValueType::Date);
     pub const DATETIME: Self = Self::of(ValueType::DateTime);
+    pub const TIME: Self = Self::of(ValueType::Time);
     /// `int` or `float`, decided per value.
     pub const NUMBER: Self = Self(bit(ValueType::Int) | bit(ValueType::Float));
 
@@ -80,7 +72,9 @@ impl ResultType {
     }
     /// The member types, in VALUE-1 order.
     pub fn types(self) -> impl Iterator<Item = ValueType> {
-        TYPES.into_iter().filter(move |&kind| self.contains(kind))
+        ValueType::ALL
+            .into_iter()
+            .filter(move |&kind| self.contains(kind))
     }
     /// The one type every non-missing result has, if there is one.
     pub fn single(self) -> Option<ValueType> {
@@ -90,14 +84,7 @@ impl ResultType {
     }
     /// The one column type every non-missing result has, if there is one.
     pub fn column_type(self) -> Option<ColumnType> {
-        match self.single()? {
-            ValueType::Str => Some(ColumnType::Str),
-            ValueType::Int => Some(ColumnType::Int),
-            ValueType::Float => Some(ColumnType::Float),
-            ValueType::Date => Some(ColumnType::Date),
-            ValueType::DateTime => Some(ColumnType::DateTime),
-            ValueType::Bool => None,
-        }
+        ColumnType::from_name(self.single()?.name())
     }
     /// The numeric members alone.
     pub fn numeric(self) -> Self {

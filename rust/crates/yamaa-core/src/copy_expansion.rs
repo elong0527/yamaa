@@ -391,10 +391,13 @@ impl Raw {
                 }
             }
             let content = &field.content;
-            // A date or datetime is submitted as the consumer's model
+            // A date, datetime or time is submitted as the consumer's model
             // requires, so it takes no data type, length or display format
             // from its producer (SUB-6, SUB-7, SUB-25).
-            let temporal = matches!(field.kind, ColumnType::Date | ColumnType::DateTime);
+            let temporal = matches!(
+                field.kind,
+                ColumnType::Date | ColumnType::DateTime | ColumnType::Time
+            );
             for (key, value, integer) in [
                 ("data_type", &content.data_type, false),
                 ("length", &content.length, true),

@@ -39,6 +39,7 @@ fn document(table: &TypedRows) -> DatasetJsonDocument {
                 ColumnType::Float => "float",
                 ColumnType::Date => "date",
                 ColumnType::DateTime => "datetime",
+                ColumnType::Time => "time",
                 ColumnType::Str => "string",
             }
             .into(),
@@ -159,6 +160,7 @@ fn check(rendered: &Rendered<'_>, table: &TypedRows) {
                 ValueRef::Float(value) => token.parse::<f64>() == Ok(value.get()),
                 ValueRef::Date(value) => text(token) == Some(value.to_string()),
                 ValueRef::DateTime(value) => text(token) == Some(value.to_string()),
+                ValueRef::Time(value) => text(token) == Some(value.to_string()),
                 ValueRef::Bool(_) => false,
             };
             assert!(same, "row {row}, column {column}: {held:?} became {token}");
@@ -176,6 +178,7 @@ fuzz_target!(|data: &[u8]| {
         Some(ColumnType::Float),
         Some(ColumnType::Date),
         Some(ColumnType::DateTime),
+        Some(ColumnType::Time),
     ] {
         let declarations: Vec<(String, ColumnType)> = kind
             .map(|kind| {

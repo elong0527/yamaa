@@ -166,6 +166,7 @@ impl<'d> Lower<'d> {
                 NodeKind::Temporal { kind, value } => Some(ExprKind::Literal(match kind {
                     TemporalKind::Date => Literal::Date(value.clone()),
                     TemporalKind::DateTime => Literal::DateTime(value.clone()),
+                    TemporalKind::Time => Literal::Time(value.clone()),
                 })),
                 NodeKind::Null => Some(ExprKind::Literal(Literal::Missing)),
                 _ => None,

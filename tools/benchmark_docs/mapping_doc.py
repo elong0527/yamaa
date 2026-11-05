@@ -923,6 +923,12 @@ def describe_time_of_day(node, ctx=None, depth=0):
     )
 
 
+def describe_to_time(node, ctx=None, depth=0):
+    return sentence(
+        "Take the time of day of " + describe_variable(node.get("source"), ctx, depth)
+    )
+
+
 def describe_duration_text(node, ctx=None, depth=0):
     """A number of elapsed units written as ISO 8601 duration text."""
     return sentence(
@@ -1337,6 +1343,7 @@ DERIVATION_DESCRIBERS = {
     "to_epoch_day": describe_to_epoch_day,
     "dtc": describe_dtc,
     "time_of_day": describe_time_of_day,
+    "to_time": describe_to_time,
     "duration_text": describe_duration_text,
     "study_day": describe_study_day,
     "str_case": describe_str_case,

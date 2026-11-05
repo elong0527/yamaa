@@ -180,6 +180,7 @@ impl Literal {
             Literal::Text(_) => ResultType::STR,
             Literal::Date(_) => ResultType::DATE,
             Literal::DateTime(_) => ResultType::DATETIME,
+            Literal::Time(_) => ResultType::TIME,
             Literal::Unsupported => ResultType::UNKNOWN,
         }
     }

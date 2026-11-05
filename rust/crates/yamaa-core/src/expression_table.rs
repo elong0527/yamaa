@@ -279,6 +279,7 @@ pub enum Verb {
     ToEpochDay,
     Dtc,
     TimeOfDay,
+    ToTime,
     Shift,
     DurationValue,
     DurationText,
@@ -295,7 +296,7 @@ pub enum Verb {
 #[rustfmt::skip]
 impl Verb {
     /// Every variant, in the registry's order.
-    pub const ALL: [Self; 39] = [
+    pub const ALL: [Self; 40] = [
         Self::Source,
         Self::FirstAvailable,
         Self::Greatest,
@@ -324,6 +325,7 @@ impl Verb {
         Self::ToEpochDay,
         Self::Dtc,
         Self::TimeOfDay,
+        Self::ToTime,
         Self::Shift,
         Self::DurationValue,
         Self::DurationText,
@@ -367,6 +369,7 @@ impl Verb {
             Self::ToEpochDay => "to_epoch_day",
             Self::Dtc => "dtc",
             Self::TimeOfDay => "time_of_day",
+            Self::ToTime => "to_time",
             Self::Shift => "shift",
             Self::DurationValue => "duration_value",
             Self::DurationText => "duration_text",
@@ -463,6 +466,7 @@ impl Verb {
             | Self::ToEpochDay
             | Self::Dtc
             | Self::TimeOfDay
+            | Self::ToTime
             | Self::Shift
             | Self::DurationValue
             | Self::DurationText => Form::Scalar,
@@ -597,6 +601,9 @@ impl Verb {
                 OperandField { field: "second", slot: Slot::Second, required: false, form: OperandForm::Name },
             ],
             Self::TimeOfDay => &[
+                OperandField { field: "source", slot: Slot::Source, required: true, form: OperandForm::Name },
+            ],
+            Self::ToTime => &[
                 OperandField { field: "source", slot: Slot::Source, required: true, form: OperandForm::Name },
             ],
             Self::Shift => &[
@@ -847,6 +854,8 @@ pub enum ScalarOp {
     Dtc,
     /// `time_of_day`.
     TimeOfDay,
+    /// `to_time`.
+    ToTime,
     /// `shift`.
     Shift {
         kind: TemporalType,
@@ -891,6 +900,7 @@ impl ScalarOp {
             Self::ToEpochDay => Verb::ToEpochDay,
             Self::Dtc => Verb::Dtc,
             Self::TimeOfDay => Verb::TimeOfDay,
+            Self::ToTime => Verb::ToTime,
             Self::Shift { .. } => Verb::Shift,
             Self::DurationValue { .. } => Verb::DurationValue,
             Self::DurationText { .. } => Verb::DurationText,
@@ -972,6 +982,7 @@ impl ScalarOp {
             Verb::ToEpochDay => Self::ToEpochDay,
             Verb::Dtc => Self::Dtc,
             Verb::TimeOfDay => Self::TimeOfDay,
+            Verb::ToTime => Self::ToTime,
             Verb::Shift => Self::Shift {
                 kind: TemporalType::from_name(&written.text("type")??)?,
                 unit: match written.text("unit")? { Some(text) => Some(TimeUnit::from_name(&text)?), None => None },

@@ -24,7 +24,7 @@ use super::syntax::Comparison;
 use crate::numeric::{float_operation, zero_divisor, BinaryOperator, Number};
 use crate::portable_regex::Pattern as Regex;
 use crate::table::{ColumnValues, ValueRef};
-use crate::temporal::{Date, DateTime};
+use crate::temporal::{Date, DateTime, Time};
 use crate::value::{compare_numeric, FiniteFloat, Numeric};
 
 /// Where each selected row's value lies in a lent view's payloads.
@@ -262,6 +262,7 @@ pub(super) enum Typed<'c> {
     Text(TextLayout<'c>),
     Dates(TemporalLayout<'c, Date>),
     DateTimes(TemporalLayout<'c, DateTime>),
+    Times(TemporalLayout<'c, Time>),
 }
 
 impl<'c> Typed<'c> {
@@ -277,6 +278,7 @@ impl<'c> Typed<'c> {
             ValueRef::Str(value) => Self::Text(TextLayout::Constant(Constant(value))),
             ValueRef::Date(value) => Self::Dates(TemporalLayout::Constant(Constant(value))),
             ValueRef::DateTime(value) => Self::DateTimes(TemporalLayout::Constant(Constant(value))),
+            ValueRef::Time(value) => Self::Times(TemporalLayout::Constant(Constant(value))),
             ValueRef::Missing | ValueRef::Bool(_) => return None,
         })
     }
@@ -330,6 +332,14 @@ impl<'c> Typed<'c> {
                 }))
             }
             ColumnValues::DateTime(values) => Self::DateTimes(TemporalLayout::Optional(Stored {
+                at,
+                payload: Optional(values),
+            })),
+            ColumnValues::MaskedTime(values) => Self::Times(TemporalLayout::Masked(Stored {
+                at,
+                payload: Masked(values),
+            })),
+            ColumnValues::Time(values) => Self::Times(TemporalLayout::Optional(Stored {
                 at,
                 payload: Optional(values),
             })),
@@ -534,6 +544,7 @@ macro_rules! typed {
             Typed::Text(layout) => text!(layout, $cells => $body),
             Typed::Dates(layout) => temporal!(layout, $cells => $body),
             Typed::DateTimes(layout) => temporal!(layout, $cells => $body),
+            Typed::Times(layout) => temporal!(layout, $cells => $body),
         }
     };
 }
@@ -622,6 +633,11 @@ pub(super) fn compare(
                 holds(operator, a.cmp(&b))
             }))
         }),
+        (Typed::Times(left), Typed::Times(right)) => temporal!(left, left => {
+            temporal!(right, right => pairwise(rows, left, right, move |a: Time, b: Time| {
+                holds(operator, a.cmp(&b))
+            }))
+        }),
         _ => return None,
     })
 }
@@ -686,6 +702,18 @@ pub(super) fn member(
                 .collect::<Option<Vec<DateTime>>>()?;
             temporal!(layout, cells => each(rows, cells, move |value: DateTime| {
                 items.iter().any(|item| value.cmp(item) == Ordering::Equal) != negated
+            }))
+        }
+        Typed::Times(layout) => {
+            let items = items
+                .iter()
+                .map(|item| match item {
+                    Typed::Times(TemporalLayout::Constant(Constant(item))) => Some(*item),
+                    _ => None,
+                })
+                .collect::<Option<Vec<Time>>>()?;
+            temporal!(layout, cells => each(rows, cells, move |value: Time| {
+                items.contains(&value) != negated
             }))
         }
     })
@@ -795,6 +823,8 @@ mod tests {
         OptionalDate(Vec<Option<Date>>),
         MaskedDateTime(Vec<DateTime>),
         OptionalDateTime(Vec<Option<DateTime>>),
+        MaskedTime(Vec<Time>),
+        OptionalTime(Vec<Option<Time>>),
     }
 
     struct Stored {
@@ -834,6 +864,7 @@ mod tests {
             }
             let day = Date::new(1999, 1, 1, Precision::Day).unwrap();
             let moment = DateTime::new(day, 0, 0, 0, Precision::Second).unwrap();
+            let clock = Time::new(0, 0, 0).unwrap();
             let payload = match present {
                 Value::Int(_) => Payload::Int(
                     slots
@@ -929,6 +960,25 @@ mod tests {
                         })
                         .collect(),
                 ),
+                Value::Time(_) if port => Payload::OptionalTime(
+                    slots
+                        .iter()
+                        .enumerate()
+                        .map(|(index, slot)| match slot {
+                            Some(Value::Time(value)) => Some(*value),
+                            _ => (index == 0).then_some(clock),
+                        })
+                        .collect(),
+                ),
+                Value::Time(_) => Payload::MaskedTime(
+                    slots
+                        .iter()
+                        .map(|slot| match slot {
+                            Some(Value::Time(value)) => *value,
+                            _ => clock,
+                        })
+                        .collect(),
+                ),
                 Value::Missing | Value::Bool(_) => return None,
             };
             Some(Self {
@@ -950,6 +1000,8 @@ mod tests {
                 Payload::OptionalDate(values) => ColumnValues::Date(values),
                 Payload::MaskedDateTime(values) => ColumnValues::MaskedDateTime(values),
                 Payload::OptionalDateTime(values) => ColumnValues::DateTime(values),
+                Payload::MaskedTime(values) => ColumnValues::MaskedTime(values),
+                Payload::OptionalTime(values) => ColumnValues::Time(values),
             };
             Lent {
                 view: ColumnRef::new(values, Some(&self.valid)).expect("addressable storage"),
@@ -1033,6 +1085,10 @@ mod tests {
         Value::DateTime(DateTime::new(date, hour, 0, 0, Precision::Second).unwrap())
     }
 
+    fn clock(hour: u8, minute: u8, second: u8) -> Value {
+        Value::Time(Time::new(hour, minute, second).unwrap())
+    }
+
     /// Five rows of each kind, a missing value on several rows.
     fn study() -> BTreeMap<&'static str, Vec<Value>> {
         use Value::Missing as M;
@@ -1078,6 +1134,16 @@ mod tests {
                 "S",
                 vec![moment(1, 8), M, moment(1, 9), moment(2, 8), moment(1, 8)],
             ),
+            (
+                "C",
+                vec![
+                    clock(8, 30, 0),
+                    M,
+                    clock(12, 0, 0),
+                    clock(23, 59, 59),
+                    clock(8, 30, 0),
+                ],
+            ),
             ("B", vec![M, M, M, M, M]),
         ])
     }
@@ -1117,7 +1183,7 @@ mod tests {
     fn every_layout_pair_gives_the_row_evaluators_truth() {
         use Truth::{False as F, True as T, Unknown as U};
         // (expression, expected, whether every operator has a typed loop)
-        let cases: [(&str, Outcome<Truth>, bool); 26] = [
+        let cases: [(&str, Outcome<Truth>, bool); 29] = [
             // FORMULA-5: an int and a float compare by exact value, both
             // zero signs are equal, and a missing operand is UNKNOWN.
             ("I = F", Ok(vec![T, U, F, U, T]), true),
@@ -1157,6 +1223,9 @@ mod tests {
                 Ok(vec![F, U, T, T, F]),
                 true,
             ),
+            // VALUE-21: times compare in clock order.
+            ("C >= TIME '12:00'", Ok(vec![F, U, T, T, F]), true),
+            ("C IN (TIME '08:30')", Ok(vec![T, U, F, F, T]), true),
             // FORMULA-8: IS NULL reads presence alone.
             ("I IS NULL AND F IS NOT NULL", Ok(vec![F, T, F, F, F]), true),
             // FORMULA-4: the connectives over typed comparisons.
@@ -1164,6 +1233,7 @@ mod tests {
             // FORMULA-5: a date and a datetime, and text and a number, do
             // not compare; a column of no single kind reads cell by cell.
             ("D = S", Err("refused"), false),
+            ("C = S", Err("refused"), false),
             ("B = 1", Ok(vec![U, U, U, U, U]), false),
         ];
         let study = study();

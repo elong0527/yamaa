@@ -104,6 +104,7 @@ yamaa::Summary: pub use yamaa::text::Summary
 yamaa::TIMING_COLUMNS: pub use yamaa::progress::TIMING_COLUMNS
 yamaa::Table: pub use yamaa::table::Table
 yamaa::TableError: pub use yamaa::error::TableError
+yamaa::Time32SecondArray: pub use yamaa::table::Time32SecondArray [cfg(feature = "arrow")]
 yamaa::TimeUnit: pub use yamaa::table::TimeUnit [cfg(feature = "arrow")]
 yamaa::TimestampSecondArray: pub use yamaa::table::TimestampSecondArray [cfg(feature = "arrow")]
 yamaa::Timing: pub use yamaa::progress::Timing
@@ -395,6 +396,7 @@ yamaa::host::functions::ColumnType::DateTime: DateTime
 yamaa::host::functions::ColumnType::Float: Float
 yamaa::host::functions::ColumnType::Int: Int
 yamaa::host::functions::ColumnType::Str: Str
+yamaa::host::functions::ColumnType::Time: Time
 yamaa::host::functions::FunctionError: impl FunctionError
 yamaa::host::functions::FunctionError: pub enum FunctionError [derive(Clone, Debug)] [non_exhaustive]
 yamaa::host::functions::FunctionError::Exception: Exception { class: String, message: String, payload: Option<HostPayload>, }
@@ -671,6 +673,7 @@ yamaa::scalar::Scalar::Float: Float(f64)
 yamaa::scalar::Scalar::Int: Int(i64)
 yamaa::scalar::Scalar::Missing: Missing
 yamaa::scalar::Scalar::Str: Str(String)
+yamaa::scalar::Scalar::Time: Time(Time)
 yamaa::scalar::Scalar::float: pub fn float(value: f64) -> Self
 yamaa::scalar::ScalarRef: impl<'a> ScalarRef<'a>
 yamaa::scalar::ScalarRef: pub enum ScalarRef<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
@@ -681,7 +684,14 @@ yamaa::scalar::ScalarRef::Float: Float(f64)
 yamaa::scalar::ScalarRef::Int: Int(i64)
 yamaa::scalar::ScalarRef::Missing: Missing
 yamaa::scalar::ScalarRef::Str: Str(&'a str)
+yamaa::scalar::ScalarRef::Time: Time(Time)
 yamaa::scalar::ScalarRef::from_owned: pub fn from_owned(value: &'a Scalar) -> Self
+yamaa::scalar::Time: impl Time
+yamaa::scalar::Time: pub struct Time [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::scalar::Time::fields: pub fn fields(self) -> (u8, u8, u8)
+yamaa::scalar::Time::from_seconds: pub fn from_seconds(seconds: i64) -> Option<Self>
+yamaa::scalar::Time::new: pub fn new(hour: u8, minute: u8, second: u8) -> Option<Self>
+yamaa::scalar::Time::seconds: pub fn seconds(self) -> u32
 yamaa::schema: pub use yamaa::schema::schema
 yamaa::schema::schema: pub fn schema(file_type: &str) -> Result<String, Failure>
 yamaa::selftest: pub use yamaa::selftest::selftest
@@ -751,6 +761,7 @@ yamaa::table::Table::rows: pub fn rows(&self) -> usize
 yamaa::table::Table::schema: pub fn schema(&self) -> &SchemaRef [cfg(feature = "arrow")]
 yamaa::table::Table::stream: pub fn stream(&self) -> FFI_ArrowArrayStream [cfg(feature = "arrow")]
 yamaa::table::Table::width: pub fn width(&self) -> usize
+yamaa::table::Time32SecondArray: pub use arrow_array::Time32SecondArray [cfg(feature = "arrow")]
 yamaa::table::TimeUnit: pub use arrow_schema::TimeUnit [cfg(feature = "arrow")]
 yamaa::table::TimestampSecondArray: pub use arrow_array::TimestampSecondArray [cfg(feature = "arrow")]
 yamaa::text::Summary: impl Summary

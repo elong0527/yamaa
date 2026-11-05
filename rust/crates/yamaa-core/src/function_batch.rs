@@ -41,7 +41,7 @@ use crate::{
         LogicalSignature, Presence, ProjectFunctionIdentity, ProjectInvocationPlan,
     },
     host_functions::HostFunctions,
-    value::{ColumnType, Value, ValueType},
+    value::{Value, ValueType},
 };
 use std::collections::BTreeMap;
 
@@ -102,13 +102,7 @@ fn check_result<E>(signature: &LogicalSignature, returned: &Value) -> Result<(),
         Some(ValueType::Bool) => return Err(FailureKind::BooleanResult),
         Some(actual) => actual,
     };
-    let expected = match signature.returns() {
-        ColumnType::Str => ValueType::Str,
-        ColumnType::Int => ValueType::Int,
-        ColumnType::Float => ValueType::Float,
-        ColumnType::Date => ValueType::Date,
-        ColumnType::DateTime => ValueType::DateTime,
-    };
+    let expected = ValueType::from(signature.returns());
     if actual != expected {
         return Err(FailureKind::ResultType {
             expected: signature.returns(),

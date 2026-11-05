@@ -3,14 +3,15 @@
 //!
 //! An argument becomes an ordinary R value: missing is `NA`, `str` a
 //! character string, `int` and `float` a double, `bool` a logical, `date` a
-//! `Date` and `datetime` a `POSIXct` in UTC. A value R cannot hold exactly is
+//! `Date`, `datetime` a `POSIXct` in UTC and `time` an `hms` of seconds since
+//! midnight. A value R cannot hold exactly is
 //! refused, never changed. A result converts by the declared column type, and
 //! R text is copied as checked UTF-8, never borrowed unchecked.
 use extendr_api::prelude::*;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int};
 use yamaa::host::functions::ColumnType;
-use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef};
+use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 
 /// The largest magnitude up to which binary64 holds every integer exactly.
 const EXACT_DOUBLE_MAGNITUDE: f64 = 9_007_199_254_740_992.0;
@@ -75,6 +76,7 @@ pub(crate) fn argument(value: ScalarRef<'_>) -> std::result::Result<Robj, String
                 .map_err(|_| "datetime timezone")?;
             value
         }
+        ScalarRef::Time(time) => crate::public_table::hms(Robj::from(f64::from(time.seconds())))?,
         // The facade enum is non-exhaustive; a new variant must not reach R
         // as some other value.
         _ => return Err("unsupported argument value".into()),
@@ -189,6 +191,30 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
                     )
                 })
         }
+        ColumnType::Time => {
+            let seconds = number(value)
+                .filter(|_| class_is(class.as_deref(), &["hms", "difftime"]) && seconds_unit(value))
+                .ok_or_else(|| {
+                    format!(
+                        "a time result must be one hms of seconds, not {}",
+                        describe(value, class.as_deref())
+                    )
+                })?;
+            if seconds.fract() != 0.0 {
+                return Err(format!(
+                    "a time result must be a whole number of seconds, not {}",
+                    shown(seconds)
+                ));
+            }
+            Time::from_seconds(seconds as i64)
+                .map(Scalar::Time)
+                .ok_or_else(|| {
+                    format!(
+                        "a time result must lie within one day, not {} seconds from midnight",
+                        shown(seconds)
+                    )
+                })
+        }
         // The facade enum is non-exhaustive; no other declared type exists.
         _ => Err("unsupported declared result type".into()),
     }
@@ -240,6 +266,13 @@ fn class_is(class: Option<&[String]>, expected: &[&str]) -> bool {
             .iter()
             .map(String::as_str)
             .eq(expected.iter().copied())
+    })
+}
+
+/// Whether a `difftime` counts seconds: its `units` attribute is `secs`.
+fn seconds_unit(value: &Robj) -> bool {
+    value.get_attrib("units").is_some_and(|units| {
+        units.len() == 1 && text_at(&units, 0).is_ok_and(|units| units == "secs")
     })
 }
 

@@ -53,15 +53,7 @@ pub struct ReductionFields<'a> {
 }
 
 fn owned(value: ValueRef<'_>) -> Value {
-    match value {
-        ValueRef::Missing => Value::Missing,
-        ValueRef::Str(value) => Value::Str(value.into()),
-        ValueRef::Int(value) => Value::Int(value),
-        ValueRef::Float(value) => Value::Float(value),
-        ValueRef::Bool(value) => Value::Bool(value),
-        ValueRef::Date(value) => Value::Date(value),
-        ValueRef::DateTime(value) => Value::DateTime(value),
-    }
+    Value::from(value)
 }
 
 /// Reduce all collected arguments in the order given: relation order, or

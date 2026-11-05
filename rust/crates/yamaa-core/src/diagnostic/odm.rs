@@ -86,14 +86,7 @@ fn text(value: &str) -> V {
     V::String(value.into())
 }
 fn type_name(kind: Option<ColumnType>) -> &'static str {
-    match kind {
-        Some(ColumnType::Str) => "str",
-        Some(ColumnType::Int) => "int",
-        Some(ColumnType::Float) => "float",
-        Some(ColumnType::Date) => "date",
-        Some(ColumnType::DateTime) => "datetime",
-        None => "unsupported",
-    }
+    kind.map_or("unsupported", ColumnType::name)
 }
 impl OdmFinding<'_> {
     pub(crate) fn code(self) -> C {

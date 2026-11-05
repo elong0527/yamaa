@@ -81,6 +81,8 @@ pub(super) enum Converted {
     Days(columns::Stored<i32>),
     /// Microseconds from 1970-01-01T00:00:00, each a whole second.
     Micros(columns::Stored<i64>),
+    /// Whole seconds from midnight, within one day.
+    Seconds(columns::Stored<i64>),
 }
 
 impl Converted {
@@ -88,7 +90,7 @@ impl Converted {
         match self {
             Self::Column(column) => column.len(),
             Self::Days(days) => days.len(),
-            Self::Micros(micros) => micros.len(),
+            Self::Micros(micros) | Self::Seconds(micros) => micros.len(),
         }
     }
 }
@@ -736,6 +738,32 @@ impl Runs {
                     *values =
                         columns::Stored::from_parts(counts, validity).expect("a count per slot");
                 }
+                // A time counts its annotation's unit from midnight, a
+                // millisecond in 32 bits. Each stored count is checked as
+                // stored, then, a whole second within the day, counted again
+                // in seconds (PARQUET-9).
+                (ColumnType::Time, Some(column @ (Column::Int32(_) | Column::Int64(_)))) => {
+                    let Some(second) = leaves.get(index).and_then(profile::per_second) else {
+                        return Err(((TEMPORAL, index, 0), Error::Malformed));
+                    };
+                    let (mut counts, validity) =
+                        match std::mem::replace(column, Column::Int64(Default::default())) {
+                            Column::Int32(values) => widened(values, i64::from).into_parts(),
+                            Column::Int64(values) => values.into_parts(),
+                            _ => unreachable!("matched above"),
+                        };
+                    for (row, value) in counts.iter_mut().enumerate() {
+                        if validity.get(row) {
+                            let row = before + row + 1;
+                            profile::temporal(field.kind, *value, second, &field.name, row)
+                                .map_err(at)?;
+                            *value /= second;
+                        }
+                    }
+                    *column = Column::Int64(
+                        columns::Stored::from_parts(counts, validity).expect("a count per slot"),
+                    );
+                }
                 _ => {}
             }
         }
@@ -819,6 +847,7 @@ fn convert(
         }
         (ColumnType::Date, Column::Int32(values)) => return Ok(Converted::Days(values)),
         (ColumnType::DateTime, Column::Int64(values)) => return Ok(Converted::Micros(values)),
+        (ColumnType::Time, Column::Int64(values)) => return Ok(Converted::Seconds(values)),
         _ => return Err((0, Error::Malformed)),
     }))
 }

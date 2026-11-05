@@ -347,6 +347,19 @@ fn datetime_epoch_seconds(text: &str) -> Result<i64, String> {
     Ok(days * 86_400 + hour * 3_600 + minute * 60 + second)
 }
 
+/// Seconds since midnight of an `hh:mm:ss` time, as the runner counts them.
+fn time_seconds(text: &str) -> Result<i64, String> {
+    let mut parts = text.trim().split(':');
+    let mut part = || {
+        parts
+            .next()
+            .and_then(|part| part.parse::<i64>().ok())
+            .ok_or_else(|| format!("bad time {text:?}"))
+    };
+    let (hour, minute, second) = (part()?, part()?, part()?);
+    Ok(hour * 3_600 + minute * 60 + second)
+}
+
 /// Parse float text with Python `float()` spellings (Rust's parser plus the
 /// SAS-style dotted non-finite forms).
 fn parse_float_text(text: &str) -> Result<f64, String> {
@@ -378,6 +391,7 @@ fn scalar_text(text: &str, kind: &str) -> Result<String, String> {
         "float" => format!("{:016x}", parse_float_text(text)?.to_bits()),
         "date" => days_from_iso_date(text)?.to_string(),
         "datetime" => datetime_epoch_seconds(text)?.to_string(),
+        "time" => time_seconds(text)?.to_string(),
         other => return Err(format!("unknown declared type {other}")),
     })
 }
@@ -592,12 +606,16 @@ enum CellValue {
     Float(f64),
     Date(i64),
     DateTime(i64),
+    Time(u32),
 }
 
 /// The cells of one public table batch: `Utf8` text, `Int64`, `Float64`,
-/// `Date32` days and `TimestampSecond` seconds, as the facade commits them.
+/// `Date32` days, `TimestampSecond` seconds and `Time32Second` seconds, as
+/// the facade commits them.
 fn batch_cells(batch: &RecordBatch) -> Result<Vec<Vec<CellValue>>, String> {
-    use yamaa::{Date32Array, Float64Array, Int64Array, StringArray, TimestampSecondArray};
+    use yamaa::{
+        Date32Array, Float64Array, Int64Array, StringArray, Time32SecondArray, TimestampSecondArray,
+    };
     let mut rows: Vec<Vec<CellValue>> = (0..batch.num_rows()).map(|_| Vec::new()).collect();
     for array in batch.columns() {
         let cell = |row: usize| -> Result<CellValue, String> {
@@ -625,6 +643,9 @@ fn batch_cells(batch: &RecordBatch) -> Result<Vec<Vec<CellValue>>, String> {
                     any.downcast_ref::<TimestampSecondArray>()
                         .unwrap()
                         .value(row),
+                ),
+                DataType::Time32(TimeUnit::Second) => CellValue::Time(
+                    any.downcast_ref::<Time32SecondArray>().unwrap().value(row) as u32,
                 ),
                 other => return Err(format!("unsupported public table type {other}")),
             })
@@ -660,6 +681,10 @@ fn encode_cell(cell: CellValue, kind: &str) -> Result<Option<String>, String> {
         CellValue::DateTime(seconds) => Some(match kind {
             "datetime" => seconds.to_string(),
             other => return Err(format!("cannot encode a datetime as {other}")),
+        }),
+        CellValue::Time(seconds) => Some(match kind {
+            "time" => seconds.to_string(),
+            other => return Err(format!("cannot encode a time as {other}")),
         }),
     })
 }
@@ -701,6 +726,7 @@ pub fn typed_from_table(table: &Table, decimals: Option<u32>) -> Result<TypedTab
             DataType::Float64 => "float",
             DataType::Date32 => "date",
             DataType::Timestamp(_, _) => "datetime",
+            DataType::Time32(_) => "time",
             other => return Err(format!("unsupported host table type {other}")),
         };
         columns.push((field.name().clone(), kind.to_string()));
@@ -722,7 +748,6 @@ type Cells = Vec<Vec<CellValue>>;
 /// engine's Parquet source reader.
 fn parquet_cells(bytes: &[u8]) -> Result<(Columns, Cells), String> {
     use yamaa_core::table::{TableAccess, ValueRef};
-    use yamaa_core::value::ColumnType;
     let table = yamaa_adapters::parquet_source::parse(bytes)
         .map_err(|error| format!("parquet reader: {error:?}"))?;
     let columns = table
@@ -730,13 +755,7 @@ fn parquet_cells(bytes: &[u8]) -> Result<(Columns, Cells), String> {
         .columns()
         .iter()
         .map(|column| {
-            let kind = match column.kind {
-                ColumnType::Str => "str",
-                ColumnType::Int => "int",
-                ColumnType::Float => "float",
-                ColumnType::Date => "date",
-                ColumnType::DateTime => "datetime",
-            };
+            let kind = column.kind.name();
             (column.name.clone(), kind.to_owned())
         })
         .collect::<Vec<_>>();
@@ -758,6 +777,7 @@ fn parquet_cells(bytes: &[u8]) -> Result<(Columns, Cells), String> {
                 ValueRef::DateTime(datetime) => {
                     CellValue::DateTime(yamaa_adapters::epoch::datetime_seconds(datetime))
                 }
+                ValueRef::Time(time) => CellValue::Time(time.seconds()),
                 ValueRef::Bool(_) => return Err("a Parquet column holds booleans".to_owned()),
             });
         }

@@ -41,6 +41,7 @@ impl<'a> ValueKey<'a> {
             Value::Bool(_) => 4,
             Value::Date(_) => 5,
             Value::DateTime(_) => 6,
+            Value::Time(_) => 7,
         }
     }
 }

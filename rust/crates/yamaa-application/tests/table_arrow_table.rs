@@ -976,6 +976,61 @@ mod table {
         }
 
         #[test]
+        fn a_time_saves_as_a_zone_free_count_of_microseconds_since_midnight() {
+            // PARQUET-1 and PARQUET-2: a `time` column is an INT64 leaf
+            // annotated TIME of microseconds, not adjusted to UTC, holding
+            // the whole seconds since midnight; the counts were written by
+            // hand. The record API reads no TIME, so the values come back
+            // through parquet's Arrow reader.
+            use arrow_array::{Array, Time64MicrosecondArray};
+            let table = table(
+                &[("A", ColumnType::Time)],
+                vec![
+                    vec![Value::Time("00:00:00".parse().unwrap())],
+                    vec![Value::Missing],
+                    vec![Value::Time("23:59:59".parse().unwrap())],
+                    vec![Value::Time("08:30:15".parse().unwrap())],
+                ],
+            );
+            let bytes = render(&table, &[0]).unwrap();
+            let source = Source::new(&bytes);
+            let reader = source.reader();
+            let field = reader.metadata().file_metadata().schema_descr().column(0);
+            let time = parquet::schema::parser::parse_message_type(
+                "message expected { OPTIONAL INT64 a (TIME(MICROS,false)); }",
+            )
+            .unwrap();
+            assert_eq!(
+                (field.physical_type(), field.logical_type()),
+                (
+                    Type::INT64,
+                    time.get_fields()[0].get_basic_info().logical_type()
+                ),
+                "the time leaf"
+            );
+            let batches = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
+                File::open(source.0.join("source.parquet")).unwrap(),
+            )
+            .unwrap()
+            .build()
+            .unwrap()
+            .map(Result::unwrap)
+            .collect::<Vec<_>>();
+            let column = batches[0]
+                .column(0)
+                .as_any()
+                .downcast_ref::<Time64MicrosecondArray>()
+                .unwrap();
+            assert_eq!(
+                (0..column.len())
+                    .map(|row| (!column.is_null(row)).then(|| column.value(row)))
+                    .collect::<Vec<_>>(),
+                [Some(0), None, Some(86_399_000_000), Some(30_615_000_000)],
+                "the time values"
+            );
+        }
+
+        #[test]
         fn opaque_cell_failures_retain_the_original_payload() {
             struct Failed {
                 schema: TableSchema,

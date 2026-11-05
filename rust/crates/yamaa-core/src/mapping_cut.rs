@@ -103,15 +103,7 @@ fn text(value: &str) -> V {
     V::String(value.into())
 }
 fn actual(value: ValueRef<'_>) -> &'static str {
-    match value {
-        ValueRef::Str(_) => "str",
-        ValueRef::Int(_) => "int",
-        ValueRef::Float(_) => "float",
-        ValueRef::Bool(_) => "bool",
-        ValueRef::Date(_) => "date",
-        ValueRef::DateTime(_) => "datetime",
-        ValueRef::Missing => "missing",
-    }
+    value.value_type().map_or("missing", ValueType::name)
 }
 impl Mapping {
     /// Collision admission happens before any source resolution and retains authored entries.

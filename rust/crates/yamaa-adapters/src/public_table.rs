@@ -68,6 +68,8 @@ pub enum PublicColumn {
     Date(Values<i32>),
     /// Whole seconds since 1970-01-01T00:00:00, with no zone.
     DateTime(Values<i64>),
+    /// Whole seconds since midnight, 0 to 86399.
+    Time(Values<i32>),
     /// A list of values of one type in each row, which only engine-built
     /// tables such as issues carry.
     List(Box<List>),
@@ -80,7 +82,7 @@ impl PublicColumn {
             Self::Str(values) => values.len(),
             Self::Int(values) | Self::DateTime(values) => values.len(),
             Self::Float(values) => values.len(),
-            Self::Date(values) => values.len(),
+            Self::Date(values) | Self::Time(values) => values.len(),
             Self::List(lists) => lists.len(),
         }
     }
@@ -98,12 +100,13 @@ impl PublicColumn {
             Self::Float(_) => ColumnType::Float,
             Self::Date(_) => ColumnType::Date,
             Self::DateTime(_) => ColumnType::DateTime,
+            Self::Time(_) => ColumnType::Time,
             Self::List(_) => return None,
         })
     }
 
     /// The language name of the column's type: `str`, `int`, `float`,
-    /// `date`, `datetime`, or `list<T>` for a list of `T`.
+    /// `date`, `datetime`, `time`, or `list<T>` for a list of `T`.
     pub fn type_name(&self) -> String {
         match self {
             Self::List(lists) => format!("list<{}>", lists.items.type_name()),
@@ -121,7 +124,7 @@ impl PublicColumn {
             Self::Str(values) => values.validity().get(row),
             Self::Int(values) | Self::DateTime(values) => values.validity().get(row),
             Self::Float(values) => values.validity().get(row),
-            Self::Date(values) => values.validity().get(row),
+            Self::Date(values) | Self::Time(values) => values.validity().get(row),
             Self::List(lists) => lists.validity.get(row),
         }
     }
@@ -134,6 +137,7 @@ impl PublicColumn {
             Self::Float(_) => Self::Float(Values::default()),
             Self::Date(_) => Self::Date(Values::default()),
             Self::DateTime(_) => Self::DateTime(Values::default()),
+            Self::Time(_) => Self::Time(Values::default()),
             Self::List(lists) => Self::List(Box::new(List::new(lists.items.emptied()))),
         }
     }
@@ -155,7 +159,9 @@ impl PublicColumn {
                 values(into, from, rows)
             }
             (Self::Float(into), Self::Float(from)) => values(into, from, rows),
-            (Self::Date(into), Self::Date(from)) => values(into, from, rows),
+            (Self::Date(into), Self::Date(from)) | (Self::Time(into), Self::Time(from)) => {
+                values(into, from, rows)
+            }
             (Self::List(into), Self::List(from)) => {
                 for row in rows {
                     let items = from.get(row);
@@ -484,6 +490,16 @@ impl PublicTable {
                         });
                         PublicColumn::DateTime(values)
                     }
+                    ColumnType::Time => {
+                        let mut values = Values::with_capacity(len);
+                        fill(&reader, rows.clone(), |value| {
+                            values.push(match value {
+                                ValueRef::Time(value) => Some(value.seconds() as i32),
+                                _ => None,
+                            })
+                        });
+                        PublicColumn::Time(values)
+                    }
                 };
                 (field.name, column)
             })
@@ -579,7 +595,8 @@ impl PublicTable {
 
     /// The Arrow schema: each field nullable, a string `Utf8`, an integer
     /// `Int64`, a float `Float64`, a date `Date32`, a datetime
-    /// `Timestamp(Second)` and a list a `List` of items named `item`.
+    /// `Timestamp(Second)`, a time `Time32(Second)` and a list a `List` of
+    /// items named `item`.
     #[cfg(feature = "arrow")]
     pub fn schema(&self) -> &arrow_schema::SchemaRef {
         self.arrow().schema()
@@ -608,6 +625,7 @@ fn public_type(kind: ColumnType) -> DataType {
         ColumnType::Float => DataType::Float64,
         ColumnType::Date => DataType::Date32,
         ColumnType::DateTime => DataType::Timestamp(arrow_schema::TimeUnit::Second, None),
+        ColumnType::Time => DataType::Time32(arrow_schema::TimeUnit::Second),
     }
 }
 

@@ -94,6 +94,27 @@ physical = "INT64"
 logical = ["Timestamp(NANOS, isAdjustedToUTC=false)"]
 layouts = ["timestamp[ns]"]
 
+# A time counts its annotation's unit from midnight, and each stored value
+# must be a whole second of it within one day (PARQUET-9). As for a
+# timestamp, no zone is admitted: a time adjusted to UTC stays refused.
+[[column]]
+type = "time"
+physical = "INT64"
+logical = ["Time(MICROS, isAdjustedToUTC=false)"]
+layouts = ["time64[us]"]
+
+[[column]]
+type = "time"
+physical = "INT32"
+logical = ["Time(MILLIS, isAdjustedToUTC=false)"]
+layouts = ["time32[ms]"]
+
+[[column]]
+type = "time"
+physical = "INT64"
+logical = ["Time(NANOS, isAdjustedToUTC=false)"]
+layouts = ["time64[ns]"]
+
 # Physical types, by their code in the format, and the value encodings each
 # decodes (PARQUET-5). Every column is decoded before any field is admitted, a
 # refused one too, so a page whose values are in an encoding its physical type

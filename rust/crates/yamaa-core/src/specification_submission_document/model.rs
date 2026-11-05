@@ -87,7 +87,7 @@ pub const VALUE_ENTRY_FIELDS: &[FieldName] = &[
     FieldName::Method,
     FieldName::Comment,
 ];
-vocabulary!(ColumnType { String => "str", Integer => "int", Float => "float", Date => "date", Datetime => "datetime" });
+vocabulary!(ColumnType { String => "str", Integer => "int", Float => "float", Date => "date", Datetime => "datetime", Time => "time" });
 impl ColumnType {
     pub fn default_data_type(self) -> DataType {
         match self {
@@ -96,30 +96,33 @@ impl ColumnType {
             Self::Float => DataType::Float,
             Self::Date => DataType::Date,
             Self::Datetime => DataType::Datetime,
+            Self::Time => DataType::Time,
         }
     }
     /// Admission on the specification alone, before a document names the
-    /// family: a date or datetime admits its own type and the `integer` an
-    /// `adam` document submits it as (SUB-6, SUB-25).
+    /// family: a date, datetime or time admits its own type and the
+    /// `integer` an `adam` document submits it as (SUB-6, SUB-25).
     pub fn admits_data_type(self, data_type: DataType) -> bool {
         match self {
             Self::String => !matches!(data_type, DataType::Integer | DataType::Float),
-            Self::Date | Self::Datetime => {
+            Self::Date | Self::Datetime | Self::Time => {
                 data_type == self.default_data_type() || data_type == DataType::Integer
             }
             Self::Integer | Self::Float => data_type == self.default_data_type(),
         }
     }
-    /// Whether the column type is `date` or `datetime`.
+    /// Whether the column type is `date`, `datetime` or `time`.
     pub fn temporal(self) -> bool {
-        matches!(self, Self::Date | Self::Datetime)
+        matches!(self, Self::Date | Self::Datetime | Self::Time)
     }
-    /// The display format of a date or datetime an `adam` document submits as
-    /// a SAS numeric date, or None when the column keeps its own form (SUB-25).
+    /// The display format of a date, datetime or time an `adam` document
+    /// submits as a SAS numeric date or time, or None when the column keeps
+    /// its own form (SUB-25).
     pub fn numeric_date_format(self, adam: bool) -> Option<&'static str> {
         match self {
             Self::Date if adam => Some("DATE9."),
             Self::Datetime if adam => Some("DATETIME20."),
+            Self::Time if adam => Some("TIME8."),
             _ => None,
         }
     }

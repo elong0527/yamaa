@@ -4,8 +4,7 @@
 //! position.
 use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
 use crate::expression::{
-    Condition, Context as Field, ErrorKind, EvaluationError, Failure, Step, TemporalKind,
-    TypeFinding,
+    Condition, Context as Field, ErrorKind, EvaluationError, Failure, Step, TypeFinding,
 };
 use crate::expression_table::Verb;
 use crate::json::Value as V;
@@ -18,14 +17,7 @@ fn text(value: &str) -> V {
 }
 
 fn type_name(kind: ValueType) -> &'static str {
-    match kind {
-        ValueType::Str => "str",
-        ValueType::Int => "int",
-        ValueType::Float => "float",
-        ValueType::Bool => "bool",
-        ValueType::Date => "date",
-        ValueType::DateTime => "datetime",
-    }
+    kind.name()
 }
 
 /// A written integer literal's value: its sign without `+`, and its digits
@@ -153,13 +145,7 @@ impl Failure {
                 context.insert("reason".into(), text(reason));
             }
             Self::InvalidTemporal { kind, error } => {
-                context.insert(
-                    "literal_type".into(),
-                    text(match kind {
-                        TemporalKind::Date => "date",
-                        TemporalKind::DateTime => "datetime",
-                    }),
-                );
+                context.insert("literal_type".into(), text(kind.name()));
                 context.insert(
                     "temporal_error".into(),
                     text(match error {

@@ -179,7 +179,7 @@ impl StringTemplate {
         let source = self.identifiers.get(index)?;
         if !matches!(
             actual,
-            "str" | "int" | "float" | "bool" | "date" | "datetime"
+            "str" | "int" | "float" | "bool" | "date" | "datetime" | "time"
         ) {
             return None;
         }
@@ -261,14 +261,10 @@ impl StringTemplate {
         Ok(result)
     }
     pub fn input_kind(value: ValueRef<'_>) -> Option<&'static str> {
-        match value {
-            ValueRef::Missing | ValueRef::Str(_) => None,
-            ValueRef::Int(_) => Some("int"),
-            ValueRef::Float(_) => Some("float"),
-            ValueRef::Bool(_) => Some("bool"),
-            ValueRef::Date(_) => Some("date"),
-            ValueRef::DateTime(_) => Some("datetime"),
-        }
+        value
+            .value_type()
+            .filter(|&kind| kind != crate::value::ValueType::Str)
+            .map(crate::value::ValueType::name)
     }
 }
 fn valid_name(name: &str) -> bool {

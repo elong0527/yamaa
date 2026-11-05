@@ -88,6 +88,7 @@ pub fn parquet_values(bytes: &[u8]) -> Option<(Vec<String>, Vec<Vec<String>>)> {
                 ValueRef::Float(value) => format!("float {:016x}", value.get().to_bits()),
                 ValueRef::Date(date) => format!("date {:?}", date.fields()),
                 ValueRef::DateTime(datetime) => format!("datetime {:?}", datetime.fields()),
+                ValueRef::Time(time) => format!("time {:?}", time.fields()),
                 ValueRef::Bool(value) => format!("bool {value}"),
             });
         }

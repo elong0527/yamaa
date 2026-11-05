@@ -58,13 +58,7 @@ pub struct BoundCall {
     pub dependencies: Vec<usize>,
 }
 fn kind(column: ColumnType) -> ValueType {
-    match column {
-        ColumnType::Str => ValueType::Str,
-        ColumnType::Int => ValueType::Int,
-        ColumnType::Float => ValueType::Float,
-        ColumnType::Date => ValueType::Date,
-        ColumnType::DateTime => ValueType::DateTime,
-    }
+    ValueType::from(column)
 }
 /// Context is compiler-selected from the row/column phase, never host cells.
 /// Invalid arguments retain all independent findings and expose no partial call.

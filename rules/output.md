@@ -162,7 +162,8 @@ the primary artifact and its declared report file.
 The profile mapping is closed at two entries, and a container is added to it
 only when it carries every value the language admits without changing one. A
 profile writes Unicode scalar sequences, binary64 floats, signed 64-bit
-integers, dates and local civil datetimes under the declared column names,
+integers, dates, local civil datetimes and times of day under the declared
+column names,
 without truncation, re-encoding or rounding. A value that cannot be written
 under its column's mapping fails, reporting the column, the row's key and the
 value.
@@ -170,7 +171,7 @@ value.
 Evidence: `schema-parquet`.
 
 The values are the text ([VALUE-11](values.md#value-11)), numbers
-([VALUE-5](values.md#value-5)) and dates and datetimes
+([VALUE-5](values.md#value-5)) and dates, datetimes and times
 ([VALUE-13](values.md#value-13)) of [Values](values.md), under the names
 [SPEC-2](specification.md#spec-2) admits. The `parquet`
 profile carries its own types: an artifact read by another specification needs

@@ -65,6 +65,8 @@ def decode_value(field: str):
         return datetime.date.fromisoformat(text)
     if kind == "t":
         return datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%S")
+    if kind == "h":
+        return datetime.time.fromisoformat(text)
     raise ValueError(f"the protocol spells no value {field!r}")
 
 
@@ -96,6 +98,10 @@ def encode_value(value) -> str:
         )
     if type(value) is datetime.date:
         return f"d:{value.year:04}-{value.month:02}-{value.day:02}"
+    if type(value) is datetime.time:
+        if value.tzinfo is not None or value.microsecond:
+            raise Rejected("a returned time carries a zone or a fraction of a second")
+        return f"h:{value.hour:02}:{value.minute:02}:{value.second:02}"
     raise Rejected("a binding returned a value of no scalar type", type(value).__name__)
 
 

@@ -1097,6 +1097,7 @@ impl ResolvedPlan {
                             | (Value::Float(_), Some(ColumnType::Float))
                             | (Value::Date(_), Some(ColumnType::Date))
                             | (Value::DateTime(_), Some(ColumnType::DateTime))
+                            | (Value::Time(_), Some(ColumnType::Time))
                     );
                     let literal = crate::table_grouping::Key::from(ValueRef::from(value));
                     let distinct = typed && !seen.contains(&literal);

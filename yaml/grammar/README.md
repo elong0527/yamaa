@@ -125,7 +125,7 @@ parenthesis in the source text groups and leaves no trace in the shape.
 | `(star DATASET)` | the record star a `COUNT` may take |
 | `(id NAME)` | an identifier |
 | `(int 42)`, `(float 1.5)` | a numeric literal, in its written form |
-| `(str 'text')`, `(date '2025-06-01')`, `(datetime '2025-06-01T08:30')` | a literal value |
+| `(str 'text')`, `(date '2025-06-01')`, `(datetime '2025-06-01T08:30')`, `(time '08:30')` | a literal value |
 | `null` | the missing literal |
 | `(template (text 'x') (placeholder NAME))` | a string template |
 

@@ -2,7 +2,7 @@
 //! field, for independent differential fixtures.
 use super::syntax_spans as spans;
 use yamaa_adapters::json;
-use yamaa_core::expression::{CompiledExpression, Context, NodeKind, TemporalKind};
+use yamaa_core::expression::{CompiledExpression, Context, NodeKind};
 use yamaa_core::json::Value;
 use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
 
@@ -86,7 +86,7 @@ pub(super) fn ast(compiled: &CompiledExpression, id: usize) -> Value {
         // An expression field admits quoted text and temporal literals.
         NodeKind::String(text) => json!({"kind":"string","value":text}),
         NodeKind::Temporal { kind, value } => {
-            json!({"kind":"temporal","type":match kind {TemporalKind::Date=>"date",TemporalKind::DateTime=>"datetime"},"value":value})
+            json!({"kind":"temporal","type":kind.name(),"value":value})
         }
         NodeKind::Identifier => json!({"kind":"identifier","name":written}),
         NodeKind::Star => json!({"kind":"star","dataset":&written[..written.len()-2]}),

@@ -80,7 +80,7 @@ productions:
       number | string | temporal | "TRUE" | "FALSE" | "NULL"
   - name: temporal
     definition: |-
-      ("DATE" | "DATETIME") string
+      ("DATE" | "DATETIME" | "TIME") string
   - name: number
     definition: |-
       digits ["." digits] [("e" | "E") ["+" | "-"] digits]
@@ -141,7 +141,7 @@ vocabulary:
     GEOMEAN: {argument: [expression]}
 # A reserved word is case-insensitive and cannot be a bare identifier. A
 # qualified field may still use one of these spellings after its qualifier.
-# `DATE` and `DATETIME` begin a temporal literal only before a string, and
+# `DATE`, `DATETIME` and `TIME` begin a temporal literal only before a string, and
 # `ESCAPE` is a keyword only after a `LIKE` pattern; elsewhere each is a name.
 reserved:
   - "AND"
@@ -594,6 +594,13 @@ cases:
     parse: accept
     identifiers: [ADTM]
     shape: (>= (id ADTM) (datetime '2025-06-01T08:30'))
+  - id: a-time-literal-carries-a-clock-reading
+    context: predicate
+    covers: [literal, temporal]
+    text: "ATM >= TIME '08:30'"
+    parse: accept
+    identifiers: [ATM]
+    shape: (>= (id ATM) (time '08:30'))
   - id: a-quoted-date-without-its-keyword-is-text
     context: predicate
     covers: [literal, temporal]
@@ -980,6 +987,19 @@ cases:
     parse: accept
     identifiers: []
     shape: (datetime '2025-06-01T08:30')
+  - id: a-time-literal-is-a-value-in-an-expression-field
+    context: derivation
+    covers: [literal, temporal, context]
+    text: "TIME '23:59:59'"
+    parse: accept
+    identifiers: []
+    shape: (time '23:59:59')
+  - id: a-time-literal-at-hour-twenty-four-is-rejected
+    context: derivation
+    covers: [literal, temporal, rejection]
+    text: "TIME '24:00'"
+    parse: reject
+    condition: invalid_expression
   - id: a-temporal-keyword-alone-is-a-name-in-an-expression-field
     context: derivation
     covers: [identifier, reserved, temporal]

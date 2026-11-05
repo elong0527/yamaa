@@ -32,7 +32,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
 /// for each of the operation's operands, each read from the source `sources`
 /// names at its position, or, without `sources`, from a source named as its
 /// operand, `{kind, path, sources, values}`: `kind` is `"date_shift"`,
-/// `"study_day"`, `"epoch_day"` or `"time_of_day"`, or one of
+/// `"study_day"`, `"epoch_day"`, `"time_of_day"` or `"to_time"`, or one of
 /// `{"difference": <unit>, "bounds": ...}`, `{"datetime_difference":
 /// <unit>}`, `{"datetime_shift": <unit>}`, `{"duration_value": <unit>}`,
 /// `{"duration_text": <unit>}` and `{"date_text": <depth>}`.
@@ -51,6 +51,7 @@ fn temporal(input: &Json) -> Vec<Diagnostic> {
             "study_day" => TemporalKind::StudyDay,
             "epoch_day" => TemporalKind::EpochDay,
             "time_of_day" => TemporalKind::TimeOfDay,
+            "to_time" => TemporalKind::ToTime,
             other => panic!("no date and time operation {other:?}"),
         },
         kind => match kind.members() {

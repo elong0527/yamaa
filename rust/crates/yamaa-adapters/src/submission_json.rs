@@ -218,6 +218,7 @@ impl Writer<'_> {
             ValueRef::Float(value) => self.text(&yamaa_core::conversion::float_text(value)),
             ValueRef::Date(value) => self.string(&value.to_string()),
             ValueRef::DateTime(value) => self.string(&value.to_string()),
+            ValueRef::Time(value) => self.string(&value.to_string()),
             ValueRef::Bool(value) => Err(Finding::cause(
                 ConditionCode::SubmissionJsonInvalid,
                 "dataset_json",

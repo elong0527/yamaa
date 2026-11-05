@@ -2,7 +2,7 @@
 use super::reader::{Converted, Decoded};
 use crate::{
     column_table::{Column, ColumnTable, TableError},
-    epoch::{date_from_days, datetime_from_seconds},
+    epoch::{date_from_days, datetime_from_seconds, time_from_seconds},
 };
 use yamaa_core::{temporal::Precision, value::ColumnType};
 
@@ -65,6 +65,16 @@ pub(super) fn build(decoded: Decoded, rows: usize) -> Result<ColumnTable, Error>
                                 datetime_from_seconds(micros / 1_000_000, Precision::Second)
                                     .ok_or(Error::Invalid)
                             })
+                            .transpose()
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            (ColumnType::Time, Some(Converted::Seconds(seconds))) => Column::Time(
+                (0..seconds.len())
+                    .map(|row| {
+                        seconds
+                            .get(row)
+                            .map(|seconds| time_from_seconds(seconds).ok_or(Error::Invalid))
                             .transpose()
                     })
                     .collect::<Result<_, _>>()?,

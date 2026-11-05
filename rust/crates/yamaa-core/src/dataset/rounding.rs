@@ -72,13 +72,10 @@ impl Rounding {
             ValueRef::Int(value) => Number::Int(value),
             ValueRef::Float(value) => Number::Float(value),
             other => {
-                let actual = match other {
-                    ValueRef::Str(_) => "str",
-                    ValueRef::Bool(_) => "bool",
-                    ValueRef::Date(_) => "date",
-                    ValueRef::DateTime(_) => "datetime",
-                    _ => unreachable!("numeric and missing values handled above"),
-                };
+                let actual = other
+                    .value_type()
+                    .map(crate::value::ValueType::name)
+                    .expect("numeric and missing values handled above");
                 return Err(Self::input_diagnostic(&self.source, &self.path, actual));
             }
         };

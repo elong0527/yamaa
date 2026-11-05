@@ -164,6 +164,7 @@ pub fn records<T: TableAccess>(
                         "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}"
                     ));
                 }
+                ValueRef::Time(value) => text.quoted(&value.to_string()),
                 ValueRef::Bool(_) => return Err(Error::ValueType),
             }
         }

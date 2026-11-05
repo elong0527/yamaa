@@ -45,6 +45,7 @@ mod table {
                             Ok(ValueRef::Bool(value)) => Value::Bool(value),
                             Ok(ValueRef::Date(value)) => Value::Date(value),
                             Ok(ValueRef::DateTime(value)) => Value::DateTime(value),
+                            Ok(ValueRef::Time(value)) => Value::Time(value),
                             Err(_) => panic!("cell {row}, {column}"),
                         })
                         .collect()
@@ -71,13 +72,14 @@ mod table {
                 ("ADT", ColumnType::Date, "date", None),
                 ("ADTM", ColumnType::DateTime, "datetime", None),
                 ("TRTSDT", ColumnType::Date, "date", Some("integer")),
-                ("ATM", ColumnType::Str, "time", None),
+                ("ATM", ColumnType::Time, "time", None),
                 ("AELINK", ColumnType::Str, "URI", None),
                 ("AESTDTC", ColumnType::Str, "string", None),
                 ("AECOMM", ColumnType::Str, "string", None),
             ];
             let date = |text: &str| Value::Date(text.parse().unwrap());
             let datetime = |text: &str| Value::DateTime(text.parse().unwrap());
+            let time = |text: &str| Value::Time(text.parse().unwrap());
             let text = |text: &str| Value::Str(text.into());
             let rows = vec![
                 vec![
@@ -87,7 +89,7 @@ mod table {
                     date("2025-01-08"),
                     datetime("2025-01-08T08:30:00"),
                     date("2024-12-31"),
-                    text("08:30"),
+                    time("08:30:00"),
                     text("https://example.org/s-01"),
                     text("2025-01"),
                     text("say \"hi\"\\\n\tthen \u{0}\u{e9}\u{1f642}/"),
@@ -111,7 +113,7 @@ mod table {
                     date("0001-01-01"),
                     datetime("9999-12-31T23:59:59"),
                     date("1960-01-01"),
-                    text(""),
+                    time("00:00:00"),
                     text("urn:x"),
                     text("--01-05"),
                     Value::Missing,
@@ -123,7 +125,7 @@ mod table {
                     date("2024-02-29"),
                     datetime("2024-02-29T00:00:00"),
                     date("2024-02-29"),
-                    text("23:59:59"),
+                    time("23:59:59"),
                     text("x"),
                     text("2025"),
                     text(" leading and trailing "),
@@ -135,7 +137,7 @@ mod table {
                     date("2025-03-04"),
                     datetime("2025-03-04T14:05:09"),
                     date("2025-03-04"),
-                    text("14:05"),
+                    time("14:05:09"),
                     text("y"),
                     text("2025-03-04T14:05"),
                     text("1.50"),
@@ -325,7 +327,7 @@ mod table {
                     read += 1;
                 }
             }
-            assert_eq!(read, 7, "the seven Dataset-JSON goldens");
+            assert_eq!(read, 8, "the eight Dataset-JSON goldens");
         }
 
         /// DSJSON-2: a `types` entry may restate the type a `dataType`
@@ -334,13 +336,13 @@ mod table {
         /// declared type.
         #[test]
         fn a_types_entry_narrows_exactly_as_the_narrowing_table_states() {
-            use ColumnType::{Date, DateTime, Float, Int, Str};
-            let every = [Str, Int, Float, Date, DateTime];
+            use ColumnType::{Date, DateTime, Float, Int, Str, Time};
+            let every = [Str, Int, Float, Date, DateTime, Time];
             // Each dataType and the types a `types` entry may declare for it.
             let table: [(&str, &[ColumnType]); 9] = [
-                ("string", &[Str, Int, Float, Date, DateTime]),
-                ("URI", &[Str, Int, Float, Date, DateTime]),
-                ("time", &[Str, Int, Float, Date, DateTime]),
+                ("string", &[Str, Int, Float, Date, DateTime, Time]),
+                ("URI", &[Str, Int, Float, Date, DateTime, Time]),
+                ("time", &[Time, Str]),
                 ("integer", &[Int]),
                 ("float", &[Float, Int]),
                 ("double", &[Float, Int]),

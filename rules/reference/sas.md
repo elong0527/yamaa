@@ -61,7 +61,7 @@ input:
 Character storage supplies `str`; numeric storage supplies `float`. SAS
 display formats and labels do not select types. A `types` entry may retain
 `str` on a character field, retain `float` on a numeric field, or narrow a
-numeric field to `int`, `date` or `datetime`. Any other physical/type pair
+numeric field to `int`, `date`, `datetime` or `time`. Any other physical/type pair
 fails ingestion.
 
 Fails: `source_sas_invalid`, `unknown_field`.
@@ -81,8 +81,9 @@ Ordinary numeric `float` fields use the reader's IBM-to-binary64 conversion,
 including normal fractional values such as 0.1. Numeric narrowing accepts only
 a finite stored exact integral value in signed 64-bit range; it never
 truncates, rounds, saturates or recovers digits already rounded in a binary64
-SAS value. A numeric `date` counts whole days from 1960-01-01, and a numeric
-`datetime` whole seconds from 1960-01-01T00:00:00, without a timezone.
+SAS value. A numeric `date` counts whole days from 1960-01-01, a numeric
+`datetime` whole seconds from 1960-01-01T00:00:00, and a numeric `time` whole
+seconds from midnight, from 0 through 86399, without a timezone.
 
 Fails: `field_parse_failed`.
 Evidence: `schema-source-xpt`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::ordinary_float_keeps_readstat_conversion_while_exact_narrowing_is_guarded`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::narrowing_never_truncates_or_accepts_an_ibm_precision_loss`, `rust/crates/yamaa-adapters/src/sas_source/native.rs::numeric_narrowing_has_exact_bounds_and_epoch`.
@@ -92,8 +93,8 @@ in binary64 cannot narrow, even if decoding would produce an integral binary64
 value. Non-integral, out-of-range or precision-losing narrowing fails with
 `field_parse_failed`, reporting the dataset, field, declared type and decoded
 numeric value. Negative counts precede the epoch. Fractions are rejected
-before conversion, and dates and datetimes must remain within the complete
-civil ranges [Values](../values.md) fixes.
+before conversion, and dates, datetimes and times must remain within the
+complete civil ranges [Values](../values.md) fixes.
 
 ## Values and order
 

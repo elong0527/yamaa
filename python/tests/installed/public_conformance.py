@@ -78,6 +78,8 @@ def cell(value, kind):
                 ).total_seconds()
             )
         )
+    if kind == "time":
+        return str(value.hour * 3600 + value.minute * 60 + value.second)
     raise ValueError("unknown public table type: " + kind)
 
 
@@ -199,6 +201,8 @@ def table(result):
             kinds.append("date")
         elif isinstance(dtype, pl.Datetime):
             kinds.append("datetime")
+        elif dtype == pl.Time:
+            kinds.append("time")
         else:
             raise ValueError(f"unexpected public type: {dtype}")
     return {
@@ -256,7 +260,7 @@ def main(argv=None):
             "platform": platform.platform(),
             "package_form": args.package_form,
             "evidence": args.evidence,
-            "table_encoding": "str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds",
+            "table_encoding": "str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds,time:day-seconds",
         },
     )
     try:

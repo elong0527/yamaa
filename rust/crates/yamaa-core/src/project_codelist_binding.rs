@@ -94,13 +94,7 @@ impl Finding {
 }
 /// The column type a codelist binding names, as a column declares it.
 pub(crate) fn column_type(kind: ColumnType) -> &'static str {
-    match kind {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
+    kind.name()
 }
 /// The data type of a codelist the catalogue admits: text or numeric only.
 pub(crate) fn codelist_data_type(kind: ColumnType) -> &'static str {

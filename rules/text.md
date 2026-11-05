@@ -235,7 +235,7 @@ so a period aligned with the numbers is written with its spaces,
 `missing: "       ."`, and a missing source is counted under `missing`
 whether or not it is declared ([COLUMN-14](columns.md#column-14)).
 
-A `str`, `date`, `datetime` or Boolean source fails with
+A `str`, `date`, `datetime`, `time` or Boolean source fails with
 `incompatible_input_type` at `str_decimal.source`, whatever its values:
 before any record is read where its declared type shows it
 ([EXPR-14](expressions.md#expr-14)), and otherwise when it binds, by the type

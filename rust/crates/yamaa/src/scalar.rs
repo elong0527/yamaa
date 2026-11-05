@@ -20,6 +20,7 @@ pub enum Scalar {
     Bool(bool),
     Date(Date),
     DateTime(DateTime),
+    Time(Time),
 }
 
 impl Scalar {
@@ -42,6 +43,7 @@ impl Scalar {
             Value::Bool(value) => Self::Bool(value),
             Value::Date(value) => Self::Date(Date::from_core(value)),
             Value::DateTime(value) => Self::DateTime(DateTime::from_core(value)),
+            Value::Time(value) => Self::Time(Time::from_core(value)),
         }
     }
 
@@ -55,6 +57,7 @@ impl Scalar {
             Self::Bool(value) => Value::Bool(value),
             Self::Date(value) => Value::Date(value.into_core()),
             Self::DateTime(value) => Value::DateTime(value.into_core()),
+            Self::Time(value) => Value::Time(value.into_core()),
         }
     }
 }
@@ -70,6 +73,7 @@ pub enum ScalarRef<'a> {
     Bool(bool),
     Date(Date),
     DateTime(DateTime),
+    Time(Time),
 }
 
 impl<'a> ScalarRef<'a> {
@@ -83,6 +87,7 @@ impl<'a> ScalarRef<'a> {
             ValueRef::Bool(value) => Self::Bool(value),
             ValueRef::Date(value) => Self::Date(Date::from_core(value)),
             ValueRef::DateTime(value) => Self::DateTime(DateTime::from_core(value)),
+            ValueRef::Time(value) => Self::Time(Time::from_core(value)),
         }
     }
 
@@ -97,6 +102,7 @@ impl<'a> ScalarRef<'a> {
             Scalar::Bool(value) => Self::Bool(*value),
             Scalar::Date(value) => Self::Date(*value),
             Scalar::DateTime(value) => Self::DateTime(*value),
+            Scalar::Time(value) => Self::Time(*value),
         }
     }
 }
@@ -195,6 +201,46 @@ impl DateTime {
     }
 }
 
+/// A facade time of day with whole-second precision and no date or zone.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Time {
+    inner: yamaa_core::temporal::Time,
+}
+
+impl Time {
+    /// Validate clock fields: hour 0 to 23, minute and second 0 to 59.
+    pub fn new(hour: u8, minute: u8, second: u8) -> Option<Self> {
+        yamaa_core::temporal::Time::new(hour, minute, second)
+            .ok()
+            .map(Self::from_core)
+    }
+
+    /// Return clock fields in most-significant-first order.
+    pub fn fields(self) -> (u8, u8, u8) {
+        self.inner.fields()
+    }
+
+    /// Return whole seconds since midnight, 0 to 86399.
+    pub fn seconds(self) -> u32 {
+        self.inner.seconds()
+    }
+
+    /// The time `seconds` whole seconds after midnight, when it is within
+    /// one day.
+    pub fn from_seconds(seconds: i64) -> Option<Self> {
+        yamaa_adapters::epoch::time_from_seconds(seconds).map(Self::from_core)
+    }
+
+    pub(crate) fn from_core(value: yamaa_core::temporal::Time) -> Self {
+        Self { inner: value }
+    }
+
+    pub(crate) fn into_core(self) -> yamaa_core::temporal::Time {
+        self.inner
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +263,7 @@ mod tests {
             Scalar::Bool(true),
             Scalar::Date(Date::new(2024, 2, 29).unwrap()),
             Scalar::DateTime(DateTime::new(2024, 1, 31, 23, 59, 58).unwrap()),
+            Scalar::Time(Time::new(23, 59, 58).unwrap()),
         ];
         for value in values {
             let round = Scalar::from_core(value.clone().into_core());

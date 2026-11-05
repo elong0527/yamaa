@@ -9,7 +9,7 @@ language_version:
 
 column_type:
     type: str
-    values: [str, int, float, date, datetime]
+    values: [str, int, float, date, datetime, time]
 
 literal_value:
     type: [str, int, float, bool, "null"]

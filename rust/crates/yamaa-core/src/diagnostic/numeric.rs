@@ -15,23 +15,10 @@ fn text(value: impl Into<String>) -> JsonValue {
     scalar(Value::Str(value.into()))
 }
 fn type_name(value: ValueType) -> &'static str {
-    match value {
-        ValueType::Str => "str",
-        ValueType::Int => "int",
-        ValueType::Float => "float",
-        ValueType::Bool => "bool",
-        ValueType::Date => "date",
-        ValueType::DateTime => "datetime",
-    }
+    value.name()
 }
 fn target_name(value: ColumnType) -> &'static str {
-    match value {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
+    value.name()
 }
 
 impl ConversionError {

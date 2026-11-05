@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.ASTTM.derivation.to_time.source
+rule: TIME-23
+context:
+  source: AE.AESTDTC
+  expected: datetime
+  actual: str

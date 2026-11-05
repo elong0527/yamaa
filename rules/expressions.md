@@ -102,6 +102,7 @@ Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_resul
 | `round_half_away_from_zero`, `duration_value` | fixed | `float` |
 | `duration_text` | fixed | `str` |
 | `to_date` | fixed | `date` |
+| `to_time` | fixed | `time` |
 | `diff` | by parameter | `int` with `type: date`; with `type: datetime`, `int` in `second` and `float` in `minute`, `hour` or `day` |
 | `impute`, `shift` | by parameter | the declared `type` |
 | `function` | by parameter | the result type its definition declares ([FUNC-9](profiles/functions.md#func-9)) |
@@ -167,8 +168,8 @@ A dataset-qualified reference reads through the implicit join, and a
 structured `source:` binding adds its range, filter, selection and absent
 value ([LOOKUP-1](lookup.md#lookup-1)). Each returns its variable's value
 under [EXPR-6](#expr-6), with the variable's type ([EXPR-14](#expr-14)). A
-literal is quoted text, a number, `NULL` or a `DATE` or `DATETIME` literal
-written as expression-field text, or a YAML number, Boolean or null.
+literal is quoted text, a number, `NULL` or a `DATE`, `DATETIME` or `TIME`
+literal written as expression-field text, or a YAML number, Boolean or null.
 
 <a id="expr-5"></a>
 

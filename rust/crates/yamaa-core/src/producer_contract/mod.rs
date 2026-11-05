@@ -102,14 +102,7 @@ fn sequence(d: &Document, node: usize) -> Result<&[usize], Error> {
     }
 }
 fn kind(d: &Document, node: usize) -> Result<ColumnType, Error> {
-    match node_text(d, node)? {
-        "str" => Ok(ColumnType::Str),
-        "int" => Ok(ColumnType::Int),
-        "float" => Ok(ColumnType::Float),
-        "date" => Ok(ColumnType::Date),
-        "datetime" => Ok(ColumnType::DateTime),
-        _ => Err(Error::Boundary),
-    }
+    ColumnType::from_name(node_text(d, node)?).ok_or(Error::Boundary)
 }
 /// A declared column's submission content metadata ([`Content`]).
 fn content(d: &Document, column: usize, kind: ColumnType) -> Content {

@@ -139,6 +139,11 @@ expressions:
             type: variable
             required: true
             description: Datetime whose time of day is returned as whole seconds since midnight (TIME-20).
+    to_time: # See TIME-23.
+        - source:
+            type: variable
+            required: true
+            description: Datetime whose time of day is returned as a time (TIME-23).
 
     shift: # See TIME-14.
         - type:

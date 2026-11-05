@@ -210,6 +210,7 @@ impl Writer {
                 }
                 ValueRef::Date(value) => self.field(&value.to_string())?,
                 ValueRef::DateTime(value) => self.field(&value.to_string())?,
+                ValueRef::Time(value) => self.field(&value.to_string())?,
                 ValueRef::Bool(_) => return Err(Error::UnsupportedValue),
             }
         }

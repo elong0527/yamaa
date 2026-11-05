@@ -2,13 +2,13 @@
 //!
 //! Every value either keeps its exact value in R or the conversion fails:
 //! integers become doubles up to 2^53 in magnitude, text becomes character
-//! unless it contains NUL, dates become `Date` and zone-free datetimes
-//! `POSIXct` in UTC. List columns, which only engine-built tables such as
+//! unless it contains NUL, dates become `Date`, zone-free datetimes
+//! `POSIXct` in UTC and times of day `hms` seconds. List columns, which only engine-built tables such as
 //! issues carry, become lists of such vectors, with `NULL` for a missing list.
 use extendr_api::prelude::*;
 use yamaa::{
     Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    StringArray, StringViewArray, Table, TimeUnit, TimestampSecondArray,
+    StringArray, StringViewArray, Table, Time32SecondArray, TimeUnit, TimestampSecondArray,
 };
 
 /// The largest magnitude every integer below it holds exactly in binary64.
@@ -20,6 +20,7 @@ enum Column {
     Float(Vec<Option<f64>>),
     Date(Vec<Option<i32>>),
     DateTime(Vec<Option<i64>>),
+    Time(Vec<Option<i32>>),
     List(Vec<Option<Robj>>),
 }
 
@@ -60,6 +61,7 @@ fn empty(data_type: &DataType, rows: usize) -> std::result::Result<Column, Strin
         DataType::Float64 => Column::Float(Vec::with_capacity(rows)),
         DataType::Date32 => Column::Date(Vec::with_capacity(rows)),
         DataType::Timestamp(TimeUnit::Second, None) => Column::DateTime(Vec::with_capacity(rows)),
+        DataType::Time32(TimeUnit::Second) => Column::Time(Vec::with_capacity(rows)),
         DataType::List(_) => Column::List(Vec::with_capacity(rows)),
         other => return Err(format!("unsupported Arrow column type {other}")),
     })
@@ -94,6 +96,7 @@ fn extend(column: &mut Column, array: &dyn Array) -> std::result::Result<(), Str
         Column::Float(values) => values.extend(cast::<Float64Array>(array)?.iter()),
         Column::Date(values) => values.extend(cast::<Date32Array>(array)?.iter()),
         Column::DateTime(values) => values.extend(cast::<TimestampSecondArray>(array)?.iter()),
+        Column::Time(values) => values.extend(cast::<Time32SecondArray>(array)?.iter()),
         Column::List(values) => {
             let list = cast::<ListArray>(array)?;
             for row in 0..list.len() {
@@ -152,6 +155,9 @@ fn finish(column: Column) -> std::result::Result<Robj, String> {
                 .map_err(|_| "datetime timezone")?;
             value
         }
+        Column::Time(values) => hms(doubles(
+            values.into_iter().map(|v| v.map(f64::from)).collect(),
+        ))?,
         Column::List(values) => List::from_values(
             values
                 .into_iter()
@@ -159,6 +165,19 @@ fn finish(column: Column) -> std::result::Result<Robj, String> {
         )
         .into_robj(),
     })
+}
+
+/// `seconds`, doubles counting seconds since midnight, as an `hms` time of
+/// day: a `difftime` of seconds, the class the hms package and haven give
+/// one, which needs neither package.
+pub(crate) fn hms(mut seconds: Robj) -> std::result::Result<Robj, String> {
+    seconds
+        .set_class(["hms", "difftime"])
+        .map_err(|_| "time class")?;
+    seconds
+        .set_attrib("units", "secs")
+        .map_err(|_| "time units")?;
+    Ok(seconds)
 }
 
 pub(crate) fn exact_double(value: i64) -> std::result::Result<f64, String> {

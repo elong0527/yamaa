@@ -109,6 +109,7 @@ pub fn temporal(
             value % per_second == 0
                 && (MIN_DAY * 86_400..=MAX_DAY * 86_400 + 86_399).contains(&(value / per_second))
         }
+        ColumnType::Time => value % per_second == 0 && (0..86_400).contains(&(value / per_second)),
         _ => true,
     };
     if valid {

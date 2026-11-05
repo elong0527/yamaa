@@ -22,7 +22,7 @@ fn constant(value: &Literal, path: &str) -> Result<Value, PrepareError> {
                 value: value.clone(),
             }])
         })?),
-        Literal::Date(_) | Literal::DateTime(_) | Literal::Unsupported => {
+        Literal::Date(_) | Literal::DateTime(_) | Literal::Time(_) | Literal::Unsupported => {
             return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
                 operation: "literal".into(),
                 path: path.into(),
@@ -41,7 +41,9 @@ fn label(value: &Literal) -> Option<String> {
         Literal::Bool(value) => N::Boolean(*value),
         Literal::Int(text) => N::Integer(text.clone()),
         Literal::Float(value) => N::Float(*value),
-        Literal::Date(_) | Literal::DateTime(_) | Literal::Unsupported => return None,
+        Literal::Date(_) | Literal::DateTime(_) | Literal::Time(_) | Literal::Unsupported => {
+            return None
+        }
     };
     crate::schema::scalar_diagnostic_label(&scalar)
 }

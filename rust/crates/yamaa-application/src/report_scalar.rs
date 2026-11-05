@@ -12,7 +12,8 @@ impl ScalarValue {
     }
 
     /// Project to the owned JSON tree: one key naming the type, holding the
-    /// value's exact text, its bits or its temporal text and precision.
+    /// value's exact text, its bits or its date or datetime text and
+    /// precision.
     pub(crate) fn to_json(&self) -> yamaa_core::json::Value {
         use yamaa_core::json::Value as Json;
         let (key, value) = match &self.0 {
@@ -21,6 +22,7 @@ impl ScalarValue {
             Scalar::Float(text) => ("float", Json::String(text.clone())),
             Scalar::Str(text) => ("str", Json::String(text.clone())),
             Scalar::Bool(value) => ("bool", Json::Bool(*value)),
+            Scalar::Time(text) => ("time", Json::String(text.clone())),
             Scalar::Date(temporal) => (
                 "date",
                 Json::Object(
@@ -63,6 +65,8 @@ enum Scalar {
     Bool(bool),
     Date(Temporal),
     Datetime(Temporal),
+    /// A time of day carries no collected precision.
+    Time(String),
 }
 
 struct Temporal {
@@ -87,6 +91,7 @@ impl Scalar {
                 text: value.to_string(),
                 precision: value.collected_precision(),
             }),
+            Value::Time(value) => Self::Time(value.to_string()),
         }
     }
 }

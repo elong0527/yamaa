@@ -228,7 +228,7 @@ the type of every field, so each of their `types` entries fails with
 For a typeless container, the `str` row of [VALUE-3](values.md#value-3) parses
 stored text into its field's declared type: `int` and `float` by numeric text
 parsing under [VALUE-6](values.md#value-6), including its non-finite
-normalization, and `date` and `datetime` by exactly the forms of
+normalization, and `date`, `datetime` and `time` by exactly the forms of
 [VALUE-15](values.md#value-15). A value that does not parse fails the run,
 reporting the dataset, field and value. This is an ingestion failure, not a
 conversion failure: it occurs before any derivation, and no handler answers it.
@@ -371,8 +371,8 @@ before a generated ordinal is appended.
 
 A stored cell in a delimited artifact is still text. After recognizing missing
 values, ingestion applies the `str` row of [VALUE-3](values.md#value-3) to
-every non-missing cell, and a producer column declared `date` or `datetime`
-uses the forms of [VALUE-15](values.md#value-15), exactly as an inline `types`
+every non-missing cell, and a producer column declared `date`, `datetime`
+or `time` uses the forms of [VALUE-15](values.md#value-15), exactly as an inline `types`
 declaration or a column conversion does. A Parquet artifact instead supplies
 typed values under the [Parquet profile](reference/parquet.md), and the link does
 not convert those values through text.

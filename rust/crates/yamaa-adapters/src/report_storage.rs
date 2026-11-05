@@ -77,6 +77,10 @@ impl Serialize for WireCell<'_> {
                 map.serialize_entry("type", "datetime")?;
                 map.serialize_entry("value", &Text(value))?;
             }
+            ValueRef::Time(value) => {
+                map.serialize_entry("type", "time")?;
+                map.serialize_entry("value", &Text(value))?;
+            }
         }
         map.end()
     }

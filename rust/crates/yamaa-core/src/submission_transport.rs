@@ -271,6 +271,7 @@ fn width(value: ValueRef<'_>) -> usize {
         ValueRef::Str(text) => text.len(),
         ValueRef::Date(_) => 10,
         ValueRef::DateTime(_) => 19,
+        ValueRef::Time(_) => 8,
         _ => 0,
     }
 }
@@ -511,15 +512,7 @@ fn equal_value(actual: ValueRef<'_>, expected: &Value) -> bool {
     crate::value::compare_present(&owned(actual), expected) == Ok(std::cmp::Ordering::Equal)
 }
 fn owned(value: ValueRef<'_>) -> Value {
-    match value {
-        ValueRef::Missing => Value::Missing,
-        ValueRef::Str(value) => Value::Str(value.into()),
-        ValueRef::Int(value) => Value::Int(value),
-        ValueRef::Float(value) => Value::Float(value),
-        ValueRef::Bool(value) => Value::Bool(value),
-        ValueRef::Date(value) => Value::Date(value),
-        ValueRef::DateTime(value) => Value::DateTime(value),
-    }
+    Value::from(value)
 }
 #[cfg(test)]
 mod tests {

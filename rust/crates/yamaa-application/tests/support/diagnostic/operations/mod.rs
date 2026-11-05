@@ -212,7 +212,7 @@ fn rows(table: &PublicTable) -> Vec<Value> {
 /// The value at `row` of `column`, a date read from its days and a datetime
 /// from its seconds.
 fn cell(column: &PublicColumn, row: usize) -> ValueRef<'_> {
-    use yamaa_adapters::epoch::{date_from_days, datetime_from_seconds};
+    use yamaa_adapters::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
     let missing = ValueRef::Missing;
     match column {
         PublicColumn::Str(values) => values.get(row).map_or(missing, ValueRef::Str),
@@ -227,6 +227,9 @@ fn cell(column: &PublicColumn, row: usize) -> ValueRef<'_> {
             ValueRef::DateTime(
                 datetime_from_seconds(seconds, Precision::Second).expect("a datetime"),
             )
+        }),
+        PublicColumn::Time(values) => values.get(row).map_or(missing, |seconds| {
+            ValueRef::Time(time_from_seconds(seconds.into()).expect("a time"))
         }),
         PublicColumn::List(_) => panic!("an output or report column holds no list"),
     }

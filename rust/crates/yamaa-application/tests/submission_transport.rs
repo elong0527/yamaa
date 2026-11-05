@@ -306,6 +306,7 @@ mod transport {
                         ValueRef::Float(value) => yamaa_core::conversion::float_text(value),
                         ValueRef::Date(value) => value.to_string(),
                         ValueRef::DateTime(value) => value.to_string(),
+                        ValueRef::Time(value) => value.to_string(),
                         ValueRef::Bool(_) => unreachable!("a transport file has no Boolean"),
                     };
                     assert_eq!(actual, *cell, "{name} row {row} {}", header[column]);
@@ -316,8 +317,10 @@ mod transport {
 
     /// Seam: byte offsets of a NAMESTR in saved SAS Transport bytes, and their
     /// values read back through `sas_source::parse`. XPT-9 and TIME-20: an
-    /// analysis time is a numeric variable carrying its declared `TIME8.` in
-    /// its NAMESTR, and reads back as its seconds.
+    /// analysis time held as an `int` of seconds is a numeric variable carrying
+    /// its declared `TIME8.` in its NAMESTR; XPT-6 and SUB-25: one held as a
+    /// `time` is the same variable, its `TIME8.` fixed. Each reads back as its
+    /// seconds, an `int` declared `int` and a `time` declared `time`.
     #[test]
     fn an_analysis_time_is_a_numeric_variable_with_its_time_format() {
         use yamaa_core::{
@@ -325,51 +328,60 @@ mod transport {
             table::{TableAccess, ValueRef},
             value::ColumnType as T,
         };
-        let case = benchmarks().join("adam-adae-analysis-time");
-        let temp = stage(&case);
-        convert("adam-adae-analysis-time", &temp);
-        let project = temp.0.join("project.yaml");
-        let text = fs::read_to_string(&project)
-            .unwrap()
-            .edit("transport: dataset_json", "transport: xpt");
-        fs::write(&project, text).unwrap();
-        let mut result = run(&case, &temp);
-        assert!(result.issues().is_empty(), "{:?}", result.issues());
-        assert!(result.save().unwrap());
-        let bytes = fs::read(temp.0.join("adae.xpt")).unwrap();
-        // The seventh NAMESTR, after the 640 header bytes (XPT-2, XPT-4).
-        let namestr = &bytes[640 + 140 * 6..640 + 140 * 7];
-        assert_eq!(&namestr[0..2], &[0, 1], "numeric");
-        assert_eq!(&namestr[4..6], &[0, 8], "eight bytes");
-        assert_eq!(&namestr[8..16], b"ASTTM   ");
-        assert_eq!(&namestr[56..64], b"TIME    ");
-        assert_eq!(&namestr[64..66], &[0, 8], "format width");
-        assert_eq!(&namestr[66..68], &[0, 0], "format decimals");
-        let source = SourceDeclaration {
-            name: "SRC".into(),
-            path: "adae.xpt".into(),
-            profile: SourceProfile::Xport,
-            types: [("AESEQ", T::Int), ("ASTTM", T::Int)]
-                .iter()
-                .map(|(column, kind)| ((*column).into(), *kind))
-                .collect(),
-            encoding: Some("ascii".into()),
-            byte_order_mark: false,
-            empty_string_present: false,
-            ordinal: None,
-        };
-        let table = yamaa_adapters::sas_source::parse(&bytes, &source).unwrap();
-        let times: Vec<_> = (0..table.row_count())
-            .map(|row| match table.cell(row, 6).unwrap() {
-                ValueRef::Int(value) => Some(value),
-                ValueRef::Missing => None,
-                other => panic!("{other:?}"),
-            })
-            .collect();
-        assert_eq!(
-            times,
-            [Some(30615), Some(50700), Some(0), None, Some(75600)]
-        );
+        for (name, converted, column, kind) in [
+            ("adam-adae-analysis-time", true, 6, T::Int),
+            ("schema-time-column", false, 5, T::Time),
+        ] {
+            let case = benchmarks().join(name);
+            let temp = stage(&case);
+            if converted {
+                convert(name, &temp);
+            }
+            let project = temp.0.join("project.yaml");
+            let text = fs::read_to_string(&project)
+                .unwrap()
+                .edit("transport: dataset_json", "transport: xpt");
+            fs::write(&project, text).unwrap();
+            let mut result = run(&case, &temp);
+            assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());
+            assert!(result.save().unwrap());
+            let bytes = fs::read(temp.0.join("adae.xpt")).unwrap();
+            // The column's NAMESTR, after the 640 header bytes (XPT-2, XPT-4).
+            let namestr = &bytes[640 + 140 * column..640 + 140 * (column + 1)];
+            assert_eq!(&namestr[0..2], &[0, 1], "{name}: numeric");
+            assert_eq!(&namestr[4..6], &[0, 8], "{name}: eight bytes");
+            assert_eq!(&namestr[8..16], b"ASTTM   ", "{name}");
+            assert_eq!(&namestr[56..64], b"TIME    ", "{name}");
+            assert_eq!(&namestr[64..66], &[0, 8], "{name}: format width");
+            assert_eq!(&namestr[66..68], &[0, 0], "{name}: format decimals");
+            let source = SourceDeclaration {
+                name: "SRC".into(),
+                path: "adae.xpt".into(),
+                profile: SourceProfile::Xport,
+                types: [("AESEQ", T::Int), ("ASTTM", kind)]
+                    .iter()
+                    .map(|(column, kind)| ((*column).into(), *kind))
+                    .collect(),
+                encoding: Some("ascii".into()),
+                byte_order_mark: false,
+                empty_string_present: false,
+                ordinal: None,
+            };
+            let table = yamaa_adapters::sas_source::parse(&bytes, &source).unwrap();
+            let times: Vec<_> = (0..table.row_count())
+                .map(|row| match table.cell(row, column).unwrap() {
+                    ValueRef::Int(value) if kind == T::Int => Some(value),
+                    ValueRef::Time(value) if kind == T::Time => Some(i64::from(value.seconds())),
+                    ValueRef::Missing => None,
+                    other => panic!("{name}: {other:?}"),
+                })
+                .collect();
+            assert_eq!(
+                times,
+                [Some(30615), Some(50700), Some(0), None, Some(75600)],
+                "{name}"
+            );
+        }
     }
 
     /// Already data: each define benchmark's single-object Dataset-JSON

@@ -4,7 +4,7 @@
 
 use super::bind::{children, AggregateResult, CompiledExpression, ReductionOperand};
 use super::evaluate::Step;
-use super::syntax::{NodeKind, TemporalKind};
+use super::syntax::NodeKind;
 use super::{Context, Function, Reducer};
 use crate::numeric::BinaryOperator;
 use crate::result_type::ResultType;
@@ -403,14 +403,7 @@ impl<K: Fn(&str) -> Option<ValueType>> Checker<'_, K> {
             NodeKind::Group(inner) => return self.numeric_leaves(*inner, numeric_position),
             NodeKind::Identifier => (self.kind)(self.compiled.syntax.text(id)),
             NodeKind::String(_) => Some(ValueType::Str),
-            NodeKind::Temporal {
-                kind: TemporalKind::Date,
-                ..
-            } => Some(ValueType::Date),
-            NodeKind::Temporal {
-                kind: TemporalKind::DateTime,
-                ..
-            } => Some(ValueType::DateTime),
+            NodeKind::Temporal { kind, .. } => Some(kind.value_type()),
             NodeKind::Unary { .. } | NodeKind::Binary { .. } | NodeKind::Call { .. } => {
                 for child in children(&kind) {
                     self.numeric_leaves(child, true);

@@ -195,6 +195,7 @@ pub(super) fn tree_kind(
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
         },
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
+        ScalarOp::ToTime => TemporalKind::ToTime,
         ScalarOp::Dtc => {
             // Every part before the finest declared one must be declared too.
             let declared = DATE_PARTS

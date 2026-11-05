@@ -93,11 +93,8 @@ fn available() -> bool {
 }
 
 fn column_type<'de, D: Deserializer<'de>>(deserializer: D) -> Result<ColumnType, D::Error> {
-    use ColumnType::*;
     let name = String::deserialize(deserializer)?;
-    [Str, Int, Float, Date, DateTime]
-        .into_iter()
-        .find(|kind| kind.name() == name)
+    ColumnType::from_name(&name)
         .ok_or_else(|| serde::de::Error::custom(format!("no column type {name:?}")))
 }
 

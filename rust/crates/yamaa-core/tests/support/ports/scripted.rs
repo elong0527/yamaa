@@ -281,6 +281,7 @@ fn owned(value: ValueRef<'_>) -> Value {
         ValueRef::Bool(value) => Value::Bool(value),
         ValueRef::Date(value) => Value::Date(value),
         ValueRef::DateTime(value) => Value::DateTime(value),
+        ValueRef::Time(value) => Value::Time(value),
     }
 }
 impl<E> FunctionPort for ScriptedFunctions<E> {

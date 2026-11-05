@@ -26,13 +26,7 @@ pub fn replace_extreme(
         })
 }
 fn kind_name(kind: ColumnType) -> &'static str {
-    match kind {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
+    kind.name()
 }
 pub fn incomparable_diagnostic(sources: &[String], types: &[ColumnType], path: &str) -> Diagnostic {
     let texts =

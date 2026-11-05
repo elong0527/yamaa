@@ -17,10 +17,7 @@ pub fn observe(expression: &str) -> Value {
 
 /// Temporal spelling is syntax metadata, not a conversion or precision policy.
 fn temporal_name(kind: TemporalKind) -> &'static str {
-    match kind {
-        TemporalKind::Date => "date",
-        TemporalKind::DateTime => "datetime",
-    }
+    kind.name()
 }
 
 /// Emit the existing portable AST vocabulary, retaining operand/call character sites.
