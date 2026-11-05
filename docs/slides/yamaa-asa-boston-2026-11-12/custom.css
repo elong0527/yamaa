@@ -112,3 +112,11 @@
 .reveal .slides ol {
   margin-left: 1.6em;
 }
+
+/* The Codespaces badge sits on the text line of its bullet, at text height,
+   instead of taking the block margin reveal.js gives images. */
+.reveal .slides img.codespaces-badge {
+  height: 1.2em;
+  margin: 0;
+  vertical-align: middle;
+}

@@ -8,7 +8,7 @@
       "type": "text",
       "x": 40,
       "y": 17.72,
-      "width": 328.176,
+      "width": 505.584,
       "height": 27.6,
       "angle": 0,
       "strokeColor": "#222",
@@ -31,13 +31,13 @@
       "updated": 1793846400000,
       "link": null,
       "locked": false,
-      "text": "How an LLM generates output:",
+      "text": "An LLM is a probability model of the next token:",
       "fontSize": 24,
       "fontFamily": 2,
       "textAlign": "left",
       "verticalAlign": "top",
       "containerId": null,
-      "originalText": "How an LLM generates output:",
+      "originalText": "An LLM is a probability model of the next token:",
       "autoResize": true,
       "lineHeight": 1.15,
       "index": "a0"
@@ -45,7 +45,7 @@
     {
       "id": "pbo5JvWYfWpYAP9Bt5UI8",
       "type": "text",
-      "x": 380.176,
+      "x": 557.584,
       "y": 17.72,
       "width": 16.008,
       "height": 27.6,
@@ -84,7 +84,7 @@
     {
       "id": "xfGtb59Ih15o2l-tlEV-p",
       "type": "text",
-      "x": 396.184,
+      "x": 573.592,
       "y": 29.48,
       "width": 8.896,
       "height": 18.4,
@@ -123,7 +123,7 @@
     {
       "id": "1GXKxdZrXiwqoQflB64Is",
       "type": "text",
-      "x": 405.08,
+      "x": 582.488,
       "y": 17.72,
       "width": 19.992,
       "height": 27.6,
@@ -162,7 +162,7 @@
     {
       "id": "avwg2TkccH5YVgP0FsPNg",
       "type": "text",
-      "x": 425.072,
+      "x": 602.48,
       "y": 29.48,
       "width": 4.448,
       "height": 18.4,
@@ -201,7 +201,7 @@
     {
       "id": "5xVNeekZg-XctuBWHdbvH",
       "type": "text",
-      "x": 429.52,
+      "x": 606.928,
       "y": 17.72,
       "width": 31.584,
       "height": 27.6,
@@ -240,7 +240,7 @@
     {
       "id": "9qLkJXuuxWsoGdXaOdLRS",
       "type": "text",
-      "x": 461.104,
+      "x": 638.512,
       "y": 29.48,
       "width": 13.792,
       "height": 18.4,
@@ -279,7 +279,7 @@
     {
       "id": "ISpELYFRfIxiD3NM74BbA",
       "type": "text",
-      "x": 474.896,
+      "x": 652.304,
       "y": 17.72,
       "width": 7.992,
       "height": 27.6,

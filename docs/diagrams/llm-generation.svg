@@ -10,7 +10,7 @@
   <rect width="1300" height="555" fill="#ffffff"/>
 
   <!-- Title -->
-  <text x="40" y="38" font-size="24" font-weight="bold" fill="#222">How an LLM generates output:  P<tspan font-size="16" dy="5">θ</tspan><tspan dy="-5">(x</tspan><tspan font-size="16" dy="5">t</tspan><tspan dy="-5"> | x</tspan><tspan font-size="16" dy="5">&lt;t</tspan><tspan dy="-5">)</tspan></text>
+  <text x="40" y="38" font-size="24" font-weight="bold" fill="#222">An LLM is a probability model of the next token:  P<tspan font-size="16" dy="5">θ</tspan><tspan dy="-5">(x</tspan><tspan font-size="16" dy="5">t</tspan><tspan dy="-5"> | x</tspan><tspan font-size="16" dy="5">&lt;t</tspan><tspan dy="-5">)</tspan></text>
 
   <!-- Step 1: raw prompt -->
   <text x="40" y="78" font-size="14" fill="#888">① Prompt (text)</text>
