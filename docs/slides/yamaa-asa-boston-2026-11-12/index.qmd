@@ -89,6 +89,65 @@ You have been hired by the CMO to build a biometrics group.
 
 ![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
 
+## Example: arena.ai
+
+:::: {.columns}
+
+::: {.column width="50%"}
+::: {.prompt}
+Use the Pilot 5 ADSL dataset to generate a baseline characteristics table
+using R and gtsummary.
+
+Data: <https://github.com/RConsortium/submissions-pilot7-synthetic-data/tree/main/submission-pilot5/data/adam>
+:::
+
+[Try it at arena.ai/agent](https://arena.ai/agent)
+:::
+
+::: {.column width="50%"}
+To finish, the agent has to:
+
+1. Find `adsl.parquet` in the folder.
+2. Read it in R.
+3. Pick the population, arms, and grouping variables.
+4. Build the table with gtsummary.
+5. Return the table and its code.
+:::
+
+::::
+
+**What to check:** the prompt never names the population, variables, or
+statistics, so the agent has to guess them. Do they match your table shell?
+
+## Example: Muse
+
+Muse is a personal agent from Meta. "Give Muse a goal or task and it handles
+the rest": sort email, book a dinner, or fill out a form.
+
+:::: {.columns}
+
+::: {.column width="60%"}
+| Agent part | In Muse |
+| ---------- | ------------------------------ |
+| Tools | Connected apps such as email and calendar, a full browser, and new tools it builds when one is missing |
+| Environment | A persistent, isolated Linux computer in the cloud |
+| Human checkpoints | You approve actions such as sending an email or making a purchase |
+| Memory | Long-term goals it keeps track of |
+| Interface | The Muse app on mobile or Mac, or WhatsApp |
+:::
+
+::: {.column width="40%"}
+![](../../image/muse.png){fig-alt="Muse, a soft beige character wearing headphones, works on a laptop at a desk beside a plant and a phone."}
+:::
+
+::::
+
+The same parts as a coding agent: a goal, tools, a sandbox, approvals, and a record.
+
+::: {.sources}
+Source: [Muse](https://muse.ai), a personal agent from Meta.
+:::
+
 ## What is a large language model?
 
 ![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
@@ -102,47 +161,9 @@ run code: a harness does that and puts the results back into the context.
 
 > The model is the CPU; the harness is the operating system.
 
-::: {.sources}
-Sources: [LangChain, The anatomy of an agent harness](https://www.langchain.com/blog/the-anatomy-of-an-agent-harness);
-[Philipp Schmid, The importance of agent harness in 2026](https://www.philschmid.de/agent-harness-2026);
-[ai4csr, What an AI agent is](https://github.com/elong0527/ai4csr/blob/main/04-ai-agent.qmd).
-:::
+## Agent Example 1:
 
-## How does an AI agent call tools?
-
-:::: {.columns}
-
-::: {.column width="62%"}
-```{mermaid}
-%%| fig-width: 7
-%%{init: {"sequence": {"mirrorActors": false}}}%%
-sequenceDiagram
-    participant H as Harness (OpenCode)
-    participant M as Model
-    participant T as Tool (bash)
-    H->>M: Task, context, and tool definitions
-    M-->>H: Tool call: bash("Rscript derive_adsl.R")
-    H->>H: Check the permission: allow, ask, or deny
-    H->>T: Run the command
-    T-->>H: Output or error
-    H->>M: Tool result, added to the context
-    M-->>H: Final answer, or the next tool call
-```
-:::
-
-::: {.column width="38%"}
-- A tool definition is a name, a description, and an input schema.
-- The model never runs a tool itself: it asks, and the harness decides and acts.
-- [MCP](https://modelcontextprotocol.io/) is a standard way to plug in more tools.
-:::
-
-::::
-
-::: {.sources}
-Sources: [OpenAI, Function calling](https://developers.openai.com/api/docs/guides/function-calling);
-[Anthropic, Tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview);
-[OpenCode, Tools](https://opencode.ai/docs/tools/).
-:::
+## Agent Example 2:
 
 ## Goal: AI-first workflow for CDISC data standardization
 
