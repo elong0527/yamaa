@@ -590,7 +590,7 @@ def render_review_queue(entries, saved):
     need one more review to settle, then those nobody has reviewed."""
     reviews = saved["reviews"] if saved else []
     counted = review_status.tally(review_queue(entries), reviews)
-    current = [(name, history[-1][0]) for name, history in counted.items()]
+    current = [(name, len(history[-1][0])) for name, history in counted.items()]
     queue = {
         "doneKey": review_done_key(),
         "started": [
@@ -609,8 +609,10 @@ def render_review_queue(entries, saved):
 
 
 def render_review_status(entries, saved):
-    """The Status section of the review page, from the saved reviews. Votes stay
-    out of it: a benchmark shows how many people reviewed it until it settles."""
+    """The Status section of the review page, from the saved reviews. Each
+    reviewer's decision shows as soon as it is published, so the people running
+    the review can align on a disagreement without waiting for the benchmark to
+    settle."""
     if saved is None:
         return "Status is not available in this build."
     counted = review_status.tally(review_queue(entries), saved["reviews"])
@@ -646,20 +648,101 @@ def render_review_status(entries, saved):
         )
         for label, key in groups
     ]
-    rows = [
-        f'| <a href="../{escape(name)}.html">{escape(name)}</a> '
-        f"| {escape(categories[name])} | {len(history)} | {history[-1][0]} "
-        f"| {history[-1][1]} |\n"
-        for name, history in counted.items()
-    ]
     return (
         f"Updated {escape(saved['updated'])}.\n\n"
         + summary("Round", by_round)
         + "\n"
         + summary("Group", by_group)
         + "\n"
-        + f"| Benchmark | Domain | Round | Reviews ({review_status.REQUIRED_REVIEWS} "
-        "needed) | Status |\n|---|---|---|---|---|\n" + "".join(rows)
+        + render_review_table(counted, categories)
+    )
+
+
+def ordinal(number):
+    if number % 100 in (11, 12, 13):
+        return f"{number}th"
+    return f"{number}" + {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+
+
+def render_review_table(counted, categories):
+    """Each benchmark's status, in HTML so `review-status.js` can filter it to
+    the benchmarks reviewers need to align on. Each filter is named after a data
+    attribute of the rows, and offers the values the rows can hold. Each
+    decision links to its review."""
+    # A decision column for each review a benchmark needs, and one more for
+    # each review past that, since a later decision can still mean rework.
+    width = max(
+        [review_status.REQUIRED_REVIEWS]
+        + [len(history[-1][0]) for history in counted.values()]
+    )
+    decisions = [
+        (f"decision{number}", f"{ordinal(number)} decision")
+        for number in range(1, width + 1)
+    ]
+    rows = []
+    for name, history in counted.items():
+        made, status = history[-1]
+        decided = [review["overall"] for review in made] + [""] * width
+        attributes = {
+            "benchmark": name,
+            "status": status,
+            **dict(zip((key for key, _ in decisions), decided)),
+            "group": benchmark_group(name),
+            "domain": categories[name],
+            "round": str(len(history)),
+        }
+        rows.append((attributes, made))
+    filters = (
+        ("status", "Status", review_status.STATUSES),
+        *((key, label, review_status.DECISIONS) for key, label in decisions),
+        ("group", "Group", REVIEW_GROUPS),
+        ("domain", "Domain", sorted({row["domain"] for row, _ in rows})),
+        ("round", "Round", sorted({row["round"] for row, _ in rows}, key=int)),
+    )
+    selects = "".join(
+        f'<label>{label} <select name="{key}"><option value="">All</option>'
+        + "".join(f"<option>{escape(value)}</option>" for value in values)
+        + "</select></label>\n"
+        for key, label, values in filters
+    )
+    body = "".join(
+        "<tr"
+        + "".join(
+            f' data-{key}="{escape(row[key])}"'
+            for key in ("benchmark", *(key for key, _, _ in filters))
+        )
+        + f'><td><a href="../{escape(row["benchmark"])}.html">{escape(row["benchmark"])}</a></td>'
+        + f"<td>{escape(row['domain'])}</td><td>{row['round']}</td><td>{len(made)}</td>"
+        + "".join(
+            f'<td><a href="{escape(review["url"])}">{escape(review["overall"])}</a></td>'
+            for review in made
+        )
+        + "<td></td>" * (width - len(made))
+        + f"<td>{escape(row['status'])}</td></tr>\n"
+        for row, made in rows
+    )
+    return (
+        "Filter the table to find the benchmarks to align on, such as those a "
+        "reviewer did not approve, and select a decision to read its review. The "
+        "page address keeps the filters, so you can share the list.\n\n"
+        '<div class="review-status">\n'
+        '<form class="review-filter" aria-label="Filter benchmarks" hidden>\n'
+        + selects
+        + '<label>Benchmark <input type="search" name="benchmark" '
+        'placeholder="Name contains"></label>\n'
+        '<button type="reset">Clear</button>\n'
+        "</form>\n"
+        '<p class="review-filter-count" role="status" aria-live="polite" hidden></p>\n'
+        "<table>\n"
+        "<thead><tr><th>Benchmark</th><th>Domain</th><th>Round</th>"
+        f"<th>Reviews ({review_status.REQUIRED_REVIEWS} needed)</th>"
+        + "".join(f"<th>{label}</th>" for _, label in decisions)
+        + "<th>Status</th>"
+        "</tr></thead>\n"
+        f"<tbody>\n{body}</tbody>\n"
+        "</table>\n"
+        "</div>\n"
+        f"<script>\n{(HERE / 'review-status.js').read_text(encoding='utf-8')}</script>\n"
     )
 
 

@@ -872,6 +872,7 @@ class DashboardTests(unittest.TestCase):
         body = "Review of it.\r\n\r\n| **Overall** | Not approve |\r\n\r\n### Comments"
         author = {"login": "reviewer-a"}
         posted = "2026-11-02T10:00:00Z"
+        url = "https://github.com/elong0527/yamaa/discussions/4250"
         cases = (
             (
                 "crlf body",
@@ -879,6 +880,7 @@ class DashboardTests(unittest.TestCase):
                     "title": "Review: adam-adae-death",
                     "body": body,
                     "createdAt": posted,
+                    "url": url,
                     "author": author,
                 },
                 {
@@ -886,6 +888,7 @@ class DashboardTests(unittest.TestCase):
                     "reviewer": "reviewer-a",
                     "posted": posted,
                     "overall": "Not approve",
+                    "url": url,
                 },
             ),
             (
@@ -894,6 +897,7 @@ class DashboardTests(unittest.TestCase):
                     "title": "yaml/examples/adam-adae-death",
                     "body": body,
                     "createdAt": posted,
+                    "url": url,
                     "author": author,
                 },
                 None,
@@ -904,6 +908,7 @@ class DashboardTests(unittest.TestCase):
                     "title": "Review: adam-adae-death",
                     "body": "| **Overall:** Ready |",
                     "createdAt": posted,
+                    "url": url,
                     "author": author,
                 },
                 None,
@@ -914,6 +919,7 @@ class DashboardTests(unittest.TestCase):
                     "title": "Review: adam-adae-death",
                     "body": body,
                     "createdAt": posted,
+                    "url": url,
                     "author": None,
                 },
                 None,
@@ -969,15 +975,21 @@ class DashboardTests(unittest.TestCase):
             review("repeated", "a", 2, "Approve"),
             review("not-in-the-queue", "a", 1, "Approve"),
         ]
+        # Each round holds each reviewer's latest review, here by its index in
+        # `reviews`, in the order the reviewers first reviewed.
+        expected = {
+            "none": [((), "Not reviewed")],
+            "one": [((0,), "In review")],
+            "agreed": [((1, 2), "Approved")],
+            "split": [((3, 4), "Needs rework")],
+            "changed": [((5, 7), "Approved")],
+            "repeated": [((9,), "In review")],
+        }
         self.assertEqual(
             review_status.tally(names, reviews),
             {
-                "none": [(0, "Not reviewed")],
-                "one": [(1, "In review")],
-                "agreed": [(2, "Approved")],
-                "split": [(2, "Needs rework")],
-                "changed": [(2, "Approved")],
-                "repeated": [(1, "In review")],
+                name: [(tuple(reviews[i] for i in made), found) for made, found in rows]
+                for name, rows in expected.items()
             },
         )
 
@@ -998,12 +1010,12 @@ class DashboardTests(unittest.TestCase):
                     review("b", 2, approve),
                     review("c", 6, reject),
                 ],
-                [(2, "Approved")],
+                [((0, 1), "Approved")],
             ),
             (
                 "rework waits for the next round",
                 [review("a", 1, approve), review("b", 2, reject)],
-                [(2, "Needs rework"), (0, "Not reviewed")],
+                [((0, 1), "Needs rework"), ((), "Not reviewed")],
             ),
             (
                 "an approval stands against a later review in the same round",
@@ -1012,7 +1024,7 @@ class DashboardTests(unittest.TestCase):
                     review("b", 2, approve),
                     review("c", 3, reject),
                 ],
-                [(2, "Approved")],
+                [((0, 1), "Approved")],
             ),
             (
                 "rework passes on new reviews",
@@ -1022,27 +1034,74 @@ class DashboardTests(unittest.TestCase):
                     review("a", 6, approve),
                     review("b", 7, approve),
                 ],
-                [(2, "Needs rework"), (2, "Approved")],
+                [((0, 1), "Needs rework"), ((2, 3), "Approved")],
             ),
             (
                 "a review short of settling carries over",
                 [review("a", 1, approve), review("b", 6, approve)],
-                [(1, "In review"), (2, "Approved")],
+                [((0,), "In review"), ((0, 1), "Approved")],
             ),
-            ("no reviews", [], [(0, "Not reviewed"), (0, "Not reviewed")]),
+            ("no reviews", [], [((), "Not reviewed"), ((), "Not reviewed")]),
             (
                 "a review on the first day counts in the new round",
                 [review("a", 5, approve)],
-                [(0, "Not reviewed"), (1, "In review")],
+                [((), "Not reviewed"), ((0,), "In review")],
             ),
         )
+        # A round names its reviews by their index in the case's reviews.
         for label, reviews, expected in cases:
             with self.subTest(case=label):
                 self.assertEqual(
-                    review_status.rounds(reviews, ("2026-11-05",)), expected, label
+                    review_status.rounds(reviews, ("2026-11-05",)),
+                    [
+                        (tuple(reviews[i] for i in made), found)
+                        for made, found in expected
+                    ],
+                    label,
                 )
 
     def test_review_page_states_the_status_of_each_benchmark(self):
+        # The table under the counts offers a filter for each data attribute of
+        # its rows, with the values those rows hold, and the script that filters.
+        # It has a decision column for each review needed, or more if given.
+        script = (generate.HERE / "review-status.js").read_text(encoding="utf-8")
+        script = f"<script>\n{script}</script>\n"
+        discussions = "https://github.com/elong0527/yamaa/discussions/"
+        decision = (
+            '<label>{} decision <select name="decision{}"><option value="">All</option>'
+            "<option>Approve</option><option>Not approve</option></select></label>\n"
+        )
+        table = (
+            "Filter the table to find the benchmarks to align on, such as those a "
+            "reviewer did not approve, and select a decision to read its review. "
+            "The page address keeps the filters, so you can share the list.\n\n"
+            '<div class="review-status">\n'
+            '<form class="review-filter" aria-label="Filter benchmarks" hidden>\n'
+            '<label>Status <select name="status"><option value="">All</option>'
+            "<option>Approved</option><option>Needs rework</option>"
+            "<option>In review</option><option>Not reviewed</option>"
+            "</select></label>\n"
+            "{decisions}"
+            '<label>Group <select name="group"><option value="">All</option>'
+            "<option>sdtm</option><option>adam</option></select></label>\n"
+            '<label>Domain <select name="domain"><option value="">All</option>'
+            "<option>ADSL</option><option>DM</option></select></label>\n"
+            '<label>Round <select name="round"><option value="">All</option>'
+            "{rounds}</select></label>\n"
+            '<label>Benchmark <input type="search" name="benchmark" '
+            'placeholder="Name contains"></label>\n'
+            '<button type="reset">Clear</button>\n'
+            "</form>\n"
+            '<p class="review-filter-count" role="status" aria-live="polite" '
+            "hidden></p>\n"
+            "<table>\n"
+            "<thead><tr><th>Benchmark</th><th>Domain</th><th>Round</th>"
+            "<th>Reviews (2 needed)</th>{headings}<th>Status</th>"
+            "</tr></thead>\n"
+            "<tbody>\n{rows}</tbody>\n"
+            "</table>\n"
+            "</div>\n"
+        )
         entries = [
             ("adam-adsl-age", "Age", "ADSL"),
             ("sdtm-dm-basic", "Basic", "DM"),
@@ -1056,6 +1115,7 @@ class DashboardTests(unittest.TestCase):
                     "reviewer": "a",
                     "posted": "2026-11-02T09:00:00Z",
                     "overall": "Not approve",
+                    "url": discussions + "1",
                 }
             ],
         }
@@ -1070,10 +1130,23 @@ class DashboardTests(unittest.TestCase):
             "| `sdtm` | 1 | 0 | 0 | 1 | 0 |\n"
             "| `adam` | 1 | 0 | 0 | 0 | 1 |\n"
             "| **All** | 2 | 0 | 0 | 1 | 1 |\n\n"
-            "| Benchmark | Domain | Round | Reviews (2 needed) | Status |\n"
-            "|---|---|---|---|---|\n"
-            '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | 1 | In review |\n'
-            '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 1 | 0 | Not reviewed |\n',
+            + table.format(
+                decisions=decision.format("1st", 1) + decision.format("2nd", 2),
+                rounds="<option>1</option>",
+                headings="<th>1st decision</th><th>2nd decision</th>",
+                rows='<tr data-benchmark="sdtm-dm-basic" data-status="In review" '
+                'data-decision1="Not approve" data-decision2="" data-group="sdtm" '
+                'data-domain="DM" data-round="1"><td><a href="../sdtm-dm-basic.html">'
+                "sdtm-dm-basic</a></td><td>DM</td><td>1</td><td>1</td>"
+                f'<td><a href="{discussions}1">Not approve</a></td><td></td>'
+                "<td>In review</td></tr>\n"
+                '<tr data-benchmark="adam-adsl-age" data-status="Not reviewed" '
+                'data-decision1="" data-decision2="" data-group="adam" '
+                'data-domain="ADSL" data-round="1"><td><a href="../adam-adsl-age.html">'
+                "adam-adsl-age</a></td><td>ADSL</td><td>1</td><td>0</td>"
+                "<td></td><td></td><td>Not reviewed</td></tr>\n",
+            )
+            + script,
         )
         settled = {
             "updated": "2026-11-06 10:00 UTC",
@@ -1081,14 +1154,19 @@ class DashboardTests(unittest.TestCase):
                 {
                     "benchmark": benchmark,
                     "reviewer": reviewer,
-                    "posted": "2026-11-02T09:00:00Z",
+                    "posted": posted,
                     "overall": overall,
+                    "url": discussions + number,
                 }
-                for benchmark, reviewer, overall in (
-                    ("sdtm-dm-basic", "a", "Approve"),
-                    ("sdtm-dm-basic", "b", "Approve"),
-                    ("adam-adsl-age", "a", "Approve"),
-                    ("adam-adsl-age", "b", "Not approve"),
+                for number, benchmark, reviewer, posted, overall in (
+                    ("2", "sdtm-dm-basic", "a", "2026-11-02T09:00:00Z", "Approve"),
+                    ("3", "sdtm-dm-basic", "b", "2026-11-02T09:00:00Z", "Approve"),
+                    ("4", "adam-adsl-age", "a", "2026-11-02T09:00:00Z", "Approve"),
+                    ("5", "adam-adsl-age", "b", "2026-11-02T09:00:00Z", "Not approve"),
+                    # Round 2 shows three decisions, in the order they came.
+                    ("6", "adam-adsl-age", "c", "2026-11-06T07:00:00Z", "Approve"),
+                    ("7", "adam-adsl-age", "a", "2026-11-06T08:00:00Z", "Not approve"),
+                    ("8", "adam-adsl-age", "b", "2026-11-06T09:00:00Z", "Approve"),
                 )
             ],
         }
@@ -1099,16 +1177,38 @@ class DashboardTests(unittest.TestCase):
                 "| Round | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
                 "|---|---|---|---|---|---|\n"
                 "| Round 1 | 2 | 1 | 1 | 0 | 0 |\n"
-                "| Round 2 | 1 | 0 | 0 | 0 | 1 |\n\n"
+                "| Round 2 | 1 | 0 | 1 | 0 | 0 |\n\n"
                 "| Group | Benchmarks | Approved | Needs rework | In review | Not reviewed |\n"
                 "|---|---|---|---|---|---|\n"
                 "| `sdtm` | 1 | 1 | 0 | 0 | 0 |\n"
-                "| `adam` | 1 | 0 | 0 | 0 | 1 |\n"
-                "| **All** | 2 | 1 | 0 | 0 | 1 |\n\n"
-                "| Benchmark | Domain | Round | Reviews (2 needed) | Status |\n"
-                "|---|---|---|---|---|\n"
-                '| <a href="../sdtm-dm-basic.html">sdtm-dm-basic</a> | DM | 1 | 2 | Approved |\n'
-                '| <a href="../adam-adsl-age.html">adam-adsl-age</a> | ADSL | 2 | 0 | Not reviewed |\n',
+                "| `adam` | 1 | 0 | 1 | 0 | 0 |\n"
+                "| **All** | 2 | 1 | 1 | 0 | 0 |\n\n"
+                + table.format(
+                    decisions=decision.format("1st", 1)
+                    + decision.format("2nd", 2)
+                    + decision.format("3rd", 3),
+                    rounds="<option>1</option><option>2</option>",
+                    headings="<th>1st decision</th><th>2nd decision</th>"
+                    "<th>3rd decision</th>",
+                    rows='<tr data-benchmark="sdtm-dm-basic" data-status="Approved" '
+                    'data-decision1="Approve" data-decision2="Approve" '
+                    'data-decision3="" data-group="sdtm" data-domain="DM" '
+                    'data-round="1"><td><a href="../sdtm-dm-basic.html">'
+                    "sdtm-dm-basic</a></td><td>DM</td><td>1</td><td>2</td>"
+                    f'<td><a href="{discussions}2">Approve</a></td>'
+                    f'<td><a href="{discussions}3">Approve</a></td>'
+                    "<td></td><td>Approved</td></tr>\n"
+                    '<tr data-benchmark="adam-adsl-age" data-status="Needs rework" '
+                    'data-decision1="Approve" data-decision2="Not approve" '
+                    'data-decision3="Approve" data-group="adam" data-domain="ADSL" '
+                    'data-round="2"><td><a href="../adam-adsl-age.html">'
+                    "adam-adsl-age</a></td><td>ADSL</td><td>2</td><td>3</td>"
+                    f'<td><a href="{discussions}6">Approve</a></td>'
+                    f'<td><a href="{discussions}7">Not approve</a></td>'
+                    f'<td><a href="{discussions}8">Approve</a></td>'
+                    "<td>Needs rework</td></tr>\n",
+                )
+                + script,
             )
         page = generate.render_review_page(entries, saved).decode("ascii")
         self.assertIn("| Reviewers | `a` |\n", page)

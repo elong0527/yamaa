@@ -18,9 +18,11 @@ from tools.paths import ROOT
 API = "https://api.github.com/graphql"
 DESTINATION = ROOT / "docs/benchmark/review/reviews.json"
 TITLE = re.compile(r"Review: ([a-z0-9-]+)")
+# A reviewer's decision, as the Overall row of the review states it.
+DECISIONS = ("Approve", "Not approve")
 # GitHub can store a submitted form's line breaks as CRLF.
 OVERALL = re.compile(
-    r"^\| \*\*Overall\*\* \| (Approve|Not approve) \|\s*$", re.MULTILINE
+    rf"^\| \*\*Overall\*\* \| ({'|'.join(DECISIONS)}) \|\s*$", re.MULTILINE
 )
 REQUIRED_REVIEWS = 2
 # The UTC date each later round opens, oldest first. The coordinator adds one
@@ -36,7 +38,7 @@ query ($cursor: String) {
   repository(owner: "elong0527", name: "yamaa") {
     discussions(first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
-      nodes { title body createdAt author { login } }
+      nodes { title body createdAt url author { login } }
     }
   }
 }
@@ -54,6 +56,7 @@ def read_review(discussion):
         "reviewer": discussion["author"]["login"],
         "posted": discussion["createdAt"],
         "overall": overall.group(1),
+        "url": discussion["url"],
     }
 
 
@@ -67,21 +70,22 @@ def status(verdicts):
 
 
 def rounds(reviews, starts):
-    """A benchmark's (reviewers, status) in each round it took part in. Only a
+    """A benchmark's (reviews, status) in each round it took part in, with each
+    reviewer's latest review in the order they first reviewed it. Only a
     person's latest review counts until approval. An approval stands for good,
     rework starts the next round with no reviews, and other reviews carry over."""
-    history, verdicts = [], {}
+    history, latest = [], {}
     pending = sorted(reviews, key=lambda review: review["posted"])
     for end in (*starts, None):
         while pending and (end is None or pending[0]["posted"] < end):
             review = pending.pop(0)
-            verdicts[review["reviewer"]] = review["overall"]
-            if status(list(verdicts.values())) == APPROVED:
-                return history + [(len(verdicts), APPROVED)]
-        found = status(list(verdicts.values()))
-        history.append((len(verdicts), found))
+            latest[review["reviewer"]] = review
+            if status([item["overall"] for item in latest.values()]) == APPROVED:
+                return history + [(tuple(latest.values()), APPROVED)]
+        found = status([item["overall"] for item in latest.values()])
+        history.append((tuple(latest.values()), found))
         if found == NEEDS_REWORK:
-            verdicts = {}
+            latest = {}
     return history
 
 
