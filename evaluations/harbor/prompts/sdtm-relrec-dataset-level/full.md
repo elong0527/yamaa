@@ -4,6 +4,8 @@ create a RELREC dataset with one record per linked record or related dataset.
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID
 
+Each TU record identifies one tumor by its own link identifier, and
+each TR record carries the link identifier of the tumor it measures.
 The TU dataset gives one dataset-level row and the TR dataset gives one
 dataset-level row; the two rows relate the datasets as a whole. RDOMAIN
 is "TU" on the TU row, "TR" on the TR row, "AE" on a row for an adverse
