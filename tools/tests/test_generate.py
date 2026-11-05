@@ -753,9 +753,9 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(questions, expected, name)
                 if name == "negative-ambiguous-type":
                     self.assertIn(
-                        "take no more than 5 minutes to answer two short questions "
-                        'in <a href="#your-review">Your review</a>: the task and '
-                        "the inputs. Agreeing with both approves this benchmark; "
+                        "answer two short questions in "
+                        '<a href="#your-review">Your review</a>: the task and the '
+                        "inputs. Agreeing with both approves this benchmark; "
                         "disagreeing with either needs a comment.",
                         page,
                     )
@@ -786,14 +786,14 @@ class DashboardTests(unittest.TestCase):
         ask = page.split('<div class="review-ask-body">', 1)[1].split("</div>", 1)[0]
         self.assertEqual(
             ask,
-            "<p>As a clinical trial statistician or programmer, take no more than 5 "
-            "minutes to answer three short questions in "
-            '<a href="#your-review">Your review</a>: the task, the inputs and '
-            "outputs, and the key points. Agreeing with all three approves this "
-            "benchmark; disagreeing with any needs a comment. Propose a fix with "
-            "the <strong>Edit</strong> button on any source file, or add it to "
-            'your comments.</p><p class="review-ask-note">The other tabs beside '
-            "Your review are background for assessment, not under review.</p>",
+            "<p>As a clinical trial statistician or programmer, answer three short "
+            'questions in <a href="#your-review">Your review</a>: the task, the '
+            "inputs and outputs, and the key points. Agreeing with all three "
+            "approves this benchmark; disagreeing with any needs a comment. Propose "
+            "a fix with the <strong>Edit</strong> button on any source file, or add "
+            'it to your comments.</p><p class="review-ask-note">We suggest spending '
+            "no more than 5 minutes on a review. The other tabs beside Your review "
+            "are background for assessment, not under review.</p>",
         )
         # The key points and the summary are challenged too, so they carry the
         # chip with the data.

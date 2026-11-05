@@ -30,8 +30,9 @@ the coordinator confirms the reviewers before a benchmark is finalized.
 
 ## How to review
 
-A review should take no more than 5 minutes: it gives a preliminary approval,
-and the coordinator confirms the reviewers before a benchmark is finalized.
+We suggest spending no more than 5 minutes on a review. It gives a preliminary
+approval, and the coordinator confirms the reviewers before a benchmark is
+finalized.
 
 1. Sign in to GitHub in your browser.
 2. Select **Start reviewing**.

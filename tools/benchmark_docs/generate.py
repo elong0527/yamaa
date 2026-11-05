@@ -1318,13 +1318,13 @@ def render_benchmark(benchmark, previous=None, next=None):
         topics = f"the task, the {data_scope}, and the key points"
     count, every, any_ = QUESTION_COUNTS[len(questions)]
     review_ask = (
-        "<p>As a clinical trial statistician or programmer, take no more than 5 "
-        f"minutes to answer {count} short questions in "
-        f'<a href="#your-review">Your review</a>: {topics}. Agreeing with {every} '
-        f"approves this benchmark; disagreeing with {any_} needs a comment. "
-        "Propose a fix with the <strong>Edit</strong> button on any source file, "
-        'or add it to your comments.</p><p class="review-ask-note">The other tabs '
-        "beside Your review are background for assessment, not under review.</p>"
+        f"<p>As a clinical trial statistician or programmer, answer {count} short "
+        f'questions in <a href="#your-review">Your review</a>: {topics}. Agreeing '
+        f"with {every} approves this benchmark; disagreeing with {any_} needs a "
+        "comment. Propose a fix with the <strong>Edit</strong> button on any source "
+        'file, or add it to your comments.</p><p class="review-ask-note">We suggest '
+        "spending no more than 5 minutes on a review. The other tabs beside Your "
+        "review are background for assessment, not under review.</p>"
     )
     review_form = render_review_form(
         benchmark.name, questions, "What should change to finalize the benchmark"

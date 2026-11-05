@@ -55,8 +55,8 @@ benchmark whose `benchmark.yaml` declares `review.key_points` -- three points,
 each from its own angle of concern -- shows them in a Key points panel above
 the summary and asks a third question, whether the reviewer agrees with each.
 Each question takes Agree or Disagree: agreeing with all of them approves the
-benchmark, and a disagreement needs a comment. The review ask says a review
-should take no more than 5 minutes. The questions and their fixed choices are
+benchmark, and a disagreement needs a comment. The review ask suggests spending
+no more than 5 minutes on a review. The questions and their fixed choices are
 declared once in `generate.py`; `review-form.js` reads them back from the page,
 keeps a draft in the browser, and opens GitHub's new-discussion composer in the
 General category with the answers filled in, so the static page holds no
