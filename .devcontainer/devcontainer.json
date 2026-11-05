@@ -11,6 +11,7 @@
     "ghcr.io/devcontainers/features/rust:1": {},
     "ghcr.io/devcontainers-extra/features/uv:1": {}
   },
+  "workspaceFolder": "/workspaces",
   "remoteUser": "rstudio",
   "overrideCommand": true,
   "hostRequirements": {
@@ -19,7 +20,7 @@
     "storage": "32gb"
   },
   "remoteEnv": {
-    "PATH": "${containerWorkspaceFolder}/python/.venv/bin:/home/rstudio/.local/bin:${containerEnv:PATH}",
+    "PATH": "/workspaces/yamaa/python/.venv/bin:/home/rstudio/.local/bin:${containerEnv:PATH}",
     "R_LIBS_USER": "/home/rstudio/R/library",
     "CARGO_BUILD_JOBS": "2"
   },
@@ -36,9 +37,10 @@
         "tamasfe.even-better-toml"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder}/python/.venv/bin/python",
+        "python.defaultInterpreterPath": "/workspaces/yamaa/python/.venv/bin/python",
         "r.rterm.linux": "/usr/local/bin/R",
-        "rust-analyzer.linkedProjects": ["rust/Cargo.toml"]
+        "rust-analyzer.linkedProjects": ["/workspaces/yamaa/rust/Cargo.toml"],
+        "terminal.integrated.cwd": "/workspaces/yamaa"
       }
     }
   }
