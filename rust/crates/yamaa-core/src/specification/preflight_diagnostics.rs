@@ -1,10 +1,7 @@
 //! Own original-document preflight vocabulary and authored geometry at its cause.
 use super::PreflightFinding;
+use crate::diagnostic::{ConditionCode as C, Context, Diagnostic};
 use crate::json::Value as V;
-use crate::{
-    diagnostic::{ConditionCode as C, Context, Diagnostic},
-    value::ColumnType,
-};
 use std::vec;
 
 fn text(value: &str) -> V {
@@ -188,16 +185,7 @@ impl PreflightFinding {
                 context([
                     ("dataset", text(dataset)),
                     ("field", text(field)),
-                    (
-                        "type",
-                        text(match kind {
-                            ColumnType::Str => "str",
-                            ColumnType::Int => "int",
-                            ColumnType::Float => "float",
-                            ColumnType::Date => "date",
-                            ColumnType::DateTime => "datetime",
-                        }),
-                    ),
+                    ("type", text(kind.name())),
                 ]),
             ),
         };

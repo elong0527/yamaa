@@ -75,6 +75,7 @@ pub fn count_distinct(values: &[ValueRef<'_>]) -> Result<Number, ReductionError>
             ValueRef::Int(_) | ValueRef::Float(_) => 2,
             ValueRef::Date(_) => 3,
             ValueRef::DateTime(_) => 4,
+            ValueRef::Time(_) => 6,
             ValueRef::Bool(_) => 5,
         }
     }

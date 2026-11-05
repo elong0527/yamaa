@@ -70,9 +70,9 @@ back under [JSON-15](../profiles/dataset-json.md#json-15).
 
 Each column's `dataType` supplies its field's type through the closed table
 below, which inverts [JSON-10](../profiles/dataset-json.md#json-10):
-`string`, `URI` and `time` give `str`; `integer` gives `int`; `float`,
-`double` and `decimal` give `float`; `date` gives `date`; and `datetime` gives
-`datetime`. `boolean`, or any other spelling, names no type and fails.
+`string` and `URI` give `str`; `integer` gives `int`; `float`, `double` and
+`decimal` give `float`; `date` gives `date`; `datetime` gives `datetime`; and
+`time` gives `time`. `boolean`, or any other spelling, names no type and fails.
 `targetDataType`, `label`, `length` and `displayFormat` select nothing. A
 `types` entry may restate the supplied type or narrow it as the table states;
 any other entry fails.
@@ -82,28 +82,29 @@ Evidence: `schema-source-dataset-json`, `schema-source-dataset-ndjson`, `negativ
 
 | `dataType` | Supplies | A `types` entry may also declare |
 |---|---|---|
-| `string`, `URI`, `time` | `str` | `int`, `float`, `date`, `datetime` |
+| `string`, `URI` | `str` | `int`, `float`, `date`, `datetime`, `time` |
 | `integer` | `int` | none |
 | `float`, `double` | `float` | `int` |
 | `decimal` | `float` | `int`, `str` |
 | `date` | `date` | `str` |
 | `datetime` | `datetime` | `str` |
+| `time` | `time` | `str` |
 | `boolean`, any other | none: fails as `data_type` | none |
 
 A field narrowed from text is read as a delimited field is
 ([INPUT-7](../inputs.md#input-7)). A number narrowed to `int` accepts only an
 exactly integral value within range ([VALUE-7](../values.md#value-7)); it
-never rounds or truncates. A `decimal`, `date` or `datetime` field declared
-`str` holds the text the file stores, unparsed: a decimal keeps its trailing
-zeros, and a partial date a sender wrote under `date` stays text. `integer`
+never rounds or truncates. A `decimal`, `date`, `datetime` or `time` field
+declared `str` holds the text the file stores, unparsed: a decimal keeps its
+trailing zeros, and a partial date a sender wrote under `date` stays text. `integer`
 admits no other type, and nothing narrows a number to a date: Dataset-JSON
 writes dates as ISO 8601 text, never as counts.
 
 `targetDataType` asks a receiving system to convert a value, such as an ISO
 date into the SAS date a document describes; the reader ignores it, so a
 `date` column with `targetDataType` `integer` reads as `date`. A file a
-submission writes for a `str` column the document submits as `date` or
-`datetime` therefore reads as that type unless the input declares the field
+submission writes for a `str` column the document submits as `date`,
+`datetime` or `time` therefore reads as that type unless the input declares the field
 `str`.
 
 The checks are made at ingest, once the file's columns are read, as a SAS
@@ -137,9 +138,10 @@ writes it. An `int` field reads it by numeric parsing and then integral
 conversion ([VALUE-6](../values.md#value-6),
 [VALUE-7](../values.md#value-7)), so `2` and `2.0` read as 2 and `2.5` does
 not parse; a `float` field by numeric parsing, a number beyond binary64
-becoming missing ([VALUE-4](../values.md#value-4)); and a `date` or
-`datetime` field by exactly the forms of [VALUE-15](../values.md#value-15), so
-a zone, an offset or a fractional second does not parse. A `str` field holds
+becoming missing ([VALUE-4](../values.md#value-4)); and a `date`,
+`datetime` or `time` field by exactly the forms of
+[VALUE-15](../values.md#value-15), so a zone, an offset or a fractional second
+does not parse. A `str` field holds
 the text as it is.
 
 A zero-length string of a field read as `str`, whether its `dataType`
@@ -148,8 +150,8 @@ supplies `str` or a `types` entry declares it, follows the input's
 default `missing`, and the collected empty string under `present`. The
 convention is applied before narrowing, so a zero-length `string` value
 narrowed to `int` is missing under `missing` and does not parse under
-`present`. A zero-length string of a `decimal`, `date` or `datetime` field
-read as its own type does not parse. No other text is missing
+`present`. A zero-length string of a `decimal`, `date`, `datetime` or `time`
+field read as its own type does not parse. No other text is missing
 ([INPUT-8](../inputs.md#input-8)).
 
 `field_parse_failed` reports the dataset, the field, the type it is read as

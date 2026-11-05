@@ -60,6 +60,7 @@ impl TryFrom<ValueRef<'_>> for Number {
             ValueRef::Bool(_) => Err(ValueType::Bool),
             ValueRef::Date(_) => Err(ValueType::Date),
             ValueRef::DateTime(_) => Err(ValueType::DateTime),
+            ValueRef::Time(_) => Err(ValueType::Time),
         }
     }
 }

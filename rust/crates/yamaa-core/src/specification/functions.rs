@@ -48,14 +48,7 @@ pub struct FunctionFinding {
     pub cause: Cause,
 }
 fn type_name(kind: ValueType) -> &'static str {
-    match kind {
-        ValueType::Str => "str",
-        ValueType::Int => "int",
-        ValueType::Float => "float",
-        ValueType::Bool => "bool",
-        ValueType::Date => "date",
-        ValueType::DateTime => "datetime",
-    }
+    kind.name()
 }
 impl FunctionFinding {
     pub fn diagnostic(&self) -> Diagnostic {
@@ -118,6 +111,7 @@ impl FunctionFinding {
                         crate::project_function_document::Kind::InvalidDateTime => {
                             "invalid_datetime"
                         }
+                        crate::project_function_document::Kind::InvalidTime => "invalid_time",
                     }),
                 )
             }
@@ -333,6 +327,10 @@ fn decode(
                 ast::Literal::DateTime(text) => match text.parse() {
                     Ok(value) => Value::DateTime(value),
                     Err(_) => refuse(Kind::InvalidDateTime, Some(text)),
+                },
+                ast::Literal::Time(text) => match text.parse() {
+                    Ok(value) => Value::Time(value),
+                    Err(_) => refuse(Kind::InvalidTime, Some(text)),
                 },
                 ast::Literal::Unsupported => refuse(Kind::NormalizedShape, None),
             }),

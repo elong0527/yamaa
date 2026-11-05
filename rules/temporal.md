@@ -1,6 +1,6 @@
 # Dates and times
 
-These operations compute with the `date` and `datetime` values of
+These operations compute with the `date`, `datetime` and `time` values of
 [VALUE-13](values.md#value-13): differences, study days and times of day,
 reading of declared date forms, assembly and completion of collected dates and
 times, collected precision and imputation flags, and civil arithmetic with
@@ -43,6 +43,7 @@ Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negati
 | `duration_text` | `source` is `int` or `float`; an elapsed `unit` |
 | `dtc` | `year`, `month`, `day`, `hour`, `minute` and `second` are `str` or `int` |
 | `time_of_day` | `source` is `datetime` |
+| `to_time` | `source` is `datetime` |
 
 Collected date text is defined by [TIME-7](#time-7), and
 [VALUE-13](values.md#value-13) to [VALUE-21](values.md#value-21) define the
@@ -129,7 +130,31 @@ describes like any other numeric display format
 time carries no collected precision: the `*TMF` flag of a supplied time is
 read from the `datetime` it came from ([TIME-18](#time-18)). A `str` or `date`
 source fails as an incompatible input where the specification is read, as
-[TIME-1](#time-1) states.
+[TIME-1](#time-1) states. A column that keeps the time of day as a value of
+its own rather than as a count is a `time` column, derived by `to_time`
+([TIME-23](#time-23)).
+
+<a id="time-23"></a>
+
+### TIME-23. to_time returns a datetime's time of day as a time
+
+`to_time` returns the time of day of a `datetime` as a `time`
+([VALUE-13](values.md#value-13)): its hour, minute and second, with its date
+dropped. A missing source gives missing. Collected precision takes no part, so
+a time that `impute` supplied is the time it names, and the dropped date is
+never a zone conversion. A source of another type is an incompatible input.
+
+Fails: `incompatible_input_type`.
+Evidence: `schema-time-column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::to_time_refuses_a_source_that_is_not_a_datetime`.
+
+`2025-03-04T08:30:15` gives `08:30:15` and `2025-03-04T00:00:00` gives
+`00:00:00`. A `time` compares with a `time`
+([VALUE-21](values.md#value-21)), so `ASTTM >= TIME '12:00'` reads a time of
+day in the afternoon. Text becomes a `time` by conversion
+([VALUE-15](values.md#value-15)), and a `time` never becomes a `datetime`: no
+operation supplies its date. `to_time` declares no handler. A `str` or `date`
+source fails where the specification is read, as [TIME-1](#time-1) states,
+naming the source, the `datetime` it expected and the type it found.
 
 ## Differences
 

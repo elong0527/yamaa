@@ -234,13 +234,7 @@ fn invoke_signature<P: FunctionPort + ?Sized, I: Clone>(
         Some(ValueType::Bool) => return Err(failure(FailureKind::BooleanResult)),
         Some(actual) => actual,
     };
-    let expected = match signature.returns() {
-        ColumnType::Str => ValueType::Str,
-        ColumnType::Int => ValueType::Int,
-        ColumnType::Float => ValueType::Float,
-        ColumnType::Date => ValueType::Date,
-        ColumnType::DateTime => ValueType::DateTime,
-    };
+    let expected = ValueType::from(signature.returns());
     if actual != expected {
         return Err(failure(FailureKind::ResultType {
             expected: signature.returns(),

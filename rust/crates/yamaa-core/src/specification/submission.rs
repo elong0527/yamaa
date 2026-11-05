@@ -257,8 +257,8 @@ fn admit_counts(
     // submitted as. A text column may omit it: whether a published length
     // replaces it depends on the sections that list the specification, so
     // composition checks it (SUB-23).
-    let length_type =
-        !["date", "datetime"].contains(&kind) && ["text", "integer", "float"].contains(&resolved);
+    let length_type = !["date", "datetime", "time"].contains(&kind)
+        && ["text", "integer", "float"].contains(&resolved);
     if length_type && resolved != "text" && effective.length.is_none() && maxima.is_empty() {
         result.push(finding(
             C::SubmissionLengthMissing,
@@ -995,13 +995,13 @@ fn reject_datetime_columns(
     }
     for column in &spec.columns {
         let name = column.name.name.as_str();
-        if output.contains(name) && column.kind == ColumnType::DateTime {
+        if output.contains(name) && matches!(column.kind, ColumnType::DateTime | ColumnType::Time) {
             result.push(finding(
                 C::SubmissionDatetimeColumn,
                 &format!("{}.type", spec.cite(column.meta)),
                 &[
                     ("column", s(name)),
-                    ("value", s("datetime")),
+                    ("value", s(column.kind.name())),
                     ("class", s(class)),
                     ("permitted", V::Array(vec![s("str"), s("date")])),
                 ],

@@ -48,7 +48,7 @@ star        := name "." "*"
 call        := function "(" [expression ("," expression)*] ")"
 identifier  := name ["." name]
 literal     := number | string | temporal | "TRUE" | "FALSE" | "NULL"
-temporal    := ("DATE" | "DATETIME") string
+temporal    := ("DATE" | "DATETIME" | "TIME") string
 number      := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 digits      := digit { digit }
 name        := (letter | "_") { letter | digit | "_" }
@@ -95,8 +95,8 @@ is not a bare name, but a qualified field may use one after its qualifier.
 Evidence: `yaml/grammar/expression.yaml`, `schema-predicates`.
 
 The reserved keywords are `AND`, `BETWEEN`, `FALSE`, `IN`, `IS`, `LIKE`,
-`NOT`, `NULL`, `OR` and `TRUE`. `DATE` and `DATETIME` begin a temporal
-literal only directly before a string literal, and `ESCAPE` is a keyword only
+`NOT`, `NULL`, `OR` and `TRUE`. `DATE`, `DATETIME` and `TIME` begin a
+temporal literal only directly before a string literal, and `ESCAPE` is a keyword only
 after a `LIKE` pattern; anywhere else each is an ordinary name, as are `CASE`,
 `WHEN`, `THEN`, `ELSE`, `END` and `OVER`. A function or reducer name is not
 reserved either: `SUM` without `(` is a name.
@@ -116,8 +116,8 @@ other is a `float`, and a sign written before a number belongs to it. An
 integer literal must lie in the `int` range. A `string` is delimited by single
 quotes, a doubled quote denotes one quote, backslash has no escape meaning,
 and its type is `str`. `TRUE` and `FALSE` are truth values and `NULL` is
-missing. `DATE '...'` and `DATETIME '...'` are temporal literals whose text
-must parse under [Values](values.md) for the named type.
+missing. `DATE '...'`, `DATETIME '...'` and `TIME '...'` are temporal
+literals whose text must parse under [Values](values.md) for the named type.
 
 Fails: `invalid_expression`, `integer_overflow`.
 Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-application/tests/fixtures/predicate_diagnostics.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_literals.tsv`.
@@ -310,8 +310,8 @@ Two non-missing operands compare only when
 [VALUE-19](values.md#value-19) makes their runtime types mutually
 comparable, in the order the table below gives, and no operand conversion
 occurs. A mixed `int` and `float` pair compares by exact mathematical value.
-Every other pair fails: a temporal value is not comparable to text, and a
-`date` is not comparable to a `datetime`.
+Every other pair fails: a temporal value is not comparable to text, and no
+two of `date`, `datetime` and `time` are comparable to each other.
 
 Fails: `incompatible_input_type`.
 Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`.
@@ -324,6 +324,7 @@ Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/pr
 | `str` with `str` | [Values](values.md) text order |
 | `date` with `date` | Chronological under [Values](values.md) |
 | `datetime` with `datetime` | Chronological under [Values](values.md) |
+| `time` with `time` | Chronological within the day under [Values](values.md) |
 
 Strings use the equality and total order [Values](values.md)
 defines. `9007199254740993 = 9007199254740992.0` is `FALSE`. An arithmetic
@@ -661,7 +662,8 @@ arithmetic fails under [FORMULA-23](#formula-23).
 `STR_JOIN(x)` writes each non-missing value of `x` as the text a `str` column
 converts it to ([VALUE-3](values.md#value-3)): an `int` as decimal text, a
 `float` as the shortest positional text of [VALUE-8](values.md#value-8), a
-`date` or `datetime` as the canonical text of [VALUE-17](values.md#value-17),
+`date`, `datetime` or `time` as the canonical text of
+[VALUE-17](values.md#value-17),
 and text as it is. It is the one reduction that converts its argument. It
 joins the values in the aggregate's `order_by` order
 ([LOOKUP-10](lookup.md#lookup-10)), writing `separator`, which may be the
@@ -670,8 +672,8 @@ once, where it first occurs in that order, comparing the written text scalar
 for scalar ([VALUE-12](values.md#value-12)). `COUNT(x)` with `distinct: true`
 counts the different non-missing values of `x`: text equal scalar for scalar,
 numbers by exact value, an `int` and a `float` alike
-([VALUE-19](values.md#value-19)), and dates and datetimes on the day or second
-they name ([VALUE-21](values.md#value-21)). `COUNT(D.*)` counts records and
+([VALUE-19](values.md#value-19)), and dates, datetimes and times on the day or
+second they name ([VALUE-21](values.md#value-21)). `COUNT(D.*)` counts records and
 takes no `distinct`. A joined text is at most the 1 MiB of
 [TEXT-2](text.md#text-2): the first value whose text would make it longer
 refuses the run, without reading the rest of the group, as `engine_rejected`

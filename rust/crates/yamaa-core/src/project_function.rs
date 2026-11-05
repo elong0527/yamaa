@@ -333,13 +333,7 @@ fn case_id(id: &str) -> bool {
         && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 fn column_kind(kind: ColumnType) -> ValueType {
-    match kind {
-        ColumnType::Str => ValueType::Str,
-        ColumnType::Int => ValueType::Int,
-        ColumnType::Float => ValueType::Float,
-        ColumnType::Date => ValueType::Date,
-        ColumnType::DateTime => ValueType::DateTime,
-    }
+    ValueType::from(kind)
 }
 
 fn obligations(def: &ast::Function) -> BTreeSet<String> {

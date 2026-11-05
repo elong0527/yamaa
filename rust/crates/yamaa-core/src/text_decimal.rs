@@ -175,6 +175,7 @@ impl StringDecimal {
             ValueRef::Bool(_) => return Err(self.refusal("bool")),
             ValueRef::Date(_) => return Err(self.refusal("date")),
             ValueRef::DateTime(_) => return Err(self.refusal("datetime")),
+            ValueRef::Time(_) => return Err(self.refusal("time")),
         };
         let uncounted =
             || Error::Limit(Limits::text_bytes(None).expect_err("no uncounted text is admitted"));

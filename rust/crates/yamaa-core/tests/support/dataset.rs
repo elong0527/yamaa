@@ -107,6 +107,7 @@ fn scalar_text(scalar: &Scalar) -> String {
         Scalar::Literal(Value::DateTime(value)) => {
             format!("DATETIME {}", quoted(&value.to_string()))
         }
+        Scalar::Literal(Value::Time(value)) => format!("TIME {}", quoted(&value.to_string())),
         Scalar::Literal(Value::Bool(_)) => panic!("a truth value is not an operand"),
     }
 }

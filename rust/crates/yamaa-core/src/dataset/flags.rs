@@ -120,15 +120,7 @@ pub fn flag_condition_diagnostic<E>(
         V::String(s.into())
     }
     fn kind(k: crate::value::ValueType) -> &'static str {
-        use crate::value::ValueType::*;
-        match k {
-            Str => "str",
-            Int => "int",
-            Float => "float",
-            Bool => "bool",
-            Date => "date",
-            DateTime => "datetime",
-        }
+        k.name()
     }
     let ErrorKind::Condition(cause) = &error.kind else {
         return None;

@@ -21,7 +21,8 @@ use arrow_array::{
     builder::{Int64Builder, MapBuilder, MapFieldNames, StringBuilder},
     ArrayRef, BinaryArray, BooleanArray, Date32Array, Date64Array, FixedSizeListArray,
     Float32Array, Float64Array, Int32Array, Int64Array, LargeStringArray, ListArray, RecordBatch,
-    StringArray, StructArray, TimestampMicrosecondArray, TimestampMillisecondArray,
+    StringArray, StructArray, Time32MillisecondArray, Time64MicrosecondArray,
+    Time64NanosecondArray, TimestampMicrosecondArray, TimestampMillisecondArray,
     TimestampNanosecondArray, UInt64Array,
 };
 use arrow_buffer::OffsetBuffer;
@@ -143,6 +144,52 @@ pub fn file(name: &str) -> Vec<u8> {
             &batch(vec![(
                 "AT",
                 array(TimestampMillisecondArray::from(vec![253_402_300_800_000])),
+            )]),
+            none(),
+        ),
+        // The time units Arrow writes: midnight and the last second of the
+        // day in milliseconds, microseconds and nanoseconds.
+        "time-units" => write(
+            &batch(vec![
+                (
+                    "MS",
+                    array(Time32MillisecondArray::from(vec![
+                        Some(0),
+                        None,
+                        Some(86_399_000),
+                    ])),
+                ),
+                (
+                    "US",
+                    array(Time64MicrosecondArray::from(vec![
+                        Some(30_615_000_000),
+                        None,
+                        Some(86_399_000_000),
+                    ])),
+                ),
+                (
+                    "NS",
+                    array(Time64NanosecondArray::from(vec![
+                        Some(1_000_000_000),
+                        None,
+                        Some(86_399_000_000_000),
+                    ])),
+                ),
+            ]),
+            none(),
+        ),
+        "fractional-time" => write(
+            &batch(vec![(
+                "AT",
+                array(Time64MicrosecondArray::from(vec![0, 1_500_000])),
+            )]),
+            none(),
+        ),
+        // 24:00:00, one day past midnight.
+        "time-past-a-day" => write(
+            &batch(vec![(
+                "AT",
+                array(Time32MillisecondArray::from(vec![86_400_000])),
             )]),
             none(),
         ),

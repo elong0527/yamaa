@@ -960,15 +960,9 @@ fn flag(part: FlagPart, seconds_collected: bool, precision: Precision) -> Value 
     Value::Str(code.into())
 }
 fn type_name(value: ValueRef<'_>) -> &'static str {
-    match value {
-        ValueRef::Str(_) => "str",
-        ValueRef::Int(_) => "int",
-        ValueRef::Float(_) => "float",
-        ValueRef::Bool(_) => "bool",
-        ValueRef::Date(_) => "date",
-        ValueRef::DateTime(_) => "datetime",
-        ValueRef::Missing => "missing",
-    }
+    value
+        .value_type()
+        .map_or("missing", crate::value::ValueType::name)
 }
 pub(crate) fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
     Diagnostic {

@@ -77,11 +77,11 @@ function_parameter_class:
 
 function_param_type:
     type: str
-    values: [str, int, float, bool, date, datetime]
+    values: [str, int, float, bool, date, datetime, time]
 
 function_value:
     type: literal_value
-    description: Constant of the declared parameter or return type, a date or datetime written as bare text and YAML null for missing (FUNC-5).
+    description: Constant of the declared parameter or return type, a date, datetime or time written as bare text and YAML null for missing (FUNC-5).
 
 qualified_callable:
     type: str

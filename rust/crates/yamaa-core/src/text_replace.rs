@@ -82,16 +82,14 @@ impl StringReplace {
             ValueRef::Missing => return Ok(Step::Recovered),
             ValueRef::Str(subject) => subject,
             other => {
-                return Err(Error::Diagnostic(self.search.input_diagnostic(
-                    match other {
-                        ValueRef::Int(_) => "int",
-                        ValueRef::Float(_) => "float",
-                        ValueRef::Bool(_) => "bool",
-                        ValueRef::Date(_) => "date",
-                        ValueRef::DateTime(_) => "datetime",
-                        _ => unreachable!(),
-                    },
-                )));
+                return Err(Error::Diagnostic(
+                    self.search.input_diagnostic(
+                        other
+                            .value_type()
+                            .map(crate::value::ValueType::name)
+                            .expect("a present value of another type"),
+                    ),
+                ));
             }
         };
         let spans = self

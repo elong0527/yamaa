@@ -1,17 +1,17 @@
 # Values
 
 Every value has one runtime type. These rules define the column types, the
-missing value, numbers, text, dates and datetimes, the one conversion of a
-completed result, and how values compare and order.
+missing value, numbers, text, dates, datetimes and times, the one conversion
+of a completed result, and how values compare and order.
 
 ## Column types and conversion
 
 <a id="value-1"></a>
 
-### VALUE-1. A column declares exactly one of five types, and every type also admits missing
+### VALUE-1. A column declares exactly one of six types, and every type also admits missing
 
-A column must declare exactly one type: `str`, `int`, `float`, `date` or
-`datetime`. Every type also admits the missing value. There is no Boolean
+A column must declare exactly one type: `str`, `int`, `float`, `date`,
+`datetime` or `time`. Every type also admits the missing value. There is no Boolean
 column type; a flag is a `str` column with `allowed_values`. The vocabulary is
 closed: a declared type outside it fails schema validation, and extending it
 is a rule change, never an implementation option.
@@ -20,8 +20,8 @@ Fails: `value_not_permitted`.
 Evidence: `negative-ambiguous-type`, `rust/crates/yamaa-core/tests/schema_references.rs`.
 
 `str` follows [VALUE-11](#value-11) to [VALUE-12](#value-12), `int` and
-`float` follow [VALUE-5](#value-5) to [VALUE-10](#value-10), and `date` and
-`datetime` follow [VALUE-13](#value-13) to [VALUE-18](#value-18). A declared
+`float` follow [VALUE-5](#value-5) to [VALUE-10](#value-10), and `date`,
+`datetime` and `time` follow [VALUE-13](#value-13) to [VALUE-18](#value-18). A declared
 type outside the vocabulary fails under
 [Schema language](reference/schema-language.md)'s `values` constraint.
 
@@ -66,15 +66,16 @@ The source is the value's runtime type and the destination is the column's
 declared type. Identity preserves the value. A Boolean fails conversion to
 every column type even when the schema accepts it as a literal.
 
-| Source | `str` | `int` | `float` | `date` | `datetime` |
-| --- | --- | --- | --- | --- | --- |
-| missing | missing | missing | missing | missing | missing |
-| `str` | identity | numeric parse, then integral conversion | numeric parse | temporal parse | temporal parse |
-| `int` | decimal text | identity | widening | fail | fail |
-| `float` | shortest positional text | integral conversion | identity | fail | fail |
-| `date` | canonical text | fail | fail | identity | fail |
-| `datetime` | canonical text | fail | fail | fail | identity |
-| `bool` | fail | fail | fail | fail | fail |
+| Source | `str` | `int` | `float` | `date` | `datetime` | `time` |
+| --- | --- | --- | --- | --- | --- | --- |
+| missing | missing | missing | missing | missing | missing | missing |
+| `str` | identity | numeric parse, then integral conversion | numeric parse | temporal parse | temporal parse | temporal parse |
+| `int` | decimal text | identity | widening | fail | fail | fail |
+| `float` | shortest positional text | integral conversion | identity | fail | fail | fail |
+| `date` | canonical text | fail | fail | identity | fail | fail |
+| `datetime` | canonical text | fail | fail | fail | identity | fail |
+| `time` | canonical text | fail | fail | fail | fail | identity |
+| `bool` | fail | fail | fail | fail | fail | fail |
 
 Numeric parse is [VALUE-6](#value-6), integral conversion
 [VALUE-7](#value-7), and widening and numeric text [VALUE-8](#value-8); a
@@ -373,36 +374,37 @@ intermediates, group and window partitions, keys, uniqueness checks, allowed
 values, and every other comparison of string identities. Equal strings have
 byte-identical UTF-8 encodings.
 
-## Dates and datetimes
+## Dates, datetimes and times
 
 <a id="value-13"></a>
 
-### VALUE-13. A date names one calendar day and a datetime one civil second, with no gaps
+### VALUE-13. A date names one calendar day, a datetime one civil second and a time one second of the day, with no gaps
 
 A `date` is a complete proleptic Gregorian calendar date naming one day. A
 `datetime` is a complete local civil datetime: a date of the same kind
 together with a time of day resolved to a whole second, naming a reading on a
-wall clock rather than an instant on a timeline. Both also admit the missing
-value. Every combination of fields in the ranges below names one day or civil
+wall clock rather than an instant on a timeline. A `time` is that time of day
+alone. All three admit the missing value. Every combination of fields in the ranges below names one day or civil
 moment, and every day or moment in range has one combination.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
 
-| Field | Range | In `date` | In `datetime` |
-|---|---|---|---|
-| year | `0001` to `9999` | yes | yes |
-| month | `01` to `12` | yes | yes |
-| day | `01` to the length of that month in that year | yes | yes |
-| hour | `00` to `23` | -- | yes |
-| minute | `00` to `59` | -- | yes |
-| second | `00` to `59` | -- | yes |
+| Field | Range | In `date` | In `datetime` | In `time` |
+|---|---|---|---|---|
+| year | `0001` to `9999` | yes | yes | -- |
+| month | `01` to `12` | yes | yes | -- |
+| day | `01` to the length of that month in that year | yes | yes | -- |
+| hour | `00` to `23` | -- | yes | yes |
+| minute | `00` to `59` | -- | yes | yes |
+| second | `00` to `59` | -- | yes | yes |
 
-Both value spaces are total and gapless. No civil time is nonexistent or
+The value spaces are total and gapless. No civil time is nonexistent or
 ambiguous: a daylight-saving gap or repetition arises only when a wall-clock
 reading is mapped to a timeline, and a zone supplies that mapping. Without a
 zone, every field combination in the ranges above is a value of the type and
 denotes the reading it spells, so there is nothing to reject as
-unrepresentable and nothing to disambiguate.
+unrepresentable and nothing to disambiguate. A `time` runs from `00:00:00` to
+`23:59:59`; midnight is `00:00:00`, never `24:00:00`.
 
 <a id="value-14"></a>
 
@@ -412,31 +414,34 @@ A `datetime` carries no timezone and no offset and resolves to a whole second.
 Text carrying a zone, an offset or a fractional second is rejected rather than
 normalized, and parsing keeps the fields of the text. A datetime is never
 implicitly shifted into another zone; only an explicit `shift` moves a civil
-value, under [TIME-14](temporal.md#time-14). A study that collects sub-second
-times keeps the collected text in a `str` column.
+value, under [TIME-14](temporal.md#time-14). A `time` likewise carries no
+zone, offset or fractional second. A study that collects sub-second times
+keeps the collected text in a `str` column.
 
 Evidence: `negative-datetime-zones`, `adam-adae-post-dose-window`.
 
 Whole seconds are exact in both hosts, which fixes how a host represents a
 temporal value:
 
-| Host | `date` | `datetime` |
-|---|---|---|
-| Python | `datetime.date` | `datetime`; tzinfo unset; microsecond zero |
-| R | `Date` | `POSIXct` with `tzone` set to `"UTC"` |
+| Host | `date` | `datetime` | `time` |
+|---|---|---|---|
+| Python | `datetime.date` | `datetime`; tzinfo unset; microsecond zero | `datetime.time`; tzinfo unset; microsecond zero |
+| R | `Date` | `POSIXct` with `tzone` set to `"UTC"` | `hms`, a `difftime` of whole seconds since midnight in units `"secs"` |
 
-An R `datetime` sets `tzone` to `UTC` rather than leaving it empty.
+An R `datetime` sets `tzone` to `UTC` rather than leaving it empty. An R `time`
+has class `c("hms", "difftime")`, the class the `hms` package gives it, and
+needs no package to be read.
 
 A value holding a fractional or leap second is never reached: such text is
 rejected first, and an implementation never rounds to reach such a value.
 
 <a id="value-15"></a>
 
-### VALUE-15. Text becomes a date or datetime only in one zero-padded extended form
+### VALUE-15. Text becomes a date, datetime or time only in one zero-padded extended form
 
 Every place text becomes a temporal value uses one form: a `date` is
-`YYYY-MM-DD`, and a `datetime` is a date, `T`, and `hh:mm` with an optional
-`:ss`. `YYYY` is four ASCII digits and every other field two, zero-padded. An
+`YYYY-MM-DD`, a `time` is `hh:mm` with an optional `:ss`, and a `datetime` is
+a date, `T`, and a time. `YYYY` is four ASCII digits and every other field two, zero-padded. An
 omitted `ss` names second `00`; nothing else is defaulted, and no sign,
 surrounding whitespace, other separator or field order is recognised. Any other
 text, or a field outside its range, is not a temporal value: reaching a
@@ -451,8 +456,8 @@ datetime := date "T" time
 time     := hh ":" mm [ ":" ss ]
 ```
 
-One production defines the calendar half of both types, so a date parses
-identically wherever it appears. These text forms are rejected:
+One production defines the calendar half of a datetime and one its clock
+half, so a date or a time parses identically wherever it appears. These text forms are rejected:
 
 | Rejected | Offered as | Why |
 |---|---|---|
@@ -470,16 +475,19 @@ identically wherever it appears. These text forms are rejected:
 | `2025-01-12T14:00:00.5` | `datetime` | a fractional second |
 | `2025-01-12T24:00` | `datetime` | hour 24; midnight is the next day's `00:00` |
 | `2025-01-12T23:59:60` | `datetime` | a leap second |
+| `8:30` | `time` | fields not padded to their width |
+| `14:00:00Z` | `time` | a zone designator |
+| `24:00` | `time` | hour 24; midnight is `00:00` |
+| `2025-01-12T14:00:00` | `time` | a date; a moment is not a time of day |
 
 A date part that is not a date in the calendar, such as `2025-02-30`, and a
 year outside `0001` to `9999` fail the same way; the four-digit field admits
-no other year. A clock reading that carries no date is not a value of either
-type: a study that collects one, as the `--TM` family does, keeps the
-collected text as `str`.
+no other year. A clock reading that carries no date is a `time`, never a
+`datetime`.
 
 [Inputs](inputs.md) applies the `str` row of [VALUE-3](#value-3), which
-reaches this form, so a field declared `date` or `datetime` in a `types`
-declaration parses exactly as a column conversion parses. The two paths differ
+reaches this form, so a field declared `date`, `datetime` or `time` in a
+`types` declaration parses exactly as a column conversion parses. The two paths differ
 only in what answers a bad value. An ingested value that does not parse is
 rejected before any derivation, so no handler applies
 ([INPUT-7](inputs.md#input-7)). A `str` field converted at a column declaring
@@ -513,6 +521,9 @@ Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-tim
 | selecting an existing value | unchanged; the property follows the selected value |
 | `shift` | unchanged from the source temporal value |
 
+A `time` is always collected through the second and records no precision:
+`precision`, `impute`, `imputation_flag` and `shift` take no `time`.
+
 The parsed-text row admits no other answer: the form of
 [VALUE-15](#value-15) admits only complete text, so nothing a parse produces
 was collected in part. A parsed datetime is collected through the second: an
@@ -538,8 +549,8 @@ ADaM imputation flags.
 ### VALUE-17. A temporal value is written in one canonical text that carries its fields alone
 
 A temporal value is written back in exactly one form: `YYYY-MM-DD` for a
-`date` and `YYYY-MM-DDThh:mm:ss` for a `datetime`, every field zero-padded and
-seconds always shown. This is the text a temporal value converts to as `str`
+`date`, `YYYY-MM-DDThh:mm:ss` for a `datetime` and `hh:mm:ss` for a `time`,
+every field zero-padded and seconds always shown. This is the text a temporal value converts to as `str`
 and the text the artifact records for a temporal column; neither form takes a
 project setting. Canonical text is not the collected text, and it carries no
 collected precision.
@@ -574,12 +585,13 @@ the artifact records like any other.
 
 <a id="value-18"></a>
 
-### VALUE-18. A date and a datetime never convert into each other or enter arithmetic
+### VALUE-18. A date, a datetime and a time never convert into one another or enter arithmetic
 
-A `date` and a `datetime` do not convert in either direction; such a
-conversion fails and chooses neither value. An explicit operation names what
-it changes instead: `to_date` drops a datetime's time of day
-([TIME-2](temporal.md#time-2)), and `impute` with `type: datetime` supplies a
+No two of `date`, `datetime` and `time` convert in either direction; such a
+conversion fails and chooses no value. An explicit operation names what it
+changes instead: `to_date` drops a datetime's time of day
+([TIME-2](temporal.md#time-2)), `to_time` drops its date
+([TIME-23](temporal.md#time-23)), and `impute` with `type: datetime` supplies a
 date's, first or last ([TIME-8](temporal.md#time-8)). A temporal value never enters
 arithmetic, whose grammar under [Formulas](formulas.md) is numeric. Differences
 and shifts are the named operations of [Dates and times](temporal.md), with
@@ -608,8 +620,8 @@ Evidence: `negative-greatest-mixed`, `negative-least-mixed`, `rust/crates/yamaa-
 So `9007199254740993` and `9007199254740992.0` are unequal everywhere.
 Collected temporal precision changes neither a value's
 runtime type nor its comparability. The type's owner defines its order:
-[VALUE-20](#value-20) for `str` and [VALUE-21](#value-21) for `date` and
-`datetime`.
+[VALUE-20](#value-20) for `str` and [VALUE-21](#value-21) for `date`,
+`datetime` and `time`.
 
 Incompatible inputs fail as the incompatible-input error of
 [VALUE-2](#value-2); this includes comparing or ordering a temporal value
@@ -644,7 +656,7 @@ results separately.
 
 Two values of the same temporal type compare field by field, most significant
 first: year, then month, then day, and for a `datetime` then hour, minute and
-second. Every pair of non-missing values of one type is ordered, and that order
+second; two `time` values compare by hour, minute and second. Every pair of non-missing values of one type is ordered, and that order
 is chronological; no datetime comparison fails. Collected precision takes no
 part in a comparison: a value completed from a year and a month compares as
 the day it names.
@@ -659,7 +671,8 @@ month therefore:
 - wins a `greatest` it is the latest operand of;
 - satisfies a predicate the day satisfies.
 
-Both types are comparable wherever a rule requires mutually comparable values.
+Each type is comparable with itself wherever a rule requires mutually
+comparable values.
 `greatest` and `least` reduce them across a row, an `order_by` term orders by
 one, and [Formulas](formulas.md)'s `MIN` and `MAX` reduce one.
 [VALUE-22](#value-22) sorts missing values lowest unless the term's `nulls`

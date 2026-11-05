@@ -32,11 +32,13 @@ pub(super) fn column_type(stored: &Leaf, arrow: &DataType, annotated: bool) -> O
     row(stored, arrow, annotated).map(|row| row.kind)
 }
 /// How many of the leaf `stored`'s stored counts make one second: its
-/// timestamp annotation's unit, which every column row that reads as
-/// `datetime` names (PARQUET-9); `None` for a leaf of no timestamp.
+/// timestamp or time annotation's unit, which every column row that reads
+/// as `datetime` or `time` names (PARQUET-9); `None` for a leaf of neither.
 pub(super) fn per_second(stored: &Leaf) -> Option<i64> {
     match stored.logical {
-        Some(Logical::Timestamp { unit, .. }) => Some(unit.per_second()),
+        Some(Logical::Timestamp { unit, .. } | Logical::Time { unit, .. }) => {
+            Some(unit.per_second())
+        }
         _ => None,
     }
 }

@@ -5,4 +5,4 @@ spec_paths:
 rule: VALUE-1
 context:
   value: number
-  permitted: [str, int, float, date, datetime]
+  permitted: [str, int, float, date, datetime, time]

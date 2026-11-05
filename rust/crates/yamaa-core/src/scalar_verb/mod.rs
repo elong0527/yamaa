@@ -80,6 +80,7 @@ impl ScalarOp {
             | Self::ToEpochDay
             | Self::TimeOfDay
             | Self::StrLength => ResultType::INT,
+            Self::ToTime => ResultType::TIME,
             Self::Shift { kind, .. } | Self::Impute { kind, .. } => temporal(kind),
             Self::ToDate => ResultType::DATE,
             Self::Dtc
@@ -161,7 +162,8 @@ impl ScalarOp {
             | Self::DurationValue { .. }
             | Self::DurationText { .. }
             | Self::Dtc
-            | Self::TimeOfDay => Preflight::Temporal,
+            | Self::TimeOfDay
+            | Self::ToTime => Preflight::Temporal,
             Self::Impute { .. }
             | Self::Precision { .. }
             | Self::ImputationFlag { .. }
@@ -476,7 +478,8 @@ impl Operation {
             | ScalarOp::DurationValue { .. }
             | ScalarOp::DurationText { .. }
             | ScalarOp::Dtc
-            | ScalarOp::TimeOfDay => temporal::from_tree(spec, e),
+            | ScalarOp::TimeOfDay
+            | ScalarOp::ToTime => temporal::from_tree(spec, e),
             ScalarOp::Impute { .. }
             | ScalarOp::Precision { .. }
             | ScalarOp::ImputationFlag { .. }

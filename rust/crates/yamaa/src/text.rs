@@ -474,7 +474,7 @@ fn cell(text: &str) -> String {
 
 /// The text of the value at `row` of `column`: `null` when it is missing, a
 /// float in VALUE-8's canonical text (a nonfinite float is missing, as at the
-/// scalar boundary), a date or datetime in VALUE-17's, and a list as its
+/// scalar boundary), a date, datetime or time in VALUE-17's, and a list as its
 /// items' texts joined by `, ` in brackets. A date or datetime outside the
 /// years 1 to 9999, which no engine table holds, prints `?`.
 fn value(column: &PublicColumn, row: usize) -> Cow<'_, str> {
@@ -499,6 +499,10 @@ fn value(column: &PublicColumn, row: usize) -> Cow<'_, str> {
                 yamaa_adapters::epoch::datetime_from_seconds(seconds, Precision::Second)
             })
             .map(|datetime| Cow::Owned(datetime.to_string())),
+        PublicColumn::Time(values) => values
+            .get(row)
+            .and_then(|seconds| yamaa_adapters::epoch::time_from_seconds(i64::from(seconds)))
+            .map(|time| Cow::Owned(time.to_string())),
         PublicColumn::List(lists) => lists.get(row).map(|items| {
             let texts = items
                 .map(|item| value(lists.items(), item))

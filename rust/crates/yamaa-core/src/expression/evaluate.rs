@@ -197,15 +197,7 @@ impl CompiledExpression {
 }
 
 fn own(value: ValueRef<'_>) -> Value {
-    match value {
-        ValueRef::Missing => Value::Missing,
-        ValueRef::Str(value) => Value::Str(value.into()),
-        ValueRef::Int(value) => Value::Int(value),
-        ValueRef::Float(value) => Value::Float(value),
-        ValueRef::Bool(value) => Value::Bool(value),
-        ValueRef::Date(value) => Value::Date(value),
-        ValueRef::DateTime(value) => Value::DateTime(value),
-    }
+    Value::from(value)
 }
 
 struct Evaluator<'a, R: Resolver> {

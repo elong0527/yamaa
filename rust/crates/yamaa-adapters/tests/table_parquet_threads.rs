@@ -18,7 +18,7 @@
 use std::{num::NonZeroUsize, ops::Range, rc::Rc};
 use yamaa_adapters::{
     column_table::{Column, ColumnTable},
-    epoch::{date_from_days, datetime_from_seconds},
+    epoch::{date_from_days, datetime_from_seconds, time_from_seconds},
     parquet_artifact::{render_partitions, Error},
 };
 use yamaa_core::{
@@ -30,13 +30,14 @@ use yamaa_core::{
 /// The rows of a full row group, as the encoder documents.
 const GROUP: usize = 131_072;
 
-/// The five column types that PARQUET-1 maps, in its order.
-const COLUMNS: [(&str, ColumnType); 5] = [
+/// The six column types that PARQUET-1 maps, in its order.
+const COLUMNS: [(&str, ColumnType); 6] = [
     ("str", ColumnType::Str),
     ("int", ColumnType::Int),
     ("float", ColumnType::Float),
     ("date", ColumnType::Date),
     ("datetime", ColumnType::DateTime),
+    ("time", ColumnType::Time),
 ];
 
 fn threads(count: usize) -> NonZeroUsize {
@@ -53,6 +54,7 @@ fn value(kind: ColumnType, row: usize) -> ValueRef<'static> {
         ColumnType::Float => (13, 2),
         ColumnType::Date => (17, 0),
         ColumnType::DateTime => (19, 9),
+        ColumnType::Time => (23, 4),
     };
     if row % period == phase {
         return ValueRef::Missing;
@@ -65,6 +67,7 @@ fn value(kind: ColumnType, row: usize) -> ValueRef<'static> {
         ColumnType::DateTime => ValueRef::DateTime(
             datetime_from_seconds(n * 61 - 1_000_000, Precision::Second).unwrap(),
         ),
+        ColumnType::Time => ValueRef::Time(time_from_seconds(n * 7 % 86_400).unwrap()),
     }
 }
 
@@ -208,7 +211,7 @@ fn a_write_on_four_threads_is_refused_as_the_write_on_one_is() {
             label: "a column past the schema",
             rows: 10,
             refused: &[],
-            projection: &[0, 5],
+            projection: &[0, 6],
             partitions: whole(10),
             expected: Err(Error::Projection),
         },

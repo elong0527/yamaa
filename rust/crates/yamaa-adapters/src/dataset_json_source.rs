@@ -187,11 +187,12 @@ impl DataType {
     /// The type the closed table gives, inverting JSON-10.
     fn supplies(self) -> ColumnType {
         match self {
-            Self::String | Self::Uri | Self::Time => ColumnType::Str,
+            Self::String | Self::Uri => ColumnType::Str,
             Self::Integer => ColumnType::Int,
             Self::Float | Self::Double | Self::Decimal => ColumnType::Float,
             Self::Date => ColumnType::Date,
             Self::Datetime => ColumnType::DateTime,
+            Self::Time => ColumnType::Time,
         }
     }
 
@@ -207,11 +208,11 @@ impl DataType {
     fn admits(self, declared: ColumnType) -> bool {
         declared == self.supplies()
             || match self {
-                Self::String | Self::Uri | Self::Time => true,
+                Self::String | Self::Uri => true,
                 Self::Integer => false,
                 Self::Float | Self::Double => declared == ColumnType::Int,
                 Self::Decimal => matches!(declared, ColumnType::Int | ColumnType::Str),
-                Self::Date | Self::Datetime => declared == ColumnType::Str,
+                Self::Date | Self::Datetime | Self::Time => declared == ColumnType::Str,
             }
     }
 }

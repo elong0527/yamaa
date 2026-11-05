@@ -74,6 +74,7 @@ fn scalar_diagnostic<'a, B: Project<'a>>(
         Kind::IntegerRange => "integer_out_of_range",
         Kind::InvalidDate => "invalid_date",
         Kind::InvalidDateTime => "invalid_datetime",
+        Kind::InvalidTime => "invalid_time",
         Kind::NormalizedShape => return Err(Error::UnavailableShape),
     };
     let value = finding.value.as_deref().ok_or(Error::UnavailableShape)?;

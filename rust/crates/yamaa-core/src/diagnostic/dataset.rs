@@ -54,14 +54,7 @@ fn count(value: usize) -> JsonValue {
     }
 }
 fn type_name(value: ValueType) -> &'static str {
-    match value {
-        ValueType::Str => "str",
-        ValueType::Int => "int",
-        ValueType::Float => "float",
-        ValueType::Bool => "bool",
-        ValueType::Date => "date",
-        ValueType::DateTime => "datetime",
-    }
+    value.name()
 }
 
 impl DatasetFinding<'_> {

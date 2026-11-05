@@ -229,7 +229,7 @@ pub fn convertible(source: ValueType, target: ColumnType) -> bool {
     match (source, target) {
         (V::Bool, _) => false,
         (_, T::Str) | (V::Str, _) | (V::Int | V::Float, T::Int | T::Float) => true,
-        (V::Date, T::Date) | (V::DateTime, T::DateTime) => true,
+        (V::Date, T::Date) | (V::DateTime, T::DateTime) | (V::Time, T::Time) => true,
         _ => false,
     }
 }
@@ -246,11 +246,13 @@ pub fn convert(value: &Value, target: ColumnType) -> Result<Value, ConversionErr
         | (Value::Int(_), T::Int)
         | (Value::Float(_), T::Float)
         | (Value::Date(_), T::Date)
-        | (Value::DateTime(_), T::DateTime) => Ok(value.clone()),
+        | (Value::DateTime(_), T::DateTime)
+        | (Value::Time(_), T::Time) => Ok(value.clone()),
         (Value::Int(number), T::Str) => Ok(Value::Str(number.to_string())),
         (Value::Float(number), T::Str) => Ok(Value::Str(float_text(*number))),
         (Value::Date(date), T::Str) => Ok(Value::Str(date.to_string())),
         (Value::DateTime(date), T::Str) => Ok(Value::Str(date.to_string())),
+        (Value::Time(time), T::Str) => Ok(Value::Str(time.to_string())),
         (Value::Str(text), T::Int | T::Float) => numeric_text(text, target),
         (Value::Float(number), T::Int) => integral(*number),
         (Value::Int(number), T::Float) => Ok(Value::float(*number as f64)),
@@ -261,6 +263,10 @@ pub fn convert(value: &Value, target: ColumnType) -> Result<Value, ConversionErr
         (Value::Str(text), T::DateTime) => text
             .parse()
             .map(Value::DateTime)
+            .map_err(|_| failed(value, target, R::InvalidTemporalText)),
+        (Value::Str(text), T::Time) => text
+            .parse()
+            .map(Value::Time)
             .map_err(|_| failed(value, target, R::InvalidTemporalText)),
         _ => Err(failed(value, target, R::IncompatibleOrInvalidText)),
     }
@@ -286,17 +292,27 @@ mod tests {
                 Value::Str("1".into()),
                 Value::Str("2025-01-02".into()),
                 Value::Str("2025-01-02T03:04".into()),
+                Value::Str("03:04".into()),
             ],
             ValueType::Int => vec![Value::Int(1)],
             ValueType::Float => vec![Value::float(1.0)],
             ValueType::Bool => vec![Value::Bool(true)],
             ValueType::Date => vec![Value::Date("2025-01-02".parse().unwrap())],
             ValueType::DateTime => vec![Value::DateTime("2025-01-02T03:04:05".parse().unwrap())],
+            ValueType::Time => vec![Value::Time("03:04:05".parse().unwrap())],
         };
         use ColumnType as T;
         use ValueType as V;
-        for source in [V::Str, V::Int, V::Float, V::Bool, V::Date, V::DateTime] {
-            for target in [T::Str, T::Int, T::Float, T::Date, T::DateTime] {
+        for source in [
+            V::Str,
+            V::Int,
+            V::Float,
+            V::Bool,
+            V::Date,
+            V::DateTime,
+            V::Time,
+        ] {
+            for target in [T::Str, T::Int, T::Float, T::Date, T::DateTime, T::Time] {
                 let converts = samples(source)
                     .iter()
                     .any(|value| convert(value, target).is_ok());

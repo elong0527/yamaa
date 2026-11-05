@@ -1,8 +1,8 @@
 //! Civil fields to and from epoch days and seconds: the public form of a
-//! date and a datetime, Parquet's and SAS's stored temporals, and the
-//! facade's epoch day and second accessors.
+//! date, a datetime and a time, Parquet's and SAS's stored temporals, and
+//! the facade's epoch day and second accessors.
 
-use yamaa_core::temporal::{Date, DateTime, Precision};
+use yamaa_core::temporal::{Date, DateTime, Precision, Time};
 
 /// Days from 0001-01-01 to 1970-01-01 in the proleptic Gregorian calendar.
 const EPOCH_ORDINAL: i64 = 719_162;
@@ -90,6 +90,11 @@ pub fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateT
         precision,
     )
     .ok()
+}
+
+/// The time of day `seconds` after midnight, or None outside 0 to 86399.
+pub fn time_from_seconds(seconds: i64) -> Option<Time> {
+    Time::from_seconds(u32::try_from(seconds).ok()?).ok()
 }
 
 #[cfg(test)]

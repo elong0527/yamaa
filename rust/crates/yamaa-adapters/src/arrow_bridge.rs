@@ -11,14 +11,14 @@
 //! satisfy the Arrow C Data/Stream producer contract.
 use crate::column_table::{limit, Column, ColumnTable, TableError};
 use crate::columns::{Text, Validity};
-use crate::epoch::{date_from_days, datetime_from_seconds};
+use crate::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
 use crate::public_table::{PublicColumn, PublicTable};
 use crate::storage_api::StreamReader;
 pub use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{
     Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
     RecordBatch, RecordBatchIterator, RecordBatchOptions, RecordBatchReader, StringArray,
-    StringViewArray, TimestampSecondArray,
+    StringViewArray, Time32SecondArray, TimestampSecondArray,
 };
 use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
@@ -86,6 +86,7 @@ fn data_type(column: &PublicColumn) -> DataType {
         PublicColumn::Float(_) => DataType::Float64,
         PublicColumn::Date(_) => DataType::Date32,
         PublicColumn::DateTime(_) => DataType::Timestamp(TimeUnit::Second, None),
+        PublicColumn::Time(_) => DataType::Time32(TimeUnit::Second),
         PublicColumn::List(lists) => {
             DataType::List(Arc::new(Field::new("item", data_type(lists.items()), true)))
         }
@@ -138,6 +139,10 @@ fn array(column: &PublicColumn, rows: Range<usize>) -> ArrayRef {
             nulls(values.validity(), rows),
         )),
         PublicColumn::DateTime(values) => Arc::new(TimestampSecondArray::new(
+            values.payloads()[rows.clone()].to_vec().into(),
+            nulls(values.validity(), rows),
+        )),
+        PublicColumn::Time(values) => Arc::new(Time32SecondArray::new(
             values.payloads()[rows.clone()].to_vec().into(),
             nulls(values.validity(), rows),
         )),
@@ -241,6 +246,10 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
             cast::<TimestampSecondArray>(array)?.iter(),
             |seconds| datetime_from_seconds(seconds, Precision::Second),
         )?),
+        DataType::Time32(TimeUnit::Second) => PublicColumn::Time(temporal(
+            cast::<Time32SecondArray>(array)?.iter(),
+            |seconds| time_from_seconds(i64::from(seconds)),
+        )?),
         DataType::List(field) => {
             let array = cast::<ListArray>(array)?;
             let empty = arrow_array::new_empty_array(field.data_type());
@@ -260,8 +269,8 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
 
 /// Consume a standard stream of public Arrow types into the engine's column
 /// table: UTF-8 (including large and view arrays) as text, `Int64`,
-/// `Float64`, `Date32` and zone-free `TimestampSecond`, a date with day and
-/// a datetime with second precision. Other types require an explicit
+/// `Float64`, `Date32`, zone-free `TimestampSecond` and `Time32Second`, a
+/// date with day and a datetime with second precision, and a time of day. Other types require an explicit
 /// preserving conversion by the caller before exporting. A nonfinite float
 /// is missing. The whole stream is read before its values are converted,
 /// and the stream is released before this returns.
@@ -315,6 +324,7 @@ fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
                     DataType::Float64 => ColumnType::Float,
                     DataType::Date32 => ColumnType::Date,
                     DataType::Timestamp(TimeUnit::Second, None) => ColumnType::DateTime,
+                    DataType::Time32(TimeUnit::Second) => ColumnType::Time,
                     _ => return Err(TableError::ArrayType { batch: 0, column }),
                 };
                 Ok(Declared {
@@ -399,6 +409,19 @@ fn append(
                 datetimes.push(if present(row) {
                     Some(
                         datetime_from_seconds(seconds.value(row), Precision::Second)
+                            .ok_or(TableError::TemporalRange { batch, column, row })?,
+                    )
+                } else {
+                    None
+                });
+            }
+        }
+        Column::Time(times) => {
+            let seconds = cast::<Time32SecondArray>(array, batch, column)?;
+            for row in 0..array.len() {
+                times.push(if present(row) {
+                    Some(
+                        time_from_seconds(i64::from(seconds.value(row)))
                             .ok_or(TableError::TemporalRange { batch, column, row })?,
                     )
                 } else {

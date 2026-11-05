@@ -39,6 +39,7 @@ fuzz_target!(|data: &[u8]| {
         ColumnType::Float,
         ColumnType::Date,
         ColumnType::DateTime,
+        ColumnType::Time,
     ] {
         let types = parsed
             .names

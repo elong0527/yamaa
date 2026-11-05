@@ -47,6 +47,7 @@ mod execution {
                     "datetime:{date}:{}",
                     format!("{:?}", date.collected_precision()).to_lowercase()
                 ),
+                Value::Time(time) => format!("time:{time}"),
             }
         }
 
@@ -58,6 +59,7 @@ mod execution {
                 "str" => ColumnType::Str,
                 "date" => ColumnType::Date,
                 "datetime" => ColumnType::DateTime,
+                "time" => ColumnType::Time,
                 _ => panic!("invalid fixture target"),
             }
         }
@@ -87,7 +89,7 @@ mod execution {
                 }
                 Some(ValueType::Bool) => format!("bool:{}", error.value.as_bool().unwrap()),
                 Some(ValueType::Str) => format!("str:{}", error.value.as_str().unwrap()),
-                Some(ValueType::Date | ValueType::DateTime) => {
+                Some(ValueType::Date | ValueType::DateTime | ValueType::Time) => {
                     panic!("unexpected temporal lifecycle fixture input")
                 }
             }

@@ -89,14 +89,7 @@ fn keyword(name: &str) -> Segment {
 }
 
 pub(super) fn column_type(text: &str) -> Option<ColumnType> {
-    Some(match text {
-        "str" => ColumnType::Str,
-        "int" => ColumnType::Int,
-        "float" => ColumnType::Float,
-        "date" => ColumnType::Date,
-        "datetime" => ColumnType::DateTime,
-        _ => return None,
-    })
+    ColumnType::from_name(text)
 }
 
 impl<'d> Lower<'d> {

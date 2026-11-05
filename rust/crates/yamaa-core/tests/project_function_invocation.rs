@@ -28,6 +28,7 @@ mod project {
                 "bool" => Value::Bool(text.parse().unwrap()),
                 "date" => Value::Date(text.parse().unwrap()),
                 "datetime" => Value::DateTime(text.parse().unwrap()),
+                "time" => Value::Time(text.parse().unwrap()),
                 _ => panic!("invalid fixture type"),
             }
         }
@@ -41,6 +42,7 @@ mod project {
                 ValueRef::Bool(b) => format!("bool:{b}"),
                 ValueRef::Date(d) => format!("date:{d}"),
                 ValueRef::DateTime(d) => format!("datetime:{d}"),
+                ValueRef::Time(t) => format!("time:{t}"),
             }
         }
         /// Decode only the closed logical type vocabulary.
@@ -52,6 +54,7 @@ mod project {
                 "bool" => ValueType::Bool,
                 "date" => ValueType::Date,
                 "datetime" => ValueType::DateTime,
+                "time" => ValueType::Time,
                 _ => panic!("invalid fixture type"),
             }
         }
@@ -63,6 +66,7 @@ mod project {
                 "str" => ColumnType::Str,
                 "date" => ColumnType::Date,
                 "datetime" => ColumnType::DateTime,
+                "time" => ColumnType::Time,
                 _ => panic!("invalid result type"),
             }
         }
@@ -136,6 +140,7 @@ mod project {
                         ValueRef::Bool(b) => Value::Bool(b),
                         ValueRef::Date(d) => Value::Date(d),
                         ValueRef::DateTime(d) => Value::DateTime(d),
+                        ValueRef::Time(d) => Value::Time(d),
                     });
                 }
                 Ok(value(self.action))

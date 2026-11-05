@@ -13,7 +13,7 @@ mod declaration {
         use yamaa_adapters::yaml_decode::decode_yaml;
         use yamaa_core::expression::{
             compile, Comparison, CompileError, CompiledExpression, Context, Failure, NodeKind,
-            TemporalKind, RESERVED,
+            RESERVED,
         };
         use yamaa_core::json::Value as Json;
         use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
@@ -59,14 +59,9 @@ mod declaration {
                     format!("({} {text})", if *fractional { "float" } else { "int" })
                 }
                 NodeKind::String(value) => format!("(str {})", quote(value)),
-                NodeKind::Temporal { kind, value } => format!(
-                    "({} {})",
-                    match kind {
-                        TemporalKind::Date => "date",
-                        TemporalKind::DateTime => "datetime",
-                    },
-                    quote(value)
-                ),
+                NodeKind::Temporal { kind, value } => {
+                    format!("({} {})", kind.name(), quote(value))
+                }
                 NodeKind::Boolean(value) => value.to_string(),
                 NodeKind::Null => "null".into(),
                 NodeKind::Identifier => format!("(id {text})"),

@@ -46,7 +46,7 @@ expressions read.
 | [`schema_expression_mapping.yaml`](../../yaml/schema_expression_mapping.yaml) | `mapping`, `decode` and `cut` |
 | [`schema_expression_str.yaml`](../../yaml/schema_expression_str.yaml) | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template` and `str_case` |
 | [`schema_expression_numeric.yaml`](../../yaml/schema_expression_numeric.yaml) | `round_half_away_from_zero` and `str_decimal` |
-| [`schema_expression_date.yaml`](../../yaml/schema_expression_date.yaml) | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `date_text`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` and `duration_text` |
+| [`schema_expression_date.yaml`](../../yaml/schema_expression_date.yaml) | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `date_text`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `to_time`, `shift`, `duration_value` and `duration_text` |
 | [`schema_expression_window.yaml`](../../yaml/schema_expression_window.yaml) | `row_number`, `rank`, `row_value`, `locf` and `baseline_flag` |
 | [`schema_expression_aggregate.yaml`](../../yaml/schema_expression_aggregate.yaml) | `aggregate` |
 | [`schema_expression_odm.yaml`](../../yaml/schema_expression_odm.yaml) | `odm`, which reads an item of the collected ODM data |

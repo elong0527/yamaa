@@ -823,6 +823,7 @@ fn sample(kind: ColumnType) -> Value {
             )
             .expect("a datetime"),
         ),
+        ColumnType::Time => Value::Time(crate::temporal::Time::new(0, 0, 0).expect("a time")),
     }
 }
 

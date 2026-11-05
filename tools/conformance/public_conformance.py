@@ -443,6 +443,9 @@ def scalar(value, kind):
                 ).total_seconds()
             )
         )
+    if kind == "time":
+        time = value if isinstance(value, dt.time) else dt.time.fromisoformat(value)
+        return str(time.hour * 3600 + time.minute * 60 + time.second)
     raise ValueError(f"unknown declared type: {kind}")
 
 
@@ -504,6 +507,8 @@ def expected_table(path, types):
                 if pa.types.is_date32(field.type)
                 else "datetime"
                 if field.type == pa.timestamp("us")
+                else "time"
+                if field.type == pa.time64("us")
                 else None
             )
             if kind is None:

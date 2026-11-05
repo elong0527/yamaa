@@ -13,7 +13,7 @@
 //! then not grouped by the fields, and has no cut.
 use crate::table::TableAccess;
 use crate::table_grouping::{Key, OwnedKey};
-use crate::temporal::{Date, DateTime};
+use crate::temporal::{Date, DateTime, Time};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
@@ -211,6 +211,7 @@ impl Held {
             (_, Key::Bool(value)) => Self::Other(Key::Bool(*value)),
             (_, Key::Date(value)) => Self::Other(Key::Date(*value)),
             (_, Key::DateTime(value)) => Self::Other(Key::DateTime(*value)),
+            (_, Key::Time(value)) => Self::Other(Key::Time(*value)),
         };
     }
 }
@@ -235,6 +236,7 @@ enum Field {
     Bool(bool),
     Date(Date),
     DateTime(DateTime),
+    Time(Time),
 }
 
 impl Keys {
@@ -261,6 +263,7 @@ impl Keys {
             Field::Bool(value) => Key::Bool(value),
             Field::Date(value) => Key::Date(value),
             Field::DateTime(value) => Key::DateTime(value),
+            Field::Time(value) => Key::Time(value),
         }
     }
 
@@ -324,6 +327,7 @@ impl Keys {
                 Key::Bool(value) => Field::Bool(value),
                 Key::Date(value) => Field::Date(value),
                 Key::DateTime(value) => Field::DateTime(value),
+                Key::Time(value) => Field::Time(value),
             });
         }
     }

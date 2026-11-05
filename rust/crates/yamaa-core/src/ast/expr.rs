@@ -100,13 +100,15 @@ pub enum Literal {
     Date(String),
     /// A DATETIME literal in text, its value as written.
     DateTime(String),
+    /// A TIME literal in text, its value as written.
+    Time(String),
     /// A value outside the language; see [`ExprKind::Unsupported`].
     Unsupported,
 }
 
 impl Literal {
     /// The value the literal writes (EXPR-4): none for an integer beyond 64
-    /// bits, temporal text that names no day or second, or a value outside
+    /// bits, temporal text that names no day, second or time, or a value outside
     /// the language, which the check that converts it refuses.
     pub fn value(&self) -> Option<Value> {
         Some(match self {
@@ -117,6 +119,7 @@ impl Literal {
             Self::Int(value) => Value::Int(value.parse().ok()?),
             Self::Date(value) => Value::Date(value.parse().ok()?),
             Self::DateTime(value) => Value::DateTime(value.parse().ok()?),
+            Self::Time(value) => Value::Time(value.parse().ok()?),
             Self::Unsupported => return None,
         })
     }

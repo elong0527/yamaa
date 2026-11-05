@@ -344,6 +344,7 @@ impl Column {
             spec::ColumnType::Float => T::Float,
             spec::ColumnType::Date => T::Date,
             spec::ColumnType::Datetime => T::DateTime,
+            spec::ColumnType::Time => T::Time,
         }
     }
     pub fn values(&self) -> &[ValueDefinition] {
@@ -901,8 +902,14 @@ impl ColumnAdmission<'_> {
             );
         }
         // SUB-27: an `sdtm` or `send` dataset carries its date and time text
-        // in a `str` column, never in a `datetime` one.
-        if !adam && level == Level::Column && column_type == spec::ColumnType::Datetime {
+        // in a `str` column, never in a `datetime` or `time` one.
+        if !adam
+            && level == Level::Column
+            && matches!(
+                column_type,
+                spec::ColumnType::Datetime | spec::ColumnType::Time
+            )
+        {
             let type_path = column_path
                 .strip_suffix(".submission")
                 .map_or_else(|| format!("{column_path}.type"), |p| format!("{p}.type"));
@@ -911,7 +918,7 @@ impl ColumnAdmission<'_> {
             let text = |value: &str| crate::json::Value::String(value.into());
             for (key, value) in [
                 ("column", text(name)),
-                ("value", text("datetime")),
+                ("value", text(column_type.name())),
                 ("class", text(self.class)),
                 (
                     "permitted",
@@ -1284,6 +1291,7 @@ impl ColumnAdmission<'_> {
                 spec::ColumnType::Float => crate::value::ColumnType::Float,
                 spec::ColumnType::Date => crate::value::ColumnType::Date,
                 spec::ColumnType::Datetime => crate::value::ColumnType::DateTime,
+                spec::ColumnType::Time => crate::value::ColumnType::Time,
             };
             let codelist_path = format!("{column_path}.codelist");
             let allowed = match level {

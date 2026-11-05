@@ -178,8 +178,9 @@ Its context names the `function` and, for a fault of one argument, the
 `missing_required_argument`, or `type_mismatch` with the parameter's
 `expected_type` and the argument's `actual_type`. A written value the engine
 cannot run with is a fault of its argument too: an integer outside the 64-bit
-range (`integer_range`), a `DATE` or `DATETIME` literal that names no day or
-second (`invalid_date`, `invalid_datetime`), or a value that is no scalar
+range (`integer_range`), a `DATE`, `DATETIME` or `TIME` literal that names no
+day, second or time of day (`invalid_date`, `invalid_datetime`,
+`invalid_time`), or a value that is no scalar
 (`invalid_shape`), each naming the text it is written as in `value`, null when
 it is no scalar text. A call with other fields than `name` and `args`, or
 whose `args` are no mapping, fails with `invalid_function_argument` there,
@@ -189,8 +190,8 @@ phase, its context naming the `function` and its `call`, and the `unknown`
 arguments, or the `argument`, with `expected_type` and `actual_type` for a
 type mismatch.
 
-A function file writes a `date` or `datetime` default, test argument or result
-as text, which the declared parameter or return type reads; text that type
+A function file writes a `date`, `datetime` or `time` default, test argument
+or result as text, which the declared parameter or return type reads; text that type
 cannot read fails the file under [FUNC-2](#func-2). Each parameter name must be
 a name in every host language the file implements.
 
@@ -282,14 +283,15 @@ undeclared missing value returned by an invoked binding, fails with
 
 The R adapter passes plain R values. A missing argument is `NA`, `str` is a
 character string, `int` and `float` are doubles and `bool` is a logical.
-`date` and `datetime` use the Date and explicitly UTC POSIXct representations
-fixed by [Temporal values](../values.md#value-14). An `int` beyond 2^53 in
+`date`, `datetime` and `time` use the Date, explicitly UTC POSIXct and `hms`
+representations fixed by [Temporal values](../values.md#value-14). An `int` beyond 2^53 in
 magnitude or text containing NUL has no exact R value, and the call fails
 rather than pass a changed value. The adapter converts a result by the declared
 type. `NULL` or a length-one `NA` is missing. Otherwise `str` needs one
 character string, `int` one whole number of magnitude at most 2^53, `float`
-one number, `date` one Date of whole days and `datetime` one UTC POSIXct of
-whole seconds; a number may have integer or double storage. Any other value,
+one number, `date` one Date of whole days, `datetime` one UTC POSIXct of
+whole seconds and `time` one `hms` of whole seconds in units `"secs"` within
+one day; a number may have integer or double storage. Any other value,
 including a logical, a classed number or a vector, is an invalid result. This
 host mapping adds no logical type.
 

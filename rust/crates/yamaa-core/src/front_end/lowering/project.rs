@@ -140,14 +140,9 @@ pub(in crate::front_end) fn codelist_declarations(
 
 fn parameter_kind(reader: &mut Reader<'_>, parent: usize, path: &str) -> ValueType {
     let text = reader.text_field(parent, "type", path);
-    match text.as_str() {
-        "str" => ValueType::Str,
-        "int" => ValueType::Int,
-        "float" => ValueType::Float,
-        "bool" => ValueType::Bool,
-        "date" => ValueType::Date,
-        "datetime" => ValueType::DateTime,
-        _ => {
+    match ValueType::from_name(&text) {
+        Some(kind) => kind,
+        None => {
             reader.fault(path, parent, Kind::NormalizedShape);
             ValueType::Str
         }
@@ -160,13 +155,9 @@ pub(in crate::front_end) fn column_kind(
     path: &str,
 ) -> ColumnType {
     let text = reader.text_field(parent, "returns", path);
-    match text.as_str() {
-        "str" => ColumnType::Str,
-        "int" => ColumnType::Int,
-        "float" => ColumnType::Float,
-        "date" => ColumnType::Date,
-        "datetime" => ColumnType::DateTime,
-        _ => {
+    match ColumnType::from_name(&text) {
+        Some(kind) => kind,
+        None => {
             reader.fault(path, parent, Kind::NormalizedShape);
             ColumnType::Str
         }
@@ -223,13 +214,7 @@ pub(in crate::front_end) fn comparison_decimals(reader: &mut Reader<'_>, root: u
 
 /// The value type a column type's values have.
 fn value_type(kind: ColumnType) -> ValueType {
-    match kind {
-        ColumnType::Str => ValueType::Str,
-        ColumnType::Int => ValueType::Int,
-        ColumnType::Float => ValueType::Float,
-        ColumnType::Date => ValueType::Date,
-        ColumnType::DateTime => ValueType::DateTime,
-    }
+    ValueType::from(kind)
 }
 
 pub(in crate::front_end) fn parameters(

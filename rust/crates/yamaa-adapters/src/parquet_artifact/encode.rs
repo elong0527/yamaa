@@ -275,21 +275,25 @@ fn leaf(kind: ColumnType) -> (i32, Option<i32>) {
         ColumnType::Float => (code::DOUBLE, None),
         ColumnType::Date => (code::INT32, Some(code::DATE)),
         ColumnType::DateTime => (code::INT64, Some(code::TIMESTAMP_MICROS)),
+        // TIME_MICROS names a time adjusted to UTC, which a time of day is
+        // not, so a time takes its logical annotation alone.
+        ColumnType::Time => (code::INT64, None),
     }
 }
 
 /// The logical type annotation of a leaf of `kind`, if it has one: STRING,
-/// DATE, or a TIMESTAMP of microseconds not adjusted to UTC.
+/// DATE, or a TIME or TIMESTAMP of microseconds not adjusted to UTC.
 fn logical(footer: &mut Compact, kind: ColumnType) {
     let variant = match kind {
         ColumnType::Str => 1,
         ColumnType::Date => 6,
+        ColumnType::Time => 7,
         ColumnType::DateTime => 8,
         ColumnType::Int | ColumnType::Float => return,
     };
     footer.begin(10);
     footer.begin(variant);
-    if kind == ColumnType::DateTime {
+    if matches!(kind, ColumnType::DateTime | ColumnType::Time) {
         footer.bool(1, false);
         footer.begin(2);
         footer.begin(2);
@@ -583,6 +587,13 @@ fn column_chunk<T: TableAccess + ?Sized>(
                     .checked_mul(1_000_000)
                     .map(|micros| micros as u64)
                     .ok_or(Error::ValueType),
+                _ => Err(Error::ValueType),
+            })?,
+            compressor,
+        ),
+        ColumnType::Time => encode(
+            Read::rows(reader, segments, |value| match value {
+                ValueRef::Time(value) => Ok(u64::from(value.seconds()) * 1_000_000),
                 _ => Err(Error::ValueType),
             })?,
             compressor,

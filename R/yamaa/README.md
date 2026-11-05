@@ -14,8 +14,8 @@ is designed with these principles:
   Python runtime is needed.
 - Explicit publication: runs build in memory, and files are written only when
   you call `save()`, which returns the paths it wrote.
-- Plain values: data frames hold doubles, character, `Date` and UTC `POSIXct`
-  columns, and a value R cannot hold exactly raises an error instead of
+- Plain values: data frames hold doubles, character, `Date`, UTC `POSIXct`
+  and `hms` columns, and a value R cannot hold exactly raises an error instead of
   changing.
 - One issues table: every finding is one row of the `issues` data frame, with
   its severity, condition, rule, spec path and message.

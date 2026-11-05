@@ -43,7 +43,7 @@ class Observation(BaseModel):
 class ScalarObservation(Observation):
     """Exact scalar transport; float bits and i64 values never pass through JSON numbers."""
 
-    type: Literal["missing", "bool", "int", "float", "str", "date", "datetime"]
+    type: Literal["missing", "bool", "int", "float", "str", "date", "datetime", "time"]
     value: str | bool | None
 
 
@@ -60,6 +60,8 @@ def observe_scalar(value: object) -> ScalarObservation:
         return ScalarObservation(type="datetime", value=value.isoformat())
     if isinstance(value, datetime.date):
         return ScalarObservation(type="date", value=value.isoformat())
+    if isinstance(value, datetime.time):
+        return ScalarObservation(type="time", value=value.isoformat())
     if isinstance(value, str):
         return ScalarObservation(type="str", value=value)
     raise TypeError(f"no portable scalar encoding for {type(value).__name__}")
@@ -118,6 +120,7 @@ def _expected_parquet(payload):
         pa.float64(): "float",
         pa.date32(): "date",
         pa.timestamp("us"): "datetime",
+        pa.time64("us"): "time",
     }
     try:
         types = tuple(kinds[field.type] for field in table.schema)

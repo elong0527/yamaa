@@ -367,6 +367,22 @@ EXPECTED = {
     "new.spec.intermediate_class.key=none": [
         Values("intermediate_class", "key", ("none",))
     ],
+    # #4267: a time of day is a sixth column type (VALUE-1), and to_time
+    # takes a datetime's (TIME-23).
+    "new.spec.expressions.to_time": [
+        Keyword("expressions", "to_time", "[]"),
+        Field("expressions.to_time", "source", "variable", True, kind="name"),
+    ],
+    "new.spec.column_type=time": [
+        Values("column_class", "type", ("time",)),
+        Values("dataset_class", "types", ("time",)),
+        Values("derive_binding_class", "type", ("time",)),
+        Values("intermediate_binding_class", "type", ("time",)),
+    ],
+    "new.function.column_type=time": [
+        Values("function_parameter_class", "type", ("time",)),
+        Values("function_definition_class", "returns", ("time",)),
+    ],
     "new.spec.str_case.delimiters": [
         Field("expressions.str_case", "delimiters", "str")
     ],

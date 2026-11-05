@@ -184,8 +184,8 @@ is marked non-standard ([SUB-4](#sub-4)). A specification that declares
 ### SUB-6. A column's submission data type defaults from its column type and model, within the closed set that type admits
 
 `data_type` states the type the submission represents the column as. It
-defaults from the declared column type and, for a `date` or `datetime`, from
-the model ([SUB-25](#sub-25)); each declared type admits the closed set the
+defaults from the declared column type and, for a `date`, `datetime` or
+`time`, from the model ([SUB-25](#sub-25)); each declared type admits the closed set the
 table below fixes. `data_type` never changes a value: it states how a value
 [Values](../values.md) already typed appears in the document, and no
 derivation, key, order term or artifact byte can observe it; only the check of
@@ -193,7 +193,7 @@ a date or time type's form ([SUB-26](#sub-26)) reads it. A `data_type` outside
 the admitted set fails validation.
 
 Fails: `submission_data_type_not_admitted`.
-Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_integer_data_type_is_not_admitted_for_a_text_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_ae_coding_benchmark_saves_its_expected_domain_with_its_project`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_dm_metadata_benchmark_saves_its_expected_domain_with_its_project`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_lb_metadata_benchmark_saves_its_expected_domain_from_its_submission_layer`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_vs_epoch_benchmark_saves_its_expected_domain_with_its_project`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_date_is_not_submitted_as_a_date_data_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_date_entry_inheriting_its_data_type_leaves_it_to_its_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_sdtm_date_is_not_submitted_as_an_integer`.
+Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_integer_data_type_is_not_admitted_for_a_text_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_ae_coding_benchmark_saves_its_expected_domain_with_its_project`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_dm_metadata_benchmark_saves_its_expected_domain_with_its_project`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_lb_metadata_benchmark_saves_its_expected_domain_from_its_submission_layer`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::the_vs_epoch_benchmark_saves_its_expected_domain_with_its_project`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_date_is_not_submitted_as_a_date_data_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_time_is_not_submitted_as_a_time_data_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_date_entry_inheriting_its_data_type_leaves_it_to_its_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_sdtm_date_is_not_submitted_as_an_integer`.
 
 | Declared type | Default | Also admits |
 |---|---|---|
@@ -202,6 +202,7 @@ Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/f
 | `float` | `float` | none |
 | `date` | `date`; `integer` under `ADaM` | none |
 | `datetime` | `datetime`; `integer` under `ADaM` | none |
+| `time` | `time`; `integer` under `ADaM` | none |
 
 `str` admits `date`, `datetime`, `time`, `partialDate`, `partialTime`,
 `partialDatetime`, `incompleteDate`, `incompleteTime`, `incompleteDatetime`,
@@ -211,7 +212,7 @@ A `str` column admits temporal submission types: a submission carries a
 partial or incomplete date as text, and [Values](../values.md)
 does not admit partial or incomplete dates as `date` or `datetime`. Each of
 those types names an ISO 8601 form, which [SUB-26](#sub-26) checks the
-column's values against. The two
+column's values against. The three
 temporal column types admit only their matching submission type:
 [Values](../values.md) defines each temporal type as a
 complete value, and the submission types of the same name mean the same thing.
@@ -220,7 +221,8 @@ already decides integer or binary64. The model decides a temporal column's
 one type: its own under `SDTM` and `SEND`, and `integer` under `ADaM`. A
 specification that declares its model admits only that type on its own
 ([SUB-23](#sub-23)), and so does a document; a specification that declares
-none admits a `date` or `datetime` declared `integer` as well as its own type
+none admits a `date`, `datetime` or `time` declared `integer` as well as its
+own type
 until a document gives it its section's model. The failure reports the
 column, the declared type and the submission type, and on the specification
 alone the model in `model` when only the model refuses the type.
@@ -234,7 +236,7 @@ defines the term: a property of the column declaration, not of the data one run
 produced, and a positive integer. Unless [SUB-8](#sub-8) derives it, it is
 required for an `integer` or `float` data type, and for `text` unless every
 section listing the specification requests a transport; it is never declared
-otherwise, nor on a `date` or `datetime` column. `significant_digits`, a
+otherwise, nor on a `date`, `datetime` or `time` column. `significant_digits`, a
 non-negative count of digits after the decimal point, is declared exactly for
 `float`.
 
@@ -255,8 +257,8 @@ or `float` column always declares `length`, and a `float` column
 `significant_digits`.
 
 The other submission types carry fixed-form values, so a length for such a type
-restates that form. A `date` or `datetime` column has the fixed length its
-model gives it, none under `SDTM` and `SEND` and 8 under `ADaM`
+restates that form. A `date`, `datetime` or `time` column has the fixed
+length its model gives it, none under `SDTM` and `SEND` and 8 under `ADaM`
 ([SUB-25](#sub-25)), whatever `data_type` it declares. A `length` that is not a
 positive integer, or a negative `significant_digits`, fails validation with
 `submission_length_invalid`. A `length` or `significant_digits` absent where
@@ -386,7 +388,8 @@ A numeric column's `display_format` is also its SAS format in a transport file
 ([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)). An
 `int` column holding seconds since midnight, such as an ADaM `*TM` time from
 `time_of_day` ([TIME-20](../temporal.md#time-20)), declares a `TIMEw.` format
-such as `TIME8.` like any other numeric display format. A
+such as `TIME8.` like any other numeric display format; an `adam` `time`
+column's is fixed at `TIME8.` ([SUB-25](#sub-25)). A
 study that wants different artifact digits declares `output.decimals`, which
 the [CSV profile](../reference/csv.md) owns. The two settings are independent,
 and this profile does not reconcile them: one is a display a document reports
@@ -846,8 +849,8 @@ intermediate or, in a `case`, from an output column, is anything else.
 Anything else computes its value: arithmetic and rounding (text in an
 expression field that computes, `round_half_away_from_zero` and `str_decimal`),
 every aggregation but an `ONLY` pivot, windows, temporal computation (the date
-and datetime operations other than `to_date`, `date_text`, `dtc` and
-`duration_text`), `flag`, `cut`, `str_length`, `greatest` and `least`,
+and datetime operations other than `to_date`, `to_time`, `date_text`, `dtc`
+and `duration_text`), `flag`, `cut`, `str_length`, `greatest` and `least`,
 `function`, and every read through a named intermediate that is not a plain
 lookup: one that declares `derivations`, whose fields it computes, or one over
 `SELF`, the completed output rows. Each type it refutes asserts the value
@@ -1016,7 +1019,7 @@ Checked when the specification is validated on its own:
   ([SUB-3](#sub-3));
 - the length binding of [SUB-8](#sub-8) and the date and time forms of
   [SUB-26](#sub-26);
-- the refusal of a `datetime` column under a tabulation class
+- the refusal of a `datetime` or `time` column under a tabulation class
   ([SUB-27](#sub-27));
 - the graph refutations of [SUB-19](#sub-19), the form of a `Predecessor`
   description ([SUB-16](#sub-16)) and the copy it claims
@@ -1125,19 +1128,20 @@ has no `def:HasNoData`: it omits the measured flag and refuses a declared one
 
 <a id="sub-25"></a>
 
-### SUB-25. Under `ADaM` a date or datetime is submitted as a SAS numeric date with a fixed display format and length
+### SUB-25. Under `ADaM` a date, datetime or time is submitted as a SAS numeric date with a fixed display format and length
 
 Under the `ADaM` model, a `date` column is submitted as SAS days since
-1960-01-01 with display format `DATE9.`, and a `datetime` column as seconds
-since 1960-01-01T00:00:00 with `DATETIME20.`. The document describes each as
+1960-01-01 with display format `DATE9.`, a `datetime` column as seconds
+since 1960-01-01T00:00:00 with `DATETIME20.`, and a `time` column as seconds
+since midnight with `TIME8.`. The document describes each as
 `DataType` `integer`, `Length` 8 and that `def:DisplayFormat`. A declared
 `data_type` other than `integer`, or a declared `display_format` other than that
 format, fails when a document composes the specification. Under `SDTM` and
 `SEND` a `date` keeps its own type and canonical text, and
-[SUB-27](#sub-27) refuses a `datetime`.
+[SUB-27](#sub-27) refuses a `datetime` or `time`.
 
 Fails: `submission_data_type_not_admitted`, `value_not_permitted`.
-Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_date_with_another_display_format_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_date_takes_the_fixed_display_format`.
+Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_date_with_another_display_format_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_date_takes_the_fixed_display_format`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_adam_time_takes_the_fixed_display_format`, `rust/crates/yamaa-application/tests/submission_transport.rs::an_analysis_time_is_a_numeric_variable_with_its_time_format`.
 
 Dataset-JSON keeps the ISO value and asks for the integer with
 `targetDataType` ([JSON-10](dataset-json.md#json-10)), and a SAS Transport file
@@ -1151,25 +1155,25 @@ format in `value` and the fixed one in `permitted`.
 
 <a id="sub-27"></a>
 
-### SUB-27. An `SDTM` or `SEND` dataset carries its dates and times as text, never in a `datetime` column
+### SUB-27. An `SDTM` or `SEND` dataset carries its dates and times as text, never in a `datetime` or `time` column
 
 A dataset whose `submission.class` is a tabulation class of
 [SUB-10](#sub-10), so of the `SDTM` or `SEND` model, must not carry a
-`datetime` column in `output.columns`: such a column writes the seconds that
-the canonical text of [VALUE-17](../values.md#value-17) always shows, collected
-or not. Its dates and times are `str` columns with a date or time `data_type`
-([SUB-26](#sub-26)). A `datetime` output column fails validation at its
-`type`; an internal one is not refused.
+`datetime` or `time` column in `output.columns`: such a column writes the
+seconds that the canonical text of [VALUE-17](../values.md#value-17) always
+shows, collected or not. Its dates and times are `str` columns with a date or
+time `data_type` ([SUB-26](#sub-26)). A `datetime` or `time` output column
+fails validation at its `type`; an internal one is not refused.
 
 Fails: `value_not_permitted`.
-Evidence: `negative-sdtm-datetime-column`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_findings_dataset_refuses_a_datetime_output_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_findings_dataset_keeps_a_datetime_column_it_does_not_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_outputs_a_datetime_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_dataset_without_a_class_outputs_a_datetime_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_sdtm_document_refuses_a_datetime_output_column`.
+Evidence: `negative-sdtm-datetime-column`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_findings_dataset_refuses_a_datetime_output_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_findings_dataset_refuses_a_time_output_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_findings_dataset_keeps_a_datetime_column_it_does_not_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_outputs_a_datetime_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_dataset_without_a_class_outputs_a_datetime_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_sdtm_document_refuses_a_datetime_output_column`.
 
 The model's group is read from the dataset's class, as the resolution of
 `mandatory` reads it, so the refusal needs no study document; a dataset that
 declares no class is not checked, and a document composing an `SDTM` or `SEND`
 dataset refuses such a column the same way. The failure reports `value_not_permitted`
-at `columns.<column>.type` with the column, the value `datetime`, the class and
-the permitted column types `str` and `date`, or at
+at `columns.<column>.type` with the column, the value `datetime` or `time`,
+the class and the permitted column types `str` and `date`, or at
 `<section>.specs[<n>].columns.<column>.type` when a document composes the
 dataset. A `date` column is admitted: its
 canonical text carries the day alone. An internal `datetime`, such as the

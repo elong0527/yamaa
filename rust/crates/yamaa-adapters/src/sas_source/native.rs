@@ -329,6 +329,7 @@ fn numeric(value: f64, kind: ColumnType) -> Option<Value> {
             Precision::Second,
         )
         .map(Value::DateTime),
+        ColumnType::Time => crate::epoch::time_from_seconds(integer).map(Value::Time),
         ColumnType::Str | ColumnType::Float => None,
     }
 }
@@ -1079,7 +1080,18 @@ mod tests {
             numeric(-1.0, ColumnType::DateTime),
             Some(Value::DateTime("1959-12-31T23:59:59".parse().unwrap()))
         );
-        for kind in [ColumnType::Int, ColumnType::Date, ColumnType::DateTime] {
+        assert_eq!(
+            numeric(86_399.0, ColumnType::Time),
+            Some(Value::Time("23:59:59".parse().unwrap()))
+        );
+        assert_eq!(numeric(86_400.0, ColumnType::Time), None);
+        assert_eq!(numeric(-1.0, ColumnType::Time), None);
+        for kind in [
+            ColumnType::Int,
+            ColumnType::Date,
+            ColumnType::DateTime,
+            ColumnType::Time,
+        ] {
             assert_eq!(numeric(1.5, kind), None);
             assert_eq!(numeric(f64::INFINITY, kind), None);
         }

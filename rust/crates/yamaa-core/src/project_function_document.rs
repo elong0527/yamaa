@@ -14,14 +14,15 @@ pub enum Kind {
     IntegerRange,
     InvalidDate,
     InvalidDateTime,
+    InvalidTime,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
     pub path: String,
     pub node: usize,
     pub kind: Kind,
-    /// The text an out-of-range integer, an invalid date or an invalid
-    /// datetime is written as; a diagnostic reports it.
+    /// The text an out-of-range integer, an invalid date, datetime or time
+    /// is written as; a diagnostic reports it.
     pub value: Option<String>,
 }
 pub(crate) struct Reader<'a> {
@@ -138,8 +139,8 @@ impl Reader<'_> {
         }
     }
     /// A 1.0 function-file value, typed by the type its definition declares
-    /// (P-FN-1): text is a date or a datetime where that is the declared
-    /// type, and no value is a tagged mapping. Any other scalar keeps its
+    /// (P-FN-1): text is a date, a datetime or a time where that is the
+    /// declared type, and no value is a tagged mapping. Any other scalar keeps its
     /// YAML type, which admission checks against the declaration; a value
     /// with no declared type, such as an argument no parameter names, too.
     pub(crate) fn declared(&mut self, node: usize, path: &str, kind: Option<ValueType>) -> Value {
@@ -156,6 +157,13 @@ impl Reader<'_> {
                 Ok(value) => Value::DateTime(value),
                 Err(_) => {
                     self.refuse(path, node, Kind::InvalidDateTime, text);
+                    Value::Missing
+                }
+            },
+            (Some(N::Text(text)), Some(ValueType::Time)) => match text.parse() {
+                Ok(value) => Value::Time(value),
+                Err(_) => {
+                    self.refuse(path, node, Kind::InvalidTime, text);
                     Value::Missing
                 }
             },
@@ -197,6 +205,16 @@ impl Reader<'_> {
                         Ok(value) => Value::DateTime(value),
                         Err(_) => {
                             self.invalid(path, node, Kind::InvalidDateTime, written);
+                            Value::Missing
+                        }
+                    }
+                } else if let Some(value) = self.document.field(node, "time") {
+                    let written = self.written_text(value);
+                    let text = self.text(value, path);
+                    match text.parse() {
+                        Ok(value) => Value::Time(value),
+                        Err(_) => {
+                            self.invalid(path, node, Kind::InvalidTime, written);
                             Value::Missing
                         }
                     }

@@ -112,7 +112,7 @@ profiles in `rules/profiles/`.
 | [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal and copied columns, and ASCII source. |
 | [Inheritance](inheritance.md) | LAYER | Resolve inherited layers into one minimal, ordered specification. |
 | [Name binding](names.md) | NAME | Resolve input datasets, qualified and bare names, driver reads, and ODM item reads. |
-| [Values](values.md) | VALUE | Define column types, missing values, numbers, text, dates and datetimes, conversion, and order. |
+| [Values](values.md) | VALUE | Define column types, missing values, numbers, text, dates, datetimes and times, conversion, and order. |
 | [Inputs](inputs.md) | INPUT | Select input profiles, keep stored record order, and type source fields without inferring values. |
 | [Row construction](rows.md) | ROW | Construct output rows from declared input records or groups, or from the distinct keys of the base records. |
 | [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, handle conditions at their site, and name the phase and rule each condition reports. |

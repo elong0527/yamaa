@@ -12,18 +12,18 @@
 use pyo3::{
     exceptions::{PyModuleNotFoundError, PyTypeError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
+    types::{PyBytes, PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString, PyTime},
     IntoPyObjectExt,
 };
 use std::sync::Arc;
 use yamaa::{
     Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    StringArray, StringViewArray, TimeUnit, TimestampSecondArray,
+    StringArray, StringViewArray, Time32SecondArray, TimeUnit, TimestampSecondArray,
 };
 use yamaa_boundary::{HandleKind, Live};
 
 /// A table that yamaa returned: immutable columns of str, int, float, date,
-/// datetime or list values, any of which may be missing.
+/// datetime, time or list values, any of which may be missing.
 ///
 /// `len()` and `num_rows` count its rows, `column_names` names its columns,
 /// and `repr()` prints a preview. `to_pylist()` gives its rows as Python
@@ -176,8 +176,9 @@ impl Table {
     }
 
     /// The rows as a list of dicts, each keyed by the column names in order.
-    /// A value is a str, int, float, datetime.date, naive datetime.datetime
-    /// or list, and a missing value is None. Imports nothing.
+    /// A value is a str, int, float, datetime.date, naive datetime.datetime,
+    /// naive datetime.time or list, and a missing value is None. Imports
+    /// nothing.
     fn to_pylist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let table = self.whole(py)?;
         let names = table
@@ -325,6 +326,18 @@ fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, Py
                     None,
                 )?
                 .into_any())
+            })
+        }
+        DataType::Time32(TimeUnit::Second) => {
+            each(py, cast::<Time32SecondArray>(array)?.iter(), |seconds| {
+                let time =
+                    yamaa::scalar::Time::from_seconds(i64::from(seconds)).ok_or_else(|| {
+                        PyValueError::new_err(format!(
+                            "the time {seconds} seconds after midnight is outside one day"
+                        ))
+                    })?;
+                let (hour, minute, second) = time.fields();
+                Ok(PyTime::new(py, hour, minute, second, 0, None)?.into_any())
             })
         }
         DataType::List(_) => {

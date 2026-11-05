@@ -163,13 +163,7 @@ fn field(value: &Field) -> V {
     }
 }
 fn kind(value: ColumnType) -> &'static str {
-    match value {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
+    value.name()
 }
 impl SourceFinding<'_> {
     fn code(self) -> C {

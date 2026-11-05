@@ -2,11 +2,11 @@
 use pyo3::{
     exceptions::PyValueError,
     prelude::*,
-    types::{PyBool, PyDate, PyDateTime, PyFloat, PyInt, PyString},
+    types::{PyBool, PyDate, PyDateTime, PyFloat, PyInt, PyString, PyTime},
     IntoPyObjectExt,
 };
 use yamaa::host::functions::{FunctionError, HostPayload};
-use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef};
+use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 
 /// Function argument encoding drops collected precision only at this boundary.
 pub(super) fn host_argument<'py>(
@@ -26,6 +26,10 @@ pub(super) fn host_argument<'py>(
         ScalarRef::DateTime(d) => {
             let (y, m, d, h, minute, s) = d.fields();
             Ok(PyDateTime::new(py, i32::from(y), m, d, h, minute, s, 0, None)?.into_any())
+        }
+        ScalarRef::Time(t) => {
+            let (h, minute, s) = t.fields();
+            Ok(PyTime::new(py, h, minute, s, 0, None)?.into_any())
         }
         // The facade enum is non-exhaustive; uncovered variants cannot occur.
         _ => Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -149,6 +153,28 @@ pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Scalar, FunctionEr
         return extract().map_err(|_| {
             rejected(
                 "a returned datetime carries a zone or a fraction of a second",
+                None,
+            )
+        });
+    }
+    if value.is_exact_instance_of::<PyTime>() {
+        let extract = || -> PyResult<Scalar> {
+            if !value.getattr("tzinfo")?.is_none()
+                || value.getattr("microsecond")?.extract::<u32>()? != 0
+            {
+                return Err(PyValueError::new_err("time"));
+            }
+            Time::new(
+                value.getattr("hour")?.extract()?,
+                value.getattr("minute")?.extract()?,
+                value.getattr("second")?.extract()?,
+            )
+            .map(Scalar::Time)
+            .ok_or_else(|| PyValueError::new_err("time"))
+        };
+        return extract().map_err(|_| {
+            rejected(
+                "a returned time carries a zone or a fraction of a second",
                 None,
             )
         });

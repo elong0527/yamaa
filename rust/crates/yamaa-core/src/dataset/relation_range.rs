@@ -48,14 +48,7 @@ impl RelationRangeTypes {
     ) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::{ConditionCode, Diagnostic};
         use crate::json::Value as JsonValue;
-        let name = |kind| match kind {
-            ValueType::Str => "str",
-            ValueType::Int => "int",
-            ValueType::Float => "float",
-            ValueType::Bool => "bool",
-            ValueType::Date => "date",
-            ValueType::DateTime => "datetime",
-        };
+        let name = ValueType::name;
         let text = |value: &str| JsonValue::String(value.into());
         let mut context = crate::json::Map::from([("value_type".into(), text(name(self.value)))]);
         if let Some(intermediate) = intermediate {

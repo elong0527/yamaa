@@ -283,3 +283,95 @@ impl FromStr for DateTime {
         )
     }
 }
+
+/// A time of day resolved to a whole second, with no date, zone or
+/// collected precision (VALUE-13): every value is complete.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Time {
+    hour: u8,
+    minute: u8,
+    second: u8,
+}
+
+impl Time {
+    /// The seconds in one day; a time of day counts fewer.
+    pub const DAY_SECONDS: u32 = 86_400;
+
+    /// Validate clock fields: hour 0 to 23, minute and second 0 to 59.
+    pub fn new(hour: u8, minute: u8, second: u8) -> Result<Self, TemporalError> {
+        if hour > 23 || minute > 59 || second > 59 {
+            return Err(TemporalError::InvalidTime);
+        }
+        Ok(Self {
+            hour,
+            minute,
+            second,
+        })
+    }
+
+    /// The time `seconds` after midnight, or an error from one day on.
+    pub fn from_seconds(seconds: u32) -> Result<Self, TemporalError> {
+        if seconds >= Self::DAY_SECONDS {
+            return Err(TemporalError::InvalidTime);
+        }
+        Self::new(
+            (seconds / 3600) as u8,
+            (seconds / 60 % 60) as u8,
+            (seconds % 60) as u8,
+        )
+    }
+
+    /// Return clock fields in most-significant-first order.
+    pub fn fields(self) -> (u8, u8, u8) {
+        (self.hour, self.minute, self.second)
+    }
+
+    /// The whole seconds since midnight, 0 to 86399.
+    pub fn seconds(self) -> u32 {
+        u32::from(self.hour) * 3600 + u32::from(self.minute) * 60 + u32::from(self.second)
+    }
+}
+
+impl fmt::Display for Time {
+    /// Write canonical fixed-width text, seconds always shown.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:02}:{:02}:{:02}", self.hour, self.minute, self.second)
+    }
+}
+
+/// Parse the `hh:mm` or `hh:mm:ss` clock form; an omitted second is zero.
+fn parse_time(bytes: &[u8]) -> Result<Time, TemporalError> {
+    if !matches!(bytes.len(), 5 | 8) || bytes[2] != b':' || (bytes.len() == 8 && bytes[5] != b':') {
+        return Err(TemporalError::InvalidForm);
+    }
+    let second = if bytes.len() == 8 {
+        digits(&bytes[6..8])? as u8
+    } else {
+        0
+    };
+    Time::new(
+        digits(&bytes[..2])? as u8,
+        digits(&bytes[3..5])? as u8,
+        second,
+    )
+}
+
+impl FromStr for Time {
+    type Err = TemporalError;
+
+    /// Parse the closed clock form without a zone, offset or fraction.
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        parse_time(text.as_bytes())
+    }
+}
+
+impl DateTime {
+    /// The time of day of this moment.
+    pub fn time(self) -> Time {
+        Time {
+            hour: self.hour,
+            minute: self.minute,
+            second: self.second,
+        }
+    }
+}

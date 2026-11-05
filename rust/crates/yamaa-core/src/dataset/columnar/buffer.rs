@@ -6,7 +6,7 @@ use crate::{
     expression::{Column, Lent},
     numeric::Number,
     table::{ColumnRef, ColumnValues, ValueRef},
-    temporal::{Date, DateTime},
+    temporal::{Date, DateTime, Time},
     value::{FiniteFloat, Value},
 };
 use std::collections::TryReserveError;
@@ -464,6 +464,7 @@ pub(crate) enum Values {
     Bool(Vec<bool>, Bits),
     Date(Vec<Date>, Bits),
     DateTime(Vec<DateTime>, Bits),
+    Time(Vec<Time>, Bits),
     Str(Strings, Bits),
     Mixed(Vec<Value>),
 }
@@ -520,6 +521,10 @@ impl Values {
                 values.try_reserve(additional)?;
                 valid.try_reserve(additional)
             }
+            Self::Time(values, valid) => {
+                values.try_reserve(additional)?;
+                valid.try_reserve(additional)
+            }
             Self::Str(values, valid) => {
                 values.try_reserve(additional)?;
                 valid.try_reserve(additional)
@@ -542,6 +547,7 @@ impl Values {
             ValueRef::Bool(value) => Self::Bool(vec![value; len], valid()),
             ValueRef::Date(value) => Self::Date(vec![value; len], valid()),
             ValueRef::DateTime(value) => Self::DateTime(vec![value; len], valid()),
+            ValueRef::Time(value) => Self::Time(vec![value; len], valid()),
             ValueRef::Str(value) => Self::Str(
                 Strings {
                     spans: vec![(0, value.len()); len],
@@ -670,6 +676,17 @@ impl Values {
                 let (values, valid) = fill(rows, first, datetime)?;
                 Self::DateTime(values, valid)
             }
+            ColumnType::Time => {
+                let time = |row| match column.get(row) {
+                    ValueRef::Time(value) => Some(value),
+                    _ => None,
+                };
+                let Some(first) = rows.iter().find_map(|&row| time(row)) else {
+                    return Ok(Self::Missing(rows.len()));
+                };
+                let (values, valid) = fill(rows, first, time)?;
+                Self::Time(values, valid)
+            }
             ColumnType::Str => {
                 let mut strings = Strings::default();
                 strings.spans.try_reserve_exact(rows.len())?;
@@ -700,6 +717,7 @@ impl Values {
             | Self::Bool(_, valid)
             | Self::Date(_, valid)
             | Self::DateTime(_, valid)
+            | Self::Time(_, valid)
             | Self::Str(_, valid) => valid.any(),
             Self::Missing(_) | Self::Mixed(_) => return self,
         };
@@ -735,6 +753,7 @@ impl Values {
             Self::Bool(values, _) => values.len(),
             Self::Date(values, _) => values.len(),
             Self::DateTime(values, _) => values.len(),
+            Self::Time(values, _) => values.len(),
             Self::Str(values, _) => values.len(),
             Self::Mixed(values) => values.len(),
         }
@@ -782,6 +801,13 @@ impl Values {
                     ValueRef::Missing
                 }
             }
+            Self::Time(values, valid) => {
+                if valid.get(index) {
+                    ValueRef::Time(values[index])
+                } else {
+                    ValueRef::Missing
+                }
+            }
             Self::Str(values, valid) => {
                 if valid.get(index) {
                     ValueRef::Str(values.get(index))
@@ -803,6 +829,7 @@ impl Values {
             | Self::Bool(_, valid)
             | Self::Date(_, valid)
             | Self::DateTime(_, valid)
+            | Self::Time(_, valid)
             | Self::Str(_, valid) => valid.zeros(),
             Self::Mixed(values) => (0..values.len())
                 .filter(|&row| matches!(values[row], Value::Missing))
@@ -819,6 +846,7 @@ impl Values {
             Self::Float(values, valid) => (ColumnValues::FiniteFloat(values), valid),
             Self::Date(values, valid) => (ColumnValues::MaskedDate(values), valid),
             Self::DateTime(values, valid) => (ColumnValues::MaskedDateTime(values), valid),
+            Self::Time(values, valid) => (ColumnValues::MaskedTime(values), valid),
             Self::Str(values, valid) => (
                 ColumnValues::TextSpans {
                     spans: &values.spans,
@@ -863,6 +891,10 @@ impl Values {
                 valid.push(true);
             }
             (Self::DateTime(values, valid), ValueRef::DateTime(value)) => {
+                values.push(value);
+                valid.push(true);
+            }
+            (Self::Time(values, valid), ValueRef::Time(value)) => {
                 values.push(value);
                 valid.push(true);
             }
@@ -918,6 +950,13 @@ impl Values {
                 }
                 None => *self = Self::Missing(1),
             },
+            Self::Time(values, valid) => match values.last().copied() {
+                Some(placeholder) => {
+                    values.push(placeholder);
+                    valid.push(false);
+                }
+                None => *self = Self::Missing(1),
+            },
             Self::Str(values, valid) => {
                 values.push_empty();
                 valid.push(false);
@@ -937,6 +976,7 @@ impl Values {
             ValueRef::Bool(value) => Self::Bool(vec![value; missing], valid),
             ValueRef::Date(value) => Self::Date(vec![value; missing], valid),
             ValueRef::DateTime(value) => Self::DateTime(vec![value; missing], valid),
+            ValueRef::Time(value) => Self::Time(vec![value; missing], valid),
             ValueRef::Str(_) => {
                 let mut strings = Strings::default();
                 strings.resize_empty(missing);
@@ -982,6 +1022,10 @@ impl Values {
                 values[index] = value;
                 valid.set(index, true);
             }
+            (Self::Time(values, valid), ValueRef::Time(value)) => {
+                values[index] = value;
+                valid.set(index, true);
+            }
             (Self::Str(values, valid), ValueRef::Str(value)) => {
                 values.set(index, value);
                 valid.set(index, true);
@@ -993,6 +1037,7 @@ impl Values {
                 | Self::Bool(_, valid)
                 | Self::Date(_, valid)
                 | Self::DateTime(_, valid)
+                | Self::Time(_, valid)
                 | Self::Str(_, valid),
                 ValueRef::Missing,
             ) => valid.set(index, false),
@@ -1036,6 +1081,9 @@ impl Values {
             (Self::DateTime(to, valid), Self::DateTime(from, from_valid)) => {
                 put_valid(to, valid, start, from, from_valid);
             }
+            (Self::Time(to, valid), Self::Time(from, from_valid)) => {
+                put_valid(to, valid, start, from, from_valid);
+            }
             (Self::Str(to, valid), Self::Str(from, from_valid)) => {
                 to.set_from(start, from, from_valid);
                 valid.copy_from(start, from_valid, 0..from.len());
@@ -1046,6 +1094,7 @@ impl Values {
                 | Self::Bool(_, valid)
                 | Self::Date(_, valid)
                 | Self::DateTime(_, valid)
+                | Self::Time(_, valid)
                 | Self::Str(_, valid),
                 Self::Missing(_),
             ) => valid.fill(rows, false),
@@ -1066,6 +1115,7 @@ impl Values {
             | Self::Bool(_, valid)
             | Self::Date(_, valid)
             | Self::DateTime(_, valid)
+            | Self::Time(_, valid)
             | Self::Str(_, valid) => valid.first_set().map(|row| self.get(row)),
             Self::Mixed(values) => values
                 .iter()
@@ -1113,6 +1163,13 @@ impl Values {
                 }
                 None => *self = Self::Missing(len),
             },
+            Self::Time(values, valid) => match values.last().copied() {
+                Some(placeholder) => {
+                    values.resize(len, placeholder);
+                    valid.grow(len);
+                }
+                None => *self = Self::Missing(len),
+            },
             Self::Str(values, valid) => {
                 values.resize_empty(len);
                 valid.grow(len);
@@ -1154,6 +1211,10 @@ impl Values {
                 compact(values, first, kept);
                 valid.retain(first, kept);
             }
+            Self::Time(values, valid) => {
+                compact(values, first, kept);
+                valid.retain(first, kept);
+            }
             Self::Str(values, valid) => {
                 compact(&mut values.spans, first, kept);
                 valid.retain(first, kept);
@@ -1167,7 +1228,9 @@ impl Values {
         }
         // An emptied temporal buffer is a missing one, and stays missing
         // while the rows appended to it hold no value.
-        if let (0, Self::Date(_, valid) | Self::DateTime(_, valid)) = (first, &*self) {
+        if let (0, Self::Date(_, valid) | Self::DateTime(_, valid) | Self::Time(_, valid)) =
+            (first, &*self)
+        {
             if len > 0 && !valid.any() {
                 *self = Self::Missing(len);
             }
@@ -1184,6 +1247,7 @@ impl Values {
                 | (Self::Float(..), K::Float)
                 | (Self::Date(..), K::Date)
                 | (Self::DateTime(..), K::DateTime)
+                | (Self::Time(..), K::Time)
                 | (Self::Str(..), K::Str)
         )
     }
@@ -1208,6 +1272,10 @@ impl Values {
                 valid.truncate(len);
             }
             Self::DateTime(values, valid) => {
+                values.truncate(len);
+                valid.truncate(len);
+            }
+            Self::Time(values, valid) => {
                 values.truncate(len);
                 valid.truncate(len);
             }
@@ -1238,6 +1306,7 @@ impl Values {
             Self::DateTime(values, valid) => {
                 Self::DateTime(pick(values, rows)?, valid.gather(rows)?)
             }
+            Self::Time(values, valid) => Self::Time(pick(values, rows)?, valid.gather(rows)?),
             Self::Str(values, valid) => Self::Str(values.gather(rows)?, valid.gather(rows)?),
             // A mixed buffer's rows may share one type, as the buffer they
             // came from did before it turned mixed.
@@ -1286,6 +1355,10 @@ impl Values {
                 values.extend_from_slice(&from[range.clone()]);
                 valid.extend_from(from_valid, range);
             }
+            (Self::Time(values, valid), Self::Time(from, from_valid)) => {
+                values.extend_from_slice(&from[range.clone()]);
+                valid.extend_from(from_valid, range);
+            }
             (Self::Str(values, valid), Self::Str(from, from_valid)) => {
                 values.extend_from(from, range.clone());
                 valid.extend_from(from_valid, range);
@@ -1297,6 +1370,7 @@ impl Values {
                 | Self::Bool(..)
                 | Self::Date(..)
                 | Self::DateTime(..)
+                | Self::Time(..)
                 | Self::Str(..),
             ) => {
                 *self = other.empty_like();
@@ -1362,6 +1436,9 @@ impl Values {
             Self::DateTime(values, valid) => {
                 typed(values, valid, pairs, &mut repeats, |a, b| a == b);
             }
+            Self::Time(values, valid) => {
+                typed(values, valid, pairs, &mut repeats, |a, b| a == b);
+            }
             Self::Str(strings, valid) => {
                 repeats.extend(pairs.map(|(previous, row)| {
                     match (valid.get(previous), valid.get(row)) {
@@ -1388,6 +1465,7 @@ impl Values {
             Self::Bool(..) => Self::Bool(Vec::new(), Bits::default()),
             Self::Date(..) => Self::Date(Vec::new(), Bits::default()),
             Self::DateTime(..) => Self::DateTime(Vec::new(), Bits::default()),
+            Self::Time(..) => Self::Time(Vec::new(), Bits::default()),
             Self::Str(..) => Self::Str(Strings::default(), Bits::default()),
             Self::Mixed(_) => Self::Mixed(Vec::new()),
         }
@@ -1493,15 +1571,7 @@ impl Assembly {
 
 /// Copy a lent value, keeping temporal precision.
 pub(super) fn own(value: ValueRef<'_>) -> Value {
-    match value {
-        ValueRef::Missing => Value::Missing,
-        ValueRef::Str(value) => Value::Str(value.into()),
-        ValueRef::Int(value) => Value::Int(value),
-        ValueRef::Float(value) => Value::Float(value),
-        ValueRef::Bool(value) => Value::Bool(value),
-        ValueRef::Date(value) => Value::Date(value),
-        ValueRef::DateTime(value) => Value::DateTime(value),
-    }
+    Value::from(value)
 }
 
 #[cfg(test)]

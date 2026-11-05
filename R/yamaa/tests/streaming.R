@@ -41,15 +41,22 @@ study <- function(records = NULL) {
   }
   root
 }
-# A table's columns as plain values: numbers as doubles, dates and datetimes
-# as their canonical text (VALUE-17), the datetimes read in UTC.
+# A time's canonical text (VALUE-17) from its seconds since midnight.
+clock <- function(time) {
+  seconds <- as.numeric(time, units = "secs")
+  ifelse(is.na(seconds), NA_character_,
+    sprintf("%02d:%02d:%02d", seconds %/% 3600, seconds %/% 60 %% 60, seconds %% 60))
+}
+# A table's columns as plain values: numbers as doubles, dates, datetimes and
+# times as their canonical text (VALUE-17), the datetimes read in UTC.
 plain <- function(frame) {
   list(
     ID = as.numeric(frame$ID),
     NAME = as.character(frame$NAME),
     V = as.numeric(frame$V),
     D = format(frame$D, "%Y-%m-%d"),
-    T = format(frame$T, "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+    T = format(frame$T, "%Y-%m-%dT%H:%M:%S", tz = "UTC"),
+    H = clock(frame$H)
   )
 }
 # The truth's rows as plain values.
@@ -60,7 +67,8 @@ expected <- function() {
     NAME = vapply(truth$rows, cell, character(1L), column = "NAME"),
     V = vapply(truth$rows, function(row) if (is.null(row$V)) NA_real_ else as.numeric(row$V), numeric(1L)),
     D = vapply(truth$rows, cell, character(1L), column = "D"),
-    T = vapply(truth$rows, cell, character(1L), column = "T")
+    T = vapply(truth$rows, cell, character(1L), column = "T"),
+    H = vapply(truth$rows, cell, character(1L), column = "H")
   )
 }
 # Read a run's output stream to its end with arrow.

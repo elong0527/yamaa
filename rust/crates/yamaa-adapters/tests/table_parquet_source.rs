@@ -520,6 +520,53 @@ mod table {
         }
 
         #[test]
+        fn times_of_each_unit_read_as_the_whole_seconds_since_midnight_they_count() {
+            // The seam is a stored time's unit: midnight, 08:30:15, 00:00:01
+            // and the last second of the day in milliseconds, microseconds
+            // and nanoseconds read as the times they name, and a count short
+            // of a whole second, or of one day or more, is refused as stored
+            // (PARQUET-7, PARQUET-9). The times were counted from midnight by
+            // hand.
+            let table = parse(&content("time-units")).unwrap();
+            assert_eq!(
+                table
+                    .schema()
+                    .columns()
+                    .iter()
+                    .map(|c| (c.name.as_str(), c.kind))
+                    .collect::<Vec<_>>(),
+                [
+                    ("MS", ColumnType::Time),
+                    ("US", ColumnType::Time),
+                    ("NS", ColumnType::Time)
+                ]
+            );
+            for (column, fields) in [
+                (0, [(0, 0, 0), (23, 59, 59)]),
+                (1, [(8, 30, 15), (23, 59, 59)]),
+                (2, [(0, 0, 1), (23, 59, 59)]),
+            ] {
+                assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
+                for (row, fields) in [(0, fields[0]), (2, fields[1])] {
+                    let ValueRef::Time(value) = table.cell(row, column).unwrap() else {
+                        panic!("time cell {row}, {column}")
+                    };
+                    assert_eq!(value.fields(), fields, "row {row}, column {column}");
+                }
+            }
+            for (name, row, value) in [
+                ("fractional-time", 2, 1_500_000),
+                ("time-past-a-day", 1, 86_400_000),
+            ] {
+                let refused = match parse(&content(name)) {
+                    Err(Error::Value { field, row, value }) => Some((field, row, value)),
+                    _ => None,
+                };
+                assert_eq!(refused, Some(("AT".into(), row, value)), "{name}");
+            }
+        }
+
+        #[test]
         fn single_precision_floats_widen_exactly_and_nonfinite_ones_are_missing() {
             // The seam is a FLOAT value's bits: it widens to the binary64
             // value it names, whose bits a saved CSV cannot show, from plain

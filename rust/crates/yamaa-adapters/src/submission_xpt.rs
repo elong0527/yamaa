@@ -30,8 +30,8 @@ pub const FILE_BYTES: u64 = 5_000_000_000;
 /// How a variable's cells are encoded (XPT-6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XptKind {
-    /// Printable ASCII, blank padded; `date` and `datetime` canonical text
-    /// outside `adam`.
+    /// Printable ASCII, blank padded; `date`, `datetime` and `time`
+    /// canonical text outside `adam`.
     Character,
     /// An `int` or `float` as an IBM double.
     Number,
@@ -39,6 +39,8 @@ pub enum XptKind {
     Date,
     /// Seconds since 1960-01-01T00:00:00 as an IBM double, under `adam`.
     DateTime,
+    /// Seconds since midnight as an IBM double, under `adam`.
+    Time,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct XptVariable {
@@ -110,6 +112,7 @@ pub fn document(study: &Study, dataset: &Dataset) -> XptDocument {
                 ColumnType::Integer | ColumnType::Float => XptKind::Number,
                 ColumnType::Date if adam => XptKind::Date,
                 ColumnType::Datetime if adam => XptKind::DateTime,
+                ColumnType::Time if adam => XptKind::Time,
                 _ => XptKind::Character,
             };
             let format = match kind {
@@ -119,7 +122,9 @@ pub fn document(study: &Study, dataset: &Dataset) -> XptDocument {
                     .as_ref()
                     .and_then(|meta| meta.display_format.as_ref())
                     .and_then(|declared| sas_format(&declared.value)),
-                XptKind::Date | XptKind::DateTime => column.display_format().and_then(sas_format),
+                XptKind::Date | XptKind::DateTime | XptKind::Time => {
+                    column.display_format().and_then(sas_format)
+                }
             };
             XptVariable {
                 name: declaration.name.value.clone(),
@@ -385,6 +390,9 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
                 (XptKind::Character, ValueRef::DateTime(moment)) => {
                     writer.bytes(&padded(&moment.to_string(), variable.width))?
                 }
+                (XptKind::Character, ValueRef::Time(time)) => {
+                    writer.bytes(&padded(&time.to_string(), variable.width))?
+                }
                 (_, ValueRef::Missing) => writer.bytes(&[b'.', 0, 0, 0, 0, 0, 0, 0])?,
                 (XptKind::Number, ValueRef::Int(value)) => writer.number(value as f64)?,
                 (XptKind::Number, ValueRef::Float(value)) => writer.number(value.get())?,
@@ -393,6 +401,9 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
                 (XptKind::DateTime, ValueRef::DateTime(moment)) => writer.number(
                     (crate::epoch::datetime_seconds(moment) + SAS_EPOCH_DAYS * 86_400) as f64,
                 )?,
+                (XptKind::Time, ValueRef::Time(time)) => {
+                    writer.number(f64::from(time.seconds()))?
+                }
                 _ => return Err(writer.failure("held cell does not match its variable")),
             }
         }

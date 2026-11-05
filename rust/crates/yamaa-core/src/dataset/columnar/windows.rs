@@ -1016,6 +1016,7 @@ fn present(values: &Values, index: usize) -> bool {
         | Values::Bool(_, valid)
         | Values::Date(_, valid)
         | Values::DateTime(_, valid)
+        | Values::Time(_, valid)
         | Values::Str(_, valid) => valid.get(index),
         Values::Mixed(_) => !matches!(values.get(index), ValueRef::Missing),
     }

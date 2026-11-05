@@ -434,6 +434,7 @@ pub fn cell(value: ValueRef<'_>) -> Value {
         ValueRef::Bool(value) => Value::Bool(value),
         ValueRef::Date(date) => Value::String(date.to_string()),
         ValueRef::DateTime(datetime) => Value::String(datetime.to_string()),
+        ValueRef::Time(time) => Value::String(time.to_string()),
     }
 }
 

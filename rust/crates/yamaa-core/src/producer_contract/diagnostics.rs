@@ -11,13 +11,7 @@ pub(crate) fn text(value: &str) -> V {
     V::String(value.into())
 }
 pub(crate) fn kind(value: ColumnType) -> &'static str {
-    match value {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
+    value.name()
 }
 impl Cause {
     pub fn diagnostic(&self, dataset: &str) -> Diagnostic {

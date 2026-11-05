@@ -248,6 +248,10 @@ fn literal(kind: &NodeKind) -> Option<Value> {
             kind: TemporalKind::DateTime,
             value,
         } => Value::DateTime(value.parse().expect("an admitted datetime literal")),
+        NodeKind::Temporal {
+            kind: TemporalKind::Time,
+            value,
+        } => Value::Time(value.parse().expect("an admitted time literal")),
         NodeKind::Null => Value::Missing,
         NodeKind::Boolean(value) => Value::Bool(*value),
         _ => return None,

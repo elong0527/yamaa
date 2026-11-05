@@ -458,6 +458,7 @@ mod scalar {
                 "bool" => Value::Bool(text.parse().unwrap()),
                 "date" => Value::Date(text.parse().unwrap()),
                 "datetime" => Value::DateTime(text.parse().unwrap()),
+                "time" => Value::Time(text.parse().unwrap()),
                 _ => panic!("unknown fixture type {kind}"),
             }
         }
@@ -472,6 +473,7 @@ mod scalar {
                 Value::Bool(boolean) => format!("bool:{boolean}"),
                 Value::Date(date) => format!("date:{date}"),
                 Value::DateTime(date) => format!("datetime:{date}"),
+                Value::Time(time) => format!("time:{time}"),
             }
         }
 
@@ -489,6 +491,7 @@ mod scalar {
                     "float" => ColumnType::Float,
                     "date" => ColumnType::Date,
                     "datetime" => ColumnType::DateTime,
+                    "time" => ColumnType::Time,
                     _ => panic!("bad target"),
                 };
                 let result = convert(&decode(fields[1]), target);
@@ -521,6 +524,9 @@ mod scalar {
                             }
                             Some(ValueType::DateTime) => {
                                 format!("datetime:{}", error.value.as_str().unwrap())
+                            }
+                            Some(ValueType::Time) => {
+                                format!("time:{}", error.value.as_str().unwrap())
                             }
                         };
                         format!("error:{}:{context}", error.rule())

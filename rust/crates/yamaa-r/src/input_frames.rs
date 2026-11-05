@@ -3,7 +3,10 @@ use crate::api_entry::Refusal;
 use arrow_array::{BooleanArray, RecordBatchIterator, StructArray};
 use extendr_api::prelude::*;
 use std::{collections::BTreeMap, result::Result, sync::Arc};
-use yamaa::{Array, Date32Array, Float64Array, Int64Array, StringArray, TimestampSecondArray};
+use yamaa::{
+    Array, Date32Array, Float64Array, Int64Array, StringArray, Time32SecondArray,
+    TimestampSecondArray,
+};
 
 fn list(value: &Robj, size: Option<usize>) -> Result<List, Refusal> {
     value
@@ -139,6 +142,35 @@ fn array(column: &Robj) -> Result<Arc<dyn Array>, Refusal> {
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(Arc::new(TimestampSecondArray::from(seconds)));
     }
+    if value.inherits("hms") {
+        // An hms counts seconds since midnight; one of other units or past
+        // one day is no time of day.
+        let units = value
+            .get_attrib("units")
+            .and_then(|units| units.as_str().map(str::to_owned));
+        if units.as_deref() != Some("secs") {
+            return Err("input hms values must count seconds".into());
+        }
+        let seconds = numbers(&value)?
+            .into_iter()
+            .map(|value| {
+                value
+                    .map(|value| {
+                        if !value.is_finite()
+                            || value.fract() != 0.0
+                            || !(0.0..86_400.0).contains(&value)
+                        {
+                            return Err(Refusal::from(
+                                "input hms values must be whole seconds within one day",
+                            ));
+                        }
+                        Ok(value as i32)
+                    })
+                    .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(Arc::new(Time32SecondArray::from(seconds)));
+    }
     if value.class().is_some() {
         return Err("unsupported class on an input column".into());
     }
@@ -167,7 +199,10 @@ fn array(column: &Robj) -> Result<Arc<dyn Array>, Refusal> {
                 .collect::<Vec<_>>(),
         )));
     }
-    Err("input columns must be character, factor, integer, numeric, Date or POSIXct vectors".into())
+    Err(
+        "input columns must be character, factor, integer, numeric, Date, POSIXct or hms vectors"
+            .into(),
+    )
 }
 fn numbers(value: &Robj) -> Result<Vec<Option<f64>>, Refusal> {
     if let Some(values) = value.as_real_slice() {

@@ -22,7 +22,7 @@
 //! letter, a colon and the value: `s:` and the text, `i:` and a decimal
 //! integer, `f:` and a decimal float, or `inf`, `-inf` or `nan`, `b:` and
 //! `true` or `false`, `d:` and `YYYY-MM-DD`, `t:` and
-//! `YYYY-MM-DDTHH:MM:SS`.
+//! `YYYY-MM-DDTHH:MM:SS`, `h:` and `HH:MM:SS`.
 //!
 //! | Request | Reply |
 //! |---|---|
@@ -66,7 +66,7 @@ use yamaa::host::functions::{
     InstalledDistributions, InstalledVersion, LockContext, LockFinding, LockKind, LockReason,
     Signature,
 };
-use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef};
+use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 use yamaa::{HostLanguage, ProjectFunctions};
 
 /// The worker of one language, started when first asked, on the interpreter
@@ -499,6 +499,7 @@ fn column_type(returns: yamaa::host::functions::ColumnType) -> &'static str {
         ColumnType::Float => "float",
         ColumnType::Date => "date",
         ColumnType::DateTime => "datetime",
+        ColumnType::Time => "time",
         _ => "str",
     }
 }
@@ -557,6 +558,10 @@ pub(crate) fn encode_value(value: ScalarRef<'_>) -> String {
             let (year, month, day, hour, minute, second) = datetime.fields();
             format!("t:{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}")
         }
+        ScalarRef::Time(time) => {
+            let (hour, minute, second) = time.fields();
+            format!("h:{hour:02}:{minute:02}:{second:02}")
+        }
         // The facade enum is non-exhaustive; a new variant must not reach
         // the worker as some other value.
         _ => "-".to_owned(),
@@ -612,6 +617,9 @@ pub(crate) fn decode_value(field: &str) -> Result<Scalar, FunctionError> {
         "t" => parse_datetime(text)
             .map(Scalar::DateTime)
             .ok_or_else(|| rejected("a datetime result names no second")),
+        "h" => parse_time(text)
+            .map(Scalar::Time)
+            .ok_or_else(|| rejected("a time result names no second")),
         _ => Err(rejected("a result has a type the protocol does not spell")),
     }
 }
@@ -627,11 +635,16 @@ fn parse_date(text: &str) -> Option<Date> {
 fn parse_datetime(text: &str) -> Option<DateTime> {
     let (date, time) = text.split_once('T')?;
     let (year, month, day) = parse_date(date)?.fields();
-    let mut parts = time.splitn(3, ':');
+    let (hour, minute, second) = parse_time(time)?.fields();
+    DateTime::new(year, month, day, hour, minute, second)
+}
+
+fn parse_time(text: &str) -> Option<Time> {
+    let mut parts = text.splitn(3, ':');
     let hour = parts.next()?.parse().ok()?;
     let minute = parts.next()?.parse().ok()?;
     let second = parts.next()?.parse().ok()?;
-    DateTime::new(year, month, day, hour, minute, second)
+    Time::new(hour, minute, second)
 }
 
 #[cfg(test)]
@@ -660,6 +673,7 @@ mod tests {
                 Scalar::DateTime(DateTime::new(999, 12, 31, 23, 59, 58).unwrap()),
                 "t:0999-12-31T23:59:58",
             ),
+            (Scalar::Time(Time::new(8, 5, 9).unwrap()), "h:08:05:09"),
         ];
         for (value, spelled) in cases {
             assert_eq!(
@@ -688,6 +702,7 @@ mod tests {
                 "t:2024-02-29",
                 "a datetime result names no second: t:2024-02-29",
             ),
+            ("h:08:30", "a time result names no second: h:08:30"),
             ("b:yes", "a bool result is neither true nor false: b:yes"),
             ("s:%ZZ", "a str result is not percent-encoded UTF-8: s:%ZZ"),
             (

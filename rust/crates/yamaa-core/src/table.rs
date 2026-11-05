@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    temporal::{Date, DateTime},
+    temporal::{Date, DateTime, Time},
     value::{ColumnType, FiniteFloat, Value, ValueType},
 };
 
@@ -17,6 +17,7 @@ pub enum ValueRef<'a> {
     Bool(bool),
     Date(Date),
     DateTime(DateTime),
+    Time(Time),
 }
 
 impl ValueRef<'_> {
@@ -30,6 +31,7 @@ impl ValueRef<'_> {
             Self::Bool(_) => Some(ValueType::Bool),
             Self::Date(_) => Some(ValueType::Date),
             Self::DateTime(_) => Some(ValueType::DateTime),
+            Self::Time(_) => Some(ValueType::Time),
         }
     }
 }
@@ -45,6 +47,23 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Bool(value) => Self::Bool(*value),
             Value::Date(value) => Self::Date(*value),
             Value::DateTime(value) => Self::DateTime(*value),
+            Value::Time(value) => Self::Time(*value),
+        }
+    }
+}
+
+impl From<ValueRef<'_>> for Value {
+    /// Copy a lent value, keeping temporal precision.
+    fn from(value: ValueRef<'_>) -> Self {
+        match value {
+            ValueRef::Missing => Self::Missing,
+            ValueRef::Str(value) => Self::Str(value.into()),
+            ValueRef::Int(value) => Self::Int(value),
+            ValueRef::Float(value) => Self::Float(value),
+            ValueRef::Bool(value) => Self::Bool(value),
+            ValueRef::Date(value) => Self::Date(value),
+            ValueRef::DateTime(value) => Self::DateTime(value),
+            ValueRef::Time(value) => Self::Time(value),
         }
     }
 }
@@ -147,6 +166,8 @@ pub enum ColumnValues<'a> {
     /// is a placeholder (#4201).
     MaskedDate(&'a [Date]),
     MaskedDateTime(&'a [DateTime]),
+    Time(&'a [Option<Time>]),
+    MaskedTime(&'a [Time]),
 }
 
 impl ColumnValues<'_> {
@@ -158,6 +179,7 @@ impl ColumnValues<'_> {
             Self::Float(_) | Self::FiniteFloat(_) => ColumnType::Float,
             Self::Date(_) | Self::MaskedDate(_) => ColumnType::Date,
             Self::DateTime(_) | Self::MaskedDateTime(_) => ColumnType::DateTime,
+            Self::Time(_) | Self::MaskedTime(_) => ColumnType::Time,
         }
     }
 
@@ -173,6 +195,8 @@ impl ColumnValues<'_> {
             Self::DateTime(values) => values.len(),
             Self::MaskedDate(values) => values.len(),
             Self::MaskedDateTime(values) => values.len(),
+            Self::Time(values) => values.len(),
+            Self::MaskedTime(values) => values.len(),
         })
     }
 }
@@ -294,6 +318,8 @@ impl<'a> ColumnRef<'a> {
             }
             ColumnValues::MaskedDate(values) => ValueRef::Date(values[index]),
             ColumnValues::MaskedDateTime(values) => ValueRef::DateTime(values[index]),
+            ColumnValues::Time(values) => values[index].map_or(ValueRef::Missing, ValueRef::Time),
+            ColumnValues::MaskedTime(values) => ValueRef::Time(values[index]),
         }
     }
 
@@ -351,6 +377,12 @@ impl<'a> ColumnRef<'a> {
             }),
             ColumnValues::MaskedDateTime(values) => rows_of(self, rows, &mut visit, |index| {
                 ValueRef::DateTime(values[index])
+            }),
+            ColumnValues::Time(values) => rows_of(self, rows, &mut visit, |index| {
+                values[index].map_or(ValueRef::Missing, ValueRef::Time)
+            }),
+            ColumnValues::MaskedTime(values) => rows_of(self, rows, &mut visit, |index| {
+                ValueRef::Time(values[index])
             }),
         }
     }

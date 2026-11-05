@@ -207,7 +207,12 @@ pub fn sas(profile: SourceProfile, bytes: &[u8]) {
     if numeric.is_empty() {
         return;
     }
-    for kind in [ColumnType::Int, ColumnType::Date, ColumnType::DateTime] {
+    for kind in [
+        ColumnType::Int,
+        ColumnType::Date,
+        ColumnType::DateTime,
+        ColumnType::Time,
+    ] {
         let types = numeric.iter().map(|name| (name.clone(), kind)).collect();
         refuse_internal(&decode(
             &source(profile, types, Some("windows-1252")),

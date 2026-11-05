@@ -673,6 +673,7 @@ class DerivationShapeTests(unittest.TestCase):
             "to_date",
             "dtc",
             "time_of_day",
+            "to_time",
             "duration_text",
             "date_text",
         )
@@ -963,6 +964,12 @@ class DerivationShapeTests(unittest.TestCase):
         self.assertEqual(
             mapping_doc.describe_derivation({"time_of_day": {"source": "ASTDTM"}}),
             "Seconds since midnight for the time of day of ASTDTM.",
+        )
+
+    def test_to_time_takes_the_time_of_day(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation({"to_time": {"source": "ASTDTM"}}),
+            "Take the time of day of ASTDTM.",
         )
 
     def test_duration_text_names_the_unit_its_number_counts(self):

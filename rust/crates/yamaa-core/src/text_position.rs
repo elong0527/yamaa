@@ -339,12 +339,9 @@ pub(crate) fn input_diagnostic(source: &str, path: &str, actual: &'static str) -
 
 /// The type name of a present value that is not text.
 fn kind(value: ValueRef<'_>) -> &'static str {
-    match value {
-        ValueRef::Int(_) => "int",
-        ValueRef::Float(_) => "float",
-        ValueRef::Bool(_) => "bool",
-        ValueRef::Date(_) => "date",
-        ValueRef::DateTime(_) => "datetime",
-        ValueRef::Missing | ValueRef::Str(_) => unreachable!("missing and text are answered"),
-    }
+    value
+        .value_type()
+        .filter(|&kind| kind != crate::value::ValueType::Str)
+        .map(crate::value::ValueType::name)
+        .expect("missing and text are answered")
 }

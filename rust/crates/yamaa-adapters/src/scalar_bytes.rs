@@ -33,23 +33,26 @@ pub fn decode(tag: i32, bytes: &[u8]) -> Result<Value, &'static str> {
         ),
         4 if bytes == [0] => Value::Bool(false),
         4 if bytes == [1] => Value::Bool(true),
-        5 | 6 if bytes.len() == 8 => {
+        5..=7 if bytes.len() == 8 => {
             let epoch = f64::from_le_bytes(bytes.try_into().expect("eight bytes"));
             // All valid civil epochs are far inside 2^53. Check before casting;
             // never saturate, round fractions or delegate to a host timezone.
             if !epoch.is_finite() || epoch.fract() != 0.0 || epoch.abs() > 1e12 {
                 return Err("invalid temporal scalar");
             }
-            if tag == 5 {
-                Value::Date(
+            match tag {
+                5 => Value::Date(
                     crate::epoch::date_from_days(epoch as i64, Precision::Day)
                         .ok_or("invalid temporal scalar")?,
-                )
-            } else {
-                Value::DateTime(
+                ),
+                6 => Value::DateTime(
                     crate::epoch::datetime_from_seconds(epoch as i64, Precision::Second)
                         .ok_or("invalid temporal scalar")?,
-                )
+                ),
+                _ => Value::Time(
+                    crate::epoch::time_from_seconds(epoch as i64)
+                        .ok_or("invalid temporal scalar")?,
+                ),
             }
         }
         _ => return Err("invalid scalar payload"),
@@ -73,6 +76,7 @@ pub fn encode(value: Value) -> ScalarBytes {
                 .to_le_bytes()
                 .to_vec(),
         ),
+        Value::Time(t) => (7, f64::from(t.seconds()).to_le_bytes().to_vec()),
     };
     ScalarBytes { tag, payload }
 }

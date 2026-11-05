@@ -11,9 +11,9 @@ type is one the data file reads as that type, and the other way round.
 
 A table cell names its physical type as the first code span, then either
 ``with no annotation`` or ``annotated`` and its annotations as code spans. A
-timestamp annotation's unit and UTC adjustment follow it as prose, such as
-```Timestamp`, microseconds, no UTC adjustment``, which the data file spells
-``Timestamp(MICROS, isAdjustedToUTC=false)``. The converted types and layouts
+timestamp or time annotation's unit and UTC adjustment follow it as prose,
+such as ```Timestamp`, microseconds, no UTC adjustment``, which the data file
+spells ``Timestamp(MICROS, isAdjustedToUTC=false)``. The converted types and layouts
 the rows also list are the card's prose, which this check does not read.
 """
 
@@ -33,6 +33,8 @@ SPAN = re.compile(r"`([^`]+)`")
 SEPARATOR = re.compile(r":?-+:?")
 UNITS = {"milliseconds": "MILLIS", "microseconds": "MICROS", "nanoseconds": "NANOS"}
 ADJUSTMENTS = {"no UTC adjustment": "false", "adjusted to UTC": "true"}
+# The annotations that take a unit and a UTC adjustment.
+QUALIFIED = {"Timestamp", "Time"}
 # What the data file spells an absent annotation as, here.
 NONE = "none"
 
@@ -79,15 +81,15 @@ def card_rows(rules):
 
 
 def annotation(name, qualifiers):
-    """A card's annotation in the data file's spelling: a timestamp takes its
-    unit and UTC adjustment from the prose after it."""
-    if name != "Timestamp":
+    """A card's annotation in the data file's spelling: a timestamp or a time
+    takes its unit and UTC adjustment from the prose after it."""
+    if name not in QUALIFIED:
         return name if not qualifiers else None
     unit = [UNITS[word] for word in qualifiers if word in UNITS]
     adjusted = [ADJUSTMENTS[word] for word in qualifiers if word in ADJUSTMENTS]
     if len(unit) != 1 or len(adjusted) != 1 or len(qualifiers) != 2:
         return None
-    return f"Timestamp({unit[0]}, isAdjustedToUTC={adjusted[0]})"
+    return f"{name}({unit[0]}, isAdjustedToUTC={adjusted[0]})"
 
 
 def parse_type(cell):

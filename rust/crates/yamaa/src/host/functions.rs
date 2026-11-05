@@ -123,6 +123,7 @@ pub enum ColumnType {
     Float,
     Date,
     DateTime,
+    Time,
 }
 
 impl ColumnType {
@@ -134,6 +135,7 @@ impl ColumnType {
             Core::Float => Self::Float,
             Core::Date => Self::Date,
             Core::DateTime => Self::DateTime,
+            Core::Time => Self::Time,
         }
     }
 }

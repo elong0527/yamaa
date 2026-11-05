@@ -41,8 +41,8 @@ EXPORTED = "External error: "
 
 
 def expected_rows():
-    """The truth's rows as Python values: dates and datetimes as `datetime`
-    values, numbers as floats in the float column."""
+    """The truth's rows as Python values: dates, datetimes and times as
+    `datetime` values, numbers as floats in the float column."""
 
     def value(column, cell):
         if cell is None or column in ("ID", "NAME"):
@@ -51,6 +51,8 @@ def expected_rows():
             return dt.date.fromisoformat(cell)
         if column == "T":
             return dt.datetime.fromisoformat(cell)
+        if column == "H":
+            return dt.time.fromisoformat(cell)
         return float(cell)
 
     return [

@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 669
-  changes: 100
+  entries: 672
+  changes: 103
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 54
+    new, decided: 57
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7704,6 +7704,40 @@ entries:
     of the intermediate''s dataset matches every current row, for a one-record table that shares no column
     with the rows that read it (LOOKUP-5). An intermediate without `key` still fails as D23 requires. No
     0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.expressions.to_time
+  file_type: spec
+  path: columns[].derivation.to_time
+  today: null
+  kind: new
+  proposed: 'to_time: {source: VARIABLE}'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4267): a new verb returning the time of day of
+    its `source`, a datetime, as a time, its date dropped (TIME-23). No 0.5 file declares it, so the
+    converter wrote none.'
+  convert: {action: none}
+- id: new.spec.column_type=time
+  file_type: spec
+  path: columns[].type
+  today: null
+  kind: new
+  proposed: time
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4267): a sixth column type, a time of day to the
+    whole second with no date and no zone (VALUE-1, VALUE-13), which a column, an input field, a derived
+    field and an intermediate binding may declare. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.function.column_type=time
+  file_type: function
+  path: functions.*.params[].type
+  today: null
+  kind: new
+  proposed: time
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4267): a project function parameter or result
+    may declare the time column type (FUNC-5). No 0.5 file declares it, so the converter wrote none.'
   field_kind: value
   convert: {action: none}
 conditions:

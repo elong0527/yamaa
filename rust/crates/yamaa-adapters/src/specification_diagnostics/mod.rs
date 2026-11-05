@@ -318,14 +318,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> Rejection 
 }
 
 pub fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
-    use yamaa_core::value::ColumnType::*;
-    match kind {
-        Str => "str",
-        Int => "int",
-        Float => "float",
-        Date => "date",
-        DateTime => "datetime",
-    }
+    kind.name()
 }
 
 mod inherited;

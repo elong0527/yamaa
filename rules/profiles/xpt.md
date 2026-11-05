@@ -143,18 +143,19 @@ column for a column label, the label, and the cause `ascii` or `length`;
 
 A `str` column is a character variable, and an `int` or `float` column a
 numeric variable. Under `ADaM`, a `date` column is a numeric variable holding
-days since 1960-01-01 and a `datetime` column one holding seconds since
-1960-01-01T00:00:00 ([SUB-25](submission.md#sub-25)); under `SDTM` and `SEND`,
-each is a character variable holding its canonical text
+days since 1960-01-01, a `datetime` column one holding seconds since
+1960-01-01T00:00:00 and a `time` column one holding seconds since midnight
+([SUB-25](submission.md#sub-25)); under `SDTM` and `SEND`, each is a
+character variable holding its canonical text
 ([VALUE-17](../values.md#value-17)). A character variable is as wide as
 [SUB-24](submission.md#sub-24) measures it, and a numeric one is 8 bytes.
 
-Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`.
+Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-application/tests/submission_transport.rs::an_analysis_time_is_a_numeric_variable_with_its_time_format`.
 
-A SAS date and datetime count from midnight on 1960-01-01 on the same wall
+A SAS time counts the seconds from midnight, from 0 through 86399. A SAS date and datetime count from midnight on 1960-01-01 on the same wall
 clock the value names; a value before the origin is negative. The canonical
 text of an `SDTM` or `SEND` date is 10 bytes, and such a dataset carries no
-`datetime` column ([SUB-27](submission.md#sub-27)).
+`datetime` or `time` column ([SUB-27](submission.md#sub-27)).
 
 <a id="xpt-7"></a>
 
@@ -219,8 +220,8 @@ letters, digits and underscores that begins and ends with a letter or an
 underscore, an optional width, `.`, and optional decimals, the name empty only
 beside a width. A declared format that does not parse fails under
 `transport: xpt`. An
-`ADaM` date carries `DATE9.` and a datetime `DATETIME20.`; a character variable
-carries no format.
+`ADaM` date carries `DATE9.`, a datetime `DATETIME20.` and a time `TIME8.`; a
+character variable carries no format.
 
 Fails: `xpt_display_format_invalid`.
 Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_numeric_display_format_under_xpt_must_parse_as_a_sas_format`.

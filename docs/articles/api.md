@@ -215,6 +215,7 @@ as `polars.DataFrame(table)` or `pyarrow.table(table)`, reads it directly.
 | `float` | double | `float` | Float64 |
 | `date` | `Date` | `datetime.date` | Date32 |
 | `datetime` | `POSIXct` in UTC | `datetime.datetime`, without a time zone | Timestamp, in seconds |
+| `time` | `hms`, whole seconds since midnight | `datetime.time`, without a time zone | Time32, in seconds |
 | list, in `issues` and `conditions()` | list column | `list` | List |
 
 A missing value is `NA` in R, `NULL` for a missing list, and `None` in
@@ -253,8 +254,8 @@ metadata and save targets keep reading and writing their files. Declared input
 `types` still apply, and the report identifies these inputs as `memory:<alias>`
 with no byte count. An unknown alias fails the run before study data is read.
 
-Frames admit UTF-8 strings, 64-bit integers and floats, date32, and zone-free
-second timestamps. Convert other physical types preserving their values before
+Frames admit UTF-8 strings, 64-bit integers and floats, date32, zone-free
+second timestamps and second time32 values. Convert other physical types preserving their values before
 exporting; an unsupported type raises `yamaa.Error` with an input diagnostic.
 R takes the same alias overrides as a named list of data frames:
 
@@ -263,9 +264,9 @@ run <- yamaa_spec("adam/adsl.yaml")$run(inputs = list(DM = frame))
 ```
 
 R characters and factors become UTF-8 strings, integers become 64-bit integers,
-numeric vectors become floats, `Date` values become whole days and `POSIXct`
-values become whole UTC seconds. Missing values stay missing. Fractional dates
-or timestamps are refused. No R Arrow package is needed for input conversion.
+numeric vectors become floats, `Date` values become whole days, `POSIXct`
+values become whole UTC seconds and `hms` values become times of day. Missing
+values stay missing. Fractional dates, timestamps or times are refused. No R Arrow package is needed for input conversion.
 Project runs and the command line continue reading files.
 
 ## Read an output as a stream

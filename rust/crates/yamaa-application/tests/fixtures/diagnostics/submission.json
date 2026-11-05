@@ -389,6 +389,18 @@
       "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-25", "spec_paths": ["columns.DAY.submission.display_format"], "context": {"column": "DAY", "value": "YYMMDD10.", "permitted": "DATE9."}}]
     },
     {
+      "case": "an_adam_time_takes_the_fixed_display_format",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "adam", "edits": [{"from": "type: date", "to": "type: time"}, {"from": "submission: {core: Perm, mandatory: false, origins", "to": "submission: {core: Perm, mandatory: false, display_format: TIME5., origins"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-25", "spec_paths": ["columns.DAY.submission.display_format"], "context": {"column": "DAY", "value": "TIME5.", "permitted": "TIME8."}}]
+    },
+    {
+      "case": "an_adam_time_is_not_submitted_as_a_time_data_type",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "adam", "edits": [{"from": "type: date", "to": "type: time"}, {"from": "submission: {core: Perm, mandatory: false, origins", "to": "submission: {core: Perm, mandatory: false, data_type: time, origins"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "submission_data_type_not_admitted", "rule": "SUB-6", "spec_paths": ["columns.DAY.submission"], "context": {"column": "DAY", "declared_type": "time", "data_type": "time", "model": "ADaM"}}]
+    },
+    {
       "case": "an_adam_column_without_core_or_mandatory_passes_without_dataset_metadata",
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "adam", "edits": [{"from": "submission: {label: Subject Level, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\n", "to": ""}, {"from": "{core: Perm, mandatory: false, length: 3", "to": "{length: 3"}]}}, "specification": "spec.yaml"},
@@ -399,6 +411,12 @@
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "tabulation", "edits": [{"from": "OUTPUT]", "to": "VSDTM]"}, {"from": "CLASS", "to": "FINDINGS"}]}}, "specification": "spec.yaml"},
       "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-27", "spec_paths": ["columns.VSDTM.type"], "context": {"column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]}}]
+    },
+    {
+      "case": "a_findings_dataset_refuses_a_time_output_column",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "tabulation", "edits": [{"from": "OUTPUT]", "to": "VSDTM]"}, {"from": "CLASS", "to": "FINDINGS"}, {"from": "VSDTM, type: datetime", "to": "VSDTM, type: time"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-27", "spec_paths": ["columns.VSDTM.type"], "context": {"column": "VSDTM", "value": "time", "class": "FINDINGS", "permitted": ["str", "date"]}}]
     },
     {
       "case": "a_findings_dataset_keeps_a_datetime_column_it_does_not_output",

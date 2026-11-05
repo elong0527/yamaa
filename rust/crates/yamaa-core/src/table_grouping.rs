@@ -3,7 +3,7 @@
 use crate::limits::{LimitExceeded, Limits};
 use crate::{
     table::{CellError, ColumnRef, TableAccess, ValueRef},
-    temporal::{Date, DateTime},
+    temporal::{Date, DateTime, Time},
 };
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, TryReserveError};
@@ -23,6 +23,7 @@ pub(crate) enum Key<'a> {
     Bool(bool),
     Date(Date),
     DateTime(DateTime),
+    Time(Time),
 }
 
 /// Hash consistent with key equality: temporal values hash their civil
@@ -42,6 +43,7 @@ impl std::hash::Hash for Key<'_> {
             Self::Bool(value) => value.hash(state),
             Self::Date(value) => value.fields().hash(state),
             Self::DateTime(value) => value.fields().hash(state),
+            Self::Time(value) => value.hash(state),
         }
     }
 }
@@ -61,6 +63,7 @@ impl<'a> From<ValueRef<'a>> for Key<'a> {
             ValueRef::Bool(value) => Self::Bool(value),
             ValueRef::Date(value) => Self::Date(value),
             ValueRef::DateTime(value) => Self::DateTime(value),
+            ValueRef::Time(value) => Self::Time(value),
         }
     }
 }
@@ -102,6 +105,7 @@ pub(crate) enum OwnedKey {
     Bool(bool),
     Date(Date),
     DateTime(DateTime),
+    Time(Time),
 }
 
 impl From<Key<'_>> for OwnedKey {
@@ -114,6 +118,7 @@ impl From<Key<'_>> for OwnedKey {
             Key::Bool(value) => Self::Bool(value),
             Key::Date(value) => Self::Date(value),
             Key::DateTime(value) => Self::DateTime(value),
+            Key::Time(value) => Self::Time(value),
         }
     }
 }

@@ -54,7 +54,7 @@ impl Temporal {
             }
             (TemporalKind::DurationValue { .. }, _) => "str",
             (TemporalKind::DateText { .. }, _) => "str or int",
-            (TemporalKind::TimeOfDay, _) => "datetime",
+            (TemporalKind::TimeOfDay | TemporalKind::ToTime, _) => "datetime",
             _ => "date",
         }
     }
@@ -77,6 +77,7 @@ impl Temporal {
             TemporalKind::DurationText { .. } => C::DurationTextInput,
             TemporalKind::DateText { .. } => C::DateTextInput,
             TemporalKind::TimeOfDay => C::TimeOfDayInput,
+            TemporalKind::ToTime => C::ToTimeInput,
             _ => C::TemporalOperand,
         };
         Diagnostic {
@@ -121,6 +122,7 @@ impl Temporal {
             Value::Float(_) => (ColumnType::Float, "float"),
             Value::Date(_) => (ColumnType::Date, "date"),
             Value::DateTime(_) => (ColumnType::DateTime, "datetime"),
+            Value::Time(_) => (ColumnType::Time, "time"),
             Value::Bool(_) => return Some(Err(self.operand_diagnostic(index, "bool"))),
         };
         Some(if self.accepts(index, actual.0) {
@@ -224,8 +226,13 @@ impl Temporal {
                 let Value::DateTime(moment) = values[0] else {
                     unreachable!()
                 };
-                let (_, _, _, hour, minute, second) = moment.fields();
-                Value::Int(i64::from(hour) * 3600 + i64::from(minute) * 60 + i64::from(second))
+                Value::Int(i64::from(moment.time().seconds()))
+            }
+            TemporalKind::ToTime => {
+                let Value::DateTime(moment) = values[0] else {
+                    unreachable!()
+                };
+                Value::Time(moment.time())
             }
             _ => {
                 let dates: Vec<_> = values
