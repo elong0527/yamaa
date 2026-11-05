@@ -160,22 +160,8 @@ the rest": sort email, book a dinner, or fill out a form.
 Source: Muse, a personal agent from Meta, https://muse.ai.
 :::
 
-## Goal: AI-first workflow for CDISC data standardization
 
-| Work | Best done by | In CDISC data standardization |
-| ------------- | -------- | -------------------- |
-| Interpret requirements and draft changes | AI agent | Draft the study specification from templates, the protocol, and the SAP |
-| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with code and compare them with benchmarks |
-| Exercise judgment and accept accountability | Human | Review and approve the specification and its evidence |
-
-> Agents execute structured work with tools; explicit rules, benchmarks, and human decisions govern it.
-
-::: {.notes}
-Source: ai4csr, AI-first workflows in Biometrics,
-https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
-:::
-
-## What this course covers
+## Focusing on Skills and Tools
 
 | Part | What it does | In this course |
 | ------ | ------------------ | ------------------ |
@@ -193,4 +179,152 @@ Sources: OpenCode, Agent skills, https://opencode.ai/docs/skills/;
 ai4csr, From one-file skill to maintainable rounding workflow,
 https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd;
 yamaa, Host usage, https://elong0527.github.io/yamaa/articles/api/.
+:::
+
+
+## Goal: AI-first workflow for CDISC data standardization
+
+| Work | Best done by | In CDISC data standardization |
+| ------------- | -------- | -------------------- |
+| Interpret requirements and draft changes | AI agent | Draft the study specification from templates, the protocol, and the SAP |
+| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with code and compare them with benchmarks |
+| Exercise judgment and accept accountability | Human | Review and approve the specification and its evidence |
+
+> Agents execute structured work with tools; explicit rules, benchmarks, and human decisions govern it.
+
+::: {.notes}
+Source: ai4csr, AI-first workflows in Biometrics,
+https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
+:::
+
+## yamaa: collaboration at the planning stage
+
+![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
+
+Human and AI review the specification during planning; the engine executes the agreed rules.
+
+## yamaa: YAML specification example
+
+```yaml
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+columns:
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+verifications:
+  - unique: [STUDYID, USUBJID]
+```
+
+## yamaa: core principle
+
+> A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.
+
+::: {.formula}
+*`output_dataset = derive(input_datasets, spec)`*
+:::
+
+The design of yamaa is a contract between human and AI agents.
+
+- **spec**: schema following closed vocabulary.
+- **derive**: business rules with derivation semantics.
+
+## yamaa: four components
+
+| Component | Purpose | Links |
+| --- | --- | --- |
+| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
+| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Engine | Runs specifications in Python, R and CLI consistently following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) / [CLI](https://github.com/elong0527/yamaa/tree/main/rust/crates/yamaa-cli) |
+| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+
+## yamaa: inheritance
+
+![](../../diagrams/design.svg){fig-alt="SDTM and ADaM templates at the organization and compound levels pass down to the study's SDTM and ADaM specifications in YAML, with lower scopes overriding explicitly. From ODM XML exported by the EDC system, yamaa builds and validates the SDTM datasets, then the ADaM datasets, and generates Define-XML."}
+
+Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
+([example](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html))
+
+## yamaa: benchmarks
+
+:::: {.columns}
+::: {.column width="48%"}
+::: {.big-number}
+~ 600
+:::
+::: {.metric-label}
+runnable benchmarks
+:::
+:::
+
+::: {.column width="48%"}
+::: {.big-number}
+3
+:::
+::: {.metric-label}
+execution interfaces (Python, R, CLI)
+:::
+:::
+::::
+
+- [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/).
+
+<iframe class="benchmark-embed r-stretch" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
+
+Scroll inside the frame to explore the spec, inputs, and golden output.
+
+## RConsortium Pilot 7: full studies
+
+- Build publicly available agentic data standardization workflow.
+  + <https://rconsortium.github.io/submissions-pilot7-synthetic-data/>
+- CDISC pilots (SDTM -> ADaM)
+  + cdiscpilot01 and RConsortium submission pilots 3 and 5.
+- OpenClinica real sample data (ODM -> SDTM -> ADaM)
+  + Real sample data for testing the full data journey.
+- Synthetic studies (ODM -> SDTM -> ADaM)
+  + Simulate ODM XML from real clinical studies.
+
+## yamaa reproduces R Submission Pilot 5 {.perf}
+
+- [Pilot 5 dashboard](https://rconsortium.github.io/submissions-pilot7-synthetic-data/studies/submission-pilot5/#submission-pilot5/datasets/ADSL)
+
+::: {.perf-grid}
+::: {.perf-panel}
+<div class="perf-title">Real size: 254 subjects</div>
+
+<div class="perf-group">End-to-end time, 1 core</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 6.1%"></span></span><span class="perf-value">1.62 s</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">26.45 s</span></div>
+<div class="perf-group">Peak memory</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 41.1%"></span></span><span class="perf-value">0.25 GB</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">0.60 GB</span></div>
+<div class="perf-callouts">
+<div><div class="big-number">16×</div><div class="metric-label">faster than R</div></div>
+<div><div class="big-number">2.4×</div><div class="metric-label">less memory than R</div></div>
+</div>
+:::
+
+::: {.perf-panel}
+<div class="perf-title">Stress test: 10× subjects (2,540)</div>
+
+<div class="perf-group">End-to-end time, 1 core</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 6.9%"></span></span><span class="perf-value">12.62 s</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">181.70 s</span></div>
+<div class="perf-group">Peak memory</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 46.6%"></span></span><span class="perf-value">1.93 GB</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">4.13 GB</span></div>
+<div class="perf-callouts">
+<div><div class="big-number">14×</div><div class="metric-label">faster than R</div></div>
+<div><div class="big-number">2.1×</div><div class="metric-label">less memory than R</div></div>
+</div>
+:::
 :::
