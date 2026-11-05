@@ -69,6 +69,13 @@ GitHub published the review.
 
 `review/` is the page to circulate: its purpose, people and how-to are authored
 in `docs/articles/benchmark-review.md`, and the generator adds the status.
+Its table of benchmarks shows each reviewer's decision in the current round,
+in the order they reviewed, as soon as it is published, so a disagreement
+can be discussed before the benchmark settles. Each decision links to the
+discussion that holds its review. The table has a filter for each data
+attribute of its rows -- status, each decision, group, domain, round and
+name -- which `review-status.js` applies and keeps in the address, so a
+filtered list can be shared as a link.
 The Docs workflow refreshes the site when a `Review:` discussion is created,
 edited or deleted, as well as after a main push or manual dispatch. It runs
 `review_status.py` first, which saves the published

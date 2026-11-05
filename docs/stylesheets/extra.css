@@ -143,3 +143,47 @@
 .md-typeset .benchmark-grid + h2 {
   margin-top: 1.2rem;
 }
+
+/* Benchmark review status (docs/benchmark/review/index.md, written by the
+ * same generator). review-status.js filters the table by the controls above
+ * it, which stay hidden without JavaScript. */
+.md-typeset .review-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem 1rem;
+  margin: 1.2rem 0 0.4rem;
+  font-size: 0.7rem;
+}
+
+.md-typeset .review-filter label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .review-filter select,
+.md-typeset .review-filter input,
+.md-typeset .review-filter button {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.2rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  font: inherit;
+}
+
+.md-typeset .review-filter button {
+  cursor: pointer;
+}
+
+.md-typeset .review-filter-count {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+}
+
+.md-typeset .review-status tr[hidden] {
+  display: none;
+}
