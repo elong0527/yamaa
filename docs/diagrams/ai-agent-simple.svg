@@ -33,27 +33,27 @@
   <text x="605" y="248" font-size="16" text-anchor="middle" fill="#222">P<tspan font-size="12" dy="4">θ</tspan><tspan dy="-4">(x</tspan><tspan font-size="12" dy="4">t</tspan><tspan dy="-4"> | x</tspan><tspan font-size="12" dy="4">&lt;t</tspan><tspan dy="-4">)</tspan></text>
 
   <!-- Tools -->
-  <rect x="850" y="150" width="170" height="80" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>
-  <text x="935" y="185" font-size="19" text-anchor="middle" font-weight="bold" fill="#1b5e20">Tools</text>
-  <text x="935" y="210" font-size="13" text-anchor="middle" fill="#555">search · code · APIs</text>
+  <rect x="850" y="250" width="170" height="80" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>
+  <text x="935" y="285" font-size="19" text-anchor="middle" font-weight="bold" fill="#1b5e20">Tools</text>
+  <text x="935" y="310" font-size="13" text-anchor="middle" fill="#555">search · code · APIs</text>
 
   <!-- Memory -->
-  <rect x="850" y="300" width="170" height="80" rx="10" fill="#fffde7" stroke="#f9a825" stroke-width="2.5"/>
-  <text x="935" y="335" font-size="19" text-anchor="middle" font-weight="bold" fill="#b45309">Memory</text>
-  <text x="935" y="360" font-size="13" text-anchor="middle" fill="#555">knowledge graph</text>
+  <rect x="850" y="120" width="170" height="80" rx="10" fill="#fffde7" stroke="#f9a825" stroke-width="2.5"/>
+  <text x="935" y="155" font-size="19" text-anchor="middle" font-weight="bold" fill="#b45309">Memory</text>
+  <text x="935" y="180" font-size="13" text-anchor="middle" fill="#555">knowledge graph</text>
 
   <!-- action -->
-  <line x1="702" y1="190" x2="846" y2="190" stroke="#2e7d32" stroke-width="2.5" marker-end="url(#arg)"/>
-  <text x="790" y="180" stroke="#ffffff" stroke-width="5" paint-order="stroke" font-size="14" text-anchor="middle" fill="#2e7d32" font-weight="bold">action</text>
+  <line x1="702" y1="268" x2="846" y2="268" stroke="#2e7d32" stroke-width="2.5" marker-end="url(#arg)"/>
+  <text x="790" y="258" stroke="#ffffff" stroke-width="5" paint-order="stroke" font-size="14" text-anchor="middle" fill="#2e7d32" font-weight="bold">action</text>
 
   <!-- result -->
-  <path d="M 848 215 H 765 V 310 H 325 V 284" fill="none" stroke="#1565c0" stroke-width="2.5" marker-end="url(#arb)"/>
+  <path d="M 848 310 H 325 V 284" fill="none" stroke="#1565c0" stroke-width="2.5" marker-end="url(#arb)"/>
   <text x="545" y="303" font-size="14" text-anchor="middle" fill="#1565c0" font-weight="bold">result</text>
 
   <!-- memory links -->
-  <line x1="975" y1="232" x2="975" y2="296" stroke="#444" stroke-width="2.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
-  <path d="M 848 350 H 734" fill="none" stroke="#8e24aa" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arp)"/>
-  <text x="790" y="340" stroke="#ffffff" stroke-width="5" paint-order="stroke" font-size="14" text-anchor="middle" fill="#8e24aa" font-weight="bold">retrieve</text>
+  <line x1="975" y1="202" x2="975" y2="246" stroke="#444" stroke-width="2.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <path d="M 848 160 H 734" fill="none" stroke="#8e24aa" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arp)"/>
+  <text x="790" y="150" stroke="#ffffff" stroke-width="5" paint-order="stroke" font-size="14" text-anchor="middle" fill="#8e24aa" font-weight="bold">retrieve</text>
 
   <!-- final answer -->
   <path d="M 605 168 V 78 H 70 V 196" fill="none" stroke="#c62828" stroke-width="2.5" marker-end="url(#arr)"/>

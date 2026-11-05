@@ -29,6 +29,18 @@ The views and opinions expressed in this presentation are those of the
 individual presenter. They do not represent those of their affiliated
 organizations or institutions.
 
+## Preparation [5 min]
+
+- [![Open GitHub Codespaces](https://github.com/codespaces/badge.svg){.codespaces-badge}](https://codespaces.new/elong0527/yamaa)
+  + R / Python / opensas
+  + opencode / claude code / codex
+
+- Start [OpenCode](https://opencode.ai/) and configure a model provider
+  + Select `opencode-go/muse-spark-1.3-contributor`.
+  + Keep API keys in your personal Codespaces secrets, never in the repository.
+  + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
+    or [Codex](https://learn.chatgpt.com/docs/codex/cli).
+
 ## A Mental Game
 
 :::: {.columns}
@@ -73,32 +85,9 @@ You have been hired by the CMO to build a biometrics group.
 > member becomes an orchestrator who manages AI agents, focuses on exception
 > handling, and continuously improves the system.
 
-## Preparation [5 min]
-
-- Open [![GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/elong0527/yamaa)
-  + R / Python / opensas
-  + The Pilot 7 synthetic data, cloned beside yamaa
-
-- Start [OpenCode](https://opencode.ai/) and configure a model provider
-  + Select `opencode-go/muse-spark-1.3-contributor`.
-  + Keep API keys in your personal Codespaces secrets, never in the repository.
-  + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
-    or [Codex](https://learn.chatgpt.com/docs/codex/cli).
-
 ## What is an AI agent?
 
 ![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
-
-::: {.sources}
-Sources: [Simon Willison (2025)](https://simonwillison.net/2025/Sep/18/agents/);
-[Anthropic, Building effective agents](https://www.anthropic.com/engineering/building-effective-agents);
-[ai4csr, Onboarding an AI agent](https://github.com/elong0527/ai4csr/blob/main/04-ai-agent.qmd).
-:::
-
-::: {.notes}
-Onboard an agent like a new colleague: written instructions, bounded access,
-a record of every action, and a named human accountable for the result.
-:::
 
 ## What is a large language model?
 
@@ -109,16 +98,7 @@ run code: a harness does that and puts the results back into the context.
 
 ## What is a harness?
 
-**Agent = Model + Harness.** The harness is every piece of code, configuration,
-and execution logic that is not the model itself.
-
-| Part | Responsibility | In this course |
-| ------ | -------------------- | -------------- |
-| Model | Interpret the context and propose the next step | Muse Spark |
-| Harness | Assemble context, call the model, run tools, and control the loop | OpenCode |
-| Tools | Act and observe: read, edit, search, and run commands | `read`, `edit`, `grep`, `bash` |
-| Working state | Hold messages, plans, and tool results | The OpenCode session |
-| Environment | Limit the files, commands, and credentials the agent can reach | The Codespace and tool permissions |
+![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
 
 > The model is the CPU; the harness is the operating system.
 
@@ -181,4 +161,23 @@ decisions govern it.
 ::: {.notes}
 Source: ai4csr, AI-first workflows in Biometrics,
 https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
+:::
+
+## What this course covers
+
+| Part | What it does | In this course |
+| ------ | ------------------ | ------------------ |
+| Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
+| Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
+| **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
+| **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
+| Memory | Notes kept between sessions | Not covered |
+| Environment | The files, commands, and credentials the agent can reach | Provided: the Codespace |
+
+A skill tells the agent how to do the task; a tool does the exact part of it.
+
+::: {.sources}
+Sources: [OpenCode, Agent skills](https://opencode.ai/docs/skills/);
+[ai4csr, From one-file skill to maintainable rounding workflow](https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd);
+[yamaa, Host usage](https://elong0527.github.io/yamaa/articles/api/).
 :::
