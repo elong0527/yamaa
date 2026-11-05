@@ -33,10 +33,21 @@ npm install --global --prefix "$HOME/.local" @anthropic-ai/claude-code @openai/c
 printf '\nCloning the latest Pilot 7 synthetic data repository beside yamaa...\n'
 pilot7_dir="$(dirname "$repository_root")/submissions-pilot7-synthetic-data"
 if [ -d "$pilot7_dir/.git" ]; then
-  git -C "$pilot7_dir" pull --ff-only
+  git -C "$pilot7_dir" pull --ff-only ||
+    printf 'warning: could not update %s; keeping the existing checkout\n' "$pilot7_dir" >&2
 else
   git clone --depth 1 https://github.com/RConsortium/submissions-pilot7-synthetic-data "$pilot7_dir"
 fi
+
+# The editor opens the parent folder, so point its settings at this checkout.
+mkdir -p "$(dirname "$repository_root")/.vscode"
+cat > "$(dirname "$repository_root")/.vscode/settings.json" <<SETTINGS
+{
+  "python.defaultInterpreterPath": "$repository_root/python/.venv/bin/python",
+  "rust-analyzer.linkedProjects": ["$repository_root/rust/Cargo.toml"],
+  "terminal.integrated.cwd": "$repository_root"
+}
+SETTINGS
 
 printf '\nBuilding the Python package and installing repository tools...\n'
 # The owned setup command installs yamaa and Polars along with the locked
