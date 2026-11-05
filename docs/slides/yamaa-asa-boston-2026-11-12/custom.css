@@ -66,22 +66,23 @@
 }
 
 /* AI levels: headers darken from adoption to native; the first row holds the
-   one-line definitions and the last row the examples. */
+   one-line definitions and the last row the examples. Each header keeps at
+   least 3:1 contrast with its white bold text, the large-text minimum. */
 .reveal .ai-levels th {
   color: white;
   text-align: center;
 }
 
 .reveal .ai-levels th:nth-child(1) {
-  background: #6d9eeb;
+  background: #5b8bd9;
 }
 
 .reveal .ai-levels th:nth-child(2) {
-  background: #4a7fd0;
+  background: #3d6fc2;
 }
 
 .reveal .ai-levels th:nth-child(3) {
-  background: var(--course-blue);
+  background: #1f449a;
 }
 
 .reveal .ai-levels tbody tr:first-child td {
@@ -94,9 +95,20 @@
   color: var(--course-blue);
 }
 
+.reveal .sources {
+  color: var(--course-muted);
+  font-size: 0.55em;
+  margin-top: 1em;
+}
+
 .reveal #title-slide h1,
 .reveal #title-slide .subtitle,
 .reveal #title-slide .quarto-title-author-name,
 .reveal #title-slide .date {
   color: white;
+}
+
+/* Room for the numbers of an ordered list, which sit outside the text. */
+.reveal .slides ol {
+  margin-left: 1.6em;
 }

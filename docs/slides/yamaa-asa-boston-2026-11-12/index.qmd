@@ -77,17 +77,108 @@ You have been hired by the CMO to build a biometrics group.
 
 - Open [![GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/elong0527/yamaa)
   + R / Python / opensas
+  + The Pilot 7 synthetic data, cloned beside yamaa
 
-- Enable [OpenCode](https://opencode.ai/) and select `muse-spark-1.3-contributor`
-  + You can also use [Claude Code](https://code.claude.com/docs/en/quickstart),
-    [Codex](https://learn.chatgpt.com/docs/codex/cli), or other coding agents.
+- Start [OpenCode](https://opencode.ai/) and configure a model provider
+  + Select `opencode-go/muse-spark-1.3-contributor`.
+  + Keep API keys in your personal Codespaces secrets, never in the repository.
+  + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
+    or [Codex](https://learn.chatgpt.com/docs/codex/cli).
 
 ## What is an AI agent?
 
+![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
+
+::: {.sources}
+Sources: [Simon Willison (2025)](https://simonwillison.net/2025/Sep/18/agents/);
+[Anthropic, Building effective agents](https://www.anthropic.com/engineering/building-effective-agents);
+[ai4csr, Onboarding an AI agent](https://github.com/elong0527/ai4csr/blob/main/04-ai-agent.qmd).
+:::
+
+::: {.notes}
+Onboard an agent like a new colleague: written instructions, bounded access,
+a record of every action, and a named human accountable for the result.
+:::
+
 ## What is a large language model?
+
+![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
+
+An LLM only predicts the next token from its context. It cannot open a file or
+run code: a harness does that and puts the results back into the context.
 
 ## What is a harness?
 
+**Agent = Model + Harness.** The harness is every piece of code, configuration,
+and execution logic that is not the model itself.
+
+| Part | Responsibility | In this course |
+| ------ | -------------------- | -------------- |
+| Model | Interpret the context and propose the next step | Muse Spark |
+| Harness | Assemble context, call the model, run tools, and control the loop | OpenCode |
+| Tools | Act and observe: read, edit, search, and run commands | `read`, `edit`, `grep`, `bash` |
+| Working state | Hold messages, plans, and tool results | The OpenCode session |
+| Environment | Limit the files, commands, and credentials the agent can reach | The Codespace and tool permissions |
+
+> The model is the CPU; the harness is the operating system.
+
+::: {.sources}
+Sources: [LangChain, The anatomy of an agent harness](https://www.langchain.com/blog/the-anatomy-of-an-agent-harness);
+[Philipp Schmid, The importance of agent harness in 2026](https://www.philschmid.de/agent-harness-2026);
+[ai4csr, What an AI agent is](https://github.com/elong0527/ai4csr/blob/main/04-ai-agent.qmd).
+:::
+
 ## How does an AI agent call tools?
 
+:::: {.columns}
+
+::: {.column width="62%"}
+```{mermaid}
+%%| fig-width: 7
+%%{init: {"sequence": {"mirrorActors": false}}}%%
+sequenceDiagram
+    participant H as Harness (OpenCode)
+    participant M as Model
+    participant T as Tool (bash)
+    H->>M: Task, context, and tool definitions
+    M-->>H: Tool call: bash("Rscript derive_adsl.R")
+    H->>H: Check the permission: allow, ask, or deny
+    H->>T: Run the command
+    T-->>H: Output or error
+    H->>M: Tool result, added to the context
+    M-->>H: Final answer, or the next tool call
+```
+:::
+
+::: {.column width="38%"}
+- A tool definition is a name, a description, and an input schema.
+- The model never runs a tool itself: it asks, and the harness decides and acts.
+- [MCP](https://modelcontextprotocol.io/) is a standard way to plug in more tools.
+:::
+
+::::
+
+::: {.sources}
+Sources: [OpenAI, Function calling](https://developers.openai.com/api/docs/guides/function-calling);
+[Anthropic, Tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview);
+[OpenCode, Tools](https://opencode.ai/docs/tools/).
+:::
+
 ## Goal: AI-first workflow for CDISC data standardization
+
+Agents do structured work with tools; explicit rules, benchmarks, and human
+decisions govern it.
+
+| Work | Best done by | In CDISC data standardization |
+| ------------- | -------- | -------------------- |
+| Interpret requirements and draft changes | AI agent | Draft the study specification from templates, the protocol, and the SAP |
+| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with the yamaa engine and compare them with benchmarks |
+| Exercise judgment and accept accountability | Human | Review and approve the specification and its evidence |
+
+> Move human and AI collaboration to the planning stage: agree on the
+> specification first, then let the engine execute it.
+
+::: {.notes}
+Source: ai4csr, AI-first workflows in Biometrics,
+https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
+:::
