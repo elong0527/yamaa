@@ -74,7 +74,6 @@ print(report)
 assert report.status == "succeeded", "Python yamaa selftest failed"
 PY
 Rscript --vanilla - <<'RS'
-library(tidyverse)
 library(yamaa)
 print(R.version.string)
 report <- yamaa_selftest()
@@ -83,7 +82,8 @@ stopifnot(report$status == "succeeded")
 RS
 printf 'data _null_; put "opensas ready"; run;\n' > "$scratch/smoke.sas"
 opensas "$scratch/smoke.sas"
+quarto --version
 opencode --version
 claude --version
 codex --version
-printf '\nyamaa Codespace is ready. Run R, python, opensas, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"
+printf '\nyamaa Codespace is ready. Run R, quarto, python, opensas, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"

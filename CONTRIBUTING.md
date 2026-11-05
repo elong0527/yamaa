@@ -14,10 +14,11 @@ header before changing what it checks.
 [Open a yamaa Codespace](https://codespaces.new/elong0527/yamaa) on a
 machine with at least 4 cores, 8 GB of memory and 32 GB of storage. The
 [dev container](.devcontainer/devcontainer.json) starts from Rocker's
-latest `tidyverse` image and adds Node.js LTS, Rust and uv through its
-container features; its [setup script](.devcontainer/setup.sh) then
-installs the latest stable Python through uv, the latest opensas Linux
-release, the latest OpenCode v2, Claude Code and Codex, clones the latest
+latest `r-ver` image, which holds R alone, and adds Quarto, Node.js LTS,
+Rust and uv through its container features; its
+[setup script](.devcontainer/setup.sh) then installs the latest stable
+Python through uv, the latest opensas Linux release, the latest OpenCode
+v2, Claude Code and Codex, clones the latest
 [Pilot 7 synthetic data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 repository beside yamaa, runs `make setup` and installs the R package from
 the same checkout into `~/R/library`. Setup compiles both
@@ -28,7 +29,8 @@ in the creation log. The editor opens `/workspaces`, which holds `yamaa/` and
 
 ```sh
 python -c 'import polars, yamaa; print(yamaa.selftest())'
-Rscript -e 'library(tidyverse); library(yamaa); print(yamaa_selftest())'
+Rscript -e 'library(yamaa); print(yamaa_selftest())'
+quarto --version
 opensas path/to/program.sas
 opencode
 claude
