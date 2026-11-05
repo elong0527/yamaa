@@ -137,7 +137,7 @@ the rest": sort email, book a dinner, or fill out a form.
 :::
 
 ::: {.column width="40%"}
-![](https://muse.ai/images/landing/approvals.webp){fig-alt="Muse asks to place an 80-dollar stroller order at an online shop, showing the product and the payment card, with Allow and Deny buttons." height="330"}
+![](../../image/muse.png){fig-alt="Muse, a soft beige character wearing headphones, works on a laptop at a desk beside a plant and a phone."}
 :::
 
 ::::
