@@ -17,20 +17,26 @@ machine with at least 4 cores, 8 GB of memory and 32 GB of storage. The
 latest `tidyverse` image and adds Node.js LTS, Rust and uv through its
 container features; its [setup script](.devcontainer/setup.sh) then
 installs the latest stable Python through uv, the latest opensas Linux
-release and the latest OpenCode v2, runs `make setup` and installs the R
-package from the same checkout into `~/R/library`. Setup compiles both
+release, the latest OpenCode v2, Claude Code and Codex, clones the latest
+[Pilot 7 synthetic data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+repository beside yamaa, runs `make setup` and installs the R package from
+the same checkout into `~/R/library`. Setup compiles both
 bindings and can take several minutes; wait for **yamaa Codespace is ready**
-in the creation log. VS Code and new terminals use `python/.venv`. Then,
-from the repository root:
+in the creation log. The editor opens `/workspaces`, which holds `yamaa/` and
+`submissions-pilot7-synthetic-data/`; new terminals start in `yamaa/` and use
+`python/.venv`. Then, from the repository root:
 
 ```sh
 python -c 'import polars, yamaa; print(yamaa.selftest())'
 Rscript -e 'library(tidyverse); library(yamaa); print(yamaa_selftest())'
 opensas path/to/program.sas
 opencode
+claude
+codex
 ```
 
-Configure a model provider inside OpenCode first; keep API keys in your
+Sign in to Claude Code and Codex, or configure a model provider inside
+OpenCode, first; keep API keys in your
 personal Codespaces secrets, never in the repository. After changing Python
 or Rust sources, run `make setup` again; to rebuild both packages, rerun
 `bash .devcontainer/setup.sh`. After changing the container configuration,
