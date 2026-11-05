@@ -30,20 +30,32 @@ the coordinator confirms the reviewers before a benchmark is finalized.
 
 ## How to review
 
+A review should take no more than 5 minutes: it gives a preliminary approval,
+and the coordinator confirms the reviewers before a benchmark is finalized.
+
 1. Sign in to GitHub in your browser.
 2. Select **Start reviewing**.
-3. Read the Summary, Inputs and Expected output.
-4. Answer Task and Inputs with Agree or Disagree. If you disagree, say why in
-   the comments.
+3. Read the Key points, where a benchmark has them, then the Summary, Inputs
+   and Expected output.
+4. Answer each question with Agree or Disagree: Task, Inputs, and Key points
+   where shown. If you disagree, say why in the comments.
 5. Select **Submit and next**. In the GitHub tab, tick the search box if GitHub
    shows it, select **Start discussion**, then close the tab.
-6. Select **Skip** for any benchmark you cannot judge.
+6. Select **Skip** for any benchmark you cannot judge, and publish the skip
+   the same way, so the status below can count it. Your comments can say why.
 
 Reviews are public, so use public or invented data only.
 
 A benchmark passes when two reviewers approve it and nobody disagrees. It then
-stays approved and does not come back. Otherwise it is reworked and goes to the
-next round, which starts with no reviews for it.
+stays approved and does not come back.
+
+A review that does not approve opens a rework issue for the benchmark, with the
+review's comments, so nobody needs to file one. The pull request that reworks
+the benchmark closes the issue, and GitHub notifies the reviewer, who reviews
+the benchmark again. The new review replaces their earlier one: agreeing can
+approve the benchmark, and disagreeing opens another rework issue. When the
+coordinator opens a new round, a benchmark that still needs rework starts it
+with no reviews.
 
 ## Status
 

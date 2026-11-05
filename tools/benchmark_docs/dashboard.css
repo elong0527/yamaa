@@ -247,6 +247,9 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .review-ask-body li a { color: var(--ink); text-decoration: none; }
 .review-ask-body li a:hover { color: var(--brand); text-decoration: underline; }
 .review-ask-note { color: var(--muted); font-size: 14px; }
+.key-points-panel { margin-bottom: 14px; }
+.key-points-panel ul { margin: 0; }
+.key-points-panel li:last-child { margin-bottom: 0; }
 .review-chip { flex-shrink: 0; border-radius: 999px; padding: 2px 10px; background: var(--brand); color: #fff; font-size: 12px; font-weight: 650; letter-spacing: .02em; white-space: nowrap; }
 .section-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 

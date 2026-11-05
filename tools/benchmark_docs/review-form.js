@@ -3,7 +3,9 @@
 // The review survey: drafts stay in this browser, and submitting opens
 // GitHub's new-discussion composer with the answers filled in. The static page
 // holds no credentials; the reviewer still selects Start discussion on GitHub.
-// Submitting or skipping then moves this page on through the review queue.
+// Skipping opens the composer the same way, with Skip as the overall answer,
+// so the review page can count skips. Either then moves this page on through
+// the review queue.
 (() => {
   const form = document.querySelector(".review-form");
   if (!form) return;
@@ -80,8 +82,6 @@
     window.location.href = nextUrl(remember(outcome));
   }
 
-  form.querySelector(".review-skip").addEventListener("click", () => leave("skipped"));
-
   function show(message, isError) {
     feedback.textContent = message;
     feedback.classList.toggle("is-error", Boolean(isError));
@@ -92,7 +92,7 @@
     return text.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
   }
 
-  function body() {
+  function body(overall) {
     const page = window.location.href.split("#")[0];
     const rows = questions.map((fieldset) => {
       const prompt = fieldset.querySelector(".review-prompt").textContent;
@@ -105,7 +105,7 @@
       "| Question | Answer |",
       "| --- | --- |",
       ...rows,
-      "| **Overall** | " + (approved() ? "Approve" : "Not approve") + " |",
+      "| **Overall** | " + overall + " |",
       "",
       "### Comments",
       "",
@@ -134,8 +134,14 @@
       comments.focus();
       return;
     }
+    publish(approved() ? "Approve" : "Not approve", "submitted");
+  });
+
+  form.querySelector(".review-skip").addEventListener("click", () => publish("Skip", "skipped"));
+
+  function publish(overall, outcome) {
     const title = "Review: " + name;
-    const text = body();
+    const text = body(overall);
     let url = composer(title, text);
     const tooLong = url.length > LINK_LIMIT;
     if (tooLong) url = composer(title, "");
@@ -148,13 +154,13 @@
     }
     tab.opener = null;
     if (!tooLong) {
-      leave("submitted");
+      leave(outcome);
       return;
     }
     // The text is still here to copy, so this page stays until it has been.
-    prepared.querySelector("a").href = nextUrl(remember("submitted"));
+    prepared.querySelector("a").href = nextUrl(remember(outcome));
     preparedText.value = text;
     prepared.hidden = false;
     show("Your review is longer than a prefilled link allows, so GitHub opened with the title only. Paste the text below into the discussion, select Start discussion, then go to the next benchmark.");
-  });
+  }
 })();

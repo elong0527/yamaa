@@ -1,0 +1,47 @@
+name: Benchmark review
+
+# A published review that does not approve a benchmark opens a rework issue,
+# so the review's comments reach the repository without anyone filing them.
+# The issue mentions the reviewer, and GitHub notifies them when the pull
+# request that reworks the benchmark closes it, so they can review it again.
+# Only a newly created review opens an issue: an edit to one would open a
+# second issue for the same review.
+on:
+  discussion:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  rework:
+    if: >-
+      startsWith(github.event.discussion.title, 'Review: ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The module reads the discussion from the event file, so no field of
+      # the review reaches the shell.
+      - name: Write the rework issue the review asks for
+        run: python3 -m tools.benchmark_docs.review_rework "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/rework"
+      - name: Open the rework issue
+        run: |
+          if [ ! -f "$RUNNER_TEMP/rework/body.md" ]; then
+            echo "The review approves or skips the benchmark; no rework issue."
+            exit 0
+          fi
+          gh label create benchmark-review --color 1F3A5C \
+            --description "Rework a benchmark a published review did not approve" --force
+          gh issue create --title "$(cat "$RUNNER_TEMP/rework/title")" \
+            --label benchmark-review --body-file "$RUNNER_TEMP/rework/body.md"

@@ -20,9 +20,12 @@ DESTINATION = ROOT / "docs/benchmark/review/reviews.json"
 TITLE = re.compile(r"Review: ([a-z0-9-]+)")
 # A reviewer's decision, as the Overall row of the review states it.
 DECISIONS = ("Approve", "Not approve")
+# A reviewer who cannot judge a benchmark publishes a skip in the same row. The
+# review page counts skips, and they decide nothing.
+SKIP = "Skip"
 # GitHub can store a submitted form's line breaks as CRLF.
 OVERALL = re.compile(
-    rf"^\| \*\*Overall\*\* \| ({'|'.join(DECISIONS)}) \|\s*$", re.MULTILINE
+    rf"^\| \*\*Overall\*\* \| ({'|'.join((*DECISIONS, SKIP))}) \|\s*$", re.MULTILINE
 )
 REQUIRED_REVIEWS = 2
 # The UTC date each later round opens, oldest first. The coordinator adds one
@@ -90,12 +93,21 @@ def rounds(reviews, starts):
 
 
 def tally(names, reviews):
-    """Each benchmark's rounds, from the reviews of the benchmarks in `names`."""
+    """Each benchmark's rounds, from the decisions on the benchmarks in `names`."""
     found = {name: [] for name in names}
     for review in reviews:
-        if review["benchmark"] in found:
+        if review["benchmark"] in found and review["overall"] in DECISIONS:
             found[review["benchmark"]].append(review)
     return {name: rounds(items, ROUND_STARTS) for name, items in found.items()}
+
+
+def skips(names, reviews):
+    """How many reviewers skipped each benchmark in `names`."""
+    found = {name: set() for name in names}
+    for review in reviews:
+        if review["benchmark"] in found and review["overall"] == SKIP:
+            found[review["benchmark"]].add(review["reviewer"])
+    return {name: len(reviewers) for name, reviewers in found.items()}
 
 
 def fetch(token):

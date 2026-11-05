@@ -54,6 +54,8 @@ REPOSITORY = "https://github.com/elong0527/yamaa"
 # benchmark, and a disagreement needs a comment.
 REVIEW_URL = REPOSITORY + "/discussions/new?category=general"
 AGREEMENT = ("Agree", "Disagree")
+# A benchmark that declares key points in benchmark.yaml asks a third question.
+QUESTION_COUNTS = {2: ("two", "both", "either"), 3: ("three", "all three", "any")}
 # Submitting or skipping a review leaves for the queue page, which holds the
 # order and sends the reviewer on. It walks these gallery groups, so one dataset
 # type is reviewed together. Nobody assigns benchmarks, so the page spreads
@@ -493,8 +495,9 @@ def render_review_form(name, questions, comment_hint):
         )
     return (
         '<div class="material-toolbar"><h3 class="material-title">Your review</h3>'
-        '<p class="material-provenance">Two questions and your comments '
-        f'&middot; <a href="{escape(discussions_url)}">View benchmark discussions</a></p>'
+        f'<p class="material-provenance">{plural(len(questions), "question")} and '
+        f'your comments &middot; <a href="{escape(discussions_url)}">View benchmark '
+        "discussions</a></p>"
         "</div>"
         f'<form class="review-form" data-benchmark="{escape(name)}" '
         f'data-review-url="{escape(REVIEW_URL)}" '
@@ -512,7 +515,8 @@ def render_review_form(name, questions, comment_hint):
         "filled in and moves this page to the next benchmark. On GitHub, tick "
         "the search box if it appears, then select <strong>Start discussion"
         "</strong> to publish your review under your account. Skip any benchmark "
-        "you cannot judge.</p>"
+        "you cannot judge: skipping opens GitHub the same way, so the review page "
+        "can count skips, and your comments can say why.</p>"
         '<div class="review-buttons"><button type="button" class="review-skip">'
         'Skip</button><button type="submit" class="review-submit">'
         "Submit and next</button></div></div>"
@@ -523,6 +527,26 @@ def render_review_form(name, questions, comment_hint):
         "<noscript><p>The review form needs JavaScript. Leave your review in "
         f'<a href="{escape(REPOSITORY)}/discussions">GitHub Discussions</a>.</p>'
         "</noscript>"
+    )
+
+
+def render_key_points(points, edit_url):
+    """The three points of benchmark.yaml that reviewers judge first, each from
+    its own angle of concern, or nothing when the benchmark declares none."""
+    if not points:
+        return ""
+    markdown = MarkdownIt("commonmark", {"html": False})
+    items = "".join(f"<li>{markdown.renderInline(point)}</li>" for point in points)
+    return (
+        '<section id="key-points" class="panel key-points-panel" '
+        'aria-labelledby="key-points-heading">'
+        '<header class="panel-header"><span class="panel-title">'
+        '<h2 id="key-points-heading">Key points</h2>'
+        f'<a class="edit-button" href="{edit_url}">Edit</a>'
+        '<span class="review-chip">Under review</span></span>'
+        '<span class="panel-caption">Three points to judge first</span></header>'
+        '<div class="source-path"><code>benchmark.yaml</code></div>'
+        f'<div class="prose prose-short"><ul>{items}</ul></div></section>'
     )
 
 
@@ -615,7 +639,9 @@ def render_review_status(entries, saved):
     settle."""
     if saved is None:
         return "Status is not available in this build."
-    counted = review_status.tally(review_queue(entries), saved["reviews"])
+    names = review_queue(entries)
+    counted = review_status.tally(names, saved["reviews"])
+    skipped = review_status.skips(names, saved["reviews"])
     categories = {name: category for name, _, category in entries}
     columns = review_status.STATUSES
 
@@ -654,7 +680,7 @@ def render_review_status(entries, saved):
         + "\n"
         + summary("Group", by_group)
         + "\n"
-        + render_review_table(counted, categories)
+        + render_review_table(counted, skipped, categories)
     )
 
 
@@ -664,11 +690,12 @@ def ordinal(number):
     return f"{number}" + {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
 
 
-def render_review_table(counted, categories):
+def render_review_table(counted, skipped, categories):
     """Each benchmark's status, in HTML so `review-status.js` can filter it to
     the benchmarks reviewers need to align on. Each filter is named after a data
     attribute of the rows, and offers the values the rows can hold. Each
-    decision links to its review."""
+    decision links to its review, and Skips counts the reviewers who could not
+    judge the benchmark."""
     # A decision column for each review a benchmark needs, and one more for
     # each review past that, since a later decision can still mean rework.
     width = max(
@@ -713,6 +740,7 @@ def render_review_table(counted, categories):
         )
         + f'><td><a href="../{escape(row["benchmark"])}.html">{escape(row["benchmark"])}</a></td>'
         + f"<td>{escape(row['domain'])}</td><td>{row['round']}</td><td>{len(made)}</td>"
+        + f"<td>{skipped[row['benchmark']]}</td>"
         + "".join(
             f'<td><a href="{escape(review["url"])}">{escape(review["overall"])}</a></td>'
             for review in made
@@ -735,7 +763,7 @@ def render_review_table(counted, categories):
         '<p class="review-filter-count" role="status" aria-live="polite" hidden></p>\n'
         "<table>\n"
         "<thead><tr><th>Benchmark</th><th>Domain</th><th>Round</th>"
-        f"<th>Reviews ({review_status.REQUIRED_REVIEWS} needed)</th>"
+        f"<th>Reviews ({review_status.REQUIRED_REVIEWS} needed)</th><th>Skips</th>"
         + "".join(f"<th>{label}</th>" for _, label in decisions)
         + "<th>Status</th>"
         "</tr></thead>\n"
@@ -751,7 +779,11 @@ def render_review_page(entries, saved):
     names = review_queue(entries)
     reviews = saved["reviews"] if saved else []
     logins = sorted(
-        {item["reviewer"] for item in reviews if item["benchmark"] in names}
+        {
+            item["reviewer"]
+            for item in reviews
+            if item["benchmark"] in names and item["overall"] in review_status.DECISIONS
+        }
     )
     template = Template(REVIEW_PAGE.read_text(encoding="utf-8"))
     result = template.substitute(
@@ -1224,8 +1256,9 @@ def render_benchmark(benchmark, previous=None, next=None):
             output_caption = "Expected artifacts"
 
     # What reviewers are asked to challenge, the task included: a short survey
-    # on the use case and the data structures, where agreeing with both approves
-    # the benchmark. Everything in the tabs beside Your review is background.
+    # on the use case, the data structures and any key points, where agreeing
+    # with every question approves the benchmark. Everything in the tabs beside
+    # Your review is background.
     if is_failure:
         questions = (
             (
@@ -1269,15 +1302,29 @@ def render_benchmark(benchmark, previous=None, next=None):
                 AGREEMENT,
             ),
         )
+    key_points = metadata.get("review", {}).get("key_points", [])
     data_scope = "inputs" if is_failure else "inputs and outputs"
+    topics = f"the task and the {data_scope}"
+    if key_points:
+        questions += (
+            (
+                "points",
+                "#key-points",
+                "Key points",
+                "Would you agree with each of the three key points of this benchmark?",
+                AGREEMENT,
+            ),
+        )
+        topics = f"the task, the {data_scope}, and the key points"
+    count, every, any_ = QUESTION_COUNTS[len(questions)]
     review_ask = (
-        "<p>As a clinical trial statistician or programmer, answer two short "
-        'questions in <a href="#your-review">Your review</a>: the task and the '
-        f"{data_scope}. Agreeing with both approves this benchmark; disagreeing "
-        "with either needs a comment. Propose a fix with the "
-        "<strong>Edit</strong> button on any source file, or add it to your "
-        'comments.</p><p class="review-ask-note">The other tabs beside Your '
-        "review are background for assessment, not under review.</p>"
+        "<p>As a clinical trial statistician or programmer, take no more than 5 "
+        f"minutes to answer {count} short questions in "
+        f'<a href="#your-review">Your review</a>: {topics}. Agreeing with {every} '
+        f"approves this benchmark; disagreeing with {any_} needs a comment. "
+        "Propose a fix with the <strong>Edit</strong> button on any source file, "
+        'or add it to your comments.</p><p class="review-ask-note">The other tabs '
+        "beside Your review are background for assessment, not under review.</p>"
     )
     review_form = render_review_form(
         benchmark.name, questions, "What should change to finalize the benchmark"
@@ -1365,6 +1412,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_caption=spec_caption,
         spec_code=spec_code,
         review_ask=review_ask,
+        key_points=render_key_points(key_points, edit_base + "/benchmark.yaml"),
         review_form=review_form,
         material_tabs=material_tabs,
         material_panes=material_panes,

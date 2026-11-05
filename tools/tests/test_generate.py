@@ -385,6 +385,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(
             content.sections,
             [
+                "key-points",
                 "readme",
                 "specification",
                 "inputs",
@@ -670,7 +671,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertNotIn("<select", single)
 
-    def test_review_survey_asks_two_questions_with_agree_or_disagree(self):
+    def test_review_survey_asks_agree_or_disagree_and_key_points_add_a_third(self):
         def survey(name):
             page = generate.render_benchmark(generate.BENCHMARKS / name).decode("ascii")
             questions = [
@@ -709,10 +710,18 @@ class DashboardTests(unittest.TestCase):
             "data derivation in clinical trials?",
             agreement,
         )
+        # Asked only where benchmark.yaml declares review.key_points.
+        points = (
+            "points",
+            "#key-points",
+            "Key points",
+            "Would you agree with each of the three key points of this benchmark?",
+            agreement,
+        )
 
         cases = (
-            (BENCHMARK.name, [task, inputs]),
-            ("sdtm-mh-ongoing-conditions", [task, inputs]),
+            (BENCHMARK.name, [task, inputs, points]),
+            ("sdtm-mh-ongoing-conditions", [task, inputs, points]),
             ("send-bw-sendig311", [task, inputs]),
             ("schema-source-ordinal", [task, inputs]),
             (
@@ -744,10 +753,18 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(questions, expected, name)
                 if name == "negative-ambiguous-type":
                     self.assertIn(
-                        "Your review</a>: the task and the inputs. Agreeing with "
-                        "both approves this benchmark;",
+                        "take no more than 5 minutes to answer two short questions "
+                        'in <a href="#your-review">Your review</a>: the task and '
+                        "the inputs. Agreeing with both approves this benchmark; "
+                        "disagreeing with either needs a comment.",
                         page,
                     )
+                self.assertIn(
+                    f'<p class="material-provenance">{len(expected)} questions and '
+                    "your comments &middot;",
+                    page,
+                    name,
+                )
                 # One free-text box, a script-only form, GitHub's composer, and
                 # the queue that takes the reviewer on from this benchmark.
                 self.assertEqual(page.count('name="comments"'), 1, name)
@@ -769,20 +786,82 @@ class DashboardTests(unittest.TestCase):
         ask = page.split('<div class="review-ask-body">', 1)[1].split("</div>", 1)[0]
         self.assertEqual(
             ask,
-            "<p>As a clinical trial statistician or programmer, answer two short "
-            'questions in <a href="#your-review">Your review</a>: the task and the '
-            "inputs and outputs. Agreeing with both approves this benchmark; "
-            "disagreeing with either needs a comment. Propose a fix with the "
-            "<strong>Edit</strong> button on any source file, or add it to your "
-            'comments.</p><p class="review-ask-note">The other tabs beside Your '
-            "review are background for assessment, not under review.</p>",
+            "<p>As a clinical trial statistician or programmer, take no more than 5 "
+            "minutes to answer three short questions in "
+            '<a href="#your-review">Your review</a>: the task, the inputs and '
+            "outputs, and the key points. Agreeing with all three approves this "
+            "benchmark; disagreeing with any needs a comment. Propose a fix with "
+            "the <strong>Edit</strong> button on any source file, or add it to "
+            'your comments.</p><p class="review-ask-note">The other tabs beside '
+            "Your review are background for assessment, not under review.</p>",
         )
-        # The summary is challenged too, so it carries the chip with the data.
-        self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 3)
+        # The key points and the summary are challenged too, so they carry the
+        # chip with the data.
+        self.assertEqual(page.count('<span class="review-chip">Under review</span>'), 4)
         self.assertIn(
             'Edit</a><span class="review-chip">Under review</span></span>'
             '<span class="panel-caption">What this benchmark means</span>',
             page,
+        )
+
+    def test_key_points_panel_shows_the_points_benchmark_yaml_declares(self):
+        # The points are authored in benchmark.yaml; a benchmark without them
+        # has no panel. Inline Markdown renders and raw HTML stays text.
+        edit = generate.REPOSITORY + "/edit/main/benchmarks/{}/benchmark.yaml"
+        cases = (
+            (
+                BENCHMARK.name,
+                [
+                    "Every event of a subject who died carries the death flag, "
+                    "cause and date, so safety tables of fatal events read them "
+                    "from ADAE alone.",
+                    "Seven subjects cover one fatal event, two fatal events on "
+                    "different days and on the same day, a death known only from "
+                    "demographics, an event with no outcome, and no death.",
+                    "The fatal event's start date is the date of death even when "
+                    "demographics records a later one (KN189-102 died on "
+                    "2024-03-01, not 2024-03-05); demographics gives the date only "
+                    "when no event was fatal.",
+                ],
+            ),
+            ("send-bw-sendig311", None),
+        )
+        for name, expected in cases:
+            with self.subTest(case=name):
+                tree = html_tree.fromstring(
+                    generate.render_benchmark(generate.BENCHMARKS / name)
+                )
+                panels = tree.xpath('//section[@id="key-points"]')
+                found = [
+                    {
+                        "heading": panel.xpath(".//h2/text()"),
+                        "edit": panel.xpath('.//a[@class="edit-button"]/@href'),
+                        "source": panel.xpath('.//div[@class="source-path"]//text()'),
+                        "points": [
+                            item.text_content() for item in panel.xpath(".//li")
+                        ],
+                    }
+                    for panel in panels
+                ]
+                self.assertEqual(
+                    found,
+                    []
+                    if expected is None
+                    else [
+                        {
+                            "heading": ["Key points"],
+                            "edit": [edit.format(name)],
+                            "source": ["benchmark.yaml"],
+                            "points": expected,
+                        }
+                    ],
+                    name,
+                )
+        self.assertEqual(
+            generate.render_key_points(["`DTHFL` is <b>Y</b>", "b", "c"], "edit")
+            .split("<ul>", 1)[1]
+            .split("</ul>", 1)[0],
+            "<li><code>DTHFL</code> is &lt;b&gt;Y&lt;/b&gt;</li><li>b</li><li>c</li>",
         )
 
     def test_review_queue_offers_started_benchmarks_before_open_ones(self):
@@ -892,6 +971,23 @@ class DashboardTests(unittest.TestCase):
                 },
             ),
             (
+                "skip",
+                {
+                    "title": "Review: adam-adae-death",
+                    "body": "| **Overall** | Skip |\n",
+                    "createdAt": posted,
+                    "url": url,
+                    "author": author,
+                },
+                {
+                    "benchmark": "adam-adae-death",
+                    "reviewer": "reviewer-a",
+                    "posted": posted,
+                    "overall": "Skip",
+                    "url": url,
+                },
+            ),
+            (
                 "giscus thread",
                 {
                     "title": "yaml/examples/adam-adae-death",
@@ -974,6 +1070,11 @@ class DashboardTests(unittest.TestCase):
             review("repeated", "a", 1, "Approve"),
             review("repeated", "a", 2, "Approve"),
             review("not-in-the-queue", "a", 1, "Approve"),
+            # A skip decides nothing, even after the skipper's own decision, and
+            # counts each skipper once.
+            review("one", "b", 2, "Skip"),
+            review("one", "b", 3, "Skip"),
+            review("repeated", "a", 3, "Skip"),
         ]
         # Each round holds each reviewer's latest review, here by its index in
         # `reviews`, in the order the reviewers first reviewed.
@@ -990,6 +1091,17 @@ class DashboardTests(unittest.TestCase):
             {
                 name: [(tuple(reviews[i] for i in made), found) for made, found in rows]
                 for name, rows in expected.items()
+            },
+        )
+        self.assertEqual(
+            review_status.skips(names, reviews),
+            {
+                "none": 0,
+                "one": 1,
+                "agreed": 0,
+                "split": 0,
+                "changed": 0,
+                "repeated": 1,
             },
         )
 
@@ -1096,7 +1208,7 @@ class DashboardTests(unittest.TestCase):
             "hidden></p>\n"
             "<table>\n"
             "<thead><tr><th>Benchmark</th><th>Domain</th><th>Round</th>"
-            "<th>Reviews (2 needed)</th>{headings}<th>Status</th>"
+            "<th>Reviews (2 needed)</th><th>Skips</th>{headings}<th>Status</th>"
             "</tr></thead>\n"
             "<tbody>\n{rows}</tbody>\n"
             "</table>\n"
@@ -1116,7 +1228,15 @@ class DashboardTests(unittest.TestCase):
                     "posted": "2026-11-02T09:00:00Z",
                     "overall": "Not approve",
                     "url": discussions + "1",
-                }
+                },
+                # A skipper is counted, but is not a reviewer.
+                {
+                    "benchmark": "adam-adsl-age",
+                    "reviewer": "b",
+                    "posted": "2026-11-02T09:30:00Z",
+                    "overall": "Skip",
+                    "url": discussions + "9",
+                },
             ],
         }
         self.assertEqual(
@@ -1137,13 +1257,13 @@ class DashboardTests(unittest.TestCase):
                 rows='<tr data-benchmark="sdtm-dm-basic" data-status="In review" '
                 'data-decision1="Not approve" data-decision2="" data-group="sdtm" '
                 'data-domain="DM" data-round="1"><td><a href="../sdtm-dm-basic.html">'
-                "sdtm-dm-basic</a></td><td>DM</td><td>1</td><td>1</td>"
+                "sdtm-dm-basic</a></td><td>DM</td><td>1</td><td>1</td><td>0</td>"
                 f'<td><a href="{discussions}1">Not approve</a></td><td></td>'
                 "<td>In review</td></tr>\n"
                 '<tr data-benchmark="adam-adsl-age" data-status="Not reviewed" '
                 'data-decision1="" data-decision2="" data-group="adam" '
                 'data-domain="ADSL" data-round="1"><td><a href="../adam-adsl-age.html">'
-                "adam-adsl-age</a></td><td>ADSL</td><td>1</td><td>0</td>"
+                "adam-adsl-age</a></td><td>ADSL</td><td>1</td><td>0</td><td>1</td>"
                 "<td></td><td></td><td>Not reviewed</td></tr>\n",
             )
             + script,
@@ -1194,7 +1314,7 @@ class DashboardTests(unittest.TestCase):
                     'data-decision1="Approve" data-decision2="Approve" '
                     'data-decision3="" data-group="sdtm" data-domain="DM" '
                     'data-round="1"><td><a href="../sdtm-dm-basic.html">'
-                    "sdtm-dm-basic</a></td><td>DM</td><td>1</td><td>2</td>"
+                    "sdtm-dm-basic</a></td><td>DM</td><td>1</td><td>2</td><td>0</td>"
                     f'<td><a href="{discussions}2">Approve</a></td>'
                     f'<td><a href="{discussions}3">Approve</a></td>'
                     "<td></td><td>Approved</td></tr>\n"
@@ -1202,7 +1322,7 @@ class DashboardTests(unittest.TestCase):
                     'data-decision1="Approve" data-decision2="Not approve" '
                     'data-decision3="Approve" data-group="adam" data-domain="ADSL" '
                     'data-round="2"><td><a href="../adam-adsl-age.html">'
-                    "adam-adsl-age</a></td><td>ADSL</td><td>2</td><td>3</td>"
+                    "adam-adsl-age</a></td><td>ADSL</td><td>2</td><td>3</td><td>0</td>"
                     f'<td><a href="{discussions}6">Approve</a></td>'
                     f'<td><a href="{discussions}7">Not approve</a></td>'
                     f'<td><a href="{discussions}8">Approve</a></td>'
