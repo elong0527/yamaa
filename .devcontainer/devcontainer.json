@@ -1,18 +1,19 @@
 {
   "name": "yamaa",
-  "image": "rocker/tidyverse:latest",
+  "image": "rocker/r-ver:latest",
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
-      "username": "rstudio"
+      "username": "vscode"
     },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     },
     "ghcr.io/devcontainers/features/rust:1": {},
-    "ghcr.io/devcontainers-extra/features/uv:1": {}
+    "ghcr.io/devcontainers-extra/features/uv:1": {},
+    "ghcr.io/rocker-org/devcontainer-features/quarto-cli:1": {}
   },
   "workspaceFolder": "/workspaces",
-  "remoteUser": "rstudio",
+  "remoteUser": "vscode",
   "overrideCommand": true,
   "hostRequirements": {
     "cpus": 4,
@@ -20,8 +21,8 @@
     "storage": "32gb"
   },
   "remoteEnv": {
-    "PATH": "/workspaces/${localWorkspaceFolderBasename}/python/.venv/bin:/home/rstudio/.local/bin:${containerEnv:PATH}",
-    "R_LIBS_USER": "/home/rstudio/R/library",
+    "PATH": "/workspaces/${localWorkspaceFolderBasename}/python/.venv/bin:/home/vscode/.local/bin:${containerEnv:PATH}",
+    "R_LIBS_USER": "/home/vscode/R/library",
     "CARGO_BUILD_JOBS": "2"
   },
   "postCreateCommand": "bash /workspaces/${localWorkspaceFolderBasename}/.devcontainer/setup.sh",
