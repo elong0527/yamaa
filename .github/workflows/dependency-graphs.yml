@@ -79,16 +79,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Each graph regenerates its copy's third-party notices.
+      # Each graph regenerates its copy's third-party notices. It builds and
+      # installs its own copy of the package, so the checkout needs only the
+      # repository tools.
       - uses: ./.github/actions/setup
         with:
           r: check
           notices: 'true'
+          package: tools
       - name: Resolve and test an isolated graph
         env:
           GRAPH: ${{ matrix.graph }}
           GRAPH_PYTHON: ${{ matrix.python }}
           CARGO_TARGET_DIR: ${{ runner.temp }}/dependency-target
+          # Line tables keep backtraces readable at a fraction of the size of
+          # full debug information, with which the builds and the Python
+          # suite outgrew the runner's disk.
+          CARGO_PROFILE_DEV_DEBUG: line-tables-only
         run: |
           uv run --project python --no-sync python -m tools.ci.dependency_graphs \
             --graph "$GRAPH" --python "$GRAPH_PYTHON" \
