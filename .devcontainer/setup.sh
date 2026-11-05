@@ -27,6 +27,28 @@ curl --fail --location --retry 3 \
 install -m 0755 "$scratch/opensas" "$HOME/.local/bin/opensas"
 npm install --global --prefix "$HOME/.local" @opencode/cli@2
 
+printf '\nInstalling Claude Code and Codex...\n'
+npm install --global --prefix "$HOME/.local" @anthropic-ai/claude-code @openai/codex
+
+printf '\nCloning the latest Pilot 7 synthetic data repository beside yamaa...\n'
+pilot7_dir="$(dirname "$repository_root")/submissions-pilot7-synthetic-data"
+if [ -d "$pilot7_dir/.git" ]; then
+  git -C "$pilot7_dir" pull --ff-only ||
+    printf 'warning: could not update %s; keeping the existing checkout\n' "$pilot7_dir" >&2
+else
+  git clone --depth 1 https://github.com/RConsortium/submissions-pilot7-synthetic-data "$pilot7_dir"
+fi
+
+# The editor opens the parent folder, so point its settings at this checkout.
+mkdir -p "$(dirname "$repository_root")/.vscode"
+cat > "$(dirname "$repository_root")/.vscode/settings.json" <<SETTINGS
+{
+  "python.defaultInterpreterPath": "$repository_root/python/.venv/bin/python",
+  "rust-analyzer.linkedProjects": ["$repository_root/rust/Cargo.toml"],
+  "terminal.integrated.cwd": "$repository_root"
+}
+SETTINGS
+
 printf '\nBuilding the Python package and installing repository tools...\n'
 # The owned setup command installs yamaa and Polars along with the locked
 # development tools, using the Rust toolchain declared by the checkout.
@@ -62,4 +84,6 @@ RS
 printf 'data _null_; put "opensas ready"; run;\n' > "$scratch/smoke.sas"
 opensas "$scratch/smoke.sas"
 opencode --version
-printf '\nyamaa Codespace is ready. Run R, python, opensas, or opencode.\n'
+claude --version
+codex --version
+printf '\nyamaa Codespace is ready. Run R, python, opensas, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"

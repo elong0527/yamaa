@@ -11,6 +11,7 @@
     "ghcr.io/devcontainers/features/rust:1": {},
     "ghcr.io/devcontainers-extra/features/uv:1": {}
   },
+  "workspaceFolder": "/workspaces",
   "remoteUser": "rstudio",
   "overrideCommand": true,
   "hostRequirements": {
@@ -19,11 +20,11 @@
     "storage": "32gb"
   },
   "remoteEnv": {
-    "PATH": "${containerWorkspaceFolder}/python/.venv/bin:/home/rstudio/.local/bin:${containerEnv:PATH}",
+    "PATH": "/workspaces/${localWorkspaceFolderBasename}/python/.venv/bin:/home/rstudio/.local/bin:${containerEnv:PATH}",
     "R_LIBS_USER": "/home/rstudio/R/library",
     "CARGO_BUILD_JOBS": "2"
   },
-  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postCreateCommand": "bash /workspaces/${localWorkspaceFolderBasename}/.devcontainer/setup.sh",
   "waitFor": "postCreateCommand",
   "customizations": {
     "vscode": {
@@ -36,9 +37,7 @@
         "tamasfe.even-better-toml"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder}/python/.venv/bin/python",
-        "r.rterm.linux": "/usr/local/bin/R",
-        "rust-analyzer.linkedProjects": ["rust/Cargo.toml"]
+        "r.rterm.linux": "/usr/local/bin/R"
       }
     }
   }
