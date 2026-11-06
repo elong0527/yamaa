@@ -99,10 +99,12 @@ including within a round.
 Each new round uses fresh browser completion marks, so a reworked benchmark is
 offered again even to someone who reviewed it before.
 
-Rework does not wait for a round. When a `Review:` discussion is created, the
-Benchmark review workflow runs `review_rework.py`, which reads it the way
-`review_status.py` does; a review that does not approve opens a
-`benchmark-review` issue quoting it and mentioning the reviewer. The pull
+Rework does not wait for a round. When a `Review:` discussion is created or
+edited, the Benchmark review workflow runs `review_rework.py`, which reads it the
+way `review_status.py` does; a review that does not approve opens a
+`benchmark-review` issue quoting it and mentioning the reviewer. An edit opens
+one only when it turns the review into one that does not approve, and a review
+that an issue already cites opens no other. The pull
 request that reworks the benchmark closes that issue, GitHub notifies the
 reviewer, and their next review replaces the one that opened the issue, so it
 can approve the benchmark within the round.

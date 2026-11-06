@@ -252,8 +252,9 @@ each. They follow the README's rule of naming effects, not schema constructs.
 
     review:
       concerns:
-        - Every event of a subject who died carries the death flag, cause and
-          date, so safety tables of fatal events read them from ADAE alone.
+        - Every event of a subject who died carries the death flag and date,
+          and the cause when an event was reported fatal, so safety tables of
+          fatal events read them from ADAE alone.
         - ...
 
 Keep bullets to the variables a reader must understand. Direct key copies and

@@ -473,12 +473,13 @@ def review_done_key():
     return REVIEW_DONE_KEY + (starts[-1] + ":" if starts else "")
 
 
-def render_review_form(name, questions, comment_hint):
+def render_review_form(name, questions, comment_hint, source_url):
     """The survey: one fieldset per question, then a free-text box. The script
     reads the labels, prompts and choices back from these elements to write
     the discussion body, so each question is declared once. A question about
     something the page shows elsewhere links to it; the AI-assisted review
-    lists its concerns under its prompt instead."""
+    lists its concerns under its prompt instead, with links resolved as the
+    README's are."""
     discussions_url = (
         REPOSITORY + "/discussions?discussions_q=" + quote(f'"{name}" in:title')
     )
@@ -495,7 +496,12 @@ def render_review_form(name, questions, comment_hint):
         if target:
             heading = f'<a href="{escape(target)}">{heading}</a>'
         listed = "".join(
-            f"<li>{markdown.renderInline(concern)}</li>" for concern in concerns
+            "<li>"
+            + render_markdown_tokens(
+                markdown, markdown.parseInline(concern), source_url
+            )
+            + "</li>"
+            for concern in concerns
         )
         fieldsets.append(
             f'<fieldset class="review-question" data-label="{escape(label)}">'
@@ -1333,7 +1339,10 @@ def render_benchmark(benchmark, previous=None, next=None):
         "review are background for assessment, not under review.</p>"
     )
     review_form = render_review_form(
-        benchmark.name, questions, "What should change to finalize the benchmark"
+        benchmark.name,
+        questions,
+        "What should change to finalize the benchmark",
+        source_url,
     )
 
     def metric_cell(count, label, cls):

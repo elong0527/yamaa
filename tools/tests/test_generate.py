@@ -731,9 +731,9 @@ class DashboardTests(unittest.TestCase):
                     task,
                     inputs,
                     concerns(
-                        "Every event of a subject who died carries the death flag, "
-                        "cause and date, so safety tables of fatal events read them "
-                        "from ADAE alone.",
+                        "Every event of a subject who died carries the death flag "
+                        "and date, and the cause when an event was reported fatal, "
+                        "so safety tables of fatal events read them from ADAE alone.",
                         "Seven subjects cover one fatal event, two fatal events on "
                         "different days and on the same day, a death known only "
                         "from demographics, an event with no outcome, and no death.",
@@ -866,8 +866,10 @@ class DashboardTests(unittest.TestCase):
             page,
         )
 
-    def test_review_concerns_render_inline_markdown_and_keep_html_as_text(self):
-        # The seam is a concern's own markup, which no benchmark holds.
+    def test_review_concerns_render_inline_markdown_and_links_like_the_readme(self):
+        # The seam is a concern's own markup, which no benchmark holds: HTML stays
+        # text, and links and images resolve against the source folder, images
+        # showing as links, as the README's do.
         form = generate.render_review_form(
             "x",
             (
@@ -877,14 +879,23 @@ class DashboardTests(unittest.TestCase):
                     "AI-assisted review",
                     "Prompt",
                     generate.AGREEMENT,
-                    ("`DTHFL` is <b>Y</b>", "b", "c"),
+                    (
+                        "`DTHFL` is <b>Y</b>",
+                        "See [the inputs](input/dm.csv) or [ADaM](https://cdisc.org)",
+                        "![The plot](plot.png)",
+                    ),
                 ),
             ),
             "",
+            "https://github.com/o/r/blob/main/benchmarks/x",
         )
+        source = "https://github.com/o/r/blob/main/benchmarks/x/"
         self.assertEqual(
             form.split('<ul class="review-concerns">', 1)[1].split("</ul>", 1)[0],
-            "<li><code>DTHFL</code> is &lt;b&gt;Y&lt;/b&gt;</li><li>b</li><li>c</li>",
+            "<li><code>DTHFL</code> is &lt;b&gt;Y&lt;/b&gt;</li>"
+            f'<li>See <a href="{source}input/dm.csv">the inputs</a> or '
+            '<a href="https://cdisc.org">ADaM</a></li>'
+            f'<li><a href="{source}plot.png">The plot</a></li>',
         )
 
     def test_review_queue_offers_started_benchmarks_before_open_ones(self):
@@ -958,7 +969,9 @@ class DashboardTests(unittest.TestCase):
                 queues.append(
                     json.loads(queue.xpath('//*[@id="review-queue"]/text()')[0])
                 )
-                form = html_tree.fromstring(generate.render_review_form(name, (), ""))
+                form = html_tree.fromstring(
+                    generate.render_review_form(name, (), "", "")
+                )
                 keys.append(form.xpath("//form/@data-done-key")[0])
         self.assertEqual(
             (

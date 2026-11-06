@@ -1,14 +1,20 @@
 name: Benchmark review
 
 # A published review that does not approve a benchmark opens a rework issue,
-# so the review's comments reach the repository without anyone filing them.
+# so the review's comments reach the repository without anyone filing it.
 # The issue mentions the reviewer, and GitHub notifies them when the pull
 # request that reworks the benchmark closes it, so they can review it again.
-# Only a newly created review opens an issue: an edit to one would open a
-# second issue for the same review.
+# An edit opens one only when it turns a review into one that does not
+# approve, and a review that already has an issue never opens another.
 on:
   discussion:
-    types: [created]
+    types: [created, edited]
+
+# A review edited right after it is created waits for the creation's run, so
+# the edit sees the issue that run opened.
+concurrency:
+  group: benchmark-review-${{ github.event.discussion.number }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -31,17 +37,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: List the existing rework issues
+        run: |
+          gh label create benchmark-review --color 1F3A5C \
+            --description "Rework a benchmark a published review did not approve" --force
+          gh issue list --label benchmark-review --state all --limit 1000 \
+            --json body > "$RUNNER_TEMP/existing.json"
       # The module reads the discussion from the event file, so no field of
       # the review reaches the shell.
       - name: Write the rework issue the review asks for
-        run: python3 -m tools.benchmark_docs.review_rework "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/rework"
+        run: >-
+          python3 -m tools.benchmark_docs.review_rework "$GITHUB_EVENT_PATH"
+          "$RUNNER_TEMP/existing.json" "$RUNNER_TEMP/rework"
       - name: Open the rework issue
         run: |
           if [ ! -f "$RUNNER_TEMP/rework/body.md" ]; then
-            echo "The review approves or skips the benchmark; no rework issue."
+            echo "The review needs no new rework issue."
             exit 0
           fi
-          gh label create benchmark-review --color 1F3A5C \
-            --description "Rework a benchmark a published review did not approve" --force
           gh issue create --title "$(cat "$RUNNER_TEMP/rework/title")" \
             --label benchmark-review --body-file "$RUNNER_TEMP/rework/body.md"

@@ -1,8 +1,8 @@
 """Write the rework issue for a published review that does not approve.
 
 The Benchmark review workflow runs this module when a `Review:` discussion is
-created, so a disagreement reaches the repository as an issue without anyone
-filing it. The issue mentions the reviewer, which subscribes them: GitHub
+created or edited, so a disagreement reaches the repository as an issue without
+anyone filing it. The issue mentions the reviewer, which subscribes them: GitHub
 notifies them when the pull request that reworks the benchmark closes it, and
 they review the benchmark again. Their new review replaces the one that opened
 the issue, so agreeing approves the benchmark and disagreeing opens another.
@@ -70,12 +70,45 @@ approves the benchmark, and disagreeing opens a new rework issue.
     return f"Benchmark review: rework {name}", body
 
 
+def issue_for(event, existing):
+    """The rework issue an event asks for, or None.
+
+    An edit asks for one only when it turns the review into one that does not
+    approve, and a review that some issue in `existing` already cites, such as
+    a rerun of the same event, asks for none.
+    """
+    discussion = event["discussion"]
+    issue = rework_issue(discussion)
+    if issue is None:
+        return None
+    if event["action"] == "edited":
+        changes = event.get("changes") or {}
+        before = {
+            **discussion,
+            **{
+                field: changes[field]["from"]
+                for field in ("title", "body")
+                if field in changes
+            },
+        }
+        if rework_issue(before) is not None:
+            return None
+    cited = f"[their review]({discussion['html_url']})"
+    if any(cited in (item["body"] or "") for item in existing):
+        return None
+    return issue
+
+
 def main(argv=None):
-    """Read the event at the first path, and write the issue's `title` and
-    `body.md` into the directory at the second, or nothing when the review
-    needs no rework."""
-    event, destination = map(Path, sys.argv[1:] if argv is None else argv)
-    issue = rework_issue(json.loads(event.read_text(encoding="utf-8"))["discussion"])
+    """Read the event at the first path and the existing rework issues, as
+    `gh issue list --json body` writes them, at the second, and write the
+    issue's `title` and `body.md` into the directory at the third, or nothing
+    when the review needs no new rework issue."""
+    event, existing, destination = map(Path, sys.argv[1:] if argv is None else argv)
+    issue = issue_for(
+        json.loads(event.read_text(encoding="utf-8")),
+        json.loads(existing.read_text(encoding="utf-8")),
+    )
     if issue is None:
         return
     destination.mkdir(parents=True, exist_ok=True)

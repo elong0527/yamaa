@@ -37,42 +37,42 @@ def discussion(title="Review: adam-adae-death", overall="Not approve"):
     }
 
 
+PAGE = "https://elong0527.github.io/yamaa/benchmark/adam-adae-death.html"
+ISSUE = (
+    "Benchmark review: rework adam-adae-death",
+    f"@reviewer-a did not approve [adam-adae-death]({PAGE}) in "
+    f"[their review]({URL}):\n"
+    "\n"
+    f"> Review of the [adam-adae-death]({PAGE}) benchmark.\n"
+    ">\n"
+    "> | Question | Answer |\n"
+    "> | --- | --- |\n"
+    "> | **Task:** Would you agree? | Disagree |\n"
+    "> | **Overall** | Not approve |\n"
+    ">\n"
+    "> ### Comments\n"
+    ">\n"
+    "> Use the demographics death date.\n"
+    "\n"
+    "### Rework\n"
+    "\n"
+    "Change the benchmark as the review asks, and close this issue from the pull\n"
+    "request. A change to `input/` or `expected/` changes a golden file: reproduce\n"
+    "the values independently and say in the pull request which moved and why. When\n"
+    "the benchmark should stay as it is, answer on the review instead and close this\n"
+    "issue as not planned.\n"
+    "\n"
+    "### Review again\n"
+    "\n"
+    "GitHub notifies @reviewer-a when this issue closes. Once the site has updated,\n"
+    f"review [adam-adae-death]({PAGE}) again. The new review replaces the one above: agreeing\n"
+    "approves the benchmark, and disagreeing opens a new rework issue.\n",
+)
+
+
 class ReworkIssue(unittest.TestCase):
     def test_a_review_that_does_not_approve_opens_an_issue_naming_its_reviewer(self):
-        page = "https://elong0527.github.io/yamaa/benchmark/adam-adae-death.html"
-        self.assertEqual(
-            review_rework.rework_issue(discussion()),
-            (
-                "Benchmark review: rework adam-adae-death",
-                f"@reviewer-a did not approve [adam-adae-death]({page}) in "
-                f"[their review]({URL}):\n"
-                "\n"
-                f"> Review of the [adam-adae-death]({page}) benchmark.\n"
-                ">\n"
-                "> | Question | Answer |\n"
-                "> | --- | --- |\n"
-                "> | **Task:** Would you agree? | Disagree |\n"
-                "> | **Overall** | Not approve |\n"
-                ">\n"
-                "> ### Comments\n"
-                ">\n"
-                "> Use the demographics death date.\n"
-                "\n"
-                "### Rework\n"
-                "\n"
-                "Change the benchmark as the review asks, and close this issue from the pull\n"
-                "request. A change to `input/` or `expected/` changes a golden file: reproduce\n"
-                "the values independently and say in the pull request which moved and why. When\n"
-                "the benchmark should stay as it is, answer on the review instead and close this\n"
-                "issue as not planned.\n"
-                "\n"
-                "### Review again\n"
-                "\n"
-                "GitHub notifies @reviewer-a when this issue closes. Once the site has updated,\n"
-                f"review [adam-adae-death]({page}) again. The new review replaces the one above: agreeing\n"
-                "approves the benchmark, and disagreeing opens a new rework issue.\n",
-            ),
-        )
+        self.assertEqual(review_rework.rework_issue(discussion()), ISSUE)
 
     def test_other_discussions_open_no_issue(self):
         cases = (
@@ -86,10 +86,49 @@ class ReworkIssue(unittest.TestCase):
             with self.subTest(case=label):
                 self.assertIsNone(review_rework.rework_issue(event), label)
 
+    def test_only_a_review_newly_not_approving_without_an_issue_opens_one(self):
+        approving = BODY.format(overall="Approve")
+        not_approving = BODY.format(overall="Not approve")
+        cited = [{"body": ISSUE[1]}]
+        other = [{"body": ISSUE[1].replace(URL, URL + "1")}]
+        cases = (
+            ("created", {"action": "created"}, [], ISSUE),
+            ("created again", {"action": "created"}, cited, None),
+            ("another review's issue", {"action": "created"}, other, ISSUE),
+            (
+                "edited to not approve",
+                {"action": "edited", "changes": {"body": {"from": approving}}},
+                [],
+                ISSUE,
+            ),
+            (
+                "edited into a review",
+                {"action": "edited", "changes": {"title": {"from": "Draft"}}},
+                [],
+                ISSUE,
+            ),
+            (
+                "edited while not approving",
+                {"action": "edited", "changes": {"body": {"from": not_approving}}},
+                [],
+                None,
+            ),
+            ("title edited only", {"action": "edited", "changes": {}}, [], None),
+        )
+        for label, event, existing, expected in cases:
+            with self.subTest(case=label):
+                self.assertEqual(
+                    review_rework.issue_for(
+                        {**event, "discussion": discussion()}, existing
+                    ),
+                    expected,
+                    label,
+                )
+
     def test_main_writes_the_issue_files_only_for_rework(self):
         cases = (
-            ("rework", "Not approve", ["body.md", "title"]),
-            ("approval", "Approve", []),
+            ("rework", "Not approve", {"body.md": ISSUE[1], "title": ISSUE[0]}),
+            ("approval", "Approve", {}),
         )
         for label, overall, expected in cases:
             with self.subTest(case=label), tempfile.TemporaryDirectory() as scratch:
@@ -100,8 +139,15 @@ class ReworkIssue(unittest.TestCase):
                     ),
                     encoding="utf-8",
                 )
+                existing = Path(scratch) / "existing.json"
+                existing.write_text("[]", encoding="utf-8")
                 destination = Path(scratch) / "rework"
-                review_rework.main([str(event), str(destination)])
+                review_rework.main([str(event), str(existing), str(destination)])
                 self.assertEqual(
-                    sorted(path.name for path in destination.glob("*")), expected, label
+                    {
+                        path.name: path.read_text(encoding="utf-8")
+                        for path in destination.glob("*")
+                    },
+                    expected,
+                    label,
                 )
