@@ -13,8 +13,14 @@ The output is one self-contained HTML file (`embed-resources: true`).
 
 ## Outline
 
-The deck opens with a mental game on building an AI-native biometrics group
-and compares AI adoption, AI-first, and AI-native work. After a short
-preparation step in GitHub Codespaces and OpenCode, it explains AI agents,
-large language models, harnesses, and tool calls, and then states the goal:
-an AI-first workflow for CDISC data standardization.
+After a short preparation step in GitHub Codespaces and OpenCode, the deck
+opens with a mental game on building an AI-native biometrics group and
+compares AI adoption, AI-first, and AI-native work. It explains AI agents,
+large language models, and harnesses, shows two agents at work (a coding task
+on arena.ai and the personal agent Muse), and then states the goal: an
+AI-first workflow for CDISC data standardization, with the parts of an agent
+this course focuses on: skills and tools. It then introduces yamaa with the
+slides of the 2026-11-03 SLDS talk: planning-stage collaboration, a YAML
+specification, the core principle, the four components, inheritance, the
+benchmarks, RConsortium Pilot 7, and the Pilot 5 performance. Before Pilot 7,
+a slide shows the seven R Consortium submission pilots.

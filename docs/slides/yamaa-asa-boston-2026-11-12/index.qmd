@@ -32,8 +32,8 @@ organizations or institutions.
 ## Preparation [5 min]
 
 - [![Open GitHub Codespaces](https://github.com/codespaces/badge.svg){.codespaces-badge}](https://codespaces.new/elong0527/yamaa)
-  + R / Python / opensas
-  + opencode / claude code / codex
+  + R, Python, opensas
+  + OpenCode, Claude Code, Codex
 
 - Start [OpenCode](https://opencode.ai/) and configure a model provider
   + Select `opencode-go/muse-spark-1.3-contributor`.
@@ -41,7 +41,7 @@ organizations or institutions.
   + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
     or [Codex](https://learn.chatgpt.com/docs/codex/cli).
 
-## A Mental Game
+## A mental game
 
 :::: {.columns}
 
@@ -71,7 +71,7 @@ You have been hired by the CMO to build a biometrics group.
 
 > *Let's brainstorm the strategy for a small- to midsize biopharma company.*
 
-## What is AI-Native?
+## What is AI-native?
 
 ::: {.ai-levels}
 | AI-Adoption | AI-First | AI-Native |
@@ -81,7 +81,7 @@ You have been hired by the CMO to build a biometrics group.
 | *Example: Using ChatGPT to draft an email or summarize a document.* | *Example: Starting every analysis by prompting an AI agent before writing any code manually.* | *Example: Orchestrating multiple AI agents to handle data cleaning, analysis, reporting, and QC end-to-end.* |
 :::
 
-> **AI-Native is not just about tools** --- it is a mindset shift. Every team
+> **AI-native is not just about tools** --- it is a mindset shift. Every team
 > member becomes an orchestrator who manages AI agents, focuses on exception
 > handling, and continuously improves the system.
 
@@ -89,7 +89,22 @@ You have been hired by the CMO to build a biometrics group.
 
 ![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
 
+## What is a large language model?
+
+![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
+
+An LLM only predicts the next token from its context. It cannot open a file or
+run code: a harness does that and puts the results back into the context.
+
+## What is a harness?
+
+![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
+
+> The model is the CPU; the harness is the operating system.
+
 ## Example: arena.ai
+
+[Try it at arena.ai/agent](https://arena.ai/agent){.try-it}
 
 :::: {.columns}
 
@@ -100,8 +115,6 @@ using R and gtsummary.
 
 Data: <https://github.com/RConsortium/submissions-pilot7-synthetic-data/tree/main/submission-pilot5/data/adam>
 :::
-
-[Try it at arena.ai/agent](https://arena.ai/agent)
 :::
 
 ::: {.column width="50%"}
@@ -121,7 +134,9 @@ statistics, so the agent has to guess them. Do they match your table shell?
 
 ## Example: Muse
 
-Muse is a personal agent from Meta. "Give Muse a goal or task and it handles
+Muse is a personal agent from Meta.
+
+"Give Muse a goal or task and it handles
 the rest": sort email, book a dinner, or fill out a form.
 
 :::: {.columns}
@@ -131,9 +146,8 @@ the rest": sort email, book a dinner, or fill out a form.
 | ---------- | ------------------------------ |
 | Tools | Connected apps such as email and calendar, a full browser, and new tools it builds when one is missing |
 | Environment | A persistent, isolated Linux computer in the cloud |
-| Human checkpoints | You approve actions such as sending an email or making a purchase |
 | Memory | Long-term goals it keeps track of |
-| Interface | The Muse app on mobile or Mac, or WhatsApp |
+| Human checkpoints | You approve actions such as sending an email or making a purchase |
 :::
 
 ::: {.column width="40%"}
@@ -142,63 +156,251 @@ the rest": sort email, book a dinner, or fill out a form.
 
 ::::
 
-The same parts as a coding agent: a goal, tools, a sandbox, approvals, and a record.
-
-::: {.sources}
-Source: [Muse](https://muse.ai), a personal agent from Meta.
+::: {.notes}
+Source: Muse, a personal agent from Meta, https://muse.ai.
 :::
 
-## What is a large language model?
 
-![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
+## Focusing on Skills and Tools
 
-An LLM only predicts the next token from its context. It cannot open a file or
-run code: a harness does that and puts the results back into the context.
+| Part | What it does | In this course |
+| ------ | ------------------ | ------------------ |
+| Environment | The files, commands, and credentials the agent can reach | Provided: GitHub Codespaces |
+| Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
+| Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
+| **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
+| **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
+| Memory | Notes kept between sessions | Not covered |
 
-## What is a harness?
+> A skill tells the agent how to do the task; a tool does the exact part of it.
 
-![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
+::: {.notes}
+Sources: OpenCode, Agent skills, https://opencode.ai/docs/skills/;
+ai4csr, From one-file skill to maintainable rounding workflow,
+https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd;
+yamaa, Host usage, https://elong0527.github.io/yamaa/articles/api/.
+:::
 
-> The model is the CPU; the harness is the operating system.
-
-## Agent Example 1:
-
-## Agent Example 2:
 
 ## Goal: AI-first workflow for CDISC data standardization
-
-Agents do structured work with tools; explicit rules, benchmarks, and human
-decisions govern it.
 
 | Work | Best done by | In CDISC data standardization |
 | ------------- | -------- | -------------------- |
 | Interpret requirements and draft changes | AI agent | Draft the study specification from templates, the protocol, and the SAP |
-| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with the yamaa engine and compare them with benchmarks |
+| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with code and compare them with benchmarks |
 | Exercise judgment and accept accountability | Human | Review and approve the specification and its evidence |
 
-> Move human and AI collaboration to the planning stage: agree on the
-> specification first, then let the engine execute it.
+> Agents execute structured work with tools; explicit rules, benchmarks, and human decisions govern it.
 
 ::: {.notes}
 Source: ai4csr, AI-first workflows in Biometrics,
 https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
 :::
 
-## What this course covers
+## yamaa: collaboration at the planning stage
 
-| Part | What it does | In this course |
-| ------ | ------------------ | ------------------ |
-| Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
-| Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
-| **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
-| **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
-| Memory | Notes kept between sessions | Not covered |
-| Environment | The files, commands, and credentials the agent can reach | Provided: the Codespace |
+![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
 
-A skill tells the agent how to do the task; a tool does the exact part of it.
+Human and AI review the specification during planning; the engine executes the agreed rules.
 
-::: {.sources}
-Sources: [OpenCode, Agent skills](https://opencode.ai/docs/skills/);
-[ai4csr, From one-file skill to maintainable rounding workflow](https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd);
-[yamaa, Host usage](https://elong0527.github.io/yamaa/articles/api/).
+## yamaa: YAML specification example
+
+```yaml
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+columns:
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+verifications:
+  - unique: [STUDYID, USUBJID]
+```
+
+## yamaa: core principle
+
+> A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.
+
+::: {.formula}
+*`output_dataset = derive(input_datasets, spec)`*
+:::
+
+The design of yamaa is a contract between human and AI agents.
+
+- **spec**: schema following closed vocabulary.
+- **derive**: business rules with derivation semantics.
+
+## yamaa: four components
+
+| Component | Purpose | Links |
+| --- | --- | --- |
+| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
+| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Engine | Runs specifications in Python, R and CLI consistently following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) / [CLI](https://github.com/elong0527/yamaa/tree/main/rust/crates/yamaa-cli) |
+| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+
+## yamaa: inheritance
+
+![](../../diagrams/design.svg){fig-alt="SDTM and ADaM templates at the organization and compound levels pass down to the study's SDTM and ADaM specifications in YAML, with lower scopes overriding explicitly. From ODM XML exported by the EDC system, yamaa builds and validates the SDTM datasets, then the ADaM datasets, and generates Define-XML."}
+
+Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
+([example](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html))
+
+## yamaa: benchmarks
+
+:::: {.columns}
+::: {.column width="48%"}
+::: {.big-number}
+~ 600
+:::
+::: {.metric-label}
+runnable benchmarks
+:::
+:::
+
+::: {.column width="48%"}
+::: {.big-number}
+3
+:::
+::: {.metric-label}
+execution interfaces (Python, R, CLI)
+:::
+:::
+::::
+
+- [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/).
+
+<iframe class="benchmark-embed r-stretch" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
+
+Scroll inside the frame to explore the spec, inputs, and golden output.
+
+## Open source has reached the regulators
+
+- The R Consortium Submissions Working Group engages directly with the FDA.
+  + 7 pilots demonstrate FDA submission best practice using R.
+
+:::::::: {.hex-grid}
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%201@2x.png){fig-alt="Pilot 1 hex sticker: TLFs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot1.html)
+
+**Pilot 1**
+
+2021 -- 2022
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%202_1@2x.png){fig-alt="Pilot 2 hex sticker: Shiny for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot2.html)
+
+**Pilot 2**
+
+2022 -- 2024
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%203@2x.png){fig-alt="Pilot 3 hex sticker: ADaMs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot3.html)
+
+**Pilot 3**
+
+2023 -- 2024
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204a_1@2x.png){fig-alt="Pilot 4a hex sticker: WebAssembly for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot4.html)
+
+**Pilot 4a**
+
+2024 -- 2025
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204b@2x.png){fig-alt="Pilot 4b hex sticker: containers for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot4.html)
+
+**Pilot 4b**
+
+2024 -- 2025
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%205@2x.png){fig-alt="Pilot 5 hex sticker: datasetjson for R Submissions."}](https://rconsortium.github.io/submissions-pilot5-website/)
+
+**Pilot 5**
+
+2025 -- 2026
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%206.svg){fig-alt="Pilot 6 hex sticker: AI-driven ADaMs and TLFs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot6.html)
+
+**Pilot 6**
+
+2026 -- ongoing
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%207.svg){fig-alt="Pilot 7 hex sticker: Synthetic Clinical Data."}](https://rconsortium.github.io/submissions-wg/pilot7.html)
+
+**Pilot 7**
+
+2026 -- ongoing
+:::
+::::::::
+
+::: {.notes}
+Source: R Consortium Submissions Working Group, hex stickers,
+https://rconsortium.github.io/submissions-wg/#hex-stickers.
+:::
+
+## RConsortium Pilot 7: full studies
+
+- Build publicly available agentic data standardization workflow.
+  + <https://rconsortium.github.io/submissions-pilot7-synthetic-data/>
+- CDISC pilots (SDTM -> ADaM)
+  + cdiscpilot01 and RConsortium submission pilots 3 and 5.
+- OpenClinica real sample data (ODM -> SDTM -> ADaM)
+  + Real sample data for testing the full data journey.
+- Synthetic studies (ODM -> SDTM -> ADaM)
+  + Simulate ODM XML from real clinical studies.
+
+## yamaa reproduces R Submission Pilot 5 {.perf}
+
+- [Pilot 5 dashboard](https://rconsortium.github.io/submissions-pilot7-synthetic-data/studies/submission-pilot5/#submission-pilot5/datasets/ADSL)
+
+::: {.perf-grid}
+::: {.perf-panel}
+<div class="perf-title">Real size: 254 subjects</div>
+
+<div class="perf-group">End-to-end time, 1 core</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 6.1%"></span></span><span class="perf-value">1.62 s</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">26.45 s</span></div>
+<div class="perf-group">Peak memory</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 41.1%"></span></span><span class="perf-value">0.25 GB</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">0.60 GB</span></div>
+<div class="perf-callouts">
+<div><div class="big-number">16×</div><div class="metric-label">faster than R</div></div>
+<div><div class="big-number">2.4×</div><div class="metric-label">less memory than R</div></div>
+</div>
+:::
+
+::: {.perf-panel}
+<div class="perf-title">Stress test: 10× subjects (2,540)</div>
+
+<div class="perf-group">End-to-end time, 1 core</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 6.9%"></span></span><span class="perf-value">12.62 s</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">181.70 s</span></div>
+<div class="perf-group">Peak memory</div>
+<div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 46.6%"></span></span><span class="perf-value">1.93 GB</span></div>
+<div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">4.13 GB</span></div>
+<div class="perf-callouts">
+<div><div class="big-number">14×</div><div class="metric-label">faster than R</div></div>
+<div><div class="big-number">2.1×</div><div class="metric-label">less memory than R</div></div>
+</div>
+:::
 :::
