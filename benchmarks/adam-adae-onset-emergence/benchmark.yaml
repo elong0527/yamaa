@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Treatment-emergent flags decide which adverse events enter safety tables,
+      so the window around exposure is applied to the second.
+    - Four subjects cover events before and after the first dose on the same
+      day, events in and past the 30 and 90 day windows, a missing onset,
+      seriousness not recorded, an untreated subject and treatment still
+      ongoing.
+    - A missing onset is flagged treatment-emergent for a treated subject
+      (subject 102's PRURITUS) but never as the first occurrence, an event with
+      seriousness not recorded takes the 90-day window, and subject 102's
+      SYNCOPE one second past 90 days is outside it.

@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: DM
+review:
+  concerns:
+    - The death date and flag in DM feed survival analyses and death listings,
+      and must agree with disposition and fatal adverse events.
+    - Five subjects cover a death in disposition only, a fatal event only, both
+      sources with different dates, both with the same date, and no death, plus
+      undated death records.
+    - Disposition wins when the sources disagree (S3 died on 2025-03-20 by
+      disposition although the fatal event ended 2025-03-22), and an undated
+      record never displaces a dated one (S1, S2).

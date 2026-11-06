@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Studies of events after an index event, such as a COVID-19 infection, flag
+      which adverse events came after the subject's first occurrence.
+    - Four subjects cover events before and after the index, an event on the
+      index date, a repeated index term, a subject without the index event, and
+      an event with no start date.
+    - On the index date only a higher sequence number counts as after it
+      (subject 101's COUGH), so subject 103's second COVID-19 record on the same
+      day is flagged as after the first.

@@ -10,3 +10,14 @@ entries:
   - specification: spec_function.yaml
   - specification: spec_norm_cdf.yaml
     environment: null
+review:
+  concerns:
+    - Pediatric trials report growth as BMI-for-age and weight-for-age
+      percentiles computed from LMS reference coefficients.
+    - Five children cover BMI and weight at 12 months for both sexes, a value
+      exactly at the reference median, a 24-month age with no reference row, and
+      a missing result; the four reference rows are a small illustrative
+      extract, not a full CDC or WHO table.
+    - A child whose age has no reference row gets an empty percentile rather
+      than the nearest age's (subject 103 at 730 days), and a value exactly at
+      the median gives exactly 50.

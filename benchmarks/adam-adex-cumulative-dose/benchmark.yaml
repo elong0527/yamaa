@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADEX
+review:
+  concerns:
+    - Exposure summaries report cumulative dose, number of cycles and relative
+      dose intensity against the planned total.
+    - Five subjects cover a missing dose, varying doses, a saline placebo given
+      at zero, a duplicated exposure record, a planned treatment never given,
+      and half the planned dose.
+    - A duplicated record counts twice (subject 103's nivolumab totals 480, 100
+      percent of plan), a missing dose still counts as a cycle, and placebo's
+      zero planned total leaves relative dose intensity empty.

@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Safety narratives and listings look back at a subject's earlier serious
+      events and previous event when describing each adverse event.
+    - Five subjects cover several serious events, a serious event with no coded
+      term, a subject whose only serious event comes later, a subject with none,
+      and single-event subjects.
+    - A serious event's own prior and first serious fields stay empty even after
+      an earlier serious event (subject 101's NAUSEA), and the serious records
+      are listed before the non-serious ones rather than in sequence order.

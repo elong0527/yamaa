@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: EG
+review:
+  concerns:
+    - QT safety analyses need every replicate ECG at each planned time point,
+      with the interval as a number and the reader's interpretation as text.
+    - Two subjects each have three replicate ECGs before the dose and three two
+      hours after, with abnormal readings after dosing and one interval left
+      blank.
+    - A blank result gives no record while the other result of that ECG stays
+      (subject 002's second post-dose ECG has only its interpretation), and
+      replicates are numbered from 1 again at each time point.

@@ -192,6 +192,14 @@ class BenchmarkMetadata(unittest.TestCase):
                 },
             },
             {**self.metadata, "validation": {"validator": "schema"}},
+            {**self.metadata, "review": {"concerns": ["one", "two"]}},
+            {**self.metadata, "review": {"concerns": ["one", "two", "two"]}},
+            {**self.metadata, "review": {"concerns": ["one", "two", " three"]}},
+            {**self.metadata, "review": {"concerns": ["one", "two", ""]}},
+            {**self.metadata, "review": {"concerns": ["one", "two", 3]}},
+            {**self.metadata, "review": {"concerns": "one, two, three"}},
+            {**self.metadata, "review": {"key_points": ["one", "two", "three"]}},
+            {**self.metadata, "review": ["one", "two", "three"]},
         ]
         for metadata in mutations:
             with self.subTest(metadata=metadata):

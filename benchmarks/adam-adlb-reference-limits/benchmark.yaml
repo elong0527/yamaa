@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Studies without an external reference range sometimes derive one from
+      their own results as the mean plus or minus 1.96 standard deviations.
+    - Six subjects give ALT, platelets and sodium, with one ALT not done.
+    - Limits use the exact 97.5th normal percentile rather than 1.96 and the
+      sample standard deviation, unrounded; the test not done is left out but
+      still carries the limits, and a normal assumption may not suit a skewed
+      test such as ALT.

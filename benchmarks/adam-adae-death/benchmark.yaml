@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Every event of a subject who died carries the death flag and date,
+      and the cause when an event was reported fatal, so safety tables of
+      fatal events read them from ADAE alone.
+    - Seven subjects cover one fatal event, two fatal events on different
+      days and on the same day, a death known only from demographics, an
+      event with no outcome, and no death.
+    - The fatal event's start date is the date of death even when
+      demographics records a later one (KN189-102 died on 2024-03-01, not
+      2024-03-05); demographics gives the date only when no event was fatal.

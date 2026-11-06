@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: PP
+review:
+  concerns:
+    - PK parameters from noncompartmental analysis software are submitted in PP
+      with standard parameter codes and names.
+    - Two subjects each have Cmax, Tmax and AUClast for one analyte, exported in
+      different orders, with their reported decimal places.
+    - Estimates are published as supplied, not recalculated or converted; the
+      text keeps the reported decimals (10.0, 1.00) while the numeric result
+      drops them, and the sequence follows the parameter code, so AUCLST comes
+      first.

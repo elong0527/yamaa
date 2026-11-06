@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: EX
+review:
+  concerns:
+    - Exposure summaries and dose-intensity analyses need one record per
+      constant-dose interval rather than one per dosing day.
+    - Three subjects cover a steady dose, a dose reduction, and an interruption
+      followed by a reduced restart, thirteen dosing days in all.
+    - An interruption is its own zero-dose interval marked DOSE INTERRUPTED, but
+      a dose level that recurred after an interruption would not be split and
+      would span from its first to its last day, hiding the gap.

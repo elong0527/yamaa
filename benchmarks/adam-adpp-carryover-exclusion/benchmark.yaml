@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPP
+review:
+  concerns:
+    - Bioequivalence guidance leaves out a period whose pre-dose concentration
+      exceeds 5 percent of its Cmax, since carry-over would bias it.
+    - Seven subjects over two periods cover pre-dose results below the
+      quantitation limit, below, at and above 5 percent of Cmax, a pre-dose
+      sample not done, and a period with no pre-dose sample.
+    - Exactly 5 percent stays in (subject S03), above 5 leaves out only that
+      period (subjects S02 and S05), and a period with no usable pre-dose sample
+      stays in rather than being imputed (S06, S07).

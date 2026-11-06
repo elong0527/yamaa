@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - Lab listings and shift tables flag each result against its reference
+      range, which often differs by sex.
+    - Eight subjects cover normal, high and low results, the same hemoglobin
+      value for a man and a woman, a missing result, and a test with no
+      reference entry.
+    - Hemoglobin of 12.5 g/dL is LOW for subject 503, a man, but NORMAL for
+      subject 504, a woman; subject 507's missing ALT keeps its unit and limits
+      with no flag, and subject 508's glucose gets no range at all.

@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Crossover analyses assign each vital sign record to the period, and the
+      actual treatment, in effect when it was taken.
+    - Three subjects cover a record before the first period, records one second
+      before and exactly at the period 2 start, a date-only record on the period
+      2 start day, a record with no date, and a subject who never started period
+      2.
+    - A record at 08:29:59 on the day period 2 starts at 08:30 is period 1, but
+      a date-only record on that day is placed in period 2 (subject 102), which
+      a reviewer may question, and a record before the first period has no
+      period.

@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADTTE
+review:
+  concerns:
+    - Progression-free survival is a primary oncology endpoint, with censoring
+      rules for missed assessments and new therapy.
+    - Twelve subjects cover progression, death, censoring at the last adequate
+      assessment, an inadequate progression assessment, an undated assessment,
+      two death records on one date, new anti-cancer therapy before an event,
+      and no usable assessment.
+    - An inadequate progression leaves subject 104 censored at the last adequate
+      assessment, after new therapy only dates on or before its start count
+      (subject 112 is censored on 2026-01-10 though the subject died later), and
+      no usable assessment gives a 1-day PFS.

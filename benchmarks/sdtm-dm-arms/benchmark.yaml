@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: DM
+review:
+  concerns:
+    - Efficacy analyses use the planned arm and safety analyses the actual arm,
+      so DM must carry both and say why either is missing.
+    - Six subjects cover treatment as randomized, treatment with the other arm,
+      randomized but never treated, a screen failure, a subject never assigned,
+      and a treatment that matches no planned arm.
+    - Subject 002, randomized to Vitamin D3 but given placebo, keeps TRT as
+      planned and PBO as actual, and subject 006's rescue medication leaves the
+      actual arm blank and goes to ACTARMUD with no reason given.

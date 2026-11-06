@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: SUPPMH
+review:
+  concerns:
+    - SDTM text values hold at most 200 characters, so a long reported medical
+      history term continues in SUPPMH.
+    - Three subjects cover a short term, terms needing one continuation, and a
+      term needing two.
+    - Terms break after the last whole word that fits, so subject 103's
+      continuation is just 'physio', and a term needing a fourth piece stops the
+      run instead of losing its end.

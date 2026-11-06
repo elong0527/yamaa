@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Crossover analyses need each subject's planned treatment for each period
+      and the planned sequence, read from the trial design.
+    - Four subjects cover both planned orders, a subject treated in the reverse
+      of the planned order, a screen failure, and a subject never assigned.
+    - Planned values follow the planned arm only, so subject 102, planned
+      Placebo then Vitamin D3 but given the reverse, keeps the planned sequence,
+      and screening, washout and follow-up elements are skipped.

@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Per-subject mean lab values support summaries such as the average
+      neutrophil count during treatment.
+    - Three subjects cover several results, a missing result among them, and a
+      subject with only a missing result.
+    - The mean ignores missing results (subject 101's mean is 3.1 from three
+      results) but is repeated on the record without a result, and a subject
+      with no results gets an empty mean, never zero.

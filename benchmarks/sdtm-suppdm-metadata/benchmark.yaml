@@ -5,3 +5,13 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - Additional races and other-race text go to SUPPDM, and the define document
+      must describe each qualifier's values separately.
+    - Three subjects cover two reported races each for two of them and
+      other-race free text (Samoan) for the third.
+    - A qualifier is reported only when collected, IDVAR stays empty because the
+      qualifier belongs to the subject, and the define document gives the race
+      qualifiers and the free text separate value-level descriptions and
+      lengths.

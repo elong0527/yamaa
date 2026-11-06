@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Planned vital sign measurements often carry the last observed value
+      forward, and weight-based derivations need a once-measured baseline
+      height.
+    - Six subjects cover complete measurements, missed planned measurements
+      before and after the first value, two heights around treatment start, a
+      height on the treatment start day, and no pre-treatment height.
+    - A value is carried only from an earlier measurement of the same subject
+      and parameter (subject 102 has none before 2025-02-04), and the baseline
+      height is the latest on or before treatment start, so subject 104's later
+      height of 181 is not used.

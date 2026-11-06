@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Treatment-emergence and onset analyses need a complete start date, so
+      partial dates are imputed with a flag showing which days were supplied.
+    - Four subjects cover full dates, year-month dates, a year alone, non-date
+      text, a missing start, an event on the first-dose day, and a subject with
+      no ADSL record.
+    - A year-month start is completed to the 15th but never before a first
+      exposure in the same month (subject 0002's 2025-03 becomes 2025-03-20),
+      while a year alone gets no date rather than being imputed to mid-year.

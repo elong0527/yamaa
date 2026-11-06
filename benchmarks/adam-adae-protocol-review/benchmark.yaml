@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Protocol reviewers need a flag for the events matching a review window, a
+      term pattern and a score floor.
+    - Five subjects cover dates inside and outside January 2025, times either
+      side of 09:30 on 1 February, terms with and without the literal INF_
+      prefix, scores at and below -1.5, and missing dates or score.
+    - The underscore is matched literally, so INFXREACTION is not reviewed; a
+      score of exactly -1.5 passes while -1.6 and a missing score fail, and
+      09:29 on 1 February is outside the window.

@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: VS
+review:
+  concerns:
+    - Study day, visit number and epoch on each vital sign let analyses place
+      results in time relative to the first dose.
+    - Three subjects cover screening, baseline, week 4, an unscheduled visit, a
+      reading with no date, and a baseline on the day screening ends and
+      treatment starts.
+    - Subject 0001's unscheduled visit after baseline is numbered 2.01 and the
+      screening reading is day -6 with no day zero, while subject 0002's undated
+      week 4 reading keeps its visit number but has no epoch or study day.

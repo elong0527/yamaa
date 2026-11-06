@@ -3,3 +3,12 @@ standard: SDTM
 domain: DM
 harbor:
   opensas_exclusion: opensas has no ODM XML reader
+review:
+  concerns:
+    - Data capture systems deliver ODM snapshots with audit trails, signatures
+      and comments, and DM must read only each subject's current answers.
+    - Three subjects cover a full birth date, a year-month birth date, a birth
+      date the subject declined to give, and a sex corrected after entry.
+    - Subject 102's sex was entered as F and corrected to M, and DM carries M
+      once; subject 103's declined birth date stays missing, and the comment
+      explaining it adds nothing to DM.

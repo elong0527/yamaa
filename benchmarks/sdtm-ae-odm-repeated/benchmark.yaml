@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: AE
+review:
+  concerns:
+    - Data capture systems export adverse events as one row per collected item,
+      and each form occurrence must become one event record again.
+    - Subject 0001 reports Headache at screening and again at baseline, plus
+      Nausea with no end date; subject 0002 has a serious, severe Rash and an
+      occurrence with no reported term.
+    - The same term in two occurrences stays two records (subject 0001's
+      Headache is AESEQ 1 and 3), and the occurrence with no term gives no
+      record even though its start date was entered.

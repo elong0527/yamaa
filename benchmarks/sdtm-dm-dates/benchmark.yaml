@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: SDTM
 domain: DM
+review:
+  concerns:
+    - Reference dates anchor study days, treatment-emergent flags and exposure
+      duration in every other domain, so DM must derive them consistently.
+    - Six records cover two exposure periods for one subject, an early
+      discontinuation followed by a milestone, a screen failure, a subject with
+      no data beyond consent, an exposure with no demographics, and the same
+      subject identifier in a second study.
+    - Only disposition events count toward the last participation date, so
+      subject 0002's week 4 milestone on 2025-03-10 is ignored and the date is
+      2025-02-21; screen failure 0003 gets that date but no reference start or
+      end.

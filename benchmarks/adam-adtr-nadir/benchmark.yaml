@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADTR
+review:
+  concerns:
+    - RECIST progression is measured from the nadir, the smallest sum of target
+      lesion diameters so far.
+    - Six subjects cover incomplete assessments, an assessment with no
+      measurements, a complete assessment with no date, a single baseline, a sum
+      that rises after its low, and a sum of zero.
+    - Only assessments flagged complete set the nadir, and the flag is carried
+      as given, so subject 105's week 16 counts though 2 of 3 lesions were
+      measured, while a complete assessment with no date never counts, not even
+      for itself (subject 103).

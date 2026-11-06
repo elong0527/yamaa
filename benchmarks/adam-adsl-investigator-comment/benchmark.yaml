@@ -3,3 +3,12 @@ standard: ADaM
 domain: ADSL
 harbor:
   opensas_exclusion: opensas normalizes the spaces-only comment to missing
+review:
+  concerns:
+    - Investigator comments are free text that must reach ADSL exactly as
+      written, with a flag for whether one was collected.
+    - Six subjects cover a comment with a comma, one with quotation marks, one
+      with a line break, empty fields, and a field of only spaces.
+    - Commas, quotes and line breaks pass through unchanged and an empty field
+      counts as no comment, but a field of only spaces counts as a comment and
+      keeps its spaces (subject 106), which a reviewer may question.

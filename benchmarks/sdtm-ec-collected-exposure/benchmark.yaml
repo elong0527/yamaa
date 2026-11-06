@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: EC
+review:
+  concerns:
+    - EC keeps the dosing log as collected, including missed doses and
+      reductions, before EX summarizes what was actually given.
+    - Two subjects over five days each cover full doses, a missed day with its
+      reason, and a reduction from two tablets to one recorded on three days.
+    - A missed day is still a record, not taken, with its reason and no dose
+      (subject 001 on 2025-01-05), and a reduced dose carries DOSE REDUCED as
+      the adjustment reason rather than the adverse event behind it.

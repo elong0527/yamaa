@@ -12,3 +12,14 @@ entries:
     environment: null
   - specification: spec_suppdm.yaml
     environment: null
+review:
+  concerns:
+    - Race and ethnicity drive subgroup analyses and diversity reporting, and
+      SDTM puts MULTIPLE in DM with each reported race in SUPPDM.
+    - Twelve subjects cover single races, two or three races, a race marked
+      twice, Other with free text, a refusal, Not reported, an answer outside
+      the sponsor's list, and missing ethnicity.
+    - Subject 112 marked Not reported and White and becomes MULTIPLE with NOT
+      REPORTED as one supplemental race; subject 111's Pacific Islander is
+      outside the list, so race stays blank, and races are numbered
+      alphabetically, not in report order.

@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADRS
+review:
+  concerns:
+    - Oncology efficacy tables report each subject's best overall response by
+      investigator from the prepared response selection.
+    - Eight subjects cover CR, PR, SD, NON-CR/NON-PD, PD and NE as best
+      responses, a subject with no response selection, and a response on the
+      randomization date.
+    - Only the record ranked first is used, so subject 104's NE comes from a
+      record collected as SD but categorized NE, and subject 105, with no
+      selection, keeps one record with response, rank and date empty.

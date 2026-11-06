@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Severity summaries need each event's severity, which here arrives in
+      supplemental records rather than on the event.
+    - Four subjects cover events with and without a severity record, a record
+      with an empty severity, and a record for an event that was never
+      collected.
+    - Severity is matched on subject and sequence number, so two events of one
+      subject keep their own severities, and subject 104's supplemental record
+      for sequence 9, which has no event, is ignored.

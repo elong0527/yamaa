@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Supplemental lab qualifiers are joined back by sequence number, which
+      SUPPLB stores as space-padded text.
+    - Four subjects cover matches with different padding widths, a sequence
+      shared by two subjects, a zero-padded key, an orphan qualifier, and a
+      record with no qualifier.
+    - Only the exact space-padded key matches, so subject 102's zero-padded
+      00000259 is ignored, the same sequence for two subjects keeps each
+      subject's value, and the orphan qualifier adds nothing.

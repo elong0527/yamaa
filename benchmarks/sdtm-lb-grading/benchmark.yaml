@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - Hematology toxicity grades drive safety tables and dose decisions, and
+      they come from the CTCAE v5.0 bands for each test.
+    - Five subjects cover neutrophil counts on every band edge (0.5, 1.0, 1.5
+      and 1.8), hemoglobin for both sexes at the same value, and an
+      independently recorded grade for each result.
+    - Each band includes its lower limit, so a neutrophil count of exactly 0.5
+      is grade 3 and 1.8 is grade 0, and hemoglobin of 12.5 is grade 1 for a man
+      but grade 0 for a woman.

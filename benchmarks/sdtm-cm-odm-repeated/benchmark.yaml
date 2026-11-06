@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: CM
+review:
+  concerns:
+    - Data capture systems export medications one collected item per row, and
+      each form occurrence must become one medication course again.
+    - Subject 0001 reports acetaminophen at screening and again at baseline plus
+      an ongoing cetirizine; subject 0002 has a topical hydrocortisone and an
+      occurrence with no treatment name.
+    - The same drug reported at two visits stays two records (subject 0001's
+      acetaminophen is CMSEQ 1 and 3), and the occurrence with no name gives no
+      record although it has a date and route.

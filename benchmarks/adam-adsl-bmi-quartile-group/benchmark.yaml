@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Subgroup analyses by baseline BMI quartile need cutpoints computed from
+      the study's own data.
+    - Thirteen subjects cover twelve baseline values across the range and one
+      subject with no baseline value.
+    - Quartiles follow R's type 7, so a cutpoint need not be an observed value
+      (23.625) and the first and third quartiles differ from SAS's default; a
+      value on a cutpoint falls in the lower group.

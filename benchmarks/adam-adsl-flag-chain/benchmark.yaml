@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Analysis population flags depend on dates and age that must be settled
+      first, and a combined flag depends on both populations.
+    - Seven subjects cover treated and randomized, treated only, randomized
+      only, neither, an exposure record with no date, and ages at and around 65.
+    - Subject 105, treated but never randomized, is in the safety population but
+      not intent-to-treat, an exposure record with no date does not make a
+      subject treated (subject 107), and ties in age rank go by subject
+      identifier (102 before 104).

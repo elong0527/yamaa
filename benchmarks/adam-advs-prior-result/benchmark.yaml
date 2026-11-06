@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Listings and shift analyses often show the previous non-blank result
+      beside each character result.
+    - Three subjects cover several series, rows sharing a visit number, rows
+      with no visit number, rows with no series, blank results, a single row,
+      and a series whose early rows are all blank.
+    - Rows with no visit number sort last, so subject 101's NULL-ORDER, though
+      collected first, looks back to FIRST, and the look-back skips blank rows
+      but never crosses into another series.

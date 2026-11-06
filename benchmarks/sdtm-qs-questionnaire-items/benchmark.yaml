@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: QS
+review:
+  concerns:
+    - PHQ-9 depression scores come from nine item records plus a total, and QS
+      must show which items were skipped or refused.
+    - Two subjects at two visits cover fully answered questionnaires, a
+      logically skipped item, and a questionnaire refused as a whole.
+    - A total is derived only when all nine items were answered, so subject
+      1001's second visit, with item 9 logically skipped, has none; the refused
+      questionnaire is one QSALL record rather than nine, and the item codes are
+      local labels, not CDISC terms.

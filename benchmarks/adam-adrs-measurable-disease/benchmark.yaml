@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADRS
+review:
+  concerns:
+    - RECIST efficacy populations often require measurable disease at baseline,
+      meaning at least one target lesion at screening.
+    - Seven subjects cover target lesions at screening, non-target only, no
+      tumor records, targets found only after screening, a benign abnormality, a
+      blank result, and a tumor record for a subject not in ADSL.
+    - Only screening target records count, so subject 104's targets at weeks 1
+      and 5 give N; every ADSL subject gets a flag even with no tumor data, and
+      the record for subject 199, missing from ADSL, adds nothing.

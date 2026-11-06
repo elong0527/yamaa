@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: AE
+review:
+  concerns:
+    - Adverse event dates are often only partly known; SDTM keeps them at the
+      collected precision instead of imputing, and leaves imputation to
+      analysis.
+    - Six events across three subjects cover full, year-month and year-only
+      dates, a missing start date, and a subject with no reference start date.
+    - Only a complete date gets a study day, so subject 001's Nausea starting
+      2026-03 has none, and subject 002's Dizziness on 2026-01-28, four days
+      before the reference start, is day -4 because there is no day zero.

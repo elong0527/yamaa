@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - ADSL's treatment, exposure dates and safety flag drive every safety
+      analysis, so the first and last dose must be read precisely.
+    - Eight subjects cover dates with and without times, two treatments starting
+      at the same moment, a non-study treatment only, no exposure, an end with
+      no start, duplicated records, and an exposure for a subject not in DM.
+    - A start without a time becomes midnight and an end without one 23:59:59,
+      both flagged H, a tie on the first start goes to the lower sequence
+      (subject 104's VITAMIN D3), and subject 105, given only a rescue drug,
+      takes the actual arm but is not in the safety population.

@@ -5,3 +5,12 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - A submission needs DM with its labels, lengths, terminology and origins
+      declared, so a reviewer can trace every variable in the define document.
+    - Three subjects at two sites in two countries, with the define document and
+      a Dataset-JSON file produced from the same declarations as the data.
+    - USUBJID joins study, site and subject (CATH-MCGILL-0003), and an
+      identifier over 30 characters stops the run instead of being shortened;
+      the age unit is fixed to YEARS.

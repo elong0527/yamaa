@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Safety reviews group events by Standardized MedDRA Queries and by
+      sponsor-defined topics such as adverse events of special interest.
+    - Five subjects cover broad and narrow members of two SMQs, a sponsor
+      grouping, a term in both an SMQ and the sponsor grouping, a term in none,
+      and an event not yet coded.
+    - Stevens-Johnson syndrome shows in both the skin-reaction SMQ (narrow) and
+      the sponsor grouping, the sponsor grouping has no code or scope, and the
+      uncoded event belongs to no grouping.

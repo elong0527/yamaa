@@ -5,3 +5,13 @@ define:
   environment: project.yaml
   standard: adam
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - Analyses of event timing need a numeric start date and time with an
+      imputation flag, here delivered in SAS transport with a define document
+      declaring ADaMIG 1.1.
+    - Five events cover starts collected to the second, the minute, the hour,
+      the day and the month.
+    - A date-only start becomes midnight flagged H, so an imputed midnight can
+      be told from a collected one, and a start known only to the month (subject
+      0002's DIZZINESS) gets no analysis date at all rather than an imputed day.

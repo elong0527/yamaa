@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: CO
+review:
+  concerns:
+    - SDTM text values hold at most 200 characters, so a long site comment must
+      be split across continuation variables without losing any of it.
+    - Four comments cover 120 characters, exactly 200, 450 (needing two
+      continuations), and a blank comment.
+    - The comment is cut at fixed positions, so subject 103's 'investigator' is
+      split between the first and second pieces, and subject 104's blank comment
+      gives no record at all.

@@ -3,3 +3,13 @@ standard: ADaM
 domain: ADSL
 harbor:
   opensas_exclusion: opensas has no native Parquet reader
+review:
+  concerns:
+    - Randomization date and study day are key subject-level dates for
+      intent-to-treat analyses and time-to-event origins.
+    - Eight subjects cover randomization after, on, the day before and several
+      days before the reference date, a subject never randomized, a date with no
+      time, a missing reference date, and a time with no date.
+    - The day before the reference date is day -1 with no day zero, a time
+      without seconds gains :00 (10:30 becomes 10:30:00), and a collected time
+      with no date still gives RANDDTC (subject 108).

@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Disposition tables summarize end-of-study and end-of-treatment status and
+      reasons, which must describe one and the same last event.
+    - Seven subjects cover completion, a discontinuation with several events on
+      one date, an undated record, no records, a screen failure, a death, and
+      treatment stopped while the study was completed.
+    - When events share the latest date the higher sequence wins (subject 102's
+      adverse event over withdrawal on 2024-08-30), an undated record never
+      counts, and the two tracks are independent (subject 107 discontinued
+      treatment but completed the study).

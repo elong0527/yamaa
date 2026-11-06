@@ -5,3 +5,13 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - Morphology findings such as cell type need the collected result kept
+      beside a standardized NORMAL or ABNORMAL, here in a submission declaring
+      SDTMIG 3.3.
+    - Two subjects each have one lower-case cell type result, with the define
+      document for the transport file as part of the expected output.
+    - The standardized result only upper-cases the collected text (normal
+      becomes NORMAL), which a reviewer may question for a cell type test whose
+      result would usually name the cell type.

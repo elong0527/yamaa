@@ -5,3 +5,12 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - Submissions deliver SDTM datasets as SAS transport version 5 files
+      described by a define document.
+    - Three subjects at two sites in two countries, one without a reference
+      start date (subject 0003), so one date travels as blanks.
+    - Each text variable is exactly as wide as its longest value and the define
+      document reports that width as its length, rather than the largest length
+      the study allows; dates travel as YYYY-MM-DD text.

@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPP
+review:
+  concerns:
+    - Crossover food-effect and bioavailability comparisons use only parameters
+      evaluable under both treatments of each comparison.
+    - Four subjects over three periods cover two comparisons sharing TEST
+      FASTED, a missing value, a zero value, a subject missing a period, and a
+      subject in neither comparison.
+    - A missing or zero value also takes its partner out of the comparison for
+      that parameter only (subject S01's AUC is out of the food-effect
+      comparison while its Cmax stays in), and TEST FASTED can carry both flags.

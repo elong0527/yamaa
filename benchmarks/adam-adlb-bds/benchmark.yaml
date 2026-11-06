@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Lab change-from-baseline analyses need a baseline flag, change and percent
+      change, and often the same parameter in SI units.
+    - Six subjects cover ALT and AST before and after treatment start, a zero
+      baseline, a missing result, a result on the start date, a single result,
+      and a subject with no results.
+    - Baseline is the latest result on or before treatment start, so subject
+      106's result on 2025-01-02 counts, percent change is empty when the
+      baseline is 0 (subject 103), and the SI factor 0.0167 is applied without
+      rounding.

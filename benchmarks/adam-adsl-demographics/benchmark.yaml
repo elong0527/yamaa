@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Demographics tables need numeric codes for sex and race and an age group,
+      from the collected values.
+    - Eleven subjects cover each sex and race code, missing sex, race and age, a
+      lower-case race, an age of 0, and the boundary ages 17, 18, 64 and 65.
+    - Mappings are exact, so a lower-case white (subject 109) gives 99 rather
+      than 1, a missing sex becomes U, and an age of 0 is kept as <18 rather
+      than treated as missing.

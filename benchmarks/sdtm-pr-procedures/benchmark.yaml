@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: PR
+review:
+  concerns:
+    - Prior cancer surgery and radiotherapy are key baseline history in oncology
+      trials, and both belong in PR.
+    - Two subjects cover a lumpectomy with only a year and month, a 50 Gy
+      radiotherapy course with full dates, and a No answer to the prior
+      radiotherapy question.
+    - Subject 002's No still gives a record (asked, did not occur, no dose or
+      dates), so no prior radiotherapy is told apart from never asked, while the
+      reported surgery carries no pre-specified flag.

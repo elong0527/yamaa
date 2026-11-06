@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Lab listings report results and their multiple of the lower normal limit
+      to a fixed four decimals.
+    - Eight records cover ratios needing fewer and more than four decimals, an
+      exact half at the fifth decimal, a missing limit, a zero limit, and a
+      missing result.
+    - The ratio is rounded once, when written, with an exact half going away
+      from zero (1/32 shows as 0.0313), a zero lower limit leaves the ratio
+      blank, and a missing value is written as absent rather than 0.0000.

@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: SDTM
 domain: EX
+review:
+  concerns:
+    - Combination regimens such as pembrolizumab with platinum chemotherapy need
+      one exposure record per component, with each drug's own dose unit.
+    - Two subjects cover two cycles of a three-drug regimen with one dose
+      interruption, and a cycle with a saline placebo component.
+    - On a shared date the sequence follows the treatment name, so Carboplatin
+      is EXSEQ 1 ahead of Pembrolizumab, and the saline placebo keeps a dose of
+      0 mg instead of a missing dose.

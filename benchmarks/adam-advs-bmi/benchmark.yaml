@@ -1,3 +1,12 @@
 lifecycle: finalized
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - BMI at each visit is derived from the collected weight and the baseline
+      height, the usual practice for adults.
+    - Four subjects cover several weights each, a weight with no result, a
+      missing baseline height, and a baseline height of zero.
+    - A missing or zero baseline height keeps the BMI record with an empty value
+      (subjects 103 and 104), while a weight with no result gets no BMI record
+      at all (subject 101's week 4).

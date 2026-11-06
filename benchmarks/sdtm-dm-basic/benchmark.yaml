@@ -1,3 +1,12 @@
 lifecycle: finalized
 standard: SDTM
 domain: DM
+review:
+  concerns:
+    - Demographics is the one record per subject that every analysis population
+      and listing starts from, with sex, age and treatment arm.
+    - Four subjects cover complete male and female records, a sex answered Not
+      Reported with nothing else collected, and a sex left blank.
+    - Subjects 003 and 004 get sex U and no arm, with Not assigned to treatment
+      arm as the reason rather than an Unassigned arm value; the actual arm
+      always equals the planned arm here.

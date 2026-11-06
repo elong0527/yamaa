@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Last observation carried forward fills missed visit values for analyses
+      that need a value at each planned visit.
+    - Several subjects cover consecutive gaps, a gap before the first value, a
+      collected zero, and two parameters.
+    - A collected zero is a value and is carried like any other (subject 102's 0
+      fills visit 3), while a gap before the first collected value stays missing
+      rather than being filled backwards.

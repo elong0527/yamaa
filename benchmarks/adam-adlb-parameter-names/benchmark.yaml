@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Parameter and visit names should come from one study terminology, so every
+      dataset spells them the same way.
+    - Two subjects cover ALT and AST at baseline and week 2, and an unscheduled
+      visit numbered 99.
+    - A visit number the terminology does not list becomes Unscheduled (visit 99
+      for subject 102) rather than being left blank, and parameter names carry
+      their units, such as Alanine Aminotransferase (U/L).

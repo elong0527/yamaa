@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPP
+review:
+  concerns:
+    - Metabolite-to-parent exposure is summarized as a geometric mean of ratios,
+      and assay precision as the standard deviation of replicate assays.
+    - Four subjects over three periods cover positive ratios, a zero ratio from
+      a metabolite below the limit, a ratio not calculated, and 2-hour samples
+      assayed one to three times.
+    - A zero ratio is left out of the geometric mean rather than pulling it to
+      zero (subject S03 uses two of three periods), and a sample assayed once
+      has no standard deviation (S03).

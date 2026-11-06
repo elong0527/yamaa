@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: CLINSITE
+review:
+  concerns:
+    - FDA Bioresearch Monitoring submissions need a site-level dataset with each
+      site's enrolled and treated counts.
+    - Eleven subjects across five sites cover site keys with and without leading
+      zeros, a site with only untreated subjects, and sites with mixed arms.
+    - Site keys keep their leading zeros, so 007 and 7 are different sites, a
+      site with only untreated subjects keeps a record with no arm and 0
+      treated, and a site with mixed arms shows only the alphabetically first
+      arm (Drug A at site 007).

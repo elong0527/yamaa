@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Crossover analyses need each subject's treatment periods, the treatment
+      actually given in each, and the washout between them.
+    - Six subjects cover two exposure records per period, a duplicated record, a
+      subject with only period one, two treatments on the first day of a period,
+      and periods that touch.
+    - Washout counts days strictly between the periods, so touching periods give
+      0 (subject 105), and when two treatments start on a period's first day the
+      lower sequence wins (subject 104's VITAMIN D3 over PLACEBO).

@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADTTE
+review:
+  concerns:
+    - Overall survival is the primary endpoint of many oncology trials, counted
+      from randomization to death or last contact.
+    - Ten subjects cover deaths, censoring at the last alive date or at
+      randomization, a death before randomization, a last-alive date before
+      randomization, two death records on one date, records that do not qualify,
+      and an undated death.
+    - Subject 106's death a month before randomization counts as an event on day
+      1, a tie on the death date goes to the lower sequence (subject 108), and
+      an undated death record is ignored, so subject 110 is censored alive.

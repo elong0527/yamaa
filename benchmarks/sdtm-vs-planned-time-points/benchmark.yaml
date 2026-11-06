@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: VS
+review:
+  concerns:
+    - Post-dose vital signs are analysed by planned time point, with the actual
+      time kept so late readings can be checked.
+    - Two subjects each have pulse and blood pressure at four planned time
+      points around the first dose on day 1.
+    - The planned elapsed time stays as scheduled (PT30M) beside the actual
+      collection time, so a late reading shows its gap, and a post-dose reading
+      dated before the dose, or a pre-dose reading after it, stops the run.

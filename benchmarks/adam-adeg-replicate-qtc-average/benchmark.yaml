@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADEG
+review:
+  concerns:
+    - QT studies analyse the mean of replicate ECGs at each time point, and the
+      corrected QT must be averaged per ECG, not computed from the averaged QT
+      and RR.
+    - Three subjects cover three replicates at 0.5 h and one at 1 h, an RR not
+      done, and a time point with only RR results.
+    - QTcF is the mean of each ECG's own correction, so subject S02's 0.5 h
+      replicate with RR not done counts toward the QT mean but not toward QTcF,
+      and averages are not rounded.

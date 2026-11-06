@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Some analyses compare each visit with the subject's first observed value,
+      carried forward from the first visit that has one.
+    - Four subjects cover two parameters, a missing result after the first
+      value, a first visit with no result, a single visit, and a subject with no
+      results.
+    - The first observed value is carried to every later visit, missing ones
+      included (subject 101's visit 3), visits before it stay blank (subject
+      102's visit 1), and it never crosses parameters.

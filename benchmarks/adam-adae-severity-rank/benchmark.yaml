@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Worst-severity summaries and listings need each subject's events ranked
+      from worst to mildest.
+    - Five subjects cover all three severities, ties, missing severities beside
+      reported ones, a single event, and a subject with no severities at all.
+    - Ties share a rank and skip the ranks they would fill (subject 401's MILD
+      is rank 4), the dense rank counts each severity once, and a missing
+      severity ranks after every reported one but counts as a level of its own.

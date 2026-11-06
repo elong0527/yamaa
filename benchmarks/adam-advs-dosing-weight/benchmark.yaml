@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Oncology dosing often recalculates BSA only when weight changes by 10
+      percent or more from the weight last used.
+    - Two subjects cover the cycle pattern published in PharmaSUG 2020 DS-235
+      Table 3, exact 10 percent changes up and down, and a missing weight.
+    - The retained weight resets at exactly 10 percent in either direction
+      (subject CONTROL's 90 from 100, then 99 from 90), the reset applies on the
+      triggering cycle, and a missing weight keeps the prior retained weight.

@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADOE
+review:
+  concerns:
+    - Ophthalmology trials analyse the study eye and the fellow eye separately,
+      using the eye assigned to each subject.
+    - Five subjects cover a left and a right study eye, both eyes assigned, a
+      bilateral measurement, a subject with no assigned eye, and a measurement
+      with no laterality.
+    - When both eyes are assigned either eye counts as the study eye (subject
+      103), a bilateral measurement is Both Eyes, and a missing assignment or
+      laterality leaves the role empty rather than guessed.

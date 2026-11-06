@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADRS
+review:
+  concerns:
+    - RECIST requires a partial or complete response to be confirmed by a later
+      response at least 28 days on.
+    - Eight subjects cover confirmation after 42 and exactly 28 days, a response
+      followed by SD, one too early, one alone, two on the same date,
+      progressive disease, and an assessment with no result.
+    - Each assessment is compared only with the next one, so subject 207's
+      confirming CR is itself N for lack of a later response, PD is always Y,
+      and two PRs on one date never confirm each other (subject 206).

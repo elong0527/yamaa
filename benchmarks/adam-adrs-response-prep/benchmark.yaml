@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADRS
+review:
+  concerns:
+    - Best overall response under RECIST ranks each assessment, with stable
+      disease counting only after the minimum duration and nothing counting
+      after new therapy.
+    - Ten subjects cover CR and PR, SD before and after day 42, PD, NE, not-done
+      and missing values, assessments on or after new anti-cancer therapy, and
+      the same subject identifier in another study.
+    - SD before day 42 becomes NE (subject 932's day 28 SD), an assessment on or
+      after new therapy supports no category even when it is PD (subject 933 on
+      2025-03-03), and an unusable record never takes a sequence number.

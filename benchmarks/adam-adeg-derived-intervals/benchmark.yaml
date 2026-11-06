@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADEG
+review:
+  concerns:
+    - QT studies analyse heart-rate-corrected QT, and sponsors re-derive the
+      Bazett and Fridericia corrections from the collected QT and RR.
+    - Subjects at baseline and week 4 cover complete results, units written ms
+      or msec, a missing QT, a missing RR, and heart rates for the recomputed
+      RR.
+    - A corrected QT is added only when both QT and RR are present at that
+      visit, RR from heart rate needs a rate that is not zero, and a QT or RR in
+      a unit other than ms or msec stops the run.

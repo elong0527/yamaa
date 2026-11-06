@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Age at randomization is a key baseline covariate and stratification
+      factor, counted in completed years.
+    - Eight subjects cover birthdays before and after the randomization day, a
+      29 February birthday, a randomization exactly on the birthday, dates in
+      reverse order, and missing dates.
+    - Subject 102, born on 29 February, is 27 on 2024-02-28 and subject 103
+      turns 28 on 2024-02-29; in a common year the anniversary would be 28
+      February, and a randomization before birth gives -1 rather than stopping
+      the run.

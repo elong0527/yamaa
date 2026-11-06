@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Body surface area by the Mosteller formula is used for dosing and
+      normalization, from height and weight at the same visit.
+    - Six subjects cover height and weight at one visit, weight alone, height
+      alone, a missing weight result, a later visit with both, and a weight of
+      zero.
+    - BSA is added only when the same visit has both results, so subject 101's
+      week 2 weight without a height gets none, while a zero weight gives a BSA
+      of 0 (subject 106).

@@ -79,6 +79,7 @@ def load_metadata(case):
                 "conformance",
                 "harbor",
                 "define",
+                "review",
             }
         ),
         f"{label}: unknown metadata field",
@@ -157,6 +158,22 @@ def load_metadata(case):
             and isinstance(harbor["opensas_exclusion"], str)
             and harbor["opensas_exclusion"].strip(),
             f"{label}: Harbor exclusions must state their reason",
+        )
+    if "review" in metadata:
+        # The dashboard's third question, the AI-assisted review, lists these.
+        review = metadata["review"]
+        concerns = review.get("concerns") if isinstance(review, dict) else None
+        require(
+            isinstance(review, dict)
+            and set(review) == {"concerns"}
+            and isinstance(concerns, list)
+            and len(concerns) == 3
+            and all(
+                isinstance(concern, str) and concern.strip() == concern and concern
+                for concern in concerns
+            )
+            and len(set(concerns)) == 3,
+            f"{label}: review concerns must be three distinct texts",
         )
     return metadata
 

@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Hematology analyses need absolute differential counts, derived from the
+      white cell count and differential fraction when the lab did not report
+      them.
+    - Six subjects cover lymphocyte, neutrophil, monocyte, eosinophil and
+      basophil fractions, a fraction with no white cell count, lab-reported
+      absolute counts, and two visits for one subject.
+    - An absolute count is added only when both the white cell count and the
+      fraction exist and no absolute record is there yet, so LYM-005's reported
+      lymphocyte count is kept, not recomputed, and LYM-004's eosinophil
+      fraction without a white cell count gains nothing.

@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - Skin biomarker studies measure a cytokine in lesional and non-lesional
+      skin, and LB must show which compartments exist and which samples were
+      analysed.
+    - Three subjects cover both compartments measured, a lesional sample not
+      analysed, and a cohort with no lesional skin (NONAD).
+    - Subject 0002's missing lesional result becomes a NOT DONE record that
+      keeps the unit, while subject 0003 gets no lesional record because a NONAD
+      subject has no lesional compartment.

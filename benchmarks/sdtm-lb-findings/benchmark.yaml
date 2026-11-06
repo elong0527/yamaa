@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - Chemistry results feed lab shift tables and safety listings, which need
+      reported results, units and tests not done kept apart.
+    - Three subjects over one to three visits cover numeric results, a test
+      recorded as NOT DONE, empty entries, and a visit where calcium was not
+      collected at all.
+    - An empty entry gives no record (subject 101's day 8 calcium), while NOT
+      DONE gives a record with no result or units (subject 101's day 15
+      creatinine); the sequence follows date, then test code.

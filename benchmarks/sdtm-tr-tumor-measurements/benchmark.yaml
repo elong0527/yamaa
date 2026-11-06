@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: TR
+review:
+  concerns:
+    - Tumor response depends on standardized lesion measurements in TR, in one
+      unit, with a clear mark for lesions not assessed.
+    - One subject over three visits has two target lesions, a non-target lesion
+      that resolves, and a new lesion at the third visit, with one diameter
+      collected in centimetres.
+    - A diameter in cm is converted to mm (2.8 cm becomes 28), a lesion too
+      small to measure takes the study convention of 5 mm rather than 0, and a
+      lesion not assessed stays empty with NOT DONE instead of counting as zero.

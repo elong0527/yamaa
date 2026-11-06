@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Site is often recovered from the subject identifier when the collected
+      site is unreliable, and listings show a combined site and subject
+      reference.
+    - Eight subjects cover well-formed identifiers, a parsed site that disagrees
+      with the collected one, other identifier shapes, a missing collected site,
+      three- and five-digit subject numbers, and a missing subject number.
+    - The parsed site wins over the collected one (subject 0003 is UCLA though
+      collected as UCSD), only exactly four digits parse (006 and 00007 fall
+      back to the collected site), and a missing subject number makes the whole
+      reference UNKNOWN.

@@ -5,3 +5,11 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-10-28T00:00:00'
+review:
+  concerns:
+    - Reviewers expect the death date and flag in every demographics dataset,
+      even in a study where nobody died.
+    - Two subjects, neither with a death date and one also without a reference
+      start date, submitted as Dataset-JSON with its define document.
+    - Both death variables are kept and the define document marks them as having
+      no data, while RFSTDTC, empty for subject 002 only, is not marked.

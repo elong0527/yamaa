@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Listings and narratives often show adverse event terms in proper case, and
+      must match what SAS PROPCASE produces.
+    - Eight terms cover slashes, hyphens, parentheses, an apostrophe, a leading
+      digit, a comma, square brackets and a missing term.
+    - With the standard separators a letter after a comma or bracket stays lower
+      case (PAIN,BACK becomes Pain,back), the custom list capitalizes it, and a
+      missing term becomes Not Reported.

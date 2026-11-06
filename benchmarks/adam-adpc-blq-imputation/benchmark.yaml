@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPC
+review:
+  concerns:
+    - Noncompartmental PK analysis needs concentrations below the quantitation
+      limit set by where they fall in each profile.
+    - Two subjects with day 1 and day 8 profiles cover pre-dose and trailing
+      results below the limit, one between quantified results, samples not done,
+      and a profile with no quantified result.
+    - A below-limit result between quantified ones has no value (subject S01's 4
+      h sample) while leading and trailing ones are 0, and a profile with no
+      quantified result is all 0; this is a study convention, not a recovered
+      concentration.

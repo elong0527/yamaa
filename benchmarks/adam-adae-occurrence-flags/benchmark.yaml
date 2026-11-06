@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Occurrence flags let summary tables count each subject once overall, per
+      body system and per preferred term, and trace each count to its record.
+    - Four subjects cover events before treatment, two events on the same day,
+      repeated headaches, and a subject with no treatment-emergent events.
+    - Ties on the same day go to the lower sequence number (subject 001's
+      headache over nausea on 2024-01-10), and a pre-treatment event is never
+      flagged even when it is the subject's earliest.

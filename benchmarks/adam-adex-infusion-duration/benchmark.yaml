@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADEX
+review:
+  concerns:
+    - Infusion duration analyses use the collected duration where the form has
+      one and the start and end times otherwise.
+    - Two subjects cover collected durations that agree and disagree with the
+      times, a malformed duration, date-only starts or ends, and an infusion
+      crossing midnight with seconds.
+    - A readable collected duration wins even when the times disagree (120
+      minutes collected against 125 computed), 1H30M without its leading P
+      counts as not collected, and no time of day is assumed for a date-only
+      start or end.

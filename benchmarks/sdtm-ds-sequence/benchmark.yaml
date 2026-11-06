@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: SDTM
 domain: DS
+review:
+  concerns:
+    - Disposition records need a stable sequence in time order within each
+      subject, so listings and later merges agree on which record came first.
+    - Seven records over five subjects cover a randomization and completion
+      entered in reverse order, single records, and a screen failure collected
+      with only a year and month.
+    - A partial date is imputed to the 15th (subject 105's 2024-01 screen
+      failure becomes 2024-01-15 and follows the 2024-01-05 randomization),
+      where SDTM would usually keep the date partial; a year alone would become
+      June 15.

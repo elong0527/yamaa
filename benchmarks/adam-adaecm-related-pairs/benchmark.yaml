@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAECM
+review:
+  concerns:
+    - Reviewers want each adverse event paired with the medications given for
+      it, built from the RELREC relationships.
+    - Two subjects cover a relationship of two events and two medications, a
+      medication in two relationships, and the same relationship number used by
+      a second subject.
+    - Every event in a relationship pairs with every medication in it, so
+      subject S1's relationship 1 gives four rows, and loratadine appears once
+      for each of the two relationships it belongs to.

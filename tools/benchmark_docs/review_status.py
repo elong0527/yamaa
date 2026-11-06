@@ -24,6 +24,12 @@ DECISIONS = ("Approve", "Not approve")
 OVERALL = re.compile(
     rf"^\| \*\*Overall\*\* \| ({'|'.join(DECISIONS)}) \|\s*$", re.MULTILINE
 )
+# Skipping publishes nothing. The reviewer's next review, or the report the
+# queue offers at its end, names the benchmarks skipped since in a Skipped row.
+# The review page counts them, and they decide nothing.
+SKIPPED = re.compile(
+    r"^\| \*\*Skipped\*\* \| ([a-z0-9-]+(?:, [a-z0-9-]+)*) \|\s*$", re.MULTILINE
+)
 REQUIRED_REVIEWS = 2
 # The UTC date each later round opens, oldest first. The coordinator adds one
 # when the rework of the round before it is done.
@@ -58,6 +64,26 @@ def read_review(discussion):
         "overall": overall.group(1),
         "url": discussion["url"],
     }
+
+
+def read_skips(discussion):
+    """The skips a `Review:` discussion reports, one for each benchmark named."""
+    found = SKIPPED.search(discussion["body"])
+    if (
+        not discussion["title"].startswith("Review: ")
+        or not found
+        or not discussion["author"]
+    ):
+        return []
+    return [
+        {
+            "benchmark": name,
+            "reviewer": discussion["author"]["login"],
+            "posted": discussion["createdAt"],
+            "url": discussion["url"],
+        }
+        for name in found.group(1).split(", ")
+    ]
 
 
 def status(verdicts):
@@ -98,9 +124,18 @@ def tally(names, reviews):
     return {name: rounds(items, ROUND_STARTS) for name, items in found.items()}
 
 
+def skips(names, skipped):
+    """How many reviewers skipped each benchmark in `names`."""
+    found = {name: set() for name in names}
+    for skip in skipped:
+        if skip["benchmark"] in found:
+            found[skip["benchmark"]].add(skip["reviewer"])
+    return {name: len(reviewers) for name, reviewers in found.items()}
+
+
 def fetch(token):
-    """Every review published in the repository's discussions."""
-    reviews, cursor = [], None
+    """Every review and skip published in the repository's discussions."""
+    reviews, skipped, cursor = [], [], None
     while True:
         request = urllib.request.Request(
             API,
@@ -114,9 +149,11 @@ def fetch(token):
         discussions = answer["data"]["repository"]["discussions"]
         found = (read_review(item) for item in discussions["nodes"])
         reviews.extend(review for review in found if review)
+        for item in discussions["nodes"]:
+            skipped.extend(read_skips(item))
         page = discussions["pageInfo"]
         if not page["hasNextPage"]:
-            return reviews
+            return reviews, skipped
         if page["endCursor"] in (None, cursor):
             raise RuntimeError("the discussions cursor did not advance")
         cursor = page["endCursor"]
@@ -126,9 +163,11 @@ def main():
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         sys.exit("GITHUB_TOKEN is required to read the discussions")
+    reviews, skipped = fetch(token)
     saved = {
         "updated": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
-        "reviews": fetch(token),
+        "reviews": reviews,
+        "skips": skipped,
     }
     DESTINATION.parent.mkdir(parents=True, exist_ok=True)
     DESTINATION.write_text(json.dumps(saved, indent=2) + "\n", encoding="utf-8")

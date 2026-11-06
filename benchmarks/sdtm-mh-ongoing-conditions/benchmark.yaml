@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: MH
+review:
+  concerns:
+    - Medical history shows which conditions were still active at screening,
+      as baseline tables and eligibility checks need.
+    - The form collects only the start year and month, an end date, an
+      ongoing tick box and the screening date; seven conditions cover a
+      year-only start, no start, and ends before and after screening.
+    - A condition that ended after screening (subject 1004's gout), or has
+      neither an end date nor the ongoing box (subject 1002's asthma), gets
+      no end reference rather than AFTER or U.

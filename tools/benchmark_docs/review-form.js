@@ -3,7 +3,9 @@
 // The review survey: drafts stay in this browser, and submitting opens
 // GitHub's new-discussion composer with the answers filled in. The static page
 // holds no credentials; the reviewer still selects Start discussion on GitHub.
-// Submitting or skipping then moves this page on through the review queue.
+// A review also names the benchmarks skipped since the last one
+// (review-skips.js). Submitting or skipping then moves this page on through the
+// review queue.
 (() => {
   const form = document.querySelector(".review-form");
   if (!form) return;
@@ -80,8 +82,6 @@
     window.location.href = nextUrl(remember(outcome));
   }
 
-  form.querySelector(".review-skip").addEventListener("click", () => leave("skipped"));
-
   function show(message, isError) {
     feedback.textContent = message;
     feedback.classList.toggle("is-error", Boolean(isError));
@@ -92,7 +92,7 @@
     return text.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
   }
 
-  function body() {
+  function body(overall, skipped) {
     const page = window.location.href.split("#")[0];
     const rows = questions.map((fieldset) => {
       const prompt = fieldset.querySelector(".review-prompt").textContent;
@@ -105,7 +105,8 @@
       "| Question | Answer |",
       "| --- | --- |",
       ...rows,
-      "| **Overall** | " + (approved() ? "Approve" : "Not approve") + " |",
+      "| **Overall** | " + overall + " |",
+      ...(skipped.length ? [skippedRow(skipped)] : []),
       "",
       "### Comments",
       "",
@@ -134,8 +135,9 @@
       comments.focus();
       return;
     }
+    const skipped = pendingSkips(form.dataset.doneKey, name);
     const title = "Review: " + name;
-    const text = body();
+    const text = body(approved() ? "Approve" : "Not approve", skipped);
     let url = composer(title, text);
     const tooLong = url.length > LINK_LIMIT;
     if (tooLong) url = composer(title, "");
@@ -147,6 +149,7 @@
       return;
     }
     tab.opener = null;
+    skipsReported(form.dataset.doneKey, skipped);
     if (!tooLong) {
       leave("submitted");
       return;
@@ -157,4 +160,6 @@
     prepared.hidden = false;
     show("Your review is longer than a prefilled link allows, so GitHub opened with the title only. Paste the text below into the discussion, select Start discussion, then go to the next benchmark.");
   });
+
+  form.querySelector(".review-skip").addEventListener("click", () => leave(SKIPPED));
 })();

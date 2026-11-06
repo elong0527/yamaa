@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: DM
+review:
+  concerns:
+    - Age at informed consent is a standard baseline characteristic for
+      demographics tables and eligibility checks.
+    - Five subjects cover full birth dates before and after the consent date's
+      month and day, a year-month and a year-only birth date, and no birth date.
+    - A partial birth date gives no age rather than an imputed one (subject 003,
+      born 1985-03, has none), and subject 002 is 39 because the September 10
+      birthday falls after the June 15 consent.

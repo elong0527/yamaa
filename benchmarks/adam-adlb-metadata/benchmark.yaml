@@ -5,3 +5,12 @@ define:
   environment: project.yaml
   standard: adam
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - A submission define document must describe each lab parameter's analysis
+      values separately, with its own precision, codelist and required rules.
+    - Two subjects each have glucose, creatinine and a pregnancy test, with
+      numeric and text results.
+    - The pregnancy test has a text result only, required to be NEGATIVE or
+      POSITIVE, while glucose is described with no decimals and creatinine with
+      one, and a definition without its own description keeps the variable's.

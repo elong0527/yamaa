@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: SDTM
 domain: CM
+review:
+  concerns:
+    - Concomitant medication listings need each drug as reported, with its dose,
+      schedule and timing relative to the study, including drugs started before
+      it.
+    - Two subjects and three medications cover complete dates with a single
+      dose, a year-month start taken before the study and still ongoing, and a
+      dose collected as a range.
+    - A dose range goes to the dose text, not the numeric dose (subject 002's
+      ibuprofen 200-400 mg), and the ongoing lisinopril has no end date but
+      ONGOING relative to END OF STUDY.

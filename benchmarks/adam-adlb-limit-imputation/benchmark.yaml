@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Viral load results reported as below or above a limit must become numbers
+      for analysis, with the substituted values identified.
+    - One subject's eleven results cover plain numbers, strict and inclusive
+      inequalities, an equals sign, zero, a missing result, a decimal, and
+      limits of 1 and 0.
+    - A strict limit moves one unit (<50 becomes 49, >8000 becomes 8001) while
+      an inclusive one keeps the boundary, so <1 becomes 0; this is the study's
+      convention, not a recovered value, and DTYPE marks it.

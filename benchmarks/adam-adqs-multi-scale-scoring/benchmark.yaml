@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADQS
+review:
+  concerns:
+    - Multi-scale PRO instruments score each scale as a mean answer transformed
+      to 0 to 100, with the direction depending on the scale.
+    - Two subjects cover a fully answered ten-item questionnaire and one with
+      only the anchor items, one of them unanswered, and an item shared by two
+      scales.
+    - F104 feeds two scales' scores, functioning scales are reversed so higher
+      is better while the symptom scale reads higher as worse, and a scale with
+      too few answers keeps an empty score record (subject 02's symptom scale).

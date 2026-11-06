@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: DS
+review:
+  concerns:
+    - Disposition tables report why subjects stopped treatment or left the
+      study, with the reported reason and its controlled term.
+    - Three subjects cover completing both milestones, stopping treatment for an
+      adverse event but completing the study, and completing treatment but
+      leaving the study; the input rows arrive in no order.
+    - The subcategory names the milestone STUDY TREATMENT or STUDY, and only
+      ADVERSE EVENT and OTHER are accepted as collected reason codes, so subject
+      003's Moving abroad is reported as OTHER.

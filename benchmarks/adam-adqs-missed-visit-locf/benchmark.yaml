@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADQS
+review:
+  concerns:
+    - Efficacy analyses with last observation carried forward need a record at
+      every scheduled visit, marked when carried.
+    - Six subjects cover complete visits, dropout after week 8, a collected
+      visit with an empty score, a missing baseline, a subject outside the
+      efficacy population, and a baseline score of 0.
+    - A collected record with an empty score counts as missed and is carried
+      from baseline (subject 103's week 8 becomes 18), a subject with no earlier
+      score gets an empty carried record, and baseline itself is never added.

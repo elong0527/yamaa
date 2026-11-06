@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Survival analyses censor at the last date a subject was known alive, and a
+      partial death date must be completed without contradicting later contact.
+    - Eleven subjects cover contact from exposure, adverse events, disposition,
+      visits, vital signs and survival follow-up, partial dates, deaths with
+      full, year-month, year-only and missing dates, and survival statuses other
+      than alive.
+    - A partial death date takes the latest alive date inside the collected
+      month or year (subject 108's 2025-05 becomes 2025-05-12), a partial alive
+      date counts as the first of its month, and a death with no date keeps the
+      flag with an empty date.

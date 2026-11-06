@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADCM
+review:
+  concerns:
+    - Sites often record medication start dates as free text in several
+      spellings, which analysis must read into one date.
+    - Seven records cover an ISO date, day-month-year text in upper and lower
+      case, a slashed date, eight digits, a month and year, and a missing start.
+    - A slashed date reads month first, so 03/04/2001 is 4 March, a month alone
+      is placed on its first day (2001-03 becomes 2001-03-01), and any other
+      spelling stops the run rather than being guessed.

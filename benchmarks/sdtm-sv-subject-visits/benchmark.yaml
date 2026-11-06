@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: SV
+review:
+  concerns:
+    - SV tells reviewers which visits each subject actually attended and when,
+      including unscheduled ones.
+    - Two subjects cover screening, baseline and week 2, a week 2 visit whose
+      forms span two days, and two unscheduled visits for one subject.
+    - Subject 001's unscheduled visits are numbered 99.1 and 99.2 by date with
+      no planned day or element order, and a visit runs from its earliest to its
+      latest form date, so that subject's week 2 spans 2026-03-05 to 2026-03-06.

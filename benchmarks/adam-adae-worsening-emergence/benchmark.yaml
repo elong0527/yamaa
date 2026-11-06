@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - An event ongoing before the first dose is treatment-emergent only from
+      when it worsens on treatment, which needs the event split into periods of
+      constant severity and grade.
+    - Five subjects cover events starting before the first dose that worsen
+      after it, improvement followed by worsening, a grade-only increase, an
+      untreated subject, and an ongoing event that only improves.
+    - Subject 102's rash becomes emergent only when severity rises above the
+      last pre-treatment value, not at the dip to MILD, and once emergent every
+      later period stays flagged, even after improvement (subject 101's
+      headache).

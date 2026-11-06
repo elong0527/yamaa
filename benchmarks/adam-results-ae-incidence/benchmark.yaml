@@ -12,3 +12,14 @@ entries:
     environment: null
   - specification: spec.yaml
     environment: null
+review:
+  concerns:
+    - CDISC Analysis Results Standard datasets keep each table result beside the
+      analysis definition that produced it, here adverse event incidence by
+      treatment.
+    - Nine subjects in four planned treatments cover repeated events, events
+      that are not treatment-emergent, subjects outside the safety population,
+      and a group with no safety subjects.
+    - Repeated events count once per subject, a group with no qualifying events
+      keeps both rows at 0 (Placebo), a group with no safety subjects has no
+      rows (Excluded), and the percentage is not rounded (66.66666666666667).
