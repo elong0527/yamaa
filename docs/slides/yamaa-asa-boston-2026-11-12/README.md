@@ -22,4 +22,5 @@ AI-first workflow for CDISC data standardization, with the parts of an agent
 this course focuses on: skills and tools. It then introduces yamaa with the
 slides of the 2026-11-03 SLDS talk: planning-stage collaboration, a YAML
 specification, the core principle, the four components, inheritance, the
-benchmarks, RConsortium Pilot 7, and the Pilot 5 performance.
+benchmarks, RConsortium Pilot 7, and the Pilot 5 performance. Before Pilot 7,
+a slide shows the seven R Consortium submission pilots.

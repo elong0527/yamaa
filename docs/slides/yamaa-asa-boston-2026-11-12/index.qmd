@@ -282,6 +282,82 @@ execution interfaces (Python, R, CLI)
 
 Scroll inside the frame to explore the spec, inputs, and golden output.
 
+## Open source has reached the regulators
+
+- The R Consortium Submissions Working Group engages directly with the FDA.
+  + 7 pilots demonstrate FDA submission best practice using R.
+
+:::::::: {.hex-grid}
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%201@2x.png){fig-alt="Pilot 1 hex sticker: TLFs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot1.html)
+
+**Pilot 1**
+
+2021 -- 2022
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%202_1@2x.png){fig-alt="Pilot 2 hex sticker: Shiny for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot2.html)
+
+**Pilot 2**
+
+2022 -- 2024
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%203@2x.png){fig-alt="Pilot 3 hex sticker: ADaMs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot3.html)
+
+**Pilot 3**
+
+2023 -- 2024
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204a_1@2x.png){fig-alt="Pilot 4a hex sticker: WebAssembly for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot4.html)
+
+**Pilot 4a**
+
+2024 -- 2025
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204b@2x.png){fig-alt="Pilot 4b hex sticker: containers for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot4.html)
+
+**Pilot 4b**
+
+2024 -- 2025
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%205@2x.png){fig-alt="Pilot 5 hex sticker: datasetjson for R Submissions."}](https://rconsortium.github.io/submissions-pilot5-website/)
+
+**Pilot 5**
+
+2025 -- 2026
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%206.svg){fig-alt="Pilot 6 hex sticker: AI-driven ADaMs and TLFs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot6.html)
+
+**Pilot 6**
+
+2026 -- ongoing
+:::
+
+::: {.hex-item}
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%207.svg){fig-alt="Pilot 7 hex sticker: Synthetic Clinical Data."}](https://rconsortium.github.io/submissions-wg/pilot7.html)
+
+**Pilot 7**
+
+2026 -- ongoing
+:::
+::::::::
+
+::: {.notes}
+Source: R Consortium Submissions Working Group, hex stickers,
+https://rconsortium.github.io/submissions-wg/#hex-stickers.
+:::
+
 ## RConsortium Pilot 7: full studies
 
 - Build publicly available agentic data standardization workflow.
