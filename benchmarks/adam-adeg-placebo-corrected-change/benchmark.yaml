@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADEG
+review:
+  concerns:
+    - Thorough QT and single ascending dose studies report the placebo-corrected
+      change from baseline in QTcF, the double delta, at each time point.
+    - Two dose cohorts with drug and placebo subjects cover three time points, a
+      time point with no placebo record (2 h), and records missing their
+      baseline.
+    - Placebo records from all cohorts pool into one comparator per time point,
+      a placebo record carries the group's means rather than its own values, and
+      a time point with no placebo record has a comparison label but no double
+      delta (2 h).

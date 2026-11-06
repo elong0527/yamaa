@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: PC
+review:
+  concerns:
+    - Pharmacokinetic analyses read plasma concentrations from the bioanalytical
+      lab's transfer, with planned sample times as numbers.
+    - Two subjects cover a pre-dose sample below the quantification limit,
+      planned post-dose samples at 0.5, 2 and 24 hours, and an unscheduled
+      sample.
+    - BLQ stays as text with no numeric value rather than zero or half the
+      limit, planned hours come from the nominal label whatever the actual
+      collection time, and the unscheduled sample has no planned hour.

@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPC
+review:
+  concerns:
+    - PK analyses need each sample's actual time since the first dose and since
+      its own reference dose, in hours.
+    - Three subjects cover samples before and after doses, a sample exactly at a
+      dose time, a date-only sample, a metabolite, a second drug dosed in
+      between, and a subject never dosed.
+    - A sample taken at a dose time refers to that dose (subject 001's pre-dose
+      sample at 08:00 is 0 hours after it), a date-only sample gets no times
+      rather than an assumed one, and a dose of another drug never counts as the
+      reference.

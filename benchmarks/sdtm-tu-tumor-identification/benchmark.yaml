@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: TU
+review:
+  concerns:
+    - TU identifies every tumor once, with the link identifier TR uses for its
+      measurements, so response can be traced lesion by lesion.
+    - Two subjects cover target lesions including a mediastinal lymph node,
+      non-target lesions, lesions with no laterality, and a new lesion found at
+      week 12.
+    - A lymph node target keeps a T link identifier and the TARGET category like
+      any other target, and the new adrenal lesion is identified once at week 12
+      with no record at earlier visits.

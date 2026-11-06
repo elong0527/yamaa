@@ -5,3 +5,11 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - SV records the actual dates of each visit, including unplanned ones, here
+      in a submission declaring SDTMIG 3.3.
+    - One subject has a two-day screening visit, a one-day visit, and an
+      unscheduled repeat-lab visit numbered 2.5.
+    - The unplanned visit keeps its fractional number between scheduled visits
+      and its reason in SVUPDES, which stays empty for planned visits.

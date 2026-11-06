@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Dose modification summaries need a subject-level flag from any source that
+      records an adjustment.
+    - Ten subjects cover adjustments in exposure, exposure as collected and
+      findings about, records without an adjustment, findings that do not
+      qualify, a subject in no source, a record for a subject not in ADSL, and
+      the same subject in another study.
+    - A subject with records but no adjustment is N while one absent from all
+      three sources stays empty (AB42-004), and a pre-specified or other-object
+      finding does not qualify (AB42-008).

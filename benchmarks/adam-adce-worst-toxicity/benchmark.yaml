@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADCE
+review:
+  concerns:
+    - Clinical event summaries, such as solicited reactions, report each
+      subject's worst-graded event.
+    - Five subjects cover several severities, ties on grade and date, an event
+      without a severity beside a graded one, and a subject with no graded
+      events.
+    - The toxicity grade simply equals the severity rank (moderate is grade 2),
+      ties go to the earliest date and then the lowest sequence (subject 101's
+      FATIGUE, sequence 2), and subject 104, with no graded event, has no flag.

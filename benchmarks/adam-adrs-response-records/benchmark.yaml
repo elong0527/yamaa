@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADRS
+review:
+  concerns:
+    - Response analyses use the investigator's overall response at each
+      assessment, with one record per date for best-response and duration
+      derivations.
+    - Eight subjects cover improving and worsening responses, two results on one
+      date, a year-month and a year-only date, an assessment on the treatment
+      start, and target-lesion and independent-assessor records.
+    - On a date with two results the worse one is flagged (subject 102's PD over
+      SD), a partial date completes to the first of the month or year (2025-03
+      becomes 2025-03-01), and target-lesion and independent assessments leave
+      no record.

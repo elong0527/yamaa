@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - The last observation before exposure is the usual SDTM baseline, which
+      change-from-baseline analyses start from.
+    - Two subjects cover four tests across serum and urine, results before, on
+      and after the first dose, a test not done, a subject with no first-dose
+      date, and two results on one day.
+    - A result on the day of first exposure qualifies (subject 101's ALT on
+      2026-01-15), a NOT DONE record never does, and subject 102, with no
+      first-dose date, has the later of two results on 2026-02-10 flagged.

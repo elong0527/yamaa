@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Disposition by period tells how many subjects completed or discontinued
+      each period of a crossover.
+    - Seven subjects cover completion of both periods, discontinuation in period
+      two, a withdrawal during washout, a site transfer, a partial-date
+      discontinuation, a subject still in period one, and a withdrawal before
+      the first dose.
+    - Only the epoch places an event, so subject 103's withdrawal during washout
+      leaves period two empty rather than DISCONTINUED, a site transfer leaves
+      period two ONGOING (subject 104), and the reason is the coded term, never
+      the reported text.

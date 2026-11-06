@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: SDTM
 domain: RELREC
+review:
+  concerns:
+    - RELREC records which adverse events and medications belong together, such
+      as a drug given to treat an event.
+    - Two subjects cover a headache in two relationships, a medication in both,
+      unlinked records, and link number 1 reused by a second subject.
+    - A record carrying two link numbers gives one row per relationship (subject
+      0001's headache is in RELID 1 and 2), and a link carried by only one
+      record would fail the run as a dangling relationship.

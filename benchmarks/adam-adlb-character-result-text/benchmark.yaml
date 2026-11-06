@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Listings often show lab results as text with a fixed number of decimals,
+      which must round the same way as the display precision.
+    - Nine values cover whole and fractional numbers, negatives, a value near
+      zero, a half at the second decimal, a missing value, and values too wide
+      for eight characters.
+    - Halves round away from zero, so 2.675 shows as 2.68 although stored a hair
+      below, -0.001 shows as 0.00 without a minus sign, and a missing value
+      reads NOT DONE in the padded text but is blank in the short text.

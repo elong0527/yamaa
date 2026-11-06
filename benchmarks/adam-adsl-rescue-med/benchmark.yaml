@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Efficacy analyses often handle rescue medication as an intercurrent event,
+      starting from the first rescue drug each subject took.
+    - Six subjects cover several rescue drugs out of date order, a year-month
+      start, two on the same date, a duplicated record, a rescue drug with no
+      start date, and subjects with none.
+    - A year-month start compares as written, so subject 101's naproxen from
+      2025-03 comes before the prednisone of 2025-03-05, a tie goes to the
+      smaller sequence (ALBUTEROL), and a subject without rescue medication
+      stays blank.

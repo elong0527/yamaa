@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: SDTM
 domain: VS
+review:
+  concerns:
+    - Vital signs collected in mixed units must be standardized to one unit per
+      test before analysis.
+    - Three subjects cover height in cm, weight in kg and pounds, temperature in
+      Celsius and Fahrenheit, and a temperature not collected.
+    - 175 LB becomes 79.37866475 kg with no rounding, 98.6 F becomes 37 C, and
+      the temperature not collected is NOT DONE with no unit; records are
+      grouped by test rather than kept in collection order.

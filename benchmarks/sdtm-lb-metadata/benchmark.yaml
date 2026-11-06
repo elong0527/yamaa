@@ -8,3 +8,13 @@ entries:
   r:
   - specification: submission-spec.yaml
     environment: submission-project.yaml
+review:
+  concerns:
+    - Define documents need value-level metadata, so each lab test can carry its
+      own unit codelist and origin.
+    - Two subjects with baseline glucose and creatinine, one without creatinine,
+      run through a submission layer that completes the dataset and column
+      metadata.
+    - Glucose units name a vendor origin and creatinine units a sponsor-assigned
+      origin, overriding the shared column declaration, while the data itself is
+      unchanged by this metadata.

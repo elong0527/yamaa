@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - Lab analyses by visit use one record per window, chosen as the one closest
+      to the target day.
+    - Six subjects cover records inside and outside the week 2 window, its edges
+      on days 8 and 22, equal distances before and after the target, two records
+      on the target day, and a missing study day.
+    - Equal distances go to the later study day (subject 0001's day 20 over day
+      10), a tie on the same day goes to the lower sequence (subject 0005), and
+      records outside the window keep no visit and are never flagged.

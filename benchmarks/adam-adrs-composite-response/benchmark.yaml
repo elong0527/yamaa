@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADRS
+review:
+  concerns:
+    - Composite responder endpoints such as EASI-75 treat safety events and
+      discontinuations as non-response, following the protocol's estimand.
+    - Nine subjects cover reductions above, at and just below 75 percent,
+      missing values, a serious adverse event, a discontinuation, and both.
+    - The safety and discontinuation rule comes first, so subject 105's 90
+      percent reduction with a serious adverse event is a non-responder; exactly
+      -75 responds while -74.9 does not, and a missing value without those
+      events is NOT EVALUABLE.

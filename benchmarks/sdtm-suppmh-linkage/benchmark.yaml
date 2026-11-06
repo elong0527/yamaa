@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: SUPPMH
+review:
+  concerns:
+    - Medical history qualifiers such as family history are kept in SUPPMH and
+      must point back to the right MH record.
+    - Three subjects cover conditions with both qualifiers, one qualifier
+      missing, a condition with no qualifier record, and asthma reported by two
+      subjects under different sequence numbers.
+    - Each qualifier is linked by subject and term, so subject 0002's asthma
+      points to MHSEQ 2, and a qualifier with no matching condition stops the
+      run instead of leaving an empty link.

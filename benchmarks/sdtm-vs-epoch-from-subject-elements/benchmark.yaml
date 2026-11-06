@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: SDTM
 domain: VS
+review:
+  concerns:
+    - EPOCH on each finding lets analyses split results into screening,
+      treatment and follow-up by the subject's own element dates.
+    - Three subjects cover readings before and after the first dose on the same
+      day, a date-only reading, readings on element boundaries, a missing date,
+      a partial date, and a reading before the first element.
+    - On the first-dose day subject 101's 08:00 reading is SCREENING and the
+      10:30 reading TREATMENT, but the date-only reading that day counts as
+      midnight and stays SCREENING; a reading exactly on a boundary belongs to
+      the later element.

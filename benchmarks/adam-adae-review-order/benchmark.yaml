@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Medical reviewers read adverse event listings worst severity first, so the
+      order itself is part of the deliverable.
+    - Two subjects with eleven events cover three severities, ties on date and
+      severity, events with no onset date, and events with no severity.
+    - An undated event comes first within its severity so it is not overlooked
+      (Myocarditis leads the severe events), and an event with no severity comes
+      after every reported one, because absent is not mild.

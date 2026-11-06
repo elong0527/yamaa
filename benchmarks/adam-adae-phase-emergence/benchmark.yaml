@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Neoadjuvant, surgery and adjuvant oncology trials report adverse events by
+      the treatment phase in which they emerged.
+    - Six subjects cover all three phases, a subject who stopped after
+      neoadjuvant treatment, one who stopped after surgery, one still on
+      treatment, one untreated, and one who went from neoadjuvant straight to
+      adjuvant treatment.
+    - Each phase runs to the day before the next starts, so subject 101's
+      fatigue the day before surgery is neoadjuvant however long the gap, and
+      the 30 or 90 day window applies only after the last phase, so the serious
+      and non-serious events on 2025-12-12 fall on opposite sides.

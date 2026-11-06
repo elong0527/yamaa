@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Crossover analyses assign events to periods, which need start and end
+      dates that leave no gap between periods.
+    - Seven subjects cover two-period completers, period two starting the day
+      after period one ends, a subject who stopped after period one, ends across
+      29 February, a subject with no exposure, and an exposure record with no
+      start date.
+    - Period one ends the day before period two starts (subject 101's
+      2024-02-29), so a long washout counts toward period one, and the last
+      period ends 30 days after the last dose, counting a record with no start
+      date (subject 107).

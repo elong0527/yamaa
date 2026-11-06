@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: VS
+review:
+  concerns:
+    - Protocols often take blood pressure in triplicate and analyse the visit
+      mean, which SDTM keeps as a derived record beside the readings.
+    - Two subjects at two visits have three systolic and three diastolic
+      readings each, except one systolic reading that was not taken.
+    - The mean is taken over the readings present, so subject 002's visit 2
+      systolic mean is 125 from two readings, and the mean record has no
+      replicate number and is flagged as derived.

@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Analyses of event timing need complete start and end times, with flags
+      showing which parts of each time were imputed.
+    - Three subjects cover times to the second, minute and hour, dates alone, a
+      year and month, a missing start and a missing end.
+    - Starts take the earliest value of a missing part and ends the latest (an
+      end at hour 16 becomes 16:59:59), and the flag records what was collected,
+      so subject 103's start at hour 00 is flagged M though it completes like a
+      date alone.

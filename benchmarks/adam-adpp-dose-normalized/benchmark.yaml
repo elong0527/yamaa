@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPP
+review:
+  concerns:
+    - Dose proportionality assessments compare Cmax and AUC divided by the dose
+      of the administration the profile follows.
+    - Five subjects cover different doses on two days, twice-daily dosing, a
+      dose in micrograms, a profile with no matching dose record, a parameter
+      not calculated, and time and half-life parameters.
+    - A twice-daily day divides by one administration's dose, not the day's
+      total (subject 102's 25 mg), 500 ug counts as 0.5 mg, and subject 104's
+      day 8 profile, with no dosing record at its reference time, gets no
+      normalized records.

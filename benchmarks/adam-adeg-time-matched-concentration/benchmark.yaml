@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADEG
+review:
+  concerns:
+    - Concentration-QT analysis pairs each post-dose ECG with the parent drug
+      concentration measured at the same nominal time.
+    - Four subjects in a two-period crossover cover drug and placebo periods,
+      quantified, below-limit and metabolite results, a PK time point with no
+      ECG, and an ECG time point with no PK sample.
+    - Placebo records get a concentration of 0 when no quantified result exists,
+      even on the baseline day, while a below-limit result on drug stays empty
+      (subject S03 at 0 h), and only an exact time-point match counts, never the
+      nearest sample.

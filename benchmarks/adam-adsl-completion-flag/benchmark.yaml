@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Disposition tables count subjects who completed the study, from the
+      end-of-study completion record.
+    - Eight subjects cover treatment completed but study discontinued, a
+      completion with no date, discontinuation for an adverse event, no
+      disposition record, an untreated subject, a screen failure, and plain
+      completions.
+    - Only a COMPLETED record in the FOLLOW-UP epoch counts, so subject 101, who
+      completed treatment but discontinued the study, is N, a completion with no
+      date (subject 102) is still Y, and two completion records would stop the
+      run.

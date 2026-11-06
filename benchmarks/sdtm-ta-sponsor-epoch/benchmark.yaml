@@ -5,3 +5,12 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - Trial Arms describes the planned design, and a regulatory define document
+      must give the NCI code of every published epoch term.
+    - Two arms each run screening, a blinded treatment element and an open-label
+      extension.
+    - The sponsor's EXTENSION epoch has no NCI code, so the define document
+      marks it as a sponsor addition to the published list instead of giving it
+      a code.

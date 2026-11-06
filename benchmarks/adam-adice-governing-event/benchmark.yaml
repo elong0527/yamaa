@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADICE
+review:
+  concerns:
+    - Estimand strategies handle intercurrent events, and each subject's
+      governing event decides which strategy applies.
+    - Five subjects cover a single event, events of different priority, two of
+      the same type on different dates, two top-priority types on the same date,
+      and a subject with none.
+    - Priority outranks chronology, so subject 102's death or kidney replacement
+      on 2025-01-28 governs over earlier events, and subject 104's ICE05 and
+      ICE04 on the same date are settled by the lower source sequence.

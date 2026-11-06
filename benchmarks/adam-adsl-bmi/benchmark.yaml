@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Baseline BMI is a common covariate, and a sponsor routine must agree with
+      the inline formula it replaces.
+    - Seven subjects cover typical values, a missing height, a missing weight,
+      both missing, and a zero weight.
+    - Both versions give 24.999999999999996 rather than 25 for 64 kg at 160 cm
+      (subject 102), unrounded floating point, and a zero weight gives a BMI of
+      0 rather than an empty value.

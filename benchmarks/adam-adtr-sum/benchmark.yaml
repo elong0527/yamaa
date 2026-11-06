@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADTR
+review:
+  concerns:
+    - RECIST response starts from the sum of target lesion diameters at each
+      assessment and whether every target lesion was measured.
+    - Four subjects cover complete and incomplete assessments, a lesion not
+      done, a scheduled visit with no measurements, a visit with no date, a
+      non-target lesion, and an assessment whose records carry no result.
+    - A disappeared lesion's zero counts as measured, a sum over an incomplete
+      set is still reported but not flagged complete, and an assessment with
+      records but no results has a count of 0 (subject 104's baseline) while one
+      never performed has none.

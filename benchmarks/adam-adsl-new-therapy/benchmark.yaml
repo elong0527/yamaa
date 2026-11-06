@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Oncology analyses censor or flag subjects at the start of new anti-cancer
+      therapy, from medications and cancer-related procedures started on study.
+    - Seven subjects cover on-treatment chemotherapy and procedures, prior
+      treatments, therapy starting on the first treatment day, a medication with
+      no start date, a non-cancer procedure, and a year-month start.
+    - Subject 104's vinorelbine started 2025-01-10, before treatment start, so
+      it does not count, a year-month start is imputed to the 15th (subject
+      107's 2025-04 becomes 2025-04-15), and therapy on the treatment start day
+      is day 1.

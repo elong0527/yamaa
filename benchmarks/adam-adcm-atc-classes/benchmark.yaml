@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADCM
+review:
+  concerns:
+    - Concomitant medication tables group drugs by ATC class at each level, and
+      each path must stay with its own medication record.
+    - Three subjects cover four coded medications with full ATC paths, two
+      uncoded herbal products, and path rows naming a level or a medication that
+      does not exist.
+    - Each record takes its path by its own sequence number, so the stray ATC9
+      row and the row for medication 99 change nothing, and uncoded products
+      keep all eight ATC columns empty.

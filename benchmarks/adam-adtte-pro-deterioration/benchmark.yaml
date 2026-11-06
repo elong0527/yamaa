@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADTTE
+review:
+  concerns:
+    - Time to deterioration in global health status is a key PRO endpoint, with
+      a drop of 10 points from baseline as the event.
+    - Six subjects cover a deterioration, a death, censoring for progression,
+      withdrawal and discontinuation, and a deterioration on the same date as
+      progression.
+    - Progression is a censoring reason, never an event, but a deterioration on
+      the day of progression still counts (subject 106), and time is counted in
+      whole calendar months, so subject 101's deterioration on 2026-05-07 is
+      month 3.

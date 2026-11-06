@@ -5,3 +5,12 @@ define:
   environment: project.yaml
   standard: adam
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - Analyses of event timing need a numeric start date and time with an
+      imputation flag, here delivered as Dataset-JSON with its define document.
+    - Five events cover starts collected to the second, the minute, the hour,
+      the day and the month.
+    - The time of day is stored as seconds since midnight (08:30:15 is 30615)
+      shown as TIME8., a start collected to the hour is flagged M and to the
+      minute S, and a month-only start gets no analysis date.

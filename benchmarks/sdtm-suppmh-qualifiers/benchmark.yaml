@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: SDTM
 domain: SUPPMH
+review:
+  concerns:
+    - Collected qualifiers that MH has no variable for, such as family history
+      and confirmation by medical records, go to SUPPMH.
+    - Two subjects with two conditions each cover both qualifiers collected, and
+      a condition with only family history collected.
+    - Only collected qualifiers give records (subject 0001's eczema has no
+      confirmation record), and records sort by parent sequence as text, so a
+      sequence of 10 would sort before 2.

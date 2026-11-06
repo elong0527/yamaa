@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: TS
+review:
+  concerns:
+    - Trial Summary is required in every submission and describes the protocol
+      parameters with controlled terms reviewers can search.
+    - One protocol export carries the title, phase, randomization decision and
+      planned enrollment of a phase 2 study.
+    - Phase 2 is published as PHASE II TRIAL with NCI code C15601 and Yes as Y
+      with C49488, while the title and planned enrollment carry no code; a
+      missing protocol parameter stops the run.

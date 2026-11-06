@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: SDTM
 domain: AE
+review:
+  concerns:
+    - Safety reviews group events at every MedDRA level, from the coder's
+      lowest-level term up to the primary system organ class.
+    - Five events cover two lowest-level terms that share a preferred term with
+      primary and secondary paths, a term with a single path, an unknown code
+      and a missing code; the dictionary extract is invented, not an official
+      MedDRA release.
+    - Every level comes from the primary path even when the secondary path is
+      listed first (subject 101's events go to Nervous system disorders), and
+      subject 103's unknown code 99000999 stays visible while its hierarchy is
+      blank.

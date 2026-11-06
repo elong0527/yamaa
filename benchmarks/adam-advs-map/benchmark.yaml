@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Mean arterial pressure is derived from the systolic and diastolic pressure
+      taken at the same visit.
+    - Four subjects cover two visits with both pressures, a visit with only
+      systolic, and a visit with the diastolic result missing.
+    - MAP is two-thirds diastolic plus one-third systolic, unrounded
+      (94.33333333333333), no record is added when either pressure is absent or
+      missing, and duplicate readings stop the run rather than choosing one.

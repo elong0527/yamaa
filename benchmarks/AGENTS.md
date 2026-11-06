@@ -240,7 +240,7 @@ Lifecycle, standard and domain belong in `benchmark.yaml`. Dashboards render
 that metadata; README files contain only the data contract. New benchmarks
 start at `draft`, as defined in `README.md`.
 
-An `sdtm` or `adam` benchmark under review may add `review.concerns` to
+Every `sdtm` or `adam` benchmark under review adds `review.concerns` to
 `benchmark.yaml`: three distinct potential concerns from an AI-assisted review,
 written so a reviewer can judge them in a few minutes, each from its own angle.
 Write one on the clinical use (who needs this result and why), one on the data

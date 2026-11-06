@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: SE
+review:
+  concerns:
+    - SE records when each subject actually entered each trial element, which
+      epoch assignment and treatment-period analyses rely on.
+    - Two subjects in different arms go through screening, treatment and
+      follow-up, one stopping dosing two weeks earlier than the other.
+    - Elements run back to back, so follow-up starts on the last dosing date
+      (subject 002 on 2026-01-20), and treatment starts on study day 2 because
+      the reference start, 2026-01-05, is the day before the first dose.

@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Analysis severity sometimes needs an approved correction, such as a
+      medical review upgrading an event, with its numeric rank kept consistent.
+    - Three subjects cover lower-case and upper-case severities, a
+      life-threatening event, missing severities, and corrections to both a
+      reported and a missing severity.
+    - The correction to SEVERE also fills an event with no reported severity
+      (subject 003), and the rank follows the corrected value, so subject 001's
+      reported moderate event ranks 3.

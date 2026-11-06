@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADEG
+review:
+  concerns:
+    - Thorough QT studies compare each post-dose ECG with the baseline recorded
+      at the same clock time on the day before dosing.
+    - Four subjects cover one or two periods, two time points, a baseline day
+      missing a time point, and a period with no baseline day.
+    - Nothing stands in for a missing time-matched baseline (subject S03's 2 h
+      records have no baseline or change), each period has its own baseline
+      type, and changes are not rounded.

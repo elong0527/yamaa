@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: SDTM
 domain: RELREC
+review:
+  concerns:
+    - RELREC tells reviewers which records relate, whether every tumor to its
+      measurements across whole datasets or an adverse event to the medication
+      given for it.
+    - One relationship links TU to TR at dataset level through their link
+      variables, and two adverse event and medication pairs link record by
+      record.
+    - Dataset-level rows name no subject or value and share RELID 1, with ONE on
+      TU and MANY on TR, while record-level rows use the record's link
+      identifier as RELID (REL-1, REL-2) and leave the type blank.

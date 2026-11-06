@@ -764,7 +764,26 @@ class DashboardTests(unittest.TestCase):
                     ),
                 ],
             ),
-            ("send-bw-sendig311", [task, inputs]),
+            (
+                "send-bw-sendig311",
+                [
+                    task,
+                    inputs,
+                    concerns(
+                        "Body weight is a core in-life endpoint of toxicology "
+                        "studies, and a SEND submission needs the terminal weight "
+                        "told apart from routine weighings.",
+                        "Two animals each have two routine weighings and one "
+                        "terminal weighing, exported out of date order, all in grams.",
+                        "The sequence follows the weighing date, not the export "
+                        "order (animal 2001's 2026-03-09 weighing is BWSEQ 2), and a "
+                        "collected 281.0 is standardized to 281 with no unit "
+                        "conversion.",
+                    ),
+                ],
+            ),
+            # Schema and negative benchmarks are not under review, so they ask
+            # two questions.
             ("schema-source-ordinal", [task, inputs]),
             (
                 "negative-ambiguous-type",

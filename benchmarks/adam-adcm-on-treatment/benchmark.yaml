@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADCM
+review:
+  concerns:
+    - On-treatment medication tables need a flag for each drug whose dates
+      overlap the subject's treatment period.
+    - Three subjects cover medications before, at the edges of, during and after
+      treatment, missing start or end dates, a subject never treated, and a
+      treatment with no end date.
+    - A medication with missing dates is assumed to overlap unless its known
+      dates rule it out (subject 101's calcium carbonate is flagged, its aspirin
+      ending before treatment is not), and touching an edge of the period counts
+      as overlap.

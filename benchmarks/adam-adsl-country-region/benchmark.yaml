@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Subgroup analyses by region need one spelling per country and a region for
+      every subject.
+    - Nine subjects cover mixed-case country codes, empty countries, the text
+      unknown, and a country outside the three listed (fra).
+    - Case never splits a country (usa, UsA and USA are one), a missing country
+      becomes UNKNOWN, and an unlisted country such as FRA goes to Rest of World
+      instead of stopping the run.

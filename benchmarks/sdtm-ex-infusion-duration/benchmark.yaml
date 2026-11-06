@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: EX
+review:
+  concerns:
+    - Infusion duration matters for regimens such as FOLFOX, where a 46-hour
+      fluorouracil infusion differs from a bolus of the same drug.
+    - Six administrations cover 120, 90 and 45 minute infusions, a zero-minute
+      bolus, a 46-hour continuous infusion and a duration not collected.
+    - Durations use days as the largest part (2760 minutes is P1DT22H, not
+      PT46H), a bolus is PT0S, and a missing duration stays empty rather than
+      being computed from dates.

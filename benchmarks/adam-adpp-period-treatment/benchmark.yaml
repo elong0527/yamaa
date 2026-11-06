@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPP
+review:
+  concerns:
+    - Crossover PK analyses need each parameter tied to the period, treatment
+      and dose of the profile it came from.
+    - Two subjects in a two-period crossover with a parent drug and a metabolite
+      cover tablet and solution doses at different clock times, and a profile
+      with no matching dose.
+    - The reference date and time must match a dose exactly, so subject S01's
+      profile on 2026-03-16 keeps its values but gets no period, treatment or
+      dose, rather than borrowing the most recent earlier dose.

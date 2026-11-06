@@ -5,3 +5,12 @@ define:
   environment: project.yaml
   standard: adam
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - ADSL submitted as SAS transport needs its dates stored as SAS numeric
+      dates, described in a define document declaring ADaMIG 1.1.
+    - Three subjects cover a first exposure time to the minute and to the
+      second, a missing height, and a subject never treated.
+    - TRTSDT counts days and TRTSDTM seconds from 1 January 1960, shown as
+      DATE9. and DATETIME20., a time without seconds gains :00, and the
+      untreated subject keeps both dates empty.

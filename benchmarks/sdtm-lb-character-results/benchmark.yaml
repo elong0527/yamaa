@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - Urine dipstick and censored lab results arrive as text, and analysis needs
+      one standard spelling per grade and a number only where the result truly
+      is one.
+    - Seven subjects cover many spellings of negative, trace, 1+ and 2+,
+      censored creatinine and creatine kinase results, a plain number, and an
+      unknown grade POSITIVE.
+    - Censored values get no numeric result but are flagged (subject 104's
+      creatinine below 0.1 mg/dL is LOW, subject 105's creatine kinase above 500
+      U/L is HIGH), and the unknown spelling POSITIVE is kept as collected
+      rather than dropped.

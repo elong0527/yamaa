@@ -5,3 +5,13 @@ define:
   environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
+review:
+  concerns:
+    - Submissions deliver DM as a SAS transport version 5 file with a define
+      document that names the implementation guide, here SDTMIG 3.3.
+    - Three subjects at two sites in two countries, one without a reference
+      start date, with the transport file and define document as the expected
+      output.
+    - Each text variable is exactly as wide as its longest value, and the define
+      document reports that width as its length instead of the largest length
+      the study allows.

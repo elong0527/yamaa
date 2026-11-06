@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADPP
+review:
+  concerns:
+    - Multiple-dose studies report the accumulation ratio, the steady-state
+      AUCTAU or Cmax divided by the day 1 value.
+    - Five subjects in two arms cover steady state on day 7 or day 5, an interim
+      day 5 profile, a subject who stopped early, a day 1 parameter not
+      calculated, and a subject with no day 1 profile.
+    - Steady state is the last planned dosing day of the subject's arm, so arm
+      A's day 5 profile is ignored and subject 102, with no day 7, gets no
+      ratio; a ratio may fall below 1 (subject 103's Cmax).

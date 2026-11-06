@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Analysis visit windows by study day, with an expected record for each
+      planned visit that has no measurement, give summaries a complete visit
+      spine.
+    - Three subjects cover unscheduled measurements, several records in one
+      window, a record with no study day, the open-ended post-treatment window,
+      and planned visits with no measurement.
+    - The earliest record in a window is the analysis record, so subject 201's
+      unscheduled reading on day 2 is chosen over the Week 2 visit itself, and
+      an expected record for a missed visit carries no value and never takes the
+      flag.

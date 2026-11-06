@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Infusion-related reactions are often defined as events starting within 24
+      hours after a dose, and the flag must say which dose.
+    - Two subjects with three doses each cover onsets before the first dose,
+      exactly at a dose start, one second before and exactly at 24 hours, a
+      date-only onset, a missing onset, and two doses less than 24 hours apart.
+    - The window includes the dose start and excludes exactly 24 hours later
+      (subject 101's FATIGUE at 09:30 the next day is out), a date-only onset is
+      never flagged, and an onset inside two overlapping windows counts the
+      later dose (subject 102's URTICARIA is dose 3).

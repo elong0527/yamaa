@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: FA
+review:
+  concerns:
+    - Vaccine trials summarize solicited local and systemic reactions by diary
+      day, and SDTM keeps them in FA.
+    - Five solicited reactions over three diary days for one subject, plus one
+      reaction for a second, cover redness with diameters, absent reactions with
+      severity NONE, and a missed third day.
+    - A missed diary day gives occurrence records marked NOT DONE but no
+      severity records (subject 1001's day 3), severity is NONE when a reaction
+      did not occur, and temperature stays in VS.

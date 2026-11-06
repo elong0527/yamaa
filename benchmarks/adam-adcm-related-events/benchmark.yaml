@@ -12,3 +12,13 @@ entries:
     environment: null
   - specification: spec_adcm.yaml
     environment: null
+review:
+  concerns:
+    - Medication listings show which adverse events each drug was given for,
+      read from the RELREC relationships.
+    - Two subjects cover a medication related to two events with the same term,
+      one related to an event and a medical history record, one related to
+      nothing, and sequence numbers 2 and 10.
+    - Sequence numbers sort as numbers (2, 10), each term is listed once
+      (HEADACHE for subject 101's paracetamol), the medical history record is
+      left out, and an unrelated medication has a blank count rather than zero.

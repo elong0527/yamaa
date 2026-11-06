@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Serious adverse event listings and tables start from the subset of events
+      recorded as serious.
+    - Five subjects cover serious and non-serious events, a subject with no
+      serious event, and an event whose seriousness was never recorded.
+    - An event whose seriousness was never recorded (subject 105's RUNNY NOSE)
+      is dropped like a non-serious one rather than kept for a query, and rows
+      keep their collection order.

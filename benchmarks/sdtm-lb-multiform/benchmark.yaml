@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - Dermatology biomarker studies collect the same analyte from several
+      specimens and skin sites, and LB must keep specimen, site and visit apart.
+    - Two subjects across screening, baseline, two unscheduled visits and day 21
+      cover serum, skin biopsy, saliva and tape-strip forms, lesional and
+      non-lesional sites, zero results, a NOT DONE entry and an empty item.
+    - A collected zero stays a real result while an empty item gives no record,
+      and repeated unscheduled visits are numbered 2.01 and 2.02 after baseline
+      (subject 0001's saliva samples on 2025-01-15 and 2025-01-16).

@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Exposure duration in weeks and months is a standard subject-level summary,
+      and counting months must handle short months.
+    - Twelve subjects cover end-of-month starts, a 29 February start, spans
+      shorter than a week or a month, the same day, an end before the start, and
+      missing dates.
+    - A monthly anniversary of 31 January falls on 28 February (subject 101 has
+      1 month), 29 February 2024 to 28 February 2025 is 12 months, and an end
+      before the start gives negative durations rather than missing ones.

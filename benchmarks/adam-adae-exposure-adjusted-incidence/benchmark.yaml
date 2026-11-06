@@ -12,3 +12,15 @@ entries:
     environment: null
   - specification: spec_rate.yaml
     environment: null
+review:
+  concerns:
+    - Exposure-adjusted incidence per 100 person-years compares adverse event
+      risk between arms whose subjects were treated for different lengths of
+      time.
+    - Six treated subjects in two arms cover two terms, repeated events, an
+      event before the first dose, an event after the 30-day window, and
+      subjects with no events.
+    - Time at risk ends at the first eligible onset or 30 days after the last
+      dose, counting both ends (subject 101 has 40 days), an onset outside the
+      window does not shorten it (subject 103's diarrhoea on 2025-02-10), and
+      rates are not rounded.

@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: SDTM
 domain: EX
+review:
+  concerns:
+    - EX must state the dose actually administered in protocol units, which
+      often has to be computed from what the form collected or unblinded from
+      the kit list.
+    - Three subjects cover tablets times strength, a weight-based infusion, a
+      blinded active kit, a blinded placebo kit, an AUC-targeted dose and a
+      skipped dose.
+    - A weight-based dose uses that visit's weight (subject 001's 6 mg/kg at 72
+      kg gives 432 mg, not the 70 kg of the first visit), and the skipped dose
+      on 2025-01-09 gives no record.

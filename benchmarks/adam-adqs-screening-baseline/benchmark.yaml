@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADQS
+review:
+  concerns:
+    - PRO change-from-baseline analyses need a pre-dose baseline, and protocols
+      often accept the screening questionnaire when the baseline visit was
+      missed.
+    - Four subjects cover a baseline visit completed on the day of first dose, a
+      baseline not done, no usable rating at either visit, and a baseline
+      completed the day after first dose.
+    - A Cycle 1 Day 1 rating completed after the first dose cannot be baseline,
+      so subject 104 falls back to screening with SCBLFL, and a later rating
+      never stands in (subject 103 has no baseline at all).

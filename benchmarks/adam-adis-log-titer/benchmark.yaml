@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADIS
+review:
+  concerns:
+    - Neutralizing antibody titers are analysed on the log10 scale, for
+      geometric mean titers and fold rises.
+    - Four subjects at two visits cover titers at, above and below the
+      quantitation limit, a zero titer and a missing titer.
+    - A titer below the limit, zero included, gives no record (subject 104 on
+      day 1) rather than being imputed to half the limit, while a missing titer
+      keeps a record with a blank value and a titer exactly at the limit is
+      kept.

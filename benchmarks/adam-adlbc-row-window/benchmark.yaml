@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLBC
+review:
+  concerns:
+    - Visit-to-visit lab change needs each result's previous value within the
+      same subject and parameter.
+    - Five subjects cover albumin and bilirubin over several visits, a missing
+      result, single-visit series, equal consecutive values, and a subject with
+      hemoglobin only.
+    - A visit with no result gets no row, so the next visit compares with the
+      latest earlier result (subject 101's visit 4 albumin against visit 2), and
+      this change is from the previous visit, not from baseline.

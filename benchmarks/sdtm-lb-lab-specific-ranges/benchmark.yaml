@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: LB
+review:
+  concerns:
+    - Multi-lab studies flag results against the collecting lab's own reference
+      range, chosen by sex, age band and the date the range took effect.
+    - Eight subjects cover two labs, a revised ALT range, pediatric and adult
+      hemoglobin bands, a missing result, and a test with no range.
+    - Subject 502's ALT of 39 on 2025-07-01, the first day of the revised female
+      range, is HIGH against 38, and subject 504, who turns 18 that day, takes
+      the adult band, so 12.5 g/dL hemoglobin is LOW.

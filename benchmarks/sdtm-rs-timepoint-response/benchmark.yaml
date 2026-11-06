@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: RS
+review:
+  concerns:
+    - Oncology efficacy depends on the RECIST time-point response derived from
+      target lesion sums at each tumor assessment.
+    - Four subjects cover a target lesion not measured at week 8, a 45 percent
+      shrinkage, non-target disease only, and assessments with no measurements
+      at all.
+    - When a chosen target lesion is not measured the response is NE rather than
+      a guess (subject 921 at week 8), baseline is always NE, and an assessment
+      with no measurements is NOT DONE with no response (subject 924).

@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Summary tables by worst severity count each subject once per preferred
+      term, at the worst treatment-emergent severity.
+    - Three subjects cover repeated headaches of different severities, ties on
+      severity and date, events that are not treatment-emergent, and events with
+      no severity.
+    - Ties go to the earliest date and then the lowest sequence (subject 0003's
+      headache on 2025-03-05, though collected second), and a severe rash that
+      was not treatment-emergent is never flagged.

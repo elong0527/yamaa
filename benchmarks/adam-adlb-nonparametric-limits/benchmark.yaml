@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
+review:
+  concerns:
+    - When no external range exists, studies derive reference ranges from their
+      own data as the 2.5th and 97.5th percentiles by sex.
+    - Ten subjects give creatinine and hemoglobin by sex, five results per
+      group, with one hemoglobin not done.
+    - Percentiles follow R's default type 7, so a limit need not be an observed
+      value (female creatinine 61.5 to 79.3), the test not done is left out of
+      the male hemoglobin group of four, and limits are not rounded.

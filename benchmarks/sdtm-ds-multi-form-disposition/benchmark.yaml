@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: SDTM
 domain: DS
+review:
+  concerns:
+    - Disposition tables and the subject flow diagram count consent,
+      randomization, end of treatment and end of study from DS.
+    - Three subjects cover completing everything, stopping treatment for an
+      adverse event and leaving the study lost to follow-up, and a screen
+      failure with only consent and end-of-study forms.
+    - The category follows the event, not the term, so a completion is a
+      DISPOSITION EVENT while consent and randomization are PROTOCOL MILESTONE
+      records; subject 001's consent and randomization on the same day are
+      ordered by term.

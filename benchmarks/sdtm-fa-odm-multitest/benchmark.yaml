@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: FA
+review:
+  concerns:
+    - Vaccine reactogenicity diaries collect several tests per reaction, and
+      each test becomes its own FA record.
+    - Two subjects over one or two diary days cover redness with severity and
+      diameter, fatigue reported absent, and a severity left blank.
+    - A severity item present but blank gives a NOT DONE record (subject 0001 on
+      day 2), while a reaction with no severity or diameter item gives no such
+      record at all (subject 0001's absent fatigue).

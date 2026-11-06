@@ -1,3 +1,12 @@
 lifecycle: draft
 standard: SDTM
 domain: FA
+review:
+  concerns:
+    - Findings about an adverse event, such as a rash's location, size and
+      biopsy, belong in FA, linked to the event record.
+    - One subject has two rashes with findings forms and a third event with no
+      term or findings.
+    - Both events are called Rash, so only the link identifier (AE-1, AE-2)
+      tells their findings apart, and a finding whose event has no term would
+      stop the run.

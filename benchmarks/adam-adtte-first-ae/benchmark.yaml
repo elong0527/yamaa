@@ -1,3 +1,15 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADTTE
+review:
+  concerns:
+    - Time to first adverse event is a common safety endpoint, counted from
+      treatment start.
+    - Ten subjects cover events after, before and on the day of treatment start,
+      two events on one date, an event with no onset date, no events, a missing
+      end of study, an end of study before treatment start, and a subject never
+      treated.
+    - An event before treatment start is moved up to day 1 but still counts as
+      an event (subject 103), an undated event alone leaves the subject censored
+      (subject 109), and a subject never treated keeps the event with no day
+      count (subject 108).

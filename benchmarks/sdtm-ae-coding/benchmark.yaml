@@ -1,3 +1,13 @@
 lifecycle: reviewed
 standard: SDTM
 domain: AE
+review:
+  concerns:
+    - Safety tables summarize adverse events by preferred term and body system,
+      so every reported term needs its MedDRA coding before analysis.
+    - Eight events cover exact matches, synonyms that code to another preferred
+      term (Cephalgia to Headache, Queasy to Nausea), free text with no
+      dictionary entry, a blank term and a lower-case term.
+    - Matching is exact, letter case included, so subject 107's 'headache' stays
+      NOT CODED instead of coding to Headache; NOT CODED in both coded variables
+      marks the events a coder must resolve.

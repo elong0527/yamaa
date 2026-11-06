@@ -1,3 +1,14 @@
 lifecycle: draft
 standard: ADaM
 domain: ADEG
+review:
+  concerns:
+    - QT reporting under ICH E14 counts subjects whose on-treatment QTcF exceeds
+      450, 480 or 500 ms or rises by more than 30 or 60 ms.
+    - Four subjects cover values exactly at and just above each limit, decreases
+      from baseline, a missing value, an uncorrected QT parameter, a follow-up
+      visit outside the on-treatment window, and a subject with no baseline.
+    - Limits are strict, so exactly 450 ms or an increase of exactly 30 ms reads
+      N while 450.4 reads Y, only on-treatment QTcF records are assessed, and
+      subject S04, with no baseline, gets absolute criteria but no change
+      criteria.

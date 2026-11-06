@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: SDTM
 domain: CM
+review:
+  concerns:
+    - Medication summaries group drugs by WHODrug preferred name and ATC class,
+      and the class depends on why the drug was given.
+    - Four reported names cover a brand name (ADVIL), a misspelling the coder
+      resolved (Asprin), the same drug coded to two classes, and a name the
+      coder has not coded yet.
+    - Aspirin codes to an analgesic class for subject 101 but to platelet
+      aggregation inhibitors for subject 102, following the coder's choice, and
+      the uncoded TURMERIC keeps its coded variables blank.

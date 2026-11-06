@@ -1,3 +1,15 @@
 lifecycle: draft
 standard: ADaM
 domain: ADQS
+review:
+  concerns:
+    - FDA's technical specification for PRO data in cancer trials asks for a
+      record at every planned assessment, with phantom records and expected
+      flags showing why data are missing.
+    - Four randomized subjects cover complete, partly and fully not-done
+      questionnaires, a death, treatment ended for progression, and a subject
+      outside the safety population.
+    - A missed questionnaire after treatment ended for progression becomes a
+      phantom record carrying that reason and is not expected for safety, a
+      timepoint on the day of an event is still expected, and a total with one
+      item missing is NOT CALCULABLE.

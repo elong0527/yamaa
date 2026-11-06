@@ -1,3 +1,13 @@
 lifecycle: draft
 standard: ADaM
 domain: ADVS
+review:
+  concerns:
+    - Orthostatic hypotension and tachycardia are safety criteria derived from
+      the change between supine and standing readings.
+    - Several subjects cover changes exactly at and just below the thresholds,
+      readings after one and three minutes standing, and missing readings.
+    - Thresholds include their boundaries, so subject 101's systolic fall of
+      exactly 20 and heart rate rise of exactly 30 meet them, only the
+      three-minute standing reading is used, and one qualifying fall is enough
+      even when the other change is missing.

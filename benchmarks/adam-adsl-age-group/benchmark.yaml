@@ -1,3 +1,11 @@
 lifecycle: finalized
 standard: ADaM
 domain: ADSL
+review:
+  concerns:
+    - Demographics tables and subgroup analyses pool subjects into age groups
+      such as under 18, 18 to 64, and over 64.
+    - Ten subjects cover each group, the boundary ages 17, 18, 64 and 65, and a
+      missing age.
+    - Boundary ages belong to the middle band (18 and 64 are both 18-64), and a
+      missing age reads Missing in the text but has no numeric rank.

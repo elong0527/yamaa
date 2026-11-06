@@ -1,3 +1,14 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
+review:
+  concerns:
+    - Free-text terms and causality entered by sites need one standard case
+      before they can be grouped, and the sponsor's identifier often carries a
+      reference number.
+    - Three subjects cover mixed-case terms and causality, missing causality,
+      missing identifiers, and identifiers in the expected shape, with too many
+      digits, in lower case, and of another shape.
+    - Only AE- followed by exactly three digits gives a number, so AE-000 gives
+      0, the same as a missing identifier, while AE-1000 and a lower-case ae-007
+      give -1; a missing causality becomes NOT REPORTED.
