@@ -384,8 +384,11 @@ impl Spec {
         } else {
             parent.relation
         };
+        // An aggregate's filter and range bounds read its bindings beside
+        // its relation's fields, as its bindings read the earlier ones
+        // (LOOKUP-22).
         let bindings = match (aggregate, role) {
-            (true, Role::Binding) => Some(parent.expr),
+            (true, Role::Binding | Role::Relation | Role::RangeBound) => Some(parent.expr),
             (true, _) => None,
             (false, _) => parent.bindings,
         };

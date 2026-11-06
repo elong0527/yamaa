@@ -92,8 +92,9 @@ value is compared. `int` and `float` compare exactly, and every other type
 must match exactly.
 
 `between` declares `value` and `lower`, `upper` or both, each bound a field of
-the lookup's relation: a stored field, or a name an intermediate derives
-([LOOKUP-15](#lookup-15)). An omitted bound leaves that side unbounded;
+the lookup's relation: a stored field, a name an intermediate derives
+([LOOKUP-15](#lookup-15)), or a variable a qualified aggregate's
+`derivations` bind ([LOOKUP-22](#lookup-22)). An omitted bound leaves that side unbounded;
 `closed` still decides whether the stated endpoint is included. Every kind of
 lookup may declare it: a named intermediate, a qualified aggregate, and an
 implicit join through a structured `source:` binding or a filtered source
@@ -179,7 +180,8 @@ converted. A value and a bound whose types cannot compare fail validation as
 bounds, and the named intermediate's id or the source binding's variable that
 declares the range; a type decided per value fails the same way when the
 record is compared. A derived bound has its derivation's declared or result type
-([LOOKUP-15](#lookup-15)).
+([LOOKUP-15](#lookup-15)), and an aggregate's bound variable its declared
+`type` ([LOOKUP-22](#lookup-22)).
 
 A `between` with neither bound fails as `invalid_field_type`, and a bound
 naming no field of the relation as `unknown_field`. A source that reads the
@@ -205,7 +207,9 @@ Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-so
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
 `columns` lists bare field names, and every `filter` field is qualified,
-except a donor-record name in a donor read ([LOOKUP-16](#lookup-16)). The
+except a donor-record name in a donor read ([LOOKUP-16](#lookup-16)) and a
+variable a qualified aggregate's `derivations` bind
+([LOOKUP-22](#lookup-22)). The
 current row's driver is root `base` (or the sole input) without explicit rows,
 or the enclosing `rows[].dataset` during row construction. During column
 derivation the qualifier must be the driver of every row template that the
@@ -215,8 +219,9 @@ template, as a column derivation does. The row driver may be an eligible named
 intermediate under [ROW-2](rows.md#row-2). Other datasets,
 intermediates that are not the current driver, and unqualified output names
 are not filter scopes. The filter of a structured source or a qualified
-aggregate reads the donor record only; correlated predicates are supported by
-named intermediates. When an intermediate derivation reads a named
+aggregate reads the donor record only, a qualified aggregate's with the
+variables its `derivations` bind for that record; correlated predicates are
+supported by named intermediates. When an intermediate derivation reads a named
 intermediate, the reading donor record supplies the correlated fields,
 including its earlier derived fields, bare or qualified by its dataset
 ([LOOKUP-16](#lookup-16)).
@@ -1529,12 +1534,13 @@ intermediate variables before reduction. Each entry, keyed by the variable's
 name, declares its `type` and `derivation`; entries evaluate once per record
 of the aggregate's relation, in declaration order, and each derivation reads
 the record's fields and the values bound by earlier entries. The reducer
-expression and the aggregate's `order_by` name each bound variable by its
-unqualified name. An entry cannot use a window operation, and `derivations` is
-not available on unqualified or grouped-input aggregates.
+expression, the aggregate's `order_by`, `filter` and `between` bounds name
+each bound variable by its unqualified name. An entry cannot use a window
+operation, and `derivations` is not available on unqualified or grouped-input
+aggregates.
 
 Fails: `invalid_derive_step`, `unknown_derive_variable`.
-Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_donor_function_argument_reads_only_intermediates_that_select_one_record`.
+Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_donor_function_argument_reads_only_intermediates_that_select_one_record`, `schema-aggregate-derive-narrow`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_reads_a_binding_converted_from_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_reads_a_binding_converted_from_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_reads_a_binding_before_a_field_of_the_same_name`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_reads_a_binding_of_a_kept_selection_for_each_row`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_that_reads_a_binding_converts_the_records_it_removes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_over_stored_fields_never_converts_the_records_it_removes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_of_a_binding_whose_type_cannot_compare_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_unknown_reads.json::an_aggregate_filter_reads_its_derive_binding_but_not_an_unbound_name`.
 
 An aggregate derivation is not an expression function. Text becomes a number
 only through the entry's declared `type`, and a date becomes an integer only
@@ -1548,6 +1554,35 @@ declared numeric type fails as a conversion failure under
 [VALUE-3](values.md#value-3), answered by a declared `unconvertible`
 handler and fatal otherwise. A missing value stays missing without attempting
 conversion.
+
+A bare name reads a bound variable before a field of the relation that has
+the same name. A `filter` or a `between` bound that names a bound variable
+narrows the records on its converted value. The entries then evaluate on every record
+whose keys match the current row, before the range and the filter, as a named
+intermediate's derivations do ([LOOKUP-15](#lookup-15)); the range
+([LOOKUP-9](#lookup-9)) and the filter ([LOOKUP-8](#lookup-8)) see each record
+with its variables, and only the records they keep reach the reducer. An entry
+can therefore fail on a record the filter removes. When neither names a
+variable, the entries evaluate only on the records the range and the filter
+keep, so a filter over stored fields keeps a conversion off the records it
+removes. A bound variable compares under its declared `type`: a range value
+whose type cannot compare with it fails as `incomparable_range_types`. Per
+subject, the weights dated on or before the subject's anchor date:
+
+```yaml
+columns:
+  - {name: ANCHDT, type: date, derivation: {to_date: {source: DM.RFSTDTC}}}
+  - name: NPRE
+    type: int
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          MEASDT: {type: date, derivation: {to_date: {source: VS.VSDTC}}}
+        filter: "VS.VSTESTCD = 'WEIGHT'"
+        between: {value: ANCHDT, lower: MEASDT}
+        expr: "COUNT(VS.*)"
+```
 
 An `order_by` term that names a bound variable sorts the record by the
 variable's converted value ([LOOKUP-10](#lookup-10)). A sequence number stored

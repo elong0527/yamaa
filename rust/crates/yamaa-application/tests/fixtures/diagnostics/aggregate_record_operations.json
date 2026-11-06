@@ -1,5 +1,5 @@
 {
-  "about": "Per-record aggregates: an aggregate's filter, range and derivations reduce only the records each row matches (LOOKUP-9, LOOKUP-22), a reduction that reads no field still owns its relation and its key (LOOKUP-5, D196), and the findings of its bindings, range and names. Moved from execution_aggregate_record_operations.rs. The document spec is the test's specification() with no reduction written, and each case's edit writes its reduction after the line that opens the aggregate, as the test's format! did; rows is the test's rows(\"A.CUT\", from_a), fieldless its original_fieldless_count(\"COUNT(OTHER.*)\", \"{N: K}\", \"\"), derive its ORIGINAL_DERIVE_SPEC, whose placeholders each case edits as the test did, and qs, qs_with_text and ds the inputs the tests wrote; a variant's edits replace what its parameters changed. In ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records, subject a keeps B's records with USE = 'Y' and N at most its CUT of 3: N = 2 and N = 3, whose V of 1.5 and 2 double to 3 and 4, so TOTAL is 7; b's one record converts nothing, so its V is the recovered 0; c has no CUT and d's CUT of 1 is below every N, so neither reduces a record and TOTAL is missing. A range with neither bound narrows nothing (LOOKUP-9); 0.4.0 refused it as invalid_aggregate_context. A qualified between.value reads the record that built the row, so it names the driver of every row the aggregate is derived for, and another input has no record there and is refused (#2904): rows built from A and from C share the aggregate's column, so neither input supplies a record for every row. In a_binding_reads_a_kept_lookup_keyed_on_the_drivers_own_record, CAP keeps the current subject's own A record, so each VALUE is the lesser of B.N and that CUT: 1 and 2 for a, 3 for b. A fieldless reduction keeps its relation: its key producer K is written after the consuming column, SRC's one row has K = 1, and only OTHER's two records with N = 1 match, so a COUNT and a SUM of N each reduce to 2 and two reductions add to 4; without a key of its own the aggregate matches on the key OTHER declares (LOOKUP-5). A written key reports a pair whose types cannot compare at key, a key column the relation lacks at key, and a match value that reads nothing at its pair (D196); a filter that is the aggregate's only donor reference still reads the relation. A binding that reads a later binding is refused (P-BIND-1). A case whose test compared the issue rows of support::study::issue_row compares their five fields; one whose test read some fields of the first issue, or of the one issue of a condition, compares those fields in a complete list, since its input carries that one defect; and one whose test found its issue by cause among the others is among them. A refused case saves, stating that it wrote nothing, where its test asserted that the output file was not written, and only builds where its test did not; the build routes and save results its tests asserted are execution_aggregate_record_operations.rs::aggregate_record_cases_keep_their_build_routes_and_save_results. A STR_JOIN whose text would pass the 1 MiB of TEXT-2 refuses the run at the aggregate's expr, at the record that would cross it and without a length it does not count (FORMULA-18): subject a's two B records, each padded to 524,288 characters and joined by one comma, need 1,048,577 bytes, one more than the limit.",
+  "about": "Per-record aggregates: an aggregate's filter, range and derivations reduce only the records each row matches (LOOKUP-9, LOOKUP-22), a reduction that reads no field still owns its relation and its key (LOOKUP-5, D196), and the findings of its bindings, range and names. Moved from execution_aggregate_record_operations.rs. The document spec is the test's specification() with no reduction written, and each case's edit writes its reduction after the line that opens the aggregate, as the test's format! did; rows is the test's rows(\"A.CUT\", from_a), fieldless its original_fieldless_count(\"COUNT(OTHER.*)\", \"{N: K}\", \"\"), derive its ORIGINAL_DERIVE_SPEC, whose placeholders each case edits as the test did, and qs, qs_with_text and ds the inputs the tests wrote; a variant's edits replace what its parameters changed. In ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records, subject a keeps B's records with USE = 'Y' and N at most its CUT of 3: N = 2 and N = 3, whose V of 1.5 and 2 double to 3 and 4, so TOTAL is 7; b's one record converts nothing, so its V is the recovered 0; c has no CUT and d's CUT of 1 is below every N, so neither reduces a record and TOTAL is missing. A range with neither bound narrows nothing (LOOKUP-9); 0.4.0 refused it as invalid_aggregate_context. A qualified between.value reads the record that built the row, so it names the driver of every row the aggregate is derived for, and another input has no record there and is refused (#2904): rows built from A and from C share the aggregate's column, so neither input supplies a record for every row. In a_binding_reads_a_kept_lookup_keyed_on_the_drivers_own_record, CAP keeps the current subject's own A record, so each VALUE is the lesser of B.N and that CUT: 1 and 2 for a, 3 for b. A fieldless reduction keeps its relation: its key producer K is written after the consuming column, SRC's one row has K = 1, and only OTHER's two records with N = 1 match, so a COUNT and a SUM of N each reduce to 2 and two reductions add to 4; without a key of its own the aggregate matches on the key OTHER declares (LOOKUP-5). A written key reports a pair whose types cannot compare at key, a key column the relation lacks at key, and a match value that reads nothing at its pair (D196); a filter that is the aggregate's only donor reference still reads the relation. A binding that reads a later binding is refused (P-BIND-1). A case whose test compared the issue rows of support::study::issue_row compares their five fields; one whose test read some fields of the first issue, or of the one issue of a condition, compares those fields in a complete list, since its input carries that one defect; and one whose test found its issue by cause among the others is among them. A refused case saves, stating that it wrote nothing, where its test asserted that the output file was not written, and only builds where its test did not; the build routes and save results its tests asserted are execution_aggregate_record_operations.rs::aggregate_record_cases_keep_their_build_routes_and_save_results. A STR_JOIN whose text would pass the 1 MiB of TEXT-2 refuses the run at the aggregate's expr, at the record that would cross it and without a length it does not count (FORMULA-18): subject a's two B records, each padded to 524,288 characters and joined by one comma, need 1,048,577 bytes, one more than the limit. A qualified aggregate's filter and range bounds may read its bindings (LOOKUP-22, #4309); the bindings then evaluate on every record whose keys match, before the range and the filter. In a_range_bound_reads_a_binding_converted_from_text, NT converts B's text T to int, so subject a, CUT 3, keeps the records whose NT of 3 and 10 is at least 3, N = 2 and N = 4, summing to 6, where the text itself cannot compare with the int CUT; b's NT of 4 is below 5 and its missing NT bounds nothing, so TOTAL is missing. a_filter_reads_a_binding_converted_from_text keeps the same records of a and b's NT of 4, so b sums to 8. In a_range_bound_reads_a_binding_before_a_field_of_the_same_name, the bound N is the binding, B.N * 10, so the records of N = 2 and N = 3 reach CUT 15 and sum to 5, where the stored N would keep none. In a_filter_reads_a_binding_of_a_kept_selection_for_each_row, every row matches B's four records on G = 1, and C is the row's own CUT from CAP, so a keeps N up to 2, summing to 3, and b N up to 3, summing to 6. A filter that reads a binding sees every record whose keys match, so the record of N = 1, which the filter removes, still converts its text x and fails; a filter over stored fields alone removes it before its binding evaluates, and SUM(NT) reads the 3 of the one record left.",
   "documents": {
     "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  A: {path: a.csv, types: {CUT: int}}\n  B: {path: b.csv, key: [ID], types: {N: int}}\nbase: A\noutput: {path: result.csv, columns: [ID, CUT, TOTAL]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: CUT, type: int, derivation: A.CUT}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n",
     "rows": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {path: a.csv, types: {CUT: int}}\n  B: {path: b.csv, key: [ID], types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\noutput: {path: result.csv, columns: [ID, ORIGIN, TOTAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n        between: {value: A.CUT, lower: N}\n        expr: SUM(B.N)\nrows:\n  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n",
@@ -844,6 +844,104 @@
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["columns.TOTAL.derivation.aggregate.expr"], "context": {"step": "execute", "code": "execution_limit", "resource": "text_bytes", "limit": 1048576}}],
       "saved": {}
+    },
+    {
+      "case": "a_range_bound_reads_a_binding_converted_from_text",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          NT: {type: int, derivation: B.T}\n        between: {value: CUT, upper: NT}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,3\nb,5\n",
+          "b.csv": "ID,N,T\na,1,2\na,2,3\na,4,10\nb,8,4\nb,16,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,3,6\nb,5,\n"}
+    },
+    {
+      "case": "a_filter_reads_a_binding_converted_from_text",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        filter: NT >= 3\n        derivations:\n          NT: {type: int, derivation: B.T}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,3\nb,5\n",
+          "b.csv": "ID,N,T\na,1,2\na,2,3\na,4,10\nb,8,4\nb,16,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,3,6\nb,5,8\n"}
+    },
+    {
+      "case": "a_range_bound_reads_a_binding_before_a_field_of_the_same_name",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          N: {type: int, derivation: 'B.N * 10'}\n        between: {value: CUT, upper: N}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,15\n",
+          "b.csv": "ID,N\na,1\na,2\na,3\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,15,5\n"}
+    },
+    {
+      "case": "a_filter_reads_a_binding_of_a_kept_selection_for_each_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        key: {G: 1}\n        derivations:\n          C: {type: int, derivation: CAP.CUT}\n        filter: B.N <= C\n        expr: SUM(B.N)\n"}, {"from": "types: {N: int}}", "to": "types: {N: int, G: int}}"}, {"from": "base: A\n", "to": "base: A\nintermediates:\n  - {id: CAP, dataset: A, key: {ID: A.ID}, order_by: [A.CUT], keep: first}\n"}]},
+          "a.csv": "ID,CUT\na,2\nb,3\n",
+          "b.csv": "ID,G,N\nx,1,1\nx,1,2\nx,1,3\nx,1,4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,2,3\nb,3,6\n"}
+    },
+    {
+      "case": "a_filter_that_reads_a_binding_converts_the_records_it_removes",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        filter: B.N > 1 AND NT >= 0\n        derivations:\n          NT: {type: int, derivation: B.T}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,3\n",
+          "b.csv": "ID,N,T\na,1,x\na,2,3\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.TOTAL.derivation.aggregate.derivations.NT"]}]
+    },
+    {
+      "case": "a_filter_over_stored_fields_never_converts_the_records_it_removes",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        filter: B.N > 1\n        derivations:\n          NT: {type: int, derivation: B.T}\n        expr: SUM(NT)\n"}]},
+          "a.csv": "ID,CUT\na,3\n",
+          "b.csv": "ID,N,T\na,1,x\na,2,3\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,3,3\n"}
+    },
+    {
+      "case": "a_range_bound_of_a_binding_whose_type_cannot_compare_is_refused",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          NT: {type: str, derivation: B.T}\n        between: {value: CUT, upper: NT}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,3\n",
+          "b.csv": "ID,N,T\na,1,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incomparable_range_types", "rule": "LOOKUP-9", "spec_paths": ["columns.TOTAL.derivation.aggregate.between"], "context": {"upper_type": "str", "value_type": "int"}}]
     }
   ]
 }

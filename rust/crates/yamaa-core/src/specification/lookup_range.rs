@@ -28,6 +28,9 @@ pub(super) struct Declaration {
 /// The stated bounds, bound to fields of the lookup's relation.
 pub(super) type Bounds = (Option<RelationRangeBound>, Option<RelationRangeBound>);
 
+/// The column and type of the relation's field a bound names, if any.
+pub(super) type BoundField<'a> = &'a dyn Fn(&str) -> Option<(usize, Option<ColumnType>)>;
+
 impl Declaration {
     /// A lookup's range from the tree.
     pub(super) fn from_tree(
@@ -61,19 +64,33 @@ impl Declaration {
         admits: &dyn Fn(usize) -> bool,
         findings: &mut Vec<Diagnostic>,
     ) -> Option<Bounds> {
-        let before = findings.len();
-        let mut bound = |name: &Option<String>| {
-            let name = name.as_ref()?;
-            let found = donor
+        let field = |name: &str| {
+            donor
                 .columns()
                 .iter()
                 .enumerate()
-                .find(|(column, field)| field.name == *name && admits(*column))
-                .map(|(column, field)| RelationRangeBound {
-                    column,
-                    identifier: field.name.clone(),
-                    kind: donor_kind(column).map(Into::into),
-                });
+                .find(|(column, field)| field.name == name && admits(*column))
+                .map(|(column, _)| (column, donor_kind(column)))
+        };
+        self.bind_bounds_by(owner, &field, findings)
+    }
+    /// Bind each stated bound to the field `field` finds for its name: its
+    /// column and type. A bound naming no field fails, after every bound is
+    /// tried.
+    pub(super) fn bind_bounds_by(
+        &self,
+        owner: Owner<'_>,
+        field: BoundField<'_>,
+        findings: &mut Vec<Diagnostic>,
+    ) -> Option<Bounds> {
+        let before = findings.len();
+        let mut bound = |name: &Option<String>| {
+            let name = name.as_ref()?;
+            let found = field(name).map(|(column, kind)| RelationRangeBound {
+                column,
+                identifier: name.clone(),
+                kind: kind.map(Into::into),
+            });
             if found.is_none() {
                 findings.push(lookup::range_reference(&self.path, owner, name));
             }

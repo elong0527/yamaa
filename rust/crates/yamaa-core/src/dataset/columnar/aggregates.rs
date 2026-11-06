@@ -92,10 +92,13 @@ struct Answers {
     groups: Vec<Option<Value>>,
 }
 
-/// The donor records of one aggregate over the current row.
+/// The donor records of one aggregate over the current row, and the range
+/// value they are still to be narrowed by when the range or the filter reads
+/// a binding (LOOKUP-22).
 struct Selected {
     members: Vec<usize>,
     representative: Option<usize>,
+    deferred: Option<Option<Value>>,
 }
 
 /// An aggregate node over rows.
@@ -232,6 +235,7 @@ fn current_group<E>(
         let selected = Selected {
             members: std::mem::take(&mut members),
             representative: all.first().copied(),
+            deferred: None,
         };
         let value = reduce_selected(run, cx, bound, &donor, Coordinate::Primary, &selected, row)?;
         members = selected.members;
@@ -339,6 +343,7 @@ fn output<E>(
             let selected = Selected {
                 members,
                 representative: all.first().copied(),
+                deferred: None,
             };
             let value =
                 reduce_selected(run, cx, bound, &donor, Coordinate::Output, &selected, row)?;
@@ -382,7 +387,7 @@ fn aggregate_value<E>(
             Coordinate::Output,
         ),
     };
-    let selected = select(run, cx, expr, bound, donor, coordinate, row)?;
+    let mut selected = select(run, cx, expr, bound, donor, coordinate, row)?;
     if let Some(schema) = bound.derived_schema() {
         let values = derive_records(run, cx, expr, donor, &selected.members, row)?;
         let enriched = Enriched {
@@ -391,6 +396,15 @@ fn aggregate_value<E>(
             values: &values,
             schema,
         };
+        if let Some(range_value) = selected.deferred.take() {
+            let members = narrow(bound, &enriched, coordinate, range_value.as_ref())?;
+            let narrowed = Selected {
+                members,
+                representative: selected.representative,
+                deferred: None,
+            };
+            return reduce_selected(run, cx, bound, &enriched, coordinate, &narrowed, row);
+        }
         return reduce_selected(run, cx, bound, &enriched, coordinate, &selected, row);
     }
     reduce_selected(run, cx, bound, &donor, coordinate, &selected, row)
@@ -438,6 +452,39 @@ fn filter<E>(
     Ok(true)
 }
 
+/// The enriched records whose keys matched that the range, then the filter,
+/// keep, in stored order: both may read a binding (LOOKUP-22). The filter
+/// reads the record's bindings, so its answer is not kept for another row.
+fn narrow<E>(
+    bound: &BoundAggregate,
+    enriched: &Enriched<'_, Table<'_, E>>,
+    coordinate: Coordinate,
+    range_value: Option<&Value>,
+) -> Result<Vec<usize>, Fail<E>> {
+    let mut members = Vec::with_capacity(enriched.members.len());
+    for &source_row in enriched.members {
+        if let Some((range, value)) = bound.range().zip(range_value) {
+            let allowed = range
+                .allows(ValueRef::from(value), |column| {
+                    cell(enriched, bound, coordinate, source_row, column)
+                })
+                .map_err(|failure| match failure {
+                    crate::dataset::RelationRangeFailure::Access(error) => error,
+                    crate::dataset::RelationRangeFailure::Incomparable(types) => Box::new(
+                        ExecutionError::ScalarDiagnostic(types.diagnostic_for(range.path(), None)),
+                    ),
+                })?;
+            if !allowed {
+                continue;
+            }
+        }
+        if filter(Table::Source(enriched), bound, source_row)? {
+            members.push(source_row);
+        }
+    }
+    Ok(members)
+}
+
 /// The records of the current group, of the output rows sharing the row's
 /// group values, or of the donor relation matched on the row's keys.
 fn select<E>(
@@ -461,6 +508,7 @@ fn select<E>(
             Ok(Selected {
                 members,
                 representative: all.first().copied(),
+                deferred: None,
             })
         }
         AggregateRelation::Output { group_by } => {
@@ -512,6 +560,7 @@ fn select<E>(
             Ok(Selected {
                 members,
                 representative: matched.first().copied(),
+                deferred: None,
             })
         }
         AggregateRelation::Matched { keys, .. } => {
@@ -557,8 +606,12 @@ fn select<E>(
                 return Ok(Selected {
                     members: Vec::new(),
                     representative: None,
+                    deferred: None,
                 });
             }
+            // A range or filter that reads a binding narrows the records
+            // whose keys match once the bindings enrich them (LOOKUP-22).
+            let deferred = bound.narrows_on_derivations();
             // The join operator (#2842), as for an implicit join.
             let bucket =
                 super::joins::bucket(run, donor, &probe_keys, &kinds, |source_row, column| {
@@ -567,18 +620,24 @@ fn select<E>(
             let indexed = Probe {
                 keys: &[],
                 kinds: &[],
-                range: probe.range,
+                range: probe.range.filter(|_| !deferred),
             };
+            let keyed = Probe {
+                keys: probe.keys,
+                kinds: probe.kinds,
+                range: None,
+            };
+            let probe = if deferred { &keyed } else { &probe };
             let (rows, probe) = match &bucket {
                 Some(rows) => (super::joins::Rows::Bucket(rows.iter()), &indexed),
-                None => (super::joins::Rows::Scan(0..donor.row_count()), &probe),
+                None => (super::joins::Rows::Scan(0..donor.row_count()), probe),
             };
             let found = candidates(
                 rows,
                 probe,
                 |source_row, column| cell(&donor, bound, coordinate, source_row, column),
                 |source_row, run: &mut Run<'_, '_, E>| {
-                    if bound.filter().is_none() {
+                    if deferred || bound.filter().is_none() {
                         return Ok(true);
                     }
                     // The filter reads only the record: one answer each.
@@ -621,6 +680,7 @@ fn select<E>(
             Ok(Selected {
                 members: found.rows,
                 representative: found.first_key_match,
+                deferred: deferred.then_some(range_value),
             })
         }
     }
