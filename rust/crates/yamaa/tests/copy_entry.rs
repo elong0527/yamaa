@@ -331,6 +331,72 @@ columns:
     }
 }
 
+/// A copied column merges field by field with a column of its name that an
+/// earlier layer declares, as the columns written out do: the fields the
+/// copy does not write, here `verifications` and the submission `comment`
+/// and `method`, are kept (SPEC-9, LAYER-6).
+#[test]
+fn a_copied_column_keeps_the_fields_of_an_earlier_layers_column_it_does_not_write() {
+    let study = study();
+    study.write(
+        "base.yaml",
+        &adae(
+            "  - name: AGE
+    type: int
+    label: Age in Years
+    derivation: AE.AESEQ
+    verifications: [not_missing]
+    submission:
+      length: 3
+      comment: Kept from the base
+      method: Kept from the base
+      origins: [{type: Derived}]
+",
+        )
+        .replace("AESEQ, AGE, SEX, TRTSDT]", "AESEQ, AGE]"),
+    );
+    let child = |columns: &str| {
+        format!("yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ncolumns:\n{columns}")
+    };
+    study.write(
+        "copied.yaml",
+        &child("  - copy: {dataset: ADSL, columns: [AGE]}\n"),
+    );
+    study.write(
+        "written.yaml",
+        &child(
+            "  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL.AGE
+    submission:
+      length: 8
+      display_format: '3.'
+      origins: [{type: Predecessor, description: ADSL.AGE}]
+",
+        ),
+    );
+    let copied = resolved(&study, "copied.yaml");
+    assert_eq!(copied, resolved(&study, "written.yaml"));
+    let age = column(&copied, "AGE");
+    assert_eq!(
+        field(age, "verifications"),
+        field(
+            column(&resolved(&study, "base.yaml"), "AGE"),
+            "verifications"
+        )
+    );
+    let submission = field(age, "submission");
+    assert_eq!(
+        field(field(submission, "comment"), "text"),
+        &text("Kept from the base")
+    );
+    assert_eq!(
+        field(field(submission, "method"), "description"),
+        &text("Kept from the base")
+    );
+}
+
 /// A copied column `output.columns` does not list is internal: it carries
 /// no submission metadata (SUB-1), and another column may read it; without
 /// a model, a published one carries none either.
