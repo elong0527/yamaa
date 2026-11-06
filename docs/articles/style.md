@@ -86,6 +86,8 @@ The findings, in the order the lint lists them:
 | `equality_filter` | A lookup filter comparing a donor field and a row value | no |
 | `partial_restatement` | A layer restating an inherited mapping with entries left out | no |
 | `restated_inherited_value` | A layer value written exactly as it is inherited | no |
+| `unused_declaration` | A declaration the resolved specification prunes | no |
+| `uncalled_function` | A listed function file no specification of the project calls | no |
 
 ## Field order
 
@@ -357,8 +359,9 @@ omitted or `null`), requires no match on itself or on its input, and whose
 same-named value. Its `key` written as that list fails validation as
 `rename_only_intermediate` ([LOOKUP-4](../../rules/lookup.md#lookup-4)), so
 only the mapping that spells the same pairs is a lint finding. An unread
-intermediate is unused, not redundant, and an input without `key` has no
-implicit join to read instead.
+intermediate is unused, not redundant, and is reported as
+`unused_declaration`; an input without `key` has no implicit join to read
+instead.
 
 ```yaml
 input:
@@ -516,6 +519,93 @@ file, so a path restates only the location it inherits
 [SPEC-9](../../rules/specification.md#spec-9)). A file whose layers cannot be
 read, expanded or composed is not read for this finding, and validation
 reports why.
+
+**`unused_declaration`.** The resolved specification keeps only the
+declarations its roots reach: the columns `output.columns`, `keys` and
+`output.order_by` name, the columns dataset verifications read, each column
+and intermediate with its own verification, every row template and `base`
+([LAYER-11](../../rules/inheritance.md#layer-11)). An input, a named
+intermediate, a column or a row template's derivation of a column that no
+root reaches is pruned. It cannot affect the artifact, and a reference inside
+it is never checked ([LAYER-12](../../rules/inheritance.md#layer-12)), so a
+typo in a declaration nothing reads passes validation. Such a declaration is
+reported where the file writes it, and the message names what reads it, each
+of which is pruned too.
+
+```yaml
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+intermediates:
+  - id: WEIGHT
+    dataset: VS
+    key: [STUDYID, USUBJID]
+    filter: "VS.VSTESTCD = 'WEIGHT'"
+
+columns:
+  - name: WEIGHTBL
+    type: float
+    label: Weight (kg) at Baseline
+    derivation: WEIGHT.VSSTRESN
+```
+
+`output.columns` leaves `WEIGHTBL` out and nothing reads it, so
+`columns.WEIGHTBL` is reported, `intermediates.WEIGHT` as read only by
+`columns.WEIGHTBL`, and the input `VS`, when nothing else reads it, as read
+only by `intermediates.WEIGHT`. A row template's derivation of a pruned
+column is reported too. Delete the declaration, or list the column in
+`output.columns`; either may be intended, so `fix` makes neither.
+
+A file reports only what it writes. A template offers more members than any
+one study keeps, and a layer cannot `clear` an inherited member, so a study
+layer drops one by leaving it out of `output.columns`
+([LAYER-9](../../rules/inheritance.md#layer-9)): what a parent or a fragment
+declares and the file does not write is never reported in it. A member the
+file writes into, such as a new label for an inherited column, is reported
+at the member it writes, naming the layer that declares it. A template linted
+on its own reports a member that only the layers inheriting it read, and
+suppresses the finding with its reason. An intermediate without `key` that
+nothing reads survives to reach its refusal
+([LOOKUP-3](../../rules/lookup.md#lookup-3)), so neither it nor an input only
+it reads is reported. An expression that cannot be compiled reads nothing,
+so a declaration only such an expression names is reported as unread until
+the expression is fixed. The specification is resolved as the engine
+prepares it, through the same resolver, each `copy` entry expanded from its
+producer, so a copied column is reported at the name its entry lists. A
+fragment composes on whatever includes it and is not read for this finding,
+and neither is a file whose specification does not resolve: validation
+reports why.
+
+**`uncalled_function`.** Every function file a project lists in `functions`
+is read and admitted on each check and run
+([FUNC-2](../../rules/profiles/functions.md#func-2)), but only the test cases
+of a function a specification calls are run
+([FUNC-12](../../rules/profiles/functions.md#func-12)), so a listed function
+no specification calls goes stale without a word. The listing is reported at
+its entry in `functions`, naming the function and its file.
+
+```yaml
+yamaa: "1.0"
+type: project
+functions: [functions/bmi.yaml, functions/bsa.yaml]
+
+adam:
+  specs: [adam/advs.yaml]
+```
+
+When `adam/advs.yaml` calls only `bmi`, `functions[1]` is reported. A call
+counts once its specification is resolved: a call in a pruned declaration
+binds nothing, so it calls nothing. Every section's specifications count.
+`functions` replaces whole across project files
+([PROJECT-16](../../rules/profiles/project.md#project-16)), so only the file
+that writes it is read, and only when the project it composes lists a
+specification: a shared parent project that lists functions and no
+specifications is never reported, and one that lists both suppresses the
+finding with its reason. A project whose function files or listed
+specifications cannot be read or resolved is not read for this finding, and
+validation reports why. Either remedy, dropping the listing or adding the
+call, may be intended, so `fix` makes neither.
 
 ## Fixes
 

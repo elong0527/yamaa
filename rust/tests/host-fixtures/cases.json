@@ -6445,8 +6445,8 @@
       "result": {
         "members": ["status", "findings", "paths"],
         "r_class": "yamaa_lint_result",
-        "before": {"status": "failed", "summary": "5 lint findings in 1 of 1 file", "rewritten": false},
-        "fixed": {"status": "failed", "summary": "2 lint findings in 1 of 1 file; fixed 1 file", "rewritten": true},
+        "before": {"status": "failed", "summary": "6 lint findings in 1 of 1 file", "rewritten": false},
+        "fixed": {"status": "failed", "summary": "3 lint findings in 1 of 1 file; fixed 1 file", "rewritten": true},
         "clean": {"status": "succeeded", "summary": "0 lint findings in 0 of 1 file", "rewritten": false}
       },
       "columns": [
@@ -6498,6 +6498,13 @@
           "finding": "entry_spacing",
           "spec_path": "columns.SEX",
           "message": "leave one blank line between `columns` entries"
+        },
+        {
+          "line": "22",
+          "column": "5",
+          "finding": "unused_declaration",
+          "spec_path": "columns.SEX",
+          "message": "`columns.SEX` is pruned: it is not in `output.columns` and nothing reads it"
         }
       ],
       "fixed_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID, AGE]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  # yamaa-lint: allow line_width -- the description is quoted verbatim\n  - name: AGE\n    type: int\n    derivation: DM.AGE\n    metadata: {description: \"Age in completed years at informed consent, as recorded\"}\n\n  # yamaa-lint: allow line_width\n  - name: SEX\n    type: str\n    label: Sex\n    derivation: DM.SEX\n",
@@ -6515,6 +6522,13 @@
           "finding": "invalid_suppression",
           "spec_path": "$",
           "message": "name the findings and give a reason after `--`"
+        },
+        {
+          "line": "25",
+          "column": "5",
+          "finding": "unused_declaration",
+          "spec_path": "columns.SEX",
+          "message": "`columns.SEX` is pruned: it is not in `output.columns` and nothing reads it"
         }
       ],
       "refusals": [
@@ -6596,6 +6610,61 @@
             "finding": "restated_inherited_value",
             "spec_path": "columns.AGE.label",
             "message": "`columns.AGE.label` writes the value it inherits from adtte_v1.yaml; remove it to keep inheriting"
+          }
+        ]
+      },
+      "unused_declaration": {
+        "files": {
+          "adsl-template.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: {path: ../data/dm.csv, types: {AGE: int}}\n  VS: {path: ../data/vs.csv, types: {VSSTRESN: float}}\n  EX: {path: ../data/ex.csv, types: {EXSEQ: int}}\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, AGE, TRTSDT, WEIGHTBL]\n\nintermediates:\n  - id: FIRSTEX\n    dataset: EX\n    key: [STUDYID, USUBJID]\n    order_by: [EX.EXSEQ]\n    keep: first\n\n  - id: WEIGHT\n    dataset: VS\n    key: [STUDYID, USUBJID]\n    filter: \"VS.VSTESTCD = 'WEIGHT'\"\n\ncolumns:\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n  - {name: TRTSDT, type: str, label: First Exposure, derivation: FIRSTEX.EXSTDTC}\n  - {name: WEIGHTBL, type: float, label: Weight (kg) at Baseline, derivation: WEIGHT.VSSTRESN}\n\nrows:\n  - id: subjects\n    dataset: DM\n",
+          "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adsl-template.yaml\ninput:\n  SC: ../data/sc.csv\n\noutput:\n  columns: [STUDYID, USUBJID, AGE, TRTSDT]\n\nintermediates:\n  - id: HANDED\n    dataset: SC\n    key: [STUDYID, USUBJID]\n    filter: \"SC.SCTESTCD = 'HANDDOM'\"\n\ncolumns:\n  - name: WEIGHTBL\n    label: Baseline Weight (kg)\n\n  - name: HANDDOM\n    type: str\n    label: Dominant Hand\n    derivation: HANDED.SCSTRESC\n"
+        },
+        "file_name": "adsl.yaml",
+        "rows": [
+          {
+            "line": "5",
+            "column": "3",
+            "finding": "unused_declaration",
+            "spec_path": "input.SC",
+            "message": "`input.SC` is pruned: only `intermediates.HANDED` reads it, which is pruned"
+          },
+          {
+            "line": "11",
+            "column": "5",
+            "finding": "unused_declaration",
+            "spec_path": "intermediates.HANDED",
+            "message": "`intermediates.HANDED` is pruned: only `columns.HANDDOM` reads it, which is pruned"
+          },
+          {
+            "line": "17",
+            "column": "5",
+            "finding": "unused_declaration",
+            "spec_path": "columns.WEIGHTBL",
+            "message": "`columns.WEIGHTBL` is pruned: it is not in `output.columns` and nothing reads it; adsl-template.yaml declares it, and this layer writes `columns.WEIGHTBL.label`"
+          },
+          {
+            "line": "20",
+            "column": "5",
+            "finding": "unused_declaration",
+            "spec_path": "columns.HANDDOM",
+            "message": "`columns.HANDDOM` is pruned: it is not in `output.columns` and nothing reads it"
+          }
+        ]
+      },
+      "uncalled_function": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions: [echo.yaml, shout.yaml]\n\nadam:\n  specs: [spec.yaml]\n",
+          "echo.yaml": "yamaa: \"1.0\"\ntype: function\nname: echo\ndescription: The value itself.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.echo}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: a}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+          "shout.yaml": "yamaa: \"1.0\"\ntype: function\nname: shout\ndescription: The value itself.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.shout}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: a}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADTOY\nkeys: [USUBJID]\ninput:\n  DM: dm.csv\n\noutput:\n  path: out.csv\n  columns: [USUBJID, ECHOED]\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n\n  - name: ECHOED\n    type: str\n    label: Echoed\n    derivation:\n      function: {name: echo, args: {x: DM.USUBJID}}\n"
+        },
+        "file_name": "project.yaml",
+        "rows": [
+          {
+            "line": "3",
+            "column": "24",
+            "finding": "uncalled_function",
+            "spec_path": "functions[1]",
+            "message": "`functions[1]` lists `shout` (shout.yaml), which no specification of the project calls"
           }
         ]
       }

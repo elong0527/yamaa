@@ -21,11 +21,13 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # yamaa-lint: allow unused_declaration -- only the faulty template reads it
   - name: SITEID
     type: str
     label: Study Site Identifier
     derivation: DM.SITEID
 
+  # yamaa-lint: allow unused_declaration -- only the faulty template reads it
   - name: SUBJID
     type: str
     label: Subject Identifier for the Study

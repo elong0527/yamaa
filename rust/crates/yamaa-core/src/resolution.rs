@@ -20,7 +20,7 @@ use crate::expression::{CompileError, Context};
 use crate::schema::{
     Document, DocumentError, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaSource,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 mod recurrence;
 
@@ -63,15 +63,67 @@ pub enum Error {
     Invalid(Vec<Issue>),
 }
 
+/// A declaration that pruning keeps or removes, named by identity.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Declaration {
+    Input(String),
+    Intermediate(String),
+    Column(String),
+    /// A row template's own derivation of a column: the template's `id` and
+    /// the column's name.
+    RowDerivation {
+        template: String,
+        column: String,
+    },
+}
+
+impl Declaration {
+    /// The declaration's spec path (P-CLR-1), such as `input.VS`,
+    /// `intermediates.FIRSTEX`, `columns.WEIGHTBL` or
+    /// `rows.subjects.derivations.WEIGHTBL`.
+    pub fn spec_path(&self) -> String {
+        use crate::schema::join_spec_path as join;
+        match self {
+            Self::Input(name) => join("input", name),
+            Self::Intermediate(id) => join("intermediates", id),
+            Self::Column(name) => join("columns", name),
+            Self::RowDerivation { template, column } => {
+                join(&join(&join("rows", template), "derivations"), column)
+            }
+        }
+    }
+}
+
+/// A declaration pruning removed (LAYER-11).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrunedDeclaration {
+    pub declaration: Declaration,
+    /// The node of the pruned document that holds it: an input's value, a
+    /// member of `intermediates` or `columns`, or a row derivation's value.
+    pub node: usize,
+    /// The declarations whose reads name it, itself among them when it reads
+    /// itself, intermediates first, each in declaration order. Each is pruned
+    /// too, or is an intermediate that survives only to reach its refusal
+    /// (LOOKUP-3), whose reads no root follows. A row template's derivation
+    /// of a column reads as that column.
+    pub readers: Vec<Declaration>,
+}
+
+/// What pruning keeps and what it removes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Pruning {
+    /// The declarations kept, the surviving columns in their order, with
+    /// each node's origin in the document pruned.
+    pub document: NormalizedDocument,
+    /// The declarations removed, in the document's order.
+    pub pruned: Vec<PrunedDeclaration>,
+}
+
 /// Keep the declarations of `document`, which `spec` lowers
 /// ([`crate::front_end::v1::spec`]), reachable from the semantic roots
 /// (LAYER-11), with the surviving columns in `order`, and each node's origin
-/// in `document`.
-pub fn prune_lowered(
-    document: &Document,
-    spec: &Spec,
-    order: Order,
-) -> Result<NormalizedDocument, Error> {
+/// in `document`; and name the declarations removed, with what reads each.
+pub fn prune_lowered(document: &Document, spec: &Spec, order: Order) -> Result<Pruning, Error> {
     let mut live = Live::new(spec);
     live.roots()?;
     live.reach()?;
@@ -79,7 +131,26 @@ pub fn prune_lowered(
         Order::Declared => live.selected(),
         Order::Dependencies => live.order()?,
     };
-    Rebuild::new(document, &live, columns).run()
+    let mut readers = BTreeMap::<Declaration, Vec<Declaration>>::new();
+    for (reader, reads) in live.readers() {
+        for read in reads.into_iter().collect::<BTreeSet<_>>() {
+            readers.entry(read).or_default().push(reader.clone());
+        }
+    }
+    let rebuild = Rebuild::new(document, &live, columns);
+    let pruned = rebuild
+        .pruned()
+        .into_iter()
+        .map(|(declaration, node)| PrunedDeclaration {
+            readers: readers.get(&declaration).cloned().unwrap_or_default(),
+            declaration,
+            node,
+        })
+        .collect();
+    Ok(Pruning {
+        document: rebuild.run()?,
+        pruned,
+    })
 }
 
 /// How a name is written where it is read.
@@ -383,26 +454,45 @@ impl<'a> Live<'a> {
             .rposition(|item| item.id.name == name)
     }
 
-    /// Make what one reading names live: a column, or the input and the
-    /// lookup a qualifier names (both, so that naming validation reports a
+    /// What one reading names: a column, or the input and the lookup a
+    /// qualifier names (both, so that naming validation reports a
     /// collision), or an ODM item's input.
-    fn mark(&mut self, reading: &Reading) -> bool {
+    fn named(&self, reading: &Reading, out: &mut Vec<Declaration>) {
         let qualifier = reading.name.split_once('.').map(|(owner, _)| owner);
         match (reading.kind, qualifier) {
-            (Kind::Item, Some(dataset)) => self.inputs.insert(dataset.into()),
-            (Kind::Item, None) => false,
-            (_, None) => self.columns.insert(reading.name.clone()),
+            (Kind::Item, Some(dataset)) => out.push(Declaration::Input(dataset.into())),
+            (Kind::Item, None) => {}
+            (_, None) => out.push(Declaration::Column(reading.name.clone())),
             (_, Some(owner)) => {
-                let mut changed = false;
                 if self.declares_input(owner) {
-                    changed |= self.inputs.insert(owner.into());
+                    out.push(Declaration::Input(owner.into()));
                 }
                 if self.intermediate(owner).is_some() {
-                    changed |= self.intermediates.insert(owner.into());
+                    out.push(Declaration::Intermediate(owner.into()));
                 }
-                changed
             }
         }
+    }
+
+    /// Make `declaration` live; whether it was not.
+    fn insert(&mut self, declaration: Declaration) -> bool {
+        match declaration {
+            Declaration::Input(name) => self.inputs.insert(name),
+            Declaration::Intermediate(id) => self.intermediates.insert(id),
+            Declaration::Column(name) => self.columns.insert(name),
+            Declaration::RowDerivation { .. } => false,
+        }
+    }
+
+    /// Make what one reading names live.
+    fn mark(&mut self, reading: &Reading) -> bool {
+        let mut named = Vec::new();
+        self.named(reading, &mut named);
+        let mut changed = false;
+        for declaration in named {
+            changed |= self.insert(declaration);
+        }
+        changed
     }
 
     fn mark_all(&mut self, readings: &[Reading]) -> bool {
@@ -555,33 +645,104 @@ impl<'a> Live<'a> {
                     continue;
                 }
                 intermediates[index] = true;
-                if !item.dataset.name.is_empty() {
-                    self.inputs.insert(item.dataset.name.clone());
+                let mut reads = Vec::new();
+                self.intermediate_reads(index, &mut reads)?;
+                for declaration in reads {
+                    changed |= self.insert(declaration);
                 }
-                // A live intermediate keeps the intermediates whose records it
-                // reads: a pair relation its sides, and an intermediate over a
-                // pair relation that relation (LOOKUP-27).
-                for relation in std::iter::once(&item.dataset).chain(&item.inner_join) {
-                    if self.intermediate(&relation.name).is_some() {
-                        changed |= self.intermediates.insert(relation.name.clone());
-                    } else if !relation.name.is_empty() {
-                        self.inputs.insert(relation.name.clone());
-                    }
-                }
-                let mut readings = Vec::new();
-                self.matching(index, &mut readings)?;
-                for binding in &item.bindings {
-                    self.read(binding.derivation.expr, Scope::Donor(index), &mut readings)?;
-                }
-                for check in &item.checks {
-                    readings.extend(check.columns.iter().map(Reading::variable));
-                }
-                changed |= self.mark_all(&readings);
             }
             if !changed {
                 return Ok(());
             }
         }
+    }
+
+    /// What the intermediate numbered `index` reads once live: its input,
+    /// the intermediates whose records it reads, a pair relation its sides
+    /// and an intermediate over a pair relation that relation (LOOKUP-27),
+    /// and what its matching, its bindings and its verified columns name.
+    fn intermediate_reads(&self, index: usize, out: &mut Vec<Declaration>) -> Result<(), Error> {
+        let item = &self.spec.intermediates[index];
+        if !item.dataset.name.is_empty() {
+            out.push(Declaration::Input(item.dataset.name.clone()));
+        }
+        for relation in std::iter::once(&item.dataset).chain(&item.inner_join) {
+            if self.intermediate(&relation.name).is_some() {
+                out.push(Declaration::Intermediate(relation.name.clone()));
+            } else if !relation.name.is_empty() {
+                out.push(Declaration::Input(relation.name.clone()));
+            }
+        }
+        let mut readings = Vec::new();
+        self.matching(index, &mut readings)?;
+        for binding in &item.bindings {
+            self.read(binding.derivation.expr, Scope::Donor(index), &mut readings)?;
+        }
+        for check in &item.checks {
+            readings.extend(check.columns.iter().map(Reading::variable));
+        }
+        for reading in &readings {
+            self.named(reading, out);
+        }
+        Ok(())
+    }
+
+    /// Every intermediate and column that is not live with what its reads
+    /// name, as [`Live::reach`] would follow them: intermediates first, then
+    /// columns, each in declaration order. A live declaration's reads are
+    /// all live, so only these read what pruning removes. A row template's
+    /// own derivation of a column reads as that column. A text that exceeds
+    /// a parser resource reads nothing here: only a live one refuses.
+    fn readers(&self) -> Vec<(Declaration, Vec<Declaration>)> {
+        let spec = self.spec;
+        let mut edges = Vec::new();
+        for (index, item) in spec.intermediates.iter().enumerate() {
+            if self.intermediates.contains(&item.id.name) {
+                continue;
+            }
+            let mut reads = Vec::new();
+            if self.intermediate_reads(index, &mut reads).is_err() {
+                reads.clear();
+            }
+            edges.push((Declaration::Intermediate(item.id.name.clone()), reads));
+        }
+        let mut columns: Vec<(&str, Vec<Reading>)> = Vec::new();
+        let mut index = BTreeMap::new();
+        let mut read = |name: &'a str, root: ExprId, driver: Option<&str>| {
+            if self.columns.contains(name) {
+                return;
+            }
+            let at = *index.entry(name).or_insert_with(|| {
+                columns.push((name, Vec::new()));
+                columns.len() - 1
+            });
+            let mut readings = Vec::new();
+            if self
+                .read_driven(root, Scope::Row, driver, &mut readings)
+                .is_ok()
+            {
+                columns[at].1.extend(readings);
+            }
+        };
+        for column in &spec.columns {
+            if let Some(derivation) = &column.derivation {
+                read(&column.name.name, derivation.expr, self.driver);
+            }
+        }
+        for row in &spec.rows.templates {
+            let driver = template_driver(row, self.base);
+            for (name, derivation) in &row.overrides {
+                read(&name.name, derivation.expr, driver);
+            }
+        }
+        for (name, readings) in columns {
+            let mut reads = Vec::new();
+            for reading in &readings {
+                self.named(reading, &mut reads);
+            }
+            edges.push((Declaration::Column(name.into()), reads));
+        }
+        edges
     }
 
     /// Whether the intermediate `id` survives pruning: it is live, or it
@@ -811,6 +972,96 @@ impl<'a> Rebuild<'a> {
         }
     }
 
+    /// The text of the field `name` of the member `node`.
+    fn identity(&self, node: usize, name: &str) -> Option<&'a str> {
+        self.input.field(node, name).and_then(|id| self.text(id))
+    }
+
+    /// Whether the member `item` of `intermediates` survives.
+    fn keeps_intermediate(&self, item: usize) -> bool {
+        self.identity(item, "id")
+            .is_some_and(|id| self.live.survives(id))
+    }
+
+    /// Whether the entry of `input` or of a row template's `derivations`
+    /// whose key is `key` survives: `live` holds its name.
+    fn keeps_entry(&self, live: &BTreeSet<String>, key: usize) -> bool {
+        self.text(key).is_some_and(|name| live.contains(name))
+    }
+
+    /// The declarations [`Rebuild::copy`] leaves out that a name identifies,
+    /// each with the node that holds it, in the document's order.
+    fn pruned(&self) -> Vec<(Declaration, usize)> {
+        let input = self.input;
+        let entries = |node: usize| match &input.nodes()[node] {
+            N::Mapping(entries) => entries.as_slice(),
+            _ => &[],
+        };
+        let items = |node: usize| match &input.nodes()[node] {
+            N::Sequence(items) => items.as_slice(),
+            _ => &[],
+        };
+        let mut pruned = Vec::new();
+        for &(key, value) in entries(input.root()) {
+            match self.text(key) {
+                Some("input") if Some(value) == self.inputs => {
+                    for &(name, member) in entries(value) {
+                        if let Some(text) = self.text(name) {
+                            if !self.keeps_entry(&self.live.inputs, name) {
+                                pruned.push((Declaration::Input(text.into()), member));
+                            }
+                        }
+                    }
+                }
+                Some("intermediates") if Some(value) == self.intermediates => {
+                    for &item in items(value) {
+                        if let Some(id) = self.identity(item, "id") {
+                            if !self.keeps_intermediate(item) {
+                                pruned.push((Declaration::Intermediate(id.into()), item));
+                            }
+                        }
+                    }
+                }
+                Some("columns") if Some(value) == self.columns => {
+                    for &item in items(value) {
+                        if let Some(name) = self.identity(item, "name") {
+                            if !self.order.contains(&item) {
+                                pruned.push((Declaration::Column(name.into()), item));
+                            }
+                        }
+                    }
+                }
+                Some("rows") => {
+                    for &row in items(value) {
+                        let (Some(template), Some(derivations)) =
+                            (self.identity(row, "id"), input.field(row, "derivations"))
+                        else {
+                            continue;
+                        };
+                        if !self.derivations.contains(&derivations) {
+                            continue;
+                        }
+                        for &(column, derivation) in entries(derivations) {
+                            if let Some(text) = self.text(column) {
+                                if !self.keeps_entry(&self.live.columns, column) {
+                                    pruned.push((
+                                        Declaration::RowDerivation {
+                                            template: template.into(),
+                                            column: text.into(),
+                                        },
+                                        derivation,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        pruned
+    }
+
     fn copy(&mut self, node: usize) -> usize {
         let input = self.input;
         let copied = match &input.nodes()[node] {
@@ -821,11 +1072,8 @@ impl<'a> Rebuild<'a> {
             N::Sequence(items) => {
                 let mut copied = Vec::with_capacity(items.len());
                 for &item in items {
-                    if Some(node) == self.intermediates {
-                        let id = input.field(item, "id").and_then(|id| self.text(id));
-                        if !id.is_some_and(|id| self.live.survives(id)) {
-                            continue;
-                        }
+                    if Some(node) == self.intermediates && !self.keeps_intermediate(item) {
+                        continue;
                     }
                     copied.push(self.copy(item));
                 }
@@ -846,15 +1094,10 @@ impl<'a> Rebuild<'a> {
                     {
                         continue;
                     }
-                    if derivations || Some(node) == self.inputs {
-                        let live = if derivations {
-                            &self.live.columns
-                        } else {
-                            &self.live.inputs
-                        };
-                        if !self.text(key).is_some_and(|name| live.contains(name)) {
-                            continue;
-                        }
+                    if derivations && !self.keeps_entry(&self.live.columns, key)
+                        || Some(node) == self.inputs && !self.keeps_entry(&self.live.inputs, key)
+                    {
+                        continue;
                     }
                     copied.push((self.copy(key), self.copy(value)));
                 }

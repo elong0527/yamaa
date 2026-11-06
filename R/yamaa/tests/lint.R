@@ -1,6 +1,7 @@
 # Installed yamaa_lint: the P-LINT-2 table, fixes, a partial restatement of an
 # inherited mapping and values restated as they are inherited, which read the
-# parent layer, and refusals. The lint's
+# parent layer, a layer's pruned declarations and a project's uncalled
+# function, which resolve what a file names, and refusals. The lint's
 # complete suite is native (the adapters' and the facade's lint tests); Python
 # reads the same truth.
 library(yamaa)
@@ -77,10 +78,13 @@ expect_identical(read_text(path), truth[["fixed_yaml"]], "fix writes the proved 
 check_table(yamaa_lint(path), truth[["fixed_rows"]], "lint after fix")
 cat("fix rewrites the file and lists what remains\n")
 
-# A layer that restates its parent's row template without one derivation, and
-# one that writes values as it inherits them: the findings read the parent,
-# and fix leaves the file as written.
-for (key in c("partial_restatement", "restated_inherited_value")) {
+# A layer that restates its parent's row template without one derivation, one
+# that writes values as it inherits them, one that writes declarations its
+# resolved specification prunes, and a project that lists a function its
+# specification does not call: the findings read the files the linted file
+# names, and fix leaves the file as written.
+layered <- c("partial_restatement", "restated_inherited_value", "unused_declaration", "uncalled_function")
+for (key in layered) {
   restatement <- truth[[key]]
   for (name in names(restatement[["files"]])) write_text(file.path(work, name), restatement[["files"]][[name]])
   child <- file.path(work, restatement[["file_name"]])

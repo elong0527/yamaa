@@ -463,7 +463,7 @@ fn pruning_keeps_the_columns_of_a_declared_key() {
         let pruned =
             crate::resolution::prune_lowered(&document, &spec, crate::resolution::Order::Declared)
                 .unwrap();
-        crate::front_end::v1::spec::lower(&pruned.document, None)
+        crate::front_end::v1::spec::lower(&pruned.document.document, None)
             .into_spec()
             .columns
             .iter()
@@ -564,7 +564,7 @@ fn ordering_reads_a_row_template_s_own_driver_without_a_join() {
     let ordered =
         crate::resolution::prune_lowered(&document, &spec, crate::resolution::Order::Dependencies)
             .unwrap();
-    let columns = crate::front_end::v1::spec::lower(&ordered.document, None)
+    let columns = crate::front_end::v1::spec::lower(&ordered.document.document, None)
         .into_spec()
         .columns
         .iter()
