@@ -121,6 +121,8 @@ values:
       - equality_filter
       - partial_restatement
       - restated_inherited_value
+      - unused_declaration
+      - uncalled_function
   # The file types a yamaa file declares in `type` (SCHEMA-2), as schema()
   # takes them (D149).
   file_type:

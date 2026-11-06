@@ -26,6 +26,7 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
+  # yamaa-lint: allow unused_declaration -- the fault reads UNKNOWNDT for it
   - name: ASTDT
     type: date
     label: Analysis Start Date

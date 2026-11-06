@@ -23,6 +23,7 @@ mod language_header;
 mod lint;
 mod lint_inheritance;
 mod lint_restated;
+mod lint_unused;
 mod memory;
 mod memory_inputs;
 mod memory_route;

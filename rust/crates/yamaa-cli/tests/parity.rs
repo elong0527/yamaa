@@ -804,10 +804,12 @@ fn a_failed_run_saves_the_report_bytes_both_hosts_save() {
 }
 
 /// The `lint` family's layer cases: a layer that restates its parent's row
-/// template without one derivation, and one that writes values exactly as
-/// it inherits them, a copied column's label among them, print the rows
-/// both hosts return, all six lint columns, and `--fix` writes nothing and
-/// leaves the rows, since either meaning may be the author's.
+/// template without one derivation, one that writes values exactly as it
+/// inherits them, a copied column's label among them, one that writes
+/// declarations its resolved specification prunes, and a project that lists
+/// a function its specification does not call, print the rows both hosts
+/// return, all six lint columns, and `--fix` writes nothing and leaves the
+/// rows, since either meaning may be the author's.
 #[test]
 fn a_layer_prints_the_lint_rows_both_hosts_return() {
     let lint = family("lint");
@@ -815,7 +817,12 @@ fn a_layer_prints_the_lint_rows_both_hosts_return() {
     let integers = names(lint, "integer_columns");
     let mut keys = columns.clone();
     keys.sort_unstable();
-    for name in ["partial_restatement", "restated_inherited_value"] {
+    for name in [
+        "partial_restatement",
+        "restated_inherited_value",
+        "unused_declaration",
+        "uncalled_function",
+    ] {
         let case = &lint[name];
         let directory = Scratch::new("parity");
         for (file, contents) in case["files"].as_object().unwrap() {

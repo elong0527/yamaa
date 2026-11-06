@@ -45,7 +45,7 @@ pub use normalization::{
 pub use path_render::{
     quoted_diagnostic_text, scalar_diagnostic_label, DIAGNOSTIC_UNICODE_VERSION,
 };
-pub(crate) use spec_path::{read_step, SpecPath};
+pub(crate) use spec_path::{join as join_spec_path, read_step, SpecPath};
 pub use type_expression::{TypeError, TypeExpression, TypeNode, TypeResource};
 pub use validation::{
     DefaultDiagnostics, SchemaContext, SchemaDiagnostic, SiteRole, ValidationError, WrittenSite,

@@ -120,6 +120,89 @@ pub struct ResolvedVersioned {
     /// The layer, numbered in contribution order, that contributed each
     /// written path, keyed members named by identity (P-CLR-2).
     pub provenance: Vec<LayerProvenance>,
+    /// The declarations of the composition that no root reaches, which the
+    /// resolved specification no longer holds (LAYER-11), in the
+    /// composition's order.
+    pub pruned: Vec<PrunedVersioned>,
+}
+
+/// A declaration pruning removed from a composed 1.x chain (LAYER-11), with
+/// the declarations that read it and where its layers wrote it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrunedVersioned {
+    pub declaration: resolution::Declaration,
+    /// The declarations whose reads name it ([`resolution::PrunedDeclaration`]).
+    pub readers: Vec<resolution::Declaration>,
+    /// The declaration's spec path with the occurrence that declares it,
+    /// then each value inside it that a layer other than the one writing the
+    /// value holding it wrote, at its spec path, in the composition's order.
+    /// The identity a member is matched by is not a value it writes.
+    pub writes: Vec<(String, LayerNodeOrigin)>,
+}
+
+/// The writes of `declaration` at `node` of `document`
+/// ([`PrunedVersioned::writes`]), given each node's origin and whether it is
+/// a key that shorthand expansion wrote, which a path names a value through
+/// without spelling (P-CLR-2).
+fn writes(
+    document: &Document,
+    node: usize,
+    declaration: &resolution::Declaration,
+    origins: &[LayerNodeOrigin],
+    shorthand: &[bool],
+) -> Vec<(String, LayerNodeOrigin)> {
+    fn within(
+        document: &Document,
+        node: usize,
+        path: &str,
+        layer: Option<usize>,
+        known: (&[LayerNodeOrigin], &[bool], Option<&str>),
+        out: &mut Vec<(String, LayerNodeOrigin)>,
+    ) {
+        let (origins, shorthand, identity) = known;
+        let N::Mapping(entries) = &document.nodes()[node] else {
+            return;
+        };
+        for &(key, value) in entries {
+            let path = match &document.nodes()[key] {
+                _ if shorthand[key] => path.to_owned(),
+                N::Text(name) if Some(name.as_str()) == identity => continue,
+                N::Text(name) => crate::schema::join_spec_path(path, name),
+                _ => continue,
+            };
+            let origin = origins[value];
+            let mut holder = layer;
+            if origin.layer.is_some() && origin.layer != layer {
+                out.push((path.clone(), origin));
+                holder = origin.layer;
+            }
+            within(
+                document,
+                value,
+                &path,
+                holder,
+                (origins, shorthand, None),
+                out,
+            );
+        }
+    }
+    let identity = match declaration {
+        resolution::Declaration::Intermediate(_) => Some("id"),
+        resolution::Declaration::Column(_) => Some("name"),
+        _ => None,
+    };
+    let path = declaration.spec_path();
+    let origin = origins[node];
+    let mut out = vec![(path.clone(), origin)];
+    within(
+        document,
+        node,
+        &path,
+        origin.layer,
+        (origins, shorthand, identity),
+        &mut out,
+    );
+    out
 }
 
 /// Why a 1.x chain does not resolve.
@@ -385,8 +468,25 @@ pub fn prepare_versioned<R: Resolver>(
         Order::Declared
     };
     let lowered = crate::front_end::v1::spec::lower(&expanded.document, None);
-    let pruned = resolution::prune_lowered(&expanded.document, lowered.spec(), order)
+    let resolution::Pruning {
+        document: pruned,
+        pruned: removed,
+    } = resolution::prune_lowered(&expanded.document, lowered.spec(), order)
         .map_err(|error| VersionedError::Prune(Box::new(error)))?;
+    let removed = removed
+        .into_iter()
+        .map(|declared| PrunedVersioned {
+            writes: writes(
+                &expanded.document,
+                declared.node,
+                &declared.declaration,
+                &expanded_origins,
+                &expanded_shorthand,
+            ),
+            declaration: declared.declaration,
+            readers: declared.readers,
+        })
+        .collect();
     let pruned_origins = pruned
         .origins
         .iter()
@@ -429,6 +529,7 @@ pub fn prepare_versioned<R: Resolver>(
             .collect(),
         document: strict.document,
         provenance: composed.provenance,
+        pruned: removed,
     })
 }
 

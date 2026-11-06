@@ -1,6 +1,7 @@
 """Installed yamaa.lint: the P-LINT-2 table, fixes, a partial restatement of
 an inherited mapping and values restated as they are inherited, which read
-the parent layer, and refusals.
+the parent layer, a layer's pruned declarations and a project's uncalled
+function, which resolve what a file names, and refusals.
 
 The lint's complete suite is native (the adapters' lint tests); this checks
 what the installed host returns for the shared truth, which R reads too.
@@ -98,7 +99,12 @@ class Lint(unittest.TestCase):
         self.check_table(yamaa.lint(self.path), TRUTH["fixed_rows"])
 
     def test_a_layer_is_compared_with_its_parent_and_fix_leaves_it(self):
-        for key in ("partial_restatement", "restated_inherited_value"):
+        for key in (
+            "partial_restatement",
+            "restated_inherited_value",
+            "unused_declaration",
+            "uncalled_function",
+        ):
             case = TRUTH[key]
             for name, text in case["files"].items():
                 (self.root / name).write_bytes(text.encode("utf-8"))

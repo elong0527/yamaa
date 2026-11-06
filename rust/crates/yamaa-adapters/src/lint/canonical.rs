@@ -49,7 +49,7 @@ const HANDLERS: [(&str, &str); 14] = [
 
 /// The language version and file type a 1.x document declares, when the
 /// engine reads them.
-fn header(values: &Values) -> Option<(LanguageVersion, FileType)> {
+pub(super) fn header(values: &Values) -> Option<(LanguageVersion, FileType)> {
     let root = values.root();
     let text = |name| match &values.nodes()[values.field(root, name)?] {
         N::Text(text) => Some(text.as_str()),

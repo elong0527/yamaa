@@ -666,6 +666,28 @@ pub(crate) fn contributed_layers<P: Resolver>(
     .ok()
 }
 
+/// The resolved specification of `chain`, read through `port` as
+/// preparation resolves it ([`lifecycle::prepare_versioned`]), with the
+/// declarations pruning removed. None when it does not resolve: preparation
+/// then reports why.
+#[cfg(feature = "yaml")]
+pub(crate) fn resolved_chain<P: Resolver>(
+    schema: &yamaa_core::schema::SchemaStructure,
+    chain: &VersionedChain,
+    port: &mut P,
+) -> Option<ResolvedVersioned> {
+    let resolving = [chain.layers.last()?.source.identity.clone()];
+    lifecycle::prepare_versioned(
+        schema,
+        chain,
+        port,
+        |port, declaring, written, dataset, layers| {
+            read_producer(port, &resolving, declaring, written, dataset, layers).ok()
+        },
+    )
+    .ok()
+}
+
 /// Where `layer` was decoded: `raw`, the entry read as `source`, or the
 /// parent or fragment of `parents` read under its identity.
 fn layer_locations<'a>(
