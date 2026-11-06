@@ -615,6 +615,12 @@
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A"]}, "derivations": {"X": {"type": "int", "derivation": "SRC.ID"}}}]}]},
       "among": true,
       "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.pivot", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "pivot"}}]
+    },
+    {
+      "case": "a_pivot_beside_nearest_still_refuses_require_match",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "require_match": true, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "pivot": {"name": "N", "value": "V", "fields": ["A"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "require_match"}}]
     }
   ]
 }

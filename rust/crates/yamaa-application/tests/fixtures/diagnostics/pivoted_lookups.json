@@ -1,5 +1,5 @@
 {
-  "about": "A named intermediate that writes pivot exposes each listed value of one donor field as a field of its selection (LOOKUP-28, #4310). Match and narrow run as for any lookup; each listed name then selects among the candidates whose name equals it, by order_by and keep or nearest, and answers absence on its own, counted under the read's absent and multiple_matches handlers (LOOKUP-24, LOOKUP-14). Two candidates of one name with no selection fail as multiple_matches naming the field (LOOKUP-10), and a candidate whose name is not listed, a missing name included, fails the read as unlisted_pivot_name, unless the filter removes it. A pivot declares none on a row driver (ROW-2), and a pivoted plain lookup copies a Predecessor whose description names the value field with a where clause, the pivot standing as the condition (SUB-19, SUB-20). Every value is authored from those rules: A's second event has no site, B's first event has no cause, and A's weight on day 8 is the last of two and the one nearest a reference two days from it.",
+  "about": "A named intermediate that writes pivot exposes each listed value of one donor field as a field of its selection (LOOKUP-28, #4310). Match and narrow run as for any lookup; each listed name then selects among the candidates whose name equals it, by order_by and keep or nearest, and answers absence on its own, counted under the read's absent and multiple_matches handlers (LOOKUP-24, LOOKUP-14). Two candidates of one name with no selection fail as multiple_matches naming the field (LOOKUP-10), and a candidate whose name is not listed, a missing name included, fails the read as unlisted_pivot_name, unless the filter removes it. A pivot declares none on a row driver (ROW-2), and a pivoted plain lookup copies a Predecessor whose description names the value field with a where clause, the pivot standing as the condition (SUB-19, SUB-20). A pivot name whose stored type an input's schema does not decide, a Parquet input checked without its file, is checked when the input is read, not refused at check (P9). Every value is authored from those rules: A's weight of day 1 lies one day from a reference two days before the day 8 one, A's second event has no site, B's first event has no cause, and A's weight on day 8 is the last of two and the one nearest a reference two days from it.",
   "documents": {
     "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ, SEQ]\ninput:\n  AE: {path: ae.csv, types: {SEQ: int}}\n  SUPP: {path: supp.csv, types: {IDVARVAL: int}}\nbase: AE\noutput: {path: out.csv, columns: [SUBJ, SEQ, SITE, CAUSE]}\nintermediates:\n  - id: QUAL\n    dataset: SUPP\n    key: {SUBJ: AE.SUBJ, IDVARVAL: AE.SEQ}\n    pivot: {name: QNAM, value: QVAL, fields: [SITE, CAUSE]}\ncolumns:\n  - {name: SUBJ, type: str, derivation: AE.SUBJ}\n  - {name: SEQ, type: int, derivation: AE.SEQ}\n  - {name: SITE, type: str, derivation: QUAL.SITE}\n  - {name: CAUSE, type: str, derivation: QUAL.CAUSE}\n",
     "selection": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  DM: {path: dm.csv, types: {REFDT: date}}\n  VS: {path: vs.csv, types: {DAY: int, VSDT: date, RESULT: float}}\nbase: DM\noutput: {path: out.csv, columns: [SUBJ, HEIGHT, WEIGHT]}\nintermediates:\n  - id: LAST\n    dataset: VS\n    key: {SUBJ: DM.SUBJ}\n    order_by: [VS.DAY]\n    keep: last\n    pivot: {name: TEST, value: RESULT, fields: [HEIGHT, WEIGHT]}\ncolumns:\n  - {name: SUBJ, type: str, derivation: DM.SUBJ}\n  - {name: HEIGHT, type: float, derivation: LAST.HEIGHT}\n  - {name: WEIGHT, type: float, derivation: LAST.WEIGHT}\n",
@@ -337,7 +337,7 @@
               }
             ]
           },
-          "dm.csv": "SUBJ,REFDT\nA,2024-01-08\nB,2024-01-08\n",
+          "dm.csv": "SUBJ,REFDT\nA,2024-01-02\nB,2024-01-02\n",
           "vs.csv": "SUBJ,TEST,DAY,VSDT,RESULT\nA,HEIGHT,1,2024-01-01,170\nA,WEIGHT,1,2024-01-01,70\nA,WEIGHT,8,2024-01-10,72.5\nB,HEIGHT,1,2024-01-01,160\n"
         },
         "specification": "spec.yaml"
@@ -351,7 +351,7 @@
       ],
       "issues": [],
       "saved": {
-        "out.csv": "SUBJ,HEIGHT,WEIGHT\nA,170,72.5\nB,160,\n"
+        "out.csv": "SUBJ,HEIGHT,WEIGHT\nA,170,70\nB,160,\n"
       }
     },
     {
@@ -455,6 +455,32 @@
           }
         }
       ]
+    },
+    {
+      "case": "a_pivot_name_of_an_undecided_type_is_checked_when_the_input_is_read",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  AE: {path: ae.csv, types: {SEQ: int}}\n  SUPP: {path: supp.csv, types: {IDVARVAL: int}}\n",
+                "to": "  AE: ae.parquet\n  SUPP: supp.parquet\n"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": []
     }
   ]
 }

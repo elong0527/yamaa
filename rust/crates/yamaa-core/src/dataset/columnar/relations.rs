@@ -1231,7 +1231,7 @@ fn pivot_candidates<E>(
                     intermediate: item.identifier.clone(),
                     name: table.schema().columns()[pivot.name].name.clone(),
                     value: owned(other),
-                    fields: pivot.fields.clone(),
+                    fields: pivot.fields.to_vec(),
                     matched_key: matched_key(&table, probe_keys),
                     identity: run.failure_identity(cx, row),
                 }))

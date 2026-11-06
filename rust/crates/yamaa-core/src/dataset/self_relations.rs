@@ -69,7 +69,7 @@ impl Intermediate {
             return Some(schema);
         }
         if let Some(pivot) = &self.pivot {
-            return Some(&pivot.schema);
+            return Some(pivot.schema.as_ref());
         }
         if let Some(derived) = &self.derivations {
             return Some(derived.plan.output());

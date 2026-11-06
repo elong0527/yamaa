@@ -455,27 +455,35 @@ fn select_field(
 /// relation; its `value`, a field of it; and its listed names, each new to
 /// the relation, which the selection then exposes after the relation's own
 /// fields, each laid out as `value` is. The first finding refuses the pivot.
+/// A stored `name` whose type the input's schema does not decide yet, such
+/// as a Parquet field checked without its file, is withheld from `check()`
+/// and judged when the input is read (P9).
 fn bind_pivot(
+    item: &Declaration,
     declaration: &PivotDeclaration,
     relation: &Donor<'_>,
+    inputs: binder::Inputs<'_>,
     field_type: &dyn Fn(usize) -> crate::result_type::ResultType,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::Pivot>, BindError> {
     let Donor {
         lookup: intermediate,
+        dataset,
         schema,
         kind: donor_kind,
         admits,
-        ..
     } = *relation;
     use crate::diagnostic::lookup::{self, Owner};
     let owner = Owner::Intermediate(intermediate);
-    let mut refuse = |diagnostic: crate::diagnostic::Diagnostic| {
+    fn refuse(
+        findings: &mut Vec<BindFinding>,
+        diagnostic: crate::diagnostic::Diagnostic,
+    ) -> Result<Option<crate::dataset::Pivot>, BindError> {
         findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
             diagnostic,
         )));
         Ok(None)
-    };
+    }
     let position = |name: &str| {
         schema
             .columns()
@@ -485,31 +493,44 @@ fn bind_pivot(
     };
     let name_path = format!("{}.name", declaration.path);
     let Some(name) = position(&declaration.name) else {
-        return refuse(lookup::pivot_field_reference(
-            &name_path,
-            owner,
-            &declaration.name,
-        ));
+        return refuse(
+            findings,
+            lookup::pivot_field_reference(&name_path, owner, &declaration.name),
+        );
     };
-    if donor_kind(name) != Some(ColumnType::Str) {
-        return refuse(lookup::pivot_name_type(
-            &name_path,
-            owner,
-            &declaration.name,
-            field_type(name),
-        ));
+    let derived = item
+        .derivations
+        .iter()
+        .any(|derivation| derivation.name == declaration.name);
+    match donor_kind(name) {
+        Some(ColumnType::Str) => {}
+        None if !derived && !inputs.decides(dataset, &declaration.name) => {
+            findings.push(BindFinding::Withheld(Box::new(BindFinding::Lookup(
+                LookupFinding::from_diagnostic(lookup::pivot_name_type(
+                    &name_path,
+                    owner,
+                    &declaration.name,
+                    field_type(name),
+                )),
+            ))));
+        }
+        _ => {
+            return refuse(
+                findings,
+                lookup::pivot_name_type(&name_path, owner, &declaration.name, field_type(name)),
+            );
+        }
     }
     let value_path = format!("{}.value", declaration.path);
     let Some(value) = position(&declaration.value) else {
-        return refuse(lookup::pivot_field_reference(
-            &value_path,
-            owner,
-            &declaration.value,
-        ));
+        return refuse(
+            findings,
+            lookup::pivot_field_reference(&value_path, owner, &declaration.value),
+        );
     };
     for (field, path) in &declaration.fields {
         if schema.columns().iter().any(|column| column.name == *field) {
-            return refuse(lookup::pivot_field_duplicate(path, owner, field));
+            return refuse(findings, lookup::pivot_field_duplicate(path, owner, field));
         }
     }
     let kind = donor_kind(value).unwrap_or(ColumnType::Str);
@@ -528,9 +549,9 @@ fn bind_pivot(
         name,
         value,
         base: schema.columns().len(),
-        fields,
+        fields: fields.into(),
         field: None,
-        schema: extended,
+        schema: std::sync::Arc::new(extended),
     }))
 }
 
@@ -769,7 +790,7 @@ fn bind_one(
     // names are new to it (LOOKUP-28).
     let pivot = match &item.pivot {
         Some(declaration) => {
-            let pivot = bind_pivot(declaration, &donor, &field_type, findings)?;
+            let pivot = bind_pivot(item, declaration, &donor, inputs, &field_type, findings)?;
             failed |= pivot.is_none();
             pivot
         }

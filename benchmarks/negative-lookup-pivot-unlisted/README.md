@@ -24,6 +24,10 @@ Decide whether the qualifier belongs in the analysis. When it does, list it
 and give it a column:
 
 ```yaml
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEXSITE, AEXCAUS, AEXSIZE]
+
 intermediates:
   - id: QUAL
     dataset: SUPPAE

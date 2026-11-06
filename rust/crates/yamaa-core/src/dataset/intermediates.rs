@@ -146,7 +146,8 @@ impl Nearest {
 /// fields follow the relation's stored and derived columns in its layout,
 /// from `base`. A field relation of the resolved plan stands for one listed
 /// name, `field`, and shares the records, match index and donor of the
-/// intermediate's own relation.
+/// intermediate's own relation; the listed names and the layout are shared
+/// too, so a pivot of many names costs each field relation one position.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Pivot {
     /// The donor column, stored or derived, whose `str` value names the
@@ -156,7 +157,7 @@ pub struct Pivot {
     /// candidate selected for its name.
     pub value: usize,
     /// The listed names, in written order.
-    pub fields: Vec<String>,
+    pub fields: std::sync::Arc<[String]>,
     /// The layout column of the first listed name.
     pub base: usize,
     /// The listed name this relation selects for, by its position; none for
@@ -164,7 +165,7 @@ pub struct Pivot {
     pub field: Option<usize>,
     /// The relation's layout with the listed names appended, each laid out
     /// as the `value` column is.
-    pub schema: TableSchema,
+    pub schema: std::sync::Arc<TableSchema>,
 }
 
 impl Pivot {

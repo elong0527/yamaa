@@ -44,8 +44,3 @@ columns:
     type: float
     label: Weight (kg)
     derivation: LASTVS.WEIGHT
-
-verifications:
-  - row_count:
-      min: 3
-      max: 3

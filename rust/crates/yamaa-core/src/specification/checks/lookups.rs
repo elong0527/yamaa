@@ -357,6 +357,12 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 dataset,
             )));
         }
+        // A pivot exposes its listed names alone and answers each of them
+        // (LOOKUP-28), so it admits neither `columns` nor `require_match`
+        // beside it, nor SELF as its relation, whatever selects beside it.
+        if let Some(pivot) = &item.pivot {
+            findings.extend(pivot_findings(spec, item, pivot, &path));
+        }
         // A nearest selection chooses by distance, so neither an order nor a
         // position may choose beside it (LOOKUP-26): each field written
         // beside it, then `nearest`, in specification order, the first of
@@ -380,12 +386,6 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 )));
             }
             continue;
-        }
-        // A pivot exposes its listed names alone and answers each of them
-        // (LOOKUP-28), so it admits neither `columns` nor `require_match`
-        // beside it, nor SELF as its relation.
-        if let Some(pivot) = &item.pivot {
-            findings.extend(pivot_findings(spec, item, pivot, &path));
         }
         // A written `order_by` needs a `keep`, even when it has no term; an
         // `order_by` with no term orders nothing, so a `keep` beside it has

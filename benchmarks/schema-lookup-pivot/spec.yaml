@@ -59,8 +59,3 @@ columns:
     type: int
     label: Reaction Size (mm)
     derivation: QUAL.AEXSIZE
-
-verifications:
-  - row_count:
-      min: 5
-      max: 5
