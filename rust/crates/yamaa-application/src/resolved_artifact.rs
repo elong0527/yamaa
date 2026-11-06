@@ -6,7 +6,9 @@ use crate::{
 use std::collections::BTreeMap;
 pub mod model;
 pub use model::ResolvedArtifact;
-use model::{Entry, FieldOrigin, Location, OriginKind, RelativeTo, Resource, ResourceRole};
+use model::{
+    Entry, FieldOrigin, Location, OriginKind, PrunedValue, RelativeTo, Resource, ResourceRole,
+};
 use yamaa_core::{
     project_function::Language,
     schema::{Document, DocumentNode as N, SchemaSource},
@@ -107,6 +109,21 @@ pub fn versioned(
             .map(|layer| layer.source.identity.clone())
             .collect(),
         resources: Vec::new(),
+        pruned: prepared
+            .pruned()
+            .iter()
+            .map(|value| PrunedValue {
+                spec_path: value.spec_path.clone(),
+                declaring_source: value
+                    .layer
+                    .and_then(|layer| layers.get(layer))
+                    .map(|layer| layer.source.identity.clone()),
+                line: value.start.map(|at| at.line),
+                column: value.start.map(|at| at.column),
+                end_line: value.end.map(|at| at.line),
+                end_column: value.end.map(|at| at.column),
+            })
+            .collect(),
     };
     let mut resource = |spec_path: String,
                         role: ResourceRole,
