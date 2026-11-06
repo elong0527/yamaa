@@ -1,0 +1,68 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  VS: {path: input/vs.csv, types: {VSSTRESN: float}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, ANCHDT, NPRE, MEANPRE, NDATED]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: ANCHDT
+    type: date
+    label: Anchor Date
+    derivation: {to_date: {source: DM.RFSTDTC}}
+
+  # MEASDT is derived for each of the subject's VS records; the range keeps
+  # the weights whose MEASDT falls on or before the row's ANCHDT.
+  - name: NPRE
+    type: int
+    label: Number of Weights on or Before the Anchor Date
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          MEASDT: {type: date, derivation: {to_date: {source: VS.VSDTC}}}
+        filter: "VS.VSTESTCD = 'WEIGHT'"
+        between: {value: ANCHDT, lower: MEASDT}
+        expr: "COUNT(VS.*)"
+
+  - name: MEANPRE
+    type: float
+    label: Mean Weight on or Before the Anchor Date
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          MEASDT: {type: date, derivation: {to_date: {source: VS.VSDTC}}}
+          WEIGHT: {type: float, derivation: VS.VSSTRESN}
+        filter: "VS.VSTESTCD = 'WEIGHT'"
+        between: {value: ANCHDT, lower: MEASDT}
+        expr: "MEAN(WEIGHT)"
+
+  # The filter reads the derived MEASDT beside the stored VSTESTCD.
+  - name: NDATED
+    type: int
+    label: Number of Dated Weights
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          MEASDT: {type: date, derivation: {to_date: {source: VS.VSDTC}}}
+        filter: "VS.VSTESTCD = 'WEIGHT' AND MEASDT IS NOT NULL"
+        expr: "COUNT(VS.*)"

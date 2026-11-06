@@ -71,6 +71,18 @@ impl Declaration {
             .map(|binding| table.of(binding.expr))
             .collect())
     }
+    /// The column and type of the binding a bare `name` reads: the
+    /// binding's position after the relation's `stored` columns, and its
+    /// declared type. The reducer, the order, the filter and the range
+    /// bounds read a binding before a field of the same name (LOOKUP-22).
+    fn binding(&self, name: &str, stored: usize) -> Option<(usize, Option<ColumnType>)> {
+        self.derive
+            .iter()
+            .flatten()
+            .enumerate()
+            .find(|(_, binding)| binding.name == name)
+            .map(|(position, binding)| (stored + position, Some(binding.kind)))
+    }
     /// The aggregate at `e` as binding reads it. `named` holds the named
     /// intermediates; a derive step inside an intermediate's own derivation
     /// classifies the names it reads against the intermediates derived
@@ -1460,9 +1472,19 @@ pub(super) fn bind(
     else {
         return Ok(None);
     };
+    // A bare name the filter reads may name a binding (LOOKUP-22).
+    let narrow = |name: &str,
+                  path: &str,
+                  findings: &mut Vec<BindFinding>|
+     -> Result<Option<(usize, Option<ColumnType>)>, BindError> {
+        match declaration.binding(name, donor_schema.columns().len()) {
+            Some(binding) => Ok(Some(binding)),
+            None => resolve(name, path, findings),
+        }
+    };
     let filter = bind_filter(
         declaration,
-        &resolve,
+        &narrow,
         relation,
         before,
         cx.edges,
@@ -1565,13 +1587,8 @@ fn bind_order(
 ) -> Result<Vec<crate::dataset::OrderTerm>, BindError> {
     let mut order = Vec::new();
     for (index, (name, descending, nulls_first)) in declaration.order.iter().enumerate() {
-        let bound = declaration
-            .derive
-            .iter()
-            .flatten()
-            .position(|binding| binding.name == *name);
-        let column = match bound {
-            Some(position) => Some(donor_schema.columns().len() + position),
+        let column = match declaration.binding(name, donor_schema.columns().len()) {
+            Some((column, _)) => Some(column),
             None => {
                 let path = format!("{}.order_by[{index}]", declaration.path);
                 let column = resolve(name, &path, findings)?.map(|(column, _)| column);
@@ -1750,10 +1767,11 @@ pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding>
     findings
 }
 
-/// A qualified aggregate's range (LOOKUP-9): bounds are fields of its
-/// relation and the value a value of the current row, admitted for every row
-/// the column is derived for ([`lookup_range::admit`]). A bare value that no
-/// column takes fails whatever the bounds bind.
+/// A qualified aggregate's range (LOOKUP-9): bounds are bindings or fields
+/// of its relation (LOOKUP-22) and the value a value of the current row,
+/// admitted for every row the column is derived for
+/// ([`lookup_range::admit`]). A bare value that no column takes fails
+/// whatever the bounds bind.
 fn bind_range(
     declaration: &Declaration,
     catalog: &Catalog,
@@ -1771,13 +1789,17 @@ fn bind_range(
         return Ok(None);
     }
     let mut diagnostics = Vec::new();
-    let bounds = range.bind_bounds(
-        Owner::Unnamed,
-        donor,
-        &|column| kinds.get(column).copied().flatten(),
-        &|_| true,
-        &mut diagnostics,
-    );
+    let stored = donor.columns().len();
+    let field = |name: &str| {
+        declaration.binding(name, stored).or_else(|| {
+            donor
+                .columns()
+                .iter()
+                .position(|field| field.name == name)
+                .map(|column| (column, kinds.get(column).copied().flatten()))
+        })
+    };
+    let bounds = range.bind_bounds_by(Owner::Unnamed, &field, &mut diagnostics);
     findings.extend(
         diagnostics
             .into_iter()

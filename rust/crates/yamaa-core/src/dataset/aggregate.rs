@@ -190,6 +190,29 @@ impl BoundAggregate {
     pub fn derived_schema(&self) -> Option<&TableSchema> {
         self.derived_schema.as_ref()
     }
+    /// Whether the filter or a range bound reads a binding: the bindings
+    /// then evaluate on every record whose keys match, before the range and
+    /// the filter narrow them (LOOKUP-22).
+    pub fn narrows_on_derivations(&self) -> bool {
+        use crate::bound_expression::Read;
+        let Some(schema) = &self.derived_schema else {
+            return false;
+        };
+        let stored = schema.columns().len() - self.derivations.len();
+        let filter = self
+            .filter
+            .iter()
+            .flat_map(BoundPredicate::bindings)
+            .any(|binding| matches!(binding.read, Read::Source(column) if column >= stored));
+        let range = self.range.iter().any(|range| {
+            range
+                .lower()
+                .into_iter()
+                .chain(range.upper())
+                .any(|bound| bound.column >= stored)
+        });
+        filter || range
+    }
     pub fn expression(&self) -> &CompiledExpression {
         &self.expression
     }

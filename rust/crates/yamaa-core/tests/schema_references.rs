@@ -805,8 +805,8 @@ mod schema {
         /// Seam: the columns and inputs pruning keeps for an aggregate's bindings.
         #[test]
         fn aggregate_bindings_are_local_to_their_aggregate() {
-            // The filter reads outside the bindings; the reducer and the
-            // bindings read every binding of their aggregate locally.
+            // The filter, the reducer and the bindings read every binding of
+            // their aggregate locally (LOOKUP-22), so only OFFSET is a column.
             let total = aggregate(vec![
                 ("filter", text("A > 0")),
                 (
@@ -836,7 +836,7 @@ mod schema {
                 ]
             };
             let result = prune(&spec(&["TOTAL"], fields(total)), Order::Dependencies).unwrap();
-            assert_eq!(columns(&result), ["A", "OFFSET", "TOTAL"]);
+            assert_eq!(columns(&result), ["OFFSET", "TOTAL"]);
             assert_eq!(inputs(&result.document), ["DM"]);
             // A later binding is the aggregate's too.
             let forward = aggregate(vec![
