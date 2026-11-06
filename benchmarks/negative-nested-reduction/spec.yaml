@@ -5,6 +5,7 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
+  # yamaa-lint: allow unused_declaration -- only the faulty reduction reads it
   EX:
     path: input/ex.csv
     types: {EXSEQ: int, EXSTDY: int, EXDOSE: float}

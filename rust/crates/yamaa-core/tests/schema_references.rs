@@ -9,7 +9,7 @@ mod schema {
         //! 1.0 documents in the normalized form, which the 1.0 front end
         //! lowers.
         use yamaa_core::expression::{CompileError, Context};
-        use yamaa_core::resolution::{prune_lowered, Error as E, Issue as I, Order};
+        use yamaa_core::resolution::{prune_lowered, Declaration, Error as E, Issue as I, Order};
         use yamaa_core::schema::{Document, DocumentNode as N, NormalizedDocument, SchemaSource};
 
         use crate::support::document::Tree as V;
@@ -17,7 +17,7 @@ mod schema {
         /// Prune `document` as the 1.0 front end lowers it.
         fn prune(document: &Document, order: Order) -> Result<NormalizedDocument, E> {
             let spec = yamaa_core::front_end::v1::spec::lower(document, None).into_spec();
-            prune_lowered(document, &spec, order)
+            prune_lowered(document, &spec, order).map(|pruning| pruning.document)
         }
 
         fn text(s: &str) -> V {
@@ -373,7 +373,9 @@ mod schema {
                     ),
                     "{refused:?}"
                 );
-                // A dead declaration's text is never followed.
+                // A dead declaration's text is never followed, and pruning
+                // names the declaration, read by nothing, among those it
+                // removes.
                 let dead = spec(
                     &["A"],
                     vec![(
@@ -382,6 +384,18 @@ mod schema {
                     )],
                 );
                 assert_eq!(columns(&prune(&dead, Order::Declared).unwrap()), ["A"]);
+                let lowered = yamaa_core::front_end::v1::spec::lower(&dead, None).into_spec();
+                let removed = prune_lowered(&dead, &lowered, Order::Declared)
+                    .unwrap()
+                    .pruned
+                    .into_iter()
+                    .map(|pruned| (pruned.declaration, pruned.readers))
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    removed,
+                    [(Declaration::Column("DEAD".into()), vec![])],
+                    "{context:?}"
+                );
             }
         }
 

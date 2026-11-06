@@ -9,12 +9,13 @@ use yamaa_core::limits::Limits;
 
 use super::checks::{check, sort, suppressed};
 use super::document::{Document, Value};
-use super::{fix, inheritance, restated, Error, Finding, Linted};
+use super::{fix, functions, inheritance, restated, unused, Error, Finding, Linted};
 use crate::yaml_decode::DecodeFailure;
 
 /// The findings that remain in `text` once suppressions apply, one-based.
 /// With `file`, the path `text` was read from, a specification is also
-/// compared with the layers it inherits. `included` reads `text` as a
+/// compared with the layers it inherits and resolved, and a project file's
+/// listed specifications are resolved. `included` reads `text` as a
 /// fragment that a linted specification, or a layer it inherits, includes.
 pub(super) fn findings(
     text: &[u8],
@@ -27,6 +28,8 @@ pub(super) fn findings(
     if let Some(file) = file {
         found.extend(inheritance::check(&document, file));
         found.extend(restated::check(&document, file));
+        found.extend(unused::check(&document, file));
+        found.extend(functions::check(&document, file));
         sort(&mut found);
     }
     Ok(suppressed(&document, found)

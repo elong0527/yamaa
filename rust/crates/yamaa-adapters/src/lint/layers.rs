@@ -1,7 +1,8 @@
-//! The layers a linted specification composes on, which the two findings
-//! that read more than the file they report, `partial_restatement` and
-//! `restated_inherited_value`, compare it with: the `parent` chain it
-//! inherits and the fragments its layers include, followed from the file
+//! The layers a linted specification composes on, which the findings that
+//! read more than the file they report, `partial_restatement`,
+//! `restated_inherited_value` and `unused_declaration`, compare it with or
+//! resolve: the `parent` chain it inherits and the fragments its layers
+//! include, followed from the file
 //! through the local file resolver, captured by the spelling that located
 //! each, decoded with the shared YAML reader and admitted as composition
 //! admits them (LAYER-1 to LAYER-4). Why a layer cannot be read does not
@@ -55,4 +56,16 @@ pub(super) fn read<T>(
     .ok()?
     .chain;
     then(schema, &chain, &mut port)
+}
+
+/// The layer numbered `layer` in contribution order of `chain`, spelled from
+/// the entry's directory as the resolver respells a path (LAYER-10).
+pub(super) fn spelled(chain: &VersionedChain, layer: usize, port: &mut Port<'_>) -> Option<String> {
+    let entry = &chain.layers.last()?.source;
+    let source = &chain.layers.get(layer)?.source;
+    let name = source.identity.rsplit('/').next().unwrap_or_default();
+    Some(
+        port.rebase(source, entry, name)
+            .unwrap_or_else(|_| source.display_path.clone()),
+    )
 }

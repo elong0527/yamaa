@@ -31,7 +31,6 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use yamaa_core::inheritance::VersionedChain;
-use yamaa_core::resolver::Resolver;
 use yamaa_core::schema::{
     ComposedLayers, Document as Values, DocumentNode as N, NormalizedDocument, SchemaOrigin,
     SchemaSource,
@@ -335,14 +334,14 @@ fn sources(restated: &Restated<'_>, inherited: usize, port: &mut Port<'_>) -> Op
     let entry = &restated.chain.layers.last()?.source;
     let names = layers
         .into_iter()
-        .filter_map(|layer| restated.chain.layers.get(layer))
-        .filter(|layer| layer.source.identity != entry.identity)
-        .map(|layer| {
-            let source = &layer.source;
-            let name = source.identity.rsplit('/').next().unwrap_or_default();
-            port.rebase(source, entry, name)
-                .unwrap_or_else(|_| source.display_path.clone())
+        .filter(|&layer| {
+            restated
+                .chain
+                .layers
+                .get(layer)
+                .is_some_and(|layer| layer.source.identity != entry.identity)
         })
+        .filter_map(|layer| super::layers::spelled(restated.chain, layer, port))
         .collect::<Vec<_>>();
     (!names.is_empty()).then(|| prose(&names))
 }
