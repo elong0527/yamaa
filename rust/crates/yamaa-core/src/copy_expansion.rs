@@ -157,8 +157,14 @@ impl<'a> Resolved<'a> {
                     }
                 }
             }
-            if let Some(output) = document.field(root, "output") {
-                resolved.published = items(document, document.field(output, "columns"))
+            // A layer may write only the field of `output` it changes, so
+            // only one that writes `output.columns` replaces the list
+            // (LAYER-5, LAYER-6).
+            if let Some(columns) = document
+                .field(root, "output")
+                .and_then(|output| document.field(output, "columns"))
+            {
+                resolved.published = items(document, Some(columns))
                     .iter()
                     .filter_map(|&item| text(document, item))
                     .collect();
