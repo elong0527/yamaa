@@ -99,9 +99,12 @@ fn uncalled(document: &Document, file: &Path) -> Option<Vec<Departure>> {
 }
 
 /// The project functions the specification at `path` calls once resolved;
-/// none when it cannot be read or resolved.
+/// none when it cannot be read or resolved. It is captured through the local
+/// file resolver, as a linted file is, so a path that is not a regular file
+/// is refused rather than opened (FILE-7, FILE-8).
 fn calls(path: &Path) -> Option<BTreeSet<String>> {
-    let bytes = std::fs::read(path).ok()?;
+    let (mut resources, name) = crate::file_configuration::resources(path.to_str()?).ok()?;
+    let (bytes, _) = resources.capture_metadata(&name).ok()?;
     let entry = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
     super::layers::read(path, entry, |schema, chain, port| {
         let resolved = crate::document::resolved_chain(schema, chain, port)?;

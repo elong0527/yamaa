@@ -282,6 +282,71 @@ columns:
   - {name: AGE, type: int, label: Age, derivation: DM.AGE}
 "#;
 
+/// A pruned column that reads itself, beside one nothing reads.
+const SELF_READ: &str = r#"yamaa: "1.0"
+type: spec
+domain: ADTOY
+keys: [USUBJID]
+input:
+  DM: dm.csv
+
+output:
+  path: out.csv
+  columns: [USUBJID]
+
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}
+  - {name: COUNT, type: int, label: Count, derivation: "COUNT + 1"}
+"#;
+
+/// A template whose column reads a named window the study layer below
+/// redefines.
+const WINDOWED: &str = r#"yamaa: "1.0"
+type: spec
+domain: ADTOY
+keys: [USUBJID, VISIT]
+input:
+  SC: scores.csv
+
+output:
+  path: out.csv
+  columns: [USUBJID, VISIT, VISITNUM]
+
+windows:
+  BYSUBJ:
+    group_by: [USUBJID]
+    order_by: [VISIT]
+
+columns:
+  - {name: USUBJID, type: str, label: Subject, derivation: SC.USUBJID}
+  - {name: VISIT, type: int, label: Visit, derivation: SC.VISIT}
+  - name: VISITNUM
+    type: int
+    label: Visit Rank
+    derivation:
+      rank:
+        window: BYSUBJ
+"#;
+
+/// The study layer: it keeps two columns, redefines the window only the
+/// pruned `VISITNUM` reads, and relabels `VISITNUM`.
+const WINDOW_STUDY: &str = r#"yamaa: "1.0"
+type: spec
+parent: template.yaml
+
+output:
+  columns: [USUBJID, VISIT]
+
+windows:
+  BYSUBJ:
+    order_by:
+      - {variable: VISIT, direction: desc}
+
+columns:
+  - name: VISITNUM
+    label: Visit Order
+"#;
+
 /// A producer whose output contract a copy entry reads (SPEC-9).
 const PRODUCER: &str = r#"yamaa: "1.0"
 type: spec
@@ -456,6 +521,34 @@ fn a_pruned_declaration_is_reported_where_the_file_writes_it() {
             ],
         ),
         (
+            "a column that reads itself names itself",
+            vec![("spec.yaml", SELF_READ)],
+            vec!["spec.yaml"],
+            "spec.yaml",
+            vec![unused(
+                14,
+                5,
+                "columns.COUNT",
+                "is pruned: it is not in `output.columns`, and only `columns.COUNT` reads it, \
+                 which is pruned",
+            )],
+        ),
+        (
+            "a window a layer redefines is not a value it writes into the column using it",
+            vec![("template.yaml", WINDOWED), ("spec.yaml", WINDOW_STUDY)],
+            vec!["spec.yaml"],
+            "spec.yaml",
+            vec![unused(
+                14,
+                5,
+                "columns.VISITNUM",
+                &format!(
+                    "{pruned}; template.yaml declares it, and this layer writes \
+                     `columns.VISITNUM.label`"
+                ),
+            )],
+        ),
+        (
             "an intermediate that reaches its refusal and the input only it reads",
             vec![("spec.yaml", REFUSED)],
             vec!["spec.yaml"],
@@ -611,4 +704,27 @@ fn a_listed_function_no_specification_calls_is_reported_at_its_listing() {
         }
         assert_eq!(rows(&directory, &names, name), expected, "{label}");
     }
+}
+
+/// A listed specification is captured through the local file resolver, as a
+/// linted file is, so one that is a link is refused rather than followed
+/// (FILE-8), and the project is not read for the finding.
+#[cfg(unix)]
+#[test]
+fn a_listed_specification_that_is_a_link_leaves_the_project_unread() {
+    let directory = Scratch::new("lint-uncalled-link");
+    directory.write("echo.yaml", function("echo"));
+    directory.write("shout.yaml", function("shout"));
+    directory.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [echo.yaml, shout.yaml]\n\nadam:\n  \
+         specs: [spec.yaml]\n",
+    );
+    directory.write("real.yaml", calling("USUBJID, ECHOED"));
+    std::os::unix::fs::symlink(directory.join("real.yaml"), directory.join("spec.yaml")).unwrap();
+    assert_eq!(
+        rows(&directory, &["project.yaml"], "project.yaml"),
+        [],
+        "a project whose specification is a link"
+    );
 }

@@ -136,14 +136,15 @@ pub struct PrunedVersioned {
     /// The declaration's spec path with the occurrence that declares it,
     /// then each value inside it that a layer other than the one writing the
     /// value holding it wrote, at its spec path, in the composition's order.
-    /// The identity a member is matched by is not a value it writes.
+    /// The identity a member is matched by is not a value it writes, and a
+    /// named window it uses is read where the window is defined.
     pub writes: Vec<(String, LayerNodeOrigin)>,
 }
 
-/// The writes of `declaration` at `node` of `document`
-/// ([`PrunedVersioned::writes`]), given each node's origin and whether it is
-/// a key that shorthand expansion wrote, which a path names a value through
-/// without spelling (P-CLR-2).
+/// The writes of `declaration` at `node` of `document`, the composition
+/// before its named windows expand ([`PrunedVersioned::writes`]), given each
+/// node's origin and whether it is a key that shorthand expansion wrote,
+/// which a path names a value through without spelling (P-CLR-2).
 fn writes(
     document: &Document,
     node: usize,
@@ -160,16 +161,27 @@ fn writes(
         out: &mut Vec<(String, LayerNodeOrigin)>,
     ) {
         let (origins, shorthand, identity) = known;
-        let N::Mapping(entries) = &document.nodes()[node] else {
-            return;
+        let children = match &document.nodes()[node] {
+            N::Mapping(entries) => entries
+                .iter()
+                .filter_map(|&(key, value)| {
+                    let path = match &document.nodes()[key] {
+                        _ if shorthand[key] => path.to_owned(),
+                        N::Text(name) if Some(name.as_str()) == identity => return None,
+                        N::Text(name) => crate::schema::join_spec_path(path, name),
+                        _ => return None,
+                    };
+                    Some((path, value))
+                })
+                .collect::<Vec<_>>(),
+            N::Sequence(items) => items
+                .iter()
+                .enumerate()
+                .map(|(index, &item)| (format!("{path}[{index}]"), item))
+                .collect(),
+            _ => return,
         };
-        for &(key, value) in entries {
-            let path = match &document.nodes()[key] {
-                _ if shorthand[key] => path.to_owned(),
-                N::Text(name) if Some(name.as_str()) == identity => continue,
-                N::Text(name) => crate::schema::join_spec_path(path, name),
-                _ => continue,
-            };
+        for (path, value) in children {
             let origin = origins[value];
             let mut holder = layer;
             if origin.layer.is_some() && origin.layer != layer {
@@ -477,11 +489,11 @@ pub fn prepare_versioned<R: Resolver>(
         .into_iter()
         .map(|declared| PrunedVersioned {
             writes: writes(
-                &expanded.document,
-                declared.node,
+                &composed.document,
+                expanded.origins[declared.node],
                 &declared.declaration,
-                &expanded_origins,
-                &expanded_shorthand,
+                &composed_origins,
+                &composed_shorthand,
             ),
             declaration: declared.declaration,
             readers: declared.readers,

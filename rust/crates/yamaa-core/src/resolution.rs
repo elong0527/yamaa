@@ -20,7 +20,7 @@ use crate::expression::{CompileError, Context};
 use crate::schema::{
     Document, DocumentError, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaSource,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 mod recurrence;
 
@@ -101,10 +101,11 @@ pub struct PrunedDeclaration {
     /// The node of the pruned document that holds it: an input's value, a
     /// member of `intermediates` or `columns`, or a row derivation's value.
     pub node: usize,
-    /// The declarations whose reads name it, intermediates first, each in
-    /// declaration order. Each is pruned too, or is an intermediate that
-    /// survives only to reach its refusal (LOOKUP-3), whose reads no root
-    /// follows. A row template's derivation of a column reads as that column.
+    /// The declarations whose reads name it, itself among them when it reads
+    /// itself, intermediates first, each in declaration order. Each is pruned
+    /// too, or is an intermediate that survives only to reach its refusal
+    /// (LOOKUP-3), whose reads no root follows. A row template's derivation
+    /// of a column reads as that column.
     pub readers: Vec<Declaration>,
 }
 
@@ -130,17 +131,18 @@ pub fn prune_lowered(document: &Document, spec: &Spec, order: Order) -> Result<P
         Order::Declared => live.selected(),
         Order::Dependencies => live.order()?,
     };
-    let readers = live.readers();
+    let mut readers = BTreeMap::<Declaration, Vec<Declaration>>::new();
+    for (reader, reads) in live.readers() {
+        for read in reads.into_iter().collect::<BTreeSet<_>>() {
+            readers.entry(read).or_default().push(reader.clone());
+        }
+    }
     let rebuild = Rebuild::new(document, &live, columns);
     let pruned = rebuild
         .pruned()
         .into_iter()
         .map(|(declaration, node)| PrunedDeclaration {
-            readers: readers
-                .iter()
-                .filter(|(reader, reads)| *reader != declaration && reads.contains(&declaration))
-                .map(|(reader, _)| reader.clone())
-                .collect(),
+            readers: readers.get(&declaration).cloned().unwrap_or_default(),
             declaration,
             node,
         })
@@ -705,17 +707,15 @@ impl<'a> Live<'a> {
             edges.push((Declaration::Intermediate(item.id.name.clone()), reads));
         }
         let mut columns: Vec<(&str, Vec<Reading>)> = Vec::new();
+        let mut index = BTreeMap::new();
         let mut read = |name: &'a str, root: ExprId, driver: Option<&str>| {
             if self.columns.contains(name) {
                 return;
             }
-            let at = match columns.iter().position(|&(column, _)| column == name) {
-                Some(at) => at,
-                None => {
-                    columns.push((name, Vec::new()));
-                    columns.len() - 1
-                }
-            };
+            let at = *index.entry(name).or_insert_with(|| {
+                columns.push((name, Vec::new()));
+                columns.len() - 1
+            });
             let mut readings = Vec::new();
             if self
                 .read_driven(root, Scope::Row, driver, &mut readings)
