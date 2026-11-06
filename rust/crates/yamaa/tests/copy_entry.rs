@@ -256,64 +256,79 @@ fn a_copy_entry_declares_each_listed_producer_column() {
 }
 
 /// The copy entry and the columns it declares written out give one resolved
-/// specification, under a later layer that overrides one copied column and
-/// clears a field of another (P8, LAYER-5, LAYER-9).
+/// specification, under a later layer that overrides one copied column,
+/// clears a field of another and writes only `output.path`, whether or not
+/// the entry writes `submission` (P8, LAYER-5, LAYER-9).
 #[test]
 fn a_later_layer_overrides_and_clears_a_copied_column_as_one_written_out() {
-    let study = study();
-    let written = "  - name: AGE
+    let written = |core: &str| {
+        format!(
+            "  - name: AGE
     type: int
     label: Age
     derivation: ADSL.AGE
     submission:
-      core: Cond
-      length: 8
+{core}      length: 8
       display_format: '3.'
-      origins: [{type: Predecessor, description: ADSL.AGE}]
+      origins: [{{type: Predecessor, description: ADSL.AGE}}]
   - name: SEX
     type: str
     label: Sex
     derivation: ADSL.SEX
     submission:
-      core: Cond
-      length: 1
-      origins: [{type: Predecessor, description: ADSL.SEX}]
+{core}      length: 1
+      origins: [{{type: Predecessor, description: ADSL.SEX}}]
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
     derivation: ADSL.TRTSDT
     submission:
-      core: Cond
-      origins: [{type: Predecessor, description: ADSL.TRTSDT}]
-";
-    study.write("written.yaml", &adae(written));
+{core}      origins: [{{type: Predecessor, description: ADSL.TRTSDT}}]
+"
+        )
+    };
     let child = |parent: &str| {
         format!(
             "yamaa: \"1.0\"
 type: spec
 parent: {parent}
 clear: [columns.SEX.submission.length]
+output: {{path: adae_child.csv}}
 columns:
   - {{name: AGE, label: Age at Onset}}
 "
         )
     };
-    study.write("copied_child.yaml", &child("adae.yaml"));
-    study.write("written_child.yaml", &child("written.yaml"));
-    let copied = resolved(&study, "copied_child.yaml");
-    assert_eq!(copied, resolved(&study, "written_child.yaml"));
-    assert_eq!(
-        field(column(&copied, "AGE"), "label"),
-        &text("Age at Onset")
-    );
-    let ContextValue::Map(sex) = field(column(&copied, "SEX"), "submission") else {
-        panic!("SEX's submission")
-    };
-    assert!(!sex.contains_key("length"));
-    assert_eq!(
-        resolved(&study, "adae.yaml"),
-        resolved(&study, "written.yaml")
-    );
+    for (case, copy, core) in [
+        ("an entry with submission", COPY, "      core: Cond\n"),
+        (
+            "an entry without submission",
+            "  - copy: {dataset: ADSL, columns: [AGE, SEX, TRTSDT]}\n",
+            "",
+        ),
+    ] {
+        let study = study();
+        study.write("adae.yaml", &adae(copy));
+        study.write("written.yaml", &adae(&written(core)));
+        study.write("copied_child.yaml", &child("adae.yaml"));
+        study.write("written_child.yaml", &child("written.yaml"));
+        let copied = resolved(&study, "copied_child.yaml");
+        assert_eq!(copied, resolved(&study, "written_child.yaml"), "{case}");
+        assert_eq!(
+            field(column(&copied, "AGE"), "label"),
+            &text("Age at Onset"),
+            "{case}"
+        );
+        let ContextValue::Map(sex) = field(column(&copied, "SEX"), "submission") else {
+            panic!("SEX's submission: {case}")
+        };
+        assert!(!sex.contains_key("length"), "{case}");
+        assert_eq!(
+            resolved(&study, "adae.yaml"),
+            resolved(&study, "written.yaml"),
+            "{case}"
+        );
+    }
 }
 
 /// A copied column `output.columns` does not list is internal: it carries

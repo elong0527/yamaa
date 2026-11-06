@@ -205,10 +205,15 @@ reference. The input, its `schema` link and the base the link resolves from
 are the ones the resolved specification keeps, whichever layer writes them.
 The resolved specification is therefore the one the columns written out give:
 a later layer overrides a copied column by name, and `clear` addresses one of
-its fields, as for any column ([LAYER-9](inheritance.md#layer-9)). A renamed
-copy is an ordinary column ([SUB-20](profiles/submission.md#sub-20)).
+its fields, as for any column ([LAYER-9](inheritance.md#layer-9)). A copied
+column likewise merges field by field with a column of its name that an
+earlier layer declares ([LAYER-6](inheritance.md#layer-6)): the fields the
+copy does not write, such as `verifications` or a submission `method` or
+`comment`, are kept until a `clear` removes them. A renamed copy is an
+ordinary column ([SUB-20](profiles/submission.md#sub-20)).
 
-A copied column that `output.columns` lists carries submission metadata when
+A copied column that the resolved `output.columns` lists, whichever layer
+writes it, carries submission metadata when
 the specification declares its `model`: the entry's `core`, `mandatory` and
 `role`, the producer's content metadata, and one `Predecessor` origin whose
 `description` is `<producer domain>.X`. A copied column that `output.columns`
@@ -222,9 +227,10 @@ specification without `model` under [SUB-3](profiles/submission.md#sub-3).
 The producer's content metadata is `data_type`, `length`, `significant_digits`,
 `display_format` and `codelist` where it declares them, a `str` column's
 `length` derived from its `max_length` verification where none is declared
-([SUB-8](profiles/submission.md#sub-8)). A `date` or `datetime` column takes no
-`data_type`, `length` or `display_format`: it is submitted as the consumer's
-model requires ([SUB-6](profiles/submission.md#sub-6),
+([SUB-8](profiles/submission.md#sub-8)). A `date`, `datetime` or `time` column
+takes no `data_type`, `length` or `display_format`: it is submitted as the
+consumer's model requires ([SUB-6](profiles/submission.md#sub-6),
+[SUB-7](profiles/submission.md#sub-7),
 [SUB-25](profiles/submission.md#sub-25)). A copied `codelist` is a binding of
 the consumer's project ([CT-13](profiles/terminology.md#ct-13)). The entry's
 `submission` admits only `core`, `mandatory` and `role`, so `comment`,
