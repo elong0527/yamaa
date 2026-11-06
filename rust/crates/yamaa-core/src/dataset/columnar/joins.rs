@@ -799,6 +799,7 @@ fn pick<E>(
     let Some(selection) = shape.options.selection else {
         let name = donor_name(run.plan, cx, donor);
         return Err(Box::new(ExecutionError::MultipleMatches {
+            field: None,
             path: path.to_string(),
             dataset: name.clone(),
             intermediate: format!("intermediate({name})"),

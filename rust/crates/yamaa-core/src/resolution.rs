@@ -739,6 +739,7 @@ fn rename_only(spec: &Spec, item: &Intermediate) -> bool {
         && item.order_by.is_empty()
         && item.keep.is_none()
         && item.nearest.is_none()
+        && item.pivot.is_none()
         && item.columns.is_none()
         && item.bindings.is_empty()
         && item.checks.is_empty()

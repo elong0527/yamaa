@@ -1,0 +1,49 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  SUPPAE: {path: input/suppae.csv, types: {IDVARVAL: int}}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEXSITE, AEXCAUS]
+
+intermediates:
+  # Each listed qualifier name chooses among the event's qualifier records
+  # of that name. No order or end to keep is stated, so an event with two
+  # records of one name stops the run.
+  - id: QUAL
+    dataset: SUPPAE
+    key: {STUDYID: AE.STUDYID, USUBJID: AE.USUBJID, IDVARVAL: AE.AESEQ}
+    filter: "SUPPAE.RDOMAIN = 'AE' AND SUPPAE.IDVAR = 'AESEQ'"
+    pivot: {name: QNAM, value: QVAL, fields: [AEXSITE, AEXCAUS]}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AEXSITE
+    type: str
+    label: Location Detail
+    derivation: QUAL.AEXSITE
+
+  - name: AEXCAUS
+    type: str
+    label: Suspected Cause
+    derivation: QUAL.AEXCAUS

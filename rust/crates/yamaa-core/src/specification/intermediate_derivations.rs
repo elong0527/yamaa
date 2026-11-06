@@ -779,6 +779,7 @@ fn unused_slot_placeholder(
         filter: None,
         selection: None,
         nearest: None,
+        pivot: None,
         range: None,
         columns: None,
         no_match: Some(Value::Missing),

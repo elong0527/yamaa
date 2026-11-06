@@ -33,8 +33,8 @@ A named intermediate used as a row template's `dataset` exposes its source-only
 filtered records, in source order, its `derivations` complete, read through its
 qualifier as the current driver record, not through a keyed lookup. It must
 read an `input` dataset, declare none of `key`, `between`, `order_by`, `keep`,
-`nearest`, `absent` and `require_match`, and expose derived fields each of one
-column type ([EXPR-14](expressions.md#expr-14)). A pair relation
+`nearest`, `pivot`, `absent` and `require_match`, and expose derived fields
+each of one column type ([EXPR-14](expressions.md#expr-14)). A pair relation
 ([LOOKUP-27](lookup.md#lookup-27)) drives rows as an input does: it reads
 inputs through its sides, and its `key` matches its sides, not the current row.
 

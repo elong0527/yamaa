@@ -1,0 +1,66 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  SUPPAE: {path: input/suppae.csv, types: {IDVARVAL: int}}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AEXSITE, AEXCAUS, AEXSIZE]
+
+intermediates:
+  # The event's record-level supplemental qualifiers, one lookup for all
+  # three: each listed qualifier name is a field of the selection, holding
+  # that qualifier's value for the event, or missing when the event has
+  # none. A qualifier record whose name is not listed stops the run.
+  - id: QUAL
+    dataset: SUPPAE
+    key: {STUDYID: AE.STUDYID, USUBJID: AE.USUBJID, IDVARVAL: AE.AESEQ}
+    filter: "SUPPAE.RDOMAIN = 'AE' AND SUPPAE.IDVAR = 'AESEQ'"
+    pivot: {name: QNAM, value: QVAL, fields: [AEXSITE, AEXCAUS, AEXSIZE]}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AEXSITE
+    type: str
+    label: Location Detail
+    derivation: QUAL.AEXSITE
+
+  - name: AEXCAUS
+    type: str
+    label: Suspected Cause
+    derivation: QUAL.AEXCAUS
+
+  # The qualifier value is text; the column converts it to a number.
+  - name: AEXSIZE
+    type: int
+    label: Reaction Size (mm)
+    derivation: QUAL.AEXSIZE
+
+verifications:
+  - row_count:
+      min: 5
+      max: 5

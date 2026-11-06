@@ -205,6 +205,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("unknown_standard", "section {section} declares no standard {value}"),
     ("unknown_window", "window {window} is not declared"),
     ("unlinked_producer", "input {dataset} reads {path}, the artifact of another specification, without a schema link"),
+    ("unlisted_pivot_name", "lookup {intermediate} finds a {dataset} record whose {name} is {value}, which its pivot does not list"),
     ("unmapped_value", "the value '{value}' of {source} has no mapping"),
     ("unmatched_key", "lookup {intermediate} finds no record in {dataset}, and require_match is true"),
     ("unmatched_pattern", "the value '{value}' does not match the pattern {pattern}"),
@@ -230,5 +231,6 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
 pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("engine_rejected", "host_error", "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"),
     ("missing_input", "template_filter", "the string template reads {variable}, which is missing, and {template_filter} runs only after the row's derivations, so it cannot discard the row first"),
+    ("multiple_matches", "field", "lookup {intermediate} finds {match_count} matching records named {field} in {dataset} and has no rule to choose one"),
     ("unsupported_operation", "hint", "{operation} is not supported by this engine ({hint})"),
 ];

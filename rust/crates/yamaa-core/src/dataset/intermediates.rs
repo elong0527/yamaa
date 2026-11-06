@@ -140,6 +140,46 @@ impl Nearest {
     }
 }
 
+/// The pivot of a named intermediate (LOOKUP-28): each listed name is a
+/// field of the selection, holding the `value` of the one candidate whose
+/// `name` equals it, selected among the candidates of that name alone. The
+/// fields follow the relation's stored and derived columns in its layout,
+/// from `base`. A field relation of the resolved plan stands for one listed
+/// name, `field`, and shares the records, match index and donor of the
+/// intermediate's own relation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Pivot {
+    /// The donor column, stored or derived, whose `str` value names the
+    /// field a candidate holds.
+    pub name: usize,
+    /// The donor column, stored or derived, each listed field reads from the
+    /// candidate selected for its name.
+    pub value: usize,
+    /// The listed names, in written order.
+    pub fields: Vec<String>,
+    /// The layout column of the first listed name.
+    pub base: usize,
+    /// The listed name this relation selects for, by its position; none for
+    /// the intermediate's own relation, which no row reads.
+    pub field: Option<usize>,
+    /// The relation's layout with the listed names appended, each laid out
+    /// as the `value` column is.
+    pub schema: TableSchema,
+}
+
+impl Pivot {
+    /// The listed name a layout column stands for, by its position.
+    pub fn field_of(&self, column: usize) -> Option<usize> {
+        column
+            .checked_sub(self.base)
+            .filter(|&field| field < self.fields.len())
+    }
+    /// The listed name this relation selects for.
+    pub fn selected(&self) -> Option<&str> {
+        self.field.map(|field| self.fields[field].as_str())
+    }
+}
+
 /// A named secondary record selector with literal absence handling.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Intermediate {
@@ -152,6 +192,9 @@ pub struct Intermediate {
     /// The selection by distance, which a declaration writes instead of
     /// `order_by` and `keep` (LOOKUP-26).
     pub nearest: Option<Nearest>,
+    /// The pivot, whose listed names are the only fields a read of the
+    /// intermediate addresses (LOOKUP-28).
+    pub pivot: Option<Pivot>,
     pub range: Option<RelationRange>,
     /// Visible selected fields; donor keys, filters and order still see every slot.
     pub columns: Option<Vec<usize>>,
@@ -181,6 +224,10 @@ impl Intermediate {
             )
     }
     pub fn admits_column(&self, column: usize) -> bool {
+        // A pivoted intermediate exposes its listed names alone (LOOKUP-28).
+        if let Some(pivot) = &self.pivot {
+            return pivot.field_of(column).is_some();
+        }
         (self
             .pending_schema
             .as_ref()

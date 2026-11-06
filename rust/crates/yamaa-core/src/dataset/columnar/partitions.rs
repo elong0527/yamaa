@@ -1644,6 +1644,7 @@ fn rebase<E>(
         | X::ProjectFunction { identity: held, .. }
         | X::Numeric { identity: held, .. }
         | X::MultipleMatches { identity: held, .. }
+        | X::UnlistedPivotName { identity: held, .. }
         | X::UnmatchedKey { identity: held, .. }
         | X::Reduction { identity: held, .. } => identity(held, &rows),
         X::MultipleValues { identity: held, .. } => identity(held, &collected),

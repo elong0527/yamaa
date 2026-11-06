@@ -138,6 +138,10 @@ intermediate_class:
         type: nearest_class
         required: false
         description: Selects the candidate whose date or datetime lies nearest a current-row value; it cannot be declared with order_by or keep (LOOKUP-26).
+    - pivot:
+        type: pivot_class
+        required: false
+        description: Exposes each listed value of one donor field as a field of the selection, selected among the candidates of that name; it cannot be declared with columns, require_match, inner_join or SELF (LOOKUP-28).
     - columns:
         type: "list[identifier]"
         required: false
@@ -192,6 +196,20 @@ nearest_class:
         required: true
         values: [day, week, month, year, second, minute, hour]
         description: Unit the distance is counted in, as diff counts it, a calendar unit for a date source or an elapsed unit for a datetime source (TIME-4).
+
+pivot_class:
+    - name:
+        type: identifier
+        required: true
+        description: Donor-record str field, stored or derived, whose value on a candidate names the field the candidate holds (LOOKUP-28).
+    - value:
+        type: identifier
+        required: true
+        description: Donor-record field, stored or derived, whose value each listed field reads from the candidate selected for its name (LOOKUP-28).
+    - fields:
+        type: "list[identifier]"
+        required: true
+        description: The names the selection exposes as fields, each selected among the candidates whose name it is; a candidate named otherwise fails the read (LOOKUP-28).
 
 # See SCHEMA-5.
 match_key_range_fields:

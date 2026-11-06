@@ -487,6 +487,22 @@ pub enum ExecutionError<E> {
         dataset: String,
         intermediate: String,
         match_count: usize,
+        /// The listed name a pivot's field relation selects for (LOOKUP-28).
+        field: Option<String>,
+        matched_key: Vec<(String, Value)>,
+        identity: Option<RowIdentity>,
+    },
+    /// A pivot's candidate whose name it does not list (LOOKUP-28).
+    UnlistedPivotName {
+        path: String,
+        dataset: String,
+        intermediate: String,
+        /// The pivot's `name` field.
+        name: String,
+        /// The candidate's name: text, or missing.
+        value: Value,
+        /// The names the pivot lists.
+        fields: Vec<String>,
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
     },

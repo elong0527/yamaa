@@ -584,6 +584,10 @@ impl<'d> Lower<'d> {
                 let meta = self.field_meta(meta, "nearest", node);
                 self.nearest(node, meta)
             });
+            let pivot = self.field(item, "pivot").map(|node| {
+                let meta = self.field_meta(meta, "pivot", node);
+                self.pivot(node, meta)
+            });
             let columns = self
                 .field(item, "columns")
                 .map(|_| self.names(meta, item, "columns"));
@@ -626,6 +630,7 @@ impl<'d> Lower<'d> {
                 order_by,
                 keep,
                 nearest,
+                pivot,
                 columns,
                 absent,
                 require_match: self.boolean(item, "require_match", false),
@@ -641,6 +646,7 @@ impl<'d> Lower<'d> {
                         "order_by",
                         "keep",
                         "nearest",
+                        "pivot",
                         "columns",
                         "derivations",
                         "verifications",

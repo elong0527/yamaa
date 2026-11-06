@@ -254,6 +254,55 @@ pub(crate) fn nearest_reference_type(
     finding(C::LookupNearestReferenceType, vec![path.into()], context)
 }
 
+/// What a pivot admits none of beside it (LOOKUP-28): each of `columns` and
+/// `require_match` written beside it and a `SELF` relation, then `pivot`.
+/// `construct` is the first of them, a field's name or `SELF`.
+pub(crate) fn pivot_construct(paths: Vec<String>, owner: Owner<'_>, construct: &str) -> Diagnostic {
+    let mut context: Context = [("construct".into(), text(construct))].into();
+    owner.add(&mut context);
+    finding(C::LookupPivotConstruct, paths, context)
+}
+
+/// A pivot whose `fields` names nothing (LOOKUP-28).
+pub(crate) fn pivot_no_fields(path: &str, owner: Owner<'_>) -> Diagnostic {
+    let mut context: Context = [("expected".into(), text("at least one field"))].into();
+    owner.add(&mut context);
+    finding(C::LookupPivotNoFields, vec![path.into()], context)
+}
+
+/// A pivot field named twice, or named as a stored or derived field of the
+/// lookup's relation (LOOKUP-28).
+pub(crate) fn pivot_field_duplicate(path: &str, owner: Owner<'_>, identifier: &str) -> Diagnostic {
+    let mut context: Context = [("identifier".into(), text(identifier))].into();
+    owner.add(&mut context);
+    finding(C::LookupPivotFieldDuplicate, vec![path.into()], context)
+}
+
+/// A pivot's `name` or `value` that names no field of the lookup's relation
+/// (LOOKUP-28).
+pub(crate) fn pivot_field_reference(path: &str, owner: Owner<'_>, identifier: &str) -> Diagnostic {
+    let mut context: Context = [("identifier".into(), text(identifier))].into();
+    owner.add(&mut context);
+    finding(C::LookupPivotFieldReference, vec![path.into()], context)
+}
+
+/// A pivot's `name` whose type is not `str` (LOOKUP-28).
+pub(crate) fn pivot_name_type(
+    path: &str,
+    owner: Owner<'_>,
+    identifier: &str,
+    actual: ResultType,
+) -> Diagnostic {
+    let mut context: Context = [
+        ("identifier".into(), text(identifier)),
+        ("actual".into(), text(&actual.name())),
+        ("permitted".into(), texts(&["str"])),
+    ]
+    .into();
+    owner.add(&mut context);
+    finding(C::LookupPivotNameType, vec![path.into()], context)
+}
+
 /// What a pair relation's `inner_join` admits none of beside it (LOOKUP-27):
 /// each field written that selects, ranges or answers absence, and a side
 /// that names `SELF`, then `inner_join`, in LOOKUP-27's listed order. `construct`

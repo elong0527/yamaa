@@ -1,0 +1,22 @@
+phase: join
+condition: multiple_matches
+spec_paths:
+  - intermediates.QUAL
+rule: LOOKUP-10
+context:
+  intermediate: QUAL
+  dataset: SUPPAE
+  field: AEXSITE
+  match_count: 2
+  key:
+    - STUDYID
+    - USUBJID
+    - IDVARVAL
+  intermediate_key:
+    STUDYID: YAMAA-01
+    USUBJID: YAMAA-01-001
+    IDVARVAL: 1
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-001
+      AESEQ: 1

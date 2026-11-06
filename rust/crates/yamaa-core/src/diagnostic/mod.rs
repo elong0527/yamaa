@@ -617,6 +617,13 @@ conditions! {
     LookupNearestSourceReference => ("validation", "unknown_field", Some("LOOKUP-26")),
     LookupNearestSourceType => ("validation", "incompatible_input_type", Some("LOOKUP-26")),
     LookupNearestReferenceType => ("validation", "incompatible_input_type", Some("LOOKUP-26")),
+    // The pivot of a named intermediate (LOOKUP-28).
+    LookupPivotConstruct => ("validation", "prohibited_construct", Some("LOOKUP-28")),
+    LookupPivotNoFields => ("validation", "invalid_field_type", Some("LOOKUP-28")),
+    LookupPivotFieldDuplicate => ("validation", "duplicate_derivation", Some("LOOKUP-28")),
+    LookupPivotFieldReference => ("validation", "unknown_field", Some("LOOKUP-28")),
+    LookupPivotNameType => ("validation", "incompatible_input_type", Some("LOOKUP-28")),
+    LookupPivotUnlisted => ("join", "unlisted_pivot_name", Some("LOOKUP-28")),
     // The pair relation of a named intermediate that writes `inner_join`
     // (LOOKUP-27, D263).
     LookupPairConstruct => ("validation", "prohibited_construct", Some("LOOKUP-27")),

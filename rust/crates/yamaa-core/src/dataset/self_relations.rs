@@ -48,6 +48,11 @@ impl IntermediateSource {
 impl Intermediate {
     /// Schema slots describe layout; only admitted inference describes raw results.
     pub fn source_kind(&self, sources: &[SecondarySource], column: usize) -> Option<ColumnType> {
+        // A pivot field is laid out as the `value` column is (LOOKUP-28).
+        let column = match &self.pivot {
+            Some(pivot) if pivot.field_of(column).is_some() => pivot.value,
+            _ => column,
+        };
         if let Some(derived) = &self.derivations {
             return derived.column_kind(column);
         }
@@ -62,6 +67,9 @@ impl Intermediate {
     pub fn source_schema<'a>(&'a self, sources: &'a [SecondarySource]) -> Option<&'a TableSchema> {
         if let Some(schema) = &self.pending_schema {
             return Some(schema);
+        }
+        if let Some(pivot) = &self.pivot {
+            return Some(&pivot.schema);
         }
         if let Some(derived) = &self.derivations {
             return Some(derived.plan.output());

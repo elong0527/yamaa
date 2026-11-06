@@ -63,7 +63,9 @@ rows of a partition or the current input group, which their `filter` narrows
 pair relation runs the match and narrow steps once for every record of its
 left side, that record standing where the current row stands, and keeps every
 candidate as a record of its own; it runs once, before any row is built
-([LOOKUP-27](#lookup-27)).
+([LOOKUP-27](#lookup-27)). A named intermediate that writes `pivot` runs the
+select and absence steps once per listed name, each over the candidates whose
+`name` equals it ([LOOKUP-28](#lookup-28)).
 
 <a id="lookup-9"></a>
 
@@ -315,7 +317,8 @@ whose key is verified unique at `error` severity needs neither `order_by` nor
 `nearest` ([LOOKUP-17](#lookup-17)). Every reducer but `STR_JOIN` reads an
 aggregate's candidates in stored order ([FORMULA-19](formulas.md#formula-19)).
 A named intermediate may select by distance instead, with `nearest`
-([LOOKUP-26](#lookup-26)).
+([LOOKUP-26](#lookup-26)), and one that writes `pivot` selects once per listed
+name ([LOOKUP-28](#lookup-28)).
 
 An aggregate's `order_by` orders only the candidates `STR_JOIN` joins
 ([FORMULA-18](formulas.md#formula-18)), and an aggregate declares no `keep`.
@@ -429,6 +432,99 @@ value does ([LOOKUP-16](#lookup-16)), and a project function argument or an
 aggregate's derivation may read it, as either may read an intermediate that
 declares `keep` ([LOOKUP-22](#lookup-22)).
 
+<a id="lookup-28"></a>
+
+### LOOKUP-28. A named intermediate's pivot exposes each listed value of one donor field as a field of its selection
+
+`pivot` declares `name`, a `str` field of the lookup's relation, `value`, a
+field of it, and `fields`, the names the selection exposes. Match and narrow
+run as for any lookup; each listed name then selects among the candidates
+whose `name` equals it, by `order_by` and `keep` or `nearest`, and answers
+absence on its own. A read of a listed name through the intermediate is the
+`value` of the candidate selected for it. A candidate whose name no field
+lists fails the read.
+
+Fails: `unlisted_pivot_name`, `multiple_matches`, `prohibited_construct`, `unknown_field`, `incompatible_input_type`, `duplicate_derivation`, `invalid_field_type`.
+Evidence: `schema-lookup-pivot`, `schema-lookup-pivot-selection`, `negative-lookup-pivot-duplicate`, `negative-lookup-pivot-unlisted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/pivoted_lookups.json`.
+
+```yaml
+intermediates:
+  - id: QUAL
+    dataset: SUPPAE
+    key: {STUDYID: AE.STUDYID, USUBJID: AE.USUBJID, IDVARVAL: AE.AESEQ}
+    filter: "SUPPAE.RDOMAIN = 'AE' AND SUPPAE.IDVAR = 'AESEQ'"
+    pivot: {name: QNAM, value: QVAL, fields: [AEXSITE, AEXCAUS, AEXSIZE]}
+columns:
+  - {name: AEXSITE, type: str, label: Location Detail, derivation: QUAL.AEXSITE}
+  - {name: AEXSIZE, type: int, label: Reaction Size (mm), derivation: QUAL.AEXSIZE}
+```
+
+Each adverse event reads its supplemental qualifiers (SDTMIG section 8.4)
+through one lookup: the match finds the event's supplemental records, the
+filter keeps those of the event's domain and sequence, and each listed
+qualifier name is a field holding that qualifier's value, missing for an
+event without it.
+
+`name` and `value` each name a field of the lookup's relation, written bare:
+a stored field, or a name the intermediate derives ([LOOKUP-15](#lookup-15)).
+A name the relation does not have fails as `unknown_field` at `pivot.name`
+or `pivot.value`, naming it as `identifier`. The type of `name`, declared or
+its derivation's result type ([EXPR-14](expressions.md#expr-14)), must be
+`str`; another fails as `incompatible_input_type` at `pivot.name`, reporting
+it as `actual` and `permitted` as `str`. `fields` lists at least one name,
+or fails as `invalid_field_type`; a name listed twice, or one that names a
+stored or derived field of the relation, fails as `duplicate_derivation` at
+its entry, naming it as `identifier`. Each listed field has the type of
+`value`: a supplemental qualifier's value is text, and a column reading it
+converts it to the column's type ([VALUE-3](values.md#value-3)), as a column
+reading `QVAL` through a plain lookup does.
+
+A read through the intermediate names a listed field and nothing else: a
+stored or derived field of the relation, such as `QUAL.QORIG`, has no one
+candidate to come from, and fails as `unknown_field`, as a field outside a
+declared `columns` list does ([LOOKUP-11](#lookup-11)). `columns` written
+beside `pivot` fails validation before any input is read as
+`prohibited_construct`, as do `require_match`, which would require every
+listed name on every row, and `SELF` as the relation; the finding names each
+of them and then `pivot`, in that order, with the intermediate's id as
+`intermediate` and the first of them as `construct`. A requirement on one
+field is a column verification such as `not_missing`. A pair relation admits
+no `pivot` ([LOOKUP-27](#lookup-27)), and a row driver declares none
+([ROW-2](rows.md#row-2)).
+
+Selection and absence are answered per listed name, over the candidates
+whose `name` equals it, in stored order: with neither `order_by` and `keep`
+nor `nearest`, two candidates of one name fail as `multiple_matches`
+([LOOKUP-10](#lookup-10)), whose context names the listed name as `field`;
+with them, the selection chooses one candidate per name, and a choice among
+several counts one `multiple_matches` handling at the read's path
+([LOOKUP-14](#lookup-14)). A name with no candidate answers absence for the
+reads of it: missing, or the `absent` value, counted under `absent` at the
+read's path ([LOOKUP-24](#lookup-24)). Every column reading one field shares
+its selection, and the fields of one row share one match
+([LOOKUP-12](#lookup-12)).
+
+The listed names are a closed declaration ([SPEC-3](specification.md#spec-3)).
+A candidate whose `name` none of them lists, a missing name included, fails
+the read as `unlisted_pivot_name` at the join phase, reporting the
+intermediate, its dataset, `name`, the candidate's `value` and the listed
+`fields`, with the row's keys and the matched key as `multiple_matches`
+reports them. A qualifier the specification does not list, or a listed name
+spelt otherwise than the data spells it, stops the run on the first row that
+meets it rather than leaving a column empty; a record the filter removes, or
+that no row matches, is never asked. A specification that leaves some names
+out on purpose narrows its `filter` to the names it lists.
+
+A pivoted intermediate with no `derivations` is a plain lookup
+([SUB-19](profiles/submission.md#sub-19)): a read of a listed field is a bare
+read of the `value` field of the record selected for it, which admits every
+origin, and under [SUB-20](profiles/submission.md#sub-20) copies a
+`Predecessor` such as `SUPPAE.QVAL where QNAM = 'AEXSITE'`, the pivot
+standing as the written condition. Its `unique` checks run over the filtered
+donor records as for any intermediate ([LOOKUP-17](#lookup-17)), so
+`unique: [STUDYID, USUBJID, IDVARVAL, QNAM]` asserts before any row is built
+that no qualifier repeats.
+
 <a id="lookup-24"></a>
 
 ### LOOKUP-24. A lookup with no candidate answers absence, missing by default, unless require_match fails it
@@ -478,10 +574,11 @@ way as the default.
 A named intermediate with no candidate gives every column reading it its
 `absent` value, or missing when `absent` is omitted, independently for each
 column read and counted under that column's `absent` handler, declared or by
-default. One column's handling never answers for another. `absent: null`
-answers missing as an omitted `absent` does; in a child layer it overrides an
-inherited answer, and `clear` restores the default
-([LAYER-9](inheritance.md#layer-9)).
+default. One that writes `pivot` answers absence per listed name, and
+declares no `require_match` ([LOOKUP-28](#lookup-28)). One column's handling
+never answers for another. `absent: null` answers missing as an omitted
+`absent` does; in a child layer it overrides an inherited answer, and `clear`
+restores the default ([LAYER-9](inheritance.md#layer-9)).
 
 An aggregate declares no absence handler and no `require_match`. A row whose
 match leaves no candidate, or whose match or range value is missing, reduces
@@ -987,10 +1084,11 @@ Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crate
 
 Naming in `columns` a column the dataset does not have fails as
 `unknown_field`, and so does a lookup-qualified read of a missing or
-unlisted column. In a `between.value` a lookup-qualified variable reads the
-column the lookup selects for the row ([LOOKUP-9](#lookup-9)), or in a donor
-read for the donor record ([LOOKUP-16](#lookup-16)). In a key match
-value it fails as `unknown_field` at the pair, written alone or read by an
+unlisted column. A lookup that writes `pivot` exposes its listed names alone
+([LOOKUP-28](#lookup-28)). In a `between.value` a lookup-qualified variable
+reads the column the lookup selects for the row ([LOOKUP-9](#lookup-9)), or
+in a donor read for the donor record ([LOOKUP-16](#lookup-16)). In a key
+match value it fails as `unknown_field` at the pair, written alone or read by an
 expression; derive the value into a column first and match on the column.
 
 <a id="lookup-12"></a>
@@ -1683,7 +1781,8 @@ A side that names an input reads every record of it. A side that names an
 intermediate reads the records a row template driving on it would read: those
 its filter keeps, its derivations complete, before any pair is formed. Such an
 intermediate reads an input and declares none of `key`, `between`,
-`order_by`, `keep`, `nearest`, `absent`, `require_match` and `inner_join`, or
+`order_by`, `keep`, `nearest`, `pivot`, `absent`, `require_match` and
+`inner_join`, or
 the pair relation fails as `invalid_intermediate_driver` at its field that
 names the side, naming the side as `intermediate` and each such field, the
 side's `dataset` among them when it reads no input. So a pair relation is no
@@ -1732,7 +1831,7 @@ filter, a derivation or `columns` reads that is none of these fails as
 severity only ([LOOKUP-17](#lookup-17)).
 
 A pair relation selects nothing, ranges over nothing and answers no absence:
-`between`, `order_by`, `keep`, `nearest`, `absent` and `require_match`
+`between`, `order_by`, `keep`, `nearest`, `pivot`, `absent` and `require_match`
 written beside `inner_join`, and `SELF` as either side, fail before any input
 is read as `prohibited_construct`, naming each of them and then `inner_join`,
 in the order listed here, with the relation's id as `intermediate` and the first

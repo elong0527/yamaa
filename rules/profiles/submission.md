@@ -833,8 +833,9 @@ item, into the one value its group or relation holds
 choose the record, and the value is the variable as stored. A plain lookup is
 a named intermediate that reads a dataset `input` declares and declares no
 `derivations`: its `key`, `between`, `filter` and selection choose a record,
-and every field read through it is that record's stored value. Either is a
-bare read wherever this rule reads one.
+or with `pivot` a record per listed name
+([LOOKUP-28](../lookup.md#lookup-28)), and every field read through it is that
+record's stored value. Either is a bare read wherever this rule reads one.
 
 A recode copies, recodes, reformats or assembles collected values. Each
 variable it names is a bare read, never one through a named intermediate other
@@ -916,7 +917,10 @@ predecessor's input, a named intermediate over that declared input with no
 `derivations` ([SUB-19](#sub-19)), copies the column too: with
 `intermediates: [{id: SUBJ, dataset: ADSL, key: {USUBJID: AE.USUBJID}}]`, the
 read `SUBJ.AGE` copies `ADSL.AGE`, and a written condition then requires the
-lookup, or the structured `source` reading through it, to declare a `filter`.
+lookup, or the structured `source` reading through it, to declare a `filter`,
+or the lookup to declare a `pivot`, whose listed field read copies the
+record's `value` field and whose name stands as the condition
+([LOOKUP-28](../lookup.md#lookup-28)).
 A pair relation reads two datasets and copies through neither, and a lookup
 whose `absent` answers with a value other than null writes a value no record
 stores. No rule

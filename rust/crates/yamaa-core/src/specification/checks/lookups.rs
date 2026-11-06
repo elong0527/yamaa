@@ -64,7 +64,7 @@ pub(in crate::specification) fn driver_prohibited(
         .absent
         .as_ref()
         .map(|answer| spec.paths.segment(answer.meta.path));
-    let mut fields = ["key", "between", "order_by", "keep", "nearest"]
+    let mut fields = ["key", "between", "order_by", "keep", "nearest", "pivot"]
         .into_iter()
         .filter(|&field| item.written.contains(field))
         .collect::<Vec<_>>();
@@ -92,6 +92,7 @@ fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
         "order_by",
         "keep",
         "nearest",
+        "pivot",
         "columns",
         "derivations",
         "verifications",
@@ -115,7 +116,7 @@ fn pair_prohibited(spec: &Spec, item: &ast::Intermediate) -> Vec<&'static str> {
         .absent
         .as_ref()
         .map(|answer| spec.paths.segment(answer.meta.path));
-    let mut fields = ["between", "order_by", "keep", "nearest"]
+    let mut fields = ["between", "order_by", "keep", "nearest", "pivot"]
         .into_iter()
         .filter(|&field| item.written.contains(field))
         .collect::<Vec<_>>();
@@ -380,6 +381,12 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
             }
             continue;
         }
+        // A pivot exposes its listed names alone and answers each of them
+        // (LOOKUP-28), so it admits neither `columns` nor `require_match`
+        // beside it, nor SELF as its relation.
+        if let Some(pivot) = &item.pivot {
+            findings.extend(pivot_findings(spec, item, pivot, &path));
+        }
         // A written `order_by` needs a `keep`, even when it has no term; an
         // `order_by` with no term orders nothing, so a `keep` beside it has
         // no order to choose by, as for a source's selection (LOOKUP-10).
@@ -404,6 +411,60 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                     &[missing],
                 )));
             }
+        }
+    }
+    findings
+}
+
+/// What a pivot admits none of beside it (LOOKUP-28): `columns`,
+/// `require_match` and a `SELF` relation, in that order, then `pivot`, the
+/// first of them named as the construct; and, when those admit it, a
+/// `fields` list that names nothing or names a field twice.
+fn pivot_findings(
+    spec: &Spec,
+    item: &ast::Intermediate,
+    pivot: &ast::Pivot,
+    path: &str,
+) -> Vec<PreflightFinding> {
+    let name = item.id.name.as_str();
+    let mut refused = ["columns", "require_match"]
+        .into_iter()
+        .filter(|&field| item.written.contains(field))
+        .map(|field| (field, format!("{path}.{field}")))
+        .collect::<Vec<_>>();
+    if item.dataset.name == "SELF" {
+        refused.push(("SELF", render(spec, item.dataset.meta)));
+    }
+    let mut findings = Vec::new();
+    if let Some(&(construct, _)) = refused.first() {
+        let mut paths = refused
+            .iter()
+            .map(|(_, path)| path.clone())
+            .collect::<Vec<_>>();
+        paths.push(render(spec, pivot.meta));
+        findings.push(PreflightFinding::Scalar(lookup::pivot_construct(
+            paths,
+            Owner::Intermediate(name),
+            construct,
+        )));
+        return findings;
+    }
+    if pivot.fields.is_empty() {
+        findings.push(PreflightFinding::Scalar(lookup::pivot_no_fields(
+            &render(spec, pivot.fields_meta),
+            Owner::Intermediate(name),
+        )));
+    }
+    for (position, field) in pivot.fields.iter().enumerate() {
+        if pivot.fields[..position]
+            .iter()
+            .any(|prior| prior.name == field.name)
+        {
+            findings.push(PreflightFinding::Scalar(lookup::pivot_field_duplicate(
+                &render(spec, field.meta),
+                Owner::Intermediate(name),
+                &field.name,
+            )));
         }
     }
     findings
