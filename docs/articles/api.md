@@ -616,6 +616,17 @@ end pair, or all location fields. A schema default names its schema
 module and no location, and a value composition made, such as the model's
 root, names neither.
 
+Each entry's `pruned` lists what composition wrote that the resolved model no
+longer holds, since nothing the artifact needs reads it
+([LAYER-11](../../rules/inheritance.md#layer-11)): each pruned input, named
+intermediate, column or row template's derivation by its `spec_path`, then
+each value inside it that another layer wrote, such as a label a study layer
+gives a template column it leaves out of `output.columns`. Each names its
+`declaring_source` with the `line`, `column`, `end_line` and `end_column`
+where that layer wrote it. `lint()` reports, as `unused_declaration`, only
+what the linted file itself writes; `pruned` also shows what it inherits.
+Artifacts written before 1.0.0 have no `pruned`.
+
 === "R"
 
     ```r

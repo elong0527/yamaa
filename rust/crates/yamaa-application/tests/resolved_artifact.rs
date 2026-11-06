@@ -489,3 +489,76 @@ fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_si
     // position follows direction and the resolved term leaves it absent.
     assert!(!origins.contains_key(&format!("{prefix}/order_by/0/nulls")));
 }
+
+/// The resolved artifact lists each value of each declaration pruning
+/// removes (LAYER-11) by the file and field that wrote it, at the line and
+/// column, and the exclusive end, where that file wrote it. The child keeps
+/// one of its parent's output columns, so the parent's `WEIGHT` and the
+/// input only it reads are pruned, and the label the child gives `WEIGHT`
+/// with them; the parent's other fields of `WEIGHT` are the column's.
+#[test]
+fn a_pruned_declaration_is_listed_by_the_file_and_field_that_wrote_it() {
+    use yamaa_application::resolved_artifact::model::PrunedValue;
+    let study = Study::new();
+    study.write(
+        "parent.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADTOY\nkeys: [USUBJID]\ninput:\n  DM: dm.csv\n  \
+         VS: {path: vs.csv, key: [USUBJID]}\nbase: DM\noutput:\n  path: out.csv\n  \
+         columns: [USUBJID, WEIGHT]\ncolumns:\n  \
+         - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  \
+         - {name: WEIGHT, type: float, label: Weight, derivation: VS.VSSTRESN}\n",
+    );
+    study.write(
+        "spec.yaml",
+        "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\noutput:\n  columns: [USUBJID]\n\
+         columns:\n  - name: WEIGHT\n    label: Weight (kg)\n",
+    );
+    let artifact = study.resolve("spec.yaml");
+    let value = |spec_path: &str, file: &str, start: (u32, u32), end: (u32, u32)| PrunedValue {
+        spec_path: spec_path.into(),
+        declaring_source: Some(study.path(file)),
+        line: Some(start.0),
+        column: Some(start.1),
+        end_line: Some(end.0),
+        end_column: Some(end.1),
+    };
+    assert_eq!(
+        artifact.entries()[0].pruned,
+        [
+            value("input.VS", "parent.yaml", (7, 7), (7, 37)),
+            value("columns.WEIGHT", "parent.yaml", (14, 5), (14, 72)),
+            value("columns.WEIGHT.label", "spec.yaml", (8, 12), (8, 23)),
+        ],
+        "the pruned values of the child"
+    );
+    let json = artifact.to_json().unwrap();
+    assert_eq!(
+        ResolvedArtifact::from_json(&json).unwrap(),
+        artifact,
+        "the pruned values survive the wire"
+    );
+    // A pruned value read from the wire names its path, a layer of the entry
+    // and, only with that layer, where it wrote the value.
+    for (label, field, invented) in [
+        ("an empty path", "spec_path", Value::String(String::new())),
+        (
+            "a source that is no layer",
+            "declaring_source",
+            Value::String("/elsewhere.yaml".into()),
+        ),
+        (
+            "a location without a source",
+            "declaring_source",
+            Value::Null,
+        ),
+        ("an end before the start", "end_line", Value::from(1)),
+        ("a line of zero", "line", Value::from(0)),
+    ] {
+        let mut value: Value = yamaa_adapters::json_wire::decode(&json).unwrap();
+        value["entries"][0]["pruned"][2][field] = invented;
+        assert!(
+            ResolvedArtifact::from_json(&yamaa_adapters::json_wire::encode(&value)).is_err(),
+            "{label}"
+        );
+    }
+}
