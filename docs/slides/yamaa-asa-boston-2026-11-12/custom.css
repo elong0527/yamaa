@@ -245,3 +245,35 @@
   font-size: 0.95rem;
   margin-top: 0.15rem;
 }
+
+/* R Consortium pilots: hex stickers in rows of five, centered, each with its
+   pilot name and years. Each sticker links to its pilot's page. Sized so two
+   rows fit under a two-line title and a nested bullet. */
+.reveal .hex-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1.6em;
+  justify-content: center;
+  margin-top: 0.3em;
+}
+
+.reveal .hex-grid .hex-item {
+  font-size: 0.8em;
+  line-height: 1.2;
+  text-align: center;
+  width: 8em;
+}
+
+.reveal .hex-grid .hex-item p {
+  margin: 0;
+}
+
+.reveal .hex-grid .hex-item img {
+  height: 110px;
+  margin: 0 auto 0.15em;
+}
+
+.reveal .hex-grid .hex-item p:last-child {
+  color: var(--course-muted);
+  font-size: 0.85em;
+}
