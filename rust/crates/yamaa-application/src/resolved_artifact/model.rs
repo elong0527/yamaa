@@ -76,6 +76,27 @@ pub struct Resource {
     pub location: Location,
 }
 
+/// A value of a declaration the resolved specification prunes (LAYER-11):
+/// the declaration itself, or a value inside it that a layer other than the
+/// one writing its holder wrote, with that layer and where it wrote it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PrunedValue {
+    pub spec_path: String,
+    pub declaring_source: Option<String>,
+    /// The one-based line and column, and the exclusive end, at which the
+    /// declaring layer wrote the value, present together, as an authored
+    /// origin's are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_column: Option<u32>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
@@ -95,6 +116,12 @@ pub struct Entry {
     /// Composition layers in postorder (one entry for standalone documents).
     pub layers: Vec<String>,
     pub resources: Vec<Resource>,
+    /// Each value of each declaration pruning removed, declaration by
+    /// declaration in the composition's order. Version 1 gained it as an
+    /// optional field, so an entry an earlier engine wrote without it still
+    /// reads.
+    #[serde(default)]
+    pub pruned: Vec<PrunedValue>,
 }
 
 /// The JSON wire format is intentionally distinct from an authored specification.
@@ -229,8 +256,58 @@ impl ResolvedArtifact {
                     return Err(Error::Facts("empty resource location"));
                 }
             }
+            // A pruned value names its path, and the layer that wrote it is
+            // one of the entry's, as is where it wrote it.
+            for value in &entry.pruned {
+                let source = value.declaring_source.as_ref();
+                let location = located(value.line, value.column, value.end_line, value.end_column);
+                if value.spec_path.is_empty()
+                    || source.is_some_and(|source| !entry.layers.contains(source))
+                    || !(location == Located::Nowhere
+                        || location == Located::Written && source.is_some())
+                {
+                    return Err(Error::Facts("inconsistent pruned value"));
+                }
+            }
         }
         Ok(())
+    }
+}
+
+/// What a record's location fields hold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Located {
+    /// No location.
+    Nowhere,
+    /// A written one: a line and a column, both one-based, and an optional
+    /// exclusive end at or after them, its two fields present together.
+    Written,
+    /// Anything else.
+    Invalid,
+}
+
+fn located(
+    line: Option<u32>,
+    column: Option<u32>,
+    end_line: Option<u32>,
+    end_column: Option<u32>,
+) -> Located {
+    match (line, column, end_line, end_column) {
+        (None, None, None, None) => Located::Nowhere,
+        (Some(line), Some(column), end_line, end_column)
+            if line > 0
+                && column > 0
+                && match (end_line, end_column) {
+                    (None, None) => true,
+                    (Some(end_line), Some(end_column)) => {
+                        end_line > 0 && end_column > 0 && (line, column) <= (end_line, end_column)
+                    }
+                    _ => false,
+                } =>
+        {
+            Located::Written
+        }
+        _ => Located::Invalid,
     }
 }
 
@@ -258,28 +335,15 @@ fn validate_ledgers(entry: &Entry) -> Result<(), Error> {
             }
             _ => {}
         }
-        // A location is a written one: a line and a column, both one-based,
-        // where a layer wrote the value.
-        match (
+        // A location is a written one, where a layer wrote the value.
+        match located(
             origin.line,
             origin.column,
             origin.end_line,
             origin.end_column,
         ) {
-            (None, None, None, None) => {}
-            (Some(line), Some(column), end_line, end_column)
-                if origin.source_kind == OriginKind::Authored
-                    && line > 0
-                    && column > 0
-                    && match (end_line, end_column) {
-                        (None, None) => true,
-                        (Some(end_line), Some(end_column)) => {
-                            end_line > 0
-                                && end_column > 0
-                                && (line, column) <= (end_line, end_column)
-                        }
-                        _ => false,
-                    } => {}
+            Located::Nowhere => {}
+            Located::Written if origin.source_kind == OriginKind::Authored => {}
             _ => return Err(Error::Facts("origin location is not a written one")),
         }
         match value {

@@ -143,7 +143,7 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | Field | Meaning |
 | --- | --- |
 | `format` | `yamaa.resolved-specification`, distinct from authored YAML. |
-| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line`, `column`, `end_line` and `end_column` in 0.7.0; the end is exclusive, and starts-only or unlocated origins remain readable. |
+| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line`, `column`, `end_line` and `end_column` in 0.7.0, and an entry gained `pruned` in 1.0.0; the end is exclusive, and starts-only or unlocated origins remain readable. |
 | `model_kind` | `normalized_with_named_dictionary_references`. |
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |
@@ -153,7 +153,7 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 The entry contains `language_version`, the version its resolved specification
 records in `yamaa` (the newest any of its layers declares), its complete
 composed normalized `specification`, `layers` in composition postorder,
-`origins`, `mapping_order` and `resources`. A linked producing specification
+`origins`, `mapping_order`, `resources` and `pruned`. A linked producing specification
 is a `producer_schema` resource of the entry, never an entry of its own.
 Named mapping-dictionary references remain in the specification; preparation
 admits those resources as usual, and their declaring locations are recorded.
@@ -174,6 +174,17 @@ source. Default origins identify the retained schema module. `mapping_order`
 uses the same pointers to retain every mapping's original key order; JSON
 object keys alone cannot retain semantic iteration order. Arrays retain their
 normal order.
+
+`pruned` lists the declarations composition wrote that the resolved
+specification no longer holds, since no root reaches them (LAYER-11): each
+pruned input, named intermediate, column and row-template derivation by its
+`spec_path`, then each value inside it that a layer other than the one
+writing its holder wrote, such as a label a child gives an inherited column.
+Each record carries the `declaring_source` that wrote it and, as an authored
+origin does, its `line`, `column`, `end_line` and `end_column`. A reader
+refuses a record without a path, one whose source is not a layer of the
+entry, and a location that is not a written one or that names no source.
+Pruned values appear in no other field.
 
 Resources include final input data and producer links, output and the report file,
 named dictionaries and every inherited-parent reference. Each record contains

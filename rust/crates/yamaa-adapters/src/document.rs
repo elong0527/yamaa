@@ -251,7 +251,23 @@ pub struct PreparedSpecification {
     resolved: ResolvedVersioned,
     positions: Positions,
     end_positions: Vec<Option<Span>>,
+    pruned: Vec<PrunedValue>,
     lowered: Lowered,
+}
+
+/// A value of a declaration the resolved specification prunes (LAYER-11):
+/// the declaration itself, or a value inside it that a layer other than the
+/// one writing its holder wrote ([`lifecycle::PrunedVersioned::writes`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrunedValue {
+    pub spec_path: String,
+    /// The layer, numbered in contribution order, that wrote it, if a layer
+    /// did.
+    pub layer: Option<usize>,
+    /// Where that layer wrote it, at the line and column its reader decoded,
+    /// and the exclusive scanner end.
+    pub start: Option<Span>,
+    pub end: Option<Span>,
 }
 
 impl PreparedSpecification {
@@ -293,6 +309,11 @@ impl PreparedSpecification {
     /// The exclusive scanner end of a resolved node a layer wrote.
     pub fn end_position(&self, node: usize) -> Option<Span> {
         self.end_positions.get(node).copied().flatten()
+    }
+    /// Each value of each declaration the resolved specification prunes,
+    /// declaration by declaration in the composition's order (LAYER-11).
+    pub fn pruned(&self) -> &[PrunedValue] {
+        &self.pruned
     }
     /// Lower `materialized`, the resolved specification with each dictionary
     /// file's admitted content in place of its path, in place of the lowering
@@ -615,7 +636,7 @@ impl VersionedDocument {
         let locations = |layer: &graph::VersionedLayer| {
             layer_locations(&self.source, &self.raw, &parents, layer)
         };
-        let (positions, end_positions) = positions(&chain, &resolved, locations);
+        let (positions, end_positions, pruned) = positions(&chain, &resolved, locations);
         let lowered = front_end::lower(&resolved.document, Some(&positions));
         let found = front_end::checks::findings(lowered.spec());
         if !found.is_empty() {
@@ -633,6 +654,7 @@ impl VersionedDocument {
                 resolved,
                 positions,
                 end_positions,
+                pruned,
                 lowered,
             },
             source: self.source,
@@ -707,41 +729,51 @@ fn layer_locations<'a>(
 }
 
 /// Where each resolved node was written: the decoded position of the node
-/// its layer wrote, or none for a schema default or a node composition made.
-/// `locations` gives each layer's decoded positions.
+/// its layer wrote, or none for a schema default or a node composition made;
+/// and each value of each pruned declaration, located alike. `locations`
+/// gives each layer's decoded positions.
 fn positions<'a, 'b>(
     chain: &'b VersionedChain,
     resolved: &ResolvedVersioned,
     locations: impl Fn(&'b graph::VersionedLayer) -> Option<&'a DecodedYaml>,
-) -> (Positions, Vec<Option<Span>>) {
+) -> (Positions, Vec<Option<Span>>, Vec<PrunedValue>) {
     let decoded = chain.layers.iter().map(locations).collect::<Vec<_>>();
     let span = |layer: usize, at: &SourcePosition| Span {
         file: FileId(u32::try_from(layer).expect("a chain's layers fit u32")),
         line: u32::try_from(at.line).unwrap_or(u32::MAX),
         column: u32::try_from(at.column).unwrap_or(u32::MAX),
     };
+    let written = |origin: &LayerNodeOrigin| {
+        let layer = origin.layer?;
+        if !matches!(origin.origin.source, SchemaSource::Input) {
+            return None;
+        }
+        let raw = decoded.get(layer)?.as_ref()?;
+        let node = origin.origin.node;
+        Some((
+            span(layer, raw.locations.get(node)?),
+            span(layer, raw.end_locations.get(node)?),
+        ))
+    };
     let (nodes, end_positions) = resolved
         .origins
         .iter()
-        .map(|origin| {
-            let written = || {
-                let layer = origin.layer?;
-                if !matches!(origin.origin.source, SchemaSource::Input) {
-                    return None;
-                }
-                let raw = decoded.get(layer)?.as_ref()?;
-                let node = origin.origin.node;
-                Some((
-                    span(layer, raw.locations.get(node)?),
-                    span(layer, raw.end_locations.get(node)?),
-                ))
-            };
-            match written() {
-                Some((start, end)) => (Some(start), Some(end)),
-                None => (None, None),
+        .map(|origin| written(origin).unzip())
+        .unzip();
+    let pruned = resolved
+        .pruned
+        .iter()
+        .flat_map(|declared| &declared.writes)
+        .map(|(spec_path, origin)| {
+            let (start, end) = written(origin).unzip();
+            PrunedValue {
+                spec_path: spec_path.clone(),
+                layer: origin.layer,
+                start,
+                end,
             }
         })
-        .unzip();
+        .collect();
     (
         Positions {
             files: chain
@@ -754,6 +786,7 @@ fn positions<'a, 'b>(
             nodes,
         },
         end_positions,
+        pruned,
     )
 }
 
