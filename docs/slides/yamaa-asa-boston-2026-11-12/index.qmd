@@ -345,80 +345,6 @@ opensas: <https://github.com/kirha-ai/opensas><br>
 Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attempt, Oct 12 2026
 :::
 
-## Mean arterial pressure: three prompts {#example-mean-arterial-pressure-the-three-prompts .map-prompts}
-
-::: {.map-shared}
-**Shared Prompt:**
-
-- derive `ADVS` from `ADVS_RAW` using CDISC ADaM standards; one record per subject, visit, and parameter.
-- `STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE`
-- read from `/app/input`; write `/app/output/advs.csv`.
-:::
-
-::: {.map-comparison}
-| Rule in the prompt | Full - **passes** | Conventions - **passes** | Brief - **fails** |
-| --- | --- | --- | --- |
-| MAP identifiers | `PARAMCD = "MAP"`<br>`PARAM = "Mean Arterial Pressure (mmHg)"` | Same MAP identifiers | Not stated |
-| Records to add | Keep all collected records. Add one MAP per subject/visit only when both SBP and DBP results exist and are non-missing. | Not stated | Not stated |
-| `AVAL` | Keep collected values.<br>MAP = (2 x DBP + SBP) / 3;<br>do not round. | MAP is not rounded;<br>formula not stated. | Not stated |
-| `DTYPE` | Added MAP: `CALCULATION`.<br>Collected records: blank. | `CALCULATION` or blank;<br>assignment not stated. | Not stated |
-:::
-::: {.map-takeaway}
-**Brief omits both the MAP formula and the rule for adding a record.**<br>
-SBP = systolic blood pressure; DBP = diastolic blood pressure.<br>
-<https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html>
-:::
-
-::: {.notes}
-The on-screen comparison summarizes the three prompts. Their complete wording is retained below.
-
-### Full - passes
-
-```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
-
-The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
-
-Keep every collected record, and add one mean arterial pressure record for each subject and visit that has both a systolic and a diastolic blood pressure result. Mark it with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
-
-AVAL keeps each collected result. On the added record it is the average that counts the diastolic pressure twice and the systolic pressure once, not rounded. No record is added when either contributor is absent from the visit or its result is missing.
-
-DTYPE is CALCULATION on the added record and has no value on collected records.
-
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
-```
-
-### Conventions - passes
-
-```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
-
-The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
-
-Mark a mean arterial pressure record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
-
-On a mean arterial pressure record AVAL is not rounded.
-
-DTYPE is CALCULATION or has no value.
-
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
-```
-
-### Brief - fails
-
-```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
-
-The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
-
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
-```
-
-:::
-
 ## Goal: AI-first workflow for CDISC data standardization
 
 | Work | Best done by | In CDISC data standardization |
@@ -503,34 +429,6 @@ The design of yamaa is a contract between humans and AI agents.
 
 Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
 ([example](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html))
-
-## yamaa: benchmarks
-
-:::: {.columns}
-::: {.column width="48%"}
-::: {.big-number}
-~ 600
-:::
-::: {.metric-label}
-runnable benchmarks
-:::
-:::
-
-::: {.column width="48%"}
-::: {.big-number}
-3
-:::
-::: {.metric-label}
-execution interfaces (Python, R, CLI)
-:::
-:::
-::::
-
-- [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/).
-
-<iframe class="benchmark-embed r-stretch" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
-
-Scroll inside the frame to explore the spec, inputs, and golden output.
 
 ## Open source has reached the regulators
 
@@ -686,3 +584,243 @@ https://rconsortium.github.io/submissions-wg/#hex-stickers.
 | Memory | Notes kept between sessions | Not covered |
 
 > A skill tells the agent how to do the task; a tool does the exact part of it.
+
+# AI evaluation {background-color="#385898"}
+
+## What is a benchmark?
+
+> A benchmark is a fixed task with independently authored truth, so an agent's
+> work is measured rather than judged by eye.
+
+| Part | What it is | In yamaa |
+| --- | --- | --- |
+| **Task** | The request the agent receives | A prompt at one of three tiers: full, conventions, or brief |
+| **Inputs** | The data the agent may read | Input datasets in `/app/input` |
+| **Expected output** | The answer, authored independently | `benchmarks/<name>/expected/`, never regenerated from an implementation |
+| **Grader** | The rule that decides pass or fail | Compares every dataset cell by cell, then reruns the program |
+
+A benchmark measures the whole system: model, harness, skills, and tools.
+
+::: {.notes}
+The Test stage of an AI-first workflow ends with a benchmark report; an agent
+never approves its own benchmark. Source: ai4csr, The AI-first SDLC,
+https://github.com/elong0527/ai4csr/blob/main/05-ai-first-sdlc.qmd.
+:::
+
+## yamaa: benchmarks
+
+:::: {.columns}
+::: {.column width="48%"}
+::: {.big-number}
+~ 600
+:::
+::: {.metric-label}
+runnable benchmarks
+:::
+:::
+
+::: {.column width="48%"}
+::: {.big-number}
+3
+:::
+::: {.metric-label}
+execution interfaces (Python, R, CLI)
+:::
+:::
+::::
+
+- [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/).
+
+<iframe class="benchmark-embed r-stretch" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
+
+Scroll inside the frame to explore the spec, inputs, and golden output.
+
+## Harbor: running agents against benchmarks
+
+[Harbor](https://github.com/harbor-framework/harbor) runs an agent and a
+verifier in separate containers and publishes each job to
+[Harbor Hub](https://hub.harborframework.com/jobs?access=all&owner_org=yamaa).
+
+::: {.flow .flow-5}
+::: {.flow-step}
+Task
+[The prompt and the input datasets]{.small}
+:::
+::: {.flow-step}
+Agent
+[OpenCode and a model; only the model API is reachable]{.small}
+:::
+::: {.flow-step}
+Program
+[`result.R`, `result.py`, or `result.sas`]{.small}
+:::
+::: {.flow-step}
+Verifier
+[No network; compares with expected data and reruns]{.small}
+:::
+::: {.flow-step}
+Harbor Hub
+[Jobs, trials, trajectories, and leaderboards]{.small}
+:::
+:::
+
+- Each benchmark becomes a Harbor task, built for R, Python, and opensas at
+  each prompt tier.
+- Join the yamaa organization on Harbor Hub to explore the jobs:
+  [invitation link](https://hub.harborframework.com/invite/7chJ24hLaint4KnmK5VSTnW-Sow1D2yc).
+
+## How Harbor grades a yamaa task
+
+- **Hidden:** specifications, expected data, and reference programs stay out
+  of the agent's container.
+- **Exact:** integers match exactly, other numbers within a relative 1e-9, and
+  text exactly.
+- **Reproduced:** the program must rebuild every dataset from a clean output
+  directory.
+- **Held out:** reruns drop selected subjects and change identifiers, ages,
+  measurements, and dates, so hard-coded answers fail.
+- **Policy:** each track uses only its own language; web tools and other
+  runtimes fail the task.
+
+> Reward is 1 only when every check passes. Row and cell accuracy are
+> diagnostics, not the decision.
+
+::: {.notes}
+Source: yamaa, Agent evaluation with Harbor, grading contract,
+https://github.com/elong0527/yamaa/blob/main/evaluations/harbor/README.md.
+:::
+
+# Case study: creating a benchmark for ADaM derivation {background-color="#385898"}
+
+## Anatomy of a benchmark
+
+[Open adam-advs-map: mean arterial pressure](https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html){.try-it}
+
+| File | Role |
+| --- | --- |
+| `README.md` | The business rule in plain language |
+| `spec.yaml` | The yamaa specification that derives it |
+| `input/advs.csv`, `expected/advs.csv` | Four subjects and the independently authored answer |
+| `benchmark.yaml` | Review concerns: pressures from the same visit, a visit with only systolic, a missing diastolic, and an unrounded MAP (94.33333333333333) |
+| Harbor `prompts/adam-advs-map/` | The full and conventions prompts; the brief prompt is derived from the full one |
+| Harbor `solutions/adam-advs-map/` | Independent reference programs in R, Python, and opensas |
+
+## Mean arterial pressure: three prompts {#example-mean-arterial-pressure-the-three-prompts .map-prompts}
+
+::: {.map-shared}
+**Shared Prompt:**
+
+- derive `ADVS` from `ADVS_RAW` using CDISC ADaM standards; one record per subject, visit, and parameter.
+- `STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE`
+- read from `/app/input`; write `/app/output/advs.csv`.
+:::
+
+::: {.map-comparison}
+| Rule in the prompt | Full - **passes** | Conventions - **passes** | Brief - **fails** |
+| --- | --- | --- | --- |
+| MAP identifiers | `PARAMCD = "MAP"`<br>`PARAM = "Mean Arterial Pressure (mmHg)"` | Same MAP identifiers | Not stated |
+| Records to add | Keep all collected records. Add one MAP per subject/visit only when both SBP and DBP results exist and are non-missing. | Not stated | Not stated |
+| `AVAL` | Keep collected values.<br>MAP = (2 x DBP + SBP) / 3;<br>do not round. | MAP is not rounded;<br>formula not stated. | Not stated |
+| `DTYPE` | Added MAP: `CALCULATION`.<br>Collected records: blank. | `CALCULATION` or blank;<br>assignment not stated. | Not stated |
+:::
+::: {.map-takeaway}
+**Brief omits both the MAP formula and the rule for adding a record.**<br>
+SBP = systolic blood pressure; DBP = diastolic blood pressure.<br>
+<https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html>
+:::
+
+::: {.notes}
+The on-screen comparison summarizes the three prompts. Their complete wording is retained below.
+
+### Full - passes
+
+```text
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
+
+Keep every collected record, and add one mean arterial pressure record for each subject and visit that has both a systolic and a diastolic blood pressure result. Mark it with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+
+AVAL keeps each collected result. On the added record it is the average that counts the diastolic pressure twice and the systolic pressure once, not rounded. No record is added when either contributor is absent from the visit or its result is missing.
+
+DTYPE is CALCULATION on the added record and has no value on collected records.
+
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+```
+
+### Conventions - passes
+
+```text
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
+
+Mark a mean arterial pressure record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+
+On a mean arterial pressure record AVAL is not rounded.
+
+DTYPE is CALCULATION or has no value.
+
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+```
+
+### Brief - fails
+
+```text
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
+
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+```
+
+:::
+
+## Writing a fair benchmark
+
+1. Author the expected output independently; never regenerate it from an
+   implementation.
+2. Write prompts without the expected data; solvers see only the prompt and
+   the inputs.
+3. Reproduce the expected output with independent reference programs in each
+   language.
+4. Before spending model tokens, check that the reference passes and an empty
+   solution fails.
+5. Audit for shortcuts and leaks, and never tune a prompt to raise the pass
+   rate.
+
+> The goal is a fair test of the agent, not a high score.
+
+# Case study: assessing an agent with the benchmark {background-color="#385898"}
+
+## Muse Spark 1.3 on Harbor Hub
+
+OpenCode 1.18.33 with `opencode-go/muse-spark-1.3-contributor`, one attempt,
+October 2026: nine jobs, one for each prompt tier and language.
+
+| Benchmark (R) | Full | Conventions | Brief |
+| --- | --- | --- | --- |
+| `adam-adsl-age-group` | Pass | Pass | Fail (88% of cells) |
+| `adam-advs-map` | Pass | Pass | Fail (73% of cells) |
+| `adam-adae-death` | Pass | Fail (80% of cells) | Fail (75% of cells) |
+| `adam-adtte-dor` | Pass | Fail (97% of cells) | Fail (76% of cells) |
+
+> A failed task can still match 97% of its cells. Partial credit locates the
+> gap; the reward decides.
+
+- A full-prompt job for one language cost $0.36 to $0.96 in model usage.
+
+## Exercise: read a job on Harbor Hub
+
+1. Join the yamaa organization with the [invitation link](https://hub.harborframework.com/invite/7chJ24hLaint4KnmK5VSTnW-Sow1D2yc).
+2. Open the [yamaa jobs](https://hub.harborframework.com/jobs?access=all&owner_org=yamaa).
+3. Pick a brief-prompt failure and open its trial: the prompt, the
+   trajectory, the program, and the verifier report.
+4. Decide whether it is a model failure, a rule missing from the prompt, or a
+   defect in the task.
+5. Compare the same task under the full prompt.
+
+> Integrity before pass rate: a defect found in a benchmark is a finding, too.
