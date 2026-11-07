@@ -14,7 +14,7 @@ The output is one self-contained HTML file (`embed-resources: true`).
 
 ## Outline
 
-The deck has four sections:
+The deck has seven sections:
 
 - **Welcome:** the workshop outline, disclaimer, training objectives,
   preparation, and resources. It assumes familiarity with clinical
@@ -29,9 +29,19 @@ The deck has four sections:
   of a workflow, trustworthy assistance, and starting with one bounded
   workflow.
 - **Example: CDISC data standardization:** the problem of one specification
-  producing two results, prompt completeness and the mean arterial pressure
-  example, and the workflow's goal and principles. It introduces yamaa's
-  planning-stage collaboration, YAML specifications, core principle, four
-  components, inheritance, benchmarks, R Consortium submission pilots and
-  Pilot 7, and Pilot 5 performance. It closes with a workflow summary, input
-  and output recommendations, and the skills and tools the workshop covers.
+  producing two results, its root cause, the evidence that prompt
+  completeness decides success, and the workflow's goal and principles. It
+  introduces yamaa's planning-stage collaboration, YAML specifications, core
+  principle, four components, inheritance, R Consortium submission pilots
+  and Pilot 7, and Pilot 5 performance. It closes with a workflow summary,
+  input and output recommendations, and the skills and tools the workshop
+  covers.
+- **AI evaluation:** what a benchmark is, the yamaa benchmarks, how Harbor
+  runs and grades an agent on a benchmark, and an invitation to the yamaa
+  organization on Harbor Hub.
+- **Case study: creating a benchmark for ADaM derivation:** the anatomy of
+  the mean arterial pressure benchmark, its three prompt tiers, and rules for
+  a fair benchmark.
+- **Case study: assessing an agent with the benchmark:** per-task results
+  for Muse Spark 1.3 from its Harbor Hub jobs, and an exercise on reading a
+  job.

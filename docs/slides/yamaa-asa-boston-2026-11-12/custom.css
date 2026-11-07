@@ -400,3 +400,8 @@
 .reveal .map-prompts .map-takeaway p {
   margin: 0;
 }
+
+/* Harbor: a five-step strip. */
+.reveal .flow.flow-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
