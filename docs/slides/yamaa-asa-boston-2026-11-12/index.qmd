@@ -40,7 +40,7 @@ Three parts of this workshop:
 3. **Language models and agents for statistical programming (Jimeng)**\
    Strategies to enhance AI agents beyond skills and tools. 
 
-4. **Case study: Benchmark and AI evaluation (Yilong and **\
+4. **Case study: Benchmark and AI evaluation (Jimeng and Yilong)**\
    Hands on case studies for AI evaluation, benchmark creation
 
 ## Disclaimer
@@ -121,24 +121,16 @@ statistics, so the agent has to guess them. Do they match your table shell?
 
 [Try it at muse.ai](https://muse.ai){.try-it}
 
-Muse is a personal agent from Meta.
-
-"Give Muse a goal or task and it handles
-the rest": sort email, book a dinner, or fill out a form.
-
-- Muse also helps me maintain open source projects passively. 
-  + identify project gaps based on published Phuse papers. 
-  + bringing new benchmark ideas for CDISC standardization. 
-
 :::: {.columns}
 
 ::: {.column width="60%"}
-| Agent part | In Muse |
-| ---------- | ------------------------------ |
-| Tools | Connected apps such as email and calendar, a full browser, and new tools it builds when one is missing |
-| Environment | A persistent, isolated Linux computer in the cloud |
-| Memory | Long-term goals it keeps track of |
-| Human checkpoints | You approve actions such as sending an email or making a purchase |
+Muse is a personal agent from Meta. "Give Muse a goal or task and it handles
+the rest": sort email, book a dinner, or fill out a form.
+
+Muse also helps me maintain open source projects in the background:
+
+- Identify project gaps from published PHUSE papers.
+- Bring new benchmark ideas for CDISC standardization.
 :::
 
 ::: {.column width="40%"}
@@ -149,6 +141,12 @@ the rest": sort email, book a dinner, or fill out a form.
 
 ::: {.notes}
 Source: Muse, a personal agent from Meta, https://muse.ai.
+
+The parts of an agent in Muse: tools are connected apps such as email and
+calendar, a full browser, and new tools it builds when one is missing; the
+environment is a persistent, isolated Linux computer in the cloud; memory is
+the long-term goals it keeps track of; human checkpoints are the actions you
+approve, such as sending an email or making a purchase.
 :::
 
 ## What is an AI agent?
