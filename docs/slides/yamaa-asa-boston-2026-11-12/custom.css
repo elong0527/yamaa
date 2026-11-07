@@ -295,3 +295,108 @@
   color: var(--course-muted);
   font-size: 0.85em;
 }
+
+/* AI-first workflow: the six steps of a run as one strip of boxes joined by
+   arrows, each with a one-line note. Adapted from the SLDS deck's flow. */
+.reveal .flow {
+  align-items: stretch;
+  display: grid;
+  gap: 1.1rem;
+  grid-template-columns: repeat(6, 1fr);
+  margin: 0.6em 0 1em;
+}
+
+.reveal .flow-step {
+  background: #e8f0fc;
+  border-radius: 0.3em;
+  color: var(--course-ink);
+  font-size: 0.85em;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 0.6em 0.5em;
+  position: relative;
+  text-align: center;
+}
+
+.reveal .flow-step p {
+  margin: 0;
+}
+
+.reveal .flow-step .small {
+  color: var(--course-muted);
+  display: block;
+  font-size: 0.85em;
+  font-weight: 400;
+  margin-top: 0.35em;
+}
+
+.reveal .flow-step:not(:last-child)::after {
+  color: var(--course-blue);
+  content: "\2192";
+  font-size: 1.2em;
+  position: absolute;
+  right: -0.95em;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Mean arterial pressure: the shared prompt, then the three prompt tiers side
+   by side, from the SLDS deck. */
+.reveal .map-prompts .map-shared {
+  font-size: 0.75em;
+  margin: 0 0 0.6em;
+}
+
+.reveal .map-prompts .map-shared li {
+  margin-bottom: 0.15em;
+}
+
+.reveal .map-prompts .map-shared p {
+  margin: 0;
+}
+
+.reveal .map-prompts table {
+  font-size: 0.68em;
+  line-height: 1.25;
+  table-layout: fixed;
+}
+
+.reveal .map-prompts th,
+.reveal .map-prompts td {
+  padding: 0.35em 0.55em;
+}
+
+.reveal .map-prompts th {
+  background: #e8f0fc;
+  border-bottom: 2px solid var(--course-blue);
+}
+
+.reveal .map-prompts th:nth-child(1) { width: 18%; }
+.reveal .map-prompts th:nth-child(2) { width: 38%; }
+.reveal .map-prompts th:nth-child(3) { width: 28%; }
+.reveal .map-prompts th:nth-child(4) { width: 16%; }
+
+.reveal .map-prompts td {
+  border-bottom: 1px solid #dce4f0;
+}
+
+.reveal .map-prompts td:first-child {
+  color: var(--course-blue);
+  font-weight: 700;
+}
+
+.reveal .map-prompts code {
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.reveal .map-prompts .map-takeaway {
+  color: var(--course-muted);
+  font-size: 0.65em;
+  margin-top: 0.6em;
+}
+
+.reveal .map-prompts .map-takeaway p {
+  margin: 0;
+}
