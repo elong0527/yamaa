@@ -312,7 +312,7 @@ Source: ai4csr, AI-first workflows in Biometrics,
 https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
 :::
 
-# Example: CDISC data standardization {background-color="#385898"}
+# Agentic CDISC data standardization {background-color="#385898"}
 
 ## The problem: one specification, two results
 
@@ -327,6 +327,7 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 ## One root cause
 
 * The user prompt leaves business rules implicit, so agents must infer them.
+* e.g. Partial date handling. 
 * Business rules can differ from language defaults, e.g.:
   * [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round ties to even.
   * [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than non-missing values.
@@ -664,8 +665,8 @@ Harbor Hub
 :::
 :::
 
-- Each benchmark becomes a Harbor task, built for R, Python, and opensas at
-  each prompt tier.
+- Each benchmark becomes a Harbor task at each prompt tier, built for R and
+  Python, and for opensas where its runtime supports the benchmark.
 - Join the yamaa organization on Harbor Hub to explore the jobs:
   [invitation link](https://hub.harborframework.com/invite/7chJ24hLaint4KnmK5VSTnW-Sow1D2yc).
 
@@ -678,7 +679,7 @@ Harbor Hub
 - **Reproduced:** the program must rebuild every dataset from a clean output
   directory.
 - **Held out:** reruns drop selected subjects and change identifiers, ages,
-  measurements, and dates, so hard-coded answers fail.
+  measurements, and dates, which catches many hard-coded answers.
 - **Policy:** each track uses only its own language; web tools and other
   runtimes fail the task.
 
@@ -710,7 +711,7 @@ https://github.com/elong0527/yamaa/blob/main/evaluations/harbor/README.md.
 ::: {.map-shared}
 **Shared Prompt:**
 
-- derive `ADVS` from `ADVS_RAW` using CDISC ADaM standards; one record per subject, visit, and parameter.
+- derive `ADVS` from the provided `ADVS` dataset using CDISC ADaM standards; one record per subject, visit, and parameter.
 - `STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE`
 - read from `/app/input`; write `/app/output/advs.csv`.
 :::
@@ -719,62 +720,71 @@ https://github.com/elong0527/yamaa/blob/main/evaluations/harbor/README.md.
 | Rule in the prompt | Full - **passes** | Conventions - **passes** | Brief - **fails** |
 | --- | --- | --- | --- |
 | MAP identifiers | `PARAMCD = "MAP"`<br>`PARAM = "Mean Arterial Pressure (mmHg)"` | Same MAP identifiers | Not stated |
-| Records to add | Keep all collected records. Add one MAP per subject/visit only when both SBP and DBP results exist and are non-missing. | Not stated | Not stated |
-| `AVAL` | Keep collected values.<br>MAP = (2 x DBP + SBP) / 3;<br>do not round. | MAP is not rounded;<br>formula not stated. | Not stated |
-| `DTYPE` | Added MAP: `CALCULATION`.<br>Collected records: blank. | `CALCULATION` or blank;<br>assignment not stated. | Not stated |
+| Records to add | One per subject and visit with both `SYSBP` and `DIABP`; none when either is absent or missing. | Not stated | Not stated |
+| `AVAL` | Two-thirds `DIABP` plus one-third `SYSBP`;<br>not rounded. | Not rounded;<br>formula not stated. | Not stated |
+| `DTYPE` | Added record: `CALCULATION`.<br>Collected records: no value. | `CALCULATION` or no value;<br>assignment not stated. | Not stated |
 :::
 ::: {.map-takeaway}
 **Brief omits both the MAP formula and the rule for adding a record.**<br>
-SBP = systolic blood pressure; DBP = diastolic blood pressure.<br>
+`SYSBP` = systolic blood pressure; `DIABP` = diastolic blood pressure.<br>
 <https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html>
 :::
 
 ::: {.notes}
-The on-screen comparison summarizes the three prompts. Their complete wording is retained below.
+The on-screen comparison summarizes the three prompts. Their complete text,
+from evaluations/harbor/prompts/adam-advs-map/ (the brief prompt is derived
+from the full one), is below. The pass and fail results come from the
+October 2026 Harbor runs, which used an earlier wording of these prompts.
 
 ### Full - passes
 
 ```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
+dataset with one record per subject, visit, and parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Keep every collected record, and add one mean arterial pressure record for each subject and visit that has both a systolic and a diastolic blood pressure result. Mark it with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+An added record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)"
+is created for each subject and visit that has both a systolic (SYSBP) and a
+diastolic (DIABP) blood pressure result. On the added record, AVAL is
+two-thirds of the diastolic pressure plus one-third of the systolic pressure.
+AVAL on the added record is not rounded. No record is added when either
+contributor is absent from the visit or its result is missing. DTYPE is
+"CALCULATION" on the added record and has no value on collected records.
 
-AVAL keeps each collected result. On the added record it is the average that counts the diastolic pressure twice and the systolic pressure once, not rounded. No record is added when either contributor is absent from the visit or its result is missing.
-
-DTYPE is CALCULATION on the added record and has no value on collected records.
-
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/advs.csv.
 ```
 
 ### Conventions - passes
 
 ```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
+dataset with one record per subject, visit, and parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Mark a mean arterial pressure record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+PARAMCD is "MAP" and PARAM is "Mean Arterial Pressure (mmHg)" on the added
+record. AVAL on the added record is not rounded. DTYPE is "CALCULATION" or
+has no value.
 
-On a mean arterial pressure record AVAL is not rounded.
-
-DTYPE is CALCULATION or has no value.
-
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/advs.csv.
 ```
 
 ### Brief - fails
 
 ```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
+dataset with one record per subject, visit, and parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/advs.csv.
 ```
 
 :::
@@ -793,6 +803,158 @@ Read the source datasets from /app/input and save the completed dataset as /app/
    rate.
 
 > The goal is a fair test of the agent, not a high score.
+
+# Case study: review and finalize a benchmark {background-color="#385898"}
+
+## Human review finalizes the truth
+
+An AI-assisted draft is not truth until people who do the work confirm it.
+Both projects collect reviews from a static page as public GitHub Discussions.
+
+| | yamaa benchmarks | R Consortium Pilot 7 |
+| --- | --- | --- |
+| **What is reviewed** | Each SDTM, SEND, and ADaM benchmark: task, inputs, and expected output | AI-reported findings: Define-XML against the reproduced yamaa specification and the ADaM data |
+| **Reviewer decides** | Agree or Disagree on the task, the inputs, and three AI-assisted concerns | Agree, Disagree, or Need clarification; Critical, Not critical, or Unsure |
+| **Finalized when** | Two reviewers approve, nobody disagrees, and the coordinator confirms the reviewers | A reviewed publication record includes, clarifies, or excludes each finding |
+| **Start here** | [Benchmark review](https://elong0527.github.io/yamaa/benchmark/review/) | [Review guide](https://rconsortium.github.io/submissions-pilot7-synthetic-data/review/) |
+
+## Reviewing a yamaa benchmark
+
+[Start reviewing](https://elong0527.github.io/yamaa/benchmark/review/next/){.try-it}
+
+1. Sign in to GitHub; **Start reviewing** opens the next benchmark in the
+   queue.
+2. Read the Summary, Inputs, and Expected output: about 5 minutes.
+3. Answer Agree or Disagree for the task, the inputs, and the AI-assisted
+   review of three potential concerns; explain any disagreement.
+4. Select **Submit and next**, then **Start discussion** in the prefilled
+   GitHub tab.
+5. Select **Skip** for a benchmark you cannot judge.
+
+> Reviews are public: use public or invented data only.
+
+## Finalizing a yamaa benchmark
+
+::: {.flow .flow-5}
+::: {.flow-step}
+Review
+[Published as a GitHub Discussion]{.small}
+:::
+::: {.flow-step}
+Disagree
+[A rework issue opens automatically with the comments]{.small}
+:::
+::: {.flow-step}
+Rework
+[A pull request fixes the benchmark and closes the issue]{.small}
+:::
+::: {.flow-step}
+Review again
+[The new review replaces the reviewer's earlier one]{.small}
+:::
+::: {.flow-step}
+Approved
+[Two approvals, nobody disagrees; the coordinator confirms the reviewers]{.small}
+:::
+:::
+
+Round 1 status on 2026-11-07:
+
+:::: {.columns}
+::: {.column width="25%"}
+::: {.big-number}
+199
+:::
+::: {.metric-label}
+SDTM, SEND, and ADaM benchmarks
+:::
+:::
+::: {.column width="25%"}
+::: {.big-number}
+3
+:::
+::: {.metric-label}
+approved
+:::
+:::
+::: {.column width="25%"}
+::: {.big-number}
+17
+:::
+::: {.metric-label}
+in review or needing rework
+:::
+:::
+::: {.column width="25%"}
+::: {.big-number}
+179
+:::
+::: {.metric-label}
+not reviewed yet
+:::
+:::
+::::
+
+::: {.notes}
+Source: https://elong0527.github.io/yamaa/benchmark/review/, status updated
+2026-11-07 18:31 UTC: 3 approved, 6 need rework, 11 in review, 179 not
+reviewed. The coordinator confirms the reviewers before a benchmark is
+finalized.
+:::
+
+## Reviewing a Pilot 7 finding
+
+[Open the review guide](https://rconsortium.github.io/submissions-pilot7-synthetic-data/review/){.try-it}
+
+1. Open the Pilot 5 consistency findings and select **Start review** on a
+   finding; start with **Critical finding: Yes** or **Needs review**.
+2. Read **The finding**, compare the cited Define-XML item with the
+   reproduced yamaa specification, and check the **Subject examples**.
+3. Choose Agree, Disagree, or Need clarification, then Critical, Not
+   critical, or Unsure, and explain your reasoning.
+4. Select **Submit review on GitHub**, then **Start discussion**.
+
+> A 100% reproduced ADaM dataset does not resolve a disagreement between the
+> data and Define-XML.
+
+## How a Pilot 7 finding is finalized
+
+Agents propose, a verifier checks, and people decide.
+
+::: {.flow .flow-5}
+::: {.flow-step}
+Extract
+[An agent cites and quotes the documents, with probes]{.small}
+:::
+::: {.flow-step}
+Verify
+[A script checks every quote and runs every probe]{.small}
+:::
+::: {.flow-step}
+Adjudicate
+[A second agent checks each finding against the sources]{.small}
+:::
+::: {.flow-step}
+Group
+[A third agent writes plain-language issues]{.small}
+:::
+::: {.flow-step}
+Human review
+[Reviewers publish; the record includes, clarifies, or excludes]{.small}
+:::
+:::
+
+- Each agent has its own context; the orchestrator does not judge findings.
+- The review state is committed beside the study: claims, adjudication,
+  issues, and publication decisions.
+
+> The same AI-first pattern as the workflow section: evidence first, then a
+> recorded human decision.
+
+::: {.notes}
+Source: R Consortium Pilot 7, consistency review workflow,
+https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/.automation/consistency_review/workflow.md.
+:::
 
 # Case study: assessing an agent with the benchmark {background-color="#385898"}
 
