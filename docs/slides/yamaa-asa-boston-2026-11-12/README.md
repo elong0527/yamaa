@@ -14,7 +14,7 @@ The output is one self-contained HTML file (`embed-resources: true`).
 
 ## Outline
 
-The deck has seven sections:
+The deck has eight sections:
 
 - **Welcome:** the workshop outline, disclaimer, training objectives,
   preparation, and resources. It assumes familiarity with clinical
@@ -42,6 +42,10 @@ The deck has seven sections:
 - **Case study: creating a benchmark for ADaM derivation:** the anatomy of
   the mean arterial pressure benchmark, its three prompt tiers, and rules for
   a fair benchmark.
+- **Case study: review and finalize a benchmark:** how people review and
+  finalize a yamaa benchmark through its review page, with the current round
+  status, and how an AI-reported R Consortium Pilot 7 finding is reviewed and
+  finalized.
 - **Case study: assessing an agent with the benchmark:** per-task results
   for Muse Spark 1.3 from its Harbor Hub jobs, and an exercise on reading a
   job.
