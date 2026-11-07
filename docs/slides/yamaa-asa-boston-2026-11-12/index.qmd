@@ -5,7 +5,7 @@ author:
   - name: Yilong Zhang
 venue: "2026 Boston Pharmaceutical Statistics Symposium"
 date: "2026-11-12"
-date-format: "MMMM D, YYYY"
+date-format: "YYYY-MM-DD"
 embed-resources: true
 format:
   revealjs:
@@ -40,7 +40,7 @@ Three parts of this workshop:
 3. **Language models and agents for statistical programming (Jimeng)**\
    Strategies to enhance AI agents beyond skills and tools. 
 
-4. **Case study: Benchmark and AI evaluation**\
+4. **Case study: Benchmark and AI evaluation (Yilong and **\
    Hands on case studies for AI evaluation, benchmark creation
 
 ## Disclaimer
