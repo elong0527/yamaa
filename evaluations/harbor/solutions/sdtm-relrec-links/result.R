@@ -17,43 +17,49 @@ cm <- read_csv(
   col_types = cols(.default = col_character())
 )
 
-# A record naming two link identifiers contributes one row per identifier.
-ae_rows <- ae |>
-  pivot_longer(
-    cols = c(AELNKID1, AELNKID2),
-    values_to = "RELID"
-  ) |>
-  filter(!is.na(RELID) & trimws(RELID) != "") |>
-  mutate(
-    RDOMAIN = "AE",
-    IDVAR = "AESEQ",
-    IDVARVAL = trimws(AESEQ),
-    # Link numbers as text without a decimal point.
-    RELID = as.character(suppressWarnings(as.integer(RELID))),
-    RELTYPE = NA_character_
-  ) |>
-  select(STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID)
+ae_numbers <- ae |>
+  transmute(
+    STUDYID, USUBJID,
+    AENO = trimws(AESPID),
+    AESEQ = as.integer(AESEQ)
+  )
 
-cm_rows <- cm |>
+# Each event number on a medication record names the same subject's AE
+# record with that AESPID; every number must name one.
+pairs <- cm |>
   pivot_longer(
-    cols = c(CMLNKID1, CMLNKID2),
-    values_to = "RELID"
+    cols = c(CMAENO1, CMAENO2),
+    values_to = "AENO"
   ) |>
-  filter(!is.na(RELID) & trimws(RELID) != "") |>
-  mutate(
-    RDOMAIN = "CM",
-    IDVAR = "CMSEQ",
-    IDVARVAL = trimws(CMSEQ),
-    RELID = as.character(suppressWarnings(as.integer(RELID))),
-    RELTYPE = NA_character_
+  mutate(AENO = trimws(AENO)) |>
+  filter(!is.na(AENO) & AENO != "") |>
+  inner_join(
+    ae_numbers,
+    by = c("STUDYID", "USUBJID", "AENO"),
+    unmatched = c("error", "drop"),
+    relationship = "many-to-one"
   ) |>
-  select(STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID)
+  mutate(CMSEQ = as.integer(CMSEQ)) |>
+  arrange(STUDYID, USUBJID, AESEQ, CMSEQ) |>
+  group_by(STUDYID, USUBJID) |>
+  mutate(RELID = as.character(row_number())) |>
+  ungroup()
+
+ae_rows <- pairs |>
+  transmute(
+    STUDYID, USUBJID,
+    RDOMAIN = "AE", IDVAR = "AESEQ", IDVARVAL = as.character(AESEQ),
+    RELTYPE = NA_character_, RELID
+  )
+cm_rows <- pairs |>
+  transmute(
+    STUDYID, USUBJID,
+    RDOMAIN = "CM", IDVAR = "CMSEQ", IDVARVAL = as.character(CMSEQ),
+    RELTYPE = NA_character_, RELID
+  )
 
 relrec <- bind_rows(ae_rows, cm_rows) |>
-  arrange(
-    USUBJID, suppressWarnings(as.integer(RELID)), RDOMAIN,
-    suppressWarnings(as.integer(IDVARVAL))
-  ) |>
+  arrange(USUBJID, as.integer(RELID), RDOMAIN) |>
   select(STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID)
 
 dir.create("/app/output", showWarnings = FALSE)

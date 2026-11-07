@@ -1,38 +1,33 @@
 # Related Records
 
-**Goal:** emit one related-records row per relationship
-participation, carrying `IDVARVAL`, `RELTYPE`, and `RELID`.
+**Goal:** relate each medication to the adverse events it was given
+for, carrying `IDVARVAL`, `RELTYPE`, and `RELID`.
 
-**Input:** the finished AE and CM datasets: each record already
-carries an assigned sequence number (AESEQ on AE, CMSEQ on CM) and
-up to two link identifiers (AELNKID1/AELNKID2 on AE,
-CMLNKID1/CMLNKID2 on CM). A second subject reuses link number 1,
-showing that link numbers are per-subject: the USUBJID key keeps
-the two relationships apart.
+**Input:** adverse event (AE) records with their assigned sequence
+number (`AESEQ`) and the event number collected on the form
+(`AESPID`), and concomitant medication (CM) records with their
+assigned sequence number (`CMSEQ`) and up to two event numbers
+entered on the medication form as the events it treated (`CMAENO1`,
+`CMAENO2`). The link is collected on the medication form only.
 
 **Variables:**
 
-- `IDVARVAL` is the sequence number of the related record as text;
-  always present.
+- `IDVARVAL` is the sequence number of the related record as text:
+  `CMSEQ` on a medication row and, on an event row, the `AESEQ` of
+  the same subject's adverse event whose collected event number
+  matches, never the collected number itself.
 - `RELTYPE` is blank throughout, because each row points at one
   record rather than a whole dataset.
-- `RELID` names the relationship the row takes part in; rows
-  sharing a value are related to one another, and every row
-  carries one.
+- `RELID` numbers the subject's medication and event pairs 1, 2,
+  3 and so on, in adverse event sequence order and then medication
+  sequence order; the two rows of one pair share it.
 
-**Note:** a record with no link identifier contributes no row,
-while a record naming two link identifiers contributes one row per
-identifier - only when the two identifiers differ. A record
-repeating its link number in both fields produces two identical
-rows, which fails the run on the duplicate key; carrying a third
-relationship would need another link field on the collected
-record.
-
-**Negative case:** a link number carried by only one record is a
-dangling relationship and fails the run. Adding the collected row
-`CATH,CATH-UCSD-0001,4,COUGH,3,` to ae.csv (AELNKID1=3, no other
-record carrying link 3) emits one RELREC row, and the
-`each-relationship-has-two-or-more-rows` check then fails: the
-group (STUDYID=CATH, USUBJID=CATH-UCSD-0001, RELID=3) holds 1 row,
-below the minimum of 2. That is why the passing input above
-carries no such row.
+**Note:** each event number on a medication record gives one
+relationship of two rows, one for the medication and one for the
+event, so a medication given for two events takes part in two
+relationships, as does an event treated by two medications. Event
+numbers match within the same subject only. A medication without an
+event number, and an event no medication names, contribute no row.
+An event number that names no adverse event of that subject stops
+the run, and so does a medication repeating one event number in both
+fields, which would state the same relationship twice.

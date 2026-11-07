@@ -3,10 +3,12 @@ standard: SDTM
 domain: RELREC
 review:
   concerns:
-    - RELREC records which adverse events and medications belong together, such
-      as a drug given to treat an event.
-    - Two subjects cover a headache in two relationships, a medication in both,
-      unlinked records, and link number 1 reused by a second subject.
-    - A record carrying two link numbers gives one row per relationship (subject
-      0001's headache is in RELID 1 and 2), and a link carried by only one
-      record would fail the run as a dangling relationship.
+    - RELREC records which medications were given for which adverse events,
+      so a reviewer can see the treatment behind each event.
+    - The link is entered on the medication form only, as event numbers that
+      name the same subject's AESPID; two subjects cover one medication for
+      two events, two medications for one event, unlinked records, and event
+      number 1 reused by a second subject.
+    - An event row carries the matched record's AESEQ, not the collected
+      event number (subject 0001's AESPID 2 is AESEQ 1), and RELID numbers
+      the pairs in event, then medication, order.

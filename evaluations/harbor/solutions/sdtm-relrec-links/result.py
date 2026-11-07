@@ -4,12 +4,12 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build a RELREC dataset from AE and CM link identifiers.
+"""Build a RELREC dataset from the AE numbers entered on CM records.
 
-Each AE or CM record contributes one RELREC row per distinct link
-identifier it carries (AELNKID1/AELNKID2 for AE, CMLNKID1/CMLNKID2 for
-CM). Records with no link identifier contribute no row. RELTYPE is
-blank on every row because each row points at a single record.
+Each event number in CMAENO1/CMAENO2 names the same subject's AE record
+with that AESPID. Every such medication-event pair gives two RELREC rows,
+one for the CM record and one for the AE record, sharing a RELID that
+numbers the subject's pairs by AESEQ and then CMSEQ.
 """
 
 import csv
@@ -22,33 +22,51 @@ COLUMNS = ["STUDYID", "USUBJID", "RDOMAIN", "IDVAR", "IDVARVAL",
            "RELTYPE", "RELID"]
 
 
-def rows_for(domain, seqvar, linkvars, path):
-    """Yield one RELREC row per record/participating link identifier."""
-    with open(path, newline="", encoding="utf-8") as handle:
-        for record in csv.DictReader(handle):
-            seen = []
-            for var in linkvars:
-                link = (record.get(var) or "").strip()
-                if link and link not in seen:
-                    seen.append(link)
-            for link in seen:
-                yield {
-                    "STUDYID": record["STUDYID"],
-                    "USUBJID": record["USUBJID"],
-                    "RDOMAIN": domain,
-                    "IDVAR": seqvar,
-                    "IDVARVAL": str(record[seqvar]).strip(),
-                    "RELTYPE": "",
-                    "RELID": link,
-                }
+def read_rows(name):
+    with open(os.path.join(INPUT_DIR, name), newline="",
+              encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def clean(value):
+    return "" if value is None else value.strip()
 
 
 def main():
+    ae = read_rows("ae.csv")
+    cm = read_rows("cm.csv")
+
+    aeseq_by_number = {}
+    for record in ae:
+        key = (record["STUDYID"], record["USUBJID"], clean(record["AESPID"]))
+        aeseq_by_number[key] = int(record["AESEQ"])
+
+    pairs = {}
+    for record in cm:
+        subject = (record["STUDYID"], record["USUBJID"])
+        cmseq = int(record["CMSEQ"])
+        for var in ("CMAENO1", "CMAENO2"):
+            number = clean(record.get(var))
+            if not number:
+                continue
+            aeseq = aeseq_by_number[subject + (number,)]
+            pairs.setdefault(subject, []).append((aeseq, cmseq))
+
     rows = []
-    rows.extend(rows_for("AE", "AESEQ", ["AELNKID1", "AELNKID2"],
-                         os.path.join(INPUT_DIR, "ae.csv")))
-    rows.extend(rows_for("CM", "CMSEQ", ["CMLNKID1", "CMLNKID2"],
-                         os.path.join(INPUT_DIR, "cm.csv")))
+    for subject in sorted(pairs):
+        studyid, usubjid = subject
+        for relid, (aeseq, cmseq) in enumerate(sorted(pairs[subject]), 1):
+            for rdomain, idvar, seq in (("AE", "AESEQ", aeseq),
+                                        ("CM", "CMSEQ", cmseq)):
+                rows.append({
+                    "STUDYID": studyid,
+                    "USUBJID": usubjid,
+                    "RDOMAIN": rdomain,
+                    "IDVAR": idvar,
+                    "IDVARVAL": str(seq),
+                    "RELTYPE": "",
+                    "RELID": str(relid),
+                })
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     out_path = os.path.join(OUTPUT_DIR, "relrec.csv")

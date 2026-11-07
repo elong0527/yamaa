@@ -3,27 +3,45 @@
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data ae;
-  length STUDYID USUBJID AETERM AELNKID1 AELNKID2 $1024;
+  length STUDYID USUBJID AESPID AETERM $1024;
   infile "/app/input/ae.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. AESEQ AETERM : $char1024. AELNKID1 : $char1024. AELNKID2 : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. AESEQ AESPID : $char1024. AETERM : $char1024.;
 run;
 
 data cm;
-  length STUDYID USUBJID CMTRT CMLNKID1 CMLNKID2 $1024;
+  length STUDYID USUBJID CMTRT CMAENO1 CMAENO2 $1024;
   infile "/app/input/cm.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. CMSEQ CMTRT : $char1024. CMLNKID1 : $char1024. CMLNKID2 : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. CMSEQ CMTRT : $char1024. CMAENO1 : $char1024. CMAENO2 : $char1024.;
 run;
 
-data aelinks; set ae; length RDOMAIN IDVAR IDVARVAL RELTYPE RELID $1024; RDOMAIN='AE'; IDVAR='AESEQ'; IDVARVAL=strip(put(AESEQ,best32.)); RELTYPE='';
-if not missing(AELNKID1) then do; RELID=AELNKID1; output; end;
-if not missing(AELNKID2) then do; RELID=AELNKID2; output; end;
+data refs; set cm; length AENO $1024;
+if not missing(CMAENO1) then do; AENO=strip(CMAENO1); output; end;
+if not missing(CMAENO2) then do; AENO=strip(CMAENO2); output; end;
+keep STUDYID USUBJID CMSEQ AENO;
 run;
-data cmlinks; set cm; length RDOMAIN IDVAR IDVARVAL RELTYPE RELID $1024; RDOMAIN='CM'; IDVAR='CMSEQ'; IDVARVAL=strip(put(CMSEQ,best32.)); RELTYPE='';
-if not missing(CMLNKID1) then do; RELID=CMLNKID1; output; end;
-if not missing(CMLNKID2) then do; RELID=CMLNKID2; output; end;
-run;
-data result; set aelinks cmlinks; run;
+
 proc sql;
-  create table final as select STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID from result;
+  create table pairs as
+  select r.STUDYID, r.USUBJID, a.AESEQ, r.CMSEQ
+  from refs as r inner join ae as a
+    on r.STUDYID=a.STUDYID and r.USUBJID=a.USUBJID and r.AENO=strip(a.AESPID)
+  order by r.STUDYID, r.USUBJID, a.AESEQ, r.CMSEQ;
+quit;
+
+data numbered; set pairs; by STUDYID USUBJID;
+if first.USUBJID then RELNUM=0;
+RELNUM+1;
+run;
+
+data result; set numbered;
+length RDOMAIN IDVAR IDVARVAL RELTYPE RELID $1024;
+RELTYPE=''; RELID=strip(put(RELNUM,best32.));
+RDOMAIN='AE'; IDVAR='AESEQ'; IDVARVAL=strip(put(AESEQ,best32.)); output;
+RDOMAIN='CM'; IDVAR='CMSEQ'; IDVARVAL=strip(put(CMSEQ,best32.)); output;
+run;
+
+proc sql;
+  create table final as select STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID
+  from result order by STUDYID, USUBJID, RELNUM, RDOMAIN;
 quit;
 proc export data=final outfile="/app/output/relrec.csv" dbms=csv replace; run;
