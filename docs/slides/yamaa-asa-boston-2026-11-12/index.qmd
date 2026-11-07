@@ -52,15 +52,16 @@ organizations or institutions.
 
 ## Training objectives
 
-By the end of the workshop, you will be able to:
+This workshop aims to help you:
 
-* Design and implement agentic workflows for clinical trial development.
-* Identify where the performance of an AI agent can be improved.
-* Design and build benchmarks that assess AI agents.
+* Understand the building blocks of an agentic workflow, with CDISC data
+  standardization as one example.
+* Recognize where an AI agent's performance may be improved.
+* Get started with creating and reviewing benchmarks that assess AI agents.
 
 ::: callout-note
 Toolchains, processes, and formats differ across organizations.
-This workshop shows one common way to handle them.
+This workshop shows one possible approach, not the only one.
 :::
 
 ## Preparation
