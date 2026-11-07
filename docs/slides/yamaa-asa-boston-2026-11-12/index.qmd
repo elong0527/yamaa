@@ -32,41 +32,43 @@ title-slide-attributes:
 
 ## Outline
 
-Three parts of this workshop:
+The workshop has three parts:
 
-1. **Overview of AI-first workflow for CDISC data standardization (Yilong)**\
-   Designing and implementation AI-first workflow illustrated by using CDISC data standardization. 
+1. **An AI-first workflow for CDISC data standardization (Yilong)**\
+   How to design and implement an AI-first workflow, with CDISC data
+   standardization as the example.
 
-3. **Language models and agents for statistical programming (Jimeng)**\
-   Strategies to enhance AI agents beyond skills and tools. 
+2. **Language models and agents for statistical programming (Jimeng)**\
+   Strategies that improve AI agents beyond skills and tools.
 
-4. **Case study: Benchmark and AI evaluation (Jimeng and Yilong)**\
-   Hands on case studies for AI evaluation, benchmark creation
+3. **Case study: benchmarks and AI evaluation (Jimeng and Yilong)**\
+   Hands-on case studies in evaluating AI agents and creating benchmarks.
 
 ## Disclaimer
 
 The views and opinions expressed in this presentation are those of the
-individual presenter. They do not represent those of their affiliated
+individual presenters. They do not represent those of their affiliated
 organizations or institutions.
 
-## Training objective 
+## Training objectives
 
-With AI agents, learning how to 
+By the end of the workshop, you will be able to:
 
-* Design and implement agentic workflow for clinical trial development. 
-* Identify proper areas to improve the performance of AI agents. 
-* Design and build benchmark to assess AI agents. 
+* Design and implement agentic workflows for clinical trial development.
+* Identify where the performance of an AI agent can be improved.
+* Design and build benchmarks that assess AI agents.
 
 ::: callout-note
-The toolchain, process, and formats may be different in different organizations.
-We only provide one common way to address them.
+Toolchains, processes, and formats differ across organizations.
+This workshop shows one common way to handle them.
 :::
 
 ## Preparation
 
-In this workshop, we assume you are familiar with clinical development lifecycle, CDISC standardization, R programming experience. 
+This workshop assumes you are familiar with the clinical development
+lifecycle and CDISC standards, and that you have R programming experience.
 
-Pre-configured Codespaces for the short course. 
+A preconfigured GitHub Codespace is ready for the workshop:
 
 - [![Open GitHub Codespaces](https://github.com/codespaces/badge.svg){.codespaces-badge}](https://codespaces.new/elong0527/yamaa)
   + R, Python
@@ -78,11 +80,12 @@ Pre-configured Codespaces for the short course.
   + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
     or [Codex](https://learn.chatgpt.com/docs/codex/cli).
 
-## Resource 
+## Resources
 
-* During the workshop, we will use [yamaa](https://github.com/elong0527/yamaa) and [Rconsortium pilot 7 projects](https://github.com/RConsortium/submissions-pilot7-synthetic-data). 
-   * Project link with be shared in chat 
-   * Post questions in group chat
+* During the workshop, we will use [yamaa](https://github.com/elong0527/yamaa)
+  and the [R Consortium Pilot 7 project](https://github.com/RConsortium/submissions-pilot7-synthetic-data).
+   * Project links will be shared in the chat.
+   * Post your questions in the group chat.
 
 # AI Agents {background-color="#385898"}
 
@@ -127,7 +130,7 @@ statistics, so the agent has to guess them. Do they match your table shell?
 Muse is a personal agent from Meta. "Give Muse a goal or task and it handles
 the rest": sort email, book a dinner, or fill out a form.
 
-Muse also helps me maintain open source projects in the background:
+Muse also helps me maintain open-source projects in the background:
 
 - Identify project gaps from published PHUSE papers.
 - Bring new benchmark ideas for CDISC standardization.
@@ -215,7 +218,7 @@ You have been hired by the CMO to build a biometrics group.
 
 ## Focusing on Skills and Tools
 
-| Part | What it does | In this course |
+| Part | What it does | In this workshop |
 | ------ | ------------------ | ------------------ |
 | Environment | The files, commands, and credentials the agent can reach | Provided: GitHub Codespaces |
 | Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
@@ -278,10 +281,10 @@ verifications:
 *`output_dataset = derive(input_datasets, spec)`*
 :::
 
-The design of yamaa is a contract between human and AI agents.
+The design of yamaa is a contract between humans and AI agents.
 
-- **spec**: schema following closed vocabulary.
-- **derive**: business rules with derivation semantics.
+- **spec**: a schema with a closed vocabulary.
+- **derive**: business rules with defined derivation semantics.
 
 ## yamaa: four components
 
@@ -289,7 +292,7 @@ The design of yamaa is a contract between human and AI agents.
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
 | Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Runs specifications in Python, R and CLI consistently following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) / [CLI](https://github.com/elong0527/yamaa/tree/main/rust/crates/yamaa-cli) |
+| Engine | Runs specifications consistently in Python, R, and the CLI, following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) / [CLI](https://github.com/elong0527/yamaa/tree/main/rust/crates/yamaa-cli) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## yamaa: inheritance
@@ -330,7 +333,7 @@ Scroll inside the frame to explore the spec, inputs, and golden output.
 ## Open source has reached the regulators
 
 - The R Consortium Submissions Working Group engages directly with the FDA.
-  + 7 pilots demonstrate FDA submission best practice using R.
+  + Seven pilots demonstrate best practices for FDA submissions using R.
 
 :::::::: {.hex-grid}
 ::: {.hex-item}
@@ -403,16 +406,16 @@ Source: R Consortium Submissions Working Group, hex stickers,
 https://rconsortium.github.io/submissions-wg/#hex-stickers.
 :::
 
-## RConsortium Pilot 7: full studies
+## R Consortium Pilot 7: full studies
 
-- Build publicly available agentic data standardization workflow.
+- Builds a publicly available, agentic workflow for data standardization.
   + <https://rconsortium.github.io/submissions-pilot7-synthetic-data/>
 - CDISC pilots (SDTM -> ADaM)
-  + cdiscpilot01 and RConsortium submission pilots 3 and 5.
+  + CDISCPILOT01 and R Consortium Submission Pilots 3 and 5.
 - OpenClinica real sample data (ODM -> SDTM -> ADaM)
-  + Real sample data for testing the full data journey.
+  + Real sample data that tests the full data journey.
 - Synthetic studies (ODM -> SDTM -> ADaM)
-  + Simulate ODM XML from real clinical studies.
+  + ODM XML simulated from real clinical studies.
 
 ## yamaa reproduces R Submission Pilot 5 {.perf}
 
