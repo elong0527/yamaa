@@ -1,13 +1,18 @@
 ---
-title: "AI-First Workflow for CDISC Data Standardization"
-subtitle: "2026 Boston Pharmaceutical Statistics Symposium"
-author: "Yilong Zhang"
+title: "AI-First Workflow"
+subtitle: "Starting from CDISC Data Standardization"
+author:
+  - name: Yilong Zhang
+venue: "2026 Boston Pharmaceutical Statistics Symposium"
 date: "2026-11-12"
+date-format: "YYYY-MM-DD"
 embed-resources: true
 format:
   revealjs:
     theme: default
     css: custom.css
+    template-partials:
+      - title-slide.html
     mainfont: "system-ui, -apple-system, Segoe UI, sans-serif"
     monofont: "ui-monospace, SFMono-Regular, Consolas, monospace"
     width: 1280
@@ -23,16 +28,50 @@ title-slide-attributes:
   data-background-color: "#385898"
 ---
 
+# Welcome {background-color="#385898"}
+
+## Outline
+
+The workshop has three parts:
+
+1. **An AI-first workflow for CDISC data standardization (Yilong)**\
+   How to design and implement an AI-first workflow, with CDISC data
+   standardization as the example.
+
+2. **Language models and agents for statistical programming (Jimeng)**\
+   Strategies that improve AI agents beyond skills and tools.
+
+3. **Case study: benchmarks and AI evaluation (Jimeng and Yilong)**\
+   Hands-on case studies in evaluating AI agents and creating benchmarks.
+
 ## Disclaimer
 
 The views and opinions expressed in this presentation are those of the
-individual presenter. They do not represent those of their affiliated
+individual presenters. They do not represent those of their affiliated
 organizations or institutions.
 
-## Preparation [5 min]
+## Training objectives
+
+By the end of the workshop, you will be able to:
+
+* Design and implement agentic workflows for clinical trial development.
+* Identify where the performance of an AI agent can be improved.
+* Design and build benchmarks that assess AI agents.
+
+::: callout-note
+Toolchains, processes, and formats differ across organizations.
+This workshop shows one common way to handle them.
+:::
+
+## Preparation
+
+This workshop assumes you are familiar with the clinical development
+lifecycle and CDISC standards, and that you have R programming experience.
+
+A preconfigured GitHub Codespace is ready for the workshop:
 
 - [![Open GitHub Codespaces](https://github.com/codespaces/badge.svg){.codespaces-badge}](https://codespaces.new/elong0527/yamaa)
-  + R, Python, opensas
+  + R, Python
   + OpenCode, Claude Code, Codex
 
 - Start [OpenCode](https://opencode.ai/) and configure a model provider
@@ -40,6 +79,97 @@ organizations or institutions.
   + Keep API keys in your personal Codespaces secrets, never in the repository.
   + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
     or [Codex](https://learn.chatgpt.com/docs/codex/cli).
+
+## Resources
+
+* During the workshop, we will use [yamaa](https://github.com/elong0527/yamaa)
+  and the [R Consortium Pilot 7 project](https://github.com/RConsortium/submissions-pilot7-synthetic-data).
+   * Project links will be shared in the chat.
+   * Post your questions in the group chat.
+
+# AI Agents {background-color="#385898"}
+
+
+## Example: arena.ai
+
+[Try it at arena.ai/agent](https://arena.ai/agent){.try-it}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+::: {.prompt}
+Use the Pilot 5 ADSL dataset to generate a baseline characteristics table
+using R and gtsummary.
+
+Data: <https://github.com/RConsortium/submissions-pilot7-synthetic-data/tree/main/submission-pilot5/data/adam>
+:::
+:::
+
+::: {.column width="50%"}
+To finish, the agent has to:
+
+1. Find `adsl.parquet` in the folder.
+2. Read it in R.
+3. Pick the population, arms, and grouping variables.
+4. Build the table with gtsummary.
+5. Return the table and its code.
+:::
+
+::::
+
+**What to check:** the prompt never names the population, variables, or
+statistics, so the agent has to guess them. Do they match your table shell?
+
+## Example: Muse
+
+[Try it at muse.ai](https://muse.ai){.try-it}
+
+:::: {.columns}
+
+::: {.column width="60%"}
+Muse is a personal agent from Meta. "Give Muse a goal or task and it handles
+the rest": sort email, book a dinner, or fill out a form.
+
+Muse also helps me maintain open-source projects in the background:
+
+- Identify project gaps from published PHUSE papers.
+- Bring new benchmark ideas for CDISC standardization.
+:::
+
+::: {.column width="40%"}
+![](../../image/muse.png){fig-alt="Muse, a soft beige character wearing headphones, works on a laptop at a desk beside a plant and a phone."}
+:::
+
+::::
+
+::: {.notes}
+Source: Muse, a personal agent from Meta, https://muse.ai.
+
+The parts of an agent in Muse: tools are connected apps such as email and
+calendar, a full browser, and new tools it builds when one is missing; the
+environment is a persistent, isolated Linux computer in the cloud; memory is
+the long-term goals it keeps track of; human checkpoints are the actions you
+approve, such as sending an email or making a purchase.
+:::
+
+## What is an AI agent?
+
+![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
+
+## What is a large language model?
+
+![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
+
+An LLM only predicts the next token from its context. It cannot open a file or
+run code: a harness does that and puts the results back into the context.
+
+## What is a harness?
+
+![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
+
+> The model is the CPU; the harness is the operating system.
+
+# AI-first workflow {background-color="#385898"}
 
 ## A mental game
 
@@ -85,102 +215,209 @@ You have been hired by the CMO to build a biometrics group.
 > member becomes an orchestrator who manages AI agents, focuses on exception
 > handling, and continuously improves the system.
 
-## What is an AI agent?
 
-![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
+## From AI adoption to an AI-first workflow
 
-## What is a large language model?
+> An AI-first workflow redesigns a bounded process so an agent performs
+> structured work under explicit rules, evidence requirements, and human
+> decision rights.
 
-![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
-
-An LLM only predicts the next token from its context. It cannot open a file or
-run code: a harness does that and puts the results back into the context.
-
-## What is a harness?
-
-![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
-
-> The model is the CPU; the harness is the operating system.
-
-## Example: arena.ai
-
-[Try it at arena.ai/agent](https://arena.ai/agent){.try-it}
-
-:::: {.columns}
-
-::: {.column width="50%"}
-::: {.prompt}
-Use the Pilot 5 ADSL dataset to generate a baseline characteristics table
-using R and gtsummary.
-
-Data: <https://github.com/RConsortium/submissions-pilot7-synthetic-data/tree/main/submission-pilot5/data/adam>
-:::
-:::
-
-::: {.column width="50%"}
-To finish, the agent has to:
-
-1. Find `adsl.parquet` in the folder.
-2. Read it in R.
-3. Pick the population, arms, and grouping variables.
-4. Build the table with gtsummary.
-5. Return the table and its code.
-:::
-
-::::
-
-**What to check:** the prompt never names the population, variables, or
-statistics, so the agent has to guess them. Do they match your table shell?
-
-## Example: Muse
-
-Muse is a personal agent from Meta.
-
-"Give Muse a goal or task and it handles
-the rest": sort email, book a dinner, or fill out a form.
-
-:::: {.columns}
-
-::: {.column width="60%"}
-| Agent part | In Muse |
-| ---------- | ------------------------------ |
-| Tools | Connected apps such as email and calendar, a full browser, and new tools it builds when one is missing |
-| Environment | A persistent, isolated Linux computer in the cloud |
-| Memory | Long-term goals it keeps track of |
-| Human checkpoints | You approve actions such as sending an email or making a purchase |
-:::
-
-::: {.column width="40%"}
-![](../../image/muse.png){fig-alt="Muse, a soft beige character wearing headphones, works on a laptop at a desk beside a plant and a phone."}
-:::
-
-::::
+| | AI adoption | AI-first workflow |
+| --- | --- | --- |
+| **Unit of work** | An isolated task | A bounded, repeatable process |
+| **Starts when** | A person writes a prompt | A defined event or rule fires |
+| **Context** | Pasted into the chat | Controlled, versioned artifacts |
+| **Output** | A response to interpret | A structured artifact with evidence |
+| **Success** | Useful right now | Meets a defined benchmark |
+| **Continuity** | Each chat starts over | State and decisions carry forward |
 
 ::: {.notes}
-Source: Muse, a personal agent from Meta, https://muse.ai.
+Source: ai4csr, AI-first workflows in Biometrics,
+https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
 :::
 
+## How an AI-first workflow runs
 
-## Focusing on Skills and Tools
+::: {.flow}
+::: {.flow-step}
+Event
+[A specification, dataset, or output changes]{.small}
+:::
+::: {.flow-step}
+Task
+[Objective, inputs, tools, and stop conditions]{.small}
+:::
+::: {.flow-step}
+Tools and agent
+[The agent plans; tools do the exact work]{.small}
+:::
+::: {.flow-step}
+Evidence
+[What was checked, found, and not covered]{.small}
+:::
+::: {.flow-step}
+Human decision
+[Accept, reject, or escalate]{.small}
+:::
+::: {.flow-step}
+Recorded state
+[The decision informs the next run]{.small}
+:::
+:::
 
-| Part | What it does | In this course |
-| ------ | ------------------ | ------------------ |
-| Environment | The files, commands, and credentials the agent can reach | Provided: GitHub Codespaces |
-| Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
-| Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
-| **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
-| **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
-| Memory | Notes kept between sessions | Not covered |
+- The workflow, not a chat, supplies current and versioned artifacts.
+- The agent returns a structured finding: evidence, coverage, and uncertainty.
+- A human makes the decision and records it for the next run.
 
-> A skill tells the agent how to do the task; a tool does the exact part of it.
+> The simplest capable component does each step. An agent never replaces a
+> deterministic test, and access to a tool is never approval authority.
 
 ::: {.notes}
-Sources: OpenCode, Agent skills, https://opencode.ai/docs/skills/;
-ai4csr, From one-file skill to maintainable rounding workflow,
-https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd;
-yamaa, Host usage, https://elong0527.github.io/yamaa/articles/api/.
+Source: ai4csr, AI-first workflows in Biometrics,
+https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
 :::
 
+## Design principle: trustworthy assistance
+
+> A workflow is trustworthy when its inputs are visible, its actions are
+> traceable, its findings are evidence-backed, and its limits are clear.
+
+| Principle | In one line |
+| --- | --- |
+| **Inspectable artifacts** | If the agent cannot inspect the work, it cannot reliably assist with it. |
+| **Explicit state** | The workflow remembers through artifacts, not chat. |
+| **Events and rules** | Events trigger attention; rules trigger action. |
+| **Tools and evidence** | No finding without evidence. |
+| **Human judgment** | AI-first does not mean AI-only. |
+
+::: {.notes}
+Source: ai4csr, Principles of trustworthy assistance,
+https://github.com/elong0527/ai4csr/blob/main/03-principle.qmd.
+:::
+
+## Start with one bounded workflow
+
+A workflow is **bounded** when the team can state:
+
+- what event starts it;
+- which artifacts and tools it may use, and which actions the agent may take;
+- what output it must return;
+- when it must stop or escalate; and
+- who reviews the result and makes the decision.
+
+> Begin in advisory mode, then expand one boundary at a time.
+
+::: {.notes}
+Source: ai4csr, AI-first workflows in Biometrics,
+https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
+:::
+
+# Example: CDISC data standardization {background-color="#385898"}
+
+## The problem: one specification, two results
+
+* Two AI agents use the same specification to derive analysis datasets in clinical trials. [example](https://arena.ai/c/01a18ded-d0db-7852-b6e9-1528ddf4eb42)
+* Both report completion, but their source code and outputs may differ.
+* A reviewer spends non-trivial effort resolving the difference before signing off.
+
+From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/warning-letters/purolea-cosmetics-lab-722591-04022026):
+
+> "you must review the AI-generated documents to ensure they were accurate and actually compliant..."
+
+## One root cause
+
+* The user prompt leaves business rules implicit, so agents must infer them.
+* Business rules can differ from language defaults, e.g.:
+  * [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round ties to even.
+  * [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than non-missing values.
+
+## Evidence: prompt completeness decides success
+
+| Prompt tier | Python | R | opensas |
+| --- | --- | --- | --- |
+| Full | 99.3% (133/134) | 98.5% (132/134) | 86.6% (116/134) |
+| Conventions | 35.8% (48/134) | 33.6% (45/134) | 34.3% (46/134) |
+| Brief | 18.7% (25/134) | 17.9% (24/134) | 15.7% (21/134) |
+
+::: {style="font-size: 75%;"}
+Same 134 tasks, same agent. Only the prompt changed.<br>
+opensas: <https://github.com/kirha-ai/opensas><br>
+Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attempt, Oct 12 2026
+:::
+
+## Mean arterial pressure: three prompts {#example-mean-arterial-pressure-the-three-prompts .map-prompts}
+
+::: {.map-shared}
+**Shared Prompt:**
+
+- derive `ADVS` from `ADVS_RAW` using CDISC ADaM standards; one record per subject, visit, and parameter.
+- `STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE`
+- read from `/app/input`; write `/app/output/advs.csv`.
+:::
+
+::: {.map-comparison}
+| Rule in the prompt | Full - **passes** | Conventions - **passes** | Brief - **fails** |
+| --- | --- | --- | --- |
+| MAP identifiers | `PARAMCD = "MAP"`<br>`PARAM = "Mean Arterial Pressure (mmHg)"` | Same MAP identifiers | Not stated |
+| Records to add | Keep all collected records. Add one MAP per subject/visit only when both SBP and DBP results exist and are non-missing. | Not stated | Not stated |
+| `AVAL` | Keep collected values.<br>MAP = (2 x DBP + SBP) / 3;<br>do not round. | MAP is not rounded;<br>formula not stated. | Not stated |
+| `DTYPE` | Added MAP: `CALCULATION`.<br>Collected records: blank. | `CALCULATION` or blank;<br>assignment not stated. | Not stated |
+:::
+::: {.map-takeaway}
+**Brief omits both the MAP formula and the rule for adding a record.**<br>
+SBP = systolic blood pressure; DBP = diastolic blood pressure.<br>
+<https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html>
+:::
+
+::: {.notes}
+The on-screen comparison summarizes the three prompts. Their complete wording is retained below.
+
+### Full - passes
+
+```text
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
+
+Keep every collected record, and add one mean arterial pressure record for each subject and visit that has both a systolic and a diastolic blood pressure result. Mark it with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+
+AVAL keeps each collected result. On the added record it is the average that counts the diastolic pressure twice and the systolic pressure once, not rounded. No record is added when either contributor is absent from the visit or its result is missing.
+
+DTYPE is CALCULATION on the added record and has no value on collected records.
+
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+```
+
+### Conventions - passes
+
+```text
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
+
+Mark a mean arterial pressure record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+
+On a mean arterial pressure record AVAL is not rounded.
+
+DTYPE is CALCULATION or has no value.
+
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+```
+
+### Brief - fails
+
+```text
+Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+
+The output dataset should contain the following columns in this order:
+STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
+
+Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+```
+
+:::
 
 ## Goal: AI-first workflow for CDISC data standardization
 
@@ -196,6 +433,19 @@ yamaa, Host usage, https://elong0527.github.io/yamaa/articles/api/.
 Source: ai4csr, AI-first workflows in Biometrics,
 https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
 :::
+
+## Applying the principles to CDISC data
+
+| Principle | In this workflow |
+| --- | --- |
+| **Inspectable artifacts** | A plain-text YAML specification, the ODM XML extract, SDTM and ADaM datasets |
+| **Explicit state** | Specifications versioned and tagged in Git; inheritance from templates is explicit |
+| **Events and rules** | A new EDC extract or an approved specification change reruns the same specification |
+| **Tools and evidence** | yamaa checks and runs the specification; benchmarks compare its output with expected data |
+| **Human judgment** | People review and approve the specification and its evidence at the planning stage |
+
+> yamaa is one way to build this workflow: the specification is the contract
+> between people and AI agents.
 
 ## yamaa: collaboration at the planning stage
 
@@ -233,10 +483,10 @@ verifications:
 *`output_dataset = derive(input_datasets, spec)`*
 :::
 
-The design of yamaa is a contract between human and AI agents.
+The design of yamaa is a contract between humans and AI agents.
 
-- **spec**: schema following closed vocabulary.
-- **derive**: business rules with derivation semantics.
+- **spec**: a schema with a closed vocabulary.
+- **derive**: business rules with defined derivation semantics.
 
 ## yamaa: four components
 
@@ -244,7 +494,7 @@ The design of yamaa is a contract between human and AI agents.
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
 | Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Runs specifications in Python, R and CLI consistently following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) / [CLI](https://github.com/elong0527/yamaa/tree/main/rust/crates/yamaa-cli) |
+| Engine | Runs specifications consistently in Python, R, and the CLI, following the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) / [CLI](https://github.com/elong0527/yamaa/tree/main/rust/crates/yamaa-cli) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## yamaa: inheritance
@@ -285,7 +535,7 @@ Scroll inside the frame to explore the spec, inputs, and golden output.
 ## Open source has reached the regulators
 
 - The R Consortium Submissions Working Group engages directly with the FDA.
-  + 7 pilots demonstrate FDA submission best practice using R.
+  + Seven pilots demonstrate best practices for FDA submissions using R.
 
 :::::::: {.hex-grid}
 ::: {.hex-item}
@@ -358,16 +608,16 @@ Source: R Consortium Submissions Working Group, hex stickers,
 https://rconsortium.github.io/submissions-wg/#hex-stickers.
 :::
 
-## RConsortium Pilot 7: full studies
+## R Consortium Pilot 7: full studies
 
-- Build publicly available agentic data standardization workflow.
+- Builds a publicly available, agentic workflow for data standardization.
   + <https://rconsortium.github.io/submissions-pilot7-synthetic-data/>
 - CDISC pilots (SDTM -> ADaM)
-  + cdiscpilot01 and RConsortium submission pilots 3 and 5.
+  + CDISCPILOT01 and R Consortium Submission Pilots 3 and 5.
 - OpenClinica real sample data (ODM -> SDTM -> ADaM)
-  + Real sample data for testing the full data journey.
+  + Real sample data that tests the full data journey.
 - Synthetic studies (ODM -> SDTM -> ADaM)
-  + Simulate ODM XML from real clinical studies.
+  + ODM XML simulated from real clinical studies.
 
 ## yamaa reproduces R Submission Pilot 5 {.perf}
 
@@ -404,3 +654,35 @@ https://rconsortium.github.io/submissions-wg/#hex-stickers.
 </div>
 :::
 :::
+
+## Summary of the workflow
+
+- **Extract:** enable regular EDC extraction in ODM format for each study to create a versioned source.
+- **Draft:** ask an AI agent to draft the study specification from the organization or program template, adding only study differences.
+- **Review:** human and AI review study derivations and verifications in yamaa, where fixes are cheap.
+- **Finalize:** approve and tag the resolved specification in version control with full lineage.
+- **Automate:** run the same specification on schedule in R or Python to produce identical SDTM and ADaM datasets, plus Define-XML.
+
+> This is an iterative process while the study is ongoing. Team members and AI
+> agents collaborate centrally on the version-controlled specification at the
+> **planning stage**.
+
+## Recommendations: input and output
+
+- Plain text is the input.
+- An annotated CRF is not an input but an output.
+- An Excel specification is not an input but an output.
+- Communication costs more than tokens.
+
+## Focusing on skills and tools
+
+| Part | What it does | In this workshop |
+| ------ | ------------------ | ------------------ |
+| Environment | The files, commands, and credentials the agent can reach | Provided: GitHub Codespaces |
+| Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
+| Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
+| **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
+| **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
+| Memory | Notes kept between sessions | Not covered |
+
+> A skill tells the agent how to do the task; a tool does the exact part of it.
