@@ -1,7 +1,8 @@
 # yamaa-asa-boston-2026-11-12 slides
 
-"AI-First Workflow for CDISC Data Standardization" -- slides for the 2026
-Boston Pharmaceutical Statistics Symposium (2026-11-12).
+"AI-First Workflow", subtitled "Starting from CDISC Data Standardization" --
+workshop slides for the 2026 Boston Pharmaceutical Statistics Symposium
+(2026-11-12).
 
 [View the rendered slides](https://elong0527.github.io/yamaa/slides/yamaa-asa-boston-2026-11-12/index.html)
 
@@ -13,14 +14,24 @@ The output is one self-contained HTML file (`embed-resources: true`).
 
 ## Outline
 
-After a short preparation step in GitHub Codespaces and OpenCode, the deck
-opens with a mental game on building an AI-native biometrics group and
-compares AI adoption, AI-first, and AI-native work. It explains AI agents,
-large language models, and harnesses, shows two agents at work (a coding task
-on arena.ai and the personal agent Muse), and then states the goal: an
-AI-first workflow for CDISC data standardization, with the parts of an agent
-this course focuses on: skills and tools. It then introduces yamaa with the
-slides of the 2026-11-03 SLDS talk: planning-stage collaboration, a YAML
-specification, the core principle, the four components, inheritance, the
-benchmarks, RConsortium Pilot 7, and the Pilot 5 performance. Before Pilot 7,
-a slide shows the seven R Consortium submission pilots.
+The deck has four sections:
+
+- **Welcome:** the workshop outline, disclaimer, training objectives,
+  preparation, and resources. It assumes familiarity with clinical
+  development and CDISC standards, plus R programming experience. The
+  preconfigured GitHub Codespace provides R, Python, OpenCode, Claude Code,
+  and Codex.
+- **AI Agents:** examples using arena.ai and the personal agent Muse,
+  followed by explanations of AI agents, large language models, and
+  harnesses.
+- **AI-first workflow:** a mental game on building an AI-native biometrics
+  group, a comparison of AI adoption, AI-first, and AI-native work, the steps
+  of a workflow, trustworthy assistance, and starting with one bounded
+  workflow.
+- **Example: CDISC data standardization:** the problem of one specification
+  producing two results, prompt completeness and the mean arterial pressure
+  example, and the workflow's goal and principles. It introduces yamaa's
+  planning-stage collaboration, YAML specifications, core principle, four
+  components, inheritance, benchmarks, R Consortium submission pilots and
+  Pilot 7, and Pilot 5 performance. It closes with a workflow summary, input
+  and output recommendations, and the skills and tools the workshop covers.
