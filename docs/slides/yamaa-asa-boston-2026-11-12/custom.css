@@ -101,11 +101,29 @@
   margin-top: 1em;
 }
 
+/* The title slide and the section slides (level-1 headings) share the
+   course-blue background, so their text is white. */
 .reveal #title-slide h1,
 .reveal #title-slide .subtitle,
 .reveal #title-slide .quarto-title-author-name,
-.reveal #title-slide .date {
+.reveal #title-slide .venue,
+.reveal #title-slide .date,
+.reveal .slides section.title-slide.level1 h1 {
   color: white;
+}
+
+/* Title slide (title-slide.html): a larger subtitle under the title, then the
+   speaker, the venue and the date on their own lines at one size. */
+.reveal #title-slide .subtitle {
+  font-size: 1.5em;
+  margin-bottom: 1.2em;
+}
+
+.reveal #title-slide .quarto-title-author-name,
+.reveal #title-slide .venue,
+.reveal #title-slide .date {
+  font-size: 1em;
+  margin: 0.3em 0;
 }
 
 /* Room for the numbers of an ordered list, which sit outside the text. */

@@ -1,13 +1,18 @@
 ---
-title: "AI-First Workflow for CDISC Data Standardization"
-subtitle: "2026 Boston Pharmaceutical Statistics Symposium"
-author: "Yilong Zhang"
+title: "AI-First Workflow"
+subtitle: "Starting from CDISC Data Standardization"
+author:
+  - name: Yilong Zhang
+venue: "2026 Boston Pharmaceutical Statistics Symposium"
 date: "2026-11-12"
+date-format: "MMMM D, YYYY"
 embed-resources: true
 format:
   revealjs:
     theme: default
     css: custom.css
+    template-partials:
+      - title-slide.html
     mainfont: "system-ui, -apple-system, Segoe UI, sans-serif"
     monofont: "ui-monospace, SFMono-Regular, Consolas, monospace"
     width: 1280
@@ -23,16 +28,48 @@ title-slide-attributes:
   data-background-color: "#385898"
 ---
 
+# Welcome {background-color="#385898"}
+
+## Outline
+
+Three parts of this workshop:
+
+1. **Overview of AI-first workflow for CDISC data standardization (Yilong)**\
+   Designing and implementation AI-first workflow illustrated by using CDISC data standardization. 
+
+3. **Language models and agents for statistical programming (Jimeng)**\
+   Strategies to enhance AI agents beyond skills and tools. 
+
+4. **Case study: Benchmark and AI evaluation**\
+   Hands on case studies for AI evaluation, benchmark creation
+
 ## Disclaimer
 
 The views and opinions expressed in this presentation are those of the
 individual presenter. They do not represent those of their affiliated
 organizations or institutions.
 
-## Preparation [5 min]
+## Training objective 
+
+With AI agents, learning how to 
+
+* Design and implement agentic workflow for clinical trial development. 
+* Identify proper areas to improve the performance of AI agents. 
+* Design and build benchmark to assess AI agents. 
+
+::: callout-note
+The toolchain, process, and formats may be different in different organizations.
+We only provide one common way to address them.
+:::
+
+## Preparation
+
+In this workshop, we assume you are familiar with clinical development lifecycle, CDISC standardization, R programming experience. 
+
+Pre-configured Codespaces for the short course. 
 
 - [![Open GitHub Codespaces](https://github.com/codespaces/badge.svg){.codespaces-badge}](https://codespaces.new/elong0527/yamaa)
-  + R, Python, opensas
+  + R, Python
   + OpenCode, Claude Code, Codex
 
 - Start [OpenCode](https://opencode.ai/) and configure a model provider
@@ -40,6 +77,98 @@ organizations or institutions.
   + Keep API keys in your personal Codespaces secrets, never in the repository.
   + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
     or [Codex](https://learn.chatgpt.com/docs/codex/cli).
+
+## Resource 
+
+* During the workshop, we will use [yamaa](https://github.com/elong0527/yamaa) and [Rconsortium pilot 7 projects](https://github.com/RConsortium/submissions-pilot7-synthetic-data). 
+   * Project link with be shared in chat 
+   * Post questions in group chat
+
+# AI Agents {background-color="#385898"}
+
+
+## Example: arena.ai
+
+[Try it at arena.ai/agent](https://arena.ai/agent){.try-it}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+::: {.prompt}
+Use the Pilot 5 ADSL dataset to generate a baseline characteristics table
+using R and gtsummary.
+
+Data: <https://github.com/RConsortium/submissions-pilot7-synthetic-data/tree/main/submission-pilot5/data/adam>
+:::
+:::
+
+::: {.column width="50%"}
+To finish, the agent has to:
+
+1. Find `adsl.parquet` in the folder.
+2. Read it in R.
+3. Pick the population, arms, and grouping variables.
+4. Build the table with gtsummary.
+5. Return the table and its code.
+:::
+
+::::
+
+**What to check:** the prompt never names the population, variables, or
+statistics, so the agent has to guess them. Do they match your table shell?
+
+## Example: Muse
+
+[Try it at muse.ai](https://muse.ai){.try-it}
+
+Muse is a personal agent from Meta.
+
+"Give Muse a goal or task and it handles
+the rest": sort email, book a dinner, or fill out a form.
+
+- Muse also helps me maintain open source projects passively. 
+  + identify project gaps based on published Phuse papers. 
+  + bringing new benchmark ideas for CDISC standardization. 
+
+:::: {.columns}
+
+::: {.column width="60%"}
+| Agent part | In Muse |
+| ---------- | ------------------------------ |
+| Tools | Connected apps such as email and calendar, a full browser, and new tools it builds when one is missing |
+| Environment | A persistent, isolated Linux computer in the cloud |
+| Memory | Long-term goals it keeps track of |
+| Human checkpoints | You approve actions such as sending an email or making a purchase |
+:::
+
+::: {.column width="40%"}
+![](../../image/muse.png){fig-alt="Muse, a soft beige character wearing headphones, works on a laptop at a desk beside a plant and a phone."}
+:::
+
+::::
+
+::: {.notes}
+Source: Muse, a personal agent from Meta, https://muse.ai.
+:::
+
+## What is an AI agent?
+
+![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
+
+## What is a large language model?
+
+![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
+
+An LLM only predicts the next token from its context. It cannot open a file or
+run code: a harness does that and puts the results back into the context.
+
+## What is a harness?
+
+![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
+
+> The model is the CPU; the harness is the operating system.
+
+# AI-first workflow {background-color="#385898"}
 
 ## A mental game
 
@@ -85,81 +214,6 @@ You have been hired by the CMO to build a biometrics group.
 > member becomes an orchestrator who manages AI agents, focuses on exception
 > handling, and continuously improves the system.
 
-## What is an AI agent?
-
-![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
-
-## What is a large language model?
-
-![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
-
-An LLM only predicts the next token from its context. It cannot open a file or
-run code: a harness does that and puts the results back into the context.
-
-## What is a harness?
-
-![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
-
-> The model is the CPU; the harness is the operating system.
-
-## Example: arena.ai
-
-[Try it at arena.ai/agent](https://arena.ai/agent){.try-it}
-
-:::: {.columns}
-
-::: {.column width="50%"}
-::: {.prompt}
-Use the Pilot 5 ADSL dataset to generate a baseline characteristics table
-using R and gtsummary.
-
-Data: <https://github.com/RConsortium/submissions-pilot7-synthetic-data/tree/main/submission-pilot5/data/adam>
-:::
-:::
-
-::: {.column width="50%"}
-To finish, the agent has to:
-
-1. Find `adsl.parquet` in the folder.
-2. Read it in R.
-3. Pick the population, arms, and grouping variables.
-4. Build the table with gtsummary.
-5. Return the table and its code.
-:::
-
-::::
-
-**What to check:** the prompt never names the population, variables, or
-statistics, so the agent has to guess them. Do they match your table shell?
-
-## Example: Muse
-
-Muse is a personal agent from Meta.
-
-"Give Muse a goal or task and it handles
-the rest": sort email, book a dinner, or fill out a form.
-
-:::: {.columns}
-
-::: {.column width="60%"}
-| Agent part | In Muse |
-| ---------- | ------------------------------ |
-| Tools | Connected apps such as email and calendar, a full browser, and new tools it builds when one is missing |
-| Environment | A persistent, isolated Linux computer in the cloud |
-| Memory | Long-term goals it keeps track of |
-| Human checkpoints | You approve actions such as sending an email or making a purchase |
-:::
-
-::: {.column width="40%"}
-![](../../image/muse.png){fig-alt="Muse, a soft beige character wearing headphones, works on a laptop at a desk beside a plant and a phone."}
-:::
-
-::::
-
-::: {.notes}
-Source: Muse, a personal agent from Meta, https://muse.ai.
-:::
-
 
 ## Focusing on Skills and Tools
 
@@ -173,13 +227,6 @@ Source: Muse, a personal agent from Meta, https://muse.ai.
 | Memory | Notes kept between sessions | Not covered |
 
 > A skill tells the agent how to do the task; a tool does the exact part of it.
-
-::: {.notes}
-Sources: OpenCode, Agent skills, https://opencode.ai/docs/skills/;
-ai4csr, From one-file skill to maintainable rounding workflow,
-https://github.com/elong0527/ai4csr/blob/main/07-workflow-rounding-skill.qmd;
-yamaa, Host usage, https://elong0527.github.io/yamaa/articles/api/.
-:::
 
 
 ## Goal: AI-first workflow for CDISC data standardization
