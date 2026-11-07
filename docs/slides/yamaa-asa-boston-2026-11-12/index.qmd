@@ -813,9 +813,9 @@ Both projects collect reviews from a static page as public GitHub Discussions.
 
 | | yamaa benchmarks | R Consortium Pilot 7 |
 | --- | --- | --- |
-| **What is reviewed** | Each SDTM and ADaM benchmark: task, inputs, and expected output | AI-reported findings: Define-XML against the reproduced yamaa specification and the ADaM data |
+| **What is reviewed** | Each SDTM, SEND, and ADaM benchmark: task, inputs, and expected output | AI-reported findings: Define-XML against the reproduced yamaa specification and the ADaM data |
 | **Reviewer decides** | Agree or Disagree on the task, the inputs, and three AI-assisted concerns | Agree, Disagree, or Need clarification; Critical, Not critical, or Unsure |
-| **Finalized when** | Two reviewers approve and nobody disagrees | A reviewed publication record includes, clarifies, or excludes each finding |
+| **Finalized when** | Two reviewers approve, nobody disagrees, and the coordinator confirms the reviewers | A reviewed publication record includes, clarifies, or excludes each finding |
 | **Start here** | [Benchmark review](https://elong0527.github.io/yamaa/benchmark/review/) | [Review guide](https://rconsortium.github.io/submissions-pilot7-synthetic-data/review/) |
 
 ## Reviewing a yamaa benchmark
@@ -854,7 +854,7 @@ Review again
 :::
 ::: {.flow-step}
 Approved
-[Two approvals, nobody disagrees; it stays approved]{.small}
+[Two approvals, nobody disagrees; the coordinator confirms the reviewers]{.small}
 :::
 :::
 
@@ -866,7 +866,7 @@ Round 1 status on 2026-11-07:
 199
 :::
 ::: {.metric-label}
-SDTM and ADaM benchmarks
+SDTM, SEND, and ADaM benchmarks
 :::
 :::
 ::: {.column width="25%"}

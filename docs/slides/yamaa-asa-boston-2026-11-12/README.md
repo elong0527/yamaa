@@ -43,7 +43,7 @@ The deck has eight sections:
   the mean arterial pressure benchmark, its three prompt tiers, and rules for
   a fair benchmark.
 - **Case study: review and finalize a benchmark:** how people review and
-  finalize a yamaa benchmark through its review page, with the current round
+  finalize a yamaa SDTM, SEND, or ADaM benchmark through its review page, with the current round
   status, and how an AI-reported R Consortium Pilot 7 finding is reviewed and
   finalized.
 - **Case study: assessing an agent with the benchmark:** per-task results
