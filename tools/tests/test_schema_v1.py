@@ -333,6 +333,14 @@ EXPECTED = {
             values=("error", "warning"),
         )
     ],
+    # D-next on #4310: a named intermediate's pivot exposes each listed value
+    # of one donor field as a field of its selection (LOOKUP-28).
+    "new.spec.intermediate.pivot": [
+        Field("intermediate_class", "pivot", "pivot_class"),
+        Field("pivot_class", "name", "identifier", True, kind="identifier"),
+        Field("pivot_class", "value", "identifier", True, kind="identifier"),
+        Field("pivot_class", "fields", "list[identifier]", True, kind="identifier"),
+    ],
     # D206: a named intermediate selects the candidate nearest a reference
     # (LOOKUP-26).
     "new.spec.intermediate.nearest": [

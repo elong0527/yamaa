@@ -169,6 +169,46 @@ impl Cx<'_> {
         }
         Ok(RelationId(self.named + index as u32))
     }
+    /// The relation of the listed name `field` of the pivot of intermediate
+    /// `index`: the field relations follow every intermediate's own
+    /// relation, in intermediate order and then listed order (LOOKUP-28).
+    fn named_field(&self, index: usize, field: usize) -> Result<RelationId, ResolutionError> {
+        let items = self.plan.intermediates();
+        let pivot = items
+            .get(index)
+            .and_then(|item| item.pivot.as_ref())
+            .ok_or_else(|| unsupported("pivot field of an intermediate without a pivot", index))?;
+        if field >= pivot.fields.len() {
+            return Err(unsupported("pivot field outside the pivot", field));
+        }
+        let before: usize = items[..index]
+            .iter()
+            .map(|item| item.pivot.as_ref().map_or(0, |pivot| pivot.fields.len()))
+            .sum();
+        Ok(RelationId(
+            self.named + self::field(items.len() + before + field)?,
+        ))
+    }
+    /// A read of the column `column` of intermediate `index`: the relation
+    /// it reads and the column of that relation's records. A pivot field's
+    /// read is its field relation's read of the `value` column (LOOKUP-28).
+    fn named_read(
+        &self,
+        index: usize,
+        column: usize,
+    ) -> Result<(RelationId, usize), ResolutionError> {
+        if let Some(pivot) = self
+            .plan
+            .intermediates()
+            .get(index)
+            .and_then(|item| item.pivot.as_ref())
+        {
+            if let Some(field) = pivot.field_of(column) {
+                return Ok((self.named_field(index, field)?, pivot.value));
+            }
+        }
+        Ok((self.named(index)?, column))
+    }
     fn secondary_width(&self, index: usize) -> Result<usize, ResolutionError> {
         Ok(self
             .plan
@@ -208,6 +248,7 @@ fn relation(region: RegionId, kind: RelationKind, path: &str, donor: Donor) -> R
         windowed: false,
         scan: Vec::new(),
         named: None,
+        shares: None,
     }
 }
 
@@ -319,15 +360,33 @@ impl<'p> Builder<'p> {
             }
         }
         self.observed = crate::dataset::read_handlers(plan.intermediates());
-        // Named intermediates keep their plan positions as relation slots.
+        // Named intermediates keep their plan positions as relation slots,
+        // and a pivot's field relations follow them all, one per listed name
+        // (LOOKUP-28).
         for index in 0..plan.intermediates().len() {
             let path = plan.intermediates()[index].path.as_str();
             let index = field(index)?;
             let placeholder = relation(region, RelationKind::Named { index }, path, Donor::Driver);
             self.out.relations.push(placeholder);
         }
+        for (index, item) in plan.intermediates().iter().enumerate() {
+            let fields = item.pivot.as_ref().map_or(0, |pivot| pivot.fields.len());
+            for _ in 0..fields {
+                let index = field(index)?;
+                let placeholder = relation(
+                    region,
+                    RelationKind::Named { index },
+                    &item.path,
+                    Donor::Driver,
+                );
+                self.out.relations.push(placeholder);
+            }
+        }
         for index in 0..plan.intermediates().len() {
             self.lower_named(&cx, index)?;
+        }
+        for index in 0..plan.intermediates().len() {
+            self.lower_pivot_fields(&cx, index)?;
         }
         for template in plan.templates() {
             let driver = template_driver(&cx, &template.mode)?;
@@ -1219,13 +1278,15 @@ impl<'p> Builder<'p> {
                 }
             }
             E::Intermediate { index, column } => {
-                let relation = cx.named(*index)?;
+                // A pivot field reads its field relation's `value` column
+                // (LOOKUP-28).
+                let (relation, column) = cx.named_read(*index, *column)?;
                 node.kind = ExprKind::Intermediate(relation);
-                node.op = Op::Intermediate { column: *column };
-                node.reads.push(Read::Relation(relation, field(*column)?));
+                node.op = Op::Intermediate { column };
+                node.reads.push(Read::Relation(relation, field(column)?));
                 let read = BoundRead::Intermediate {
                     index: *index,
-                    column: *column,
+                    column,
                 };
                 self.observed(node, &read, path)?;
             }
@@ -1393,7 +1454,8 @@ impl<'p> Builder<'p> {
             BoundRead::Source(column) => self.source_read(cx, fields, *column)?,
             BoundRead::Column(column) => self.column_read(cx, fields, *column)?,
             BoundRead::Intermediate { index, column } => {
-                Read::Relation(cx.named(*index)?, field(*column)?)
+                let (relation, column) = cx.named_read(*index, *column)?;
+                Read::Relation(relation, field(column)?)
             }
             BoundRead::Joined(joined) => {
                 let relation = self.joined(cx, path, joined, None, None, None)?;
@@ -1618,6 +1680,31 @@ impl<'p> Builder<'p> {
             .map(|filter| self.relation_predicate(cx, id, filter))
             .transpose()?;
         self.out.relations[id.index()] = node;
+        Ok(())
+    }
+
+    /// The field relations of a pivot (LOOKUP-28): each the intermediate's
+    /// relation again, standing for one listed name, sharing the records,
+    /// match index, narrowing and donor of the intermediate's own relation,
+    /// and verifying nothing of its own.
+    fn lower_pivot_fields(&mut self, cx: &Cx<'p>, index: usize) -> Result<(), ResolutionError> {
+        let item = &cx.plan.intermediates()[index];
+        let Some(pivot) = &item.pivot else {
+            return Ok(());
+        };
+        let base = cx.named(index)?;
+        for position in 0..pivot.fields.len() {
+            let id = cx.named_field(index, position)?;
+            let mut node = self.out.relations[base.index()].clone();
+            let mut member = item.clone();
+            member.unique = Vec::new();
+            if let Some(pivot) = &mut member.pivot {
+                pivot.field = Some(position);
+            }
+            node.named = Some(Box::new(member));
+            node.shares = Some(base);
+            self.out.relations[id.index()] = node;
+        }
         Ok(())
     }
 
@@ -2218,7 +2305,8 @@ fn current_read(cx: &Cx<'_>, current: &CurrentField) -> Result<Read, ResolutionE
         CurrentRead::Record { column, .. } => Read::Field(field(column)?),
         CurrentRead::Output(column) => Read::Column(cx.column(column)?),
         CurrentRead::Intermediate { index, column } => {
-            Read::Relation(cx.named(index)?, field(column)?)
+            let (relation, column) = cx.named_read(index, column)?;
+            Read::Relation(relation, field(column)?)
         }
         // Only a donor plan reads it, rebased onto the donor record.
         CurrentRead::Contextual => return Err(unsupported("contextual current read", 0)),

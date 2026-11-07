@@ -229,6 +229,11 @@ impl<'a> Inputs<'a> {
         column: usize,
     ) -> Option<ColumnType> {
         use crate::dataset::IntermediateSource;
+        // A pivot field has the type of the `value` column (LOOKUP-28).
+        let column = match &item.pivot {
+            Some(pivot) if pivot.field_of(column).is_some() => pivot.value,
+            _ => column,
+        };
         if item.derivations.is_some() {
             return item.source_kind(secondary, column);
         }

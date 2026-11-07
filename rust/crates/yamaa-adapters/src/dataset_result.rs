@@ -154,6 +154,11 @@ fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
             matched_key,
             identity,
             ..
+        }
+        | ExecutionError::UnlistedPivotName {
+            matched_key,
+            identity,
+            ..
         } => Outcome::Condition(Box::new(Condition {
             diagnostic: diagnostics::failure(error)?,
             identity: identity.clone(),

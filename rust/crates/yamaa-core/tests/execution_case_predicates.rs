@@ -59,6 +59,7 @@ mod execution {
                         dataset: "DM".into(),
                         intermediate: "I".into(),
                         match_count: 2,
+                        field: None,
                         matched_key: observed(),
                         identity: identity(),
                     },

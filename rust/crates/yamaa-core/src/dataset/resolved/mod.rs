@@ -572,6 +572,10 @@ pub struct RelationNode {
     /// The bound declaration of a named intermediate; its donor plan, if
     /// any, is the `derivations` region.
     pub named: Option<Box<Intermediate>>,
+    /// The relation whose records, match index, narrowing and donor this
+    /// one shares: a pivot's field relation names the intermediate's own
+    /// relation (LOOKUP-28).
+    pub shares: Option<RelationId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

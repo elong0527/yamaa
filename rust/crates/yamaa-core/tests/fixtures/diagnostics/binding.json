@@ -708,6 +708,55 @@
         "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
       },
       "issues": [{"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.TOP.derivation.aggregate"], "context": {"column": "TOP", "operation": "aggregate"}}]
+    },
+    {
+      "case": "a_pivot_name_names_a_field_of_the_donor",
+      "operation": "bind",
+      "input": {"base": "lookup", "edits": [{"set": ["intermediates", "0", "pivot"], "to": {"name": "BAD", "value": "V", "fields": ["A"]}}], "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-28", "spec_paths": ["intermediates.SEL.pivot.name"], "context": {"identifier": "BAD", "intermediate": "SEL"}}]
+    },
+    {
+      "case": "a_pivot_value_names_a_field_of_the_donor",
+      "operation": "bind",
+      "input": {"base": "lookup", "edits": [{"set": ["intermediates", "0", "pivot"], "to": {"name": "TXT", "value": "BAD", "fields": ["A"]}}], "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-28", "spec_paths": ["intermediates.SEL.pivot.value"], "context": {"identifier": "BAD", "intermediate": "SEL"}}]
+    },
+    {
+      "case": "a_pivot_name_is_text",
+      "operation": "bind",
+      "input": {"base": "lookup", "edits": [{"set": ["intermediates", "0", "pivot"], "to": {"name": "DID", "value": "V", "fields": ["A"]}}], "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-28", "spec_paths": ["intermediates.SEL.pivot.name"], "context": {"identifier": "DID", "actual": "int", "permitted": ["str"], "intermediate": "SEL"}}]
+    },
+    {
+      "case": "a_pivot_field_that_names_a_field_of_the_donor_is_refused",
+      "operation": "bind",
+      "input": {"base": "lookup", "edits": [{"set": ["intermediates", "0", "pivot"], "to": {"name": "TXT", "value": "V", "fields": ["A", "DT"]}}], "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-28", "spec_paths": ["intermediates.SEL.pivot.fields[1]"], "context": {"identifier": "DT", "intermediate": "SEL"}}]
+    },
+    {
+      "case": "a_read_through_a_pivot_names_a_listed_field",
+      "operation": "bind",
+      "input": {"base": "lookup", "edits": [{"set": ["intermediates", "0", "pivot"], "to": {"name": "TXT", "value": "V", "fields": ["A"]}}], "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "SEL.V"}}]
+    },
+    {
+      "case": "a_rejected_derivation_does_not_hide_a_bound_pivot_field",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [
+          {"set": ["intermediates", "0", "pivot"], "to": {"name": "TXT", "value": "V", "fields": ["A"]}},
+          {"set": ["intermediates", "0", "derivations"], "to": {"BROKEN": {"value": "DONOR.MISSING"}}},
+          {"set": ["columns", "1", "derivation", "value"], "to": "SEL.A"}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.SEL.derivations.BROKEN.source"], "context": {"intermediate": "SEL", "identifier": "DONOR.MISSING"}}]
     }
   ]
 }

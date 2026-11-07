@@ -175,6 +175,7 @@ mod diagnostics {
                     dataset: "DM",
                     intermediate: &huge,
                     count: 2,
+                    field: None,
                 };
                 let diagnostic = cause.diagnostic().unwrap();
                 assert_eq!(diagnostic.code, ConditionCode::DatasetMultipleMatches);
@@ -207,7 +208,8 @@ mod diagnostics {
                             path: "p",
                             dataset: "DM",
                             intermediate: "I",
-                            count
+                            count,
+                            field: None,
                         }
                         .diagnostic(),
                         Err(ProjectionError::InvalidContext)
@@ -253,6 +255,7 @@ mod diagnostics {
                     dataset: "DM",
                     intermediate: "I",
                     count: usize::MAX,
+                    field: None,
                 }
                 .diagnostic()
                 .unwrap();

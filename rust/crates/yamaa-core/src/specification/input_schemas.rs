@@ -254,6 +254,14 @@ fn reaches<'s>(spec: &'s ast::Spec, relation: &'s str) -> Option<(&'s str, Vec<&
                 .iter()
                 .map(|binding| binding.name.name.as_str()),
         );
+        // A pivot's listed names are fields of the selection, not of the
+        // input (LOOKUP-28).
+        derived.extend(
+            item.pivot
+                .iter()
+                .flat_map(|pivot| &pivot.fields)
+                .map(|field| field.name.as_str()),
+        );
         at = &item.dataset.name;
     }
     None
@@ -286,7 +294,8 @@ fn key_fields(key: Option<&JoinKey>) -> Vec<&str> {
 ///   reads of its donor record in its derivations or range bounds (its
 ///   filter and order read a bare name of SELF alone); a bare name an
 ///   aggregate or structured source reads of its relation; a lookup's key,
-///   `unique` columns, `columns` and nearest `source`; an aggregate's key;
+///   `unique` columns, `columns`, nearest `source` and pivot `name` and
+///   `value`; an aggregate's key;
 ///   and a pair relation's key fields of either side;
 /// - when the input's records drive rows, directly or through a lookup,
 ///   the declared `key` of every other input, whose implicit join pairs it
@@ -452,6 +461,11 @@ fn read_fields(spec: &ast::Spec, input: &str, odm_items: &BTreeSet<ExprId>) -> V
                 item.nearest
                     .as_ref()
                     .map(|nearest| nearest.source.name.as_str()),
+            )
+            .chain(
+                item.pivot
+                    .iter()
+                    .flat_map(|pivot| [pivot.name.name.as_str(), pivot.value.name.as_str()]),
             );
         for field in named {
             if stored(relation, field) {

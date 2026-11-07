@@ -75,11 +75,13 @@ pub(crate) struct Reads {
 }
 
 /// The input dataset a plain lookup selects a record of, and whether the
-/// lookup declares a `filter`.
+/// lookup declares a `filter` or a `pivot`, which narrows by name; a
+/// pivoted lookup's listed names each read its `value` field (LOOKUP-28).
 #[derive(Clone, Debug)]
 struct Selection {
     dataset: String,
     filtered: bool,
+    pivot: Option<(Vec<String>, String)>,
 }
 
 impl Reads {
@@ -105,7 +107,17 @@ impl Reads {
                 if !item.pairs() && stored {
                     let selection = Selection {
                         dataset: item.dataset.name.clone(),
-                        filtered: item.filter.is_some(),
+                        filtered: item.filter.is_some() || item.pivot.is_some(),
+                        pivot: item.pivot.as_ref().map(|pivot| {
+                            (
+                                pivot
+                                    .fields
+                                    .iter()
+                                    .map(|field| field.name.clone())
+                                    .collect(),
+                                pivot.value.name.clone(),
+                            )
+                        }),
                     };
                     selections.insert(item.id.name.clone(), selection);
                 }
@@ -350,6 +362,11 @@ pub(crate) fn copies_expr(
         .selections
         .get(qualifier)
         .filter(|lookup| lookup.dataset == predecessor.dataset);
+    // A pivot field reads the lookup's `value` field (LOOKUP-28).
+    let column = match lookup.and_then(|lookup| lookup.pivot.as_ref()) {
+        Some((fields, value)) if fields.iter().any(|field| field == column) => value.as_str(),
+        _ => column,
+    };
     if column != predecessor.column
         || !reads.inputs.contains(predecessor.dataset)
         || (qualifier != predecessor.dataset && lookup.is_none())

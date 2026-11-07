@@ -571,6 +571,56 @@
       "input": {"dataset": "SRC", "columns": [["ID", "int"]], "rows": 0, "field": "ID"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [{"phase": "validation", "condition": "ordinal_field_collision", "rule": "INPUT-4", "spec_paths": ["input.SRC.ordinal"], "context": {"dataset": "SRC", "field": "ID"}}]
+    },
+    {
+      "case": "a_pivot_refuses_columns_written_beside_it",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A", "B"]}, "columns": ["V"]}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.columns", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "columns"}}]
+    },
+    {
+      "case": "a_pivot_refuses_require_match_written_beside_it",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A", "B"]}, "require_match": true}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "require_match"}}]
+    },
+    {
+      "case": "a_pivot_refuses_columns_and_require_match_naming_columns_first",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "require_match": true, "pivot": {"name": "N", "value": "V", "fields": ["A"]}, "columns": ["V"]}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.columns", "intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "columns"}}]
+    },
+    {
+      "case": "a_pivot_refuses_self_as_its_relation",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "src.csv"}}}, {"set": ["columns"], "to": [{"name": "ID", "type": "int"}]}, {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A", "B"]}}]}, {"set": ["rows"], "to": [{"id": "first", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}}}]}]},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.dataset", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "SELF"}}]
+    },
+    {
+      "case": "a_pivot_with_no_field_is_refused",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": []}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.pivot.fields"], "context": {"intermediate": "P", "expected": "at least one field"}}]
+    },
+    {
+      "case": "a_pivot_field_listed_twice_is_refused",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A", "B", "A"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.pivot.fields[2]"], "context": {"intermediate": "P", "identifier": "A"}}]
+    },
+    {
+      "case": "a_pair_relation_refuses_a_pivot_written_beside_inner_join",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A"]}, "derivations": {"X": {"type": "int", "derivation": "SRC.ID"}}}]}]},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.pivot", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "pivot"}}]
+    },
+    {
+      "case": "a_pivot_beside_nearest_still_refuses_require_match",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "require_match": true, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "pivot": {"name": "N", "value": "V", "fields": ["A"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "require_match"}}]
     }
   ]
 }

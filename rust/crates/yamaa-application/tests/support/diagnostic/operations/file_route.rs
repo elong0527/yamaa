@@ -63,6 +63,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("missing_order.json"),
     fixture!("odm_source_reads.json"),
     fixture!("order_term_types.json"),
+    fixture!("pivoted_lookups.json"),
     fixture!("producer_links.json"),
     fixture!("project_files.json"),
     fixture!("project_layers.json"),

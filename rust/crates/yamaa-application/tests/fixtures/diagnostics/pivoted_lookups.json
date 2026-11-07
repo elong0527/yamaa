@@ -1,0 +1,486 @@
+{
+  "about": "A named intermediate that writes pivot exposes each listed value of one donor field as a field of its selection (LOOKUP-28, #4310). Match and narrow run as for any lookup; each listed name then selects among the candidates whose name equals it, by order_by and keep or nearest, and answers absence on its own, counted under the read's absent and multiple_matches handlers (LOOKUP-24, LOOKUP-14). Two candidates of one name with no selection fail as multiple_matches naming the field (LOOKUP-10), and a candidate whose name is not listed, a missing name included, fails the read as unlisted_pivot_name, unless the filter removes it. A pivot declares none on a row driver (ROW-2), and a pivoted plain lookup copies a Predecessor whose description names the value field with a where clause, the pivot standing as the condition (SUB-19, SUB-20). A pivot name whose stored type an input's schema does not decide, a Parquet input checked without its file, is checked when the input is read, not refused at check (P9). Every value is authored from those rules: A's weight of day 1 lies one day from a reference two days before the day 8 one, A's second event has no site, B's first event has no cause, and A's weight on day 8 is the last of two and the one nearest a reference two days from it.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ, SEQ]\ninput:\n  AE: {path: ae.csv, types: {SEQ: int}}\n  SUPP: {path: supp.csv, types: {IDVARVAL: int}}\nbase: AE\noutput: {path: out.csv, columns: [SUBJ, SEQ, SITE, CAUSE]}\nintermediates:\n  - id: QUAL\n    dataset: SUPP\n    key: {SUBJ: AE.SUBJ, IDVARVAL: AE.SEQ}\n    pivot: {name: QNAM, value: QVAL, fields: [SITE, CAUSE]}\ncolumns:\n  - {name: SUBJ, type: str, derivation: AE.SUBJ}\n  - {name: SEQ, type: int, derivation: AE.SEQ}\n  - {name: SITE, type: str, derivation: QUAL.SITE}\n  - {name: CAUSE, type: str, derivation: QUAL.CAUSE}\n",
+    "selection": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  DM: {path: dm.csv, types: {REFDT: date}}\n  VS: {path: vs.csv, types: {DAY: int, VSDT: date, RESULT: float}}\nbase: DM\noutput: {path: out.csv, columns: [SUBJ, HEIGHT, WEIGHT]}\nintermediates:\n  - id: LAST\n    dataset: VS\n    key: {SUBJ: DM.SUBJ}\n    order_by: [VS.DAY]\n    keep: last\n    pivot: {name: TEST, value: RESULT, fields: [HEIGHT, WEIGHT]}\ncolumns:\n  - {name: SUBJ, type: str, derivation: DM.SUBJ}\n  - {name: HEIGHT, type: float, derivation: LAST.HEIGHT}\n  - {name: WEIGHT, type: float, derivation: LAST.WEIGHT}\n",
+    "driver": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  AE: ae.csv\n  SUPP: supp.csv\nbase: AE\noutput: {path: out.csv, columns: [SUBJ, VAL]}\nintermediates:\n  - id: QUAL\n    dataset: SUPP\n    filter: \"SUPP.QNAM = 'SITE'\"\n    pivot: {name: QNAM, value: QVAL, fields: [SITE]}\ncolumns:\n  - {name: SUBJ, type: str}\n  - {name: VAL, type: str}\nrows:\n  - id: each\n    dataset: QUAL\n    derivations: {SUBJ: QUAL.SUBJ, VAL: QUAL.QVAL}\n",
+    "predecessor": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int}}\n  SUPPAE: {path: suppae.csv, types: {IDVARVAL: int}}\nbase: AE\noutput: {path: out.csv, columns: [USUBJID, AESEQ, AEXSITE]}\nintermediates:\n  - id: QUAL\n    dataset: SUPPAE\n    key: {USUBJID: AE.USUBJID, IDVARVAL: AE.AESEQ}\n    pivot: {name: QNAM, value: QVAL, fields: [AEXSITE]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence Number, derivation: AE.AESEQ}\n  - name: AEXSITE\n    type: str\n    label: Location Detail\n    derivation: QUAL.AEXSITE\n    submission: {origins: [{type: Predecessor, description: \"SUPPAE.QVAL where QNAM = 'AEXSITE'\"}]}\n"
+  },
+  "cases": [
+    {
+      "case": "each_listed_name_reads_the_value_of_the_candidate_named_so",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec"
+          },
+          "ae.csv": "SUBJ,SEQ\nA,1\nA,2\nB,1\n",
+          "supp.csv": "SUBJ,IDVARVAL,QNAM,QVAL\nA,1,SITE,ARM\nA,1,CAUSE,HEAT\nA,2,CAUSE,SUN\nB,1,SITE,LEG\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "report": {
+        "handler": [
+          [
+            "SPEC_PATH",
+            "COUNT"
+          ],
+          [
+            "columns.SITE.derivation.source.absent",
+            1
+          ],
+          [
+            "columns.CAUSE.derivation.source.absent",
+            1
+          ]
+        ]
+      },
+      "saved": {
+        "out.csv": "SUBJ,SEQ,SITE,CAUSE\nA,1,ARM,HEAT\nA,2,,SUN\nB,1,LEG,\n"
+      }
+    },
+    {
+      "case": "a_listed_name_without_a_candidate_answers_the_absent_value",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "    pivot: {name: QNAM, value: QVAL, fields: [SITE, CAUSE]}\n",
+                "to": "    pivot: {name: QNAM, value: QVAL, fields: [SITE, CAUSE]}\n    absent: NONE\n"
+              }
+            ]
+          },
+          "ae.csv": "SUBJ,SEQ\nA,1\nA,2\nB,1\n",
+          "supp.csv": "SUBJ,IDVARVAL,QNAM,QVAL\nA,1,SITE,ARM\nA,1,CAUSE,HEAT\nA,2,CAUSE,SUN\nB,1,SITE,LEG\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,SEQ,SITE,CAUSE\nA,1,ARM,HEAT\nA,2,NONE,SUN\nB,1,LEG,NONE\n"
+      }
+    },
+    {
+      "case": "two_candidates_of_one_name_fail_as_multiple_matches_naming_the_field",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec"
+          },
+          "ae.csv": "SUBJ,SEQ\nA,1\nA,2\nB,1\n",
+          "supp.csv": "SUBJ,IDVARVAL,QNAM,QVAL\nA,1,SITE,ARM\nA,1,CAUSE,HEAT\nA,1,SITE,LEG\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "multiple_matches",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "intermediates.QUAL"
+          ],
+          "context": {
+            "intermediate": "QUAL",
+            "dataset": "SUPP",
+            "match_count": 2,
+            "field": "SITE",
+            "key": [
+              "SUBJ",
+              "IDVARVAL"
+            ],
+            "intermediate_key": {
+              "SUBJ": "A",
+              "IDVARVAL": 1
+            },
+            "keys": [
+              {
+                "SUBJ": "A",
+                "SEQ": 1
+              }
+            ]
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_candidate_whose_name_is_not_listed_fails_the_read",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec"
+          },
+          "ae.csv": "SUBJ,SEQ\nA,1\nA,2\nB,1\n",
+          "supp.csv": "SUBJ,IDVARVAL,QNAM,QVAL\nA,1,SITE,ARM\nA,1,TEMP,HOT\nB,1,SITE,LEG\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "unlisted_pivot_name",
+          "rule": "LOOKUP-28",
+          "spec_paths": [
+            "intermediates.QUAL"
+          ],
+          "context": {
+            "intermediate": "QUAL",
+            "dataset": "SUPP",
+            "name": "QNAM",
+            "value": "TEMP",
+            "fields": [
+              "SITE",
+              "CAUSE"
+            ],
+            "key": [
+              "SUBJ",
+              "IDVARVAL"
+            ],
+            "intermediate_key": {
+              "SUBJ": "A",
+              "IDVARVAL": 1
+            },
+            "keys": [
+              {
+                "SUBJ": "A",
+                "SEQ": 1
+              }
+            ]
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_candidate_without_a_name_fails_the_read_as_unlisted",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec"
+          },
+          "ae.csv": "SUBJ,SEQ\nA,1\nA,2\nB,1\n",
+          "supp.csv": "SUBJ,IDVARVAL,QNAM,QVAL\nA,1,,ARM\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "unlisted_pivot_name",
+          "rule": "LOOKUP-28",
+          "spec_paths": [
+            "intermediates.QUAL"
+          ],
+          "context": {
+            "intermediate": "QUAL",
+            "dataset": "SUPP",
+            "name": "QNAM",
+            "value": null,
+            "fields": [
+              "SITE",
+              "CAUSE"
+            ],
+            "key": [
+              "SUBJ",
+              "IDVARVAL"
+            ],
+            "intermediate_key": {
+              "SUBJ": "A",
+              "IDVARVAL": 1
+            },
+            "keys": [
+              {
+                "SUBJ": "A",
+                "SEQ": 1
+              }
+            ]
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_record_the_filter_removes_is_never_asked_its_name",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "    pivot: {name: QNAM, value: QVAL, fields: [SITE, CAUSE]}\n",
+                "to": "    filter: \"SUPP.QNAM <> 'TEMP'\"\n    pivot: {name: QNAM, value: QVAL, fields: [SITE, CAUSE]}\n"
+              }
+            ]
+          },
+          "ae.csv": "SUBJ,SEQ\nA,1\nA,2\nB,1\n",
+          "supp.csv": "SUBJ,IDVARVAL,QNAM,QVAL\nA,1,SITE,ARM\nA,1,TEMP,HOT\nB,1,SITE,LEG\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,SEQ,SITE,CAUSE\nA,1,ARM,\nA,2,,\nB,1,LEG,\n"
+      }
+    },
+    {
+      "case": "an_ordered_selection_chooses_per_listed_name",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "selection"
+          },
+          "dm.csv": "SUBJ,REFDT\nA,2024-01-08\nB,2024-01-08\n",
+          "vs.csv": "SUBJ,TEST,DAY,VSDT,RESULT\nA,HEIGHT,1,2024-01-01,170\nA,WEIGHT,1,2024-01-01,70\nA,WEIGHT,8,2024-01-10,72.5\nB,HEIGHT,1,2024-01-01,160\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "report": {
+        "handler": [
+          [
+            "SPEC_PATH",
+            "COUNT"
+          ],
+          [
+            "columns.HEIGHT.derivation.source.multiple_matches",
+            0
+          ],
+          [
+            "columns.HEIGHT.derivation.source.absent",
+            0
+          ],
+          [
+            "columns.WEIGHT.derivation.source.multiple_matches",
+            1
+          ],
+          [
+            "columns.WEIGHT.derivation.source.absent",
+            1
+          ]
+        ]
+      },
+      "saved": {
+        "out.csv": "SUBJ,HEIGHT,WEIGHT\nA,170,72.5\nB,160,\n"
+      }
+    },
+    {
+      "case": "a_nearest_selection_chooses_per_listed_name",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "selection",
+            "edits": [
+              {
+                "from": "    order_by: [VS.DAY]\n    keep: last\n",
+                "to": "    nearest: {source: VSDT, to: DM.REFDT, unit: day}\n"
+              }
+            ]
+          },
+          "dm.csv": "SUBJ,REFDT\nA,2024-01-02\nB,2024-01-02\n",
+          "vs.csv": "SUBJ,TEST,DAY,VSDT,RESULT\nA,HEIGHT,1,2024-01-01,170\nA,WEIGHT,1,2024-01-01,70\nA,WEIGHT,8,2024-01-10,72.5\nB,HEIGHT,1,2024-01-01,160\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,HEIGHT,WEIGHT\nA,170,70\nB,160,\n"
+      }
+    },
+    {
+      "case": "a_pivot_on_a_row_driver_is_refused",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "driver"
+          },
+          "ae.csv": "SUBJ\nA\n",
+          "supp.csv": "SUBJ,QNAM,QVAL\nA,SITE,ARM\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "invalid_intermediate_driver",
+          "rule": "ROW-2",
+          "spec_paths": [
+            "rows.each.dataset"
+          ],
+          "context": {
+            "intermediate": "QUAL",
+            "fields": [
+              "pivot"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "a_predecessor_copied_through_a_pivot_field_passes_the_check",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "predecessor"
+          },
+          "ae.csv": "USUBJID,AESEQ\nA,1\n",
+          "suppae.csv": "USUBJID,IDVARVAL,QNAM,QVAL\nA,1,AEXSITE,ARM\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": []
+    },
+    {
+      "case": "a_predecessor_of_another_field_than_the_pivot_value_is_refuted",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "predecessor",
+            "edits": [
+              {
+                "from": "SUPPAE.QVAL where QNAM = 'AEXSITE'",
+                "to": "SUPPAE.QLABEL where QNAM = 'AEXSITE'"
+              }
+            ]
+          },
+          "ae.csv": "USUBJID,AESEQ\nA,1\n",
+          "suppae.csv": "USUBJID,IDVARVAL,QNAM,QVAL\nA,1,AEXSITE,ARM\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "origin_contradicts_derivation",
+          "rule": "SUB-19",
+          "spec_paths": [
+            "columns.AEXSITE.submission"
+          ],
+          "context": {
+            "column": "AEXSITE",
+            "origin_type": "Predecessor",
+            "predecessor": "SUPPAE.QLABEL",
+            "reason": "predecessor_source"
+          }
+        }
+      ]
+    },
+    {
+      "case": "a_pivot_name_of_an_undecided_type_is_checked_when_the_input_is_read",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  AE: {path: ae.csv, types: {SEQ: int}}\n  SUPP: {path: supp.csv, types: {IDVARVAL: int}}\n",
+                "to": "  AE: ae.parquet\n  SUPP: supp.parquet\n"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": []
+    }
+  ]
+}

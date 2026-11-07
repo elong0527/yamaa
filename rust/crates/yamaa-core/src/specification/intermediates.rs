@@ -41,6 +41,7 @@ pub(super) struct Declaration {
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
     nearest: Option<NearestDeclaration>,
+    pivot: Option<PivotDeclaration>,
     no_match: Option<Value>,
     require_match: bool,
     range: Option<lookup_range::Declaration>,
@@ -74,6 +75,19 @@ struct NearestDeclaration {
     /// The current-row value, read as a key match value is (LOOKUP-5).
     to: match_values::Declaration,
     unit: Option<ast::TimeUnit>,
+}
+
+/// A pivot as written (LOOKUP-28).
+#[derive(Debug)]
+struct PivotDeclaration {
+    /// `intermediates.<id>.pivot`.
+    path: String,
+    /// The donor field whose value names a candidate's field, written bare.
+    name: String,
+    /// The donor field each listed field reads, written bare.
+    value: String,
+    /// Each listed name with its entry's path.
+    fields: Vec<(String, String)>,
 }
 
 #[derive(Debug, Default)]
@@ -437,9 +451,113 @@ fn select_field(
     field
 }
 
+/// Bind a pivot (LOOKUP-28): its `name`, a `str` field of the lookup's
+/// relation; its `value`, a field of it; and its listed names, each new to
+/// the relation, which the selection then exposes after the relation's own
+/// fields, each laid out as `value` is. The first finding refuses the pivot.
+/// A stored `name` whose type the input's schema does not decide yet, such
+/// as a Parquet field checked without its file, is withheld from `check()`
+/// and judged when the input is read (P9).
+fn bind_pivot(
+    item: &Declaration,
+    declaration: &PivotDeclaration,
+    relation: &Donor<'_>,
+    inputs: binder::Inputs<'_>,
+    field_type: &dyn Fn(usize) -> crate::result_type::ResultType,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<crate::dataset::Pivot>, BindError> {
+    let Donor {
+        lookup: intermediate,
+        dataset,
+        schema,
+        kind: donor_kind,
+        admits,
+    } = *relation;
+    use crate::diagnostic::lookup::{self, Owner};
+    let owner = Owner::Intermediate(intermediate);
+    fn refuse(
+        findings: &mut Vec<BindFinding>,
+        diagnostic: crate::diagnostic::Diagnostic,
+    ) -> Result<Option<crate::dataset::Pivot>, BindError> {
+        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+            diagnostic,
+        )));
+        Ok(None)
+    }
+    let position = |name: &str| {
+        schema
+            .columns()
+            .iter()
+            .position(|column| column.name == name)
+            .filter(|&column| admits(column))
+    };
+    let name_path = format!("{}.name", declaration.path);
+    let Some(name) = position(&declaration.name) else {
+        return refuse(
+            findings,
+            lookup::pivot_field_reference(&name_path, owner, &declaration.name),
+        );
+    };
+    let derived = item
+        .derivations
+        .iter()
+        .any(|derivation| derivation.name == declaration.name);
+    match donor_kind(name) {
+        Some(ColumnType::Str) => {}
+        None if !derived && !inputs.decides(dataset, &declaration.name) => {
+            findings.push(BindFinding::Withheld(Box::new(BindFinding::Lookup(
+                LookupFinding::from_diagnostic(lookup::pivot_name_type(
+                    &name_path,
+                    owner,
+                    &declaration.name,
+                    field_type(name),
+                )),
+            ))));
+        }
+        _ => {
+            return refuse(
+                findings,
+                lookup::pivot_name_type(&name_path, owner, &declaration.name, field_type(name)),
+            );
+        }
+    }
+    let value_path = format!("{}.value", declaration.path);
+    let Some(value) = position(&declaration.value) else {
+        return refuse(
+            findings,
+            lookup::pivot_field_reference(&value_path, owner, &declaration.value),
+        );
+    };
+    for (field, path) in &declaration.fields {
+        if schema.columns().iter().any(|column| column.name == *field) {
+            return refuse(findings, lookup::pivot_field_duplicate(path, owner, field));
+        }
+    }
+    let kind = donor_kind(value).unwrap_or(ColumnType::Str);
+    let fields: Vec<String> = declaration
+        .fields
+        .iter()
+        .map(|(field, _)| field.clone())
+        .collect();
+    let mut columns = schema.columns().to_vec();
+    columns.extend(fields.iter().map(|field| crate::table::Column {
+        name: field.clone(),
+        kind,
+    }));
+    let extended = TableSchema::new(columns).map_err(|_| BindError::Internal)?;
+    Ok(Some(crate::dataset::Pivot {
+        name,
+        value,
+        base: schema.columns().len(),
+        fields: fields.into(),
+        field: None,
+        schema: std::sync::Arc::new(extended),
+    }))
+}
+
 /// Bind one lookup over its relation: its derivations, its keys' types and
 /// fields, its key values and nearest reference in the current row, then
-/// its filter, order, projection, range and `unique` checks.
+/// its filter, order, projection, range, `unique` checks and pivot.
 fn bind_one(
     cx: Context<'_>,
     item: &Declaration,
@@ -668,9 +786,54 @@ fn bind_one(
         .transpose()?
         .flatten();
     let unique = bind_unique(item, &donor, &filter, &derivations, findings);
+    // A pivot's name and value are fields of the relation, and its listed
+    // names are new to it (LOOKUP-28).
+    let pivot = match &item.pivot {
+        Some(declaration) => {
+            let pivot = bind_pivot(item, declaration, &donor, inputs, &field_type, findings)?;
+            failed |= pivot.is_none();
+            pivot
+        }
+        None => None,
+    };
     // Range rejection owns its original cause without turning an existing
     // donor field into a second unknown-reference diagnostic.
-    let source = match item.source {
+    let source = bound_source(item, inputs, output, self_columns)?;
+    Ok((!failed).then(|| Intermediate {
+        identifier: item.name.clone(),
+        path: item.path.clone(),
+        source,
+        keys: pairs,
+        filter,
+        selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
+        nearest,
+        pivot,
+        no_match: item.no_match.clone(),
+        require_match: item.require_match,
+        unique,
+        derivations,
+        pending_schema,
+
+        range,
+        columns,
+    }))
+}
+
+/// The records a bound lookup reads: the driver's own table, a secondary
+/// input by its position among the secondary sources, or the completed rows
+/// of SELF; a pair relation's are bound by [`pairs::bind`].
+fn bound_source(
+    item: &Declaration,
+    inputs: binder::Inputs<'_>,
+    output: &TableSchema,
+    self_columns: Option<&[usize]>,
+) -> Result<crate::dataset::IntermediateSource, BindError> {
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = inputs;
+    Ok(match item.source {
         self_relations::Relation::Input(index) if index == driver => {
             crate::dataset::IntermediateSource::Primary {
                 schema: schemas[index].layout().clone(),
@@ -689,24 +852,7 @@ fn bind_one(
             columns: self_columns.unwrap_or(&[]).to_vec(),
         },
         self_relations::Relation::Pair => return Err(BindError::Internal),
-    };
-    Ok((!failed).then(|| Intermediate {
-        identifier: item.name.clone(),
-        path: item.path.clone(),
-        source,
-        keys: pairs,
-        filter,
-        selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
-        nearest,
-        no_match: item.no_match.clone(),
-        require_match: item.require_match,
-        unique,
-        derivations,
-        pending_schema,
-
-        range,
-        columns,
-    }))
+    })
 }
 
 /// The current row's catalog that a lookup's key values, nearest reference
@@ -861,14 +1007,18 @@ impl Declarations {
             _ => None,
         }
     }
-    /// Whether the named intermediate `name` derives the field `field`.
+    /// Whether the named intermediate `name` derives the field `field`, or
+    /// lists it as a field of its pivot (LOOKUP-28).
     pub(super) fn derives(&self, name: &str, field: &str) -> bool {
         self.0.iter().any(|item| {
             item.name == name
-                && item
+                && (item
                     .derivations
                     .iter()
                     .any(|derivation| derivation.name == field)
+                    || item.pivot.as_ref().is_some_and(|pivot| {
+                        pivot.fields.iter().any(|(listed, _)| listed == field)
+                    }))
         })
     }
     /// Whether `name` selects one record for each row: it declares `keep`
@@ -1259,6 +1409,16 @@ impl Declarations {
                 }
                 None => None,
             };
+            let pivot = item.pivot.as_ref().map(|pivot| PivotDeclaration {
+                path: checks::render(spec, pivot.meta),
+                name: pivot.name.name.clone(),
+                value: pivot.value.name.clone(),
+                fields: pivot
+                    .fields
+                    .iter()
+                    .map(|field| (field.name.clone(), checks::render(spec, field.meta)))
+                    .collect(),
+            });
             let no_match = checks::handler(spec, item.absent.as_ref())?;
             let unique = Self::unique_checks(spec, item)?;
             let driver_prohibited = checks::lookups::driver_prohibited(spec, item)
@@ -1286,6 +1446,7 @@ impl Declarations {
                     order,
                     keep,
                     nearest,
+                    pivot,
                     no_match,
                     require_match: item.require_match,
                     range,

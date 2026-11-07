@@ -14,8 +14,8 @@ use super::{column_type, keyword, Lower};
 use crate::ast::{
     Aggregate, Arm, Between, Binding, Constant, Derivation, Dictionary, Direction, ExprId,
     ExprKind, Formula, Handlers, JoinKey, Keep, Literal, Meta, Name, Named, Nearest, Nulls,
-    OdmRead, Operand, OrderTerm, Role, ScalarOp, Segment, Slot, SourceRead, Text, TimeUnit, Window,
-    WindowFunction,
+    OdmRead, Operand, OrderTerm, Pivot, Role, ScalarOp, Segment, Slot, SourceRead, Text, TimeUnit,
+    Window, WindowFunction,
 };
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
 use crate::expression_table::{Closed, Form, OperandForm, Verb, Written};
@@ -329,6 +329,32 @@ impl<'d> Lower<'d> {
             to,
             to_field,
             unit: self.text_of(node, "unit").and_then(TimeUnit::from_name),
+            meta,
+        }
+    }
+
+    /// A pivot: `{name, value, fields}` (LOOKUP-28), its `name` and `value`
+    /// donor fields written bare and its `fields` the names it exposes.
+    pub(super) fn pivot(&mut self, node: usize, meta: Meta) -> Pivot {
+        let missing = |meta| Named {
+            name: String::new(),
+            meta,
+        };
+        let name = self
+            .named(meta, node, "name")
+            .unwrap_or_else(|| missing(meta));
+        let value = self
+            .named(meta, node, "value")
+            .unwrap_or_else(|| missing(meta));
+        let fields_meta = match self.field(node, "fields") {
+            Some(list) => self.field_meta(meta, "fields", list),
+            None => meta,
+        };
+        Pivot {
+            name,
+            value,
+            fields: self.names(meta, node, "fields"),
+            fields_meta,
             meta,
         }
     }

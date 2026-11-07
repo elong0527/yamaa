@@ -17,7 +17,7 @@ use crate::dataset::execution::{CheckRecord, ExecutionError, RowIdentity};
 use crate::dataset::resolved::{ExprId, KeyValue, RegionId, RelationId, RelationKey, ResolvedPlan};
 use crate::dataset::{
     CurrentField, CurrentRead, Intermediate, IntermediateSource, Keep, MatchRead, MatchValue,
-    Nearest, OrderTerm, RelationPredicate, SourceSelection, VerificationSeverity,
+    Nearest, OrderTerm, Pivot, RelationPredicate, SourceSelection, VerificationSeverity,
 };
 use crate::expression::Truth;
 use crate::numeric_lifecycle::HandlerKind;
@@ -143,6 +143,11 @@ enum Entry {
 pub(super) struct State {
     first: usize,
     named: Vec<Named>,
+    /// Each relation's slot of shared state: its own, or that of the
+    /// relation it shares, whose records, match index, narrowing and donor
+    /// a pivot's field relation reads (LOOKUP-28). Choices stay the
+    /// relation's own.
+    base: Vec<usize>,
     journal: Vec<Entry>,
     /// The records the last shareable join reads chose for their
     /// selections, the latest last.
@@ -156,14 +161,25 @@ impl State {
     pub(super) fn new(plan: &ResolvedPlan, region: RegionId) -> Self {
         let relations: Vec<RelationId> = plan.region_relations(region).collect();
         let first = relations.first().map_or(0, |relation| relation.index());
-        let named = relations
+        let named: Vec<Named> = relations
             .iter()
             .take_while(|&&relation| plan.relation(relation).named.is_some())
             .map(|_| Named::default())
             .collect();
+        let base = relations
+            .iter()
+            .take(named.len())
+            .map(|&relation| {
+                plan.relation(relation)
+                    .shares
+                    .map_or(relation.index(), RelationId::index)
+                    - first
+            })
+            .collect();
         Self {
             first,
             named,
+            base,
             journal: Vec::new(),
             joined: Vec::new(),
         }
@@ -189,8 +205,16 @@ impl State {
         self.joined.push(shared);
     }
 
+    /// The shared state a relation reads: its own, or the relation's it
+    /// shares (LOOKUP-28).
     fn named(&mut self, relation: RelationId) -> &mut Named {
-        &mut self.named[relation.index() - self.first]
+        let slot = self.base[relation.index() - self.first];
+        &mut self.named[slot]
+    }
+
+    /// A relation's own record choices.
+    fn choices(&mut self, relation: RelationId) -> &mut Choices {
+        &mut self.named[relation.index() - self.first].choices
     }
 
     /// Whether a relation's derivations augment only the records its match
@@ -211,7 +235,7 @@ impl State {
         while self.journal.len() > mark.0 {
             match self.journal.pop().expect("a journal entry") {
                 Entry::Choice(relation, identity) => {
-                    self.named(relation).choices.remove(identity);
+                    self.choices(relation).remove(identity);
                 }
                 Entry::Materialized(relation, key) => {
                     self.named(relation).materialized.remove(&key);
@@ -222,7 +246,7 @@ impl State {
 
     /// A row identity's cached record choice of a relation, if any.
     pub(super) fn choice(&mut self, relation: RelationId, identity: Identity) -> Option<Choice> {
-        self.named(relation).choices.get(identity)
+        self.choices(relation).get(identity)
     }
 
     /// Cache a row identity's record choice, removed if the unit replays.
@@ -233,7 +257,7 @@ impl State {
         choice: Choice,
     ) -> Result<(), Fail<E>> {
         super::reserved(self.journal.try_reserve(1))?;
-        self.named(relation).choices.insert(identity, choice)?;
+        self.choices(relation).insert(identity, choice)?;
         self.journal.push(Entry::Choice(relation, identity));
         Ok(())
     }
@@ -1117,17 +1141,25 @@ pub(super) fn resolve_sought<E>(
             run,
         )
         .map_err(|found| refusal(found, item, table, probe_keys))?;
-        count = found.rows.len();
-        selected = found.rows.first().copied();
+        // A pivot's field relation selects among the candidates of its own
+        // name alone (LOOKUP-28).
+        let rows = match item.pivot.as_ref().filter(|pivot| pivot.field.is_some()) {
+            Some(pivot) => {
+                pivot_candidates(run, cx, reading, table, probe_keys, pivot, &found.rows)?
+            }
+            None => found.rows,
+        };
+        count = rows.len();
+        selected = rows.first().copied();
         // A nearest selection chooses among the candidates with a distance,
         // and one candidate without a distance is not chosen either.
         if let (Some(choice), Some(reference)) = (&item.nearest, reference) {
-            (selected, count) = nearest(&found.rows, choice, reference, |source_row, column| {
+            (selected, count) = nearest(&rows, choice, reference, |source_row, column| {
                 cell(table, item, source_row, column)
             })?;
         } else if count > 1 {
             if let Some(selection) = &item.selection {
-                selected = Some(select(&found.rows, selection, |source_row, column| {
+                selected = Some(select(&rows, selection, |source_row, column| {
                     cell(table, item, source_row, column)
                 })?);
             } else {
@@ -1136,6 +1168,11 @@ pub(super) fn resolve_sought<E>(
                     dataset: source_name.into(),
                     intermediate: item.identifier.clone(),
                     match_count: count,
+                    field: item
+                        .pivot
+                        .as_ref()
+                        .and_then(Pivot::selected)
+                        .map(String::from),
                     matched_key: matched_key(&table, probe_keys),
                     identity: run.failure_identity(cx, row),
                 }));
@@ -1158,6 +1195,50 @@ pub(super) fn resolve_sought<E>(
             identity: run.failure_identity(cx, row),
         }))
     }
+}
+
+/// LOOKUP-28: of a row's candidates, those whose `name` is the listed name
+/// the relation selects for, in stored order. A candidate named otherwise,
+/// or with no name, fails the read.
+fn pivot_candidates<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    reading: &Reading<'_>,
+    table: Table<'_, E>,
+    probe_keys: &[(usize, ValueRef<'_>)],
+    pivot: &Pivot,
+    candidates: &[usize],
+) -> Result<Vec<usize>, Fail<E>> {
+    let Reading {
+        item,
+        name: source_name,
+        row,
+        ..
+    } = *reading;
+    let listed = pivot
+        .selected()
+        .expect("a field relation selects for a listed name");
+    let mut rows = Vec::new();
+    super::reserved(rows.try_reserve(candidates.len()))?;
+    for &source_row in candidates {
+        match cell(table, item, source_row, pivot.name)? {
+            ValueRef::Str(name) if name == listed => rows.push(source_row),
+            ValueRef::Str(name) if pivot.fields.iter().any(|field| field == name) => (),
+            other => {
+                return Err(Box::new(ExecutionError::UnlistedPivotName {
+                    path: item.path.clone(),
+                    dataset: source_name.into(),
+                    intermediate: item.identifier.clone(),
+                    name: table.schema().columns()[pivot.name].name.clone(),
+                    value: owned(other),
+                    fields: pivot.fields.to_vec(),
+                    matched_key: matched_key(&table, probe_keys),
+                    identity: run.failure_identity(cx, row),
+                }))
+            }
+        }
+    }
+    Ok(rows)
 }
 
 /// LOOKUP-8 over every record at once, the first time a match narrows: a

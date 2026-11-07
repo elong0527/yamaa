@@ -30,12 +30,30 @@ impl<E> ExecutionError<E> {
                 dataset,
                 intermediate,
                 match_count,
+                field,
                 ..
             } => F::MultipleMatches {
                 path,
                 dataset,
                 intermediate,
                 count: *match_count,
+                field: field.as_deref(),
+            },
+            Self::UnlistedPivotName {
+                path,
+                dataset,
+                intermediate,
+                name,
+                value,
+                fields,
+                ..
+            } => F::UnlistedPivotName {
+                path,
+                dataset,
+                intermediate,
+                name,
+                value,
+                fields,
             },
             Self::BaselineAmbiguity {
                 path,

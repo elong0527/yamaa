@@ -1,0 +1,46 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  VS: {path: input/vs.csv, types: {VSSEQ: int, VSSTRESN: float}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, HEIGHT, WEIGHT]
+
+intermediates:
+  # The subject's last height and last weight, each chosen among that
+  # test's measurements alone: the latest date, and of two on one date
+  # the later record.
+  - id: LASTVS
+    dataset: VS
+    key: {STUDYID: DM.STUDYID, USUBJID: DM.USUBJID}
+    filter: "VS.VSTESTCD IN ('HEIGHT', 'WEIGHT')"
+    order_by: [VS.VSDTC]
+    keep: last
+    pivot: {name: VSTESTCD, value: VSSTRESN, fields: [HEIGHT, WEIGHT]}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: HEIGHT
+    type: float
+    label: Height (cm)
+    derivation: LASTVS.HEIGHT
+
+  - name: WEIGHT
+    type: float
+    label: Weight (kg)
+    derivation: LASTVS.WEIGHT

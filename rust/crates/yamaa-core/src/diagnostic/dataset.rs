@@ -28,6 +28,17 @@ pub enum DatasetFinding<'a> {
         dataset: &'a str,
         intermediate: &'a str,
         count: usize,
+        /// The listed name a pivot's field relation selects for (LOOKUP-28).
+        field: Option<&'a str>,
+    },
+    /// A pivot's candidate whose name it does not list (LOOKUP-28).
+    UnlistedPivotName {
+        path: &'a str,
+        dataset: &'a str,
+        intermediate: &'a str,
+        name: &'a str,
+        value: &'a Value,
+        fields: &'a [String],
     },
     BaselineAmbiguity {
         path: &'a str,
@@ -68,6 +79,12 @@ impl DatasetFinding<'_> {
                 (path, C::DatasetMultipleValues)
             }
             Self::UnmatchedKey { path, .. } => (path, C::LookupUnmatchedKey),
+            Self::UnlistedPivotName { path, value, .. } => {
+                if !matches!(value, Value::Str(_) | Value::Missing) {
+                    return Err(ProjectionError::InvalidContext);
+                }
+                (path, C::LookupPivotUnlisted)
+            }
             Self::MultipleMatches { path, count, .. } => {
                 if count < 2 {
                     return Err(ProjectionError::InvalidContext);
@@ -112,11 +129,36 @@ impl DatasetFinding<'_> {
                 dataset,
                 intermediate,
                 count: number,
+                field,
+                ..
+            } => {
+                let mut context: Context = [
+                    ("dataset".into(), text(dataset)),
+                    ("intermediate".into(), text(intermediate)),
+                    ("match_count".into(), count(number)),
+                ]
+                .into();
+                if let Some(field) = field {
+                    context.insert("field".into(), text(field));
+                }
+                context
+            }
+            Self::UnlistedPivotName {
+                dataset,
+                intermediate,
+                name,
+                value,
+                fields,
                 ..
             } => [
                 ("dataset".into(), text(dataset)),
                 ("intermediate".into(), text(intermediate)),
-                ("match_count".into(), count(number)),
+                ("name".into(), text(name)),
+                ("value".into(), JsonValue::from(value)),
+                (
+                    "fields".into(),
+                    JsonValue::Array(fields.iter().map(|field| text(field)).collect()),
+                ),
             ]
             .into(),
             Self::BaselineAmbiguity {

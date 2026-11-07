@@ -208,6 +208,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("unknown_standard", &["validation"], None),
     ("unknown_window", &["validation"], None),
     ("unlinked_producer", &["validation"], None),
+    ("unlisted_pivot_name", &["join"], None),
     ("unmapped_value", &["mapping"], None),
     ("unmatched_key", &["join"], None),
     ("unmatched_pattern", &["mapping"], None),

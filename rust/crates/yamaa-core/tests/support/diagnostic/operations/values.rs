@@ -99,14 +99,17 @@ fn selected<T>(
 
 /// A finding of a run, `{finding, path, ...}`: `multiple_values` with
 /// `identifier` and `count`, `unmatched_key` with `dataset` and
-/// `intermediate`, `multiple_matches` with those and `count`,
-/// `baseline_ambiguity` with `column`, `date` and `count`, and
-/// `reduction_input_type` with `expression`, `reducer`, `source` and
-/// `actual`.
+/// `intermediate`, `multiple_matches` with those and `count` and, for a
+/// pivot's field relation, `field`, `unlisted_pivot_name` with `dataset`,
+/// `intermediate`, `name`, `value` and `fields`, `baseline_ambiguity` with
+/// `column`, `date` and `count`, and `reduction_input_type` with
+/// `expression`, `reducer`, `source` and `actual`.
 fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
     let path = text(input, "path");
     let count = || input.field("count").integer();
     let date;
+    let held;
+    let listed;
     let finding = match text(input, "finding") {
         "multiple_values" => {
             input.closed(&["finding", "path", "identifier", "count"]);
@@ -125,12 +128,46 @@ fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
             }
         }
         "multiple_matches" => {
-            input.closed(&["finding", "path", "dataset", "intermediate", "count"]);
+            input.closed(&[
+                "finding",
+                "path",
+                "dataset",
+                "intermediate",
+                "count",
+                "field",
+            ]);
             DatasetFinding::MultipleMatches {
                 path,
                 dataset: text(input, "dataset"),
                 intermediate: text(input, "intermediate"),
                 count: count(),
+                field: input.get("field").map(Json::text),
+            }
+        }
+        "unlisted_pivot_name" => {
+            input.closed(&[
+                "finding",
+                "path",
+                "dataset",
+                "intermediate",
+                "name",
+                "value",
+                "fields",
+            ]);
+            held = value(input.field("value"));
+            listed = input
+                .field("fields")
+                .items()
+                .iter()
+                .map(|field| field.text().to_owned())
+                .collect::<Vec<_>>();
+            DatasetFinding::UnlistedPivotName {
+                path,
+                dataset: text(input, "dataset"),
+                intermediate: text(input, "intermediate"),
+                name: text(input, "name"),
+                value: &held,
+                fields: &listed,
             }
         }
         "baseline_ambiguity" => {

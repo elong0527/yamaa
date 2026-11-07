@@ -341,6 +341,9 @@ pub struct Intermediate {
     /// The selection by distance that replaces `order_by` and `keep`
     /// (LOOKUP-26).
     pub nearest: Option<Nearest>,
+    /// The pivot that exposes each listed value of one donor field as a
+    /// field of the selection (LOOKUP-28).
+    pub pivot: Option<Pivot>,
     pub columns: Option<Vec<Named>>,
     /// `absent`, the answer when the lookup selects no record (P-HND-1); it
     /// answers no variable that does not exist where it is read (D67).
@@ -349,8 +352,8 @@ pub struct Intermediate {
     pub bindings: Vec<Binding>,
     pub checks: Vec<UniqueCheck>,
     /// Of `inner_join`, `key`, `between`, `filter`, `order_by`, `keep`,
-    /// `nearest`, `columns`, `derivations`, `verifications`, the absence
-    /// answer and `require_match`.
+    /// `nearest`, `pivot`, `columns`, `derivations`, `verifications`, the
+    /// absence answer and `require_match`.
     pub written: Written,
     pub meta: Meta,
 }
@@ -390,6 +393,24 @@ pub struct Nearest {
     pub to_field: Meta,
     /// The unit as written; `None` when the schema refused it.
     pub unit: Option<TimeUnit>,
+    pub meta: Meta,
+}
+
+/// `pivot: {name, value, fields}` (LOOKUP-28): each listed name is a field
+/// of the selection, holding the `value` of the one candidate whose `name`
+/// equals it, selected among the candidates of that name alone.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Pivot {
+    /// The donor field, stored or derived, whose value on a candidate names
+    /// the field the candidate holds.
+    pub name: Named,
+    /// The donor field, stored or derived, each listed field reads from the
+    /// candidate selected for its name.
+    pub value: Named,
+    /// The names exposed, in written order, each at its own entry.
+    pub fields: Vec<Named>,
+    /// The `fields` list itself.
+    pub fields_meta: Meta,
     pub meta: Meta,
 }
 

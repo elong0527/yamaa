@@ -315,6 +315,9 @@ conditions:
   multiple_matches:
     phases: [join]
     message: "lookup {intermediate} finds {match_count} matching records in {dataset} and has no rule to choose one"
+    message_variants:
+      - when: field
+        message: "lookup {intermediate} finds {match_count} matching records named {field} in {dataset} and has no rule to choose one"
   multiple_values_per_key:
     phases: [derivation]
     message: "{identifier} gives {value_count} different values for one row"
@@ -664,6 +667,9 @@ conditions:
   unlinked_producer:
     phases: [validation]
     message: "input {dataset} reads {path}, the artifact of another specification, without a schema link"
+  unlisted_pivot_name:
+    phases: [join]
+    message: "lookup {intermediate} finds a {dataset} record whose {name} is {value}, which its pivot does not list"
   unmapped_value:
     phases: [mapping]
     message: "the value '{value}' of {source} has no mapping"

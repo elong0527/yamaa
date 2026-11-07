@@ -296,7 +296,10 @@ and each kind of read treats them in its own way:
   input and read it directly ([LOOKUP-4](../../rules/lookup.md#lookup-4)).
   An intermediate over a table of one record that shares no column with the
   rows, such as the study's settings, writes `key: none`: every row reads that
-  record ([LOOKUP-5](../../rules/lookup.md#lookup-5)).
+  record ([LOOKUP-5](../../rules/lookup.md#lookup-5)). An intermediate over
+  a supplemental qualifier dataset writes `pivot`, so each listed qualifier
+  name is a field of the record it selects for the row
+  ([LOOKUP-28](../../rules/lookup.md#lookup-28)).
   Its `derivations` add a field to each `EX` record: `EXSTDT`, the date
   `to_date` reads from `EXSTDTC`, missing for a partial start, which `filter`
   and `order_by` read as `EX.EXSTDT`. `EXSTDTC` itself stays text, as

@@ -27,7 +27,7 @@ mod intermediates;
 pub(crate) use intermediates::{read_handlers, ReadHandlers};
 pub use intermediates::{
     visit_output_dependencies, Intermediate, IntermediateDerivations, IntermediateUnique, Nearest,
-    RecordMatchKey, SourceSchemas,
+    Pivot, RecordMatchKey, SourceSchemas,
 };
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};

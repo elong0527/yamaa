@@ -1,0 +1,25 @@
+phase: join
+condition: unlisted_pivot_name
+spec_paths:
+  - intermediates.QUAL
+rule: LOOKUP-28
+context:
+  intermediate: QUAL
+  dataset: SUPPAE
+  name: QNAM
+  value: AEXSIZE
+  fields:
+    - AEXSITE
+    - AEXCAUS
+  key:
+    - STUDYID
+    - USUBJID
+    - IDVARVAL
+  intermediate_key:
+    STUDYID: YAMAA-01
+    USUBJID: YAMAA-01-001
+    IDVARVAL: 1
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-001
+      AESEQ: 1

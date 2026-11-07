@@ -447,6 +447,7 @@ pub(super) fn bind(
             filter: None,
             selection: None,
             nearest: None,
+            pivot: None,
             range: None,
             columns: Some(exposed),
             no_match: None,
