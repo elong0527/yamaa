@@ -743,6 +743,20 @@
       "input": {"base": "lookup", "edits": [{"set": ["intermediates", "0", "pivot"], "to": {"name": "TXT", "value": "V", "fields": ["A"]}}], "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}},
       "among": true,
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "SEL.V"}}]
+    },
+    {
+      "case": "a_rejected_derivation_does_not_hide_a_bound_pivot_field",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [
+          {"set": ["intermediates", "0", "pivot"], "to": {"name": "TXT", "value": "V", "fields": ["A"]}},
+          {"set": ["intermediates", "0", "derivations"], "to": {"BROKEN": {"value": "DONOR.MISSING"}}},
+          {"set": ["columns", "1", "derivation", "value"], "to": "SEL.A"}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.SEL.derivations.BROKEN.source"], "context": {"intermediate": "SEL", "identifier": "DONOR.MISSING"}}]
     }
   ]
 }

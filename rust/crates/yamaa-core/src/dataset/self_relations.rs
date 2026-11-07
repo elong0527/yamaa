@@ -65,11 +65,11 @@ impl Intermediate {
         stored.columns().get(column).map(|column| column.kind)
     }
     pub fn source_schema<'a>(&'a self, sources: &'a [SecondarySource]) -> Option<&'a TableSchema> {
-        if let Some(schema) = &self.pending_schema {
-            return Some(schema);
-        }
         if let Some(pivot) = &self.pivot {
             return Some(pivot.schema.as_ref());
+        }
+        if let Some(schema) = &self.pending_schema {
+            return Some(schema);
         }
         if let Some(derived) = &self.derivations {
             return Some(derived.plan.output());
