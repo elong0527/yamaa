@@ -25,17 +25,17 @@ The deck has eight sections:
   followed by explanations of AI agents, large language models, and
   harnesses.
 - **AI-first workflow:** a mental game on building an AI-native biometrics
-  group, a comparison of AI adoption, AI-first, and AI-native work, the steps
-  of a workflow, trustworthy assistance, and starting with one bounded
-  workflow.
+  group, the levels of AI adoption, AI-first, and AI-native work, a
+  brainstorm on designing an AI-first workflow for CDISC data standardization
+  (where to start building the agent, with its answer), and the design
+  principles: trustworthy assistance, plain text first, deterministic first,
+  and one source of truth.
 - **Example: CDISC data standardization:** the problem of one specification
   producing two results, its root cause, the evidence that prompt
   completeness decides success, and the workflow's goal and principles. It
   introduces yamaa's planning-stage collaboration, YAML specifications, core
   principle, four components, inheritance, R Consortium submission pilots
-  and Pilot 7, and Pilot 5 performance. It closes with a workflow summary,
-  input and output recommendations, and the skills and tools the workshop
-  covers.
+  and Pilot 7, and Pilot 5 performance. It closes with a workflow summary.
 - **AI evaluation:** what a benchmark is, the yamaa benchmarks, how Harbor
   runs and grades an agent on a benchmark, and an invitation to the yamaa
   organization on Harbor Hub.

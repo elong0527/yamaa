@@ -90,7 +90,6 @@ A preconfigured GitHub Codespace is ready for the workshop:
 
 # AI Agents {background-color="#385898"}
 
-
 ## Example: arena.ai
 
 [Try it at arena.ai/agent](https://arena.ai/agent){.try-it}
@@ -143,16 +142,6 @@ Muse also helps me maintain open-source projects in the background:
 
 ::::
 
-::: {.notes}
-Source: Muse, a personal agent from Meta, https://muse.ai.
-
-The parts of an agent in Muse: tools are connected apps such as email and
-calendar, a full browser, and new tools it builds when one is missing; the
-environment is a persistent, isolated Linux computer in the cloud; memory is
-the long-term goals it keeps track of; human checkpoints are the actions you
-approve, such as sending an email or making a purchase.
-:::
-
 ## What is an AI agent?
 
 ![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
@@ -168,7 +157,7 @@ run code: a harness does that and puts the results back into the context.
 
 ![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
 
-> The model is the CPU; the harness is the operating system.
+> The LLM is like the CPU; the harness is like the operating system.
 
 # AI-first workflow {background-color="#385898"}
 
@@ -204,114 +193,81 @@ You have been hired by the CMO to build a biometrics group.
 
 ## What is AI-native?
 
+> AI-native is an organization whose workflows are mostly AI-first and
+> connected through shared, inspectable artifacts.
+
 ::: {.ai-levels}
 | AI-Adoption | AI-First | AI-Native |
 | --- | --- | --- |
 | **Adding AI to existing work** | **AI is the default starting point** | **AI is a core collaborator** |
 | Using AI for specific, isolated tasks. AI supplements existing workflows but does not fundamentally change how work is done. | Using AI as the primary approach. AI is systematically integrated into some workflows. AI is the default way to start and execute tasks. | AI is inseparable from how you think and work. AI-human collaboration is designed across workflows. AI is a natural extension of execution. |
-| *Example: Using ChatGPT to draft an email or summarize a document.* | *Example: Starting every analysis by prompting an AI agent before writing any code manually.* | *Example: Orchestrating multiple AI agents to handle data cleaning, analysis, reporting, and QC end-to-end.* |
+| *Example: Using ChatGPT to draft an email or summarize a document.* | *Example: Starting every analysis by prompting an AI agent before writing any code manually.* | *Example: Orchestrating multiple AI agents to handle CDISC data standardization end-to-end.* |
 :::
 
 > **AI-native is not just about tools** --- it is a mindset shift. Every team
-> member becomes an orchestrator who manages AI agents, focuses on exception
 > handling, and continuously improves the system.
 
+## Design an AI-first workflow
 
-## From AI adoption to an AI-first workflow
+> Let's design an AI-first workflow for CDISC data standardization.
 
-> An AI-first workflow redesigns a bounded process so an agent performs
-> structured work under explicit rules, evidence requirements, and human
-> decision rights.
+![](../../diagrams/ai-first-cdisc-problem.svg)
 
-| | AI adoption | AI-first workflow |
-| --- | --- | --- |
-| **Unit of work** | An isolated task | A bounded, repeatable process |
-| **Starts when** | A person writes a prompt | A defined event or rule fires |
-| **Context** | Pasted into the chat | Controlled, versioned artifacts |
-| **Output** | A response to interpret | A structured artifact with evidence |
-| **Success** | Useful right now | Meets a defined benchmark |
-| **Continuity** | Each chat starts over | State and decisions carry forward |
+## Brainstorm: where to start building
 
-::: {.notes}
-Source: ai4csr, AI-first workflows in Biometrics,
-https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
-:::
+You will build an AI agent for this workflow. **Where do you start, and why?**
 
-## How an AI-first workflow runs
+![](../../diagrams/ai-first-agent-design.svg)
 
-::: {.flow}
-::: {.flow-step}
-Event
-[A specification, dataset, or output changes]{.small}
-:::
-::: {.flow-step}
-Task
-[Objective, inputs, tools, and stop conditions]{.small}
-:::
-::: {.flow-step}
-Tools and agent
-[The agent plans; tools do the exact work]{.small}
-:::
-::: {.flow-step}
-Evidence
-[What was checked, found, and not covered]{.small}
-:::
-::: {.flow-step}
-Human decision
-[Accept, reject, or escalate]{.small}
-:::
-::: {.flow-step}
-Recorded state
-[The decision informs the next run]{.small}
-:::
-:::
+## Opinionated proposal
 
-- The workflow, not a chat, supplies current and versioned artifacts.
-- The agent returns a structured finding: evidence, coverage, and uncertainty.
-- A human makes the decision and records it for the next run.
+- As a Biometrics organization, focus on defining the workflow.
+- Leverage internal and external AI infrastructure, with proper skills and tools.
 
-> The simplest capable component does each step. An agent never replaces a
-> deterministic test, and access to a tool is never approval authority.
+![](../../diagrams/ai-first-agent-answer.svg)
 
-::: {.notes}
-Source: ai4csr, AI-first workflows in Biometrics,
-https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
-:::
+## Agentic workflow design principles
 
-## Design principle: trustworthy assistance
+> **Root principle: trustworthy assistance.** The agent's work can be inspected,
+> repeated, challenged, and reviewed.
 
-> A workflow is trustworthy when its inputs are visible, its actions are
-> traceable, its findings are evidence-backed, and its limits are clear.
+- Plain text first. *(Inspectable artifacts)*
+- Deterministic first. *(Tools and evidence)*
+- One source of truth, shared by humans and AI agents. *(Explicit state)*
 
-| Principle | In one line |
-| --- | --- |
-| **Inspectable artifacts** | If the agent cannot inspect the work, it cannot reliably assist with it. |
-| **Explicit state** | The workflow remembers through artifacts, not chat. |
-| **Events and rules** | Events trigger attention; rules trigger action. |
-| **Tools and evidence** | No finding without evidence. |
-| **Human judgment** | AI-first does not mean AI-only. |
+For CDISC data standardization, we recommend:
 
-::: {.notes}
-Source: ai4csr, Principles of trustworthy assistance,
-https://github.com/elong0527/ai4csr/blob/main/03-principle.qmd.
-:::
+- Do not use the annotated CRF as an input; generate it as an output.
+- Do not use a specification in Excel, Word, or PDF as an input; use a plain-text specification.
 
-## Start with one bounded workflow
+## Opinionated proposal 
 
-A workflow is **bounded** when the team can state:
+> An agentic workflow for human and AI agent collaboration at the planning stage
 
-- what event starts it;
-- which artifacts and tools it may use, and which actions the agent may take;
-- what output it must return;
-- when it must stop or escalate; and
-- who reviews the result and makes the decision.
+![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
 
-> Begin in advisory mode, then expand one boundary at a time.
+Human and AI review the specification during planning; the engine / tool executes the agreed rules.
 
-::: {.notes}
-Source: ai4csr, AI-first workflows in Biometrics,
-https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
-:::
+## Specification example
+
+```yaml
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+columns:
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+verifications:
+  - unique: [STUDYID, USUBJID]
+```
 
 # Agentic CDISC data standardization {background-color="#385898"}
 
@@ -347,60 +303,6 @@ opensas: <https://github.com/kirha-ai/opensas><br>
 Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attempt, Oct 12 2026
 :::
 
-## Goal: AI-first workflow for CDISC data standardization
-
-| Work | Best done by | In CDISC data standardization |
-| ------------- | -------- | -------------------- |
-| Interpret requirements and draft changes | AI agent | Draft the study specification from templates, the protocol, and the SAP |
-| Apply exact rules and comparisons | Deterministic software | Derive SDTM and ADaM with code and compare them with benchmarks |
-| Exercise judgment and accept accountability | Human | Review and approve the specification and its evidence |
-
-> Agents execute structured work with tools; explicit rules, benchmarks, and human decisions govern it.
-
-::: {.notes}
-Source: ai4csr, AI-first workflows in Biometrics,
-https://github.com/elong0527/ai4csr/blob/main/02-ai-first.qmd.
-:::
-
-## Applying the principles to CDISC data
-
-| Principle | In this workflow |
-| --- | --- |
-| **Inspectable artifacts** | A plain-text YAML specification, the ODM XML extract, SDTM and ADaM datasets |
-| **Explicit state** | Specifications versioned and tagged in Git; inheritance from templates is explicit |
-| **Events and rules** | A new EDC extract or an approved specification change reruns the same specification |
-| **Tools and evidence** | yamaa checks and runs the specification; benchmarks compare its output with expected data |
-| **Human judgment** | People review and approve the specification and its evidence at the planning stage |
-
-> yamaa is one way to build this workflow: the specification is the contract
-> between people and AI agents.
-
-## yamaa: collaboration at the planning stage
-
-![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
-
-Human and AI review the specification during planning; the engine executes the agreed rules.
-
-## yamaa: YAML specification example
-
-```yaml
-schema_version: "1.0"
-domain: ADSL
-keys: [STUDYID, USUBJID]
-input:
-  SOURCE: input/adsl.csv
-
-columns:
-  - name: BMI
-    type: float
-    label: Body Mass Index (kg/m2)
-    derivation:
-      compute:
-        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
-
-verifications:
-  - unique: [STUDYID, USUBJID]
-```
 
 ## yamaa: core principle
 
@@ -415,6 +317,19 @@ The design of yamaa is a contract between humans and AI agents.
 
 - **spec**: a schema with a closed vocabulary.
 - **derive**: business rules with defined derivation semantics.
+
+## Applying the principles to CDISC data
+
+| Principle | In this workflow |
+| --- | --- |
+| **Inspectable artifacts** | A plain-text YAML specification, the ODM XML extract, SDTM and ADaM datasets |
+| **Explicit state** | Specifications versioned and tagged in Git; inheritance from templates is explicit |
+| **Events and rules** | A new EDC extract or an approved specification change reruns the same specification |
+| **Tools and evidence** | yamaa checks and runs the specification; benchmarks compare its output with expected data |
+| **Human judgment** | People review and approve the specification and its evidence at the planning stage |
+
+> yamaa is one way to build this workflow: the specification is the contract
+> between people and AI agents.
 
 ## yamaa: four components
 
@@ -503,11 +418,6 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 ::::::::
 
-::: {.notes}
-Source: R Consortium Submissions Working Group, hex stickers,
-https://rconsortium.github.io/submissions-wg/#hex-stickers.
-:::
-
 ## R Consortium Pilot 7: full studies
 
 - Builds a publicly available, agentic workflow for data standardization.
@@ -567,25 +477,7 @@ https://rconsortium.github.io/submissions-wg/#hex-stickers.
 > agents collaborate centrally on the version-controlled specification at the
 > **planning stage**.
 
-## Recommendations: input and output
-
-- Plain text is the input.
-- An annotated CRF is not an input but an output.
-- An Excel specification is not an input but an output.
-- Communication costs more than tokens.
-
-## Focusing on skills and tools
-
-| Part | What it does | In this workshop |
-| ------ | ------------------ | ------------------ |
-| Environment | The files, commands, and credentials the agent can reach | Provided: GitHub Codespaces |
-| Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
-| Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
-| **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
-| **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
-| Memory | Notes kept between sessions | Not covered |
-
-> A skill tells the agent how to do the task; a tool does the exact part of it.
+# Case Studies 
 
 # AI evaluation {background-color="#385898"}
 
@@ -602,12 +494,6 @@ https://rconsortium.github.io/submissions-wg/#hex-stickers.
 | **Grader** | The rule that decides pass or fail | Compares every dataset cell by cell, then reruns the program |
 
 A benchmark measures the whole system: model, harness, skills, and tools.
-
-::: {.notes}
-The Test stage of an AI-first workflow ends with a benchmark report; an agent
-never approves its own benchmark. Source: ai4csr, The AI-first SDLC,
-https://github.com/elong0527/ai4csr/blob/main/05-ai-first-sdlc.qmd.
-:::
 
 ## yamaa: benchmarks
 
@@ -687,11 +573,6 @@ Harbor Hub
 > Reward is 1 only when every check passes. Row and cell accuracy are
 > diagnostics, not the decision.
 
-::: {.notes}
-Source: yamaa, Agent evaluation with Harbor, grading contract,
-https://github.com/elong0527/yamaa/blob/main/evaluations/harbor/README.md.
-:::
-
 # Case study: creating a benchmark for ADaM derivation {background-color="#385898"}
 
 ## Anatomy of a benchmark
@@ -729,65 +610,6 @@ https://github.com/elong0527/yamaa/blob/main/evaluations/harbor/README.md.
 **Brief omits both the MAP formula and the rule for adding a record.**<br>
 `SYSBP` = systolic blood pressure; `DIABP` = diastolic blood pressure.<br>
 <https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html>
-:::
-
-::: {.notes}
-The on-screen comparison summarizes the three prompts. Their complete text,
-from evaluations/harbor/prompts/adam-advs-map/ (the brief prompt is derived
-from the full one), is below. The pass and fail results come from the
-October 2026 Harbor runs, which used an earlier wording of these prompts.
-
-### Full - passes
-
-```text
-Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
-dataset with one record per subject, visit, and parameter.
-
-The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
-
-An added record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)"
-is created for each subject and visit that has both a systolic (SYSBP) and a
-diastolic (DIABP) blood pressure result. On the added record, AVAL is
-two-thirds of the diastolic pressure plus one-third of the systolic pressure.
-AVAL on the added record is not rounded. No record is added when either
-contributor is absent from the visit or its result is missing. DTYPE is
-"CALCULATION" on the added record and has no value on collected records.
-
-Read the source datasets from /app/input and save the completed dataset as
-/app/output/advs.csv.
-```
-
-### Conventions - passes
-
-```text
-Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
-dataset with one record per subject, visit, and parameter.
-
-The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
-
-PARAMCD is "MAP" and PARAM is "Mean Arterial Pressure (mmHg)" on the added
-record. AVAL on the added record is not rounded. DTYPE is "CALCULATION" or
-has no value.
-
-Read the source datasets from /app/input and save the completed dataset as
-/app/output/advs.csv.
-```
-
-### Brief - fails
-
-```text
-Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
-dataset with one record per subject, visit, and parameter.
-
-The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
-
-Read the source datasets from /app/input and save the completed dataset as
-/app/output/advs.csv.
-```
-
 :::
 
 ## Writing a fair benchmark
@@ -896,13 +718,6 @@ not reviewed yet
 :::
 ::::
 
-::: {.notes}
-Source: https://elong0527.github.io/yamaa/benchmark/review/, status updated
-2026-11-07 18:31 UTC: 3 approved, 6 need rework, 11 in review, 179 not
-reviewed. The coordinator confirms the reviewers before a benchmark is
-finalized.
-:::
-
 ## Reviewing a Pilot 7 finding
 
 [Open the review guide](https://rconsortium.github.io/submissions-pilot7-synthetic-data/review/){.try-it}
@@ -951,11 +766,6 @@ Human review
 
 > The same AI-first pattern as the workflow section: evidence first, then a
 > recorded human decision.
-
-::: {.notes}
-Source: R Consortium Pilot 7, consistency review workflow,
-https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/.automation/consistency_review/workflow.md.
-:::
 
 # Case study: assessing an agent with the benchmark {background-color="#385898"}
 
