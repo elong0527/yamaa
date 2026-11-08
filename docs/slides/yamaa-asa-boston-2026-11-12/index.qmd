@@ -596,6 +596,13 @@ a top leaderboard model does not guarantee a working workflow.
 The same score can answer one question and not another: pick the goal before
 you read the number.
 
+## Evaluation Method
+
+![](../../diagrams/evaluate-how.svg){fig-alt="Three evaluation methods, from rule-based, cheap and repeatable to judgment-based, costly and less repeatable. Code-based grading uses multiple-choice and exact match, schema checks, tests and cell comparison; it is deterministic, repeatable, cheap and fast, but rejects valid alternatives and cannot judge subjective quality. LLM-as-a-judge uses rubric, pairwise or reference-based scoring; it scales to open-ended output and explains its verdict, but has position, length and self-preference bias, is non-deterministic and needs calibration against humans. Human review uses expert review, spot checks and adjudication; it is the gold standard for quality and catches what rubrics miss, but is slow and costly and reviewers can disagree."}
+
+**Mix them:** code where truth is checkable, LLM-as-a-judge to scale the rest,
+humans to calibrate and sign off.
+
 ## What is a benchmark?
 
 **How would you know the agent is good enough to deploy?**
@@ -689,6 +696,21 @@ Harbor Hub
 
 > Reward is 1 only when every check passes. Row and cell accuracy are
 > diagnostics, not the decision.
+
+## Evaluation Limitations
+
+![](../../diagrams/evaluate-limits.svg){fig-alt="Evaluation limits grouped as bias, variance, practical and beyond, each with what goes wrong, its familiar counterpart in clinical trials, and a recommendation. Bias: leakage, where the agent may have seen the answer, like peeking at the test data, so hide the test set; grader error, where the grader makes mistakes, like measurement error, so adjudicate disagreements. Variance: sampling error, where a pass rate is only an estimate, like a wide confidence interval, so add tasks; run-to-run noise, where the same task gives different results, like within-subject variability, so repeat runs. Practical: saturation, where top agents hit the ceiling, like a ceiling effect, so add harder tasks; cost, where full runs are expensive, like a study budget limiting the sample, so optimize tasks times runs. Beyond: external validity, where real work differs from the benchmark, like generalizability, so align to the target."}
+
+**More data shrinks variance, not bias.**
+
+## Evaluation Design
+
+![](../../diagrams/evaluate-design.svg){fig-alt="Clinical trial principles mapped to evaluation practice, each with a relative cost of one to three. Pre-specified protocol: fix tasks, grader and metric first, cost one. Defined population: sample tasks from real studies, cost two. Blinding and independence: hidden answers and an independent grader, cost two. Sample size and replication: enough tasks and repeated runs, cost three. Independent adjudication: people review disagreements, cost three. Full reporting: report every pre-specified result, cost one. Audit trail: pin versions and keep every log, cost two."}
+
+**Match the rigor to the risk:** the more a decision depends on the AI output,
+and the costlier a wrong decision, the more of these a regulatory evaluation
+needs. See the FDA
+[draft guidance on AI](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/considerations-use-artificial-intelligence-support-regulatory-decision-making-drug-and-biological).
 
 # Case study: creating a benchmark for ADaM derivation {background-color="#385898"}
 

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="488" viewBox="0 0 1230 488" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1230" height="488" fill="#ffffff"/>
+  <text x="44" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1" text-anchor="start">CLINICAL TRIAL</text>
+  <text x="358" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1" text-anchor="start">EVALUATION PRACTICE</text>
+  <text x="1079.0" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1" text-anchor="middle">RELATIVE COST</text>
+  <line x1="44" y1="48" x2="1210" y2="48" stroke="#bdbdbd" stroke-width="1.5"/>
+  <rect x="44" y="62" width="1166" height="52" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="62" width="290" height="52" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="189.0" y="94.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#1565c0">Pre-specified protocol</text>
+  <text x="358" y="94.0" font-size="19" fill="#222">Fix tasks, grader, and metric first</text>
+  <circle cx="1045.0" cy="88.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1079.0" cy="88.0" r="10" fill="#fff" stroke="#bdbdbd" stroke-width="2"/>
+  <circle cx="1113.0" cy="88.0" r="10" fill="#fff" stroke="#bdbdbd" stroke-width="2"/>
+  <rect x="44" y="122" width="1166" height="52" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="122" width="290" height="52" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="189.0" y="154.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#1565c0">Defined population</text>
+  <text x="358" y="154.0" font-size="19" fill="#222">Sample tasks from real studies</text>
+  <circle cx="1045.0" cy="148.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1079.0" cy="148.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1113.0" cy="148.0" r="10" fill="#fff" stroke="#bdbdbd" stroke-width="2"/>
+  <rect x="44" y="182" width="1166" height="52" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="182" width="290" height="52" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="189.0" y="214.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#1565c0">Blinding and independence</text>
+  <text x="358" y="214.0" font-size="19" fill="#222">Hidden answers, independent grader</text>
+  <circle cx="1045.0" cy="208.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1079.0" cy="208.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1113.0" cy="208.0" r="10" fill="#fff" stroke="#bdbdbd" stroke-width="2"/>
+  <rect x="44" y="242" width="1166" height="52" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="242" width="290" height="52" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="189.0" y="274.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#1565c0">Sample size and replication</text>
+  <text x="358" y="274.0" font-size="19" fill="#222">Enough tasks and repeated runs</text>
+  <circle cx="1045.0" cy="268.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1079.0" cy="268.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1113.0" cy="268.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <rect x="44" y="302" width="1166" height="52" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="302" width="290" height="52" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="189.0" y="334.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#1565c0">Independent adjudication</text>
+  <text x="358" y="334.0" font-size="19" fill="#222">People review disagreements</text>
+  <circle cx="1045.0" cy="328.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1079.0" cy="328.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1113.0" cy="328.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <rect x="44" y="362" width="1166" height="52" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="362" width="290" height="52" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="189.0" y="394.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#1565c0">Full reporting</text>
+  <text x="358" y="394.0" font-size="19" fill="#222">Report every pre-specified result</text>
+  <circle cx="1045.0" cy="388.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1079.0" cy="388.0" r="10" fill="#fff" stroke="#bdbdbd" stroke-width="2"/>
+  <circle cx="1113.0" cy="388.0" r="10" fill="#fff" stroke="#bdbdbd" stroke-width="2"/>
+  <rect x="44" y="422" width="1166" height="52" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="422" width="290" height="52" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="189.0" y="454.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#1565c0">Audit trail</text>
+  <text x="358" y="454.0" font-size="19" fill="#222">Pin versions and keep every log</text>
+  <circle cx="1045.0" cy="448.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1079.0" cy="448.0" r="10" fill="#e65100" stroke="#e65100" stroke-width="2"/>
+  <circle cx="1113.0" cy="448.0" r="10" fill="#fff" stroke="#bdbdbd" stroke-width="2"/>
+</svg>

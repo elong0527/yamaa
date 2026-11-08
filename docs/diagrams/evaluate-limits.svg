@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="484" viewBox="0 0 1230 484" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1230" height="484" fill="#ffffff"/>
+  <text x="44" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">LIMIT</text>
+  <text x="278" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">WHAT GOES WRONG</text>
+  <text x="668" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">FAMILIAR FROM TRIALS</text>
+  <text x="954" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">RECOMMENDATIONS</text>
+  <line x1="44" y1="48" x2="1210" y2="48" stroke="#bdbdbd" stroke-width="1.5"/>
+  <rect x="44" y="62" width="1166" height="46" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="62" width="210" height="46" rx="12" fill="#ffebee" stroke="#e53935" stroke-width="2.5"/>
+  <text x="149.0" y="92.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#b71c1c">Leakage</text>
+  <text x="278" y="91.0" font-size="18" fill="#222">Agent may have seen the answer</text>
+  <text x="668" y="91.0" font-size="18" fill="#555">Peeking at the test data</text>
+  <rect x="950" y="68" width="236" height="34" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1068.0" y="91.0" font-size="16" font-weight="bold" text-anchor="middle" fill="#1b5e20">Hide the test set</text>
+  <rect x="44" y="114" width="1166" height="46" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="114" width="210" height="46" rx="12" fill="#ffebee" stroke="#e53935" stroke-width="2.5"/>
+  <text x="149.0" y="144.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#b71c1c">Grader error</text>
+  <text x="278" y="143.0" font-size="18" fill="#222">The grader makes mistakes</text>
+  <text x="668" y="143.0" font-size="18" fill="#555">Measurement error</text>
+  <rect x="950" y="120" width="236" height="34" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1068.0" y="143.0" font-size="16" font-weight="bold" text-anchor="middle" fill="#1b5e20">Adjudicate disagreements</text>
+  <text x="22" y="116.0" font-size="14" font-weight="bold" text-anchor="middle" fill="#666" transform="rotate(-90 22 116.0)">Bias</text>
+  <line x1="32" y1="66" x2="32" y2="156" stroke="#bdbdbd" stroke-width="2"/>
+  <rect x="44" y="180" width="1166" height="46" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="180" width="210" height="46" rx="12" fill="#ffebee" stroke="#e53935" stroke-width="2.5"/>
+  <text x="149.0" y="210.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#b71c1c">Sampling error</text>
+  <text x="278" y="209.0" font-size="18" fill="#222">A pass rate is only an estimate</text>
+  <text x="668" y="209.0" font-size="18" fill="#555">Wide confidence interval</text>
+  <rect x="950" y="186" width="236" height="34" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1068.0" y="209.0" font-size="16" font-weight="bold" text-anchor="middle" fill="#1b5e20">Add tasks</text>
+  <rect x="44" y="232" width="1166" height="46" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="232" width="210" height="46" rx="12" fill="#ffebee" stroke="#e53935" stroke-width="2.5"/>
+  <text x="149.0" y="262.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#b71c1c">Run-to-run noise</text>
+  <text x="278" y="261.0" font-size="18" fill="#222">Same task, different results</text>
+  <text x="668" y="261.0" font-size="18" fill="#555">Within-subject variability</text>
+  <rect x="950" y="238" width="236" height="34" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1068.0" y="261.0" font-size="16" font-weight="bold" text-anchor="middle" fill="#1b5e20">Repeat runs</text>
+  <text x="22" y="234.0" font-size="14" font-weight="bold" text-anchor="middle" fill="#666" transform="rotate(-90 22 234.0)">Variance</text>
+  <line x1="32" y1="184" x2="32" y2="274" stroke="#bdbdbd" stroke-width="2"/>
+  <rect x="44" y="298" width="1166" height="46" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="298" width="210" height="46" rx="12" fill="#ffebee" stroke="#e53935" stroke-width="2.5"/>
+  <text x="149.0" y="328.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#b71c1c">Saturation</text>
+  <text x="278" y="327.0" font-size="18" fill="#222">Top agents hit the ceiling</text>
+  <text x="668" y="327.0" font-size="18" fill="#555">Ceiling effect</text>
+  <rect x="950" y="304" width="236" height="34" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1068.0" y="327.0" font-size="16" font-weight="bold" text-anchor="middle" fill="#1b5e20">Add harder tasks</text>
+  <rect x="44" y="350" width="1166" height="46" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="350" width="210" height="46" rx="12" fill="#ffebee" stroke="#e53935" stroke-width="2.5"/>
+  <text x="149.0" y="380.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#b71c1c">Cost</text>
+  <text x="278" y="379.0" font-size="18" fill="#222">Full runs are expensive</text>
+  <text x="668" y="379.0" font-size="18" fill="#555">Study budget limits the sample</text>
+  <rect x="950" y="356" width="236" height="34" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1068.0" y="379.0" font-size="16" font-weight="bold" text-anchor="middle" fill="#1b5e20">Optimize tasks × runs</text>
+  <text x="22" y="352.0" font-size="14" font-weight="bold" text-anchor="middle" fill="#666" transform="rotate(-90 22 352.0)">Practical</text>
+  <line x1="32" y1="302" x2="32" y2="392" stroke="#bdbdbd" stroke-width="2"/>
+  <rect x="44" y="416" width="1166" height="46" rx="12" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="416" width="210" height="46" rx="12" fill="#f3e5f5" stroke="#ab47bc" stroke-width="2.5"/>
+  <text x="149.0" y="446.0" font-size="19" font-weight="bold" text-anchor="middle" fill="#6a1b9a">External validity</text>
+  <text x="278" y="445.0" font-size="18" fill="#222">Real work differs from the benchmark</text>
+  <text x="668" y="445.0" font-size="18" fill="#555">Generalizability</text>
+  <rect x="950" y="422" width="236" height="34" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1068.0" y="445.0" font-size="16" font-weight="bold" text-anchor="middle" fill="#1b5e20">Align to the target</text>
+  <text x="22" y="444.0" font-size="14" font-weight="bold" text-anchor="middle" fill="#666" transform="rotate(-90 22 444.0)">Beyond</text>
+  <line x1="32" y1="420" x2="32" y2="458" stroke="#bdbdbd" stroke-width="2"/>
+</svg>
