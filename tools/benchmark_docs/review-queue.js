@@ -1,12 +1,18 @@
 "use strict";
 
-// The review queue: sends a reviewer to the next benchmark they have neither
-// submitted nor skipped. What they have done stays in this browser; `after`
-// names the benchmark they just left, so the queue moves on without storage.
-// Nobody assigns benchmarks, so each browser starts at its own place among the
-// benchmarks nobody has reviewed, and reviewers do not all read the same ones.
+// The review queue: sends a reviewer to the next benchmark that still needs a
+// review and that they have neither submitted nor skipped. What they have done
+// stays in this browser; `after` names the benchmark they just left, so the
+// queue moves on without storage.
+//
+// Nobody assigns benchmarks, and no benchmark goes to everyone first: each
+// browser walks the benchmarks under review in gallery order from its own
+// random place, so people who start together read different benchmarks. The
+// place is a share of the list of every benchmark under review, which a
+// published review does not change, so a site rebuild does not move it.
 (() => {
-  const { doneKey, reviewUrl, started, open } = JSON.parse(document.getElementById("review-queue").textContent);
+  const { doneKey, reviewUrl, benchmarks, unsettled } = JSON.parse(document.getElementById("review-queue").textContent);
+  const waiting = new Set(unsettled);
 
   // Storage can be unavailable (private windows, blocked site data). Nothing
   // marks a benchmark done then, so the queue walks forward once and stops.
@@ -34,14 +40,14 @@
 
   const params = new URLSearchParams(window.location.search);
   const marks = params.get("review-storage") === "unavailable" ? null : storage();
-  const offset = marks ? Math.floor(startingPlace(marks) * open.length) : 0;
-  const names = started.concat(open.slice(offset), open.slice(0, offset));
+  const place = marks ? startingPlace(marks) : 0;
   const after = params.get("after");
-  const position = names.indexOf(after);
-  const ahead = names.slice(position + 1);
-  const order = marks ? started.concat(ahead, names.slice(0, position + 1)) : ahead;
+  const position = benchmarks.indexOf(after);
+  const start = position >= 0 ? position + 1 : Math.floor(place * benchmarks.length);
+  const ahead = benchmarks.slice(start);
+  const order = marks ? ahead.concat(benchmarks.slice(0, start)) : ahead;
   const next = order.find(
-    (name) => name !== after && (!marks || marks.getItem(doneKey + name) === null),
+    (name) => waiting.has(name) && name !== after && (!marks || marks.getItem(doneKey + name) === null),
   );
   if (next) {
     const url = new URL("../../" + encodeURIComponent(next) + ".html", window.location.href);

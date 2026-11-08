@@ -607,20 +607,21 @@ def review_queue(entries):
 
 
 def render_review_queue(entries, saved):
-    """The page that sends a reviewer to their next benchmark: first those that
-    need one more review to settle, then those nobody has reviewed."""
+    """The page that sends a reviewer to their next benchmark. It lists every
+    benchmark under review, the list a reviewer's place is a share of, and the
+    ones still short of the reviews that settle them, which the walk offers."""
+    names = review_queue(entries)
     reviews = saved["reviews"] if saved else []
-    counted = review_status.tally(review_queue(entries), reviews)
-    current = [(name, len(history[-1][0])) for name, history in counted.items()]
+    counted = review_status.tally(names, reviews)
     queue = {
         "doneKey": review_done_key(),
         "reviewUrl": REVIEW_URL,
-        "started": [
+        "benchmarks": names,
+        "unsettled": [
             name
-            for name, count in current
-            if 0 < count < review_status.REQUIRED_REVIEWS
+            for name, history in counted.items()
+            if len(history[-1][0]) < review_status.REQUIRED_REVIEWS
         ],
-        "open": [name for name, count in current if not count],
     }
     template = Template((HERE / "review-queue.html").read_text(encoding="utf-8"))
     result = template.substitute(
