@@ -30,7 +30,7 @@ The deck has eight sections:
   (where to start building the agent, with its answer), and the design
   principles: trustworthy assistance, plain text first, deterministic first,
   and one source of truth.
-- **Example: CDISC data standardization:** the problem of one specification
+- **Agentic CDISC data standardization:** the problem of one specification
   producing two results, its root cause, the evidence that prompt
   completeness decides success, and the workflow's goal and principles. It
   introduces yamaa's planning-stage collaboration, YAML specifications, core

@@ -212,20 +212,20 @@ You have been hired by the CMO to build a biometrics group.
 
 > Let's design an AI-first workflow for CDISC data standardization.
 
-![](../../diagrams/ai-first-cdisc-problem.svg)
+![](../../diagrams/ai-first-cdisc-problem.svg){fig-alt="EDC data is the confirmed source. Protocol, annotated CRF, SAP, specification, SOP, and templates are candidate inputs; SDTM datasets, ADaM datasets, and Define-XML metadata are candidate outputs. Question marks leave the inputs, outputs, and relationships open for the group to decide, with alignment currently happening in meetings, emails, and messages."}
 
 ## Brainstorm: where to start building
 
 You will build an AI agent for this workflow. **Where do you start, and why?**
 
-![](../../diagrams/ai-first-agent-design.svg)
+![](../../diagrams/ai-first-agent-design.svg){fig-alt="Agent design questions: the harness supplies context to the LLM, loads skills, runs tools, returns their results, and retrieves memory. What must the LLM know; what may the harness see, write, and decide; which SOPs and templates become skills; which validation and derivation steps need tools; what memory persists between runs; and should the LLM or tools generate SDTM, ADaM, and Define-XML?"}
 
 ## Opinionated proposal
 
 - As a Biometrics organization, focus on defining the workflow.
 - Leverage internal and external AI infrastructure, with proper skills and tools.
 
-![](../../diagrams/ai-first-agent-answer.svg)
+![](../../diagrams/ai-first-agent-answer.svg){fig-alt="Proposed agent design: use provided LLMs and harnesses, load the study's business rules as skills, and use tools to check and build outputs. The LLM drafts the specification; tools build SDTM, ADaM, and Define-XML and return results to context. Memory holds the versioned specification but is outside this workshop's coverage; the workshop covers skills, tools, and outputs."}
 
 ## Agentic workflow design principles
 
@@ -380,22 +380,29 @@ Human and AI review the specification during planning; the engine executes the a
 ## yamaa: YAML specification example
 
 ```yaml
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  SOURCE: input/adsl.csv
+  SOURCE:
+    path: input/adsl.csv
+    types: {HEIGHTCM: float, WEIGHTKG: float}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, BMI]
 
 columns:
+  - {name: STUDYID, type: str, label: Study Identifier, derivation: SOURCE.STUDYID}
+  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: SOURCE.USUBJID}
+  - {name: HEIGHTCM, type: float, label: Height (cm), derivation: SOURCE.HEIGHTCM}
+  - {name: WEIGHTKG, type: float, label: Weight (kg), derivation: SOURCE.WEIGHTKG}
   - name: BMI
     type: float
     label: Body Mass Index (kg/m2)
-    derivation:
-      compute:
-        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
-
-verifications:
-  - unique: [STUDYID, USUBJID]
+    derivation: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 ```
 
 ## yamaa: core principle
