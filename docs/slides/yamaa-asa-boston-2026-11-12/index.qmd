@@ -219,11 +219,11 @@ You will build an AI agent for this workflow. **Where do you start, and why?**
 
 ![](../../diagrams/ai-first-agent-design.svg)
 
-## Brainstorm: humans and AI agents
+## Opinionated proposal
 
-> Let's design an AI-first workflow for CDISC data standardization.
+- As an organization, focusing on leveraging existing AI infra with proper skills and tools. 
 
-![](../../diagrams/ai-first-cdisc-roles.svg){fig-alt="The same flow of confirmed source, candidate input and candidate outputs, with a question beneath it: where should humans and AI agents play roles in the development lifecycle? Humans decide, review, or approve; an AI agent plans, drafts, or checks the work."}
+![](../../diagrams/ai-first-agent-answer.svg)
 
 ## Brainstorm: verify before deployment
 
@@ -234,42 +234,6 @@ You have a design: the agent, its inputs and outputs, and who does what.
 - **Evidence:** what would you compare the outputs against?
 - **Judge:** who decides that it passes, and can the agent grade its own work?
 - **Trust:** what result would make you use it on a real study?
-
-## How an AI-first workflow runs
-
-::: {.flow}
-::: {.flow-step}
-Event
-[A specification, dataset, or output changes]{.small}
-:::
-::: {.flow-step}
-Task
-[Objective, inputs, tools, and stop conditions]{.small}
-:::
-::: {.flow-step}
-Tools and agent
-[The agent plans; tools do the exact work]{.small}
-:::
-::: {.flow-step}
-Evidence
-[What was checked, found, and not covered]{.small}
-:::
-::: {.flow-step}
-Human decision
-[Accept, reject, or escalate]{.small}
-:::
-::: {.flow-step}
-Recorded state
-[The decision informs the next run]{.small}
-:::
-:::
-
-- The workflow, not a chat, supplies current and versioned artifacts.
-- The agent returns a structured finding: evidence, coverage, and uncertainty.
-- A human makes the decision and records it for the next run.
-
-> The simplest capable component does each step. An agent never replaces a
-> deterministic test, and access to a tool is never approval authority.
 
 ## Design principle: trustworthy assistance
 
@@ -549,14 +513,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 ## Focusing on skills and tools
 
-| Part | What it does | In this workshop |
-| ------ | ------------------ | ------------------ |
-| Environment | The files, commands, and credentials the agent can reach | Provided: GitHub Codespaces |
-| Model | Predicts the next step | Provided: Muse Spark, or your agent's model |
-| Harness | Builds the context, runs the loop, checks permissions | Provided: OpenCode, Claude Code, or Codex |
-| **Skill** | Instructions the harness loads when a task needs them (`SKILL.md`) | **Covered:** write the study's business rules as a skill |
-| **Tool** | Deterministic code the agent calls and observes | **Covered:** check and run a yamaa specification |
-| Memory | Notes kept between sessions | Not covered |
+![](../../diagrams/ai-first-agent-answer.svg)
 
 > A skill tells the agent how to do the task; a tool does the exact part of it.
 

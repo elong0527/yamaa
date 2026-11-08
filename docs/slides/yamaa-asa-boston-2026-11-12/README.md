@@ -25,8 +25,10 @@ The deck has eight sections:
   followed by explanations of AI agents, large language models, and
   harnesses.
 - **AI-first workflow:** a mental game on building an AI-native biometrics
-  group, a comparison of AI adoption, AI-first, and AI-native work, the steps
-  of a workflow, trustworthy assistance, and starting with one bounded
+  group, the levels of AI adoption, AI-first, and AI-native work, two
+  brainstorm questions on designing an AI-first workflow for CDISC data
+  standardization (where to start building the agent, with its answer, and how
+  to verify the design), trustworthy assistance, and starting with one bounded
   workflow.
 - **Example: CDISC data standardization:** the problem of one specification
   producing two results, its root cause, the evidence that prompt
