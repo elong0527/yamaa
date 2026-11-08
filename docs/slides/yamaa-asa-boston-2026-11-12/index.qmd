@@ -293,7 +293,7 @@ Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attemp
 ::: {.map-shared}
 **Shared Prompt:**
 
-- derive `ADVS` from `ADVS_RAW` using CDISC ADaM standards; one record per subject, visit, and parameter.
+- derive `ADVS` from the provided `ADVS` dataset using CDISC ADaM standards; one record per subject, visit, and parameter.
 - `STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE`
 - read from `/app/input`; write `/app/output/advs.csv`.
 :::
@@ -302,62 +302,68 @@ Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attemp
 | Rule in the prompt | Full - **passes** | Conventions - **passes** | Brief - **fails** |
 | --- | --- | --- | --- |
 | MAP identifiers | `PARAMCD = "MAP"`<br>`PARAM = "Mean Arterial Pressure (mmHg)"` | Same MAP identifiers | Not stated |
-| Records to add | Keep all collected records. Add one MAP per subject/visit only when both SBP and DBP results exist and are non-missing. | Not stated | Not stated |
-| `AVAL` | Keep collected values.<br>MAP = (2 x DBP + SBP) / 3;<br>do not round. | MAP is not rounded;<br>formula not stated. | Not stated |
-| `DTYPE` | Added MAP: `CALCULATION`.<br>Collected records: blank. | `CALCULATION` or blank;<br>assignment not stated. | Not stated |
+| Records to add | One per subject and visit with both `SYSBP` and `DIABP`; none when either is absent or missing. | Not stated | Not stated |
+| `AVAL` | Two-thirds `DIABP` plus one-third `SYSBP`;<br>not rounded. | Not rounded;<br>formula not stated. | Not stated |
+| `DTYPE` | Added record: `CALCULATION`.<br>Collected records: no value. | `CALCULATION` or no value;<br>assignment not stated. | Not stated |
 :::
 ::: {.map-takeaway}
 **Brief omits both the MAP formula and the rule for adding a record.**<br>
-SBP = systolic blood pressure; DBP = diastolic blood pressure.<br>
+`SYSBP` = systolic blood pressure; `DIABP` = diastolic blood pressure.<br>
 <https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html>
 :::
 
 ::: {.notes}
-The on-screen comparison summarizes the three prompts. Their complete wording is retained below.
+The on-screen comparison summarizes the three prompts. Their complete wording, from evaluations/harbor/prompts/adam-advs-map/ (the brief prompt is derived from the full one), is below.
 
 ### Full - passes
 
 ```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
+dataset with one record per subject, visit, and parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Keep every collected record, and add one mean arterial pressure record for each subject and visit that has both a systolic and a diastolic blood pressure result. Mark it with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+An added record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)"
+is created for each subject and visit that has both a systolic (SYSBP) and a
+diastolic (DIABP) blood pressure result. On the added record, AVAL is
+two-thirds of the diastolic pressure plus one-third of the systolic pressure.
+AVAL on the added record is not rounded. No record is added when either
+contributor is absent from the visit or its result is missing. DTYPE is
+"CALCULATION" on the added record and has no value on collected records.
 
-AVAL keeps each collected result. On the added record it is the average that counts the diastolic pressure twice and the systolic pressure once, not rounded. No record is added when either contributor is absent from the visit or its result is missing.
-
-DTYPE is CALCULATION on the added record and has no value on collected records.
-
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/advs.csv.
 ```
 
 ### Conventions - passes
 
 ```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
+dataset with one record per subject, visit, and parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Mark a mean arterial pressure record with PARAMCD "MAP" and PARAM "Mean Arterial Pressure (mmHg)".
+PARAMCD is "MAP" and PARAM is "Mean Arterial Pressure (mmHg)" on the added
+record. AVAL on the added record is not rounded. DTYPE is "CALCULATION" or
+has no value.
 
-On a mean arterial pressure record AVAL is not rounded.
-
-DTYPE is CALCULATION or has no value.
-
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/advs.csv.
 ```
 
 ### Brief - fails
 
 ```text
-Following CDISC ADaM standards, use the provided ADVS_RAW dataset to create an ADVS dataset with one record per subject per visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS dataset to create an ADVS
+dataset with one record per subject, visit, and parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE
 
-Read the source datasets from /app/input and save the completed dataset as /app/output/advs.csv.
+Read the source datasets from /app/input and save the completed dataset as
+/app/output/advs.csv.
 ```
 
 :::
@@ -421,7 +427,7 @@ The design of yamaa is a contract between human and AI agents.
 
 ## yamaa: inheritance
 
-![](../../diagrams/design.svg)
+![](../../diagrams/design.svg){fig-alt="SDTM and ADaM templates at the organization and compound levels pass down to the study's SDTM and ADaM specifications in YAML, with lower scopes overriding explicitly. From ODM XML exported by the EDC system, yamaa builds and validates the SDTM datasets, then the ADaM datasets, and generates Define-XML."}
 
 Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
 ([example](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html))
