@@ -569,7 +569,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 ## Evaluation Strategy
 
-![](../../diagrams/evaluate-what.svg)
+![](../../diagrams/evaluate-what.svg){fig-alt="Three levels of evaluation for an agent whose harness passes a user's request through skills, context, the LLM, tools and memory to an answer. Model level asks whether this LLM is better and highlights only the LLM; typical evidence is leaderboards (artificialanalysis.ai) and human-vote arenas (arena.ai). Component level asks whether one piece works at a time and highlights skills, context, tools and memory; typical evidence is skill and prompt A/B tests, tool-call accuracy and retrieval hit rate. System level asks whether the whole agent does the job and highlights everything from user to answer; typical evidence is Terminal-Bench (tbench.ai)."}
 
 **Evaluate what you deploy: the whole system.**
 In an AI-first workflow the model, skills, tools, and memory work together, and
@@ -580,7 +580,7 @@ a top leaderboard model does not guarantee a working workflow.
 :::: {.columns}
 
 ::: {.column width="48%"}
-![](../../diagrams/evaluate-why.svg)
+![](../../diagrams/evaluate-why.svg){fig-alt="Four evaluation goals in sequence. Choose: which model, harness or language to use, from leaderboards and bake-offs. Improve: did my change to a prompt, skill or tool help, by rerunning the same tasks and comparing. Gate: is it good enough to deploy, by a pass threshold and then human sign-off. Monitor: is it still working in production, by spot checks and drift alerts. A feedback arrow returns from Monitor to Improve."}
 :::
 
 ::: {.column width="52%"}

@@ -24,6 +24,7 @@
   <line x1="424" y1="78" x2="444" y2="78" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <line x1="528" y1="78" x2="548" y2="78" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <line x1="632" y1="78" x2="652" y2="78" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="736" y1="78" x2="756" y2="78" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <line x1="876" y1="70" x2="926" y2="70" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <text x="901" y="62" font-size="13" text-anchor="middle" fill="#bdbdbd">answer</text>
   <rect x="542" y="46" width="96" height="64" rx="14" fill="none" stroke="#c62828" stroke-width="4"/>
@@ -52,6 +53,7 @@
   <line x1="424" y1="198" x2="444" y2="198" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <line x1="528" y1="198" x2="548" y2="198" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <line x1="632" y1="198" x2="652" y2="198" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="736" y1="198" x2="756" y2="198" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <line x1="876" y1="190" x2="926" y2="190" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
   <text x="901" y="182" font-size="13" text-anchor="middle" fill="#bdbdbd">answer</text>
   <rect x="334" y="166" width="96" height="64" rx="14" fill="none" stroke="#c62828" stroke-width="4"/>
@@ -85,6 +87,7 @@
   <line x1="424" y1="318" x2="444" y2="318" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
   <line x1="528" y1="318" x2="548" y2="318" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
   <line x1="632" y1="318" x2="652" y2="318" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="736" y1="318" x2="756" y2="318" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
   <line x1="876" y1="310" x2="926" y2="310" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
   <text x="901" y="302" font-size="13" text-anchor="middle" fill="#444">answer</text>
   <rect x="214" y="253" width="722" height="114" rx="16" fill="none" stroke="#c62828" stroke-width="4"/>
