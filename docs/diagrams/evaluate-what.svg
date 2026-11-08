@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="380" viewBox="0 0 1230 380" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <marker id="ard" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#bdbdbd"/></marker>
+  </defs>
+  <rect width="1230" height="380" fill="#ffffff"/>
+  <text x="24" y="60" font-size="24" font-weight="bold" fill="#222">Model</text>
+  <text x="24" y="84" font-size="15" fill="#555">Is this LLM better?</text>
+  <rect x="222" y="45" width="66" height="50" rx="10" fill="#fafafa" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="255.0" y="76.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#aaaaaa">User</text>
+  <line x1="290" y1="70" x2="322" y2="70" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <rect x="324" y="18" width="544" height="104" rx="14" fill="#fafafa" stroke="#cfcfcf" stroke-width="2" stroke-dasharray="10,6"/>
+  <text x="338" y="38" font-size="13" font-weight="bold" fill="#aaaaaa">Harness</text>
+  <rect x="340" y="52" width="84" height="52" rx="10" fill="#fafafa" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="382.0" y="84.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#aaaaaa">Skills</text>
+  <rect x="444" y="52" width="84" height="52" rx="10" fill="#fafafa" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="486.0" y="84.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#aaaaaa">Context</text>
+  <rect x="548" y="52" width="84" height="52" rx="10" fill="#fff3e0" stroke="#fb8c00" stroke-width="2.5"/>
+  <text x="590.0" y="84.0" font-size="17" text-anchor="middle" font-weight="bold" fill="#e65100">LLM</text>
+  <rect x="652" y="52" width="84" height="52" rx="10" fill="#fafafa" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="694.0" y="84.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#aaaaaa">Tools</text>
+  <rect x="756" y="52" width="84" height="52" rx="10" fill="#fafafa" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="798.0" y="84.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#aaaaaa">Memory</text>
+  <line x1="424" y1="78" x2="444" y2="78" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="528" y1="78" x2="548" y2="78" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="632" y1="78" x2="652" y2="78" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="876" y1="70" x2="926" y2="70" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <text x="901" y="62" font-size="13" text-anchor="middle" fill="#bdbdbd">answer</text>
+  <rect x="542" y="46" width="96" height="64" rx="14" fill="none" stroke="#c62828" stroke-width="4"/>
+  <text x="958" y="40" font-size="12" font-weight="bold" fill="#999" letter-spacing="1">TYPICAL EVIDENCE</text>
+  <text x="958" y="60" font-size="15" fill="#222">Leaderboards (artificialanalysis.ai)</text>
+  <text x="958" y="80" font-size="15" fill="#222">Human-vote arenas (arena.ai)</text>
+  <line x1="20" y1="130" x2="1210" y2="130" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="24" y="180" font-size="24" font-weight="bold" fill="#222">Component</text>
+  <text x="24" y="204" font-size="15" fill="#555">Does this piece work?</text>
+  <text x="24" y="223" font-size="15" fill="#555">(one piece at a time)</text>
+  <rect x="222" y="165" width="66" height="50" rx="10" fill="#fafafa" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="255.0" y="196.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#aaaaaa">User</text>
+  <line x1="290" y1="190" x2="322" y2="190" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <rect x="324" y="138" width="544" height="104" rx="14" fill="#fafafa" stroke="#cfcfcf" stroke-width="2" stroke-dasharray="10,6"/>
+  <text x="338" y="158" font-size="13" font-weight="bold" fill="#aaaaaa">Harness</text>
+  <rect x="340" y="172" width="84" height="52" rx="10" fill="#f3e5f5" stroke="#ab47bc" stroke-width="2.5"/>
+  <text x="382.0" y="204.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Skills</text>
+  <rect x="444" y="172" width="84" height="52" rx="10" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="486.0" y="204.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#1565c0">Context</text>
+  <rect x="548" y="172" width="84" height="52" rx="10" fill="#fafafa" stroke="#cfcfcf" stroke-width="1.5"/>
+  <text x="590.0" y="204.0" font-size="17" text-anchor="middle" font-weight="bold" fill="#aaaaaa">LLM</text>
+  <rect x="652" y="172" width="84" height="52" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>
+  <text x="694.0" y="204.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#1b5e20">Tools</text>
+  <rect x="756" y="172" width="84" height="52" rx="10" fill="#fffde7" stroke="#f9a825" stroke-width="2.5"/>
+  <text x="798.0" y="204.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#b45309">Memory</text>
+  <line x1="424" y1="198" x2="444" y2="198" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="528" y1="198" x2="548" y2="198" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="632" y1="198" x2="652" y2="198" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <line x1="876" y1="190" x2="926" y2="190" stroke="#bdbdbd" stroke-width="2" marker-end="url(#ard)"/>
+  <text x="901" y="182" font-size="13" text-anchor="middle" fill="#bdbdbd">answer</text>
+  <rect x="334" y="166" width="96" height="64" rx="14" fill="none" stroke="#c62828" stroke-width="4"/>
+  <rect x="438" y="166" width="96" height="64" rx="14" fill="none" stroke="#c62828" stroke-width="4"/>
+  <rect x="646" y="166" width="96" height="64" rx="14" fill="none" stroke="#c62828" stroke-width="4"/>
+  <rect x="750" y="166" width="96" height="64" rx="14" fill="none" stroke="#c62828" stroke-width="4"/>
+  <text x="958" y="160" font-size="12" font-weight="bold" fill="#999" letter-spacing="1">TYPICAL EVIDENCE</text>
+  <text x="958" y="180" font-size="15" fill="#222">Skill A/B test (Skills)</text>
+  <text x="958" y="198" font-size="15" fill="#222">Prompt A/B test (Context)</text>
+  <text x="958" y="216" font-size="15" fill="#222">Tool-call accuracy (Tools)</text>
+  <text x="958" y="234" font-size="15" fill="#222">Retrieval hit rate (Memory)</text>
+  <line x1="20" y1="250" x2="1210" y2="250" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="24" y="300" font-size="24" font-weight="bold" fill="#222">System</text>
+  <text x="24" y="324" font-size="15" fill="#555">Does the whole agent</text>
+  <text x="24" y="343" font-size="15" fill="#555">do the job?</text>
+  <rect x="222" y="285" width="66" height="50" rx="10" fill="#f5f5f5" stroke="#777" stroke-width="2.5"/>
+  <text x="255.0" y="316.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#222">User</text>
+  <line x1="290" y1="310" x2="322" y2="310" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
+  <rect x="324" y="258" width="544" height="104" rx="14" fill="#faf5fc" stroke="#8e24aa" stroke-width="2" stroke-dasharray="10,6"/>
+  <text x="338" y="278" font-size="13" font-weight="bold" fill="#6a1b9a">Harness</text>
+  <rect x="340" y="292" width="84" height="52" rx="10" fill="#f3e5f5" stroke="#ab47bc" stroke-width="2.5"/>
+  <text x="382.0" y="324.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Skills</text>
+  <rect x="444" y="292" width="84" height="52" rx="10" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="486.0" y="324.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#1565c0">Context</text>
+  <rect x="548" y="292" width="84" height="52" rx="10" fill="#fff3e0" stroke="#fb8c00" stroke-width="2.5"/>
+  <text x="590.0" y="324.0" font-size="17" text-anchor="middle" font-weight="bold" fill="#e65100">LLM</text>
+  <rect x="652" y="292" width="84" height="52" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>
+  <text x="694.0" y="324.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#1b5e20">Tools</text>
+  <rect x="756" y="292" width="84" height="52" rx="10" fill="#fffde7" stroke="#f9a825" stroke-width="2.5"/>
+  <text x="798.0" y="324.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#b45309">Memory</text>
+  <line x1="424" y1="318" x2="444" y2="318" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="528" y1="318" x2="548" y2="318" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="632" y1="318" x2="652" y2="318" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="876" y1="310" x2="926" y2="310" stroke="#444" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="901" y="302" font-size="13" text-anchor="middle" fill="#444">answer</text>
+  <rect x="214" y="253" width="722" height="114" rx="16" fill="none" stroke="#c62828" stroke-width="4"/>
+  <text x="958" y="280" font-size="12" font-weight="bold" fill="#999" letter-spacing="1">TYPICAL EVIDENCE</text>
+  <text x="958" y="300" font-size="15" fill="#222">Terminal-Bench (tbench.ai)</text>
+</svg>

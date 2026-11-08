@@ -532,13 +532,13 @@ Inheritance reduces duplication while keeping every resolved study specification
 <div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 41.1%"></span></span><span class="perf-value">0.25 GB</span></div>
 <div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">0.60 GB</span></div>
 <div class="perf-callouts">
-<div><div class="big-number">16×</div><div class="metric-label">faster than R</div></div>
-<div><div class="big-number">2.4×</div><div class="metric-label">less memory than R</div></div>
+<div><div class="big-number">16x</div><div class="metric-label">faster than R</div></div>
+<div><div class="big-number">2.4x</div><div class="metric-label">less memory than R</div></div>
 </div>
 :::
 
 ::: {.perf-panel}
-<div class="perf-title">Stress test: 10× subjects (2,540)</div>
+<div class="perf-title">Stress test: 10x subjects (2,540)</div>
 
 <div class="perf-group">End-to-end time, 1 core</div>
 <div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 6.9%"></span></span><span class="perf-value">12.62 s</span></div>
@@ -547,8 +547,8 @@ Inheritance reduces duplication while keeping every resolved study specification
 <div class="perf-row yamaa"><span class="perf-label">yamaa</span><span class="perf-track"><span class="perf-bar" style="width: 46.6%"></span></span><span class="perf-value">1.93 GB</span></div>
 <div class="perf-row"><span class="perf-label">R (admiral)</span><span class="perf-track"><span class="perf-bar" style="width: 100%"></span></span><span class="perf-value">4.13 GB</span></div>
 <div class="perf-callouts">
-<div><div class="big-number">14×</div><div class="metric-label">faster than R</div></div>
-<div><div class="big-number">2.1×</div><div class="metric-label">less memory than R</div></div>
+<div><div class="big-number">14x</div><div class="metric-label">faster than R</div></div>
+<div><div class="big-number">2.1x</div><div class="metric-label">less memory than R</div></div>
 </div>
 :::
 :::
@@ -566,6 +566,35 @@ Inheritance reduces duplication while keeping every resolved study specification
 > **planning stage**.
 
 # AI evaluation {background-color="#385898"}
+
+## Evaluation Strategy
+
+![](../../diagrams/evaluate-what.svg)
+
+**Evaluate what you deploy: the whole system.**
+In an AI-first workflow the model, skills, tools, and memory work together, and
+a top leaderboard model does not guarantee a working workflow.
+
+## Evaluation Goal
+
+:::: {.columns}
+
+::: {.column width="48%"}
+![](../../diagrams/evaluate-why.svg)
+:::
+
+::: {.column width="52%"}
+| Prompt tier | Python | R | opensas |
+| --- | --- | --- | --- |
+| Full | 99.3% (133/134) | 98.5% (132/134) | 86.6% (116/134) |
+| Conventions | 35.8% (48/134) | 33.6% (45/134) | 34.3% (46/134) |
+| Brief | 18.7% (25/134) | 17.9% (24/134) | 15.7% (21/134) |
+:::
+
+::::
+
+The same score can answer one question and not another: pick the goal before
+you read the number.
 
 ## What is a benchmark?
 

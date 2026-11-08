@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="470" viewBox="0 0 620 470" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+  </defs>
+  <rect width="620" height="470" fill="#ffffff"/>
+  <rect x="50" y="10" width="550" height="92" rx="14" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <text x="70" y="64.0" font-size="24" font-weight="bold" fill="#1565c0">Choose</text>
+  <line x1="200" y1="24" x2="200" y2="88" stroke="#1e88e5" stroke-width="1.5" opacity="0.5"/>
+  <text x="218" y="44" font-size="16" fill="#222">Which model, harness,</text>
+  <text x="218" y="64" font-size="16" fill="#222">or language to use?</text>
+  <text x="218" y="87" font-size="13" fill="#777">Leaderboards, bake-offs</text>
+  <line x1="125" y1="105" x2="125" y2="125" stroke="#444" stroke-width="2.5" marker-end="url(#ar)"/>
+  <rect x="50" y="128" width="550" height="92" rx="14" fill="#fff3e0" stroke="#fb8c00" stroke-width="2.5"/>
+  <text x="70" y="182.0" font-size="24" font-weight="bold" fill="#e65100">Improve</text>
+  <line x1="200" y1="142" x2="200" y2="206" stroke="#fb8c00" stroke-width="1.5" opacity="0.5"/>
+  <text x="218" y="162" font-size="16" fill="#222">Did my change help?</text>
+  <text x="218" y="182" font-size="16" fill="#222">(prompt, skill, tool)</text>
+  <text x="218" y="205" font-size="13" fill="#777">Rerun the same tasks, compare</text>
+  <line x1="125" y1="223" x2="125" y2="243" stroke="#444" stroke-width="2.5" marker-end="url(#ar)"/>
+  <rect x="50" y="246" width="550" height="92" rx="14" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2.5"/>
+  <text x="70" y="300.0" font-size="24" font-weight="bold" fill="#1b5e20">Gate</text>
+  <line x1="200" y1="260" x2="200" y2="324" stroke="#2e7d32" stroke-width="1.5" opacity="0.5"/>
+  <text x="218" y="280" font-size="16" fill="#222">Is it good enough</text>
+  <text x="218" y="300" font-size="16" fill="#222">to deploy?</text>
+  <text x="218" y="323" font-size="13" fill="#777">Pass threshold, then human sign-off</text>
+  <line x1="125" y1="341" x2="125" y2="361" stroke="#444" stroke-width="2.5" marker-end="url(#ar)"/>
+  <rect x="50" y="364" width="550" height="92" rx="14" fill="#f3e5f5" stroke="#ab47bc" stroke-width="2.5"/>
+  <text x="70" y="418.0" font-size="24" font-weight="bold" fill="#6a1b9a">Monitor</text>
+  <line x1="200" y1="378" x2="200" y2="442" stroke="#ab47bc" stroke-width="1.5" opacity="0.5"/>
+  <text x="218" y="398" font-size="16" fill="#222">Is it still working</text>
+  <text x="218" y="418" font-size="16" fill="#222">in production?</text>
+  <text x="218" y="441" font-size="13" fill="#777">Spot checks, drift alerts</text>
+  <path d="M48,410.0 L24,410.0 L24,174.0 L46,174.0" fill="none" stroke="#444" stroke-width="2.5" stroke-dasharray="8,5" marker-end="url(#ar)"/>
+  <text x="14" y="292.0" font-size="14" text-anchor="middle" fill="#444" font-style="italic" transform="rotate(-90 14 292.0)">feedback</text>
+</svg>
