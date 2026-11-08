@@ -68,6 +68,10 @@
 /* AI levels: headers darken from adoption to native; the first row holds the
    one-line definitions and the last row the examples. Each header keeps at
    least 3:1 contrast with its white bold text, the large-text minimum. */
+.reveal .ai-levels table {
+  font-size: 0.7em;
+}
+
 .reveal .ai-levels th {
   color: white;
   text-align: center;
