@@ -218,13 +218,9 @@ You have been hired by the CMO to build a biometrics group.
 
 You will build an AI agent for this workflow. **Where do you start, and why?**
 
-*Discuss with a neighbor for 3 minutes.*
-
 ![](../../diagrams/ai-first-agent-design.svg)
 
 ## Opinionated proposal
-
-*Back to Day 0: what would we tell the CMO?*
 
 - As a Biometrics organization, focus on defining the workflow.
 - Leverage internal and external AI infrastructure, with proper skills and tools.
