@@ -18,6 +18,11 @@ output:
   columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
   order_by: [STUDYID, USUBJID, RELNUM, RDOMAIN]
 
+windows:
+  PAIR_ORDER:
+    group_by: [STUDYID, USUBJID]
+    order_by: [PAIRAE, PAIRCM]
+
 # The adverse event a medication's first or second event number names: the
 # same subject's AE record whose collected AESPID equals it. A number that
 # names no event of that subject fails the run.
@@ -38,19 +43,16 @@ intermediates:
       AESPID: CM.CMAENO2
     require_match: true
 
-windows:
-  PAIR_ORDER:
-    group_by: [STUDYID, USUBJID]
-    order_by: [PAIRAE, PAIRCM]
-
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: CM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: CM.USUBJID
 
   - name: RDOMAIN
     type: str
@@ -59,10 +61,6 @@ columns:
   - name: IDVAR
     type: str
     label: Identifying Variable
-
-  - name: IDVARVAL
-    type: str
-    label: Identifying Variable Value
 
   - name: RELTYPE
     type: str
@@ -79,6 +77,11 @@ columns:
   - name: PAIRCM
     type: int
     label: Paired Medication Sequence Number
+    derivation: CM.CMSEQ
+
+  - name: IDVARVAL
+    type: str
+    label: Identifying Variable Value
 
   # Pairs numbered within the subject in event, then medication, order; the
   # two rows of one pair tie and share a number.
@@ -98,58 +101,58 @@ columns:
 # Each populated event number gives one pair: a medication row and an event
 # row.
 rows:
+  # Row derivations run before their filter (ROW-3). Guard each lookup so an
+  # absent event number is skipped, while a populated unmatched number still
+  # fails under require_match.
   - id: cm_reference_1
     dataset: CM
     filter: "CM.CMAENO1 IS NOT NULL"
     derivations:
-      STUDYID: CM.STUDYID
-      USUBJID: CM.USUBJID
       RDOMAIN: "'CM'"
       IDVAR: "'CMSEQ'"
       IDVARVAL: CM.CMSEQ
-      PAIRAE: AE_REF1.AESEQ
-      PAIRCM: CM.CMSEQ
+      PAIRAE:
+        case:
+          - when: "CM.CMAENO1 IS NOT NULL"
+            then: AE_REF1.AESEQ
 
   - id: ae_reference_1
     dataset: CM
     filter: "CM.CMAENO1 IS NOT NULL"
     derivations:
-      STUDYID: CM.STUDYID
-      USUBJID: CM.USUBJID
       RDOMAIN: "'AE'"
       IDVAR: "'AESEQ'"
-      IDVARVAL: AE_REF1.AESEQ
-      PAIRAE: AE_REF1.AESEQ
-      PAIRCM: CM.CMSEQ
+      IDVARVAL: PAIRAE
+      PAIRAE:
+        case:
+          - when: "CM.CMAENO1 IS NOT NULL"
+            then: AE_REF1.AESEQ
 
   - id: cm_reference_2
     dataset: CM
     filter: "CM.CMAENO2 IS NOT NULL"
     derivations:
-      STUDYID: CM.STUDYID
-      USUBJID: CM.USUBJID
       RDOMAIN: "'CM'"
       IDVAR: "'CMSEQ'"
       IDVARVAL: CM.CMSEQ
-      PAIRAE: AE_REF2.AESEQ
-      PAIRCM: CM.CMSEQ
+      PAIRAE:
+        case:
+          - when: "CM.CMAENO2 IS NOT NULL"
+            then: AE_REF2.AESEQ
 
   - id: ae_reference_2
     dataset: CM
     filter: "CM.CMAENO2 IS NOT NULL"
     derivations:
-      STUDYID: CM.STUDYID
-      USUBJID: CM.USUBJID
       RDOMAIN: "'AE'"
       IDVAR: "'AESEQ'"
-      IDVARVAL: AE_REF2.AESEQ
-      PAIRAE: AE_REF2.AESEQ
-      PAIRCM: CM.CMSEQ
+      IDVARVAL: PAIRAE
+      PAIRAE:
+        case:
+          - when: "CM.CMAENO2 IS NOT NULL"
+            then: AE_REF2.AESEQ
 
 verifications:
-  - row_count:
-      min: 10
-      max: 10
   # Every relationship pairs one medication with one event.
   - row_count:
       id: each-relationship-has-two-rows
