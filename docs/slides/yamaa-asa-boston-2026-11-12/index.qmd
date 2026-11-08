@@ -218,7 +218,7 @@ You have been hired by the CMO to build a biometrics group.
 
 You will build an AI agent for this workflow. **Where do you start, and why?**
 
-![](../../diagrams/ai-first-agent-design.svg){fig-alt="Agent design questions: the harness supplies context to the LLM, loads skills, runs tools, returns their results, and retrieves memory. What must the LLM know; what may the harness see, write, and decide; which SOPs and templates become skills; which validation and derivation steps need tools; what memory persists between runs; and should the LLM or tools generate SDTM, ADaM, and Define-XML?"}
+![](../../diagrams/ai-first-agent-design.svg){fig-alt="Agent design questions: the harness supplies context to the LLM, loads skills, runs tools, returns their results, and retrieves memory. What must the LLM already know; what may the harness see, write, and decide on its own; which SOPs, specifications, and templates become skills; which validation and derivation steps need tools; what memory persists between runs and where is it recorded; and should the LLM or tools generate SDTM, ADaM, and Define-XML?"}
 
 ## Opinionated proposal
 
