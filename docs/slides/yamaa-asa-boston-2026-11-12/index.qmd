@@ -157,7 +157,7 @@ run code: a harness does that and puts the results back into the context.
 
 ![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
 
-> The model is the CPU; the harness is the operating system.
+> The LLM is like the CPU; the harness is like the operating system.
 
 # AI-first workflow {background-color="#385898"}
 
