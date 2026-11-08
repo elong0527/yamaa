@@ -187,6 +187,9 @@ def test_confident_opensas_reference_matches_original_golden(tmp_path, name):
 def test_relrec_opensas_refuses_unmatched_event_references(
     tmp_path, subject, field, number
 ):
+    # Benchmark/host readers run yamaa; Harbor's golden reader expects a CSV.
+    # This seam observes an independent opensas process's refusal exit and
+    # absence of a published CSV, which those fixture readers cannot express.
     if not shutil.which("opensas"):
         pytest.skip("opensas is not installed; Harbor Oracle runs every case in Docker")
     name = "sdtm-relrec-links"
@@ -210,8 +213,17 @@ def test_relrec_opensas_refuses_unmatched_event_references(
     result = subprocess.run(
         ["opensas", str(script)], cwd=tmp_path, capture_output=True, text=True
     )
-    assert result.returncode != 0, result.stdout + result.stderr
-    assert not (output / "relrec.csv").exists()
+    observed = {
+        "returncode": result.returncode,
+        "csv_published": (output / "relrec.csv").exists(),
+    }
+    assert observed == {"returncode": 1, "csv_published": False}, (
+        subject,
+        field,
+        number,
+        result.stdout,
+        result.stderr,
+    )
 
 
 def test_the_spaces_only_comment_reference_matches_its_golden(tmp_path):
