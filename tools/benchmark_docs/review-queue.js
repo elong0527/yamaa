@@ -7,19 +7,12 @@
 //
 // Nobody assigns benchmarks, and no benchmark goes to everyone first: each
 // browser walks the benchmarks under review in gallery order from its own
-// place, so people who start together read different benchmarks. The place is
-// random, or comes from a pair number entered on the review page: everyone who
-// enters the same number starts at the same benchmark, so the two people of a
-// pair give it the two reviews it needs. A place is a share of the list of
-// every benchmark under review, which a published review does not change, so
-// partners who start minutes apart, on either side of a site rebuild, still
-// start at the same benchmark.
+// random place, so people who start together read different benchmarks. The
+// place is a share of the list of every benchmark under review, which a
+// published review does not change, so a site rebuild does not move it.
 (() => {
   const { doneKey, reviewUrl, benchmarks, unsettled } = JSON.parse(document.getElementById("review-queue").textContent);
   const waiting = new Set(unsettled);
-  // Successive multiples of the golden ratio, modulo one, stay evenly spread
-  // however many there are, so pair numbers need no head count.
-  const GOLDEN = (Math.sqrt(5) - 1) / 2;
 
   // Storage can be unavailable (private windows, blocked site data). Nothing
   // marks a benchmark done then, so the queue walks forward once and stops.
@@ -35,18 +28,11 @@
     }
   }
 
-  // A pair number is a whole number from 1 to 9999; anything else is no number.
-  function pairPlace(value) {
-    return /^[1-9][0-9]{0,3}$/.test(value || "") ? (Number(value) * GOLDEN) % 1 : null;
-  }
-
-  // A pair number replaces the place this browser keeps, so a later visit
-  // without one resumes from the pair's benchmark.
-  function startingPlace(marks, pair) {
+  function startingPlace(marks) {
     const key = doneKey + "start";
     const kept = marks.getItem(key);
-    if (pair === null && kept !== null) return Number(kept);
-    const chosen = pair === null ? Math.random() : pair;
+    if (kept !== null) return Number(kept);
+    const chosen = Math.random();
     try { marks.setItem(key, String(chosen)); }
     catch (error) { /* The place then changes on each visit. */ }
     return chosen;
@@ -54,8 +40,7 @@
 
   const params = new URLSearchParams(window.location.search);
   const marks = params.get("review-storage") === "unavailable" ? null : storage();
-  const pair = pairPlace(params.get("pair"));
-  const place = marks ? startingPlace(marks, pair) : (pair === null ? 0 : pair);
+  const place = marks ? startingPlace(marks) : 0;
   const after = params.get("after");
   const position = benchmarks.indexOf(after);
   const start = position >= 0 ? position + 1 : Math.floor(place * benchmarks.length);

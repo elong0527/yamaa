@@ -72,20 +72,13 @@ Submitting or skipping a review moves the page to `review/next/`, the review
 queue `generate.py` writes beside the dashboards. Nobody assigns benchmarks. The
 queue lists every `sdtm` and `adam` benchmark under review in gallery order, and
 those still short of the reviews that settle them. `review-queue.js` walks the
-list from the browser's own place to the next of those this browser has not
-marked done, so the same link also resumes a review. No benchmark goes to
-everyone first: a room of reviewers who start together would all read it, and
-each site rebuild would send them to the next one together. The mark records
-that the reviewer left the page, not that GitHub published the review.
-
-A browser's place is random unless the review page's optional pair number sets
-it. Number *n* starts at the fractional part of *n* times 0.618..., the golden
-ratio's, taken as a share of the list. Everyone who enters the same number
-starts at the same benchmark, and the numbers stay spread however many are
-handed out. In a session where each person reviews one benchmark, two people
-per number give each benchmark its two reviews. The share is of the whole list,
-which a published review does not change, so partners who start on either side
-of a site rebuild still meet.
+list from the browser's own random place to the next of those this browser has
+not marked done, so the same link also resumes a review. The place is a share of
+the whole list, which a published review does not change, so a site rebuild
+does not move it. No benchmark goes to everyone first: a room of reviewers who
+start together would all read it, and each site rebuild would send them to the
+next one together. The mark records that the reviewer left the page, not that
+GitHub published the review.
 
 `review/` is the page to circulate: its purpose, people and how-to are authored
 in `docs/articles/benchmark-review.md`, and the generator adds the status.

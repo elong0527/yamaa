@@ -6,17 +6,9 @@ hide:
 
 # Benchmark review
 
-<form class="review-start" action="next/" method="get">
-  <label>Pair number (optional)
-    <input name="pair" type="number" min="1" max="9999" step="1" inputmode="numeric">
-  </label>
-  <button class="md-button md-button--primary" type="submit">Start reviewing</button>
-</form>
+<a class="md-button md-button--primary" href="next/">Start reviewing</a>
 
-If you already started, this button takes you to your next benchmark. In a
-session where you are asked to pair up, enter your pair's number: you and your
-partner start at the same benchmark and give it the two reviews it needs.
-Otherwise leave it blank.
+If you already started, this button takes you to your next benchmark.
 
 ## Purpose
 
@@ -43,8 +35,7 @@ approval, and the coordinator confirms the reviewers before a benchmark is
 finalized.
 
 1. Sign in to GitHub in your browser.
-2. Select **Start reviewing**, after entering your pair number if you were
-   given one.
+2. Select **Start reviewing**.
 3. Read the Summary, Inputs and Expected output.
 4. Answer each question with Agree or Disagree: Task, Inputs, and, where
    shown, the AI-assisted review of three potential concerns. If you disagree,

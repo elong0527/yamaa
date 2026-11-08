@@ -144,41 +144,6 @@
   margin-top: 1.2rem;
 }
 
-/* The review page's start form: an optional pair number beside the button,
- * which review-queue.js turns into the reviewer's starting place. */
-.md-typeset .review-start {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.6rem 1rem;
-}
-
-.md-typeset .review-start label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  color: var(--md-default-fg-color--light);
-  font-size: 0.7rem;
-}
-
-.md-typeset .review-start input {
-  width: 9rem;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid var(--md-default-fg-color--lighter);
-  border-radius: 0.2rem;
-  background: var(--md-default-bg-color);
-  color: var(--md-default-fg-color);
-  font: inherit;
-  font-size: 0.8rem;
-}
-
-.md-typeset .review-start button {
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  cursor: pointer;
-}
-
 /* Benchmark review status (docs/benchmark/review/index.md, written by the
  * same generator). review-status.js filters the table by the controls above
  * it, which stay hidden without JavaScript. */
