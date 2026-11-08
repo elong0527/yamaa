@@ -205,6 +205,7 @@ You have been hired by the CMO to build a biometrics group.
 :::
 
 > **AI-native is not just about tools** --- it is a mindset shift. Every team
+> member becomes an orchestrator who manages AI agents, focuses on exception
 > handling, and continuously improves the system.
 
 ## Design an AI-first workflow
@@ -217,9 +218,13 @@ You have been hired by the CMO to build a biometrics group.
 
 You will build an AI agent for this workflow. **Where do you start, and why?**
 
+*Discuss with a neighbor for 3 minutes.*
+
 ![](../../diagrams/ai-first-agent-design.svg)
 
 ## Opinionated proposal
+
+*Back to Day 0: what would we tell the CMO?*
 
 - As a Biometrics organization, focus on defining the workflow.
 - Leverage internal and external AI infrastructure, with proper skills and tools.
@@ -239,15 +244,6 @@ For CDISC data standardization, we recommend:
 
 - Do not use the annotated CRF as an input; generate it as an output.
 - Do not use a specification in Excel, Word, or PDF as an input; use a plain-text specification.
-
-## Opinionated proposal 
-
-> An agentic workflow for human and AI agent collaboration at the planning stage
-
-![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
-
-Human and AI review the specification during planning; the engine / tool executes the agreed rules.
-
 
 # Agentic CDISC data standardization {background-color="#385898"}
 
@@ -292,7 +288,7 @@ opensas: <https://github.com/kirha-ai/opensas><br>
 Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attempt, Oct 12 2026
 :::
 
-## Mean arterial pressure: three prompts {#example-mean-arterial-pressure-the-three-prompts .map-prompts}
+## Mean arterial pressure: three prompts {.map-prompts}
 
 ::: {.map-shared}
 **Shared Prompt:**
@@ -560,11 +556,11 @@ Inheritance reduces duplication while keeping every resolved study specification
 > agents collaborate centrally on the version-controlled specification at the
 > **planning stage**.
 
-# Case Studies 
-
 # AI evaluation {background-color="#385898"}
 
 ## What is a benchmark?
+
+**How would you know the agent is good enough to deploy?**
 
 > A benchmark is a fixed task with independently authored truth, so an agent's
 > work is measured rather than judged by eye.
@@ -880,3 +876,9 @@ October 2026: nine jobs, one for each prompt tier and language.
 5. Compare the same task under the full prompt.
 
 > Integrity before pass rate: a defect found in a benchmark is a finding, too.
+
+## Takeaways
+
+- Define the workflow, reuse AI infrastructure, and invest in skills and tools.
+- Make a plain-text specification the single source of truth for humans and AI agents.
+- Verify with benchmarks: measure the agent, and let people review the truth.
