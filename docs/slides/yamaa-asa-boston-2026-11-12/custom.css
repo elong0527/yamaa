@@ -409,3 +409,42 @@
 .reveal .flow.flow-5 {
   grid-template-columns: repeat(5, 1fr);
 }
+
+/* AI evaluation: the opening result, a second headline number in the muted
+   colour, and a gap before it so the two read as separate results. */
+.reveal .big-number.muted {
+  color: var(--course-muted);
+  margin-top: 1.2rem;
+}
+
+/* AI evaluation: the protocol map. The first column names the protocol element
+   that starts each later slide title. */
+.reveal .protocol table {
+  font-size: 0.72em;
+}
+
+.reveal .protocol th,
+.reveal .protocol td {
+  padding: 0.32em 0.6em;
+}
+
+.reveal .protocol td:first-child {
+  color: var(--course-blue);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* AI evaluation: the prompt-tier results read once for each goal, beside the
+   goal diagram. */
+.reveal .goal-reading {
+  font-size: 0.85em;
+}
+
+.reveal .goal-reading table {
+  font-size: 0.8em;
+}
+
+/* AI evaluation: the opening result's labels read at body size. */
+.reveal .sign-off .metric-label {
+  font-size: 1.25rem;
+}

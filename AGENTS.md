@@ -97,6 +97,10 @@ The whole of this guide is the contract; this list is the order of work.
   page and `rules/README.md` for the rules index. MkDocs reads those
   files through `tools/docs/canonical_pages.py`; do not create
   `docs/index.md` or `docs/articles/rules.md`.
+- **No alt text in the ASA Boston slides.** Do not add `fig-alt` or any other
+  image alternative text to
+  `docs/slides/yamaa-asa-boston-2026-11-12/index.qmd`; the owner does not want
+  it in that deck, and the deck carries none.
 
 ## Design principles
 

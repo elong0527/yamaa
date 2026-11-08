@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="414" viewBox="0 0 1230 414" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1230" height="414" fill="#ffffff"/>
+  <text x="44" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">STEP</text>
+  <text x="318" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">CLAIM</text>
+  <text x="718" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">EVIDENCE</text>
+  <text x="1052" y="38" font-size="14" font-weight="bold" fill="#888" letter-spacing="1">STATUS</text>
+  <line x1="44" y1="48" x2="1210" y2="48" stroke="#bdbdbd" stroke-width="1.5"/>
+  <rect x="44" y="62" width="1166" height="70" rx="14" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="62" width="250" height="70" rx="14" fill="#f5f5f5" stroke="#777" stroke-width="2.5"/>
+  <circle cx="80" cy="97" r="17" fill="#777"/>
+  <text x="80" y="104" font-size="19" font-weight="bold" text-anchor="middle" fill="#fff">1</text>
+  <text x="110" y="104" font-size="22" font-weight="bold" fill="#222">Baseline</text>
+  <text x="318" y="103" font-size="19" fill="#222">Agent-written code is not reliable enough</text>
+  <text x="718" y="103" font-size="18" fill="#555">Harbor benchmark, without yamaa</text>
+  <rect x="1048" y="78" width="146" height="38" rx="19" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1121" y="103" font-size="17" font-weight="bold" text-anchor="middle" fill="#1b5e20">Shown</text>
+  <rect x="44" y="144" width="1166" height="70" rx="14" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="144" width="250" height="70" rx="14" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2.5"/>
+  <circle cx="80" cy="179" r="17" fill="#1e88e5"/>
+  <text x="80" y="186" font-size="19" font-weight="bold" text-anchor="middle" fill="#fff">2</text>
+  <text x="110" y="186" font-size="22" font-weight="bold" fill="#1565c0">With yamaa</text>
+  <text x="318" y="185" font-size="19" fill="#222">One reviewed spec, one result</text>
+  <text x="718" y="185" font-size="18" fill="#555">Authored cases test the engine</text>
+  <rect x="1048" y="160" width="146" height="38" rx="19" fill="#fff8e1" stroke="#f9a825" stroke-width="2"/>
+  <text x="1121" y="185" font-size="17" font-weight="bold" text-anchor="middle" fill="#8d5a00">Partly shown</text>
+  <rect x="44" y="246" width="1166" height="70" rx="14" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="246" width="250" height="70" rx="14" fill="#e0f2f1" stroke="#00897b" stroke-width="2.5"/>
+  <circle cx="80" cy="281" r="17" fill="#00897b"/>
+  <text x="80" y="288" font-size="19" font-weight="bold" text-anchor="middle" fill="#fff">3</text>
+  <text x="110" y="288" font-size="22" font-weight="bold" fill="#00695c">Retrospective</text>
+  <text x="318" y="287" font-size="19" fill="#222">Matches existing studies end to end</text>
+  <text x="718" y="287" font-size="18" fill="#555">Pilots 01, 3, 5: 20/20 ADaM datasets</text>
+  <rect x="1048" y="262" width="146" height="38" rx="19" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="1121" y="287" font-size="17" font-weight="bold" text-anchor="middle" fill="#1b5e20">Shown, draft</text>
+  <rect x="44" y="328" width="1166" height="70" rx="14" fill="#fafafa" stroke="#e0e0e0" stroke-width="1.5"/>
+  <rect x="44" y="328" width="250" height="70" rx="14" fill="#e8eaf6" stroke="#3f51b5" stroke-width="2.5"/>
+  <circle cx="80" cy="363" r="17" fill="#3f51b5"/>
+  <text x="80" y="370" font-size="19" font-weight="bold" text-anchor="middle" fill="#fff">4</text>
+  <text x="110" y="370" font-size="22" font-weight="bold" fill="#283593">Prospective</text>
+  <text x="318" y="369" font-size="19" fill="#222">Schema suffices; experts read the spec</text>
+  <text x="718" y="369" font-size="18" fill="#555">Trials reviewed by experts</text>
+  <rect x="1048" y="344" width="146" height="38" rx="19" fill="#fff8e1" stroke="#f9a825" stroke-width="2"/>
+  <text x="1121" y="369" font-size="17" font-weight="bold" text-anchor="middle" fill="#8d5a00">Early results</text>
+  <line x1="32" y1="66" x2="32" y2="210" stroke="#1e88e5" stroke-width="2"/>
+  <text x="22" y="138.0" font-size="14" font-weight="bold" text-anchor="middle" fill="#1565c0" transform="rotate(-90 22 138.0)">Benchmark</text>
+  <line x1="32" y1="250" x2="32" y2="394" stroke="#3f51b5" stroke-width="2"/>
+  <text x="22" y="322.0" font-size="13" font-weight="bold" text-anchor="middle" fill="#283593" transform="rotate(-90 22 322.0)">Human confirmation</text>
+</svg>
