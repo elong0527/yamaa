@@ -175,6 +175,45 @@ def test_confident_opensas_reference_matches_original_golden(tmp_path, name):
         assert header == spec["columns"], (name, spec["file"], header)
 
 
+@pytest.mark.parametrize(
+    "subject,field,number",
+    [
+        ("CATH-UCSD-0001", "CMAENO1", "999"),
+        ("CATH-UCSD-0001", "CMAENO2", "999"),
+        ("CATH-UCSD-0002", "CMAENO1", "3"),
+    ],
+    ids=["first-reference", "second-reference", "other-subject-only"],
+)
+def test_relrec_opensas_refuses_unmatched_event_references(
+    tmp_path, subject, field, number
+):
+    if not shutil.which("opensas"):
+        pytest.skip("opensas is not installed; Harbor Oracle runs every case in Docker")
+    name = "sdtm-relrec-links"
+    shutil.copytree(build.BENCHMARKS / name / "input", tmp_path / "input")
+    cm = tmp_path / "input/cm.csv"
+    header, rows = grade.read_rows(cm)
+    row = next(r for r in rows if r["USUBJID"] == subject and r["CMSEQ"] == "1")
+    row[field] = number
+    with cm.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(rows)
+    output = tmp_path / "output"
+    output.mkdir()
+    script = output / "result.sas"
+    script.write_text(
+        (build.SOLUTIONS / name / script.name)
+        .read_text()
+        .replace("/app/", f"{tmp_path.as_posix()}/")
+    )
+    result = subprocess.run(
+        ["opensas", str(script)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert not (output / "relrec.csv").exists()
+
+
 def test_the_spaces_only_comment_reference_matches_its_golden(tmp_path):
     # The track still excludes this case, so grade its reference under the
     # Python contract: it keeps the two-space comment by reading raw records

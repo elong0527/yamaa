@@ -21,12 +21,18 @@ keep STUDYID USUBJID CMSEQ AENO;
 run;
 
 proc sql;
-  create table pairs as
-  select r.STUDYID, r.USUBJID, a.AESEQ, r.CMSEQ
-  from refs as r inner join ae as a
+  create table matched as
+  select r.STUDYID, r.USUBJID, a.AESEQ, r.CMSEQ, a.AESPID as MATCHED_AENO
+  from refs as r left join ae as a
     on r.STUDYID=a.STUDYID and r.USUBJID=a.USUBJID and r.AENO=strip(a.AESPID)
   order by r.STUDYID, r.USUBJID, a.AESEQ, r.CMSEQ;
 quit;
+
+/* A populated reference must name an event before any output is written. */
+data pairs; set matched;
+if missing(MATCHED_AENO) then abort return 1;
+drop MATCHED_AENO;
+run;
 
 data numbered; set pairs; by STUDYID USUBJID;
 if first.USUBJID then RELNUM=0;
