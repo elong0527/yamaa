@@ -424,7 +424,8 @@ The design of yamaa is a contract between human and AI agents.
 ![](../../diagrams/yamaa-uncertainty.svg)
 
 The AI agent is probabilistic, so people review the specification. The engine
-that executes it is deterministic.
+that executes it is deterministic: the same specification and inputs give the
+same datasets.
 
 ## yamaa: four components
 
@@ -657,7 +658,7 @@ The prompt-tier results, read four ways:
 | ---- | ---------------- |
 | **Choose** | With the full prompt, Python and R are one task apart (133 vs 132); opensas passes 116. |
 | **Improve** | Writing the rules into the prompt lifts Python from 25 to 133 passes. |
-| **Gate** | 133 of 134 from one attempt: the exact 95% CI is 95.9% to 99.98%. |
+| **Gate** | 133 of 134, one attempt each: exact 95% CI 95.9% to 99.98% for these tasks, not for the work you deploy on. |
 | **Monitor** | Not answered: a benchmark is a snapshot, not production. |
 :::
 :::
@@ -667,9 +668,11 @@ The prompt-tier results, read four ways:
 **One table, four answers:** pick the decision before you read the number.
 
 ::: {.notes}
-The 95% interval is Clopper-Pearson for 133 of 134. The brief-to-full
-comparison is paired: the same tasks, agent and model, with only the prompt
-changed.
+The 95% interval is Clopper-Pearson for 133 of 134. It treats each task as an
+independent trial, so it describes these 134 tasks run once. The tasks are
+authored edge cases, not a random sample of real work, so the interval does not
+carry over to deployment. The brief-to-full comparison is paired: the same
+tasks, agent and model, with only the prompt changed.
 :::
 
 ## Intervention: the system you deploy
@@ -793,7 +796,7 @@ reruns target leakage; human review of the expected output targets grader error.
 the cheapest way to address each.
 
 - 133 of 134 tasks pass: Python, full prompt, one model, one attempt, October 2026.
-- The exact 95% confidence interval is 95.9% to 99.98%.
+- The exact 95% confidence interval for these 134 tasks is 95.9% to 99.98%.
 - The benchmarks and their expected outputs are public on GitHub.
 - Each task isolates one derivation on a fixture of about 20 rows.
 - People have approved 3 of the 199 SDTM, SEND, and ADaM benchmarks so far.
@@ -801,8 +804,10 @@ the cheapest way to address each.
 ::: {.notes}
 Points to draw out:
 
-- Sampling error: the lower bound is 95.9%, so the data cannot support a claim
-  above 96%.
+- Sampling error: the interval treats the 134 tasks as independent trials and
+  describes these tasks only. They are authored edge cases, not a random sample
+  of real work, so no interval from them carries over to deployment. That gap
+  is external validity, which more tasks of the same kind will not close.
 - Run-to-run noise: one attempt per task; repeated runs show whether the same
   task fails again.
 - Saturation: the full tier sits at the ceiling and cannot separate strong

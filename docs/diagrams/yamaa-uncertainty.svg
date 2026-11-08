@@ -19,7 +19,7 @@
   <rect x="244" y="236" width="432" height="92" rx="16" fill="none" stroke="#c62828" stroke-width="2.5" stroke-dasharray="9,6"/>
   <text x="260" y="228" font-size="15" font-weight="bold" fill="#c62828">Probabilistic: review the spec</text>
   <rect x="704" y="236" width="432" height="92" rx="16" fill="none" stroke="#1e88e5" stroke-width="2.5" stroke-dasharray="9,6"/>
-  <text x="720" y="228" font-size="15" font-weight="bold" fill="#1e88e5">Deterministic: one spec, one result</text>
+  <text x="720" y="228" font-size="15" font-weight="bold" fill="#1e88e5">Deterministic: same spec and inputs, same result</text>
   <rect x="260" y="250" width="170" height="64" rx="12" fill="#fff3e0" stroke="#fb8c00" stroke-width="2.5"/>
   <text x="345.0" y="289.0" font-size="21" font-weight="bold" text-anchor="middle" fill="#e65100">Agent</text>
   <rect x="490" y="250" width="170" height="64" rx="12" fill="#fffde7" stroke="#f9a825" stroke-width="2.5"/>
