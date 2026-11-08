@@ -221,7 +221,8 @@ You will build an AI agent for this workflow. **Where do you start, and why?**
 
 ## Opinionated proposal
 
-- As an organization, focusing on leveraging existing AI infra with proper skills and tools. 
+- As a Biometrics organization, focus on defining the workflow.
+- Leverage internal and external AI infrastructure, with proper skills and tools.
 
 ![](../../diagrams/ai-first-agent-answer.svg)
 
@@ -510,12 +511,6 @@ Inheritance reduces duplication while keeping every resolved study specification
 - An annotated CRF is not an input but an output.
 - An Excel specification is not an input but an output.
 - Communication costs more than tokens.
-
-## Focusing on skills and tools
-
-![](../../diagrams/ai-first-agent-answer.svg)
-
-> A skill tells the agent how to do the task; a tool does the exact part of it.
 
 # AI evaluation {background-color="#385898"}
 

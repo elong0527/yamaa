@@ -35,9 +35,8 @@ The deck has eight sections:
   completeness decides success, and the workflow's goal and principles. It
   introduces yamaa's planning-stage collaboration, YAML specifications, core
   principle, four components, inheritance, R Consortium submission pilots
-  and Pilot 7, and Pilot 5 performance. It closes with a workflow summary,
-  input and output recommendations, and the skills and tools the workshop
-  covers.
+  and Pilot 7, and Pilot 5 performance. It closes with a workflow summary
+  and recommendations on input and output.
 - **AI evaluation:** what a benchmark is, the yamaa benchmarks, how Harbor
   runs and grades an agent on a benchmark, and an invitation to the yamaa
   organization on Harbor Hub.
