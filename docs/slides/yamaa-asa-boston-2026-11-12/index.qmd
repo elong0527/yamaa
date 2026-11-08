@@ -226,6 +226,65 @@ You will build an AI agent for this workflow. **Where do you start, and why?**
 
 ![](../../diagrams/ai-first-agent-answer.svg)
 
+## Agentic workflow design principles
+
+- Plain text first.
+- Deterministic first.
+
+For CDISC data standardization, we recommend:
+
+- Do not use the annotated CRF as an input; generate it as an output.
+- Do not use a specification in Excel, Word, or PDF as an input; use a plain-text specification.
+
+> Communication costs more than tokens.
+
+## yamaa: collaboration at the planning stage
+
+![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
+
+Human and AI review the specification during planning; the engine executes the agreed rules.
+
+## yamaa: YAML specification example
+
+```yaml
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+columns:
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+verifications:
+  - unique: [STUDYID, USUBJID]
+```
+
+## yamaa: core principle
+
+> A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.
+
+::: {.formula}
+*`output_dataset = derive(input_datasets, spec)`*
+:::
+
+The design of yamaa is a contract between humans and AI agents.
+
+- **spec**: a schema with a closed vocabulary.
+- **derive**: business rules with defined derivation semantics.
+
+
+
+
+
+
+
 ## Brainstorm: verify before deployment
 
 You have a design: the agent, its inputs and outputs, and who does what.
@@ -318,46 +377,6 @@ Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attemp
 > yamaa is one way to build this workflow: the specification is the contract
 > between people and AI agents.
 
-## yamaa: collaboration at the planning stage
-
-![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
-
-Human and AI review the specification during planning; the engine executes the agreed rules.
-
-## yamaa: YAML specification example
-
-```yaml
-schema_version: "1.0"
-domain: ADSL
-keys: [STUDYID, USUBJID]
-input:
-  SOURCE: input/adsl.csv
-
-columns:
-  - name: BMI
-    type: float
-    label: Body Mass Index (kg/m2)
-    derivation:
-      compute:
-        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
-
-verifications:
-  - unique: [STUDYID, USUBJID]
-```
-
-## yamaa: core principle
-
-> A yamaa specification has exactly one execution. Where it would have two,
-> yamaa fails instead of choosing.
-
-::: {.formula}
-*`output_dataset = derive(input_datasets, spec)`*
-:::
-
-The design of yamaa is a contract between humans and AI agents.
-
-- **spec**: a schema with a closed vocabulary.
-- **derive**: business rules with defined derivation semantics.
 
 ## yamaa: four components
 
@@ -504,13 +523,6 @@ Inheritance reduces duplication while keeping every resolved study specification
 > This is an iterative process while the study is ongoing. Team members and AI
 > agents collaborate centrally on the version-controlled specification at the
 > **planning stage**.
-
-## Recommendations: input and output
-
-- Plain text is the input.
-- An annotated CRF is not an input but an output.
-- An Excel specification is not an input but an output.
-- Communication costs more than tokens.
 
 # AI evaluation {background-color="#385898"}
 
