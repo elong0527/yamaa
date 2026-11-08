@@ -1,12 +1,25 @@
 "use strict";
 
-// The review queue: sends a reviewer to the next benchmark they have neither
-// submitted nor skipped. What they have done stays in this browser; `after`
-// names the benchmark they just left, so the queue moves on without storage.
-// Nobody assigns benchmarks, so each browser starts at its own place among the
-// benchmarks nobody has reviewed, and reviewers do not all read the same ones.
+// The review queue: sends a reviewer to the next benchmark that still needs a
+// review and that they have neither submitted nor skipped. What they have done
+// stays in this browser; `after` names the benchmark they just left, so the
+// queue moves on without storage.
+//
+// Nobody assigns benchmarks, and no benchmark goes to everyone first: each
+// browser walks the benchmarks under review in gallery order from its own
+// place, so people who start together read different benchmarks. The place is
+// random, or comes from a pair number entered on the review page: everyone who
+// enters the same number starts at the same benchmark, so the two people of a
+// pair give it the two reviews it needs. A place is a share of the list of
+// every benchmark under review, which a published review does not change, so
+// partners who start minutes apart, on either side of a site rebuild, still
+// start at the same benchmark.
 (() => {
-  const { doneKey, reviewUrl, started, open } = JSON.parse(document.getElementById("review-queue").textContent);
+  const { doneKey, reviewUrl, benchmarks, unsettled } = JSON.parse(document.getElementById("review-queue").textContent);
+  const waiting = new Set(unsettled);
+  // Successive multiples of the golden ratio, modulo one, stay evenly spread
+  // however many there are, so pair numbers need no head count.
+  const GOLDEN = (Math.sqrt(5) - 1) / 2;
 
   // Storage can be unavailable (private windows, blocked site data). Nothing
   // marks a benchmark done then, so the queue walks forward once and stops.
@@ -22,11 +35,18 @@
     }
   }
 
-  function startingPlace(marks) {
+  // A pair number is a whole number from 1 to 9999; anything else is no number.
+  function pairPlace(value) {
+    return /^[1-9][0-9]{0,3}$/.test(value || "") ? (Number(value) * GOLDEN) % 1 : null;
+  }
+
+  // A pair number replaces the place this browser keeps, so a later visit
+  // without one resumes from the pair's benchmark.
+  function startingPlace(marks, pair) {
     const key = doneKey + "start";
     const kept = marks.getItem(key);
-    if (kept !== null) return Number(kept);
-    const chosen = Math.random();
+    if (pair === null && kept !== null) return Number(kept);
+    const chosen = pair === null ? Math.random() : pair;
     try { marks.setItem(key, String(chosen)); }
     catch (error) { /* The place then changes on each visit. */ }
     return chosen;
@@ -34,14 +54,15 @@
 
   const params = new URLSearchParams(window.location.search);
   const marks = params.get("review-storage") === "unavailable" ? null : storage();
-  const offset = marks ? Math.floor(startingPlace(marks) * open.length) : 0;
-  const names = started.concat(open.slice(offset), open.slice(0, offset));
+  const pair = pairPlace(params.get("pair"));
+  const place = marks ? startingPlace(marks, pair) : (pair === null ? 0 : pair);
   const after = params.get("after");
-  const position = names.indexOf(after);
-  const ahead = names.slice(position + 1);
-  const order = marks ? started.concat(ahead, names.slice(0, position + 1)) : ahead;
+  const position = benchmarks.indexOf(after);
+  const start = position >= 0 ? position + 1 : Math.floor(place * benchmarks.length);
+  const ahead = benchmarks.slice(start);
+  const order = marks ? ahead.concat(benchmarks.slice(0, start)) : ahead;
   const next = order.find(
-    (name) => name !== after && (!marks || marks.getItem(doneKey + name) === null),
+    (name) => waiting.has(name) && name !== after && (!marks || marks.getItem(doneKey + name) === null),
   );
   if (next) {
     const url = new URL("../../" + encodeURIComponent(next) + ".html", window.location.href);

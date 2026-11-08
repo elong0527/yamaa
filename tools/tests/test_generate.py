@@ -898,7 +898,8 @@ class DashboardTests(unittest.TestCase):
             f'<li><a href="{source}plot.png">The plot</a></li>',
         )
 
-    def test_review_queue_offers_started_benchmarks_before_open_ones(self):
+    def test_review_queue_lists_every_benchmark_and_those_still_unsettled(self):
+        # The seam is the queue data review-queue.js walks, outside fixture readers.
         entries = [
             ("adam-adsl-second", "Second", "ADSL"),
             ("adam-adsl-first", "First", "ADSL"),
@@ -939,9 +940,21 @@ class DashboardTests(unittest.TestCase):
                 "doneKey": "yamaa-benchmark-reviewed:",
                 "reviewUrl": "https://github.com/elong0527/yamaa/discussions/new"
                 "?category=general",
-                "started": ["adam-adsl-first"],
-                "open": ["send-bw-weight", "sdtm-dm-basic", "adam-adsl-second"],
+                "benchmarks": [
+                    "send-bw-weight",
+                    "sdtm-dm-basic",
+                    "adam-adae-event",
+                    "adam-adsl-first",
+                    "adam-adsl-second",
+                ],
+                "unsettled": [
+                    "send-bw-weight",
+                    "sdtm-dm-basic",
+                    "adam-adsl-first",
+                    "adam-adsl-second",
+                ],
             },
+            "gallery order, sdtm before adam; two approvals settle adam-adae-event",
         )
 
     def test_a_new_round_reopens_a_previously_completed_benchmark(self):
@@ -975,8 +988,8 @@ class DashboardTests(unittest.TestCase):
                 keys.append(form.xpath("//form/@data-done-key")[0])
         self.assertEqual(
             (
-                queues[0]["open"],
-                queues[1]["open"],
+                queues[0]["unsettled"],
+                queues[1]["unsettled"],
                 queues[0]["doneKey"] == keys[0],
                 queues[1]["doneKey"] == keys[1],
                 keys[0] != keys[1],
