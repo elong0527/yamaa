@@ -5,12 +5,16 @@
     "ghcr.io/devcontainers/features/common-utils:2": {
       "username": "vscode"
     },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     },
     "ghcr.io/devcontainers/features/rust:1": {},
     "ghcr.io/devcontainers-extra/features/uv:1": {},
-    "ghcr.io/rocker-org/devcontainer-features/quarto-cli:1": {}
+    "ghcr.io/rocker-org/devcontainer-features/quarto-cli:1": {},
+    "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+      "packages": "libreoffice-writer-nogui,fonts-liberation"
+    }
   },
   "workspaceFolder": "/workspaces",
   "remoteUser": "vscode",
@@ -35,7 +39,8 @@
         "REditorSupport.r",
         "rust-lang.rust-analyzer",
         "redhat.vscode-yaml",
-        "tamasfe.even-better-toml"
+        "tamasfe.even-better-toml",
+        "elong0527.vs-rtf-preview"
       ],
       "settings": {
         "r.rterm.linux": "/usr/local/bin/R"

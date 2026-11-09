@@ -16,8 +16,26 @@ export UV_PYTHON="$repository_root/python/.venv/bin/python"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 
-printf '\nInstalling OpenCode...\n'
+printf '\nInstalling opensas, OpenCode and Harbor...\n'
+# The Harbor evaluation's installer pins the opensas release its images use.
+case "$(uname -m)" in
+  x86_64) opensas_architecture=amd64 ;;
+  aarch64|arm64) opensas_architecture=arm64 ;;
+  *) printf 'Unsupported opensas architecture: %s\n' "$(uname -m)" >&2; exit 1 ;;
+esac
+sudo bash evaluations/harbor/install-opensas.sh "$opensas_architecture"
 npm install --global --prefix "$HOME/.local" @opencode/cli@2
+# Harbor's version comes from the evaluation's own pin. It runs on CI's
+# Python, 3.14: one of its dependencies does not build for 3.15 yet.
+harbor_requirement="$(python - <<'PY'
+import tomllib
+
+with open("evaluations/harbor/pyproject.toml", "rb") as handle:
+    dependencies = tomllib.load(handle)["project"]["dependencies"]
+print(next(entry for entry in dependencies if entry.startswith("harbor==")))
+PY
+)"
+uv tool install --force --python 3.14 "$harbor_requirement"
 
 printf '\nInstalling Claude Code and Codex...\n'
 npm install --global --prefix "$HOME/.local" @anthropic-ai/claude-code @openai/codex
@@ -54,6 +72,12 @@ printf '\nBuilding the R package from the same checkout...\n'
 python -m tools.staging.stage_r_package "$scratch/yamaa"
 R CMD INSTALL --library="$R_LIBS_USER" "$scratch/yamaa"
 
+printf '\nInstalling the tidyverse and languageserver R packages...\n'
+# pak installs the packages' system libraries through sudo. Rscript runs
+# without --vanilla so that Rocker's site profile supplies its binary repository.
+Rscript -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch), lib = Sys.getenv("R_LIBS_USER"))'
+PKG_SYSREQS=true Rscript -e 'pak::pkg_install(c("tidyverse", "languageserver"), lib = Sys.getenv("R_LIBS_USER"))'
+
 printf '\nChecking the installed environment...\n'
 python --version
 python - <<'PY'
@@ -71,9 +95,21 @@ print(R.version.string)
 report <- yamaa_selftest()
 print(report)
 stopifnot(report$status == "succeeded")
+for (package in c("tidyverse", "languageserver")) {
+  library(package, character.only = TRUE)
+  cat(package, format(packageVersion(package)), "\n")
+}
 RS
 quarto --version
 opencode --version
 claude --version
 codex --version
-printf '\nyamaa Codespace is ready. Run R, quarto, python, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"
+harbor --version
+docker --version
+printf 'data _null_; put "opensas ready"; run;\n' > "$scratch/smoke.sas"
+opensas "$scratch/smoke.sas"
+# The RTF preview extension converts with LibreOffice; prove that conversion.
+printf '{\\rtf1\\ansi yamaa}\n' > "$scratch/smoke.rtf"
+soffice --headless --convert-to pdf --outdir "$scratch" "$scratch/smoke.rtf"
+test -s "$scratch/smoke.pdf"
+printf '\nyamaa Codespace is ready. Run R, quarto, python, opensas, harbor, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"
