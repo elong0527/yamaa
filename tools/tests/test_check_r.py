@@ -617,7 +617,7 @@ MEMCHECK_ERROR = """\
 # and its definite loss, the other callers' blocks and the unrelated root's
 # block counted.
 MEMCHECK_CONTROL_COUNTED = (
-    "==4243== ERROR SUMMARY: 4 errors from 4 contexts (suppressed: 3 from 3)\n"
+    "==4243== ERROR SUMMARY: 4 errors from 4 contexts (suppressed: 4 from 4)\n"
 )
 RUNTIME_LOG = """\
 * using log directory '/tmp/check/yamaa.Rcheck'
