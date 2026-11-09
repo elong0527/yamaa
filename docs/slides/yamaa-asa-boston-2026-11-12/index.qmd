@@ -548,9 +548,9 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 [Hands-on: 10 min]{.pill}
 
-Copy the benchmark with
-`mkdir -p exercise && cp -r benchmarks/adam-advs-map exercise/advs`, then run
-its specification from the repository root:
+In a terminal at the repository root, copy the benchmark with
+`rm -rf exercise/advs && mkdir -p exercise && cp -r benchmarks/adam-advs-map exercise/advs`,
+then run its specification there:
 
 ::: {.panel-tabset}
 
@@ -593,19 +593,19 @@ run fails before any output with one issue,
 `the row count is outside the bounds of verifications[0].row_count in 1 of
 the counted groups [row_count_failed, CHECK-13]`, because subjects 103 (no
 diastolic record) and 104 (missing diastolic result) each get a MAP record
-with no value, 14 rows against the 12 the verification demands. Before the
-next exercise, undo both edits or replace the copy with
-`rm -rf exercise/advs && cp -r benchmarks/adam-advs-map exercise/advs`;
-copying over the existing directory would nest the fresh copy inside it.
+with no value, 14 rows against the 12 the verification demands. The copy
+command removes `exercise/advs` first, so running it again restores a clean
+copy and discards every edit; copying over the existing directory would nest
+the fresh copy inside it.
 :::
 
 ## Hands-on 2: draft with an agent, then review {.compact}
 
 [Hands-on: 15 min]{.pill}
 
-Start from a fresh copy,
-`rm -rf exercise/advs && cp -r benchmarks/adam-advs-map exercise/advs`, then
-give OpenCode, Claude Code, or Codex this task:
+In a terminal at the repository root, reset the copy with
+`rm -rf exercise/advs && mkdir -p exercise && cp -r benchmarks/adam-advs-map exercise/advs`,
+then give your agent this task:
 
 ::: {.prompt}
 In exercise/advs/spec.yaml, add a pulse pressure record for each subject and
