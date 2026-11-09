@@ -13,18 +13,10 @@ uv python install --default --force 3
 uv venv --clear --seed --python "$HOME/.local/bin/python3" python/.venv
 export UV_PYTHON="$repository_root/python/.venv/bin/python"
 
-printf '\nInstalling opensas and OpenCode...\n'
-case "$(uname -m)" in
-  x86_64) opensas_asset=opensas-amd ;;
-  aarch64|arm64) opensas_asset=opensas-arm ;;
-  *) printf 'Unsupported opensas architecture: %s\n' "$(uname -m)" >&2; exit 1 ;;
-esac
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
-curl --fail --location --retry 3 \
-  "https://github.com/kirha-ai/opensas/releases/latest/download/$opensas_asset" \
-  --output "$scratch/opensas"
-install -m 0755 "$scratch/opensas" "$HOME/.local/bin/opensas"
+
+printf '\nInstalling OpenCode...\n'
 npm install --global --prefix "$HOME/.local" @opencode/cli@2
 
 printf '\nInstalling Claude Code and Codex...\n'
@@ -80,10 +72,8 @@ report <- yamaa_selftest()
 print(report)
 stopifnot(report$status == "succeeded")
 RS
-printf 'data _null_; put "opensas ready"; run;\n' > "$scratch/smoke.sas"
-opensas "$scratch/smoke.sas"
 quarto --version
 opencode --version
 claude --version
 codex --version
-printf '\nyamaa Codespace is ready. Run R, quarto, python, opensas, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"
+printf '\nyamaa Codespace is ready. Run R, quarto, python, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"

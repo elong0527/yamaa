@@ -35,6 +35,19 @@
    fun:*yamaa_r*interrupt*token*
 }
 
+# The same handle when the R binding's project-function capabilities ask for
+# it first: ThreadBound::new, inlined into project_activation's Functions::new,
+# records the creating thread, as yamaa_cli() does before any token exists.
+{
+   yamaa-std-current-thread-handle-project-functions
+   Memcheck:Leak
+   match-leak-kinds: possible
+   ...
+   fun:*std*thread*current*init_current*
+   ...
+   fun:*yamaa_r*project_activation*Functions*new*
+}
+
 # The lazy DFA caches of the regexes that the shipped schemas compile once,
 # held by yamaa-adapters' `static OnceLock` schemas (shipped_schema), when a
 # schema descriptor's constraint check first searches with them.
