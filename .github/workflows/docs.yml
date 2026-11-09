@@ -37,13 +37,6 @@ jobs:
           version: '0.13.0'
           python-version: '3.14'
           enable-cache: true
-      - name: Set up Quarto
-        uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2
-      - name: Render slide decks
-        run: |
-          for deck in docs/slides/*/index.qmd; do
-            quarto render "$deck"
-          done
       - name: Install the site tooling
         run: uv sync --project python --locked --group tooling --no-install-package yamaa
       # The site still builds without the reviews; the review page says so.
