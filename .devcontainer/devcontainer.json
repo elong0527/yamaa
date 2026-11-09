@@ -25,8 +25,8 @@
     "R_LIBS_USER": "/home/vscode/R/library",
     "CARGO_BUILD_JOBS": "2"
   },
-  "postCreateCommand": "bash /workspaces/${localWorkspaceFolderBasename}/.devcontainer/setup.sh",
-  "waitFor": "postCreateCommand",
+  "updateContentCommand": "bash /workspaces/${localWorkspaceFolderBasename}/.devcontainer/setup.sh",
+  "waitFor": "updateContentCommand",
   "customizations": {
     "vscode": {
       "extensions": [
