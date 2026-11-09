@@ -72,11 +72,11 @@ printf '\nBuilding the R package from the same checkout...\n'
 python -m tools.staging.stage_r_package "$scratch/yamaa"
 R CMD INSTALL --library="$R_LIBS_USER" "$scratch/yamaa"
 
-printf '\nInstalling the tidyverse and languageserver R packages...\n'
+printf '\nInstalling the course R packages (tidyverse, languageserver, gtsummary, arrow, jsonlite, knitr, rmarkdown)...\n'
 # pak installs the packages' system libraries through sudo. Rscript runs
 # without --vanilla so that Rocker's site profile supplies its binary repository.
 Rscript -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch), lib = Sys.getenv("R_LIBS_USER"))'
-PKG_SYSREQS=true Rscript -e 'pak::pkg_install(c("tidyverse", "languageserver"), lib = Sys.getenv("R_LIBS_USER"))'
+PKG_SYSREQS=true Rscript -e 'pak::pkg_install(c("tidyverse", "languageserver", "gtsummary", "arrow", "jsonlite", "knitr", "rmarkdown"), lib = Sys.getenv("R_LIBS_USER"))'
 
 printf '\nChecking the installed environment...\n'
 python --version
@@ -95,7 +95,7 @@ print(R.version.string)
 report <- yamaa_selftest()
 print(report)
 stopifnot(report$status == "succeeded")
-for (package in c("tidyverse", "languageserver")) {
+for (package in c("tidyverse", "languageserver", "gtsummary", "arrow", "jsonlite", "knitr", "rmarkdown")) {
   library(package, character.only = TRUE)
   cat(package, format(packageVersion(package)), "\n")
 }
