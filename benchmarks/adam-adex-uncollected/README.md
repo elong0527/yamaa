@@ -7,14 +7,18 @@ treatment) through and adding `DOSECUM` (cumulative dose), `NDOSREC`
 **Input:** the subject-level analysis dataset (ADSL) carrying each
 subject's planned treatment, and the SDTM exposure (EX) records holding
 administered doses (`EXDOSE`) and exposure sequence numbers (`EXSEQ`).
+Every recorded dose in this case is expressed in milligrams (`EXDOSU=mg`),
+including any additional treatment records. Mixed-unit dose normalization
+is outside this case's contract; doses in other units must be standardized
+before supplying EX. A recorded dose with another unit or no unit is rejected.
 
 **Variables:**
 
 - `TRT01P` is the subject's planned treatment, so a subject who was never
   dosed still has a record.
-- `DOSECUM` is the total administered dose across the subject's exposure
-  records; empty when no dose was ever recorded, while a recorded zero
-  total is kept so a measured zero never reads as missing.
+- `DOSECUM` is the total administered dose in milligrams across the
+  subject's exposure records; empty when no dose was ever recorded, while
+  a recorded zero total is kept so a measured zero never reads as missing.
 - `NDOSREC` is the number of the subject's exposure records; empty when
   the subject has no exposure record at all.
 - `NDOSVAL` is the number of exposure records carrying a recorded dose;

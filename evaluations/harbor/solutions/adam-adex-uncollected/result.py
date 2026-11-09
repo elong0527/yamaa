@@ -41,6 +41,8 @@ def main():
 
     doses_by_key = defaultdict(list)
     for row in exposure:
+        if row["EXDOSE"].strip() and row["EXDOSU"] != "mg":
+            raise ValueError("Recorded doses must be standardized to mg")
         key = (row["STUDYID"], row["USUBJID"])
         doses_by_key[key].append(row["EXDOSE"])
 

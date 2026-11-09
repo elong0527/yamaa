@@ -6,6 +6,7 @@ data ex;
   length STUDYID DOMAIN USUBJID EXTRT EXDOSU EXSTDTC $1024;
   infile "/app/input/ex.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
   input STUDYID : $char1024. DOMAIN : $char1024. USUBJID : $char1024. EXSEQ EXTRT : $char1024. EXDOSE EXDOSU : $char1024. EXSTDTC : $char1024.;
+  if not missing(EXDOSE) and EXDOSU ne 'mg' then abort return 1;
 run;
 
 data adsl;

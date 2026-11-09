@@ -41,13 +41,29 @@ columns:
     type: int
     label: Number of Dose Records
     derivation:
-      aggregate: "COUNT(EX.EXSEQ)"
+      aggregate: "COUNT(EX.*)"
 
   - name: NDOSVAL
     type: int
     label: Number of Nonmissing Doses
     derivation:
       aggregate: "COUNT(EX.EXDOSE)"
+
+  # A private check column: a recorded dose must already be in milligrams.
+  # Missing doses may also have no unit, and subjects with no EX still pass.
+  - name: NDOSOTHER
+    type: int
+    label: Number of Recorded Doses Not in Milligrams
+    derivation:
+      aggregate:
+        filter: >-
+          EX.EXDOSE IS NOT NULL AND
+          (EX.EXDOSU IS NULL OR EX.EXDOSU <> 'mg')
+        expr: "COUNT(EX.*)"
+    verifications:
+      - range:
+          id: doses-standardized-to-mg
+          max: 0
 
 verifications:
   - row_count:

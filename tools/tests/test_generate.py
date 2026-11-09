@@ -357,6 +357,30 @@ class DashboardTests(unittest.TestCase):
                 )
                 self.assertEqual(document.xpath('//table[@class="define-table"]'), [])
 
+    def test_invalid_define_key_sequences_remain_literal(self):
+        fixtures = HERE / "fixtures/benchmark_docs"
+        sequences = json.loads(
+            (fixtures / "define-invalid-key-sequences.json").read_text()
+        )
+        source = (
+            generate.BENCHMARKS / "sdtm-dm-metadata/expected/define.xml"
+        ).read_text()
+        for sequence in sequences:
+            with (
+                self.subTest(sequence=sequence),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                text = source.replace('KeySequence="1"', f'KeySequence="{sequence}"', 1)
+                self.assertNotEqual(text, source)
+                path = support.write(root, "expected/define.xml", text)
+                rendered, _, _ = generate.render_files(
+                    [path], "output", root, set(), {}
+                )
+                document = html_tree.fromstring(rendered)
+                self.assertEqual(document.xpath("//pre/code")[0].text_content(), text)
+                self.assertEqual(document.xpath('//table[@class="define-table"]'), [])
+
     def test_public_host_metadata_and_reviewed_exclusions_are_visible(self):
         active = generate.render_benchmark(
             generate.BENCHMARKS / "sdtm-dm-basic"

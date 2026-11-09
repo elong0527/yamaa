@@ -16,6 +16,10 @@ ex <- read_csv(
   col_types = cols(EXDOSE = col_double(), .default = col_character())
 )
 
+if (any(!is.na(ex$EXDOSE) & (is.na(ex$EXDOSU) | ex$EXDOSU != "mg"))) {
+  stop("Recorded doses must be standardized to mg")
+}
+
 # Per subject: total dose, record count, and count of recorded doses.
 agg <- ex |>
   group_by(STUDYID, USUBJID) |>

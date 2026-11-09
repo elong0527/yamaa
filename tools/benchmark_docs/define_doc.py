@@ -244,11 +244,19 @@ def dataset_row(group, definitions):
                 ),
             )
         )
-    keys = sorted(
-        (int(reference.get("KeySequence")), reference.get("ItemOID", ""))
-        for reference in group.findall("{*}ItemRef")
-        if (reference.get("KeySequence") or "").isdigit()
-    )
+    keys = []
+    for reference in group.findall("{*}ItemRef"):
+        sequence = reference.get("KeySequence")
+        if sequence is None:
+            continue
+        try:
+            position = int(sequence)
+        except ValueError:
+            return None
+        if position < 1:
+            return None
+        keys.append((position, reference.get("ItemOID", "")))
+    keys.sort()
     names = []
     for _, oid in keys:
         item = definitions.get(oid)
@@ -276,11 +284,14 @@ def render_metadata(metadata, prefix):
         if element.get("OID") or element.get("ID")
     }
     groups = metadata.findall("{*}ItemGroupDef")
+    datasets = [dataset_row(group, definitions) for group in groups]
+    if any(row is None for row in datasets):
+        return None
     parts = [
         table(
             "Datasets",
             DATASET_HEADERS,
-            [dataset_row(group, definitions) for group in groups],
+            datasets,
         )
     ]
     navigation = []
@@ -374,7 +385,10 @@ def render_define(text, prefix):
                 for standard in metadata.findall("{*}Standards/{*}Standard")
             )
             parts.append("<p>" + html.escape("; ".join(filter(None, summary))) + "</p>")
-            parts.append(render_metadata(metadata, f"{prefix}-{study_index}-{index}"))
+            rendered = render_metadata(metadata, f"{prefix}-{study_index}-{index}")
+            if rendered is None:
+                return None
+            parts.append(rendered)
     return (
         '<div class="define-document">' + "".join(parts) + "</div>" if parts else None
     )

@@ -44,7 +44,7 @@ def main():
             sex = "F"
         else:
             sex = "U"
-        age = items.get(ITEM_AGE, "") or ""
+        age = (items.get(ITEM_AGE, "") or "").strip()
         arm = items.get(ITEM_ARM, "") or ""
         actarm = arm
         armnrs = "" if arm else "NOT ASSIGNED"
