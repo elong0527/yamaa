@@ -9,7 +9,8 @@ input:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM, ARMNRS]
+  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, ARM,
+            ACTARM, ARMNRS, COUNTRY]
 
 columns:
   - name: DOMAIN
@@ -32,6 +33,30 @@ columns:
     label: Subject Identifier for the Study
     derivation: USUBJID
 
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.SITEID'
+        variable: ODM.Value
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.AGE'
+        variable: ODM.Value
+
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation:
+      case:
+        - when: "AGE IS NOT NULL"
+          then: "'YEARS'"
+
   - name: SEX
     type: str
     label: Sex
@@ -45,14 +70,6 @@ columns:
           Female: F
         missing: U
         unmapped: U
-
-  - name: AGE
-    type: int
-    label: Age
-    derivation:
-      source:
-        filter: ODM.ItemOID = 'IT.DM.AGE'
-        variable: ODM.Value
 
   - name: ARM
     type: str
@@ -73,4 +90,12 @@ columns:
     derivation:
       case:
         - when: "ARM IS NULL"
-          then: "'Not assigned to treatment arm'"
+          then: "'NOT ASSIGNED'"
+
+  - name: COUNTRY
+    type: str
+    label: Country
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.COUNTRY'
+        variable: ODM.Value

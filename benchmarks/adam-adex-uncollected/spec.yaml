@@ -2,36 +2,35 @@ yamaa: "1.0"
 type: spec
 model: ADaM
 domain: ADEX
-keys: [STUDYID, USUBJID, EXTRT]
+keys: [STUDYID, USUBJID]
 input:
-  TRT: input/subject_treatment.csv
-  EX: {path: input/ex.csv, types: {EXDOSE: float},
-       key: [STUDYID, USUBJID, EXTRT]}
-base: TRT
+  ADSL: input/adsl.csv
+  EX: {path: input/ex.csv, types: {EXDOSE: float}, key: [STUDYID, USUBJID]}
+base: ADSL
 
 output:
   path: adex.csv
-  columns: [STUDYID, USUBJID, EXTRT, DOSECUM, NDOSREC, NDOSVAL]
+  columns: [STUDYID, USUBJID, TRT01P, DOSECUM, NDOSREC, NDOSVAL]
 
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: TRT.STUDYID
+    derivation: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: TRT.USUBJID
+    derivation: ADSL.USUBJID
 
-  - name: EXTRT
+  - name: TRT01P
     type: str
-    label: Name of Treatment
-    derivation: TRT.EXTRT
+    label: Planned Treatment for Period 01
+    derivation: ADSL.TRT01P
 
-  # Summed and counted over the treatment's exposure records, matched on
-  # STUDYID, USUBJID, and EXTRT. With no records all three are empty; with
-  # records but no recorded dose, DOSECUM is empty and NDOSVAL is 0.
+  # Summed and counted over the subject's exposure records, matched on
+  # STUDYID and USUBJID. With no records all three are empty; with records
+  # but no recorded dose, DOSECUM is empty and NDOSVAL is 0.
   - name: DOSECUM
     type: float
     label: Cumulative Dose
@@ -52,8 +51,8 @@ columns:
 
 verifications:
   - row_count:
-      min: 6
-      max: 6
+      min: 5
+      max: 5
   - assert:
       id: recorded-dose-implies-a-record
       when: "NDOSVAL > 0"

@@ -45,11 +45,14 @@ class SdtmMappingTests(unittest.TestCase):
                 "STUDYID",
                 "USUBJID",
                 "SUBJID",
-                "SEX",
+                "SITEID",
                 "AGE",
+                "AGEU",
+                "SEX",
                 "ARM",
                 "ACTARM",
                 "ARMNRS",
+                "COUNTRY",
             ],
         )
 
@@ -531,7 +534,7 @@ class LookupResolutionTests(unittest.TestCase):
         rule = method_column("sdtm-ae-coding")["AEDECOD"]
         self.assertNotIn("MEDDRA_CODING", rule)
         self.assertIn("Take PTNAME from the MEDDRA record", rule)
-        self.assertIn("LLTNAME equals AE_RAW.AETERM", rule)
+        self.assertIn("LLTNAME, in upper case, equals AETERM", rule)
         self.assertIn('no match yields "NOT CODED"', rule)
 
     def test_selection_names_the_filter_order_and_kept_record(self):

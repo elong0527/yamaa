@@ -118,7 +118,7 @@ for (subj in subjects) {
       ADT = subj_visits$IT.VISIT.ADT[[i]],
       RSSEQ = seq,
       RSTESTCD = "TRGRESP",
-      RSTEST = "Timepoint Response",
+      RSTEST = "Target Response",
       RSSTRESC = resp$rsstresc,
       RSSTAT = resp$rsstat
     )

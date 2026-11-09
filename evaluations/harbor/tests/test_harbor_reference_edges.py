@@ -692,7 +692,7 @@ def test_subject_without_dm_items_still_gets_dm(
     subject = next(r for r in rows if r["USUBJID"] == "NO-DEMOGRAPHICS")
     assert subject["SEX"] == "U"
     assert subject["AGE"] == subject["ARM"] == subject["ACTARM"] == ""
-    assert subject["ARMNRS"] == "Not assigned to treatment arm"
+    assert subject["ARMNRS"] == "NOT ASSIGNED"
 
 
 def test_expected_visit_sequences_follow_all_subject_parameters(tmp_path, language):

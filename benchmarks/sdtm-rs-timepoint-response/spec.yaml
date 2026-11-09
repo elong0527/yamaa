@@ -53,7 +53,7 @@ columns:
   - name: RSTEST
     type: str
     label: Response Test Name
-    derivation: "'Timepoint Response'"
+    derivation: "'Target Response'"
 
   # SUMV, NMEAS, NTARGET and NTR are matched to the record by subject and,
   # except NTARGET, by visit. With no matching record a count is missing

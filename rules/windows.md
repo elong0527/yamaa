@@ -280,7 +280,7 @@ one result can cross any number of consecutive gaps. With
 instead. With `include_current: false` the current row is never a candidate.
 A row with no qualifying source yields missing.
 
-Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `adam-advs-carryforward`, `schema-window-functions`.
+Evidence: `adam-advs-locf`, `adam-advs-carryforward`, `schema-window-functions`.
 
 `locf` preserves row count and the selected value's type and temporal
 precision. Zero and a present empty string are values, not gaps. In either

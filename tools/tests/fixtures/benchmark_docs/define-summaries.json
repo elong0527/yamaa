@@ -1,14 +1,41 @@
 [
   {
     "benchmark": "sdtm-dm-metadata",
-    "expected": "Demographics; Tabulation; One record per subject; SPECIAL PURPOSE; Demographics are described in section 2.1 of the reviewer's guide.\nStudy Data Reviewer's Guide (csdrg.pdf)"
+    "expected": [
+      "DM",
+      "Demographics",
+      "SPECIAL PURPOSE",
+      "One record per subject",
+      "Tabulation",
+      "STUDYID, USUBJID",
+      "Demographics are described in section 2.1 of the reviewer's guide.\nStudy Data Reviewer's Guide (csdrg.pdf)",
+      "dm.json"
+    ]
   },
   {
     "benchmark": "schema-define-2-0",
-    "expected": "Demographics; Tabulation; One record per subject; SPECIAL PURPOSE"
+    "expected": [
+      "DM",
+      "Demographics",
+      "SPECIAL PURPOSE",
+      "One record per subject",
+      "Tabulation",
+      "STUDYID, USUBJID",
+      "",
+      "dm.xpt"
+    ]
   },
   {
     "benchmark": "send-bw-sendig311",
-    "expected": "Body Weight; Tabulation; One record per test per observation time per subject; FINDINGS"
+    "expected": [
+      "BW",
+      "Body Weight",
+      "FINDINGS",
+      "One record per test per observation time per subject",
+      "Tabulation",
+      "STUDYID, USUBJID, BWSEQ",
+      "",
+      "bw.xpt"
+    ]
   }
 ]

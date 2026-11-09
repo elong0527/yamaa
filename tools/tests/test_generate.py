@@ -177,7 +177,10 @@ class DashboardTests(unittest.TestCase):
                 )
 
     def test_define_xml_resolves_variables_origins_and_methods(self):
-        # Resolved display reads independently authored metadata, not the spec.
+        # Resolved display reads independently authored metadata, not the spec,
+        # in the columns of the CDISC define2-1.xsl variable table: a Role
+        # column only where the dataset declares roles, a display format in
+        # place of the length, and ISO 8601 for a date without a codelist.
         cases = [
             (
                 "send-bw-sendig311",
@@ -186,13 +189,10 @@ class DashboardTests(unittest.TestCase):
                     "BWSTRESN",
                     "Standardized Result in Numeric Format",
                     "float",
-                    "8",
-                    "1",
-                    "No",
                     "Result Qualifier",
+                    "8",
                     "",
-                    "Derived; Sponsor",
-                    "The collected result read as a number.",
+                    "Derived; Sponsor\nThe collected result read as a number.",
                 ],
             ),
             (
@@ -202,13 +202,36 @@ class DashboardTests(unittest.TestCase):
                     "SUBJID",
                     "Subject Identifier for the Study",
                     "text",
+                    "Topic",
                     "4",
                     "",
-                    "Yes",
-                    "Topic",
-                    "",
                     "CRF; Annotated Case Report Form (acrf.pdf); pages 1",
+                ],
+            ),
+            (
+                "adam-adae-adamig11",
+                "ASTTM",
+                [
+                    "ASTTM",
+                    "Analysis Start Time",
+                    "integer",
+                    "TIME8.",
                     "",
+                    "Derived; Sponsor\nTime part of ASTDTM as seconds since midnight.",
+                ],
+            ),
+            (
+                "sdtm-sv-sdtmig33",
+                "SVSTDTC",
+                [
+                    "SVSTDTC",
+                    "Start Date/Time of Visit",
+                    "date",
+                    "Timing",
+                    "",
+                    "ISO 8601",
+                    "Collected; Investigator; Annotated Case Report Form (acrf.pdf); "
+                    "pages 1",
                 ],
             ),
         ]
@@ -252,12 +275,8 @@ class DashboardTests(unittest.TestCase):
                 "Analysis Value (C)",
                 "text",
                 "8",
-                "",
-                "Yes",
-                "",
                 "Pregnancy Test Result (CL.HCGRS)\nNEGATIVE\nPOSITIVE",
                 "Predecessor; LB.LBSTRESC",
-                "",
             ],
         )
 
@@ -284,9 +303,12 @@ class DashboardTests(unittest.TestCase):
                 )
                 document = html_tree.fromstring(rendered)
                 self.assertEqual(
-                    document.xpath('//div[@class="define-document"]/section/p')[
-                        0
-                    ].text_content(),
+                    [
+                        cell.text_content()
+                        for cell in document.xpath(
+                            '//table[caption="Datasets"]/tbody/tr'
+                        )[0]
+                    ],
                     case["expected"],
                 )
 

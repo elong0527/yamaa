@@ -143,7 +143,7 @@ def main():
                 "ADT": visit["adt"],
                 "RSSEQ": seq,
                 "RSTESTCD": "TRGRESP",
-                "RSTEST": "Timepoint Response",
+                "RSTEST": "Target Response",
                 "RSSTRESC": rsstresc,
                 "RSSTAT": rsstat,
             })

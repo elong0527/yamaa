@@ -5,8 +5,8 @@ review:
   concerns:
     - Demographics is the one record per subject that every analysis population
       and listing starts from, with sex, age and treatment arm.
-    - Four subjects cover complete male and female records, a sex answered Not
-      Reported with nothing else collected, and a sex left blank.
-    - Subjects 003 and 004 get sex U and no arm, with Not assigned to treatment
-      arm as the reason rather than an Unassigned arm value; the actual arm
-      always equals the planned arm here.
+    - Four subjects at two sites cover complete male and female records, a sex
+      answered Not Reported with no age or arm collected, and a sex left blank.
+    - Subjects 003 and 004 get sex U, no age units and no arm, with the
+      controlled term NOT ASSIGNED as the reason rather than an Unassigned arm
+      value; the actual arm always equals the planned arm here.
