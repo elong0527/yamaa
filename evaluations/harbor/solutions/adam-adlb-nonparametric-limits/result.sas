@@ -77,11 +77,14 @@ proc sql;
     select LBTESTCD, SEX,
            case when N > 1 then sum(SQ) / (N - 1) else . end as AVALVAR
     from squares group by LBTESTCD, SEX, N;
+  /* A query of one table names its columns bare: opensas reads a table
+     alias's qualified names as missing in GROUP BY and inside a summary
+     function, which would put every row in one group with no limits. */
   create table limits as
-    select q.LBTESTCD, q.SEX,
-           max(case when q.STAT = 1 then q.Q else . end) as ANRLO,
-           max(case when q.STAT = 2 then q.Q else . end) as ANRHI
-    from quantiles as q group by q.LBTESTCD, q.SEX;
+    select LBTESTCD, SEX,
+           max(case when STAT = 1 then Q else . end) as ANRLO,
+           max(case when STAT = 2 then Q else . end) as ANRHI
+    from quantiles group by LBTESTCD, SEX;
   create table final as
     select w.STUDYID, w.USUBJID, w.SEX, w.LBTESTCD as PARAMCD length=40,
            w.LBSTRESN as AVAL, s.ANRLO, s.ANRHI, v.AVALVAR
