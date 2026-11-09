@@ -842,9 +842,9 @@ for drugs.
 
 ![](../../diagrams/evaluate-yamaa.svg)
 
-Benchmarks carry the first two claims; real studies confirm the last two.
-Early results suggest the schema is sufficient without many custom functions,
-and experts can read the specification with help from AI.
+Benchmarks carry the first two claims; real studies test the last two, where
+draft and early results suggest the schema is sufficient without many custom
+functions and experts can read the specification with help from AI.
 
 ::: {.notes}
 Bridge to the case studies: they open up the benchmark, showing how one is
