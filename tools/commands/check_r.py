@@ -142,11 +142,11 @@ MEMCHECK_SUPPRESSIONS = Path(__file__).with_name("memcheck.supp")
 # A program that loses a possibly lost block at each listed root through its
 # listed caller, a definite one at a listed root, possibly lost ones in the
 # listed functions through other callers, and one elsewhere: memcheck must
-# suppress the first three and count the other four, as
+# suppress the first four and count the other four, as
 # MEMCHECK_CONTROL_SUMMARY states.
 MEMCHECK_CONTROL = Path(__file__).with_name("memcheck_control.c")
 MEMCHECK_CONTROL_SUMMARY = re.compile(
-    r"^==\d+== ERROR SUMMARY: 4 errors from 4 contexts \(suppressed: 3 from 3\)$",
+    r"^==\d+== ERROR SUMMARY: 4 errors from 4 contexts \(suppressed: 4 from 4\)$",
     re.M,
 )
 COUNTED = ("ERROR", "WARNING", "NOTE")

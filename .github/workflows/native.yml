@@ -1170,8 +1170,13 @@ jobs:
     #   live as long as the process, and memcheck_control.c proves before the
     #   check that every other leak still counts. Under memcheck the tests
     #   run many times slower than natively.
+    # When R-hub has no binary of a Suggest for the image's R-devel, as after
+    # R-devel moves on, pak builds it from source: arrow's C++ library took 20
+    # minutes on gcc16 and 30 to 40 on clang-asan, and more than the job's
+    # hour on gcc-asan, whose compiler instruments it. So the sanitizer images
+    # get two hours.
     container: ghcr.io/r-hub/containers/${{ matrix.platform }}:latest
-    timeout-minutes: ${{ matrix.platform == 'valgrind' && 240 || 60 }}
+    timeout-minutes: ${{ matrix.platform == 'valgrind' && 240 || endsWith(matrix.platform, '-asan') && 120 || 60 }}
     strategy:
       fail-fast: false
       matrix:
