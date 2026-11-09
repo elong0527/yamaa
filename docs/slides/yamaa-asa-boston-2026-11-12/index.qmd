@@ -30,19 +30,22 @@ title-slide-attributes:
 
 # Welcome {background-color="#385898"}
 
-## Outline
+## Schedule
 
-The workshop has three parts:
+The course has three parts, with a break in the middle. Times are approximate.
 
-1. **An AI-first workflow for CDISC data standardization (Yilong)**\
-   How to design and implement an AI-first workflow, with CDISC data
-   standardization as the example.
-
-2. **Language models and agents for statistical programming (Jimeng)**\
-   Strategies that improve AI agents beyond skills and tools.
-
-3. **Case study: benchmarks and AI evaluation (Jimeng and Yilong)**\
-   Hands-on case studies in evaluating AI agents and creating benchmarks.
+::: {.schedule}
+| | Topic | Format | Minutes |
+| --- | --- | --- | --- |
+| Welcome | Objectives, setup check, and resources | Talk, setup check | 10 |
+| Part 1 | **AI agents and the AI-first workflow** (Yilong)<br>Designing an AI-first workflow, with CDISC data standardization as the example | Talk, two brainstorms | 35 |
+| Part 1 | **Agentic CDISC data standardization** (Yilong)<br>Why two agents disagree on one specification, and a workflow that reviews the specification instead | Talk, discussion, two hands-on exercises | 50 |
+| Break | | | 15 |
+| Part 2 | **Language models and agents for statistical programming** (Jimeng)<br>Strategies that improve AI agents beyond skills and tools | Talk | 45 |
+| Part 3 | **AI evaluation** (Yilong)<br>Designing the evaluation of an AI agent as a study | Talk, discussion | 30 |
+| Part 3 | **Case studies: create, review, and assess** (Jimeng and Yilong)<br>One benchmark taken apart, two reviews, and one agent's job read | Three hands-on exercises | 40 |
+| Wrap-up | Takeaways, where to go next, and questions | Talk | 10 |
+:::
 
 ## Disclaimer
 
@@ -72,7 +75,7 @@ lifecycle and CDISC standards, and that you have R programming experience.
 A preconfigured GitHub Codespace is ready for the workshop:
 
 - [![Open GitHub Codespaces](https://github.com/codespaces/badge.svg){.codespaces-badge}](https://codespaces.new/elong0527/yamaa)
-  + R, Python
+  + R, with the yamaa package installed
   + OpenCode, Claude Code, Codex
 
 - Start [OpenCode](https://opencode.ai/) and configure a model provider
@@ -80,6 +83,24 @@ A preconfigured GitHub Codespace is ready for the workshop:
   + Keep API keys in your personal Codespaces secrets, never in the repository.
   + Or sign in to the preinstalled [Claude Code](https://code.claude.com/docs/en/quickstart)
     or [Codex](https://learn.chatgpt.com/docs/codex/cli).
+
+## Check your setup
+
+[Hands-on: 5 min]{.pill}
+
+Open the Codespace, start R from the repository root, and run:
+
+```r
+library(yamaa)
+yamaa_selftest()
+```
+
+The first line of the result reads `yamaa selftest: succeeded`; the second
+names your engine and platform.
+
+- Then start an agent in the terminal: `opencode`, `claude`, or `codex`.
+- If the Codespace is not ready, keep going: the review and Harbor Hub
+  exercises need only a browser.
 
 ## Resources
 
@@ -89,6 +110,12 @@ A preconfigured GitHub Codespace is ready for the workshop:
    * Post your questions in the group chat.
 
 # AI Agents {background-color="#385898"}
+
+::: {.section-brief}
+**You will:** name the parts of an AI agent and say what each one can and
+cannot do.<br>
+**Format:** two examples and three diagrams, about 15 minutes.
+:::
 
 ## Example: arena.ai
 
@@ -159,9 +186,56 @@ run code: a harness does that and puts the results back into the context.
 
 > The LLM is like the CPU; the harness is like the operating system.
 
+## Vocabulary for the rest of the course
+
+:::: {.columns}
+
+::: {.column width="50%"}
+::: {.glossary}
+**Building an agent**
+
+| Term | Meaning here |
+| --- | --- |
+| Token | The unit of text a model reads and writes; a word is one or two. |
+| Context | Everything the model sees in one call: the prompt, the files read, the tool results. Nothing outside it exists for the model. |
+| Prompt | The request, with every rule you wrote into it. |
+| LLM | A probability model of the next token given the context. |
+| Harness | The software that builds the context, calls the model, runs tools, and records each step: OpenCode, Claude Code, Codex. |
+| Tool | A program the harness runs for the model: read a file, run R. |
+| Skill | Written instructions the harness loads for a kind of task: the agent's SOP. |
+| Agent | LLM, harness, and tools, looping until the task is done. |
+:::
+:::
+
+::: {.column width="50%"}
+::: {.glossary}
+**Evaluating an agent**
+
+| Term | Meaning here |
+| --- | --- |
+| Benchmark | A fixed task with an independently authored answer: a validation case with its golden output. |
+| Trajectory | The record of one run: every prompt, tool call, and result. The audit trail. |
+| Reward | 1 when every check passes, otherwise 0: a binary endpoint. |
+| Leaderboard | Pass rates of several agents on the same tasks. |
+| LLM judge | A model that scores another model's output against a rubric: an assessor that needs calibration. |
+| Leakage | The answer reaches the agent before the test: unblinding. |
+| Saturation | Every strong agent passes, so the tasks no longer separate them: a ceiling effect. |
+:::
+:::
+
+::::
+
 # AI-first workflow {background-color="#385898"}
 
+::: {.section-brief}
+**You will:** place CDISC data standardization in an AI-first workflow and
+decide where to start building.<br>
+**Format:** two brainstorms and one proposal, about 20 minutes.
+:::
+
 ## A mental game
+
+[Discussion: 5 min]{.pill}
 
 :::: {.columns}
 
@@ -216,6 +290,8 @@ You have been hired by the CMO to build a biometrics group.
 
 ## Brainstorm: where to start building
 
+[Discussion: 5 min]{.pill}
+
 You will build an AI agent for this workflow. **Where do you start, and why?**
 
 ![](../../diagrams/ai-first-agent-design.svg)
@@ -243,6 +319,12 @@ For CDISC data standardization, we recommend:
 
 # Agentic CDISC data standardization {background-color="#385898"}
 
+::: {.section-brief}
+**You will:** see why two agents disagree on one specification, run a yamaa
+specification yourself, and review one that an agent drafted.<br>
+**Format:** talk, a discussion, and two hands-on exercises, about 50 minutes.
+:::
+
 ## Contributors {.center}
 
 ::: {.center-body-left}
@@ -269,6 +351,25 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 * Business rules can differ from language defaults, e.g.:
   * [R](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Round.html) and [Python](https://docs.python.org/3/library/functions.html#round) round ties to even.
   * [SAS](https://documentation.sas.com/api/docsets/lrcon/9.4/content/lrcon.pdf) compares missing numeric values as lower than non-missing values.
+
+## Your turn: find an implicit rule {.compact}
+
+[Discussion: 5 min]{.pill}
+
+Take one derivation from a study you work on. Say its rule in one sentence to
+your neighbor, then find the words two programmers could read differently.
+
+::: {.roles}
+| Derivation | What one sentence usually leaves open |
+| --- | --- |
+| **Baseline** | The last non-missing value on or before the first dose, or strictly before? Which one when two share the date? |
+| **Treatment-emergent** | Onset after the first dose, or on its day? What if the onset date is partial? |
+| **Analysis visit** | Which window when a visit falls on a boundary? Which record when two fall in one window? |
+| **Age group** | Does `18-64` include 64? Age at screening, at randomization, or at consent? |
+:::
+
+**Where the gaps hide:** ties, missing values, partial dates, boundaries, and
+language defaults such as rounding ties to even.
 
 ## Evidence: prompt completeness decides success
 
@@ -443,6 +544,99 @@ same datasets.
 Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
 ([example](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html))
 
+## Hands-on 1: run a specification, then break it {.compact}
+
+[Hands-on: 10 min]{.pill}
+
+Copy the benchmark with
+`mkdir -p exercise && cp -r benchmarks/adam-advs-map exercise/advs`, then run
+its specification from the repository root:
+
+::: {.panel-tabset}
+
+### R
+
+```r
+library(yamaa)
+run <- yamaa_spec("exercise/advs/spec.yaml")$run()
+run$status
+run$output
+```
+
+### Python
+
+```python
+import yamaa
+run = yamaa.spec("exercise/advs/spec.yaml").run()
+run.status
+run.output
+```
+
+:::
+
+1. **Compare** the output with `exercise/advs/expected/advs.csv`: 12 rows,
+   three `MAP` records.
+2. **Change the formula** in `spec.yaml` to `(DIABP_VAL + SYSBP_VAL) / 2` and
+   run again: only the three `MAP` values change.
+3. **Delete the `filter:` line** of the `derived_map` template and run again:
+   the run fails with `row_count_failed`, since two visits with a missing
+   pressure now get a `MAP` record.
+
+**Takeaway:** same specification and inputs, same datasets; the verification
+you kept catches the rule you removed.
+
+::: {.notes}
+Answer key. Step 1: the output is the expected file, with MAP 94.33333333333333
+and 91.33333333333333 for subject 101 and 70 for subject 102. Step 2: the MAP
+values become 101, 98 and 75; the collected records are unchanged. Step 3: the
+run fails before any output with one issue,
+`the row count is outside the bounds of verifications[0].row_count in 1 of
+the counted groups [row_count_failed, CHECK-13]`, because subjects 103 (no
+diastolic record) and 104 (missing diastolic result) each get a MAP record
+with no value, 14 rows against the 12 the verification demands. Restore the
+line, or copy the benchmark again, before the next exercise.
+:::
+
+## Hands-on 2: draft with an agent, then review {.compact}
+
+[Hands-on: 15 min]{.pill}
+
+Start OpenCode, Claude Code, or Codex in the Codespace and give it this task:
+
+::: {.prompt}
+In exercise/advs/spec.yaml, add a pulse pressure record for each subject and
+visit that has both a systolic and a diastolic result: PARAMCD "PP", PARAM
+"Pulse Pressure (mmHg)", AVAL is the systolic minus the diastolic pressure,
+not rounded, and DTYPE "CALCULATION". Keep the MAP record and every collected
+record. Run the specification with yamaa and show me the output.
+:::
+
+Review the draft as the owner of the rule:
+
+1. Is pulse pressure a new row template with the same `filter` as `MAP`, or
+   did the agent edit the `MAP` template?
+2. Did it raise `row_count` to 15 and extend the `no-pre-existing-target`
+   assertion to `PP`?
+3. Did it run the specification and read the output, or only say that it did?
+4. Would you approve the specification? What would you ask for first?
+
+**Takeaway:** the agent drafts, you review the specification rather than the
+code, and the engine runs what you approved.
+
+::: {.notes}
+Answer key. A correct draft adds a third row template, `derived_pp`, with the
+same `group_by`, the same `filter`, the same two `aggregate` derivations for
+`SYSBP_VAL` and `DIABP_VAL`, `AVAL: "SYSBP_VAL - DIABP_VAL"`, `PARAMCD: "'PP'"`,
+`PARAM: "'Pulse Pressure (mmHg)'"` and `DTYPE: "'CALCULATION'"`; it raises
+`row_count` to `min: 15, max: 15` and changes the assertion to
+`NOT (PARAMCD IN ('MAP', 'PP') AND DTYPE IS NULL)`. The run then succeeds with
+15 rows, and the three PP records are 40 (101, BASELINE), 40 (101, WEEK 2)
+and 30 (102, BASELINE). Common misses: the agent leaves `row_count` at 12 and
+reports the failure as a yamaa bug, derives PP inside the MAP template, or
+rounds. An agent that edits and then runs the specification shows the
+workflow; one that only claims success is the point of question 3.
+:::
+
 ## Open source has reached the regulators
 
 - The R Consortium Submissions Working Group engages directly with the FDA.
@@ -561,6 +755,25 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 :::
 
+## Who does what: one allocation
+
+::: {.roles}
+| Step | Statistician | Statistical programmer | AI agent |
+| --- | --- | --- | --- |
+| **Draft** | States each business rule: the SAP, the analysis decisions, what "baseline" means | Keeps the organization template and its conventions | Drafts the study specification from the template and the rules |
+| **Review** | Reads each derivation against the SAP | Checks verifications, edge cases, and lineage | Pre-reviews the draft and lists its concerns |
+| **Finalize** | Signs off | Tags the approved version | |
+| **Automate** | | Schedules the runs and triages failures | None: the deterministic engine runs the approved specification |
+| **Evaluate** | Designs the evaluation: decision, tasks, endpoint, rigor | Authors benchmarks and reference programs | Is the subject under test |
+:::
+
+Review moves from code to the specification, so both roles read the same
+artifact.
+
+::: callout-note
+One allocation among many. Adapt it to the roles and SOPs of your organization.
+:::
+
 ## Summary of the workflow
 
 - **Extract:** enable regular EDC extraction in ODM format for each study to create a versioned source.
@@ -574,6 +787,12 @@ Inheritance reduces duplication while keeping every resolved study specification
 > **planning stage**.
 
 # AI evaluation {background-color="#385898"}
+
+::: {.section-brief}
+**You will:** design the evaluation of an AI agent as a study: the decision,
+the tasks, the endpoint, the conduct, the bias, and the rigor.<br>
+**Format:** talk and a discussion, about 30 minutes.
+:::
 
 ## Would you sign off?
 
@@ -792,6 +1011,8 @@ reruns target leakage; human review of the expected output targets grader error.
 
 ## Discussion: can you trust 133/134?
 
+[Discussion: 5 min]{.pill}
+
 **With your neighbor:** pick the two limits that matter most for this result, and
 the cheapest way to address each.
 
@@ -857,6 +1078,11 @@ deterministic engine.
 
 # Case study: creating a benchmark for ADaM derivation {background-color="#385898"}
 
+::: {.section-brief}
+**You will:** take one benchmark apart and list what makes it a fair test.<br>
+**Format:** walk-through, about 10 minutes.
+:::
+
 ## Anatomy of a benchmark
 
 [Open adam-advs-map: mean arterial pressure](https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html){.try-it}
@@ -911,6 +1137,12 @@ deterministic engine.
 
 # Case study: review and finalize a benchmark {background-color="#385898"}
 
+::: {.section-brief}
+**You will:** review a yamaa benchmark and a Pilot 7 finding, and see how each
+is finalized.<br>
+**Format:** two hands-on reviews, about 15 minutes.
+:::
+
 ## Human review finalizes the truth
 
 An AI-assisted draft is not truth until people who do the work confirm it.
@@ -924,6 +1156,8 @@ Both projects collect reviews from a static page as public GitHub Discussions.
 | **Start here** | [Benchmark review](https://elong0527.github.io/yamaa/benchmark/review/) | [Review guide](https://rconsortium.github.io/submissions-pilot7-synthetic-data/review/) |
 
 ## Reviewing a yamaa benchmark
+
+[Hands-on: 10 min]{.pill}
 
 [Start reviewing](https://elong0527.github.io/yamaa/benchmark/review/next/){.try-it}
 
@@ -1002,6 +1236,8 @@ not reviewed yet
 
 ## Reviewing a Pilot 7 finding
 
+[Hands-on: 5 min]{.pill}
+
 [Open the review guide](https://rconsortium.github.io/submissions-pilot7-synthetic-data/review/){.try-it}
 
 1. Open the Pilot 5 consistency findings and select **Start review** on a
@@ -1051,6 +1287,12 @@ Human review
 
 # Case study: assessing an agent with the benchmark {background-color="#385898"}
 
+::: {.section-brief}
+**You will:** read one agent's job on Harbor Hub and decide what a failure
+means.<br>
+**Format:** results and a hands-on exercise, about 15 minutes.
+:::
+
 ## Muse Spark 1.3 on Harbor Hub
 
 OpenCode 1.18.33 with `opencode-go/muse-spark-1.3-contributor`, one attempt,
@@ -1068,7 +1310,9 @@ October 2026: nine jobs, one for each prompt tier and language.
 
 - A full-prompt job for one language cost $0.36 to $0.96 in model usage.
 
-## Exercise: read a job on Harbor Hub
+## Hands-on 3: read a job on Harbor Hub
+
+[Hands-on: 10 min]{.pill}
 
 1. Join the yamaa organization with the [invitation link](https://hub.harborframework.com/invite/7chJ24hLaint4KnmK5VSTnW-Sow1D2yc).
 2. Open the [yamaa jobs](https://hub.harborframework.com/jobs?access=all&owner_org=yamaa).
@@ -1086,3 +1330,47 @@ October 2026: nine jobs, one for each prompt tier and language.
 - Make a plain-text specification the single source of truth for humans and AI agents.
 - Evaluate like a study: measure the whole system with benchmarks, let people
   review the truth, and match the rigor to the risk.
+
+## Keep going after the course
+
+- **Review a benchmark** in five minutes:
+  [Start reviewing](https://elong0527.github.io/yamaa/benchmark/review/next/).
+  Each public review helps finalize the truth that agents are measured against.
+- **Join R Consortium Pilot 7:** the
+  [working group](https://rconsortium.github.io/submissions-wg/pilot7.html)
+  and its
+  [review guide](https://rconsortium.github.io/submissions-pilot7-synthetic-data/review/).
+- **Repeat the hands-on exercises** on a public study: the Codespace link
+  keeps working, and the
+  [Pilot 7 synthetic data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+  holds complete SDTM and ADaM packages.
+- **Before adopting an agent,** write down the decision, the tasks, and the
+  endpoint, then run it on the public benchmarks through
+  [Harbor Hub](https://hub.harborframework.com/jobs?access=all&owner_org=yamaa)
+  or on benchmarks of your own.
+
+## References
+
+- **yamaa:** [repository](https://github.com/elong0527/yamaa),
+  [documentation](https://elong0527.github.io/yamaa/),
+  [R, Python, and command-line API](https://elong0527.github.io/yamaa/articles/api/),
+  and [benchmarks](https://elong0527.github.io/yamaa/benchmark/).
+- **Harbor:** the [framework](https://github.com/harbor-framework/harbor) and
+  [Harbor Hub](https://hub.harborframework.com/jobs?access=all&owner_org=yamaa).
+- **R Consortium:** the
+  [Submissions Working Group](https://rconsortium.github.io/submissions-wg/)
+  and the
+  [Pilot 7 synthetic data](https://rconsortium.github.io/submissions-pilot7-synthetic-data/).
+- **FDA:** the
+  [draft guidance on AI to support regulatory decision-making](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/considerations-use-artificial-intelligence-support-regulatory-decision-making-drug-and-biological)
+  and the CDRH [discussion paper](https://www.fda.gov/media/194242/download)
+  on generative AI-enabled devices.
+- **These slides:**
+  <https://elong0527.github.io/yamaa/slides/yamaa-asa-boston-2026-11-12/>
+
+## Questions {background-color="#385898" .center}
+
+::: {.section-brief}
+Thank you. Post your questions in the group chat, or open an issue on
+[github.com/elong0527/yamaa](https://github.com/elong0527/yamaa/issues).
+:::

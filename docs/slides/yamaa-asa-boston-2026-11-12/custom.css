@@ -151,14 +151,154 @@
 
 /* A prompt typed into an agent, shown as a quoted input box. Long URLs wrap
    inside the box instead of running past the column. */
-.reveal .slides .column > .prompt {
+.reveal .slides .prompt {
   background: #f5f7fa;
   border-left: 0.18em solid var(--course-blue);
   border-radius: 0.2em;
   font-size: 0.8em;
-  margin-right: 1.2em;
   overflow-wrap: anywhere;
   padding: 0.6em 0.9em;
+}
+
+.reveal .slides .column > .prompt {
+  margin-right: 1.2em;
+}
+
+/* Short course: a time tag on each hands-on exercise and discussion, the
+   first line under the slide title. */
+.reveal .slides .pill {
+  background: #e8f0fc;
+  border-radius: 1em;
+  color: var(--course-blue);
+  display: inline-block;
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.15em 0.8em;
+}
+
+.reveal .slides p:has(> .pill) {
+  margin: 0 0 0.4em;
+}
+
+/* Short course: an exercise slide holds a code tabset, numbered steps and a
+   takeaway, so its blocks sit closer together than on a talk slide. */
+.reveal .slides section.compact h2 {
+  margin-bottom: 0.2em;
+}
+
+.reveal .slides section.compact p {
+  margin: 0 0 0.4em;
+}
+
+.reveal .slides section.compact li {
+  margin-bottom: 0.1em;
+}
+
+.reveal .slides section.compact ol,
+.reveal .slides section.compact table {
+  margin-bottom: 0.4em;
+}
+
+.reveal .slides section.compact .panel-tabset {
+  margin-bottom: 0.3em;
+}
+
+.reveal .slides section.compact .panel-tabset .nav-tabs {
+  margin-bottom: 0.2em;
+}
+
+.reveal .slides section.compact .panel-tabset .nav-link {
+  padding: 0.15em 0.8em;
+}
+
+.reveal .slides section.compact .panel-tabset pre,
+.reveal .slides section.compact .panel-tabset div.sourceCode {
+  margin: 0;
+}
+
+.reveal .slides section.compact .prompt {
+  font-size: 0.72em;
+  padding: 0.45em 0.8em;
+}
+
+/* Short course: each section slide carries a brief under its title, what the
+   part teaches and how long it runs, in white on the course-blue background.
+   The Questions slide reuses it for the closing line. */
+.reveal .slides section.level1 .section-brief,
+.reveal .slides section.level2 .section-brief {
+  color: white;
+  font-size: 0.95em;
+  line-height: 1.5;
+  margin-top: 0.8em;
+  max-width: 36em;
+}
+
+.reveal .slides section .section-brief p {
+  margin: 0;
+}
+
+.reveal .slides section .section-brief a {
+  color: white;
+  text-decoration: underline;
+}
+
+/* Short course: the schedule, with its part column kept on one line and the
+   minutes right-aligned. */
+.reveal .schedule table {
+  font-size: 0.62em;
+  line-height: 1.3;
+  table-layout: fixed;
+}
+
+.reveal .schedule th,
+.reveal .schedule td {
+  padding: 0.3em 0.5em;
+}
+
+.reveal .schedule th:nth-child(1) { width: 10%; }
+.reveal .schedule th:nth-child(2) { width: 57%; }
+.reveal .schedule th:nth-child(3) { width: 25%; }
+.reveal .schedule th:nth-child(4) { width: 8%; }
+
+.reveal .schedule td:first-child {
+  color: var(--course-blue);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.reveal .schedule th:last-child,
+.reveal .schedule td:last-child {
+  text-align: right;
+}
+
+/* Short course: the vocabulary, two tables side by side, each term in the
+   course colour. */
+.reveal .glossary table {
+  font-size: 0.58em;
+  line-height: 1.3;
+}
+
+.reveal .glossary th,
+.reveal .glossary td {
+  padding: 0.3em 0.5em;
+}
+
+.reveal .glossary td:first-child {
+  color: var(--course-blue);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Short course: who does what, one row per workflow step. */
+.reveal .roles table {
+  font-size: 0.66em;
+  line-height: 1.35;
+}
+
+.reveal .roles td:first-child {
+  color: var(--course-blue);
+  white-space: nowrap;
 }
 
 /* yamaa introduction, from the 2026-11-03 SLDS deck: a centered formula,
