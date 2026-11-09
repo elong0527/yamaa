@@ -36,9 +36,15 @@ The deck has eight sections:
   introduces yamaa's planning-stage collaboration, YAML specifications, core
   principle, four components, inheritance, R Consortium submission pilots
   and Pilot 7, and Pilot 5 performance. It closes with a workflow summary.
-- **AI evaluation:** what a benchmark is, the yamaa benchmarks, how Harbor
-  runs and grades an agent on a benchmark, and an invitation to the yamaa
-  organization on Harbor Hub.
+- **AI evaluation:** designs an evaluation the way a statistician designs a
+  study. It opens on the 133 of 134 full-prompt result ("would you sign
+  off?") and a protocol map, then covers the objective (choose, improve, gate,
+  monitor), the intervention (the whole deployed system), the population (what
+  a benchmark is and the yamaa benchmarks), the endpoint (code, LLM-judge, and
+  human grading), the conduct (how Harbor runs and grades an agent, with an
+  invitation to the yamaa organization on Harbor Hub), bias and variance with a
+  discussion of how far 133 of 134 can be trusted, rigor matched to risk, and
+  the evidence for yamaa so far.
 - **Case study: creating a benchmark for ADaM derivation:** the anatomy of
   the mean arterial pressure benchmark, its three prompt tiers, and rules for
   a fair benchmark.

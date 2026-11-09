@@ -93,4 +93,5 @@
   <rect x="214" y="253" width="722" height="114" rx="16" fill="none" stroke="#c62828" stroke-width="4"/>
   <text x="958" y="280" font-size="12" font-weight="bold" fill="#999" letter-spacing="1">TYPICAL EVIDENCE</text>
   <text x="958" y="300" font-size="15" fill="#222">Terminal-Bench (tbench.ai)</text>
+  <text x="958" y="318" font-size="15" fill="#222">yamaa tasks on Harbor (this workshop)</text>
 </svg>

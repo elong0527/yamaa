@@ -137,25 +137,25 @@ Muse also helps me maintain open-source projects in the background:
 :::
 
 ::: {.column width="40%"}
-![](../../image/muse.png){fig-alt="Muse, a soft beige character wearing headphones, works on a laptop at a desk beside a plant and a phone."}
+![](../../image/muse.png)
 :::
 
 ::::
 
 ## What is an AI agent?
 
-![](../../diagrams/ai-agent-simple.svg){fig-alt="An AI agent is an LLM plus a harness plus tools. The user's prompt enters the context inside the harness; the LLM reads the context and either takes an action with a tool, whose result returns to the context, or gives the final answer to the user. Tools can read from and write to memory, which the harness can retrieve."}
+![](../../diagrams/ai-agent-simple.svg)
 
 ## What is a large language model?
 
-![](../../diagrams/llm-generation.svg){fig-alt="An LLM tokenizes a prompt, predicts a probability for every possible next token, samples one, appends it to the context, and repeats until it samples the end-of-sequence token."}
+![](../../diagrams/llm-generation.svg)
 
 An LLM only predicts the next token from its context. It cannot open a file or
 run code: a harness does that and puts the results back into the context.
 
 ## What is a harness?
 
-![](../../diagrams/agent-harness.svg){fig-alt="The harness is the software around the LLM. It takes the user's prompt and, in a loop, builds the context, including retrieved memory, calls the LLM, decides what the output means, and runs any tool call under its permissions, adding the tool's output back to the context. When the LLM answers, or a limit or error stops the loop, the harness returns the final answer to the user."}
+![](../../diagrams/agent-harness.svg)
 
 > The LLM is like the CPU; the harness is like the operating system.
 
@@ -212,20 +212,20 @@ You have been hired by the CMO to build a biometrics group.
 
 > Let's design an AI-first workflow for CDISC data standardization.
 
-![](../../diagrams/ai-first-cdisc-problem.svg){fig-alt="EDC data is the confirmed source. Protocol, annotated CRF, SAP, specification, SOP, and templates are candidate inputs; SDTM datasets, ADaM datasets, and Define-XML metadata are candidate outputs. Question marks leave the inputs, outputs, and relationships open for the group to decide, with alignment currently happening in meetings, emails, and messages."}
+![](../../diagrams/ai-first-cdisc-problem.svg)
 
 ## Brainstorm: where to start building
 
 You will build an AI agent for this workflow. **Where do you start, and why?**
 
-![](../../diagrams/ai-first-agent-design.svg){fig-alt="Agent design questions: the harness supplies context to the LLM, loads skills, runs tools, returns their results, and retrieves memory. What must the LLM already know; what may the harness see, write, and decide on its own; which SOPs, specifications, and templates become skills; which validation and derivation steps need tools; what memory persists between runs and where is it recorded; and should the LLM or tools generate SDTM, ADaM, and Define-XML?"}
+![](../../diagrams/ai-first-agent-design.svg)
 
 ## Opinionated proposal
 
 - As a Biometrics organization, focus on defining the workflow.
 - Leverage internal and external AI infrastructure, with proper skills and tools.
 
-![](../../diagrams/ai-first-agent-answer.svg){fig-alt="Proposed agent design: use provided LLMs and harnesses, load the study's business rules as skills, and use tools to check and build outputs. The LLM drafts the specification; tools build SDTM, ADaM, and Define-XML and return results to context. Memory holds the versioned specification but is outside this workshop's coverage; the workshop covers skills, tools, and outputs."}
+![](../../diagrams/ai-first-agent-answer.svg)
 
 ## Agentic workflow design principles
 
@@ -373,7 +373,7 @@ Read the source datasets from /app/input and save the completed dataset as
 
 ## yamaa: collaboration at the planning stage
 
-![](../../diagrams/yamaa-sdlc.svg){fig-alt="Human and AI collaborate on a yamaa specification during planning."}
+![](../../diagrams/yamaa-sdlc.svg)
 
 Human and AI review the specification during planning; the engine executes the agreed rules.
 
@@ -419,6 +419,14 @@ The design of yamaa is a contract between human and AI agents.
 - **spec**: schema following closed vocabulary.
 - **derive**: business rules with derivation semantics.
 
+## yamaa: where the uncertainty lives
+
+![](../../diagrams/yamaa-uncertainty.svg)
+
+The AI agent is probabilistic, so people review the specification. The engine
+that executes it is deterministic: the same specification and inputs give the
+same datasets.
+
 ## yamaa: four components
 
 | Component | Purpose | Links |
@@ -430,7 +438,7 @@ The design of yamaa is a contract between human and AI agents.
 
 ## yamaa: inheritance
 
-![](../../diagrams/design.svg){fig-alt="SDTM and ADaM templates at the organization and compound levels pass down to the study's SDTM and ADaM specifications in YAML, with lower scopes overriding explicitly. From ODM XML exported by the EDC system, yamaa builds and validates the SDTM datasets, then the ADaM datasets, and generates Define-XML."}
+![](../../diagrams/design.svg)
 
 Inheritance reduces duplication while keeping every resolved study specification self-contained and reviewable.
 ([example](https://elong0527.github.io/yamaa/benchmark/schema-inheritance.html))
@@ -442,7 +450,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 :::::::: {.hex-grid}
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%201@2x.png){fig-alt="Pilot 1 hex sticker: TLFs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot1.html)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%201@2x.png)](https://rconsortium.github.io/submissions-wg/pilot1.html)
 
 **Pilot 1**
 
@@ -450,7 +458,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%202_1@2x.png){fig-alt="Pilot 2 hex sticker: Shiny for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot2.html)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%202_1@2x.png)](https://rconsortium.github.io/submissions-wg/pilot2.html)
 
 **Pilot 2**
 
@@ -458,7 +466,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%203@2x.png){fig-alt="Pilot 3 hex sticker: ADaMs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot3.html)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%203@2x.png)](https://rconsortium.github.io/submissions-wg/pilot3.html)
 
 **Pilot 3**
 
@@ -466,7 +474,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204a_1@2x.png){fig-alt="Pilot 4a hex sticker: WebAssembly for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot4.html)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204a_1@2x.png)](https://rconsortium.github.io/submissions-wg/pilot4.html)
 
 **Pilot 4a**
 
@@ -474,7 +482,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204b@2x.png){fig-alt="Pilot 4b hex sticker: containers for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot4.html)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%204b@2x.png)](https://rconsortium.github.io/submissions-wg/pilot4.html)
 
 **Pilot 4b**
 
@@ -482,7 +490,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%205@2x.png){fig-alt="Pilot 5 hex sticker: datasetjson for R Submissions."}](https://rconsortium.github.io/submissions-pilot5-website/)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%205@2x.png)](https://rconsortium.github.io/submissions-pilot5-website/)
 
 **Pilot 5**
 
@@ -490,7 +498,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%206.svg){fig-alt="Pilot 6 hex sticker: AI-driven ADaMs and TLFs for R Submissions."}](https://rconsortium.github.io/submissions-wg/pilot6.html)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%206.svg)](https://rconsortium.github.io/submissions-wg/pilot6.html)
 
 **Pilot 6**
 
@@ -498,7 +506,7 @@ Inheritance reduces duplication while keeping every resolved study specification
 :::
 
 ::: {.hex-item}
-[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%207.svg){fig-alt="Pilot 7 hex sticker: Synthetic Clinical Data."}](https://rconsortium.github.io/submissions-wg/pilot7.html)
+[![](https://rconsortium.github.io/submissions-wg/hexes/pilot%207.svg)](https://rconsortium.github.io/submissions-wg/pilot7.html)
 
 **Pilot 7**
 
@@ -567,59 +575,129 @@ Inheritance reduces duplication while keeping every resolved study specification
 
 # AI evaluation {background-color="#385898"}
 
-## Evaluation Strategy
-
-![](../../diagrams/evaluate-what.svg){fig-alt="Three levels of evaluation for an agent whose harness passes a user's request through skills, context, the LLM, tools and memory to an answer. Model level asks whether this LLM is better and highlights only the LLM; typical evidence is leaderboards (artificialanalysis.ai) and human-vote arenas (arena.ai). Component level asks whether one piece works at a time and highlights skills, context, tools and memory; typical evidence is skill and prompt A/B tests, tool-call accuracy and retrieval hit rate. System level asks whether the whole agent does the job and highlights everything from user to answer; typical evidence is Terminal-Bench (tbench.ai)."}
-
-**Evaluate what you deploy: the whole system.**
-In an AI-first workflow the model, skills, tools, and memory work together, and
-a top leaderboard model does not guarantee a working workflow.
-
-## Evaluation Goal
+## Would you sign off?
 
 :::: {.columns}
 
-::: {.column width="48%"}
-![](../../diagrams/evaluate-why.svg){fig-alt="Four evaluation goals in sequence. Choose: which model, harness or language to use, from leaderboards and bake-offs. Improve: did my change to a prompt, skill or tool help, by rerunning the same tasks and comparing. Gate: is it good enough to deploy, by a pass threshold and then human sign-off. Monitor: is it still working in production, by spot checks and drift alerts. A feedback arrow returns from Monitor to Improve."}
+::: {.column width="38%" .sign-off}
+::: {.big-number}
+133 / 134
+:::
+::: {.metric-label}
+tasks passed with the full prompt (Python, one attempt)
 :::
 
-::: {.column width="52%"}
-| Prompt tier | Python | R | opensas |
-| --- | --- | --- | --- |
-| Full | 99.3% (133/134) | 98.5% (132/134) | 86.6% (116/134) |
-| Conventions | 35.8% (48/134) | 33.6% (45/134) | 34.3% (46/134) |
-| Brief | 18.7% (25/134) | 17.9% (24/134) | 15.7% (21/134) |
+::: {.big-number .muted}
+25 / 134
+:::
+::: {.metric-label}
+tasks passed with the brief prompt
+:::
+:::
+
+::: {.column width="62%"}
+Before this result supports a decision, ask:
+
+1. Which task failed, and would a reviewer have caught it?
+2. Would the same task fail on the next run?
+3. Would another model or language do better?
+4. Is 99.3% good enough to submit?
 :::
 
 ::::
 
-The same score can answer one question and not another: pick the goal before
-you read the number.
+> "you must review the AI-generated documents to ensure they were accurate and
+> actually compliant..." --- FDA warning letter
 
-## Evaluation Method
+Reviewing AI output is evaluating it. This section designs that evaluation the
+way we design a trial.
 
-![](../../diagrams/evaluate-how.svg){fig-alt="Three evaluation methods, from rule-based, cheap and repeatable to judgment-based, costly and less repeatable. Code-based grading uses multiple-choice and exact match, schema checks, tests and cell comparison; it is deterministic, repeatable, cheap and fast, but rejects valid alternatives and cannot judge subjective quality. LLM-as-a-judge uses rubric, pairwise or reference-based scoring; it scales to open-ended output and explains its verdict, but has position, length and self-preference bias, is non-deterministic and needs calibration against humans. Human review uses expert review, spot checks and adjudication; it is the gold standard for quality and catches what rubrics miss, but is slow and costly and reviewers can disagree."}
+::: {.notes}
+Welcome back. Part 1 showed the same 134 SDTM and ADaM tasks at three prompt
+tiers; this is the Python column. Each question returns later in the section:
+the first is grader error and the gate, the second is run-to-run noise, the
+third is the choose goal, and the fourth is rigor matched to risk.
+:::
 
-**Mix them:** code where truth is checkable, LLM-as-a-judge to scale the rest,
-humans to calibrate and sign off.
+## An evaluation is a study
 
-## What is a benchmark?
+Statisticians already have the vocabulary. Read an AI evaluation as a study
+protocol:
 
-**How would you know the agent is good enough to deploy?**
+::: {.protocol}
+| Protocol | Question for the evaluation | Answer in this section |
+| -------- | ------------------ | ------------------ |
+| Objective | What decision will the result inform? | Choose, improve, gate, or monitor |
+| Intervention | What is under test? | The whole system you deploy |
+| Population | Which tasks? | Benchmarks drawn from the target work |
+| Endpoint | How is each task scored? | Code, an LLM judge, or people |
+| Conduct | How is each run kept fair? | Harbor: hidden answers, isolated runs |
+| Bias and variance | What can mislead? | Leakage, grader error, noise, saturation |
+| Rigor | How much evidence is enough? | As much as the risk of the decision |
+| Results | Does it work? | The evidence for yamaa so far |
+:::
 
-> A benchmark is a fixed task with independently authored truth, so an agent's
-> work is measured rather than judged by eye.
+::: {.notes}
+This table is the map for the section: each slide title starts with the
+protocol element it covers.
+:::
+
+## Objective: name the decision first
+
+:::: {.columns}
+
+::: {.column width="44%"}
+![](../../diagrams/evaluate-why.svg)
+:::
+
+::: {.column width="56%"}
+::: {.goal-reading}
+The prompt-tier results, read four ways:
+
+| Goal | What the 134 tasks say |
+| ---- | ---------------- |
+| **Choose** | With the full prompt, Python and R are one task apart (133 vs 132); opensas passes 116. |
+| **Improve** | Writing the rules into the prompt lifts Python from 25 to 133 passes. |
+| **Gate** | 133 of 134, one attempt each: exact 95% CI 95.9% to 99.98% for these tasks, not for the work you deploy on. |
+| **Monitor** | Not answered: a benchmark is a snapshot, not production. |
+:::
+:::
+
+::::
+
+**One table, four answers:** pick the decision before you read the number.
+
+::: {.notes}
+The 95% interval is Clopper-Pearson for 133 of 134. It treats each task as an
+independent trial, so it describes these 134 tasks run once. The tasks are
+authored edge cases, not a random sample of real work, so the interval does not
+carry over to deployment. The brief-to-full comparison is paired: the same
+tasks, agent and model, with only the prompt changed.
+:::
+
+## Intervention: the system you deploy
+
+![](../../diagrams/evaluate-what.svg)
+
+**Evaluate what you deploy: the whole system.** A trial tests the drug product
+as patients take it, not the molecule alone; likewise, a top leaderboard model
+does not guarantee a working workflow.
+
+## Population: what is a benchmark?
+
+> A benchmark is a fixed task with an independently authored answer, the
+> reference standard, so an agent's work is measured rather than judged by eye.
 
 | Part | What it is | In yamaa |
-| --- | --- | --- |
+| ----- | -------- | ----------- |
 | **Task** | The request the agent receives | A prompt at one of three tiers: full, conventions, or brief |
 | **Inputs** | The data the agent may read | Input datasets in `/app/input` |
-| **Expected output** | The answer, authored independently | `benchmarks/<name>/expected/`, never regenerated from an implementation |
+| **Expected output** | The reference standard, authored independently | `benchmarks/<name>/expected/`, never regenerated from an implementation |
 | **Grader** | The rule that decides pass or fail | Compares every dataset cell by cell, then reruns the program |
 
-A benchmark measures the whole system: model, harness, skills, and tools.
+Like a trial population, the tasks should look like the work the agent will do.
 
-## yamaa: benchmarks
+## Population: the yamaa benchmarks
 
 :::: {.columns}
 ::: {.column width="48%"}
@@ -642,12 +720,20 @@ execution interfaces (Python, R, CLI)
 ::::
 
 - [Explore all benchmarks](https://elong0527.github.io/yamaa/benchmark/).
+  The Harbor results in this deck use 134 SDTM and ADaM tasks built from them.
 
 <iframe class="benchmark-embed r-stretch" src="https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html" title="Age Groups benchmark dashboard"></iframe>
 
 Scroll inside the frame to explore the spec, inputs, and golden output.
 
-## Harbor: running agents against benchmarks
+## Endpoint: how each task is scored
+
+![](../../diagrams/evaluate-how.svg)
+
+**Mix them:** code where the truth is checkable, an LLM judge to scale the
+rest, and people to calibrate and sign off. The case studies use all three.
+
+## Conduct: Harbor runs the agent
 
 [Harbor](https://github.com/harbor-framework/harbor) runs an agent and a
 verifier in separate containers and publishes each job to
@@ -681,7 +767,7 @@ Harbor Hub
 - Join the yamaa organization on Harbor Hub to explore the jobs:
   [invitation link](https://hub.harborframework.com/invite/7chJ24hLaint4KnmK5VSTnW-Sow1D2yc).
 
-## How Harbor grades a yamaa task
+## Conduct: how Harbor grades a task
 
 - **Hidden:** specifications, expected data, and reference programs stay out
   of the agent's container.
@@ -697,20 +783,77 @@ Harbor Hub
 > Reward is 1 only when every check passes. Row and cell accuracy are
 > diagnostics, not the decision.
 
-## Evaluation Limitations
+## Bias and variance: what can mislead you
 
-![](../../diagrams/evaluate-limits.svg){fig-alt="Evaluation limits grouped as bias, variance, practical and beyond, each with what goes wrong, its familiar counterpart in clinical trials, and a recommendation. Bias: leakage, where the agent may have seen the answer, like peeking at the test data, so hide the test set; grader error, where the grader makes mistakes, like measurement error, so adjudicate disagreements. Variance: sampling error, where a pass rate is only an estimate, like a wide confidence interval, so add tasks; run-to-run noise, where the same task gives different results, like within-subject variability, so repeat runs. Practical: saturation, where top agents hit the ceiling, like a ceiling effect, so add harder tasks; cost, where full runs are expensive, like a study budget limiting the sample, so optimize tasks times runs. Beyond: external validity, where real work differs from the benchmark, like generalizability, so align to the target."}
+![](../../diagrams/evaluate-limits.svg)
 
-**More data shrinks variance, not bias.**
+**More data shrinks variance, not bias.** Harbor's hidden answers and held-out
+reruns target leakage; human review of the expected output targets grader error.
 
-## Evaluation Design
+## Discussion: can you trust 133/134?
 
-![](../../diagrams/evaluate-design.svg){fig-alt="Clinical trial principles mapped to evaluation practice, each with a relative cost of one to three. Pre-specified protocol: fix tasks, grader and metric first, cost one. Defined population: sample tasks from real studies, cost two. Blinding and independence: hidden answers and an independent grader, cost two. Sample size and replication: enough tasks and repeated runs, cost three. Independent adjudication: people review disagreements, cost three. Full reporting: report every pre-specified result, cost one. Audit trail: pin versions and keep every log, cost two."}
+**With your neighbor:** pick the two limits that matter most for this result, and
+the cheapest way to address each.
+
+- 133 of 134 tasks pass: Python, full prompt, one model, one attempt, October 2026.
+- The exact 95% confidence interval for these 134 tasks is 95.9% to 99.98%.
+- The benchmarks and their expected outputs are public on GitHub.
+- Each task isolates one derivation on a fixture of about 20 rows.
+- People have approved 3 of the 199 SDTM, SEND, and ADaM benchmarks so far.
+
+::: {.notes}
+Points to draw out:
+
+- Sampling error: the interval treats the 134 tasks as independent trials and
+  describes these tasks only. They are authored edge cases, not a random sample
+  of real work, so no interval from them carries over to deployment. That gap
+  is external validity, which more tasks of the same kind will not close.
+- Run-to-run noise: one attempt per task; repeated runs show whether the same
+  task fails again.
+- Saturation: the full tier sits at the ceiling and cannot separate strong
+  agents; the conventions and brief tiers can.
+- Leakage: public benchmarks may be in a model's training data. Hidden answers
+  stop lookup during the run, and held-out reruns catch hard-coded answers, but
+  neither rules out memorized rules.
+- External validity: small fixtures are not full studies; the retrospective
+  Pilot 7 studies on the results slide address this.
+- Grader error: the expected output is truth only after human review, which is
+  the second case study.
+:::
+
+## Rigor: match the evidence to the risk
+
+![](../../diagrams/evaluate-design.svg)
 
 **Match the rigor to the risk:** the more a decision depends on the AI output,
-and the costlier a wrong decision, the more of these a regulatory evaluation
-needs. See the FDA
-[draft guidance on AI](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/considerations-use-artificial-intelligence-support-regulatory-decision-making-drug-and-biological).
+and the costlier a wrong one, the further an evaluation goes: down the benchmark
+column, then down the human column. In both parts, report every pre-specified
+result, pin versions, and keep every log.
+
+::: {.sources}
+The two-part design is adapted from the FDA CDRH
+[discussion paper](https://www.fda.gov/media/194242/download) on generative
+AI-enabled devices; see also the FDA
+[draft guidance on AI](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/considerations-use-artificial-intelligence-support-regulatory-decision-making-drug-and-biological)
+for drugs.
+:::
+
+## Results: the evidence for yamaa so far
+
+![](../../diagrams/evaluate-yamaa.svg)
+
+Benchmarks carry the first two claims; real studies test the last two, where
+draft and early results suggest the schema is sufficient without many custom
+functions and experts can read the specification with help from AI.
+
+::: {.notes}
+Bridge to the case studies: they open up the benchmark, showing how one is
+created, how people finalize its truth, and how an agent is assessed with it.
+
+The first two rows are the two rows of the "where the uncertainty lives"
+diagram: agent-written code, then a reviewed specification run by a
+deterministic engine.
+:::
 
 # Case study: creating a benchmark for ADaM derivation {background-color="#385898"}
 
@@ -941,4 +1084,5 @@ October 2026: nine jobs, one for each prompt tier and language.
 
 - Define the workflow, reuse AI infrastructure, and invest in skills and tools.
 - Make a plain-text specification the single source of truth for humans and AI agents.
-- Verify with benchmarks: measure the agent, and let people review the truth.
+- Evaluate like a study: measure the whole system with benchmarks, let people
+  review the truth, and match the rigor to the risk.
