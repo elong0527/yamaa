@@ -12,11 +12,19 @@ output:
   path: ae.csv
   columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
 
+# The reported term is stored in upper case, so the dictionary is matched on
+# its lowest-level term in upper case too: letter case never decides whether
+# a term codes.
 intermediates:
   - id: MEDDRA_CODING
     dataset: MEDDRA
-    key: {LLTNAME: AE_RAW.AETERM}
+    key: {LLTKEY: AETERM}
     absent: NOT CODED
+    derivations:
+      LLTKEY:
+        str_case:
+          source: LLTNAME
+          to: upper
 
 columns:
   - name: DOMAIN
@@ -67,15 +75,15 @@ columns:
         - type: Assigned
           source: Sponsor
 
-  # SDTMIG designates AETERM Req. This coding fixture keeps one blank reported
-  # term to show the NOT CODED fallback, which a required term would refuse,
-  # so it declares Exp; a study submitting AE declares Req.
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
-    derivation: AE_RAW.AETERM
+    derivation:
+      str_case:
+        source: AE_RAW.AETERM
+        to: upper
     submission:
-      core: Exp
+      core: Req
       role: Topic
       length: 200
       origins:
@@ -85,9 +93,8 @@ columns:
             - document: acrf
               pages: {type: PhysicalRef, refs: "1"}
 
-  # Both coded terms come from the dictionary row whose lowest-level term
-  # equals the reported term exactly, letter case included. No such row, or
-  # a missing reported term, gives NOT CODED.
+  # Both coded terms come from the dictionary row whose lowest-level term, in
+  # upper case, equals the reported term. No such row gives NOT CODED.
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
@@ -100,8 +107,8 @@ columns:
       origins:
         - type: Assigned
           source: Sponsor
-      method: Take PTNAME from the MEDDRA record whose LLTNAME equals
-        AE_RAW.AETERM, and no match yields "NOT CODED".
+      method: Take PTNAME from the MEDDRA record whose LLTNAME, in upper case,
+        equals AETERM, and no match yields "NOT CODED".
 
   - name: AEBODSYS
     type: str
@@ -115,13 +122,13 @@ columns:
       origins:
         - type: Assigned
           source: Sponsor
-      method: Take SOCNAME from the MEDDRA record whose LLTNAME equals
-        AE_RAW.AETERM, and no match yields "NOT CODED".
+      method: Take SOCNAME from the MEDDRA record whose LLTNAME, in upper case,
+        equals AETERM, and no match yields "NOT CODED".
 
 verifications:
   - row_count:
-      min: 8
-      max: 8
+      min: 7
+      max: 7
 
 submission:
   label: Adverse Events

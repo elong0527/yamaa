@@ -84,7 +84,7 @@ const DIVIDED: [&str; 3] = [
 /// STUDYID and SITEID. adam-adlb-lymphocytes is admitted but runs as one
 /// partition: its `lb.csv` returns to LYM-001's CYCLE 1 DAY 1 records after
 /// other subjects, so the input is not grouped by USUBJID and VISIT.
-const KEY_BOUNDED: [&str; 34] = [
+const KEY_BOUNDED: [&str; 33] = [
     "adam-adae-occurrence-flags",
     "adam-adae-serious-sequence",
     "adam-adae-severity-rank",
@@ -94,7 +94,6 @@ const KEY_BOUNDED: [&str; 34] = [
     "adam-adeg-time-matched-baseline",
     "adam-adex-cumulative-dose",
     "adam-adex-dose-reduction",
-    "adam-adex-uncollected",
     "adam-adfa-fever",
     "adam-adlb-closest-visit",
     "adam-adlb-lymphocytes",
@@ -120,6 +119,11 @@ const KEY_BOUNDED: [&str; 34] = [
     "adam-advs-prior-result",
     "adam-clinsite-site-level",
 ];
+
+/// These programs inspect records outside the driver's subject groups.
+/// Exposure unit validation includes EX records with no DM subject, so
+/// key-bounded execution must refuse it and use the whole-table fallback.
+const WHOLE_REQUIRED: [&str; 1] = ["adam-adex-uncollected"];
 
 /// Benchmarks that read another input beside their driver input, which
 /// key-bounded partitions over their two leading declared keys must admit
@@ -756,6 +760,7 @@ fn partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_funct
     let mut exempt = Vec::new();
     let mut divided = Vec::new();
     let mut key_admitted = Vec::new();
+    let mut whole_required = Vec::new();
     for case in cases() {
         if case.supplies_functions() {
             exempt.push(case.name);
@@ -764,6 +769,17 @@ fn partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_funct
         let Some(Chains { one, keyed, whole }) = reproduce(&case, &token) else {
             continue;
         };
+        if WHOLE_REQUIRED.contains(&case.name.as_str()) {
+            whole_required.push(case.name.clone());
+            assert!(
+                !keyed.admitted,
+                "{} requires whole-table validation",
+                case.name
+            );
+            // partitioned_run records false only after the partition_global
+            // refusal and a retry with whole-table fallback. The shared
+            // problems check below still compares every saved golden byte.
+        }
         // One-record partitions divide every run they admit over more than
         // one record.
         if one.admitted {
@@ -787,6 +803,10 @@ fn partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_funct
         "the benchmarks whose projects supply project functions"
     );
     assert!(mismatched.is_empty(), "{mismatched:#?}");
+    assert_eq!(
+        whole_required, WHOLE_REQUIRED,
+        "whole-table cases are exercised"
+    );
     for name in DIVIDED {
         assert!(divided.iter().any(|case| case == name), "{name} divides");
     }

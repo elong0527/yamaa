@@ -3,7 +3,7 @@ standard: SDTM
 domain: RS
 review:
   concerns:
-    - Oncology efficacy depends on the RECIST time-point response derived from
+    - Oncology efficacy depends on the RECIST target response, derived from the
       target lesion sums at each tumor assessment.
     - Four subjects cover a target lesion not measured at week 8, a 45 percent
       shrinkage, non-target disease only, and assessments with no measurements

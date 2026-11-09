@@ -177,7 +177,10 @@ class DashboardTests(unittest.TestCase):
                 )
 
     def test_define_xml_resolves_variables_origins_and_methods(self):
-        # Resolved display reads independently authored metadata, not the spec.
+        # Resolved display reads independently authored metadata, not the spec,
+        # in the columns of the CDISC define2-1.xsl variable table: a Role
+        # column only where the dataset declares roles, a display format in
+        # place of the length, and ISO 8601 for a date without a codelist.
         cases = [
             (
                 "send-bw-sendig311",
@@ -186,13 +189,10 @@ class DashboardTests(unittest.TestCase):
                     "BWSTRESN",
                     "Standardized Result in Numeric Format",
                     "float",
-                    "8",
-                    "1",
-                    "No",
                     "Result Qualifier",
+                    "8",
                     "",
-                    "Derived; Sponsor",
-                    "The collected result read as a number.",
+                    "Derived; Sponsor\nThe collected result read as a number.",
                 ],
             ),
             (
@@ -202,13 +202,36 @@ class DashboardTests(unittest.TestCase):
                     "SUBJID",
                     "Subject Identifier for the Study",
                     "text",
+                    "Topic",
                     "4",
                     "",
-                    "Yes",
-                    "Topic",
-                    "",
                     "CRF; Annotated Case Report Form (acrf.pdf); pages 1",
+                ],
+            ),
+            (
+                "adam-adae-adamig11",
+                "ASTTM",
+                [
+                    "ASTTM",
+                    "Analysis Start Time",
+                    "integer",
+                    "TIME8.",
                     "",
+                    "Derived; Sponsor\nTime part of ASTDTM as seconds since midnight.",
+                ],
+            ),
+            (
+                "sdtm-sv-sdtmig33",
+                "SVSTDTC",
+                [
+                    "SVSTDTC",
+                    "Start Date/Time of Visit",
+                    "date",
+                    "Timing",
+                    "",
+                    "ISO 8601",
+                    "Collected; Investigator; Annotated Case Report Form (acrf.pdf); "
+                    "pages 1",
                 ],
             ),
         ]
@@ -236,30 +259,26 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(document.xpath("//details/@open"), [])
 
     def test_define_xml_resolves_value_conditions_and_codelist_values(self):
-        benchmark = generate.BENCHMARKS / "adam-adlb-metadata"
-        rendered, _, _ = generate.render_files(
-            [benchmark / "expected/define.xml"], "output", benchmark, set(), {}
-        )
-        document = html_tree.fromstring(rendered)
-        row = document.xpath(
-            '//table[caption="ADLB.AVALC value-level metadata"]/tbody/tr'
-        )[0]
-        self.assertEqual(
-            [cell.text_content() for cell in row],
-            [
-                "PARAMCD = HCG",
-                "AVALC",
-                "Analysis Value (C)",
-                "text",
-                "8",
-                "",
-                "Yes",
-                "",
-                "Pregnancy Test Result (CL.HCGRS)\nNEGATIVE\nPOSITIVE",
-                "Predecessor; LB.LBSTRESC",
-                "",
-            ],
-        )
+        fixtures = HERE / "fixtures/benchmark_docs"
+        cases = json.loads((fixtures / "define-value-level-rows.json").read_text())
+        for case in cases:
+            with self.subTest(benchmark=case["benchmark"]):
+                benchmark = generate.BENCHMARKS / case["benchmark"]
+                rendered, _, _ = generate.render_files(
+                    [benchmark / "expected/define.xml"], "output", benchmark, set(), {}
+                )
+                document = html_tree.fromstring(rendered)
+                table = document.xpath(f'//table[caption="{case["caption"]}"]')[0]
+                self.assertEqual(
+                    {
+                        "headers": table.xpath("thead/tr/th/text()"),
+                        "rows": [
+                            [cell.text_content() for cell in row]
+                            for row in table.xpath("tbody/tr")
+                        ],
+                    },
+                    {"headers": case["headers"], "rows": case["rows"]},
+                )
 
     def test_html_files_render_in_isolated_frames_and_keep_original_source(self):
         # Read authored HTML preview cases from their fixture home.
@@ -284,9 +303,12 @@ class DashboardTests(unittest.TestCase):
                 )
                 document = html_tree.fromstring(rendered)
                 self.assertEqual(
-                    document.xpath('//div[@class="define-document"]/section/p')[
-                        0
-                    ].text_content(),
+                    [
+                        cell.text_content()
+                        for cell in document.xpath(
+                            '//table[caption="Datasets"]/tbody/tr'
+                        )[0]
+                    ],
                     case["expected"],
                 )
 
@@ -333,6 +355,30 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(
                     document.xpath("//pre/code")[0].text_content(), path.read_text()
                 )
+                self.assertEqual(document.xpath('//table[@class="define-table"]'), [])
+
+    def test_invalid_define_key_sequences_remain_literal(self):
+        fixtures = HERE / "fixtures/benchmark_docs"
+        sequences = json.loads(
+            (fixtures / "define-invalid-key-sequences.json").read_text()
+        )
+        source = (
+            generate.BENCHMARKS / "sdtm-dm-metadata/expected/define.xml"
+        ).read_text()
+        for sequence in sequences:
+            with (
+                self.subTest(sequence=sequence),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                text = source.replace('KeySequence="1"', f'KeySequence="{sequence}"', 1)
+                self.assertNotEqual(text, source)
+                path = support.write(root, "expected/define.xml", text)
+                rendered, _, _ = generate.render_files(
+                    [path], "output", root, set(), {}
+                )
+                document = html_tree.fromstring(rendered)
+                self.assertEqual(document.xpath("//pre/code")[0].text_content(), text)
                 self.assertEqual(document.xpath('//table[@class="define-table"]'), [])
 
     def test_public_host_metadata_and_reviewed_exclusions_are_visible(self):

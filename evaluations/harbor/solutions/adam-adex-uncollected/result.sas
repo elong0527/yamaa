@@ -3,20 +3,21 @@
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data ex;
-  length STUDYID USUBJID EXTRT $1024;
+  length STUDYID DOMAIN USUBJID EXTRT EXDOSU EXSTDTC $1024;
   infile "/app/input/ex.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. EXTRT : $char1024. EXSEQ EXDOSE;
+  input STUDYID : $char1024. DOMAIN : $char1024. USUBJID : $char1024. EXSEQ EXTRT : $char1024. EXDOSE EXDOSU : $char1024. EXSTDTC : $char1024.;
+  if not missing(EXDOSE) and EXDOSU ne 'mg' then abort return 1;
 run;
 
-data subject_treatment;
-  length STUDYID USUBJID EXTRT $1024;
-  infile "/app/input/subject_treatment.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. EXTRT : $char1024.;
+data dm;
+  length DOMAIN STUDYID USUBJID ARM $1024;
+  infile "/app/input/dm.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
+  input DOMAIN : $char1024. STUDYID : $char1024. USUBJID : $char1024. ARM : $char1024.;
 run;
 
 proc sql;
-  create table totals as select STUDYID,USUBJID,EXTRT,sum(EXDOSE) as DOSECUM,count(*) as NDOSREC,count(EXDOSE) as NDOSVAL from ex group by STUDYID,USUBJID,EXTRT;
-  create table result as select a.*,b.DOSECUM,b.NDOSREC,b.NDOSVAL from subject_treatment as a left join totals as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.EXTRT=b.EXTRT;
+  create table totals as select STUDYID,USUBJID,sum(EXDOSE) as DOSECUM,count(*) as NDOSREC,count(EXDOSE) as NDOSVAL from ex group by STUDYID,USUBJID;
+  create table result as select a.STUDYID,a.USUBJID,a.ARM as TRT01P,b.DOSECUM,b.NDOSREC,b.NDOSVAL from dm as a left join totals as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID;
 quit;
 
-proc export data=result(keep=STUDYID USUBJID EXTRT DOSECUM NDOSREC NDOSVAL) outfile="/app/output/adex.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID TRT01P DOSECUM NDOSREC NDOSVAL) outfile="/app/output/adex.csv" dbms=csv replace; run;

@@ -7,8 +7,8 @@
 library(dplyr, warn.conflicts = FALSE)
 library(readr)
 
-trt <- read_csv(
-  "/app/input/subject_treatment.csv",
+dm <- read_csv(
+  "/app/input/dm.csv",
   col_types = cols(.default = col_character())
 )
 ex <- read_csv(
@@ -16,9 +16,13 @@ ex <- read_csv(
   col_types = cols(EXDOSE = col_double(), .default = col_character())
 )
 
-# Per treatment: total dose, record count, and count of recorded doses.
+if (any(!is.na(ex$EXDOSE) & (is.na(ex$EXDOSU) | ex$EXDOSU != "mg"))) {
+  stop("Recorded doses must be standardized to mg")
+}
+
+# Per subject: total dose, record count, and count of recorded doses.
 agg <- ex |>
-  group_by(STUDYID, USUBJID, EXTRT) |>
+  group_by(STUDYID, USUBJID) |>
   summarise(
     DOSE_SUM = sum(EXDOSE, na.rm = TRUE),
     NDOSREC = n(),
@@ -26,11 +30,11 @@ agg <- ex |>
     .groups = "drop"
   ) |>
   mutate(DOSECUM = if_else(NDOSVAL > 0, DOSE_SUM, NA_real_)) |>
-  select(STUDYID, USUBJID, EXTRT, DOSECUM, NDOSREC, NDOSVAL)
+  select(STUDYID, USUBJID, DOSECUM, NDOSREC, NDOSVAL)
 
-adex <- trt |>
-  left_join(agg, by = c("STUDYID", "USUBJID", "EXTRT")) |>
-  select(STUDYID, USUBJID, EXTRT, DOSECUM, NDOSREC, NDOSVAL)
+adex <- dm |>
+  left_join(agg, by = c("STUDYID", "USUBJID")) |>
+  transmute(STUDYID, USUBJID, TRT01P = ARM, DOSECUM, NDOSREC, NDOSVAL)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(adex, "/app/output/adex.csv", na = "")

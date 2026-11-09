@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import functools
+import io
+import json
 import os
 import re
 import shutil
@@ -48,7 +50,7 @@ def language(request):
     return request.param
 
 
-def _run(tmp_path, name, language, changes):
+def _run(tmp_path, name, language, changes, *, rejects=False):
     script_name = {"python": "result.py", "r": "result.R", "opensas": "result.sas"}[
         language
     ]
@@ -79,6 +81,9 @@ def _run(tmp_path, name, language, changes):
     completed = subprocess.run(
         [runner, str(script)], cwd=tmp_path, capture_output=True, text=True, check=False
     )
+    if rejects:
+        assert completed.returncode != 0, completed.stdout + completed.stderr
+        return {}
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return {p.name: _read(p)[1] for p in output.glob("*.csv")}
 
@@ -690,9 +695,116 @@ def test_subject_without_dm_items_still_gets_dm(
     records = [extra] if only_nondemographic else [*odm, extra]
     rows = _run(tmp_path, name, language, {"odm.csv": records})["dm.csv"]
     subject = next(r for r in rows if r["USUBJID"] == "NO-DEMOGRAPHICS")
-    assert subject["SEX"] == "U"
-    assert subject["AGE"] == subject["ARM"] == subject["ACTARM"] == ""
-    assert subject["ARMNRS"] == "Not assigned to treatment arm"
+    assert subject == {
+        "DOMAIN": "DM",
+        "STUDYID": "STUDY01",
+        "USUBJID": "NO-DEMOGRAPHICS",
+        "SUBJID": "NO-DEMOGRAPHICS",
+        "SITEID": "",
+        "AGE": "",
+        "AGEU": "",
+        "SEX": "U",
+        "ARM": "",
+        "ACTARM": "",
+        "ARMNRS": "NOT ASSIGNED",
+        "COUNTRY": "",
+    }
+
+
+@pytest.mark.parametrize("age", ["", "  "])
+def test_blank_age_has_no_unit(tmp_path, language, age):
+    name = "sdtm-dm-basic"
+    odm = _input(name, "odm.csv")
+    for row in odm:
+        if row["SubjectKey"] == "001" and row["ItemOID"] == "IT.DM.AGE":
+            row["Value"] = age
+    rows = _run(tmp_path, name, language, {"odm.csv": odm})["dm.csv"]
+    assert next(r for r in rows if r["USUBJID"] == "001") == {
+        "DOMAIN": "DM",
+        "STUDYID": "STUDY01",
+        "USUBJID": "001",
+        "SUBJID": "001",
+        "SITEID": "101",
+        "AGE": "",
+        "AGEU": "",
+        "SEX": "M",
+        "ARM": "Placebo",
+        "ACTARM": "Placebo",
+        "ARMNRS": "",
+        "COUNTRY": "USA",
+    }
+
+
+def test_exposure_counts_records_and_includes_other_treatments(tmp_path, language):
+    name = "adam-adex-uncollected"
+    exposure = _input(name, "ex.csv")
+    exposure[0]["EXSEQ"] = ""
+    exposure.append({**exposure[0], "EXSEQ": "99", "EXTRT": "Other", "EXDOSE": "175"})
+    rows = _run(tmp_path, name, language, {"ex.csv": exposure})["adex.csv"]
+    assert next(r for r in rows if r["USUBJID"] == "YAMAA-01-101") == {
+        "STUDYID": "YAMAA-01",
+        "USUBJID": "YAMAA-01-101",
+        "TRT01P": "Carboplatin",
+        "DOSECUM": "925",
+        "NDOSREC": "3",
+        "NDOSVAL": "3",
+    }
+
+
+@pytest.mark.parametrize("unit", ["g", "", "mg/kg"])
+def test_exposure_rejects_unstandardized_doses(tmp_path, language, unit):
+    name = "adam-adex-uncollected"
+    exposure = _input(name, "ex.csv")
+    exposure[0]["EXDOSU"] = unit
+    _run(tmp_path, name, language, {"ex.csv": exposure}, rejects=True)
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads(
+        (Path(__file__).parent / "fixtures/exposure_spec_controls.json").read_text()
+    ),
+    ids=lambda case: case["id"],
+)
+@pytest.mark.parametrize("track", ["yamaa", "python", "r", "opensas"])
+def test_exposure_specification_controls(tmp_path, case, track):
+    from evaluations.harbor import build, grade
+
+    name = "adam-adex-uncollected"
+    if track == "yamaa":
+        import yamaa
+
+        actual = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, actual)
+        for filename, content in case["files"].items():
+            (actual / filename).write_text(content)
+        result = yamaa.spec(actual / "spec.yaml").run()
+        if "condition" in case:
+            assert result.output is None
+            assert {row["condition"] for row in result.issues.to_pylist()} == {
+                case["condition"]
+            }
+            return
+        assert result.output is not None, result.issues
+        result.save()
+    else:
+        changes = {
+            Path(filename).name: list(csv.DictReader(io.StringIO(content)))
+            for filename, content in case["files"].items()
+        }
+        _run(tmp_path, name, track, changes, rejects="condition" in case)
+        if "condition" in case:
+            return
+        actual = tmp_path / "output"
+    contract = build.contract_for(ROOT / "benchmarks" / name, "python")["outputs"][0]
+    expected = tmp_path / "expected"
+    expected.mkdir()
+    with (expected / contract["file"]).open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=contract["columns"])
+        writer.writeheader()
+        writer.writerows(case["rows"])
+    verdict = grade.grade_output(contract, expected, actual)
+    assert verdict["passed"], verdict
 
 
 def test_expected_visit_sequences_follow_all_subject_parameters(tmp_path, language):

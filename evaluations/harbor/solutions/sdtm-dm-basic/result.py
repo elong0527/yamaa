@@ -7,7 +7,8 @@
 """Build the SDTM DM dataset from the long-format ODM extract.
 
 One record per subject, with columns:
-DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM, ARMNRS
+DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, ARM, ACTARM,
+ARMNRS, COUNTRY
 """
 
 import csv
@@ -16,9 +17,11 @@ from collections import OrderedDict
 INPUT_PATH = "/app/input/odm.csv"
 OUTPUT_PATH = "/app/output/dm.csv"
 
+ITEM_SITEID = "IT.DM.SITEID"
 ITEM_SEX = "IT.DM.SEX"
 ITEM_AGE = "IT.DM.AGE"
 ITEM_ARM = "IT.DM.ARM"
+ITEM_COUNTRY = "IT.DM.COUNTRY"
 
 
 def main():
@@ -41,21 +44,24 @@ def main():
             sex = "F"
         else:
             sex = "U"
-        age = items.get(ITEM_AGE, "") or ""
+        age = (items.get(ITEM_AGE, "") or "").strip()
         arm = items.get(ITEM_ARM, "") or ""
         actarm = arm
-        armnrs = "" if arm else "Not assigned to treatment arm"
+        armnrs = "" if arm else "NOT ASSIGNED"
         rows.append(
             {
                 "DOMAIN": "DM",
                 "STUDYID": study_ids[key],
                 "USUBJID": key,
                 "SUBJID": key,
-                "SEX": sex,
+                "SITEID": items.get(ITEM_SITEID, ""),
                 "AGE": age,
+                "AGEU": "YEARS" if age else "",
+                "SEX": sex,
                 "ARM": arm,
                 "ACTARM": actarm,
                 "ARMNRS": armnrs,
+                "COUNTRY": items.get(ITEM_COUNTRY, ""),
             }
         )
 
@@ -64,11 +70,14 @@ def main():
         "STUDYID",
         "USUBJID",
         "SUBJID",
-        "SEX",
+        "SITEID",
         "AGE",
+        "AGEU",
+        "SEX",
         "ARM",
         "ACTARM",
         "ARMNRS",
+        "COUNTRY",
     ]
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)

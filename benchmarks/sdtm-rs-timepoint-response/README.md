@@ -1,4 +1,4 @@
-# Timepoint Response
+# Target Lesion Response at Each Tumor Assessment
 
 **Goal:** build one RS record per subject and scheduled tumor
 assessment holding the visit order (`AVISITN`), the assessment date
@@ -22,8 +22,8 @@ lesions chosen at study entry are listed in `IG.TUTARGET` and
   assessment.
 - `RSSEQ` numbers a subject's response records in visit order,
   starting at 1.
-- `RSTESTCD` is `TRGRESP` and `RSTEST` is `Timepoint Response` on
-  every record.
+- `RSTESTCD` is `TRGRESP` and `RSTEST` is `Target Response` on every
+  record: the response of the target lesions alone.
 - `RSSTRESC` is the response at the assessment: `NE` (not evaluable)
   at baseline, when fewer target lesions were measured than were
   chosen, when the subject has non-target disease only, or when no

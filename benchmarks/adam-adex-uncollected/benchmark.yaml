@@ -5,9 +5,10 @@ review:
   concerns:
     - Exposure summaries must tell a dose recorded as zero apart from a dose
       left blank and from a treatment never given.
-    - Five subjects cover recorded doses, doses all left blank, a recorded zero
-      beside a blank, a planned treatment with no exposure, and a single blank
-      record.
+    - Five subjects in two arms cover recorded doses, doses all left blank, a
+      recorded zero beside a blank, a planned treatment with no exposure, and a
+      single blank record.
     - Subject 103's recorded zero keeps a total of 0 with one recorded dose,
       subject 102's blanks give an empty total but a count of 0, and subject
-      104, never given the drug, leaves all three measures empty.
+      104, planned for cisplatin but never dosed, leaves all three measures
+      empty.

@@ -16,19 +16,19 @@ meddra <- read_csv(
   col_types = cols(.default = col_character())
 )
 
-# The preferred term and body system of the entry whose lowest-level term
-# equals the reported term exactly, including letter case. A blank term or
-# one with no exact match is not coded.
+# The reported term in upper case, coded to the preferred term and body
+# system of the entry whose lowest-level term, in upper case, equals it. A
+# term with no match is not coded.
 ae <- ae_raw |>
-  left_join(meddra, by = c("AETERM" = "LLTNAME")) |>
+  mutate(AETERM = toupper(AETERM)) |>
+  left_join(
+    mutate(meddra, LLTNAME = toupper(LLTNAME)),
+    by = c("AETERM" = "LLTNAME")
+  ) |>
   mutate(
     DOMAIN = "AE",
-    AEDECOD = if_else(
-      is.na(AETERM) | AETERM == "" | is.na(PTNAME), "NOT CODED", PTNAME
-    ),
-    AEBODSYS = if_else(
-      is.na(AETERM) | AETERM == "" | is.na(SOCNAME), "NOT CODED", SOCNAME
-    )
+    AEDECOD = if_else(is.na(PTNAME), "NOT CODED", PTNAME),
+    AEBODSYS = if_else(is.na(SOCNAME), "NOT CODED", SOCNAME)
   ) |>
   select(DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS)
 

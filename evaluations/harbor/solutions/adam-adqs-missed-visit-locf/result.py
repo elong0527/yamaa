@@ -5,7 +5,6 @@
 # be solved and that the grader scores a correct answer 1.
 
 import csv
-from collections import defaultdict
 
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
@@ -21,41 +20,43 @@ def main():
     with open(f"{INPUT_DIR}/qs.csv", newline="") as f:
         qs = list(csv.DictReader(f))
 
-    # Collected records: a QS record with a non-empty score. A score of
-    # zero counts as a score.
-    collected = [r for r in qs if r["AVAL"].strip() != ""]
-
-    # Scores by subject and analysis visit number, for LOCF lookup.
-    scores = defaultdict(dict)
-    for r in collected:
-        scores[(r["STUDYID"], r["USUBJID"])][int(r["AVISITN"])] = r["AVAL"]
-
+    # Every QS record is kept, an empty score included.
     rows = []
-    for r in collected:
+    for r in qs:
         rows.append(
             {
                 "STUDYID": r["STUDYID"],
                 "USUBJID": r["USUBJID"],
-                "PARAMCD": r["PARAMCD"],
-                "AVISIT": r["AVISIT"],
-                "AVISITN": r["AVISITN"],
-                "AVAL": r["AVAL"],
+                "PARAMCD": r["QSTESTCD"],
+                "AVISIT": r["VISIT"],
+                "AVISITN": r["VISITNUM"],
+                "AVAL": r["QSSTRESN"],
                 "DTYPE": "",
+                "QSSEQ": r["QSSEQ"],
                 "EFFFL": efffl.get((r["STUDYID"], r["USUBJID"]), ""),
             }
         )
 
-    # Added LOCF records for missed scheduled visits, efficacy
-    # population only.
+    # Scores by subject and visit number. A score of zero counts.
+    scored = {}
+    for r in qs:
+        if r["QSSTRESN"].strip() != "":
+            key = (r["STUDYID"], r["USUBJID"])
+            scored.setdefault(key, {})[int(r["VISITNUM"])] = r
+
+    # A carried-forward record for each missed scheduled visit of an
+    # efficacy subject, from the closest earlier post-baseline score.
     for (studyid, usubjid), flag in efffl.items():
         if flag != "Y":
             continue
-        subject_scores = scores.get((studyid, usubjid), {})
+        visits = scored.get((studyid, usubjid), {})
         for avisit, avisitn in SCHEDULED:
-            if avisitn in subject_scores:
+            if avisitn in visits:
                 continue
-            earlier = [n for n in subject_scores if n < avisitn]
-            aval = subject_scores[max(earlier)] if earlier else ""
+            earlier = [n for n in visits if 0 < n < avisitn]
+            if not earlier:
+                continue
+            source = visits[max(earlier)]
             rows.append(
                 {
                     "STUDYID": studyid,
@@ -63,13 +64,14 @@ def main():
                     "PARAMCD": "ACTOT",
                     "AVISIT": avisit,
                     "AVISITN": str(avisitn),
-                    "AVAL": aval,
+                    "AVAL": source["QSSTRESN"],
                     "DTYPE": "LOCF",
+                    "QSSEQ": source["QSSEQ"],
                     "EFFFL": flag,
                 }
             )
 
-    rows.sort(key=lambda r: (r["USUBJID"], int(r["AVISITN"])))
+    rows.sort(key=lambda r: (r["USUBJID"], int(r["AVISITN"]), r["DTYPE"]))
 
     columns = [
         "STUDYID",
@@ -79,6 +81,7 @@ def main():
         "AVISITN",
         "AVAL",
         "DTYPE",
+        "QSSEQ",
         "EFFFL",
     ]
     with open(f"{OUTPUT_DIR}/adqs.csv", "w", newline="") as f:

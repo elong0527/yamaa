@@ -11,16 +11,17 @@ names.
 
 **Variables:**
 
+- `AETERM` is the reported term in upper case, so letter case
+  never decides whether a term codes.
 - `AEDECOD` is the preferred term of the dictionary entry whose
   lowest-level term matches the reported term.
 - `AEBODSYS` is the body system of that same entry.
 
-**Note:** a reported term codes only when it equals a lowest-level
-term exactly, including letter case; the preferred term comes from
+**Note:** a reported term codes when it equals a lowest-level term,
+whatever the letter case of either; the preferred term comes from
 the matched dictionary entry, so it can differ from the reported
-term. A term with no exact match, or a blank term, gives `NOT
-CODED` in both coded variables. `NOT CODED` is not a MedDRA term:
-it marks an event whose coding must be resolved before delivery.
-The coded terms follow the recorded dictionary, MedDRA version
-`26.1`, since the same reported term can code differently between
-releases.
+term. A term with no match gives `NOT CODED` in both coded
+variables. `NOT CODED` is not a MedDRA term: it marks an event whose
+coding must be resolved before delivery. The coded terms follow the
+recorded dictionary, MedDRA version `26.1`, since the same reported
+term can code differently between releases.

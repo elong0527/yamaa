@@ -57,7 +57,7 @@ fn shapes() -> [Shape; 3] {
             records: 1,
             write: |subject, out| writeln!(out, "S1,{subject:08},{}", 10 + subject % 100).unwrap(),
         },
-        // The three items the specification maps, and seven it reads past,
+        // The five items the specification maps, and five it reads past,
         // as an extract of a study's items holds them.
         Shape {
             benchmark: "sdtm-dm-basic",
@@ -70,9 +70,9 @@ fn shapes() -> [Shape; 3] {
                 writeln!(out, "S1,{subject:08},IT.DM.SEX,{sex}").unwrap();
                 writeln!(out, "S1,{subject:08},IT.DM.AGE,{}", 20 + subject % 60).unwrap();
                 writeln!(out, "S1,{subject:08},IT.DM.ARM,{arm}").unwrap();
-                for item in [
-                    "RACE", "ETHNIC", "COUNTRY", "SITEID", "BRTHDTC", "RFSTDTC", "DTHFL",
-                ] {
+                writeln!(out, "S1,{subject:08},IT.DM.SITEID,{}", 100 + subject % 7).unwrap();
+                writeln!(out, "S1,{subject:08},IT.DM.COUNTRY,USA").unwrap();
+                for item in ["RACE", "ETHNIC", "BRTHDTC", "RFSTDTC", "DTHFL"] {
                     writeln!(out, "S1,{subject:08},IT.DM.{item},{}", subject % 7).unwrap();
                 }
             },

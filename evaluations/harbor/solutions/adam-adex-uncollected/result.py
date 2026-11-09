@@ -4,17 +4,16 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create the ADEX dataset from EX and SUBJECT_TREATMENT.
+"""Create the ADEX dataset from SDTM DM and EX.
 
-One record per subject and treatment listed in SUBJECT_TREATMENT.
-DOSECUM is the total of the recorded EXDOSE values on the EX records
-for the subject and treatment; it has no value when no dose was ever
-recorded, while a recorded total of zero is kept as zero. NDOSREC is
-the number of EX records for the subject and treatment, with no value
-when the treatment has no EX record at all. NDOSVAL is the number of
-those EX records that carry a recorded dose; an explicitly recorded
-zero counts, and NDOSVAL is 0 when the treatment has EX records but
-every dose was left blank.
+One record per DM subject, carrying ARM as the planned treatment TRT01P.
+DOSECUM is the total of the recorded EXDOSE values on the subject's EX
+records; it has no value when no dose was ever recorded, while a
+recorded total of zero is kept as zero. NDOSREC is the number of the
+subject's EX records, with no value when the subject has no EX record at
+all. NDOSVAL is the number of those EX records that carry a recorded
+dose; an explicitly recorded zero counts, and NDOSVAL is 0 when the
+subject has EX records but every dose was left blank.
 """
 
 import csv
@@ -37,17 +36,19 @@ def format_number(value):
 
 
 def main():
-    treatments = read_rows(f"{INPUT_DIR}/subject_treatment.csv")
+    subjects = read_rows(f"{INPUT_DIR}/dm.csv")
     exposure = read_rows(f"{INPUT_DIR}/ex.csv")
 
     doses_by_key = defaultdict(list)
     for row in exposure:
-        key = (row["STUDYID"], row["USUBJID"], row["EXTRT"])
+        if row["EXDOSE"].strip() and row["EXDOSU"] != "mg":
+            raise ValueError("Recorded doses must be standardized to mg")
+        key = (row["STUDYID"], row["USUBJID"])
         doses_by_key[key].append(row["EXDOSE"])
 
     records = []
-    for row in treatments:
-        key = (row["STUDYID"], row["USUBJID"], row["EXTRT"])
+    for row in subjects:
+        key = (row["STUDYID"], row["USUBJID"])
         doses = doses_by_key.get(key)
         if doses is None:
             n_records = ""
@@ -62,14 +63,14 @@ def main():
             {
                 "STUDYID": row["STUDYID"],
                 "USUBJID": row["USUBJID"],
-                "EXTRT": row["EXTRT"],
+                "TRT01P": row["ARM"],
                 "DOSECUM": dose_cum,
                 "NDOSREC": n_records,
                 "NDOSVAL": n_values,
             }
         )
 
-    columns = ["STUDYID", "USUBJID", "EXTRT", "DOSECUM", "NDOSREC", "NDOSVAL"]
+    columns = ["STUDYID", "USUBJID", "TRT01P", "DOSECUM", "NDOSREC", "NDOSVAL"]
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
         writer.writeheader()

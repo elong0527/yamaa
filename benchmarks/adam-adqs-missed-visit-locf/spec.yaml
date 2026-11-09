@@ -2,25 +2,27 @@ yamaa: "1.0"
 type: spec
 model: ADaM
 domain: ADQS
-keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN, QSSEQ]
 input:
   ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
   QS:
     path: input/qs.csv
-    types: {AVISITN: int, AVAL: float}
+    types: {QSSEQ: int, QSSTRESN: float, VISITNUM: int}
 
 # The planned visits are the protocol schedule, so the specification states
 # it: one row template per scheduled visit, driven by the subject-level
 # input and kept only for an efficacy subject with no collected score at
-# that visit. The protocol fixes how many visits there are, not the data,
-# so writing them out is the rule itself, and a reviewer reads three
-# templates instead of an enumerated planning file. A schedule that varies
-# by subject (by arm, cut at discontinuation, or driven by a collected
-# count) is expanded upstream and read here as an ordinary input.
+# that visit and an earlier post-baseline score to carry. The protocol fixes
+# how many visits there are, not the data, so writing them out is the rule
+# itself, and a reviewer reads three templates instead of an enumerated
+# planning file. A schedule that varies by subject (by arm, cut at
+# discontinuation, or driven by a collected count) is expanded upstream and
+# read here as an ordinary input.
 
 output:
   path: adqs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVISITN, AVAL, DTYPE, EFFFL]
+  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVISITN, AVAL, DTYPE, QSSEQ,
+            EFFFL]
   order_by: [USUBJID, PARAMCD, AVISITN]
 
 intermediates:
@@ -29,8 +31,20 @@ intermediates:
   # missed.
   - id: COLLECTED
     dataset: QS
-    key: [STUDYID, USUBJID, PARAMCD, AVISITN]
-    filter: "QS.AVAL IS NOT NULL"
+    key: {STUDYID: STUDYID, USUBJID: USUBJID, QSTESTCD: PARAMCD,
+          VISITNUM: AVISITN}
+    filter: "QS.QSSTRESN IS NOT NULL"
+
+  # The subject's latest collected score before the visit a template is
+  # building. Only post-baseline visits are carried forward: baseline is the
+  # reference a change is measured from, not an observation on treatment.
+  - id: LAST_SCORE
+    dataset: QS
+    key: {STUDYID: STUDYID, USUBJID: USUBJID, QSTESTCD: PARAMCD}
+    between: {value: AVISITN, lower: VISITNUM, closed: right}
+    filter: "QS.VISITNUM > 0 AND QS.QSSTRESN IS NOT NULL"
+    order_by: [QS.VISITNUM]
+    keep: last
 
 columns:
   - name: STUDYID
@@ -53,107 +67,103 @@ columns:
     type: int
     label: Analysis Visit (N)
 
-  # The collected score, empty on a carried-forward record. It is not in
-  # the output.
-  - name: AVALCOL
+  # The collected score on a collected record, missing when the score was
+  # not collected; the carried score on a carried-forward record.
+  - name: AVAL
     type: float
-    label: Collected Analysis Value
+    label: Analysis Value
 
   - name: DTYPE
     type: str
     label: Derivation Type
 
+  # The collected record a record comes from: its own on a collected record,
+  # and the record whose score it carries on a carried-forward record.
+  - name: QSSEQ
+    type: int
+    label: Sequence Number
+
   - name: EFFFL
     type: str
     label: Efficacy Population Flag
 
-  # Last observation carried forward across the finished records: a
-  # carried-forward record takes the closest earlier collected score for
-  # the subject and parameter, in visit order, and stays empty when there
-  # is none. A collected record always holds its own score.
-  - name: AVAL
-    type: float
-    label: Analysis Value
-    derivation:
-      locf:
-        source: AVALCOL
-        window:
-          group_by: [STUDYID, USUBJID, PARAMCD]
-          order_by: [AVISITN]
-
 rows:
-  # Every collected score, unchanged.
+  # Every collected record, unchanged, including one whose score is empty,
+  # so it stays traceable to its QSSEQ.
   - id: collected
     dataset: QS
-    filter: "QS.AVAL IS NOT NULL"
     derivations:
       STUDYID: QS.STUDYID
       USUBJID: QS.USUBJID
-      PARAMCD: QS.PARAMCD
-      AVISIT: QS.AVISIT
-      AVISITN: QS.AVISITN
-      AVALCOL: QS.AVAL
+      PARAMCD: QS.QSTESTCD
+      AVISIT: QS.VISIT
+      AVISITN: QS.VISITNUM
+      AVAL: QS.QSSTRESN
       DTYPE: null
+      QSSEQ: QS.QSSEQ
       EFFFL: ADSL.EFFFL
 
   # One template per scheduled visit. Each builds at most one record per
-  # subject: the subject's missed visit.
+  # subject: the carried-forward record of the subject's missed visit.
   - id: week_8
     dataset: ADSL
-    filter: "ADSL.EFFFL = 'Y' AND COLLECTED.AVAL IS NULL"
+    filter: >-
+      ADSL.EFFFL = 'Y' AND COLLECTED.QSSTRESN IS NULL
+      AND LAST_SCORE.QSSTRESN IS NOT NULL
     derivations:
       STUDYID: ADSL.STUDYID
       USUBJID: ADSL.USUBJID
       PARAMCD: "'ACTOT'"
       AVISIT: "'Week 8'"
       AVISITN: 8
-      AVALCOL: null
+      AVAL: LAST_SCORE.QSSTRESN
       DTYPE: "'LOCF'"
+      QSSEQ: LAST_SCORE.QSSEQ
       EFFFL: ADSL.EFFFL
 
   - id: week_16
     dataset: ADSL
-    filter: "ADSL.EFFFL = 'Y' AND COLLECTED.AVAL IS NULL"
+    filter: >-
+      ADSL.EFFFL = 'Y' AND COLLECTED.QSSTRESN IS NULL
+      AND LAST_SCORE.QSSTRESN IS NOT NULL
     derivations:
       STUDYID: ADSL.STUDYID
       USUBJID: ADSL.USUBJID
       PARAMCD: "'ACTOT'"
       AVISIT: "'Week 16'"
       AVISITN: 16
-      AVALCOL: null
+      AVAL: LAST_SCORE.QSSTRESN
       DTYPE: "'LOCF'"
+      QSSEQ: LAST_SCORE.QSSEQ
       EFFFL: ADSL.EFFFL
 
   - id: week_24
     dataset: ADSL
-    filter: "ADSL.EFFFL = 'Y' AND COLLECTED.AVAL IS NULL"
+    filter: >-
+      ADSL.EFFFL = 'Y' AND COLLECTED.QSSTRESN IS NULL
+      AND LAST_SCORE.QSSTRESN IS NOT NULL
     derivations:
       STUDYID: ADSL.STUDYID
       USUBJID: ADSL.USUBJID
       PARAMCD: "'ACTOT'"
       AVISIT: "'Week 24'"
       AVISITN: 24
-      AVALCOL: null
+      AVAL: LAST_SCORE.QSSTRESN
       DTYPE: "'LOCF'"
+      QSSEQ: LAST_SCORE.QSSEQ
       EFFFL: ADSL.EFFFL
 
 verifications:
-  # Every efficacy subject has exactly one total score record at each
-  # scheduled visit, collected or carried forward.
+  # A subject has at most one analysis value at a visit: a carried-forward
+  # record is added only where no score was collected.
   - row_count:
-      id: efficacy-subject-has-every-scheduled-visit
-      group_by: [STUDYID, USUBJID, PARAMCD]
-      filter: "AVISITN IN (8, 16, 24)"
-      when: "EFFFL = 'Y' AND PARAMCD = 'ACTOT'"
-      min: 3
-      max: 3
-  # A record is added only for an efficacy subject at a scheduled visit.
+      id: one-analysis-value-per-visit
+      group_by: [STUDYID, USUBJID, PARAMCD, AVISITN]
+      filter: "AVAL IS NOT NULL"
+      max: 1
+  # A record is added only for an efficacy subject at a scheduled visit, and
+  # only when there is a score to carry.
   - assert:
       id: carried-record-fills-a-scheduled-visit
       when: "DTYPE = 'LOCF'"
-      require: "EFFFL = 'Y' AND AVISITN IN (8, 16, 24)"
-  # Carrying forward never overwrites a collected score.
-  - assert:
-      id: collected-record-keeps-its-score
-      when: "DTYPE IS NULL"
-      require: "AVAL = AVALCOL"
+      require: "EFFFL = 'Y' AND AVISITN IN (8, 16, 24) AND AVAL IS NOT NULL"

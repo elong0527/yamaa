@@ -8,7 +8,7 @@ RSSTAT
 STUDYID is the ODM study OID and USUBJID is the ODM subject key, each as
 given. AVISIT is the name of the scheduled assessment, AVISITN is its
 numeric order, and ADT is its date. RSSEQ numbers a subject's records in
-visit order, starting at 1. RSTESTCD is "TRGRESP" and RSTEST is "Timepoint
+visit order, starting at 1. RSTESTCD is "TRGRESP" and RSTEST is "Target
 Response" on every record. RSSTAT is "NOT DONE" for a scheduled assessment
 with no tumor measurement records at all, and has no value otherwise.
 RSSTRESC has no value when the assessment was not done. A baseline

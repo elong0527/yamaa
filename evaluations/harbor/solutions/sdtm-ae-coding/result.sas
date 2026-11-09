@@ -16,7 +16,7 @@ run;
 
 proc sql;
   create table result as
-  select 'AE' as DOMAIN,a.*,coalescec(b.PTNAME,'NOT CODED') as AEDECOD,coalescec(b.SOCNAME,'NOT CODED') as AEBODSYS from ae_raw a left join meddra_26_1 b on a.AETERM=b.LLTNAME;
+  select 'AE' as DOMAIN,a.STUDYID,a.USUBJID,a.AESEQ,upcase(a.AETERM) as AETERM,coalescec(b.PTNAME,'NOT CODED') as AEDECOD,coalescec(b.SOCNAME,'NOT CODED') as AEBODSYS from ae_raw a left join meddra_26_1 b on upcase(a.AETERM)=upcase(b.LLTNAME);
 quit;
 
 proc sql;

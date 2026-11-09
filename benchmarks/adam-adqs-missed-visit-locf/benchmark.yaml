@@ -3,11 +3,14 @@ standard: ADaM
 domain: ADQS
 review:
   concerns:
-    - Efficacy analyses with last observation carried forward need a record at
-      every scheduled visit, marked when carried.
-    - Six subjects cover complete visits, dropout after week 8, a collected
+    - Efficacy analyses with last observation carried forward need a value at
+      every scheduled visit, on a record marked as carried, beside the records
+      that were collected.
+    - Seven subjects cover complete visits, dropout after week 8, a collected
       visit with an empty score, a missing baseline, a subject outside the
-      efficacy population, and a baseline score of 0.
-    - A collected record with an empty score counts as missed and is carried
-      from baseline (subject 103's week 8 becomes 18), a subject with no earlier
-      score gets an empty carried record, and baseline itself is never added.
+      efficacy population, a score of 0 carried forward, and a subject with
+      only a baseline score.
+    - Only post-baseline scores are carried, so subject 103's empty week 16
+      record stays and its week 8 score goes on a separate carried record,
+      while subject 107, with only a baseline score, and subject 104 at week 8
+      gain no record.

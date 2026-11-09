@@ -7,10 +7,10 @@
 """Create the SDTM AE dataset by coding reported terms against MedDRA 26.1.
 
 Reads AE_RAW and MEDDRA_26_1 from /app/input and writes ae.csv to
-/app/output with one record per adverse event. AETERM is matched exactly
-(including letter case) to the dictionary's lowest-level term; the
+/app/output with one record per adverse event. AETERM is stored in upper
+case and matched to the dictionary's lowest-level term in upper case; the
 preferred term and body system come from the matched entry. A term with
-no exact match, or a blank term, is coded "NOT CODED" in both fields.
+no match is coded "NOT CODED" in both fields.
 """
 
 import csv
@@ -30,12 +30,12 @@ def read_rows(path):
 def main():
     dictionary = {}
     for entry in read_rows(INPUT / "meddra_26_1.csv"):
-        dictionary[entry["LLTNAME"]] = (entry["PTNAME"], entry["SOCNAME"])
+        dictionary[entry["LLTNAME"].upper()] = (entry["PTNAME"], entry["SOCNAME"])
 
     records = []
     for event in read_rows(INPUT / "ae_raw.csv"):
-        term = event["AETERM"]
-        if term and term in dictionary:
+        term = event["AETERM"].upper()
+        if term in dictionary:
             decoded, body_system = dictionary[term]
         else:
             decoded, body_system = NOT_CODED, NOT_CODED

@@ -2,36 +2,35 @@ yamaa: "1.0"
 type: spec
 model: ADaM
 domain: ADEX
-keys: [STUDYID, USUBJID, EXTRT]
+keys: [STUDYID, USUBJID]
 input:
-  TRT: input/subject_treatment.csv
-  EX: {path: input/ex.csv, types: {EXDOSE: float},
-       key: [STUDYID, USUBJID, EXTRT]}
-base: TRT
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXDOSE: float}, key: [STUDYID, USUBJID]}
+base: DM
 
 output:
   path: adex.csv
-  columns: [STUDYID, USUBJID, EXTRT, DOSECUM, NDOSREC, NDOSVAL]
+  columns: [STUDYID, USUBJID, TRT01P, DOSECUM, NDOSREC, NDOSVAL]
 
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: TRT.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: TRT.USUBJID
+    derivation: DM.USUBJID
 
-  - name: EXTRT
+  - name: TRT01P
     type: str
-    label: Name of Treatment
-    derivation: TRT.EXTRT
+    label: Planned Treatment for Period 01
+    derivation: DM.ARM
 
-  # Summed and counted over the treatment's exposure records, matched on
-  # STUDYID, USUBJID, and EXTRT. With no records all three are empty; with
-  # records but no recorded dose, DOSECUM is empty and NDOSVAL is 0.
+  # Summed and counted over the subject's exposure records, matched on
+  # STUDYID and USUBJID. With no records all three are empty; with records
+  # but no recorded dose, DOSECUM is empty and NDOSVAL is 0.
   - name: DOSECUM
     type: float
     label: Cumulative Dose
@@ -42,7 +41,7 @@ columns:
     type: int
     label: Number of Dose Records
     derivation:
-      aggregate: "COUNT(EX.EXSEQ)"
+      aggregate: "COUNT(EX.*)"
 
   - name: NDOSVAL
     type: int
@@ -50,10 +49,25 @@ columns:
     derivation:
       aggregate: "COUNT(EX.EXDOSE)"
 
+  # Check the full SDTM EX relation, including records outside the DM
+  # population. Every EX record has DOMAIN=EX; this key deliberately avoids
+  # the per-subject match used by the output measures above.
+  - name: NDOSOTHER
+    type: int
+    label: Number of Recorded Doses Not in Milligrams
+    derivation:
+      aggregate:
+        key: {DOMAIN: "'EX'"}
+        filter: >-
+          EX.EXDOSE IS NOT NULL AND
+          (EX.EXDOSU IS NULL OR EX.EXDOSU <> 'mg')
+        expr: "COUNT(EX.*)"
+    verifications:
+      - range:
+          id: doses-standardized-to-mg
+          max: 0
+
 verifications:
-  - row_count:
-      min: 6
-      max: 6
   - assert:
       id: recorded-dose-implies-a-record
       when: "NDOSVAL > 0"

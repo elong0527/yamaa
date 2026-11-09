@@ -1,4 +1,11 @@
-"""Render authored Define-XML metadata as resolved tables for human review."""
+"""Render authored Define-XML metadata as resolved tables for human review.
+
+The tables take the columns of the CDISC Define-XML 2.1 stylesheet
+(define2-1.xsl), so a reviewer reads the document as a submission's define.xml
+reads in a browser: the datasets with their keys, then each dataset's
+variables. As there, a Role column appears only for a dataset whose variables
+declare roles.
+"""
 
 import html
 import xml.etree.ElementTree as ET
@@ -15,18 +22,38 @@ COMPARATORS = {
     "IN": "in",
     "NOTIN": "not in",
 }
-HEADERS = (
-    "Variable",
-    "Label",
-    "Type",
-    "Length",
-    "Significant digits",
-    "Required",
-    "Role / key",
-    "Codelist / values",
-    "Origin",
-    "Method / comment",
+DATASET_HEADERS = (
+    "Dataset",
+    "Description",
+    "Class",
+    "Structure",
+    "Purpose",
+    "Keys",
+    "Documentation",
+    "Location",
 )
+VARIABLE_HEADERS = (
+    "Variable",
+    "Label / Description",
+    "Type",
+    "Length or Display Format",
+    "Controlled Terms or ISO Format",
+    "Origin / Source / Method / Comment",
+)
+ROLE_HEADER = "Role"
+ROLE_AT = VARIABLE_HEADERS.index("Type") + 1
+# The data types whose values the stylesheet labels ISO 8601 when no codelist
+# constrains them.
+ISO_8601 = {
+    "date",
+    "time",
+    "datetime",
+    "partialDate",
+    "partialTime",
+    "partialDatetime",
+    "incompleteDatetime",
+    "durationDatetime",
+}
 
 
 def attribute(element, name):
@@ -152,11 +179,18 @@ def referenced_text(oid, definitions):
     )
 
 
-def item_row(reference, definitions):
+def controlled_terms(item, definitions):
+    return codelist(item, definitions) or (
+        "ISO 8601" if item.get("DataType") in ISO_8601 else ""
+    )
+
+
+def item_row(reference, definitions, roles):
     oid = reference.get("ItemOID", "")
     item = definitions.get(oid)
+    width = len(VARIABLE_HEADERS) + roles
     if item is None:
-        return [oid] + [""] * (len(HEADERS) - 1)
+        return [oid] + [""] * (width - 1)
     origins = []
     for origin in item.findall("{*}Origin"):
         origins.append(
@@ -172,25 +206,74 @@ def item_row(reference, definitions):
                 )
             )
         )
-    methods = []
     for method_oid in (reference.get("MethodOID"), attribute(item, "CommentOID")):
         if not method_oid:
             continue
-        methods.append(referenced_text(method_oid, definitions))
-    role = reference.get("Role", "")
-    if reference.get("KeySequence"):
-        role += ("; " if role else "") + "Key " + reference.get("KeySequence")
-    return [
+        origins.append(referenced_text(method_oid, definitions))
+    row = [
         item.get("Name", oid),
         description(item),
         item.get("DataType", ""),
-        item.get("Length", ""),
-        item.get("SignificantDigits", ""),
-        reference.get("Mandatory", ""),
-        role,
-        codelist(item, definitions),
+        attribute(item, "DisplayFormat") or item.get("Length", ""),
+        controlled_terms(item, definitions),
         "\n".join(origins),
-        "\n".join(methods),
+    ]
+    if roles:
+        row.insert(ROLE_AT, reference.get("Role", ""))
+    return row
+
+
+def variable_headers(roles):
+    headers = list(VARIABLE_HEADERS)
+    if roles:
+        headers.insert(ROLE_AT, ROLE_HEADER)
+    return headers
+
+
+def dataset_row(group, definitions):
+    class_node = group.find("{*}Class")
+    if class_node is None:
+        named_class = attribute(group, "Class")
+    else:
+        named_class = " - ".join(
+            filter(
+                None,
+                (
+                    class_node.get("Name"),
+                    *(sub.get("Name") for sub in class_node.findall("{*}SubClass")),
+                ),
+            )
+        )
+    keys = []
+    for reference in group.findall("{*}ItemRef"):
+        sequence = reference.get("KeySequence")
+        if sequence is None:
+            continue
+        try:
+            position = int(sequence)
+        except ValueError:
+            return None
+        if position < 1:
+            return None
+        keys.append((position, reference.get("ItemOID", "")))
+    keys.sort()
+    names = []
+    for _, oid in keys:
+        item = definitions.get(oid)
+        names.append(oid if item is None else item.get("Name", oid))
+    locations = [
+        leaf.findtext("{*}title", "") or attribute(leaf, "href")
+        for leaf in group.findall("{*}leaf")
+    ]
+    return [
+        group.get("Name", group.get("OID", "")),
+        description(group),
+        named_class,
+        attribute(group, "Structure"),
+        group.get("Purpose", ""),
+        ", ".join(names),
+        referenced_text(attribute(group, "CommentOID"), definitions),
+        "\n".join(locations),
     ]
 
 
@@ -200,31 +283,30 @@ def render_metadata(metadata, prefix):
         for element in metadata.iter()
         if element.get("OID") or element.get("ID")
     }
-    parts, navigation = [], []
-    for index, group in enumerate(metadata.findall("{*}ItemGroupDef")):
+    groups = metadata.findall("{*}ItemGroupDef")
+    datasets = [dataset_row(group, definitions) for group in groups]
+    if any(row is None for row in datasets):
+        return None
+    parts = [
+        table(
+            "Datasets",
+            DATASET_HEADERS,
+            datasets,
+        )
+    ]
+    navigation = []
+    for index, group in enumerate(groups):
         name = group.get("Name", group.get("OID", "Dataset"))
         anchor = f"{prefix}-dataset-{index}"
         navigation.append(f'<a href="#{anchor}">{html.escape(name)}</a>')
         parts.append(f'<section id="{anchor}"><h4>{html.escape(name)}</h4>')
-        facts = [
-            description(group),
-            group.get("Purpose"),
-            attribute(group, "Structure"),
-        ]
-        class_node = group.find("{*}Class")
-        facts.append(
-            class_node.get("Name")
-            if class_node is not None
-            else attribute(group, "Class")
-        )
-        facts.append(referenced_text(attribute(group, "CommentOID"), definitions))
-        parts.append("<p>" + html.escape("; ".join(filter(None, facts))) + "</p>")
         references = group.findall("{*}ItemRef")
+        roles = any(reference.get("Role") for reference in references)
         parts.append(
             table(
                 name + " variables",
-                HEADERS,
-                [item_row(ref, definitions) for ref in references],
+                variable_headers(roles),
+                [item_row(ref, definitions, roles) for ref in references],
             )
         )
         for reference in references:
@@ -235,14 +317,17 @@ def render_metadata(metadata, prefix):
                 values = definitions.get(link.get("ValueListOID"))
                 if values is None:
                     continue
+                value_references = values.findall("{*}ItemRef")
+                value_roles = any(ref.get("Role") for ref in value_references)
                 rows = [
-                    [condition(ref, definitions)] + item_row(ref, definitions)
-                    for ref in values.findall("{*}ItemRef")
+                    [condition(ref, definitions)]
+                    + item_row(ref, definitions, value_roles)
+                    for ref in value_references
                 ]
                 parts.append(
                     table(
                         name + "." + item.get("Name", "") + " value-level metadata",
-                        ("Condition", *HEADERS),
+                        ("Where Condition", *variable_headers(value_roles)),
                         rows,
                     )
                 )
@@ -303,7 +388,10 @@ def render_define(text, prefix):
                 for standard in metadata.findall("{*}Standards/{*}Standard")
             )
             parts.append("<p>" + html.escape("; ".join(filter(None, summary))) + "</p>")
-            parts.append(render_metadata(metadata, f"{prefix}-{study_index}-{index}"))
+            rendered = render_metadata(metadata, f"{prefix}-{study_index}-{index}")
+            if rendered is None:
+                return None
+            parts.append(rendered)
     return (
         '<div class="define-document">' + "".join(parts) + "</div>" if parts else None
     )
