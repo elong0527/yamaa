@@ -7,8 +7,8 @@
 library(dplyr, warn.conflicts = FALSE)
 library(readr)
 
-adsl <- read_csv(
-  "/app/input/adsl.csv",
+dm <- read_csv(
+  "/app/input/dm.csv",
   col_types = cols(.default = col_character())
 )
 ex <- read_csv(
@@ -32,9 +32,9 @@ agg <- ex |>
   mutate(DOSECUM = if_else(NDOSVAL > 0, DOSE_SUM, NA_real_)) |>
   select(STUDYID, USUBJID, DOSECUM, NDOSREC, NDOSVAL)
 
-adex <- adsl |>
+adex <- dm |>
   left_join(agg, by = c("STUDYID", "USUBJID")) |>
-  select(STUDYID, USUBJID, TRT01P, DOSECUM, NDOSREC, NDOSVAL)
+  transmute(STUDYID, USUBJID, TRT01P = ARM, DOSECUM, NDOSREC, NDOSVAL)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(adex, "/app/output/adex.csv", na = "")

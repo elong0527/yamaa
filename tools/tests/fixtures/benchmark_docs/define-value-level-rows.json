@@ -1,0 +1,62 @@
+[
+  {
+    "benchmark": "adam-adlb-metadata",
+    "caption": "ADLB.AVALC value-level metadata",
+    "headers": [
+      "Where Condition",
+      "Variable",
+      "Label / Description",
+      "Type",
+      "Length or Display Format",
+      "Controlled Terms or ISO Format",
+      "Origin / Source / Method / Comment"
+    ],
+    "rows": [
+      [
+        "PARAMCD = HCG",
+        "AVALC",
+        "Analysis Value (C)",
+        "text",
+        "8",
+        "Pregnancy Test Result (CL.HCGRS)\nNEGATIVE\nPOSITIVE",
+        "Predecessor; LB.LBSTRESC"
+      ]
+    ]
+  },
+  {
+    "benchmark": "schema-value-level-not-in",
+    "caption": "LB.LBORRES value-level metadata",
+    "headers": [
+      "Where Condition",
+      "Variable",
+      "Label / Description",
+      "Type",
+      "Role",
+      "Length or Display Format",
+      "Controlled Terms or ISO Format",
+      "Origin / Source / Method / Comment"
+    ],
+    "rows": [
+      [
+        "LBTESTCD not in HCG, PH",
+        "LBORRES",
+        "Central Laboratory Result",
+        "text",
+        "Result Qualifier",
+        "8",
+        "",
+        "Collected; Vendor"
+      ],
+      [
+        "LBTESTCD in HCG, PH",
+        "LBORRES",
+        "Site Laboratory Result",
+        "text",
+        "Result Qualifier",
+        "8",
+        "",
+        "Collected; Investigator; Annotated Case Report Form (acrf.pdf); pages 14"
+      ]
+    ]
+  }
+]

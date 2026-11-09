@@ -16,6 +16,7 @@ from evaluations.harbor.tests.test_harbor_evaluation import (
     _board,
     _fake_job,
     _golden,
+    _held_out_case,
     _load,
     _on,
     _rerun,
@@ -390,6 +391,27 @@ def test_pc_unit_challenge_contains_changed_and_missing_units(tmp_path):
         ],
         "units": ["ug/mL", "", "ug/mL", "", "ug/mL"],
     }
+
+
+@pytest.mark.parametrize("agent", ["reference", "hardcode"])
+def test_qs_challenge_grades_changed_scores(tmp_path, agent):
+    # Seam: verifier profile selection must change the actual scores graded,
+    # so reproducing the original golden cannot pass the required challenge.
+    result = _held_out_case(
+        tmp_path,
+        agent,
+        "reference",
+        "adam-adqs-missed-visit-locf",
+        challenge_required=True,
+    )
+    assert result["outputs"][0]["passed"]
+    assert result["challenge"]["checked"]
+    assert any(
+        "QSSTRESN" in change["columns"]
+        for change in result["challenge"]["value_changes"]
+    )
+    assert result["challenge"]["passed"] == (agent == "reference")
+    assert result["reward"]["reward"] == (1 if agent == "reference" else 0)
 
 
 def test_declared_input_changes_name_columns_the_inputs_carry():

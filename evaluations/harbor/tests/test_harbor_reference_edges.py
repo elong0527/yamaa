@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import functools
+import io
+import json
 import os
 import re
 import shutil
@@ -755,6 +757,54 @@ def test_exposure_rejects_unstandardized_doses(tmp_path, language, unit):
     exposure = _input(name, "ex.csv")
     exposure[0]["EXDOSU"] = unit
     _run(tmp_path, name, language, {"ex.csv": exposure}, rejects=True)
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads(
+        (Path(__file__).parent / "fixtures/exposure_spec_controls.json").read_text()
+    ),
+    ids=lambda case: case["id"],
+)
+@pytest.mark.parametrize("track", ["yamaa", "python", "r", "opensas"])
+def test_exposure_specification_controls(tmp_path, case, track):
+    from evaluations.harbor import build, grade
+
+    name = "adam-adex-uncollected"
+    if track == "yamaa":
+        import yamaa
+
+        actual = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, actual)
+        for filename, content in case["files"].items():
+            (actual / filename).write_text(content)
+        result = yamaa.spec(actual / "spec.yaml").run()
+        if "condition" in case:
+            assert result.output is None
+            assert {row["condition"] for row in result.issues.to_pylist()} == {
+                case["condition"]
+            }
+            return
+        assert result.output is not None, result.issues
+        result.save()
+    else:
+        changes = {
+            Path(filename).name: list(csv.DictReader(io.StringIO(content)))
+            for filename, content in case["files"].items()
+        }
+        _run(tmp_path, name, track, changes, rejects="condition" in case)
+        if "condition" in case:
+            return
+        actual = tmp_path / "output"
+    contract = build.contract_for(ROOT / "benchmarks" / name, "python")["outputs"][0]
+    expected = tmp_path / "expected"
+    expected.mkdir()
+    with (expected / contract["file"]).open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=contract["columns"])
+        writer.writeheader()
+        writer.writerows(case["rows"])
+    verdict = grade.grade_output(contract, expected, actual)
+    assert verdict["passed"], verdict
 
 
 def test_expected_visit_sequences_follow_all_subject_parameters(tmp_path, language):

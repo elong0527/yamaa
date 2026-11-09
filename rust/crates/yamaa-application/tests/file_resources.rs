@@ -1090,6 +1090,9 @@ mod file {
                 }
                 fs::write(temp.0.join("spec.yaml"), spec).unwrap();
                 let result = temp.run("2026-09-30T00:00:00");
+                if !derives {
+                    assert!(result.issues().is_empty(), "{:?}", result.issues());
+                }
                 assert_eq!(
                     result
                         .issues()

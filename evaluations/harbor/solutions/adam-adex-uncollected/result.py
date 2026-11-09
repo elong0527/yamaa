@@ -4,9 +4,9 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create the ADEX dataset from ADSL and EX.
+"""Create the ADEX dataset from SDTM DM and EX.
 
-One record per ADSL subject, carrying the planned treatment TRT01P.
+One record per DM subject, carrying ARM as the planned treatment TRT01P.
 DOSECUM is the total of the recorded EXDOSE values on the subject's EX
 records; it has no value when no dose was ever recorded, while a
 recorded total of zero is kept as zero. NDOSREC is the number of the
@@ -36,7 +36,7 @@ def format_number(value):
 
 
 def main():
-    subjects = read_rows(f"{INPUT_DIR}/adsl.csv")
+    subjects = read_rows(f"{INPUT_DIR}/dm.csv")
     exposure = read_rows(f"{INPUT_DIR}/ex.csv")
 
     doses_by_key = defaultdict(list)
@@ -63,7 +63,7 @@ def main():
             {
                 "STUDYID": row["STUDYID"],
                 "USUBJID": row["USUBJID"],
-                "TRT01P": row["TRT01P"],
+                "TRT01P": row["ARM"],
                 "DOSECUM": dose_cum,
                 "NDOSREC": n_records,
                 "NDOSVAL": n_values,

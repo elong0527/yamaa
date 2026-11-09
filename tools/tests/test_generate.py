@@ -259,26 +259,26 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(document.xpath("//details/@open"), [])
 
     def test_define_xml_resolves_value_conditions_and_codelist_values(self):
-        benchmark = generate.BENCHMARKS / "adam-adlb-metadata"
-        rendered, _, _ = generate.render_files(
-            [benchmark / "expected/define.xml"], "output", benchmark, set(), {}
-        )
-        document = html_tree.fromstring(rendered)
-        row = document.xpath(
-            '//table[caption="ADLB.AVALC value-level metadata"]/tbody/tr'
-        )[0]
-        self.assertEqual(
-            [cell.text_content() for cell in row],
-            [
-                "PARAMCD = HCG",
-                "AVALC",
-                "Analysis Value (C)",
-                "text",
-                "8",
-                "Pregnancy Test Result (CL.HCGRS)\nNEGATIVE\nPOSITIVE",
-                "Predecessor; LB.LBSTRESC",
-            ],
-        )
+        fixtures = HERE / "fixtures/benchmark_docs"
+        cases = json.loads((fixtures / "define-value-level-rows.json").read_text())
+        for case in cases:
+            with self.subTest(benchmark=case["benchmark"]):
+                benchmark = generate.BENCHMARKS / case["benchmark"]
+                rendered, _, _ = generate.render_files(
+                    [benchmark / "expected/define.xml"], "output", benchmark, set(), {}
+                )
+                document = html_tree.fromstring(rendered)
+                table = document.xpath(f'//table[caption="{case["caption"]}"]')[0]
+                self.assertEqual(
+                    {
+                        "headers": table.xpath("thead/tr/th/text()"),
+                        "rows": [
+                            [cell.text_content() for cell in row]
+                            for row in table.xpath("tbody/tr")
+                        ],
+                    },
+                    {"headers": case["headers"], "rows": case["rows"]},
+                )
 
     def test_html_files_render_in_isolated_frames_and_keep_original_source(self):
         # Read authored HTML preview cases from their fixture home.

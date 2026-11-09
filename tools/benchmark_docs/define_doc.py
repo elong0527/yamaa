@@ -317,14 +317,17 @@ def render_metadata(metadata, prefix):
                 values = definitions.get(link.get("ValueListOID"))
                 if values is None:
                     continue
+                value_references = values.findall("{*}ItemRef")
+                value_roles = any(ref.get("Role") for ref in value_references)
                 rows = [
-                    [condition(ref, definitions)] + item_row(ref, definitions, False)
-                    for ref in values.findall("{*}ItemRef")
+                    [condition(ref, definitions)]
+                    + item_row(ref, definitions, value_roles)
+                    for ref in value_references
                 ]
                 parts.append(
                     table(
                         name + "." + item.get("Name", "") + " value-level metadata",
-                        ("Where Condition", *VARIABLE_HEADERS),
+                        ("Where Condition", *variable_headers(value_roles)),
                         rows,
                     )
                 )
