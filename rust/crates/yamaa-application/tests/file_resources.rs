@@ -1070,9 +1070,10 @@ mod file {
         /// `a_label_in_the_metadata_mapping_is_a_reserved_key`.
         #[test]
         fn a_plain_dictionary_lookup_refutes_no_collected_origin_and_a_deriving_lookup_does() {
-            // The coded terms are a plain dictionary lookup, which copies the
-            // record it selects and refutes no origin; a lookup that derives
-            // fields computes what it exposes and refutes Collected.
+            // The coded terms come from a lookup that derives its upper-case
+            // match key, so it computes what it exposes and refutes Collected;
+            // matched on the stored term instead, it is a plain dictionary
+            // lookup, which copies the record it selects and refutes no origin.
             for (derives, refuted) in [(false, false), (true, true)] {
                 let temp = Temp::fixture("sdtm-ae-coding", false);
                 let mut spec = fs::read_to_string(temp.0.join("spec.yaml"))
@@ -1081,10 +1082,10 @@ mod file {
                     "codelist: MEDDRA\n      origins:\n        - type: Assigned\n          source: Sponsor",
                     "codelist: MEDDRA\n      origins:\n        - type: Collected\n          source: Vendor",
                 );
-                if derives {
+                if !derives {
                     spec = spec.edit(
-                        "    absent: NOT CODED\n",
-                        "    absent: NOT CODED\n    derivations:\n      LLTUPPER: {str_case: {source: LLTNAME, to: upper}}\n",
+                        "    key: {LLTKEY: AETERM}\n    absent: NOT CODED\n    derivations:\n      LLTKEY:\n        str_case:\n          source: LLTNAME\n          to: upper\n",
+                        "    key: {LLTNAME: AETERM}\n    absent: NOT CODED\n",
                     );
                 }
                 fs::write(temp.0.join("spec.yaml"), spec).unwrap();
