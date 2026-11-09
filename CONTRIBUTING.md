@@ -14,13 +14,17 @@ header before changing what it checks.
 [Open a yamaa Codespace](https://codespaces.new/elong0527/yamaa) on a
 machine with at least 4 cores, 8 GB of memory and 32 GB of storage. The
 [dev container](.devcontainer/devcontainer.json) starts from Rocker's
-latest `r-ver` image, which holds R alone, and adds Quarto, Node.js LTS,
-Rust and uv through its container features; its
+latest `r-ver` image, which holds R alone, and adds Docker, Quarto,
+Node.js LTS, Rust, uv and LibreOffice Writer through its container features,
+with the RTF Preview extension in the editor; its
 [setup script](.devcontainer/setup.sh) then installs the latest stable
-Python through uv, the latest OpenCode v2, Claude Code and Codex, clones the latest
+Python through uv, the opensas release and the Harbor version that the
+[Harbor evaluation](evaluations/harbor/README.md) pins, the latest OpenCode
+v2, Claude Code and Codex, clones the latest
 [Pilot 7 synthetic data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 repository beside yamaa, runs `make setup` and installs the R package from
-the same checkout into `~/R/library`. Setup compiles both
+the same checkout, with the tidyverse and languageserver, into
+`~/R/library`. Setup compiles both
 bindings and can take several minutes, so it runs as the container's
 `updateContentCommand`, which a Codespaces prebuild runs ahead of time; a
 Codespace created from a prebuild opens ready. Without one, wait for
@@ -32,6 +36,8 @@ Codespace created from a prebuild opens ready. Without one, wait for
 python -c 'import polars, yamaa; print(yamaa.selftest())'
 Rscript -e 'library(yamaa); print(yamaa_selftest())'
 quarto --version
+opensas path/to/program.sas
+harbor --help
 opencode
 claude
 codex
