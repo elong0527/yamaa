@@ -29,8 +29,9 @@ bindings and can take several minutes, so it runs as the container's
 `updateContentCommand`, which a Codespaces prebuild runs ahead of time; a
 Codespace created from a prebuild opens ready. Without one, wait for
 **yamaa Codespace is ready** in the creation log. The editor opens `/workspaces`, which holds `yamaa/` and
-`submissions-pilot7-synthetic-data/`; new terminals start in `yamaa/` and use
-`python/.venv`. Then, from the repository root:
+`submissions-pilot7-synthetic-data/`; new terminals start in `yamaa/`, and
+both they and the Python extension use `python/.venv`, with the Python
+Environments extension turned off. Then, from the repository root:
 
 ```sh
 python -c 'import polars, yamaa; print(yamaa.selftest())'
