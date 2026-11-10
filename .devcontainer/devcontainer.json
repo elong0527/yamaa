@@ -43,7 +43,14 @@
         "elong0527.vs-rtf-preview"
       ],
       "settings": {
-        "r.rterm.linux": "/usr/local/bin/R"
+        "r.rterm.linux": "/usr/local/bin/R",
+        // Off, so that the Python extension resolves
+        // python.defaultInterpreterPath itself. With it on, the Python
+        // Environments extension answers "no environment" until its discovery
+        // ends, and on a new Codespace's first open the Python extension
+        // reports that as an invalid interpreter
+        // (microsoft/vscode-python-environments#1858).
+        "python.useEnvironmentsExtension": false
       }
     }
   }
