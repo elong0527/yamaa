@@ -58,6 +58,18 @@ else
   git clone --depth 1 https://github.com/RConsortium/submissions-pilot7-synthetic-data "$pilot7_dir"
 fi
 
+printf '\nCloning the ai4csr repository beside yamaa...\n'
+# The ASA Boston short-course deck lives in ai4csr
+# (slides/asa-boston-2026-11-12); check it out beside yamaa so the course
+# can be run and edited from the Codespace.
+ai4csr_dir="$(dirname "$repository_root")/ai4csr"
+if [ -d "$ai4csr_dir/.git" ]; then
+  git -C "$ai4csr_dir" pull --ff-only ||
+    printf 'warning: could not update %s; keeping the existing checkout\n' "$ai4csr_dir" >&2
+else
+  git clone --depth 1 https://github.com/elong0527/ai4csr "$ai4csr_dir"
+fi
+
 # The editor opens the parent folder, so point its settings at this checkout.
 mkdir -p "$(dirname "$repository_root")/.vscode"
 cat > "$(dirname "$repository_root")/.vscode/settings.json" <<SETTINGS
@@ -122,4 +134,6 @@ opensas "$scratch/smoke.sas"
 printf '{\\rtf1\\ansi yamaa}\n' > "$scratch/smoke.rtf"
 soffice --headless --convert-to pdf --outdir "$scratch" "$scratch/smoke.rtf"
 test -s "$scratch/smoke.pdf"
-printf '\nyamaa Codespace is ready. Run R, quarto, python, opensas, harbor, opencode, claude, codex, or muse.\nPilot 7 data: %s\n' "$pilot7_dir"
+# The course deck lives in ai4csr; fail loudly if the checkout missed it.
+test -s "$ai4csr_dir/slides/asa-boston-2026-11-12/index.qmd"
+printf '\nyamaa Codespace is ready. Run R, quarto, python, opensas, harbor, opencode, claude, codex, or muse.\nPilot 7 data: %s\nai4csr: %s\n' "$pilot7_dir" "$ai4csr_dir"
