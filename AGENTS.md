@@ -97,10 +97,11 @@ The whole of this guide is the contract; this list is the order of work.
   page and `rules/README.md` for the rules index. MkDocs reads those
   files through `tools/docs/canonical_pages.py`; do not create
   `docs/index.md` or `docs/articles/rules.md`.
-- **No alt text in the ASA Boston slides.** Do not add `fig-alt` or any other
-  image alternative text to
-  `docs/slides/yamaa-asa-boston-2026-11-12/index.qmd`; the owner does not want
-  it in that deck, and the deck carries none.
+- **Slides live in ai4csr.** Talk and workshop decks are kept in
+  <https://github.com/elong0527/ai4csr/tree/main/slides> and published at
+  `https://ai4csr.org/slides/<deck>/`. Do not add a deck, a Quarto source or
+  slide assets to this repository; `docs/slides/` holds only the redirects
+  from the old deck addresses.
 
 ## Design principles
 
