@@ -20,7 +20,7 @@ with the RTF Preview extension in the editor; its
 [setup script](.devcontainer/setup.sh) then installs the latest stable
 Python through uv, the opensas release and the Harbor version that the
 [Harbor evaluation](evaluations/harbor/README.md) pins, the latest OpenCode
-v2, Claude Code and Codex, clones the latest
+v2, Claude Code, Codex and Muse Code, clones the latest
 [Pilot 7 synthetic data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 repository beside yamaa, runs `make setup` and installs the R package from
 the same checkout, with the tidyverse and languageserver, into
@@ -42,9 +42,10 @@ harbor --help
 opencode
 claude
 codex
+muse
 ```
 
-Sign in to Claude Code and Codex, or configure a model provider inside
+Sign in to Claude Code, Codex, or Muse Code, or configure a model provider inside
 OpenCode, first; keep API keys in your
 personal Codespaces secrets, never in the repository. After changing Python
 or Rust sources, run `make setup` again; to rebuild both packages, rerun

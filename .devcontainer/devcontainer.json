@@ -5,7 +5,12 @@
     "ghcr.io/devcontainers/features/common-utils:2": {
       "username": "vscode"
     },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    // Moby (moby-cli) is not shipped for Ubuntu resolute, which the floating
+    // rocker/r-ver image now uses, so install Docker CE instead: the Nov 10
+    // prebuild rebuild failed on the default (moby: true).
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": false
+    },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     },

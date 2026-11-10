@@ -40,6 +40,15 @@ uv tool install --force --python 3.14 "$harbor_requirement"
 printf '\nInstalling Claude Code and Codex...\n'
 npm install --global --prefix "$HOME/.local" @anthropic-ai/claude-code @openai/codex
 
+printf '\nInstalling Muse Code...\n'
+# Muse Code is Meta's terminal-first multi-agent coding CLI. Its official
+# installer lands the `muse` launcher in ~/.local/bin, which is already on
+# PATH here, so it writes no shell-profile lines; MUSE_NO_MODIFY_PATH keeps
+# it from editing profiles if that ever changes. The installer itself takes
+# no input. Using Muse Code needs each attendee's own sign-in and plan --
+# the image carries no credentials.
+curl -fsSL https://dev.meta.ai/install.sh | MUSE_NO_MODIFY_PATH=1 bash
+
 printf '\nCloning the latest Pilot 7 synthetic data repository beside yamaa...\n'
 pilot7_dir="$(dirname "$repository_root")/submissions-pilot7-synthetic-data"
 if [ -d "$pilot7_dir/.git" ]; then
@@ -104,6 +113,7 @@ quarto --version
 opencode --version
 claude --version
 codex --version
+muse --version
 harbor --version
 docker --version
 printf 'data _null_; put "opensas ready"; run;\n' > "$scratch/smoke.sas"
@@ -112,4 +122,4 @@ opensas "$scratch/smoke.sas"
 printf '{\\rtf1\\ansi yamaa}\n' > "$scratch/smoke.rtf"
 soffice --headless --convert-to pdf --outdir "$scratch" "$scratch/smoke.rtf"
 test -s "$scratch/smoke.pdf"
-printf '\nyamaa Codespace is ready. Run R, quarto, python, opensas, harbor, opencode, claude, or codex.\nPilot 7 data: %s\n' "$pilot7_dir"
+printf '\nyamaa Codespace is ready. Run R, quarto, python, opensas, harbor, opencode, claude, codex, or muse.\nPilot 7 data: %s\n' "$pilot7_dir"
