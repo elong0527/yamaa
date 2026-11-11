@@ -314,7 +314,7 @@ Every other pair fails: a temporal value is not comparable to text, and no
 two of `date`, `datetime` and `time` are comparable to each other.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`.
+Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_leaves_undeclared_compared_with_a_number_names_the_entry_that_types_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_declares_str_compared_with_a_number_has_no_hint`.
 
 | Types | Order |
 |---|---|
@@ -331,7 +331,11 @@ defines. `9007199254740993 = 9007199254740992.0` is `FALSE`. An arithmetic
 operand has the numeric type of its result: `X + 0 = 9007199254740993` keeps
 an exact `int`, while `X * 1.0` is a `float`. Two non-missing operands that are
 not mutually comparable, or a non-string operand to `LIKE`
-([FORMULA-7](#formula-7)), fail with `incompatible_input_type`.
+([FORMULA-7](#formula-7)), fail with `incompatible_input_type`. When the
+`str` operand of such a pair is a field of a delimited input that its `types`
+leave undeclared, which reads as `str` ([INPUT-5](inputs.md#input-5)), and
+the input stores it, the refusal's `hint` names that field and says that its
+input's `types` declare no type for it.
 
 <a id="formula-6"></a>
 

@@ -516,15 +516,39 @@ impl Run<'_> {
     fn field(&mut self, value: usize, name: &str) -> Result<Option<usize>, ValidationError> {
         Ok(self.input.field(value, name))
     }
-    /// Whether a mapping's keys are exactly a result wrapper's `value` and
-    /// `unconvertible` (COLUMN-13).
-    fn result_wrapper(&mut self, items: &[(usize, usize)]) -> Result<bool, ValidationError> {
+    /// The hint for a mapping whose keys are exactly a result wrapper's
+    /// `value` and `unconvertible`, written where only an expression fits,
+    /// such as a case's `otherwise` (EXPR-5): the innermost derivation that
+    /// holds it takes the wrapper around its whole expression (COLUMN-13),
+    /// and an intermediate's derivation takes `type`, `derivation` and
+    /// `unconvertible` instead (LOOKUP-15), each the type of that name in
+    /// `yaml/schema_derivation.yaml`. Outside both, no hint.
+    fn result_wrapper_hint(
+        &mut self,
+        items: &[(usize, usize)],
+    ) -> Result<Option<&'static str>, ValidationError> {
         let mut keys = Vec::with_capacity(items.len());
         for (key, _) in items {
             keys.push(self.key(*key)?.0);
         }
         keys.sort_unstable();
-        Ok(keys == ["unconvertible", "value"])
+        if keys != ["unconvertible", "value"] {
+            return Ok(None);
+        }
+        let aliases = self.schema.aliases();
+        Ok(self
+            .active
+            .iter()
+            .rev()
+            .find_map(|&(_, id)| match aliases[id].name.as_str() {
+                "derivation" => Some(
+                    "value and unconvertible are a result wrapper, not operations; write them on the derivation, around its whole expression",
+                ),
+                "intermediate_derivation" => Some(
+                    "value and unconvertible are a result wrapper, not operations; an intermediate's derivation writes type, derivation and unconvertible instead",
+                ),
+                _ => None,
+            }))
     }
     fn key(&mut self, node: usize) -> Result<(String, bool), ValidationError> {
         Ok((
@@ -1089,15 +1113,10 @@ impl Run<'_> {
                             ("registry", Self::text(&registry.name)),
                             ("count", SchemaContext::Count(items.len())),
                         ];
-                        // A result wrapper where only an expression fits,
-                        // such as a case's `otherwise` (EXPR-5, COLUMN-13).
-                        if registry.name == "expressions" && self.result_wrapper(items)? {
-                            context.push((
-                                "hint",
-                                Self::text(
-                                    "write value and unconvertible on the derivation, around its whole expression",
-                                ),
-                            ));
+                        if registry.name == "expressions" {
+                            if let Some(hint) = self.result_wrapper_hint(items)? {
+                                context.push(("hint", Self::text(hint)));
+                            }
                         }
                         return Ok(vec![self.diagnostic(
                             site,

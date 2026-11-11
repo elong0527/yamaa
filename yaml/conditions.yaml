@@ -189,6 +189,8 @@ conditions:
     phases: [validation]
     message: "{spec_path} reads a value of type {actual}, which it does not accept"
     message_variants:
+      - when: hint
+        message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared ({hint})"
       - when: left_type
         message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"
   inheritance_cycle:

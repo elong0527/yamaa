@@ -7,6 +7,7 @@ use super::*;
 use crate::{
     ast::{self, ExprId, Read, Scope, TypeEnv},
     diagnostic::{ConditionCode, Diagnostic},
+    expression::TypeFinding,
     producer_contract::Contract,
     result_type::ResultType,
     value::ValueType,
@@ -216,11 +217,26 @@ impl PreparedSpecification {
 pub(super) struct CapturedTypes<'a> {
     donors: binder::Donors<'a>,
     catalog: &'a Catalog,
+    spec: &'a ast::Spec,
 }
 
 impl<'a> CapturedTypes<'a> {
-    pub(super) fn new(donors: binder::Donors<'a>, catalog: &'a Catalog) -> Self {
-        Self { donors, catalog }
+    pub(super) fn new(
+        donors: binder::Donors<'a>,
+        catalog: &'a Catalog,
+        spec: &'a ast::Spec,
+    ) -> Self {
+        Self {
+            donors,
+            catalog,
+            spec,
+        }
+    }
+    fn origins(&self) -> FieldOrigins<'a> {
+        FieldOrigins {
+            spec: self.spec,
+            inputs: self.donors.inputs,
+        }
     }
     pub(super) fn kind(&self, name: &str) -> Option<ValueType> {
         if let Some((index, field)) = self.donors.named.reference(name) {
@@ -249,9 +265,13 @@ impl<'a> CapturedTypes<'a> {
             .map(|name| (name, self.kind(name)))
             .collect::<BTreeMap<_, _>>();
         findings.extend(
-            predicate_kinds(plan, |name| kinds.get(name).copied().flatten())
-                .into_iter()
-                .map(BindFinding::Predicate),
+            predicate_kinds(
+                plan,
+                |name| kinds.get(name).copied().flatten(),
+                self.origins(),
+            )
+            .into_iter()
+            .map(BindFinding::Predicate),
         );
     }
     /// Every static type fault of a formula over the names `bindings` binds.
@@ -267,9 +287,13 @@ impl<'a> CapturedTypes<'a> {
             .map(|name| (name, self.kind(name)))
             .collect::<BTreeMap<_, _>>();
         findings.extend(
-            numeric_kinds(plan, |name| kinds.get(name).copied().flatten())
-                .into_iter()
-                .map(BindFinding::Scalar),
+            numeric_kinds(
+                plan,
+                |name| kinds.get(name).copied().flatten(),
+                self.origins(),
+            )
+            .into_iter()
+            .map(BindFinding::Scalar),
         );
     }
 }
@@ -280,43 +304,109 @@ impl TypeEnv for CapturedTypes<'_> {
     }
 }
 
+/// Where an input field's type comes from, as a comparison fault's hint
+/// reads it: the specification's input declarations, and the schemas
+/// binding reads, which say whether an input stores a field.
+#[derive(Clone, Copy)]
+pub(super) struct FieldOrigins<'a> {
+    pub spec: &'a ast::Spec,
+    pub inputs: binder::Inputs<'a>,
+}
+
+impl FieldOrigins<'_> {
+    /// The hint for `name`, a bare name of a field that a delimited input,
+    /// which no schema link types, stores and its `types` leave undeclared,
+    /// so that the field reads as `str` (INPUT-5): the field, why it is
+    /// text, and where its type is declared. A field the input is not
+    /// known to store, as `check()` reads one no declaration states, has
+    /// none.
+    fn untyped(&self, name: &str) -> Option<String> {
+        let (owner, field) = name.split_once('.')?;
+        let source = &self
+            .spec
+            .inputs
+            .iter()
+            .find(|input| input.name.name == owner)?
+            .source;
+        let untyped = matches!(source.profile, Some(ast::Profile::Csv))
+            && source.schema.is_none()
+            && !source
+                .types
+                .iter()
+                .any(|(declared, _)| declared.name == field)
+            && self.inputs.schema(owner)?.stores(field) == Some(true);
+        untyped.then(|| {
+            format!(
+                "{name} is str because input {owner} declares no type for {field} in input.{owner}.types"
+            )
+        })
+    }
+}
+
 /// Every static type fault of a numeric expression or predicate, with
-/// `kind` giving each name's type.
+/// `kind` giving each name's type. A comparison whose `str` operand is an
+/// input field no declaration types names it in a `hint` (INPUT-5,
+/// FORMULA-5).
 fn type_findings(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
     collected_sources: bool,
+    origins: FieldOrigins<'_>,
 ) -> Result<Vec<Diagnostic>, BindError> {
     plan.type_findings(kind, collected_sources)
         .iter()
         .map(|finding| {
-            finding
+            let mut diagnostic = finding
                 .diagnostic(plan.spec_path(), plan.expression())
-                .map_err(|_| BindError::InvalidDiagnostic)
+                .map_err(|_| BindError::InvalidDiagnostic)?;
+            if let Some(hint) = untyped_field_hint(origins, finding) {
+                diagnostic
+                    .context
+                    .insert("hint".into(), crate::json::Value::String(hint));
+            }
+            Ok(diagnostic)
         })
         .collect()
+}
+
+/// The hint of a comparison fault whose `str` operand is an input field no
+/// declaration types ([`FieldOrigins::untyped`]).
+fn untyped_field_hint(origins: FieldOrigins<'_>, finding: &TypeFinding) -> Option<String> {
+    let TypeFinding::IncompatiblePair {
+        left, right, names, ..
+    } = finding
+    else {
+        return None;
+    };
+    [(*left, &names[0]), (*right, &names[1])]
+        .into_iter()
+        .filter(|&(kind, _)| kind == ValueType::Str)
+        .find_map(|(_, name)| origins.untyped(name.as_deref()?))
 }
 
 pub(super) fn numeric_kinds(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
+    origins: FieldOrigins<'_>,
 ) -> Vec<Diagnostic> {
-    type_findings(plan, kind, false).expect("numeric findings project")
+    type_findings(plan, kind, false, origins).expect("numeric findings project")
 }
 
 pub(super) fn aggregate_kinds(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
     source_arguments: bool,
+    origins: FieldOrigins<'_>,
 ) -> Result<Vec<Diagnostic>, BindError> {
-    type_findings(plan, kind, source_arguments)
+    type_findings(plan, kind, source_arguments, origins)
 }
 
 pub(super) fn predicate_kinds(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
+    origins: FieldOrigins<'_>,
 ) -> Vec<Diagnostic> {
-    type_findings(plan, kind, false).expect("predicate findings project")
+    type_findings(plan, kind, false, origins).expect("predicate findings project")
 }
 
 impl PreparedSpecification {

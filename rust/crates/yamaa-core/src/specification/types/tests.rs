@@ -322,7 +322,19 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
         "result",
     )
     .unwrap();
-    let findings = numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str));
+    let prepared = prepare(&document(literal(N::Integer("1".into())), None)).unwrap();
+    let findings = numeric_kinds(
+        &plan,
+        |_| Some(crate::value::ValueType::Str),
+        FieldOrigins {
+            spec: prepared.tree.spec(),
+            inputs: binder::Inputs {
+                sources: &[],
+                schemas: &[],
+                driver: 0,
+            },
+        },
+    );
     assert_eq!(findings.len(), 1024);
     for (index, finding) in findings.iter().enumerate() {
         assert_eq!(finding.code, C::NumericInputType);

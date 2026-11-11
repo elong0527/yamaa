@@ -307,11 +307,19 @@ pub(super) fn bind(
         return finish(operation, |condition| captured.typed(condition), bindings);
     }
     let catalog = cx.catalog;
+    let origins = types::FieldOrigins {
+        spec: cx.spec(),
+        inputs: cx.donors.inputs,
+    };
     if cx.findings.len() == start {
         cx.findings.extend(
-            types::predicate_kinds(condition, |name| catalog.type_of(name).map(Into::into))
-                .into_iter()
-                .map(BindFinding::Predicate),
+            types::predicate_kinds(
+                condition,
+                |name| catalog.type_of(name).map(Into::into),
+                origins,
+            )
+            .into_iter()
+            .map(BindFinding::Predicate),
         );
     }
     if cx.findings.len() != start {

@@ -871,6 +871,10 @@ fn bind_groups_and_operands(
         ..
     } = *reduced;
     let (catalog, phase) = (cx.catalog, cx.scope.phase);
+    let origins = types::FieldOrigins {
+        spec: cx.spec(),
+        inputs: cx.donors.inputs,
+    };
     let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     if matches!(phase, Phase::Row { .. })
         && grain.iter().any(|name| {
@@ -973,7 +977,7 @@ fn bind_groups_and_operands(
     }
     let kind = |name: &str| binding_kind(name, &bindings, donor_kinds, declaration);
     findings.extend(
-        types::aggregate_kinds(compiled, kind, matches!(phase, Phase::Row { .. }))?
+        types::aggregate_kinds(compiled, kind, matches!(phase, Phase::Row { .. }), origins)?
             .into_iter()
             .map(BindFinding::AggregateDiagnostic),
     );
@@ -1956,8 +1960,10 @@ fn bind_derivations(
     let catalog = catalog
         .with_selected(selected)
         .map_err(BindError::Catalog)?;
-    let derived_types =
-        declaration.derive_types(tree, &types::CapturedTypes::new(donors, &catalog))?;
+    let derived_types = declaration.derive_types(
+        tree,
+        &types::CapturedTypes::new(donors, &catalog, tree.spec()),
+    )?;
     let mut bound = Vec::new();
     for (index, binding) in derive.iter().enumerate() {
         let available = (0..width + index).collect::<Vec<_>>();

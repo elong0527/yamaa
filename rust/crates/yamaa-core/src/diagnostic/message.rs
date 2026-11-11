@@ -254,8 +254,8 @@ mod tests {
     /// (`yaml/conditions.yaml`): `missing_input` on `template_filter`
     /// (COLUMN-9), `unsupported_operation` on `hint` (ROW-2),
     /// `engine_rejected` on `actual` and then `limit` (LIMIT-1),
-    /// `incompatible_input_type` on `left_type` (FORMULA-5) and
-    /// `invalid_operation_count` on `hint` (SCHEMA-7).
+    /// `incompatible_input_type` on `hint` and then `left_type` (FORMULA-5)
+    /// and `invalid_operation_count` on `hint` (SCHEMA-7).
     #[test]
     fn a_variant_replaces_the_default_message_when_its_key_is_present() {
         let template = ["rows.matched_only.derivations.TAGGED.str_template"];
@@ -302,6 +302,20 @@ mod tests {
                 "columns.P.derivation.case[0].when compares a value of type str with a value of type int, which cannot be compared",
             ),
             (
+                ConditionCode::PredicateIncompatiblePair,
+                &when,
+                vec![
+                    ("actual", text("int")),
+                    (
+                        "hint",
+                        text("X.N is str because input X declares no type for N in input.X.types"),
+                    ),
+                    ("left_type", text("str")),
+                    ("right_type", text("int")),
+                ],
+                "columns.P.derivation.case[0].when compares a value of type str with a value of type int, which cannot be compared (X.N is str because input X declares no type for N in input.X.types)",
+            ),
+            (
                 ConditionCode::SchemaInvalidOperationCount,
                 &otherwise,
                 operations.clone(),
@@ -314,11 +328,11 @@ mod tests {
                     operations.clone(),
                     vec![(
                         "hint",
-                        text("write value and unconvertible on the derivation, around its whole expression"),
+                        text("value and unconvertible are a result wrapper, not operations; write them on the derivation, around its whole expression"),
                     )],
                 ]
                 .concat(),
-                "the expressions entry declares 2 operations instead of exactly one (write value and unconvertible on the derivation, around its whole expression)",
+                "the expressions entry declares 2 operations instead of exactly one (value and unconvertible are a result wrapper, not operations; write them on the derivation, around its whole expression)",
             ),
             (
                 ConditionCode::TemplateMissing,

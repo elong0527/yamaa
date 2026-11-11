@@ -838,6 +838,7 @@ fn rebase_filter(
     donor_kinds: &[Option<ColumnType>],
     record_types: &[ResultType],
     static_types: bool,
+    origins: types::FieldOrigins<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<crate::dataset::RelationPredicate, BindError> {
     let (predicate, deferred) = if filter
@@ -862,7 +863,7 @@ fn rebase_filter(
             }
         };
         let (typed, deferred) =
-            relation_predicates::typed(filter.plan(), kind, static_types, findings);
+            relation_predicates::typed(filter.plan(), kind, static_types, origins, findings);
         (
             crate::bound_expression::BoundPredicate::new(typed, filter.bindings().to_vec())
                 .map_err(BindError::InvalidPredicateBinding)?,
@@ -1160,6 +1161,10 @@ fn rebase(
                 &donor_kinds,
                 plan.record_types,
                 relation_predicates::static_filter_types(&item.keys),
+                types::FieldOrigins {
+                    spec: cx.tree.spec(),
+                    inputs: cx.inputs,
+                },
                 findings,
             )?);
         }
