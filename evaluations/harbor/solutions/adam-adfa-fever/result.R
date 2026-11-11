@@ -23,9 +23,11 @@ adfa <- vs |>
     DOMAIN = "ADFA",
     PARAMCD = "FEVER",
     PARAM = "Fever Occurrence",
+    # VSSTRESN is the standard result in C, even for a temperature
+    # collected in Fahrenheit.
     AVALC = case_when(
-      VSSTRESU == "C" & VSSTRESN >= 38 ~ "Y",
-      VSSTRESU == "C" & VSSTRESN < 38 ~ "N"
+      VSSTRESN >= 38 ~ "Y",
+      VSSTRESN < 38 ~ "N"
     ),
     AVAL = case_when(
       AVALC == "Y" ~ 1,

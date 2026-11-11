@@ -8,8 +8,9 @@
 
 One record per qualifying temperature record: VSTESTCD "TEMP" in the
 "REACTOGENICITY" category. AVALC is "Y" for a temperature of 38 C or
-higher and "N" below that; it has no value when the result is missing
-or the unit is not "C". AVAL is 1 for "Y" and 0 for "N".
+higher and "N" below that, judged on the standard result VSSTRESN, which
+SDTM holds in "C" even when the collected result is in Fahrenheit; it has
+no value when the result is missing. AVAL is 1 for "Y" and 0 for "N".
 """
 
 import csv
@@ -48,8 +49,7 @@ def main():
         recs.sort(key=lambda r: (r["VSDTC"][:10], float(r["VSSEQ"])))
         for i, r in enumerate(recs, start=1):
             result = r["VSSTRESN"].strip()
-            unit = r["VSSTRESU"].strip()
-            if result == "" or unit != "C":
+            if result == "":
                 avalc = ""
                 aval = ""
             elif float(result) >= 38:

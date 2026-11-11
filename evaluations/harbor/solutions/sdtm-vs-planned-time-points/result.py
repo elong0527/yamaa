@@ -31,8 +31,8 @@ TEST_ORDER = {"PULSE": 0, "SYSBP": 1, "DIABP": 2}
 
 COLUMNS = [
     "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VISIT", "VSTPT",
-    "VSTPTNUM", "VSELTM", "VSTESTCD", "VSORRES", "VSORRESU",
-    "VSSTRESN", "VSSTRESU", "VSDTC", "VSDY",
+    "VSTPTNUM", "VSELTM", "VSTPTREF", "VSRFTDTC", "VSTESTCD", "VSORRES",
+    "VSORRESU", "VSSTRESN", "VSSTRESU", "VSDTC", "VSDY",
 ]
 
 
@@ -68,6 +68,14 @@ def main():
 
     dictionary = {
         row["ItemOID"]: (row["VSTESTCD"], row["UNIT"]) for row in mapping_rows
+    }
+
+    # The first-dose datetime on each subject's dosing form is the reference
+    # time point every planned elapsed time counts from.
+    first_dose = {
+        row["SubjectKey"]: row["Value"].strip()
+        for row in odm_rows
+        if row["FormOID"] == "FO.EX" and row["ItemOID"] == "IT.EX.EXSTDTC"
     }
 
     # Group ODM item rows by subject and form occurrence.
@@ -110,6 +118,8 @@ def main():
                     "VSTPT": vstpt,
                     "VSTPTNUM": vstptnum,
                     "VSELTM": vseltm,
+                    "VSTPTREF": "FIRST DOSE",
+                    "VSRFTDTC": first_dose.get(subject, ""),
                     "VSTESTCD": testcd,
                     "VSORRES": value,
                     "VSORRESU": unit,

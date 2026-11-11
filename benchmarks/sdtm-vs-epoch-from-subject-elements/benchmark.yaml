@@ -9,6 +9,6 @@ review:
       day, a date-only reading, readings on element boundaries, a missing date,
       a partial date, and a reading before the first element.
     - On the first-dose day subject 101's 08:00 reading is SCREENING and the
-      10:30 reading TREATMENT, but the date-only reading that day counts as
-      midnight and stays SCREENING; a reading exactly on a boundary belongs to
-      the later element.
+      10:30 reading TREATMENT. The date-only reading that day is compared by
+      date, with no time assumed, and it matches both elements, so it belongs
+      to the later one, TREATMENT, as a reading exactly on a boundary does.

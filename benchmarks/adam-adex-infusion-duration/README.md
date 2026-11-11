@@ -1,8 +1,8 @@
 # Infusion duration from the collected duration or the start and end times
 
-**Goal:** give each infusion its duration in minutes as `AVAL`, with the
-unit in `AVALU`, and carry beside it `CALCDUR`, the duration computed from
-the start and end times.
+**Goal:** give each infusion its duration in minutes as `AVAL`, under a
+parameter `PARAM` that names the unit, and carry beside it `CALCDUR`, the
+duration computed from the start and end times.
 
 **Input:** Study Data Tabulation Model (SDTM) exposure (EX) records, one
 per infusion (`EXSEQ`), with the start (`EXSTDTC`) and end (`EXENDTC`) as

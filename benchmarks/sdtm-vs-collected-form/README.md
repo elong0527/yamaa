@@ -3,13 +3,13 @@
 **Goal:** build one record per test from the wide vital signs
 form collected at each visit, carrying `VSTESTCD`,
 `VSTEST`, `VSORRES`, `VSORRESU`, `VSSTRESN`, `VSSTRESC`,
-`VSSTRESU`, `VSPOS`, `VSMETHOD`, `VSSTAT`, and `VSREASND`, plus
+`VSSTRESU`, `VSPOS`, `VSSTAT`, `VSREASND`, and `VSLOC`, plus
 the visit name in `VISIT` and the measurement date in `VSDTC`.
 
 **Input:** long-form Operational Data Model (ODM) rows, one row per
 collected form item, with the collected entry in the value field.
 Each visit contributes one vitals form group: the visit date, body
-position, temperature method, each measurement with its unit, and the
+position, temperature location, each measurement with its unit, and the
 blood pressure not-done flag with its reason, each as its own item.
 
 **Variables:**
@@ -35,13 +35,13 @@ blood pressure not-done flag with its reason, each as its own item.
 - `VSPOS` is the body position as collected on the form
   (`SITTING`) on blood pressure and pulse records with a
   collected result; blank otherwise.
-- `VSMETHOD` is the measurement method as collected on the
-  form (`ORAL`) on temperature records with a collected
-  result; blank otherwise.
 - `VSSTAT` is `NOT DONE` when the form flags blood pressure as
   not done; blank otherwise.
 - `VSREASND` is the reason the form gives for blood pressure
   not done; blank otherwise.
+- `VSLOC` is the body location of the measurement as collected
+  on the form (`ORAL CAVITY`) on temperature records with a
+  collected result; blank otherwise.
 
 **Note:** each visit's form group fans out into one record per test.
 `VSSEQ` numbers them per subject by visit date, then in test order

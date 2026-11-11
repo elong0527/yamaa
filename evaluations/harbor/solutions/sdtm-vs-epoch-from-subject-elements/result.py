@@ -11,15 +11,16 @@ record per vital signs measurement.
 
 EPOCH is the trial period of the subject's element in progress at the
 collection date-time: the element whose start is on or before the collection
-and whose end is on or after it. A date-only collection reads as the start
-of that day. A reading exactly at a shared element boundary belongs to the
-later element. EPOCH is blank when the reading has no date or only a
-partial one, or when the date-time falls outside every element.
+and whose end is on or after it. A date-only collection is compared by date,
+with no time assumed: the element whose start date is on or before it and
+whose end date is on or after it. A reading that falls in two elements
+belongs to the later one. EPOCH is blank when the reading has no date or
+only a partial one, or when it falls outside every element.
 """
 
 import csv
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
@@ -34,11 +35,11 @@ def parse_element_bound(text):
 
 
 def parse_collection(text):
-    """Return the collection date-time, or None if missing or partial.
+    """Return the collection date-time or date, or None if missing or partial.
 
-    A full date-time parses directly; a full date alone reads as the
-    start of that day. Anything else (empty, year-month, year only)
-    yields None.
+    A full date-time parses to a datetime; a full date alone parses to a
+    date, with no time assumed. Anything else (empty, year-month, year
+    only) yields None.
     """
     if not text:
         return None
@@ -46,24 +47,28 @@ def parse_collection(text):
     if FULL_DATETIME.match(text):
         return datetime.fromisoformat(text)
     if FULL_DATE.match(text):
-        return datetime.fromisoformat(text)
+        return date.fromisoformat(text)
     return None
+
+
+def covers(element, collection):
+    """Whether the element is in progress at the collection: by moment for a
+    date-time, by calendar date for a date alone."""
+    if isinstance(collection, datetime):
+        return element["start"] <= collection <= element["end"]
+    return element["start"].date() <= collection <= element["end"].date()
 
 
 def derive_epoch(collection, elements):
     """Return the EPOCH of the element in progress at the collection.
 
-    An element covers the collection when its start is on or before it
-    and its end is on or after it. When two elements share the boundary
-    instant, the later element (the one starting at the boundary) wins.
+    When two elements cover the collection, at a shared boundary instant
+    or on a shared boundary date, the later element (the one starting at
+    the boundary) wins.
     """
     if collection is None:
         return ""
-    matches = [
-        element
-        for element in elements
-        if element["start"] <= collection <= element["end"]
-    ]
+    matches = [element for element in elements if covers(element, collection)]
     if not matches:
         return ""
     later = max(matches, key=lambda element: element["start"])

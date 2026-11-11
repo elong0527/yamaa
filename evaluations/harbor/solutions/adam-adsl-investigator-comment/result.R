@@ -13,12 +13,11 @@ dm <- read_csv(
   trim_ws = FALSE
 )
 
-# An empty comment field, quoted or not, counts as no comment collected,
-# while a field holding only spaces is still a comment and the spaces
-# are kept.
+# A comment field that is empty, quoted or not, or holds only spaces
+# counts as no comment collected; any other comment is kept as recorded.
 adsl <- dm |>
   mutate(
-    CMNT = na_if(COMMENT, ""),
+    CMNT = if_else(grepl("\\S", COMMENT), COMMENT, NA_character_),
     CMNTFL = if_else(is.na(CMNT), "N", "Y")
   ) |>
   select(STUDYID, USUBJID, CMNT, CMNTFL) |>

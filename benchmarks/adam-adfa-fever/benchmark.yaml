@@ -5,9 +5,9 @@ review:
   concerns:
     - Vaccine trials report fever from reactogenicity temperatures at or above
       38 degrees Celsius.
-    - Two subjects cover temperatures above and below 38 C, a missing result,
-      one in Fahrenheit, a blood pressure, and a temperature from another
-      category.
-    - A temperature recorded in Fahrenheit (SUBJ2's 101.3 F, about 38.5 C) gets
-      no fever flag rather than being converted, and the temperature outside the
-      reactogenicity category gives no record.
+    - Two subjects cover temperatures above and below 38 C, a temperature not
+      done, one collected in Fahrenheit, a blood pressure, and a temperature
+      from another category.
+    - A temperature collected in Fahrenheit is judged on its standard result in
+      Celsius (SUBJ2's 101.3 F is 38.5 C, so it is a fever), and the
+      temperature outside the reactogenicity category gives no record.

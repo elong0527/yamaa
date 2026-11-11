@@ -46,6 +46,12 @@ mapping <- read_csv(
 )
 
 ref_map <- setNames(suppressWarnings(ymd(dm$RFSTDTC)), dm$USUBJID)
+
+# The first-dose datetime on each subject's dosing form is the reference
+# time point every planned elapsed time counts from.
+doses <- odm |>
+  filter(FormOID == "FO.EX", ItemOID == "IT.EX.EXSTDTC") |>
+  select(SubjectKey, VSRFTDTC = Value)
 test_map <- setNames(mapping$VSTESTCD, mapping$ItemOID)
 unit_map <- setNames(mapping$UNIT, mapping$ItemOID)
 
@@ -65,12 +71,14 @@ results <- odm |>
     !is.na(Value) & Value != ""
   ) |>
   left_join(forms, by = c("SubjectKey", "FormOID", "StudyOID")) |>
+  left_join(doses, by = "SubjectKey") |>
   rowwise() |>
   mutate(
     point = list(time_point(FormOID)),
     VSTPT = point$vstpt,
     VSTPTNUM = point$vstptnum,
     VSELTM = point$vseltm,
+    VSTPTREF = "FIRST DOSE",
     VSTESTCD = test_map[[ItemOID]],
     VSORRES = Value,
     VSORRESU = unit_map[[ItemOID]],
@@ -98,8 +106,8 @@ results <- odm |>
     USUBJID = SubjectKey,
     VSSEQ,
     VISIT = "DAY 1",
-    VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU,
-    VSDTC, VSDY
+    VSTPT, VSTPTNUM, VSELTM, VSTPTREF, VSRFTDTC, VSTESTCD, VSORRES, VSORRESU,
+    VSSTRESN, VSSTRESU, VSDTC, VSDY
   )
 
 dir.create("/app/output", showWarnings = FALSE)
