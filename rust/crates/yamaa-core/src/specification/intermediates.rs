@@ -117,7 +117,8 @@ pub(super) struct Context<'a> {
 /// The relation a lookup reads, as its filter, range, nearest selection
 /// and `unique` checks probe it: the lookup's name, the dataset it reads,
 /// that dataset's schema once the lookup's derivations extend it, each
-/// field's kind, and whether the lookup may read a field.
+/// field's kind, whether the lookup may read a field, and the specification
+/// that declares the inputs its filter reads.
 #[derive(Clone, Copy)]
 pub(super) struct Donor<'a> {
     pub lookup: &'a str,
@@ -125,6 +126,7 @@ pub(super) struct Donor<'a> {
     pub schema: &'a TableSchema,
     pub kind: &'a dyn Fn(usize) -> Option<ColumnType>,
     pub admits: &'a dyn Fn(usize) -> bool,
+    pub spec: &'a crate::ast::Spec,
 }
 
 /// A lookup's filter over its relation: a read the relation does not
@@ -472,6 +474,7 @@ fn bind_pivot(
         schema,
         kind: donor_kind,
         admits,
+        ..
     } = *relation;
     use crate::diagnostic::lookup::{self, Owner};
     let owner = Owner::Intermediate(intermediate);
@@ -643,6 +646,7 @@ fn bind_one(
         schema,
         kind: &donor_kind,
         admits: &admits,
+        spec: tree.spec(),
     };
     let self_rows = matches!(item.source, self_relations::Relation::SelfRows);
     let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {

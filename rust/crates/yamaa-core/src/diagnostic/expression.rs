@@ -339,7 +339,9 @@ impl TypeFinding {
                 },
                 None,
             ),
-            Self::IncompatiblePair { left, right, route } => (
+            Self::IncompatiblePair {
+                left, right, route, ..
+            } => (
                 Condition::IncompatiblePair {
                     left: *left,
                     right: *right,

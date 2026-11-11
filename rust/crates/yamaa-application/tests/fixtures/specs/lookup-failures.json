@@ -120,7 +120,8 @@
         "context": {
           "left_type": "str",
           "right_type": "int",
-          "actual": "int"
+          "actual": "int",
+          "hint": "AE.AEOUT is str because input AE declares no type for AEOUT in input.AE.types"
         },
         "operand_route": []
       }

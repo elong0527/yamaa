@@ -301,7 +301,7 @@ impl Implicit {
             }
             .bind(declaration.expr, column)?;
             if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-                let captured = types::CapturedTypes::new(donors, &catalog);
+                let captured = types::CapturedTypes::new(donors, &catalog, prepared.tree.spec());
                 let result =
                     prepared
                         .tree
@@ -800,7 +800,7 @@ fn bind_template_filter(
         predicate
             .map(|plan| {
                 BoundPredicate::new_contextual(
-                    types::CapturedTypes::new(cx.donors, row_catalog).typed(plan),
+                    types::CapturedTypes::new(cx.donors, row_catalog, cx.spec()).typed(plan),
                     bindings,
                     Vec::new(),
                 )

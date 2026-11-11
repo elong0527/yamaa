@@ -328,7 +328,7 @@ pub(super) fn bind(
     };
     let (keys, values) = bind_keys(pair, name, &left, &right, cx, findings)?;
     let filter = match &declaration.filter {
-        Some(Ok(plan)) => bind_filter(plan, name, &joined, findings)?,
+        Some(Ok(plan)) => bind_filter(plan, name, &joined, cx, findings)?,
         Some(Err(CompileError::Invalid {
             position, failure, ..
         })) => {
@@ -798,6 +798,7 @@ fn bind_filter(
     plan: &CompiledExpression,
     name: &str,
     joined: &Joined<'_>,
+    cx: &Context<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationPredicate>, BindError> {
     let before = findings.len();
@@ -823,9 +824,16 @@ fn bind_filter(
             .and_then(|(_, kind)| kind.map(Into::into))
     };
     findings.extend(
-        types::predicate_kinds(plan, kind)
-            .into_iter()
-            .map(BindFinding::Predicate),
+        types::predicate_kinds(
+            plan,
+            kind,
+            types::FieldOrigins {
+                spec: cx.tree.spec(),
+                inputs: cx.relations,
+            },
+        )
+        .into_iter()
+        .map(BindFinding::Predicate),
     );
     if findings.len() != before {
         return Ok(None);

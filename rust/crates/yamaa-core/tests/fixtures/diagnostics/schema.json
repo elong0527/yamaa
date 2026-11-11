@@ -1,5 +1,5 @@
 {
-  "about": "The schema language's own findings in a pass over a complete document or a layer (SCHEMA-5, SCHEMA-7, SCHEMA-9, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. `schema_document` reads a complete document as an author wrote it, a list member named by the text of its `name` or `id` and otherwise by a rendering of what it holds; `schema_layer` reads a layer, inside each member of a keyed collection (`input`, `windows`, `columns`, `rows`, `intermediates`) and inside each block (`output`, `submission`) as a fragment whose requiredness waits for the resolved specification. A case that names both operations states that a fragment reports what the complete document reports. A case compares a complete list where its source stated every finding, and otherwise finds each finding by its cause among those the pass reports; its rows compare phase, condition, rule and path, with the context or the `expected` of the context where its source stated them. A value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). The rows from the Rust tests of schema_validation.rs and schema_references.rs keep those tests' paths, conditions and context; each phase is the registry's (yaml/conditions.yaml) and each rule the one the cause cites in the condition table. A class validated by itself (schema_types), which no version gates, reports its missing required field, a field of the wrong type and an unknown field in that order, each with its context, names a list member by its index, and admits an int field's integer beyond 64 bits as written; these rows are declaration_schema_capture.rs's, whose tests read the class from a captured schema and the document from YAML.",
+  "about": "The schema language's own findings in a pass over a complete document or a layer (SCHEMA-5, SCHEMA-7, SCHEMA-9, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. `schema_document` reads a complete document as an author wrote it, a list member named by the text of its `name` or `id` and otherwise by a rendering of what it holds; `schema_layer` reads a layer, inside each member of a keyed collection (`input`, `windows`, `columns`, `rows`, `intermediates`) and inside each block (`output`, `submission`) as a fragment whose requiredness waits for the resolved specification. A case that names both operations states that a fragment reports what the complete document reports. A case compares a complete list where its source stated every finding, and otherwise finds each finding by its cause among those the pass reports; its rows compare phase, condition, rule and path, with the context or the `expected` of the context where its source stated them. A value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). The rows from the Rust tests of schema_validation.rs and schema_references.rs keep those tests' paths, conditions and context; each phase is the registry's (yaml/conditions.yaml) and each rule the one the cause cites in the condition table. A mapping of exactly a result wrapper's value and unconvertible, written where only an expression fits, carries a hint the innermost type it sits in chooses: one named derivation takes the wrapper around its whole expression (COLUMN-13), one named intermediate_derivation takes type, derivation and unconvertible instead (LOOKUP-15), and outside both there is no hint; the schema of those cases mirrors the specification schema's two derivation types. A class validated by itself (schema_types), which no version gates, reports its missing required field, a field of the wrong type and an unknown field in that order, each with its context, names a list member by its index, and admits an int field's integer beyond 64 bits as written; these rows are declaration_schema_capture.rs's, whose tests read the class from a captured schema and the document from YAML.",
   "cases": [
     {
       "case": "classes_keep_schema_then_input_order_in_a_complete_document",
@@ -272,6 +272,75 @@
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["derive.case[1].otherwise.literal"]}]
+    },
+    {
+      "case": "a_result_wrapper_in_a_case_otherwise_hints_that_it_goes_on_the_derivation",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}, {"lookup": {"type": "intermediate_derivation"}}, {"check": {"type": "expression"}}],
+          "expression": {"type": ["int", "operation"]},
+          "operation": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "derivation": {"type": ["expression", "handled_expression_class"]},
+          "handled_expression_class": [{"value": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "intermediate_derivation": {"type": ["expression", "intermediate_binding_class"]},
+          "intermediate_binding_class": [{"type": {"type": "str", "required": true}}, {"derivation": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "expression", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "expression", "required": true}}]
+        }},
+        "document": {"derive": {"case": [{"when": "AGE >= 65", "then": 1}, {"otherwise": {"value": {"literal": 2}, "unconvertible": 0}}]}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["derive.case[1].otherwise"], "context": {"registry": "expressions", "count": 2, "hint": "value and unconvertible are a result wrapper, not operations; write them on the derivation, around its whole expression"}}]
+    },
+    {
+      "case": "a_result_wrapper_as_an_intermediate_derivation_hints_at_the_intermediate_wrapper",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}, {"lookup": {"type": "intermediate_derivation"}}, {"check": {"type": "expression"}}],
+          "expression": {"type": ["int", "operation"]},
+          "operation": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "derivation": {"type": ["expression", "handled_expression_class"]},
+          "handled_expression_class": [{"value": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "intermediate_derivation": {"type": ["expression", "intermediate_binding_class"]},
+          "intermediate_binding_class": [{"type": {"type": "str", "required": true}}, {"derivation": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "expression", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "expression", "required": true}}]
+        }},
+        "document": {"lookup": {"value": {"literal": 2}, "unconvertible": 0}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["lookup"], "context": {"registry": "expressions", "count": 2, "hint": "value and unconvertible are a result wrapper, not operations; an intermediate's derivation writes type, derivation and unconvertible instead"}}]
+    },
+    {
+      "case": "a_result_wrapper_outside_any_derivation_has_no_hint",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}, {"lookup": {"type": "intermediate_derivation"}}, {"check": {"type": "expression"}}],
+          "expression": {"type": ["int", "operation"]},
+          "operation": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "derivation": {"type": ["expression", "handled_expression_class"]},
+          "handled_expression_class": [{"value": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "intermediate_derivation": {"type": ["expression", "intermediate_binding_class"]},
+          "intermediate_binding_class": [{"type": {"type": "str", "required": true}}, {"derivation": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "expression", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "expression", "required": true}}]
+        }},
+        "document": {"check": {"case": [{"when": "AGE >= 65", "then": 1}, {"otherwise": {"value": {"literal": 2}, "unconvertible": 0}}]}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["check.case[1].otherwise"], "context": {"registry": "expressions", "count": 2}}]
     },
     {
       "case": "a_case_list_of_branches_ending_in_at_most_one_otherwise_is_admitted",

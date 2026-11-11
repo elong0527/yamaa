@@ -334,7 +334,7 @@ fn moved_two_host_families_keep_their_r_host_calls() {
     }
     assert_eq!(
         counts,
-        [10, 67, 1],
+        [12, 67, 1],
         "every moved two-host case makes its R calls"
     );
 }

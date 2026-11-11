@@ -24,9 +24,10 @@ pub(super) fn typed(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<crate::value::ValueType>,
     static_types: bool,
+    origins: types::FieldOrigins<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> (CompiledExpression, Vec<crate::diagnostic::Diagnostic>) {
-    let types = types::predicate_kinds(plan, &kind);
+    let types = types::predicate_kinds(plan, &kind, origins);
     if static_types {
         findings.extend(types.iter().cloned().map(BindFinding::Predicate));
     }
@@ -54,6 +55,7 @@ pub(super) fn bind(
         schema: donor,
         kind: donor_kind,
         admits,
+        spec,
     } = *relation;
     let binder::Inputs {
         sources,
@@ -171,7 +173,8 @@ pub(super) fn bind(
             _ => None,
         }
     };
-    let (typed, deferred) = typed(plan, kind, static_filter_types, findings);
+    let origins = types::FieldOrigins { spec, inputs };
+    let (typed, deferred) = typed(plan, kind, static_filter_types, origins, findings);
     if !references_resolved {
         return Ok(None);
     }

@@ -285,7 +285,7 @@ impl<'a> BindContext<'a, '_> {
     }
     /// The names this binding reads, typed from the captured schemas.
     pub(super) fn captured(&self) -> types::CapturedTypes<'a> {
-        types::CapturedTypes::new(self.donors, self.catalog)
+        types::CapturedTypes::new(self.donors, self.catalog, self.tree.spec())
     }
     /// The tree binding reads.
     pub(super) fn spec(&self) -> &'a ast::Spec {

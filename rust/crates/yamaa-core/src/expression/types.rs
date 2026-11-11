@@ -16,10 +16,12 @@ pub enum TypeFinding {
     /// An operand of arithmetic or of a numeric function that is not
     /// numeric, named by its written text.
     NumericOperand { source: String, actual: ValueType },
-    /// Two comparison operands whose types are not mutually comparable.
+    /// Two comparison operands whose types are not mutually comparable,
+    /// with the written name of each operand that is a bare name.
     IncompatiblePair {
         left: ValueType,
         right: ValueType,
+        names: [Option<String>; 2],
         route: Vec<Step>,
     },
     /// A non-text `LIKE` operand.
@@ -455,12 +457,24 @@ impl<K: Fn(&str) -> Option<ValueType>> Checker<'_, K> {
         }
     }
 
+    /// A comparison operand's written name, when it is a bare name.
+    fn operand_name(&self, id: usize) -> Option<String> {
+        match self.node(id) {
+            NodeKind::Group(inner) => self.operand_name(*inner),
+            NodeKind::Identifier => Some(self.compiled.syntax.text(id).into()),
+            _ => None,
+        }
+    }
+
     fn pair(&mut self, left: usize, right: usize) {
-        if let (Some(left), Some(right)) = (self.operand_type(left), self.operand_type(right)) {
-            if !comparable_types(left, right) {
+        if let (Some(left_type), Some(right_type)) =
+            (self.operand_type(left), self.operand_type(right))
+        {
+            if !comparable_types(left_type, right_type) {
                 self.findings.push(TypeFinding::IncompatiblePair {
-                    left,
-                    right,
+                    left: left_type,
+                    right: right_type,
+                    names: [self.operand_name(left), self.operand_name(right)],
                     route: self.route.clone(),
                 });
             }

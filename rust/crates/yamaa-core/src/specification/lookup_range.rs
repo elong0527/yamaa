@@ -494,6 +494,10 @@ mod tests {
                 schema: &donor,
                 kind: &|column| donor.columns().get(column).map(|column| column.kind),
                 admits: &|_| true,
+                spec: &crate::test_specification::lower(crate::test_specification::document(
+                    Vec::new(),
+                    Vec::new(),
+                )),
             },
             &catalog,
             false,
