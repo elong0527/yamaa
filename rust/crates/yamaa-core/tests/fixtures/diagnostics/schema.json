@@ -274,6 +274,25 @@
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["derive.case[1].otherwise.literal"]}]
     },
     {
+      "case": "a_result_wrapper_in_a_case_otherwise_hints_that_it_goes_on_the_derivation",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "case_result", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "case_result", "required": true}}],
+          "case_result": {"type": ["int", "expression"]}
+        }},
+        "document": {"derive": {"case": [{"when": "AGE >= 65", "then": 1}, {"otherwise": {"value": {"literal": 2}, "unconvertible": 0}}]}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.registry", "context.count", "context.hint"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["derive.case[1].otherwise"], "context": {"registry": "expressions", "count": 2, "hint": "write value and unconvertible on the derivation, around its whole expression"}}]
+    },
+    {
       "case": "a_case_list_of_branches_ending_in_at_most_one_otherwise_is_admitted",
       "operation": "schema_document",
       "input": {

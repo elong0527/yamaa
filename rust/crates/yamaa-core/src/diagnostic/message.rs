@@ -252,14 +252,74 @@ mod tests {
     /// because it compares no message. A record holding its condition's
     /// variant key takes the variant, and one without keeps the default
     /// (`yaml/conditions.yaml`): `missing_input` on `template_filter`
-    /// (COLUMN-9) and `unsupported_operation` on `hint` (ROW-2).
+    /// (COLUMN-9), `unsupported_operation` on `hint` (ROW-2),
+    /// `engine_rejected` on `actual` and then `limit` (LIMIT-1),
+    /// `incompatible_input_type` on `left_type` (FORMULA-5) and
+    /// `invalid_operation_count` on `hint` (SCHEMA-7).
     #[test]
     fn a_variant_replaces_the_default_message_when_its_key_is_present() {
         let template = ["rows.matched_only.derivations.TAGGED.str_template"];
         let variable = ("variable", text("LK.LBL"));
         let column = ["columns.R.derivation.source"];
         let operation = ("operation", text("intermediate_driver_column_read"));
+        let input = ["input"];
+        let limit = vec![
+            ("step", text("prepare")),
+            ("code", text("compiler_limit")),
+            ("resource", text("inputs")),
+            ("limit", number("16")),
+        ];
+        let when = ["columns.P.derivation.case[0].when"];
+        let otherwise = ["columns.N.derivation.case[1].otherwise"];
+        let operations = vec![("registry", text("expressions")), ("count", number("2"))];
         for (code, path, context, expected) in [
+            (
+                ConditionCode::ApplicationRejected,
+                &input,
+                limit.clone(),
+                "the engine refused the operation in its prepare step: compiler_limit: inputs is above the limit of 16",
+            ),
+            (
+                ConditionCode::ApplicationRejected,
+                &input,
+                [limit.clone(), vec![("actual", number("17"))]].concat(),
+                "the engine refused the operation in its prepare step: compiler_limit: inputs is 17, above the limit of 16",
+            ),
+            (
+                ConditionCode::PredicateIncompatiblePair,
+                &when,
+                vec![("actual", text("int"))],
+                "columns.P.derivation.case[0].when reads a value of type int, which it does not accept",
+            ),
+            (
+                ConditionCode::PredicateIncompatiblePair,
+                &when,
+                vec![
+                    ("actual", text("int")),
+                    ("left_type", text("str")),
+                    ("right_type", text("int")),
+                ],
+                "columns.P.derivation.case[0].when compares a value of type str with a value of type int, which cannot be compared",
+            ),
+            (
+                ConditionCode::SchemaInvalidOperationCount,
+                &otherwise,
+                operations.clone(),
+                "the expressions entry declares 2 operations instead of exactly one",
+            ),
+            (
+                ConditionCode::SchemaInvalidOperationCount,
+                &otherwise,
+                [
+                    operations.clone(),
+                    vec![(
+                        "hint",
+                        text("write value and unconvertible on the derivation, around its whole expression"),
+                    )],
+                ]
+                .concat(),
+                "the expressions entry declares 2 operations instead of exactly one (write value and unconvertible on the derivation, around its whole expression)",
+            ),
             (
                 ConditionCode::TemplateMissing,
                 &template,

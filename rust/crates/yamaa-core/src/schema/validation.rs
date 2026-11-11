@@ -516,6 +516,16 @@ impl Run<'_> {
     fn field(&mut self, value: usize, name: &str) -> Result<Option<usize>, ValidationError> {
         Ok(self.input.field(value, name))
     }
+    /// Whether a mapping's keys are exactly a result wrapper's `value` and
+    /// `unconvertible` (COLUMN-13).
+    fn result_wrapper(&mut self, items: &[(usize, usize)]) -> Result<bool, ValidationError> {
+        let mut keys = Vec::with_capacity(items.len());
+        for (key, _) in items {
+            keys.push(self.key(*key)?.0);
+        }
+        keys.sort_unstable();
+        Ok(keys == ["unconvertible", "value"])
+    }
     fn key(&mut self, node: usize) -> Result<(String, bool), ValidationError> {
         Ok((
             super::path_render::label(self.input, node)?,
@@ -1075,13 +1085,24 @@ impl Run<'_> {
                     };
                     let registry = &schema.registries()[registry];
                     if items.len() != 1 {
+                        let mut context = vec![
+                            ("registry", Self::text(&registry.name)),
+                            ("count", SchemaContext::Count(items.len())),
+                        ];
+                        // A result wrapper where only an expression fits,
+                        // such as a case's `otherwise` (EXPR-5, COLUMN-13).
+                        if registry.name == "expressions" && self.result_wrapper(items)? {
+                            context.push((
+                                "hint",
+                                Self::text(
+                                    "write value and unconvertible on the derivation, around its whole expression",
+                                ),
+                            ));
+                        }
                         return Ok(vec![self.diagnostic(
                             site,
                             ConditionCode::SchemaInvalidOperationCount,
-                            vec![
-                                ("registry", Self::text(&registry.name)),
-                                ("count", SchemaContext::Count(items.len())),
-                            ],
+                            context,
                         )]);
                     }
                     let (key, payload) = items[0];
