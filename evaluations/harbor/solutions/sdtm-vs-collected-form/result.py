@@ -21,12 +21,12 @@ OUTPUT_DIR = "/app/output"
 COLUMNS = [
     "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VISIT", "VSTESTCD",
     "VSTEST", "VSORRES", "VSORRESU", "VSSTRESN", "VSSTRESC", "VSSTRESU",
-    "VSPOS", "VSMETHOD", "VSSTAT", "VSREASND", "VSDTC",
+    "VSPOS", "VSSTAT", "VSREASND", "VSLOC", "VSDTC",
 ]
 
 BP_TESTS = {"SYSBP", "DIABP"}
 POSITION_TESTS = {"SYSBP", "DIABP", "PULSE"}
-METHOD_TESTS = {"TEMP"}
+LOCATION_TESTS = {"TEMP"}
 
 
 def num_text(value):
@@ -70,7 +70,7 @@ def main():
     for (studyid, subjid, visit, *_rest), form in forms.items():
         vsdtc = form.get("VSDTC", "")
         position = form.get("POSITION", "")
-        method = form.get("TEMPMETHOD", "")
+        location = form.get("TEMPLOC", "")
         bp_not_done = form.get("BPNOTDONE", "") == "Y"
         bp_reason = form.get("BPREASND", "") if bp_not_done else ""
 
@@ -99,11 +99,11 @@ def main():
                 "VSSTRESU": unit,
                 "VSPOS": position
                 if (code in POSITION_TESTS and result) else "",
-                "VSMETHOD": method
-                if (code in METHOD_TESTS and result) else "",
                 "VSSTAT": "NOT DONE"
                 if (code in BP_TESTS and bp_not_done) else "",
                 "VSREASND": bp_reason if code in BP_TESTS else "",
+                "VSLOC": location
+                if (code in LOCATION_TESTS and result) else "",
                 "VSDTC": vsdtc,
             })
         subjects.setdefault(subjid, []).append((vsdtc, records))

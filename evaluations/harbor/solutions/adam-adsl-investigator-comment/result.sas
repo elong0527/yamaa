@@ -3,9 +3,9 @@
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 /* Read DM line by line and split the fields here: a quoted comment can hold
-   commas, doubled quotation marks, and line breaks, and a comment of only
-   spaces keeps its spaces, so each field's length is counted as it is
-   read. An empty field, quoted or not, has length zero. */
+   commas, doubled quotation marks, and line breaks, so each field's length
+   is counted as it is read. An empty field, quoted or not, has length
+   zero. */
 data dm;
   infile "/app/input/dm.csv" firstobs=2 truncover;
   length STUDYID $20 USUBJID $40 COMMENT $1000 FIELD $1000 CH $1;
@@ -65,7 +65,13 @@ endfield:
   return;
 run;
 
-/* CMNT is the comment as recorded, CMNTFL Y when one was collected. */
+/* CMNT is the comment as recorded, CMNTFL Y when one was collected. A
+   field of only spaces counts as no comment, so it has length zero too. */
+data dm;
+  set dm;
+  if lengthn(COMMENT) = 0 then CMNTLEN = 0;
+run;
+
 proc sql;
   create table adsl as
   select STUDYID, USUBJID,
@@ -76,9 +82,8 @@ proc sql;
   order by STUDYID, USUBJID;
 quit;
 
-/* PROC EXPORT would drop the spaces of a comment of only spaces, so write
-   the file directly: the comment quoted, with its quotation marks doubled,
-   at its recorded length. */
+/* Write the file directly: the comment quoted, with its quotation marks
+   doubled, at its recorded length. */
 data _null_;
   set adsl;
   file "/app/output/adsl.csv";

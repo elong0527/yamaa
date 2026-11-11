@@ -94,7 +94,7 @@ columns:
   # 1 for the youngest subject in the study; USUBJID breaks ties.
   - name: AGERNK
     type: int
-    label: Pooled Age Group 1 Rank
+    label: Age Rank
     derivation:
       row_number:
         window:

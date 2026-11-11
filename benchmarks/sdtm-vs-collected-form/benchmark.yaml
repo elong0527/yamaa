@@ -4,7 +4,7 @@ domain: VS
 review:
   concerns:
     - Vital signs are collected on one wide form per visit and analysed as one
-      record per test, with position and method kept where they apply.
+      record per test, with position and location kept where they apply.
     - Two subjects at two visits cover six tests, and a blood pressure not done
       at one visit because the subject declined.
     - A not-done blood pressure still gives two records with NOT DONE and the

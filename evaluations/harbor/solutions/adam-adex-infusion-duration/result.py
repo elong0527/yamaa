@@ -7,7 +7,7 @@
 """Create ADEX (one record per infusion) from EX.
 
 PARAMCD is "INFDUR" and PARAM is "Infusion Duration (min)" on every
-record; AVALU is "min" on every record.
+record.
 
 CALCDUR is the elapsed time in minutes from EXSTDTC to EXENDTC, with
 seconds kept as a fraction of a minute and nothing added or rounded.
@@ -39,7 +39,6 @@ COLUMNS = [
     "PARAMCD",
     "PARAM",
     "AVAL",
-    "AVALU",
     "CALCDUR",
 ]
 
@@ -127,7 +126,6 @@ def main():
                 "PARAMCD": "INFDUR",
                 "PARAM": "Infusion Duration (min)",
                 "AVAL": format_number(aval),
-                "AVALU": "min",
                 "CALCDUR": format_number(calcdur),
             }
         )

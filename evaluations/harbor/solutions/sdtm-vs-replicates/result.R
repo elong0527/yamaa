@@ -51,42 +51,25 @@ readings <- odm |>
   filter(!is.na(val), !is.na(VSREPNUM)) |>
   select(STUDYID, USUBJID, VISIT, VSTESTCD, VSTEST, VSREPNUM, val)
 
-mean_records <- readings |>
-  group_by(STUDYID, USUBJID, VISIT, VSTESTCD, VSTEST) |>
-  summarise(mean_val = mean(val), .groups = "drop")
-
-vs <- bind_rows(
-  readings |>
-    transmute(
-      DOMAIN = "VS",
-      STUDYID, USUBJID, VISIT, VSTESTCD, VSTEST,
-      VSREPNUM,
-      VSORRES = vapply(val, fmt_text, character(1)),
-      VSORRESU = "mmHg",
-      VSSTRESN = val,
-      VSSTRESC = VSORRES,
-      VSDRVFL = NA_character_
-    ),
-  mean_records |>
-    transmute(
-      DOMAIN = "VS",
-      STUDYID, USUBJID, VISIT, VSTESTCD, VSTEST,
-      VSREPNUM = NA_integer_,
-      VSORRES = vapply(mean_val, fmt_text, character(1)),
-      VSORRESU = "mmHg",
-      VSSTRESN = mean_val,
-      VSSTRESC = VSORRES,
-      VSDRVFL = "Y"
-    )
-) |>
-  arrange(USUBJID, VISIT, VSTESTCD, is.na(VSREPNUM), VSREPNUM) |>
+vs <- readings |>
+  transmute(
+    DOMAIN = "VS",
+    STUDYID, USUBJID, VISIT, VSTESTCD, VSTEST,
+    VSREPNUM,
+    VSSPID = as.character(VSREPNUM),
+    VSORRES = vapply(val, fmt_text, character(1)),
+    VSORRESU = "mmHg",
+    VSSTRESN = val,
+    VSSTRESC = VSORRES
+  ) |>
+  arrange(USUBJID, VISIT, VSTESTCD, VSREPNUM) |>
   group_by(USUBJID) |>
   mutate(VSSEQ = row_number()) |>
   ungroup() |>
   arrange(USUBJID, VSSEQ) |>
   select(
-    DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM,
-    VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL
+    DOMAIN, STUDYID, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST,
+    VSORRES, VSORRESU, VSSTRESN, VSSTRESC
   )
 
 dir.create("/app/output", showWarnings = FALSE)

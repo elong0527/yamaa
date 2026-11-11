@@ -33,8 +33,10 @@ data dates;
     if ItemOID='IT.VS.VSDTC' then VSDTC=Value;
   if last.FormRepeatKey then output;
 run;
-proc sql; create table joined as select a.*,b.VSDTC,c.VSTESTCD,c.UNIT,d.RFSTDTC from odm a inner join dates b on a.StudyOID=b.StudyOID and a.SubjectKey=b.SubjectKey and a.StudyEventOID=b.StudyEventOID and a.StudyEventRepeatKey=b.StudyEventRepeatKey and a.FormOID=b.FormOID and a.FormRepeatKey=b.FormRepeatKey inner join vs_mapping c on a.ItemOID=c.ItemOID left join dm d on a.StudyOID=d.STUDYID and a.SubjectKey=d.USUBJID; quit;
-data prepared; set joined; length DOMAIN $2 STUDYID USUBJID VISIT VSTPT VSELTM VSORRES VSORRESU VSSTRESU $1024; DOMAIN='VS'; STUDYID=StudyOID; USUBJID=SubjectKey; VISIT='DAY 1'; VSTPT=''; VSELTM=''; VSTPTNUM=.;
+/* The first-dose datetime on the dosing form is the reference time point. */
+data doses; set odm; where FormOID='FO.EX' and ItemOID='IT.EX.EXSTDTC'; length VSRFTDTC $1024; VSRFTDTC=Value; keep StudyOID SubjectKey VSRFTDTC; run;
+proc sql; create table joined as select a.*,b.VSDTC,c.VSTESTCD,c.UNIT,d.RFSTDTC,e.VSRFTDTC from odm a inner join dates b on a.StudyOID=b.StudyOID and a.SubjectKey=b.SubjectKey and a.StudyEventOID=b.StudyEventOID and a.StudyEventRepeatKey=b.StudyEventRepeatKey and a.FormOID=b.FormOID and a.FormRepeatKey=b.FormRepeatKey inner join vs_mapping c on a.ItemOID=c.ItemOID left join dm d on a.StudyOID=d.STUDYID and a.SubjectKey=d.USUBJID left join doses e on a.StudyOID=e.StudyOID and a.SubjectKey=e.SubjectKey; quit;
+data prepared; set joined; length DOMAIN $2 STUDYID USUBJID VISIT VSTPT VSELTM VSTPTREF VSORRES VSORRESU VSSTRESU $1024; DOMAIN='VS'; VSTPTREF='FIRST DOSE'; STUDYID=StudyOID; USUBJID=SubjectKey; VISIT='DAY 1'; VSTPT=''; VSELTM=''; VSTPTNUM=.;
 if FormOID='FO.VS_PREDOSE' then do; VSTPT='PRE-DOSE'; VSTPTNUM=1; VSELTM='-PT15M'; end;
 if FormOID='FO.VS_30MIN' then do; VSTPT='30 MIN POST-DOSE'; VSTPTNUM=2; VSELTM='PT30M'; end;
 if FormOID='FO.VS_1H' then do; VSTPT='1 H POST-DOSE'; VSTPTNUM=3; VSELTM='PT1H'; end;
@@ -48,6 +50,6 @@ data result; set prepared; by STUDYID USUBJID; retain VSSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY from result;
+  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM, VSTPTREF, VSRFTDTC, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY from result;
 quit;
 proc export data=final outfile="/app/output/vs.csv" dbms=csv replace; run;

@@ -17,8 +17,8 @@ TESTS = {
 }
 
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VISIT", "VSTESTCD", "VSTEST",
-    "VSREPNUM", "VSORRES", "VSORRESU", "VSSTRESN", "VSSTRESC", "VSDRVFL",
+    "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSSPID", "VISIT", "VSTESTCD",
+    "VSTEST", "VSORRES", "VSORRESU", "VSSTRESN", "VSSTRESC",
 ]
 
 
@@ -57,7 +57,7 @@ def main():
             continue
         value = (row["Value"] or "").strip()
         if value == "":
-            continue  # reading not taken: no reading record
+            continue  # reading not taken: no record
         key = (subject, visit_name(row["StudyEventOID"]), testcd)
         readings.setdefault(key, []).append(
             (int(row["ItemGroupRepeatKey"]), float(value))
@@ -69,37 +69,19 @@ def main():
         keys = [k for k in readings if k[0] == subject]
         for key in sorted(keys, key=lambda k: (k[1], k[2])):
             _, visit, testcd = key
-            reps = sorted(readings[key])
-            for repnum, value in reps:
+            for repnum, value in sorted(readings[key]):
                 records.append({
                     "DOMAIN": "VS",
                     "STUDYID": studyid,
                     "USUBJID": subject,
+                    "VSSPID": str(repnum),
                     "VISIT": visit,
                     "VSTESTCD": testcd,
                     "VSTEST": TESTS[testcd],
-                    "VSREPNUM": str(repnum),
                     "VSORRES": fmt(value),
                     "VSORRESU": "mmHg",
                     "VSSTRESN": fmt(value),
                     "VSSTRESC": fmt(value),
-                    "VSDRVFL": "",
-                })
-            if reps:
-                mean = sum(v for _, v in reps) / len(reps)
-                records.append({
-                    "DOMAIN": "VS",
-                    "STUDYID": studyid,
-                    "USUBJID": subject,
-                    "VISIT": visit,
-                    "VSTESTCD": testcd,
-                    "VSTEST": TESTS[testcd],
-                    "VSREPNUM": "",
-                    "VSORRES": fmt(mean),
-                    "VSORRESU": "mmHg",
-                    "VSSTRESN": fmt(mean),
-                    "VSSTRESC": fmt(mean),
-                    "VSDRVFL": "Y",
                 })
         for i, rec in enumerate(records, start=1):
             rec["VSSEQ"] = str(i)

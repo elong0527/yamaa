@@ -12,11 +12,12 @@ base: ODM
 output:
   path: vs.csv
   columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM,
-    VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC, VSDY]
+    VSTPTREF, VSRFTDTC, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC,
+    VSDY]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
-# The subject's first-dose date-time, from the dosing form's start item. It
-# is not in the output; only the two dose-order checks at the end read it.
+# The subject's first-dose date-time, from the dosing form's start item: the
+# reference time point every planned elapsed time is counted from.
 intermediates:
   - id: DOSE
     dataset: ODM
@@ -93,6 +94,18 @@ columns:
     verifications:
       - not_missing
 
+  # Every planned elapsed time counts from the first dose, whose date-time
+  # the dosing form gives.
+  - name: VSTPTREF
+    type: str
+    label: Time Point Reference
+    derivation: "'FIRST DOSE'"
+
+  - name: VSRFTDTC
+    type: datetime
+    label: Date/Time of Reference Time Point
+    derivation: DOSE.Value
+
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
@@ -163,13 +176,8 @@ columns:
     verifications:
       - not_missing
 
-  # Typed copies of the first-dose date-time and the reference start date,
-  # for the dose-order checks and the study day; neither is in the output.
-  - name: EXSTDTC
-    type: datetime
-    label: Date/Time of First Dose
-    derivation: DOSE.Value
-
+  # A typed copy of the reference start date, for the study day; it is not
+  # in the output.
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date/Time
@@ -214,9 +222,9 @@ verifications:
   # checked.
   - assert:
       id: post-dose-reading-at-or-after-dose
-      when: "VSTPTNUM > 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
-      require: "VSDTC >= EXSTDTC"
+      when: "VSTPTNUM > 1 AND VSDTC IS NOT NULL AND VSRFTDTC IS NOT NULL"
+      require: "VSDTC >= VSRFTDTC"
   - assert:
       id: pre-dose-reading-at-or-before-dose
-      when: "VSTPTNUM = 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
-      require: "VSDTC <= EXSTDTC"
+      when: "VSTPTNUM = 1 AND VSDTC IS NOT NULL AND VSRFTDTC IS NOT NULL"
+      require: "VSDTC <= VSRFTDTC"

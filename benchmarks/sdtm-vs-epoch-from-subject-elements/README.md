@@ -14,12 +14,15 @@ element.
   when no date was collected.
 - `EPOCH` is the trial period of the element in progress at the
   collection date-time: the element whose start is on or before the
-  collection and whose end is on or after it. It is missing when the
-  reading has no date or only a partial one, or falls outside every
-  element, such as before the first element starts.
+  collection and whose end is on or after it. A reading collected as a
+  date alone is compared by date: the element whose start date is on or
+  before that date and whose end date is on or after it. It is missing
+  when the reading has no date or only a partial one, or falls outside
+  every element, such as before the first element starts.
 
 **Note:** the first-dose day shows why a date-time matters: a pre-dose
 reading on that day belongs to screening and a post-dose reading to
-treatment. A date-only collection reads as the start of that day, so it
-falls in the element in progress at day-start; a reading exactly at a
-shared element boundary belongs to the later element.
+treatment. A date-only reading on that day has no time to place it, and
+no time is assumed; it matches both elements by date. When a reading
+matches two elements, at a shared boundary moment or on a shared
+boundary date, it belongs to the later element.

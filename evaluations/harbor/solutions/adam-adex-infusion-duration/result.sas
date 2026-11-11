@@ -13,9 +13,9 @@ run;
    seconds counts as second zero. An ISO 8601 duration of days, hours,
    minutes and seconds wins; anything else counts as not collected. */
 data final;
-  length PARAMCD $6 PARAM $23 AVALU $3;
+  length PARAMCD $6 PARAM $23;
   set ex;
-  PARAMCD='INFDUR'; PARAM='Infusion Duration (min)'; AVALU='min';
+  PARAMCD='INFDUR'; PARAM='Infusion Duration (min)';
   st=.; en=.;
   if lengthn(EXSTDTC)>10 then st=input(cats(EXSTDTC, ifc(lengthn(EXSTDTC)=16, ':00', '')), e8601dt.);
   if lengthn(EXENDTC)>10 then en=input(cats(EXENDTC, ifc(lengthn(EXENDTC)=16, ':00', '')), e8601dt.);
@@ -32,11 +32,11 @@ data final;
   end;
   AVAL=coalesce(COLL, CALCDUR);
   format AVAL CALCDUR best32.;
-  keep STUDYID USUBJID EXSEQ EXSTDTC EXENDTC EXDUR PARAMCD PARAM AVAL AVALU CALCDUR;
+  keep STUDYID USUBJID EXSEQ EXSTDTC EXENDTC EXDUR PARAMCD PARAM AVAL CALCDUR;
 run;
 
 proc sql;
-  create table out as select STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM, AVAL, AVALU, CALCDUR
+  create table out as select STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM, AVAL, CALCDUR
     from final;
 quit;
 proc export data=out outfile="/app/output/adex.csv" dbms=csv replace; run;

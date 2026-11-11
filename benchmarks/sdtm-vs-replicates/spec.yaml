@@ -10,11 +10,14 @@ input:
       StudyEventRepeatKey: int
       ItemGroupRepeatKey: int
       Value: float
+# Each collected item is one reading; a blank reading was not taken and gives
+# no record.
+filter: "ODM.Value IS NOT NULL"
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM,
-            VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST,
+            VSORRES, VSORRESU, VSSTRESN, VSSTRESC]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 columns:
@@ -66,17 +69,17 @@ columns:
           IT.VS.SYSBP: Systolic Blood Pressure
           IT.VS.DIABP: Diastolic Blood Pressure
 
-  - name: ORD
-    type: int
-    label: Readings sort before the mean record
-
-  - name: VSREPNUM
-    type: int
-    label: Replicate Number
+  # The item-group repeat key numbers the readings of one test at one visit,
+  # and the sponsor keeps it as the reading's identifier.
+  - name: VSSPID
+    type: str
+    label: Sponsor-Defined Identifier
+    derivation: ODM.ItemGroupRepeatKey
 
   - name: VSSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
+    derivation: ODM.Value
 
   - name: VSSTRESC
     type: str
@@ -92,19 +95,10 @@ columns:
     type: str
     label: Original Units
     derivation: "'mmHg'"
-    verifications:
-      - allowed_values:
-          values: [mmHg]
 
-  - name: VSDRVFL
-    type: str
-    label: Derived Record Flag
-    verifications:
-      - allowed_values:
-          values: [Y]
-
-  # Within a subject: by visit name, then test code (DIABP before SYSBP),
-  # with each test's readings in replicate order followed by its mean.
+  # Within a subject: by visit, then test (DIABP before SYSBP), then the
+  # readings in the order they were taken. A key reads only the collected
+  # record, whose visit and item identifiers sort the same way.
   - name: VSSEQ
     type: int
     label: Sequence Number
@@ -112,60 +106,12 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [VISIT, VSTESTCD, ORD, VSREPNUM]
-
-# One reading row per subject, visit, replicate and test. The aggregate
-# filter confines a template to its own test, so a group of the other test
-# has no value and is not emitted; neither is a blank reading.
-rows:
-  - id: systolic
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-               ODM.ItemGroupRepeatKey, ODM.ItemOID]
-    filter: "VSSTRESN IS NOT NULL"
-    derivations:
-      ORD: 1
-      VSREPNUM:
-        aggregate: "ONLY(ODM.ItemGroupRepeatKey)"
-      VSSTRESN:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
-          expr: "ONLY(ODM.Value)"
-      VSDRVFL: null
-
-  - id: diastolic
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
-               ODM.ItemGroupRepeatKey, ODM.ItemOID]
-    filter: "VSSTRESN IS NOT NULL"
-    derivations:
-      ORD: 1
-      VSREPNUM:
-        aggregate: "ONLY(ODM.ItemGroupRepeatKey)"
-      VSSTRESN:
-        aggregate:
-          filter: "ODM.ItemOID = 'IT.VS.DIABP'"
-          expr: "ONLY(ODM.Value)"
-      VSDRVFL: null
-
-  # One mean row per subject, visit and test, over the readings present:
-  # MEAN skips a blank value, and a reading never taken has no record.
-  - id: means
-    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemOID]
-    derivations:
-      ORD: 2
-      VSREPNUM: null
-      VSSTRESN:
-        aggregate: "MEAN(ODM.Value)"
-      VSDRVFL: "'Y'"
+          order_by: [ODM.StudyEventOID, ODM.ItemOID, ODM.ItemGroupRepeatKey]
 
 verifications:
   - row_count:
-      min: 31
-      max: 31
-  - assert:
-      id: derived-mean-carries-no-replicate-number
-      when: "VSDRVFL = 'Y'"
-      require: "VSREPNUM IS NULL AND VSSTRESN IS NOT NULL"
-  - assert:
-      id: reading-carries-its-replicate-number
-      when: "VSDRVFL IS NULL"
-      require: "VSREPNUM IS NOT NULL"
+      min: 23
+      max: 23
+  - unique:
+      id: one-record-per-reading
+      columns: [STUDYID, USUBJID, VISIT, VSTESTCD, VSSPID]

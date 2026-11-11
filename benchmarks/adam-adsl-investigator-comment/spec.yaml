@@ -23,12 +23,15 @@ columns:
     derivation: DM.USUBJID
 
   # Read as collected: the source file's quoting keeps a comma, a doubled
-  # quote and a line break inside one comment. An empty field, quoted or
-  # not, is missing; a field holding only spaces is still a comment.
+  # quote and a line break inside one comment. A field with no character
+  # other than white space, empty or holding only spaces, is no comment.
   - name: CMNT
     type: str
     label: Investigator Comment
-    derivation: DM.COMMENT
+    derivation:
+      case:
+        - when: "str_contains(DM.COMMENT, '\\S')"
+          then: DM.COMMENT
 
   - name: CMNTFL
     type: str

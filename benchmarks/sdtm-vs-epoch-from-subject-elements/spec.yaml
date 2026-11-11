@@ -19,7 +19,7 @@ output:
 # elements (both endpoints are inclusive) order_by/keep: last picks the
 # later element, so a reading exactly at an element's start belongs to
 # that element. A reading outside every element, or one with no usable
-# collection date-time, matches no element and EPOCH stays missing.
+# collection date, matches no element and EPOCH stays missing.
 intermediates:
   - id: ELEM
     dataset: SE
@@ -30,6 +30,23 @@ intermediates:
       upper: SEENDTC
     order_by: [SE.SESTDTC]
     keep: last
+
+  # A reading collected as a date alone is compared by date: the element
+  # whose start date is on or before that date and whose end date is on or
+  # after it. On a date shared by two elements, the later element wins, as
+  # it does on a shared boundary moment.
+  - id: SE_DAY
+    dataset: SE
+    key: [STUDYID, USUBJID]
+    between:
+      value: VSDAY
+      lower: SESTDT
+      upper: SEENDT
+    order_by: [SE.SESTDTC]
+    keep: last
+    derivations:
+      SESTDT: {to_date: {source: SESTDTC}}
+      SEENDT: {to_date: {source: SEENDTC}}
 
 columns:
   - name: DOMAIN
@@ -120,24 +137,34 @@ columns:
         - type: Collected
           source: Investigator
 
-  # The element lookup compares moments, so the collected text becomes a
-  # datetime: a full date-time passes through, a date-only collection is
-  # read as the start of that day, and a missing or partial date stays
-  # missing.
+  # The element lookup compares moments, so a collected date-time becomes a
+  # datetime. A date alone names a day, not a moment, so it converts to no
+  # value rather than taking an invented time of day, as a missing or
+  # partial date does.
   - name: VSDTM
     type: datetime
     label: Date/Time of Measurements as a Moment
     derivation:
-      impute:
-        type: datetime
-        source: VSDTC
-        time: first
-        invalid: null
+      value: VSDTC
+      unconvertible: null
+
+  # The collection date of a reading that has no time, for the comparison
+  # by date; a reading with a time, or a partial or missing date, has none.
+  - name: VSDAY
+    type: date
+    label: Date of Measurements Collected Without a Time
+    derivation:
+      case:
+        - when: "VSDTM IS NULL"
+          then:
+            to_date: {source: VSDTC}
 
   - name: EPOCH
     type: str
     label: Epoch
-    derivation: ELEM.EPOCH
+    derivation:
+      first_available:
+        sources: [ELEM.EPOCH, SE_DAY.EPOCH]
     submission:
       core: Perm
       role: Timing
@@ -148,7 +175,9 @@ columns:
           source: Sponsor
       method: Take EPOCH from the last SE record matching on STUDYID and
         USUBJID, where VSDTM falls within SESTDTC to SEENDTC, ordered by
-        SE.SESTDTC, and no match yields blank.
+        SE.SESTDTC. A reading collected as a date without a time is matched
+        by date instead, where the date falls within the start and end dates
+        of SESTDTC and SEENDTC. No match yields blank.
 
 verifications:
   - row_count:

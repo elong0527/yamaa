@@ -20,8 +20,9 @@ parse_moment <- function(x) {
   if (nchar(x) == 4 && grepl("^[0-9]{4}$", x)) {
     return(as.POSIXct(NA, tz = "UTC"))
   }
+  # A date alone has no time and is compared by date instead.
   if (!grepl("T", x, fixed = TRUE)) {
-    suppressWarnings(ymd_hms(paste0(x, "T00:00:00"), tz = "UTC"))
+    as.POSIXct(NA, tz = "UTC")
   } else {
     # Element bounds and collections use ISO datetimes without seconds.
     out <- suppressWarnings(ymd_hm(x, tz = "UTC"))
@@ -48,20 +49,39 @@ se <- se |>
   )
 
 vs_raw <- vs_raw |>
-  mutate(moment = vapply(VSDTC, function(x) as.numeric(parse_moment(x)), numeric(1)))
+  mutate(
+    moment = vapply(VSDTC, function(x) as.numeric(parse_moment(x)), numeric(1)),
+    day = if_else(
+      grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", coalesce(VSDTC, "")),
+      suppressWarnings(as.numeric(ymd(VSDTC))),
+      NA_real_
+    )
+  )
+
+# The calendar dates of each element's start and end, in days.
+se <- se |>
+  mutate(
+    start_day = as.numeric(as.Date(as.POSIXct(start, origin = "1970-01-01", tz = "UTC"))),
+    end_day = as.numeric(as.Date(as.POSIXct(end, origin = "1970-01-01", tz = "UTC")))
+  )
 
 vs <- vs_raw |>
   mutate(
     DOMAIN = "VS",
     EPOCH = pmap_chr(
-      list(USUBJID, moment),
-      function(usubjid, coll) {
-        if (is.na(coll)) {
+      list(USUBJID, moment, day),
+      function(usubjid, coll, coll_day) {
+        # A date-time is placed by moment, a date alone by calendar date;
+        # when two elements match, the later one wins.
+        if (!is.na(coll)) {
+          hits <- se |> filter(USUBJID == usubjid, start <= coll, coll <= end)
+        } else if (!is.na(coll_day)) {
+          hits <- se |>
+            filter(USUBJID == usubjid, start_day <= coll_day, coll_day <= end_day)
+        } else {
           return(NA_character_)
         }
-        hits <- se |>
-          filter(USUBJID == usubjid, start <= coll, coll <= end) |>
-          arrange(start)
+        hits <- hits |> arrange(start)
         if (nrow(hits) == 0) {
           return(NA_character_)
         }

@@ -3,9 +3,9 @@
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data vs;
-  length STUDYID USUBJID VSTESTCD VSCAT VSSTRESU VSDTC $1024;
+  length STUDYID USUBJID VSTESTCD VSCAT VSORRES VSORRESU VSSTRESU VSSTAT VSDTC $1024;
   infile "/app/input/vs.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. VSSEQ VSTESTCD : $char1024. VSCAT : $char1024. VSSTRESN VSSTRESU : $char1024. VSDTC : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. VSSEQ VSTESTCD : $char1024. VSCAT : $char1024. VSORRES : $char1024. VSORRESU : $char1024. VSSTRESN VSSTRESU : $char1024. VSSTAT : $char1024. VSDTC : $char1024.;
 run;
 
 data dated; set vs; length ADT $10; ADT=substr(VSDTC,1,10); NODATE=missing(ADT); run;
@@ -16,7 +16,8 @@ data result;
   if first.USUBJID then ASEQ=0; ASEQ+1;
   DOMAIN='ADFA'; PARAMCD='FEVER'; PARAM='Fever Occurrence'; ADT=substr(VSDTC,1,10);
   SRCDOM='VS'; SRCVAR='VSSTRESN'; SRCSEQ=VSSEQ;
-  if not missing(VSSTRESN) and VSSTRESU='C' then do;
+  /* VSSTRESN is the standard result in C, even when collected in F. */
+  if not missing(VSSTRESN) then do;
     if VSSTRESN>=38 then do; AVAL=1; AVALC='Y'; end;
     else do; AVAL=0; AVALC='N'; end;
   end;

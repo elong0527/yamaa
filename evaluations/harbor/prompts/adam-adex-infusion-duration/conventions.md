@@ -2,7 +2,7 @@ Following CDISC ADaM standards, use the provided EX dataset to create an ADEX
 dataset with one record per infusion.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM, AVAL, AVALU,
+STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM, AVAL,
 CALCDUR
 
 PARAMCD is "INFDUR" and PARAM is "Infusion Duration (min)" on every record.

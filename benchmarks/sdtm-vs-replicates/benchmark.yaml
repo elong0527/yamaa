@@ -3,10 +3,11 @@ standard: SDTM
 domain: VS
 review:
   concerns:
-    - Protocols often take blood pressure in triplicate and analyse the visit
-      mean, which SDTM keeps as a derived record beside the readings.
+    - Protocols often take blood pressure in triplicate. SDTM keeps each
+      reading as its own record, identified by VSSPID, and leaves the visit
+      mean to the analysis dataset.
     - Two subjects at two visits have three systolic and three diastolic
       readings each, except one systolic reading that was not taken.
-    - The mean is taken over the readings present, so subject 002's visit 2
-      systolic mean is 125 from two readings, and the mean record has no
-      replicate number and is flagged as derived.
+    - A reading that was not taken gives no record and the other readings keep
+      their numbers (subject 002's visit 2 systolic readings 1 and 2), and no
+      mean record is added in SDTM.
