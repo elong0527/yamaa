@@ -49,63 +49,37 @@ columns:
     derivation:
       aggregate: "COUNT(EX.EXDOSE)"
 
-  # Check the full SDTM EX relation, including records outside the DM
-  # population. Every EX record has DOMAIN=EX; this key deliberately avoids
-  # the per-subject match used by the output measures above. Its range check
-  # runs only on output rows, so it cannot see EX when DM has no subject;
-  # the exposure-units rows below check every EX record before it.
+  # The exposure-units template derives this count over the full EX domain,
+  # including records outside DM. It retains an invalid validation candidate
+  # for this range check even when DM has no subject. Subjects do not derive
+  # this private column; the unit policy lives in that one aggregate.
   - name: NDOSOTHER
     type: int
     label: Number of Recorded Doses Not in Milligrams
-    derivation:
-      aggregate:
-        key: {DOMAIN: "'EX'"}
-        filter: >-
-          EX.EXDOSE IS NOT NULL AND
-          (EX.EXDOSU IS NULL OR EX.EXDOSU <> 'mg')
-        expr: "COUNT(EX.*)"
+    derivation: null
     verifications:
       - range:
           id: doses-standardized-to-mg
           max: 0
 
-  # The unit of each EX record's recorded dose, and its check, derived only
-  # by the exposure-units rows below. A blank dose needs no unit; a recorded
-  # dose without one reads as "(missing)". Any unit but mg has no mapping,
-  # which stops the run.
-  - name: DOSEUNIT
-    type: str
-    label: Unit of the Recorded Dose
-    derivation: null
-
-  - name: DOSUSTD
-    type: str
-    label: Recorded Dose Standardized to Milligrams
-    derivation: null
-
 rows:
-  # Validation section: one candidate per EX record, matched to a DM subject
-  # or not, so the unit check covers the full EX relation even when DM has
-  # no subject. A record that passes keeps a check value and is dropped, so
-  # these candidates never reach the output.
+  # One validation candidate per EX domain, independent of DM. Grouped
+  # filters read their row aggregates. A valid group is dropped; an invalid
+  # one reaches the existing NDOSOTHER range check and refuses the run.
   - id: exposure-units
     dataset: EX
-    filter: "DOSUSTD IS NULL"
+    group_by: [EX.DOMAIN]
+    filter: "NDOSOTHER > 0"
     derivations:
-      STUDYID: EX.STUDYID
-      USUBJID: EX.USUBJID
+      STUDYID: "'(validation)'"
+      USUBJID: "'(validation)'"
       TRT01P: null
-      DOSEUNIT:
-        case:
-          - when: "EX.EXDOSE IS NULL"
-            then: "'mg'"
-          - when: "EX.EXDOSU IS NULL"
-            then: "'(missing)'"
-          - otherwise: EX.EXDOSU
-      DOSUSTD:
-        mapping:
-          source: DOSEUNIT
-          dict: {mg: "Y"}
+      NDOSOTHER:
+        aggregate:
+          filter: >-
+            EX.EXDOSE IS NOT NULL AND
+            (EX.EXDOSU IS NULL OR EX.EXDOSU <> 'mg')
+          expr: "COUNT(EX.*)"
 
   # One ADEX row per DM subject.
   - id: subjects
