@@ -5,10 +5,11 @@
 //! counted drops, misaligned buffers and failing callbacks, imported and
 //! exported through `arrow_bridge`, which no fixture reader produces.
 use arrow_array::{
-    new_empty_array, Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray,
-    RecordBatch, RecordBatchOptions, RecordBatchReader, StringArray, StringViewArray,
-    TimestampSecondArray,
+    new_empty_array, types::Int32Type, Array, ArrayRef, Date32Array, Float64Array, Int32Array,
+    Int64Array, LargeStringArray, ListArray, RecordBatch, RecordBatchOptions, RecordBatchReader,
+    RunArray, StringArray, StringViewArray, TimestampSecondArray,
 };
+use arrow_buffer::OffsetBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef, TimeUnit};
 use std::{
     collections::VecDeque,
@@ -20,7 +21,7 @@ use std::{
 use yamaa_adapters::{
     arrow_bridge::{self, ArrowArrayStreamReader, FFI_ArrowArrayStream},
     column_table::{Column as Values, ColumnTable, TableError},
-    public_table::PublicTable,
+    public_table::{PublicTable, TableError as ResultError},
 };
 use yamaa_core::{
     limits::Limits,
@@ -278,6 +279,58 @@ fn incapable_physical_types_are_refused_and_release_the_input() {
             "{kind}"
         );
         assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    }
+}
+
+/// Arrow 55 validates a run-end encoded array against its own run ends,
+/// not its parent's length (RUSTSEC-2026-0442), so reading one's values can
+/// read past them. Both imports refuse the type before reading a value: an
+/// input frame by its schema, before any batch, and a result table by each
+/// column's type, at the top level or as a list's items.
+#[test]
+fn run_end_encoded_columns_are_refused_before_any_value_is_read() {
+    let runs: ArrayRef = Arc::new(
+        RunArray::<Int32Type>::try_new(
+            &Int32Array::from(vec![2, 3]),
+            &Int64Array::from(vec![7, 8]),
+        )
+        .unwrap(),
+    );
+    let item = Arc::new(Field::new("item", runs.data_type().clone(), true));
+    let list: ArrayRef = Arc::new(ListArray::new(
+        item,
+        OffsetBuffer::from_lengths([3]),
+        runs.clone(),
+        None,
+    ));
+    let batch = |array: &ArrayRef| {
+        let field = Field::new("X", array.data_type().clone(), true);
+        let schema = Arc::new(Schema::new(vec![field]));
+        let batch = RecordBatch::try_new(schema.clone(), vec![array.clone()]).unwrap();
+        (schema, batch)
+    };
+    let (schema, input) = batch(&runs);
+    let (source, dropped) = stream(schema, vec![Ok(input)]);
+    assert!(
+        matches!(
+            arrow_bridge::import_public_stream(source),
+            Err(TableError::ArrayType {
+                batch: 0,
+                column: 0
+            })
+        ),
+        "an input frame's run-end encoded column"
+    );
+    assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    for (label, array) in [("a column", &runs), ("a list's items", &list)] {
+        let (schema, result) = batch(array);
+        let (source, dropped) = stream(schema, vec![Ok(result)]);
+        assert_eq!(
+            arrow_bridge::import_result_stream(source),
+            Err(ResultError::InvalidTable),
+            "a result table's run-end encoded {label}"
+        );
+        assert_eq!(dropped.load(Ordering::SeqCst), 1, "{label}");
     }
 }
 
