@@ -36,10 +36,9 @@ adex <- ex |>
     CALCDUR = as.numeric(difftime(moment(EXENDTC), moment(EXSTDTC), units = "mins")),
     AVAL = coalesce(collected_minutes(EXDUR), CALCDUR),
     PARAMCD = "INFDUR",
-    PARAM = "Infusion Duration (min)",
-    AVALU = "min"
+    PARAM = "Infusion Duration (min)"
   ) |>
-  select(STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM, AVAL, AVALU, CALCDUR)
+  select(STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM, AVAL, CALCDUR)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(adex, "/app/output/adex.csv", na = "")

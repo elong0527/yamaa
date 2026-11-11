@@ -126,7 +126,7 @@
         "edits": {
           "spec.yaml": [
             {"from": "VSDTC, EPOCH]", "to": "VSDTC, VSDTM, EPOCH]"},
-            {"from": "        invalid: null\n", "to": "        invalid: null\n    submission:\n      core: Perm\n      role: Timing\n      origins:\n        - type: Derived\n          source: Sponsor\n      method: VSDTC completed to the start of its day.\n"}
+            {"from": "      unconvertible: null\n", "to": "      unconvertible: null\n    submission:\n      core: Perm\n      role: Timing\n      origins:\n        - type: Derived\n          source: Sponsor\n      method: VSDTC read as a moment when it carries a time.\n"}
           ]
         },
         "project": "project.yaml",

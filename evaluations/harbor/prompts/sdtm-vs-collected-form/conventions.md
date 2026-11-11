@@ -4,7 +4,7 @@ collected at each visit.
 
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
-VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC
+VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSSTAT, VSREASND, VSLOC, VSDTC
 
 DOMAIN is "VS". VSTESTCD is "SYSBP", "DIABP", "PULSE", "RESP", "TEMP",
 or "WEIGHT". VSTEST is the test name VS_TESTS gives for the test code:

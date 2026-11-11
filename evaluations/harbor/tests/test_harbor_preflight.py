@@ -196,7 +196,7 @@ def test_restricted_opensas_exclusion_is_recorded_without_running_unrelated_case
             "--out",
             str(tmp_path),
             "--benchmarks",
-            "adam-adsl-investigator-comment",
+            "adam-adsl-randomization",
             "--language",
             "opensas",
             "--all-cases",
@@ -206,9 +206,9 @@ def test_restricted_opensas_exclusion_is_recorded_without_running_unrelated_case
     if allow_empty:
         smoke.main()
         sample = json.loads((tmp_path / "sample.json").read_text())
-        assert sample["benchmarks"] == ["adam-adsl-investigator-comment"]
+        assert sample["benchmarks"] == ["adam-adsl-randomization"]
         assert sample["tasks"] == [] and sample["candidate_tasks"] == 0
-        assert "spaces-only" in sample["skipped"][0]
+        assert "Parquet" in sample["skipped"][0]
         assert json.loads((tmp_path / "summary.json").read_text())["agents"] == {}
     else:
         with pytest.raises(RuntimeError, match="no buildable tasks"):

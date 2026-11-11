@@ -7,13 +7,14 @@ input:
   ODM: input/odm.csv
   TESTS:
     path: input/vs_tests.csv
-    types: {TESTORD: int, HAS_POSITION: int, HAS_METHOD: int, HAS_NOTDONE: int}
+    types:
+      {TESTORD: int, HAS_POSITION: int, HAS_LOCATION: int, HAS_NOTDONE: int}
 
 output:
   path: vs.csv
   columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
-            VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT,
-            VSREASND, VSDTC]
+            VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSSTAT, VSREASND,
+            VSLOC, VSDTC]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 # The test table, read through each record's test code.
@@ -60,10 +61,10 @@ columns:
     label: Body Position Collected on the Form
     derivation: {odm: ODM.IT.VS.POSITION}
 
-  - name: TEMPMETHOD
+  - name: TEMPLOC
     type: str
-    label: Temperature Method Collected on the Form
-    derivation: {odm: ODM.IT.VS.TEMPMETHOD}
+    label: Temperature Location Collected on the Form
+    derivation: {odm: ODM.IT.VS.TEMPLOC}
 
   - name: BPNOTDONE
     type: str
@@ -90,16 +91,16 @@ columns:
     derivation: TEST.TESTORD
 
   # Test table flags, 1 or 0: whether the test uses the form's body
-  # position, its temperature method, or its blood pressure not-done flag.
+  # position, its temperature location, or its blood pressure not-done flag.
   - name: HAS_POSITION
     type: int
     label: Test Uses Collected Body Position
     derivation: TEST.HAS_POSITION
 
-  - name: HAS_METHOD
+  - name: HAS_LOCATION
     type: int
-    label: Test Uses Collected Method
-    derivation: TEST.HAS_METHOD
+    label: Test Uses Collected Location
+    derivation: TEST.HAS_LOCATION
 
   - name: HAS_NOTDONE
     type: int
@@ -134,7 +135,7 @@ columns:
     label: Standard Units
     derivation: VSORRESU
 
-  # Position and method go only on the tests that use them, and only when
+  # Position and location go only on the tests that use them, and only when
   # a result was collected; otherwise they stay missing.
   - name: VSPOS
     type: str
@@ -144,13 +145,13 @@ columns:
         - when: "HAS_POSITION = 1 AND VSORRES IS NOT NULL"
           then: POSITION
 
-  - name: VSMETHOD
+  - name: VSLOC
     type: str
-    label: Method of Test or Examination
+    label: Location of Vital Signs Measurement
     derivation:
       case:
-        - when: "HAS_METHOD = 1 AND VSORRES IS NOT NULL"
-          then: TEMPMETHOD
+        - when: "HAS_LOCATION = 1 AND VSORRES IS NOT NULL"
+          then: TEMPLOC
 
   # A not-done flag of Y marks only the blood pressure tests, which then
   # also carry the form's reason.

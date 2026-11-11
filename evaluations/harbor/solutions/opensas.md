@@ -66,13 +66,6 @@ benchmark with no Harbor prompt, and run reports are not graded.
 
 ## Compatibility gaps and solution choices
 
-- **Whitespace needs raw records.** opensas's CSV reader and exporter
-  normalize the spaces-only comment in `adam-adsl-investigator-comment` to
-  character missing. Its reference reads raw records instead, counts each
-  field's length with `lengthc(_infile_)`, and writes its CSV with a DATA step,
-  so the two-space comment and `CMNTFL=Y` survive the original, held-out and
-  changed-input checks. The track still excludes the case. Whether SAS 9.4
-  keeps the trailing blanks of `_infile_` the same way is unverified.
 - **Blank search strings.** INDEX returns zero for a blank one-character
   excerpt, so the proper-case reference compares the previous character
   with each word separator in an IN list instead of searching a separator

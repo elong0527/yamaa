@@ -4,7 +4,7 @@ collected at each visit.
 
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
-VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC
+VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSSTAT, VSREASND, VSLOC, VSDTC
 
 DOMAIN is "VS". STUDYID is the ODM study OID and USUBJID is the ODM
 subject key, each as given. VISIT is the name of the visit at which the
@@ -26,13 +26,13 @@ agrees with the numeric result, and it has no value when no result was
 collected. VSSTRESU is the standard unit, equal to the collected unit,
 and it has no value when no result was collected. VSPOS is the body
 position as collected on the form on blood pressure and pulse records
-with a collected result, and has no value otherwise. VSMETHOD is the
-measurement method as collected on the form on temperature records with
-a collected result, and has no value otherwise. VSSTAT is "NOT DONE" on
-the blood pressure records when the form flags blood pressure as not
+with a collected result, and has no value otherwise. VSSTAT is "NOT DONE"
+on the blood pressure records when the form flags blood pressure as not
 done, and has no value otherwise. VSREASND is the reason the form gives
 for blood pressure not done, on the blood pressure records, and has no
-value otherwise. A not-done blood pressure still gives its two records,
+value otherwise. VSLOC is the body location of the measurement as
+collected on the form on temperature records with a collected result, and
+has no value otherwise. A not-done blood pressure still gives its two records,
 so the reason is kept, but those records carry no result, unit,
 position, or standardized value. VSSEQ numbers each subject's records
 from 1 by visit date, then in test order within each visit.

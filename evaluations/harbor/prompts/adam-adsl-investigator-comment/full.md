@@ -8,9 +8,9 @@ CMNT is the comment exactly as the investigator recorded it: a comma
 inside it, quotation marks around a subject's own words, and a line
 break in the middle of it all reach the result unchanged, and CMNT has
 no value when no comment was collected. CMNTFL is "Y" when a comment
-was collected and "N" when none was. An empty comment field, quoted or
-not, counts as no comment collected. A field holding only spaces is
-still a comment: CMNTFL is "Y" and the spaces are kept in CMNT.
+was collected and "N" when none was. A comment field that is empty,
+quoted or not, or holds only spaces counts as no comment collected:
+CMNTFL is "N" and CMNT has no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adsl.csv.

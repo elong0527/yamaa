@@ -9,17 +9,15 @@ data odm;
 run;
 
 data readings; set odm; where ItemOID in ('IT.VS.SYSBP','IT.VS.DIABP') and not missing(Value); length STUDYID USUBJID VISIT VSTESTCD $1024;
-STUDYID=StudyOID; USUBJID=SubjectKey; VISIT=catx(' ','VISIT',scan(StudyEventOID,-1,'T')); if StudyEventOID='SE.VISIT1' then VISIT='VISIT 1'; if StudyEventOID='SE.VISIT2' then VISIT='VISIT 2'; VSTESTCD=scan(ItemOID,-1,'.'); VSREPNUM=input(ItemGroupRepeatKey,best32.); VSSTRESN=input(Value,best32.); MEANORD=0; run;
-proc sql; create table means as select STUDYID,USUBJID,VISIT,VSTESTCD,mean(VSSTRESN) as VSSTRESN from readings group by STUDYID,USUBJID,VISIT,VSTESTCD; quit;
-data meanout; set means; VSREPNUM=.; MEANORD=1; run;
-data prepared; set readings meanout; length DOMAIN $2 VSTEST VSORRES VSORRESU VSSTRESC VSDRVFL $1024; DOMAIN='VS'; VSTEST='Diastolic Blood Pressure'; if VSTESTCD='SYSBP' then VSTEST='Systolic Blood Pressure'; VSORRES=strip(put(VSSTRESN,best32.)); VSSTRESC=VSORRES; VSORRESU='mmHg'; VSDRVFL=''; if MEANORD=1 then VSDRVFL='Y'; run;
-proc sort data=prepared; by STUDYID USUBJID VISIT VSTESTCD MEANORD VSREPNUM; run;
+STUDYID=StudyOID; USUBJID=SubjectKey; VISIT=catx(' ','VISIT',scan(StudyEventOID,-1,'T')); if StudyEventOID='SE.VISIT1' then VISIT='VISIT 1'; if StudyEventOID='SE.VISIT2' then VISIT='VISIT 2'; VSTESTCD=scan(ItemOID,-1,'.'); VSREPNUM=input(ItemGroupRepeatKey,best32.); VSSTRESN=input(Value,best32.); run;
+data prepared; set readings; length DOMAIN $2 VSSPID VSTEST VSORRES VSORRESU VSSTRESC $1024; DOMAIN='VS'; VSSPID=strip(ItemGroupRepeatKey); VSTEST='Diastolic Blood Pressure'; if VSTESTCD='SYSBP' then VSTEST='Systolic Blood Pressure'; VSORRES=strip(put(VSSTRESN,best32.)); VSSTRESC=VSORRES; VSORRESU='mmHg'; run;
+proc sort data=prepared; by STUDYID USUBJID VISIT VSTESTCD VSREPNUM; run;
 data result; set prepared; by STUDYID USUBJID; retain VSSEQ;
   if first.USUBJID then VSSEQ=0;
   VSSEQ+1;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL from result;
+  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC from result;
 quit;
 proc export data=final outfile="/app/output/vs.csv" dbms=csv replace; run;

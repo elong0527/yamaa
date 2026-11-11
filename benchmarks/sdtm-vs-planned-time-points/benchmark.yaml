@@ -8,5 +8,6 @@ review:
     - Two subjects each have pulse and blood pressure at four planned time
       points around the first dose on day 1.
     - The planned elapsed time stays as scheduled (PT30M) beside the actual
-      collection time, so a late reading shows its gap, and a post-dose reading
+      collection time and the first-dose time it counts from (VSTPTREF FIRST
+      DOSE, VSRFTDTC), so a late reading shows its gap, and a post-dose reading
       dated before the dose, or a pre-dose reading after it, stops the run.

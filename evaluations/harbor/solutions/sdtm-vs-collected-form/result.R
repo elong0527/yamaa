@@ -38,7 +38,7 @@ for (i in seq_len(nrow(wide))) {
   visit <- wide[i, ]
   vsdtc <- visit$IT.VS.VSDTC
   position <- visit$IT.VS.POSITION
-  method <- visit$IT.VS.TEMPMETHOD
+  location <- visit$IT.VS.TEMPLOC
   not_done <- !is.na(visit$IT.VS.BPNOTDONE) && visit$IT.VS.BPNOTDONE == "Y"
   reason <- visit$IT.VS.BPREASND
   for (j in seq_len(nrow(tests))) {
@@ -59,7 +59,7 @@ for (i in seq_len(nrow(wide))) {
       stresc <- NA_character_
       stresu <- NA_character_
       pos <- NA_character_
-      meth <- NA_character_
+      loc <- NA_character_
     } else {
       orres <- result
       orresu <- unit
@@ -67,7 +67,7 @@ for (i in seq_len(nrow(wide))) {
       stresc <- fmt_text(stresn)
       stresu <- unit
       pos <- if (test$HAS_POSITION == "1") position else NA_character_
-      meth <- if (test$HAS_METHOD == "1") method else NA_character_
+      loc <- if (test$HAS_LOCATION == "1") location else NA_character_
     }
     if (test$HAS_NOTDONE == "1" && not_done) {
       stat <- "NOT DONE"
@@ -89,9 +89,9 @@ for (i in seq_len(nrow(wide))) {
       VSSTRESC = stresc,
       VSSTRESU = stresu,
       VSPOS = pos,
-      VSMETHOD = meth,
       VSSTAT = stat,
       VSREASND = reasnd,
+      VSLOC = loc,
       VSDTC = vsdtc
     )
   }
@@ -106,7 +106,7 @@ vs <- bind_rows(rows) |>
   transmute(
     DOMAIN = "VS",
     STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
-    VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSMETHOD, VSSTAT, VSREASND, VSDTC
+    VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSSTAT, VSREASND, VSLOC, VSDTC
   )
 
 dir.create("/app/output", showWarnings = FALSE)

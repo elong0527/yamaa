@@ -7,9 +7,9 @@
 """Create ADSL (one record per subject) from DM.
 
 CMNT carries the investigator comment exactly as recorded; CMNTFL is
-"Y" when a comment was collected and "N" when none was. An empty
-comment field (quoted or not) counts as no comment; a field holding
-only spaces is still a comment and its spaces are kept.
+"Y" when a comment was collected and "N" when none was. A comment
+field that is empty (quoted or not) or holds only spaces counts as no
+comment.
 """
 
 import csv
@@ -30,7 +30,7 @@ def main():
     adsl_rows = []
     for row in dm_rows:
         comment = row.get("COMMENT") or ""
-        collected = comment != ""
+        collected = comment.strip() != ""
         adsl_rows.append(
             {
                 "STUDYID": row["STUDYID"],

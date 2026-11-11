@@ -9,7 +9,7 @@ input:
 output:
   path: adex.csv
   columns: [STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM,
-            AVAL, AVALU, CALCDUR]
+            AVAL, CALCDUR]
 
 columns:
   - name: STUDYID
@@ -47,6 +47,7 @@ columns:
     label: Parameter Code
     derivation: "'INFDUR'"
 
+  # The parameter names the unit, so no separate unit column is needed.
   - name: PARAM
     type: str
     label: Parameter
@@ -100,11 +101,6 @@ columns:
     derivation:
       first_available:
         sources: [COLLDUR, CALCDUR]
-
-  - name: AVALU
-    type: str
-    label: Analysis Value Unit
-    derivation: "'min'"
 
 verifications:
   - row_count:

@@ -2,8 +2,9 @@
 
 **Goal:** carry each collected vital-signs result with its actual
 collection datetime, and add the planned time point it was
-scheduled for: `VSTESTCD`, `VSORRES`, `VSTPT`, `VSTPTNUM`,
-`VSELTM`, `VSDTC`, and `VSDY`.
+scheduled for and the dose it is timed from: `VSTESTCD`,
+`VSORRES`, `VSTPT`, `VSTPTNUM`, `VSELTM`, `VSTPTREF`, `VSRFTDTC`,
+`VSDTC`, and `VSDY`.
 
 **Input:** long-form Operational Data Model (ODM) data with one row
 per collected item, carrying the collection form (`FormOID`), the
@@ -28,6 +29,10 @@ datetime rides along on the dosing form `FO.EX`.
 - `VSELTM` is the planned elapsed time since the first dose for
   the form, in ISO 8601 duration form: `-PT15M` before the dose,
   then `PT30M`, `PT1H`, and `PT4H` after it.
+- `VSTPTREF` names the reference time point the planned elapsed
+  time counts from: `FIRST DOSE` on every record.
+- `VSRFTDTC` is the date and time of that reference time point,
+  the first-dose datetime from the subject's dosing form.
 - `VSTESTCD` is the test short name, looked up from the test
   dictionary by item: `PULSE`, `SYSBP`, or `DIABP`. Items with no
   dictionary entry (the datetime and dosing items) give no record.
@@ -52,5 +57,5 @@ datetime rides along on the dosing form `FO.EX`.
 the actual collection datetime, so a reading taken later than
 planned keeps its late actual datetime and the gap shows when the
 two are compared. Each reading is also checked against the
-first-dose datetime: a post-dose reading dated before the dose, or
-a pre-dose reading dated after it, stops the run.
+first-dose datetime in `VSRFTDTC`: a post-dose reading dated before
+the dose, or a pre-dose reading dated after it, stops the run.
