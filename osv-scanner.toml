@@ -27,6 +27,11 @@ ignoreUntil = 2027-04-30
 reason = "paste is unmaintained, not vulnerable, and a procedural macro that runs only at compile time. It arrives through extendr-api 0.9.0, the latest release, which the R binding builds, and through parquet 55.2.0, which only the adapters' and the application's tests compile, as their differential oracle (#3954)."
 
 [[IgnoredVulns]]
+id = "RUSTSEC-2026-0442"
+ignoreUntil = 2027-01-31
+reason = "arrow-data 55.2.0 (fixed in 57.3.2, 58.4.1, 59.3.2 and 60.1.0, each of which needs Rust 1.85) validates a run-end encoded array's last run end against the run ends' own length rather than the parent array's, so a later read of the array's values can read past them. Arrow 55.2.0 is the newest release that builds with the workspace's minimum Rust 1.82, which stays the minimum through 1.0.0 for CRAN's two-year-old cargo rule (#3154), and no 55 or 56 release carries the fix. Every package builds arrow-data, through arrow-array, but no yamaa code reads a run-end encoded array's values: an input frame's import refuses every type outside its public set by the stream's schema before importing a batch, a result table's import (the Python pickle restore included) refuses the type of each column, and of each list's items, before reading a value, and the Parquet reader only names the type of an embedded schema's field. arrow_host_bridge::run_end_encoded_columns_are_refused_before_any_value_is_read in yamaa-adapters holds both refusals (#4446). RustSec marks it informational (unsound), and cargo deny reports an unsound advisory only for a crate that a workspace member depends on directly, which arrow-data is not, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
 id = "RUSTSEC-2026-0176"
 ignoreUntil = 2027-01-31
 reason = "PyO3 0.27.2 is the newest release that builds with the workspace's minimum Rust 1.82 (#3111), which stays the minimum through 1.0.0 for CRAN's two-year-old cargo rule (#3154). The fix arrived in 0.29.0, which needs Rust 1.83, and no 0.27 or 0.28 release carries it. The Python binding iterates a PyList or PyTuple only with next, through for loops and collect, and never calls Iterator::nth or nth_back on one, directly or through an adapter such as skip or step_by."
