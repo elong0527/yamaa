@@ -51,7 +51,9 @@ columns:
 
   # Check the full SDTM EX relation, including records outside the DM
   # population. Every EX record has DOMAIN=EX; this key deliberately avoids
-  # the per-subject match used by the output measures above.
+  # the per-subject match used by the output measures above. Its range check
+  # runs only on output rows, so it cannot see EX when DM has no subject;
+  # the exposure-units rows below check every EX record before it.
   - name: NDOSOTHER
     type: int
     label: Number of Recorded Doses Not in Milligrams
@@ -66,6 +68,48 @@ columns:
       - range:
           id: doses-standardized-to-mg
           max: 0
+
+  # The unit of each EX record's recorded dose, and its check, derived only
+  # by the exposure-units rows below. A blank dose needs no unit; a recorded
+  # dose without one reads as "(missing)". Any unit but mg has no mapping,
+  # which stops the run.
+  - name: DOSEUNIT
+    type: str
+    label: Unit of the Recorded Dose
+    derivation: null
+
+  - name: DOSUSTD
+    type: str
+    label: Recorded Dose Standardized to Milligrams
+    derivation: null
+
+rows:
+  # Validation section: one candidate per EX record, matched to a DM subject
+  # or not, so the unit check covers the full EX relation even when DM has
+  # no subject. A record that passes keeps a check value and is dropped, so
+  # these candidates never reach the output.
+  - id: exposure-units
+    dataset: EX
+    filter: "DOSUSTD IS NULL"
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      TRT01P: null
+      DOSEUNIT:
+        case:
+          - when: "EX.EXDOSE IS NULL"
+            then: "'mg'"
+          - when: "EX.EXDOSU IS NULL"
+            then: "'(missing)'"
+          - otherwise: EX.EXDOSU
+      DOSUSTD:
+        mapping:
+          source: DOSEUNIT
+          dict: {mg: "Y"}
+
+  # One ADEX row per DM subject.
+  - id: subjects
+    dataset: DM
 
 verifications:
   - assert:

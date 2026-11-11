@@ -52,14 +52,14 @@
     "files": {
       "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,YAMAA-01-101,1,Carboplatin,400,g,2025-01-06\nYAMAA-01,EX,YAMAA-01-101,2,Carboplatin,350,mg,2025-01-27\nYAMAA-01,EX,YAMAA-01-102,1,Cisplatin,,,2025-01-08\nYAMAA-01,EX,YAMAA-01-102,2,Cisplatin,,,2025-01-29\nYAMAA-01,EX,YAMAA-01-103,1,Carboplatin,0,mg,2025-01-10\nYAMAA-01,EX,YAMAA-01-103,2,Carboplatin,,,2025-01-31\nYAMAA-01,EX,YAMAA-01-105,1,Carboplatin,,,2025-01-14\n"
     },
-    "condition": "range_failed"
+    "condition": "unmapped_value"
   },
   {
     "id": "unmatched-recorded-grams-refused",
     "files": {
       "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,YAMAA-01-101,1,Carboplatin,400,mg,2025-01-06\nYAMAA-01,EX,YAMAA-01-101,2,Carboplatin,350,mg,2025-01-27\nYAMAA-01,EX,YAMAA-01-102,1,Cisplatin,,,2025-01-08\nYAMAA-01,EX,YAMAA-01-102,2,Cisplatin,,,2025-01-29\nYAMAA-01,EX,YAMAA-01-103,1,Carboplatin,0,mg,2025-01-10\nYAMAA-01,EX,YAMAA-01-103,2,Carboplatin,,,2025-01-31\nYAMAA-01,EX,YAMAA-01-105,1,Carboplatin,,,2025-01-14\nYAMAA-01,EX,UNMATCHED,1,Other,2,g,2025-02-01\n"
     },
-    "condition": "range_failed"
+    "condition": "unmapped_value"
   },
   {
     "id": "six-subjects-one-record-each",
@@ -121,6 +121,30 @@
     "id": "no-subjects-no-records",
     "files": {
       "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n"
+    },
+    "rows": []
+  },
+  {
+    "id": "no-subjects-unmatched-grams-refused",
+    "files": {
+      "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n",
+      "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,UNMATCHED,1,Other,2,g,2025-02-01\n"
+    },
+    "condition": "unmapped_value"
+  },
+  {
+    "id": "no-subjects-unmatched-missing-unit-refused",
+    "files": {
+      "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n",
+      "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,UNMATCHED,1,Other,2,,2025-02-01\n"
+    },
+    "condition": "unmapped_value"
+  },
+  {
+    "id": "no-subjects-unmatched-milligrams-no-rows",
+    "files": {
+      "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n",
+      "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,UNMATCHED,1,Other,2,mg,2025-02-01\n"
     },
     "rows": []
   }
