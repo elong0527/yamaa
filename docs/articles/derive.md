@@ -437,7 +437,10 @@ the agreement. `COUNT(x)` with `distinct: true` in a column, and an `assert`
 that it is at most 1, shows that the present values agree. `COUNT(x)` skips
 missing values, so where a missing value also disagrees, also assert that
 `COUNT(x)` is 0 or equals the record count, `COUNT(D.*)`
-([FORMULA-24](../../rules/formulas.md#formula-24)).
+([FORMULA-24](../../rules/formulas.md#formula-24)). A group with no record
+makes every count missing, so give each `assert` a `when`, such as the record
+count being present, that exempts it
+([CHECK-12](../../rules/verification.md#check-12)).
 
 Choosing one record by order is a window's work. A `baseline_flag` that finds
 two eligible rows on the latest date fails with `ambiguous_baseline`; declare
