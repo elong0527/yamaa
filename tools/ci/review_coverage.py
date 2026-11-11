@@ -46,16 +46,19 @@ FORMAL_REVIEW = (
 # The app's Commits heading: the inbox emoji, or, since November 2026 (#4469),
 # an icon <picture> of an optional dark-scheme <source> and one <img>. The
 # newer section also wraps the range in <dl><dd><br> ... </dd></dl>.
-COMMITS_HEADER = re.compile(
-    r"<summary>(?:\U0001f4e5 |<picture>(?:<source [^<>]*>)?<img [^<>]*></picture> )"
-    r"Commits</summary>"
+EMOJI_COMMITS_HEADER = r"<summary>\U0001f4e5 Commits</summary>"
+ICON_COMMITS_HEADER = (
+    r"<summary><picture>(?:<source [^<>]*>)?<img [^<>]*></picture> Commits</summary>"
 )
+COMMITS_HEADER = re.compile(f"(?:{EMOJI_COMMITS_HEADER}|{ICON_COMMITS_HEADER})")
 COMMITS_SECTION = re.compile(
-    r"(?m)^<details>\r?\n"
-    + COMMITS_HEADER.pattern
-    + r"\r?\n(?:\r?\n"
+    r"(?m)^<details>\r?\n(?:"
+    + EMOJI_COMMITS_HEADER
+    + r"\r?\n\r?\n"
     + REVIEW_RANGE.pattern
-    + r"\r?\n\r?\n|<dl>\r?\n<dd>\r?\n<br>\r?\n\r?\n"
+    + r"\r?\n\r?\n|"
+    + ICON_COMMITS_HEADER
+    + r"\r?\n<dl>\r?\n<dd>\r?\n<br>\r?\n\r?\n"
     + REVIEW_RANGE.pattern
     + r"\r?\n\r?\n</dd>\r?\n</dl>\r?\n)</details>(?=\r?\n|\Z)"
 )

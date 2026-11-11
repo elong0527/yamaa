@@ -777,6 +777,21 @@ class FormalReviewRange(unittest.TestCase):
             ):
                 gate.verify(api, NUMBER)
 
+    def test_each_commits_heading_requires_its_published_wrapper(self):
+        # Seam: each valid heading paired with the other receipt's body.
+        for shape, other in [("icon", "emoji"), ("emoji", "icon")]:
+            api = self.evidence(shape)
+            review = api.page_values[f"pulls/{NUMBER}/reviews"][0]
+            heading = commits_section(shape, OTHER, HEAD).split("\n")[1]
+            replacement = commits_section(other, OTHER, HEAD).split("\n")[1]
+            review["body"] = review["body"].replace(heading, replacement)
+            with (
+                self.subTest(heading=other, wrapper=shape),
+                self.assertRaisesRegex(gate.GateError, "missing, quoted or ambiguous"),
+            ):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
     def test_icon_section_needs_its_whole_wrapper(self):
         section = commits_section("icon", OTHER, HEAD)
         for label, broken in [
