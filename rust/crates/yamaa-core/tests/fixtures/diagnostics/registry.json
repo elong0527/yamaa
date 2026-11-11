@@ -420,16 +420,16 @@
       "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1e"}}]
     },
     {
-      "case": "a_point_without_fraction_digits_does_not_convert_to_an_int",
+      "case": "a_point_without_a_digit_on_either_side_does_not_convert_to_an_int",
       "operation": "convert",
-      "input": {"value": "1.e2", "to": "int", "path": "columns.X"},
-      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "1.e2"}}]
+      "input": {"value": ".e2", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": ".e2"}}]
     },
     {
-      "case": "a_point_without_fraction_digits_does_not_convert_to_a_float",
+      "case": "a_point_without_a_digit_on_either_side_does_not_convert_to_a_float",
       "operation": "convert",
-      "input": {"value": "1.e2", "to": "float", "path": "columns.X"},
-      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1.e2"}}]
+      "input": {"value": ".e2", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": ".e2"}}]
     },
     {
       "case": "an_exponent_with_a_fraction_does_not_convert_to_an_int",
