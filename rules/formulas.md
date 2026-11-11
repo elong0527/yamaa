@@ -331,8 +331,8 @@ defines. `9007199254740993 = 9007199254740992.0` is `FALSE`. An arithmetic
 operand has the numeric type of its result: `X + 0 = 9007199254740993` keeps
 an exact `int`, while `X * 1.0` is a `float`. Two non-missing operands that are
 not mutually comparable, or a non-string operand to `LIKE`
-([FORMULA-7](#formula-7)), fail with `incompatible_input_type`. When the
-`str` operand of such a pair is a field of a delimited input that its `types`
+([FORMULA-7](#formula-7)), fail with `incompatible_input_type`. For a static
+comparison, when the `str` operand of such a pair is a field of a delimited input that its `types`
 leave undeclared, which reads as `str` ([INPUT-5](inputs.md#input-5)), and
 the input stores it, the refusal's `hint` names that field and says that its
 input's `types` declare no type for it.
