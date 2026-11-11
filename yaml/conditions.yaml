@@ -155,6 +155,10 @@ conditions:
     message_variants:
       - when: host_error
         message: "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"
+      - when: actual
+        message: "the engine refused the operation in its {step} step: {code}: {resource} is {actual}, above the limit of {limit}"
+      - when: limit
+        message: "the engine refused the operation in its {step} step: {code}: {resource} is above the limit of {limit}"
   field_parse_failed:
     phases: [ingest]
     message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"
@@ -184,6 +188,9 @@ conditions:
   incompatible_input_type:
     phases: [validation]
     message: "{spec_path} reads a value of type {actual}, which it does not accept"
+    message_variants:
+      - when: left_type
+        message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"
   inheritance_cycle:
     phases: [validation]
     message: "the layers form a cycle: {cycle}"
@@ -239,6 +246,9 @@ conditions:
   invalid_operation_count:
     phases: [validation]
     message: "the {registry} entry declares {count} operations instead of exactly one"
+    message_variants:
+      - when: hint
+        message: "the {registry} entry declares {count} operations instead of exactly one ({hint})"
   invalid_parent_path:
     phases: [validation]
     message: "parent {parent} is not a relative file path"

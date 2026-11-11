@@ -230,6 +230,10 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
 #[rustfmt::skip]
 pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("engine_rejected", "host_error", "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"),
+    ("engine_rejected", "actual", "the engine refused the operation in its {step} step: {code}: {resource} is {actual}, above the limit of {limit}"),
+    ("engine_rejected", "limit", "the engine refused the operation in its {step} step: {code}: {resource} is above the limit of {limit}"),
+    ("incompatible_input_type", "left_type", "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"),
+    ("invalid_operation_count", "hint", "the {registry} entry declares {count} operations instead of exactly one ({hint})"),
     ("missing_input", "template_filter", "the string template reads {variable}, which is missing, and {template_filter} runs only after the row's derivations, so it cannot discard the row first"),
     ("multiple_matches", "field", "lookup {intermediate} finds {match_count} matching records named {field} in {dataset} and has no rule to choose one"),
     ("unsupported_operation", "hint", "{operation} is not supported by this engine ({hint})"),

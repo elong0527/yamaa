@@ -5742,7 +5742,7 @@
               "file": "spec.yaml",
               "line": 17,
               "column": 9,
-              "message": "the engine refused the operation in its prepare step: compiler_limit",
+              "message": "the engine refused the operation in its prepare step: compiler_limit: regex_size is above the limit of 10485760",
               "context": "{\"code\":\"compiler_limit\",\"limit\":10485760,\"resource\":\"regex_size\",\"step\":\"prepare\"}",
               "source_span": null,
               "operand_route": null
@@ -5766,7 +5766,7 @@
               "file": "spec.yaml",
               "line": 12,
               "column": 5,
-              "message": "the engine refused the operation in its prepare step: compiler_limit",
+              "message": "the engine refused the operation in its prepare step: compiler_limit: intermediate_keys is 65, above the limit of 64",
               "context": "{\"actual\":65,\"code\":\"compiler_limit\",\"limit\":64,\"resource\":\"intermediate_keys\",\"step\":\"prepare\"}",
               "source_span": null,
               "operand_route": null
