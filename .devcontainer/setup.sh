@@ -70,13 +70,14 @@ else
   git clone --depth 1 https://github.com/elong0527/ai4csr "$ai4csr_dir"
 fi
 
-# The editor opens the parent folder, so point its settings at this checkout.
+# The editor opens the parent folder, so the terminal starts there too.
+# (The interpreter and rust-analyzer settings below still point at this checkout.)
 mkdir -p "$(dirname "$repository_root")/.vscode"
 cat > "$(dirname "$repository_root")/.vscode/settings.json" <<SETTINGS
 {
   "python.defaultInterpreterPath": "$repository_root/python/.venv/bin/python",
   "rust-analyzer.linkedProjects": ["$repository_root/rust/Cargo.toml"],
-  "terminal.integrated.cwd": "$repository_root"
+  "terminal.integrated.cwd": "$(dirname "$repository_root")"
 }
 SETTINGS
 
