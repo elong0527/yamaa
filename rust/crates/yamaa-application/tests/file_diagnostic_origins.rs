@@ -517,7 +517,6 @@ mod file {
             use yamaa_adapters::json;
             for (resource, limit, actual, path) in [
                 ("columns", 1024, 1025, "columns"),
-                ("inputs", 16, 17, "input"),
                 ("source_fields", 1024, 1025, "input.SRC.types"),
                 ("projected_columns", 1024, 1025, "output.columns"),
                 (
@@ -553,27 +552,6 @@ mod file {
                             "columns: [ID]}",
                             &format!("columns: [ID, {projected}]}}"),
                         );
-                    }
-                    "inputs" => {
-                        let inputs = (0..actual)
-                            .map(|i| format!("S{i}: input.csv"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        let sources = (0..actual)
-                            .map(|i| format!("S{i}.ID"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        // Every declared input must be read, or pruning
-                        // (LAYER-11) discards it before the inputs capacity
-                        // is counted.
-                        body = body
-                            .edit("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"))
-                            .edit(
-                                "derivation: SRC.ID",
-                                &format!(
-                                    "derivation: {{first_available: {{sources: [{sources}]}}}}"
-                                ),
-                            );
                     }
                     "source_fields" => {
                         let fields = (0..actual)

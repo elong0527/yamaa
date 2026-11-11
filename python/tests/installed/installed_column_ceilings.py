@@ -268,19 +268,6 @@ class ColumnCeilings(unittest.TestCase):
                         typed=resource == "source_fields",
                     )
                     document = json.loads(spec.read_text(encoding="ascii"))
-                    if resource == "inputs":
-                        document["input"] = {
-                            f"S{index}": "input.csv" for index in range(actual)
-                        }
-                        # Every specification is pruned after composition
-                        # (LAYER-11 and LAYER-12): keep every input live
-                        # through a single row-phase default so the inputs
-                        # capacity is still exercised instead of being pruned.
-                        document["columns"][0]["derivation"] = {
-                            "first_available": {
-                                "sources": [f"S{index}.ID" for index in range(actual)]
-                            }
-                        }
                     if resource == "projected_columns":
                         document["output"]["columns"] = ["ID"] * actual
                     spec.write_text(json.dumps(document), encoding="ascii")

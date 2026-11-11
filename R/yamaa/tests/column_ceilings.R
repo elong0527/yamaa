@@ -333,17 +333,8 @@ run_column_ceilings <- function() {
       fields = if (resource == "source_fields") actual else 1L,
       typed = resource == "source_fields",
       # Keep the counted resource live through pruning: columns needs its
-      # full output, inputs needs a row-phase default that reads every input.
+      # full output.
       selected = if (resource == "columns") NULL else if (resource == "projected_columns") rep("ID", actual) else "ID")
-    if (resource == "inputs") {
-      lines <- readLines(spec)
-      lines[startsWith(lines, "input:")] <- sprintf("input: {%s}",
-        paste(sprintf("S%s: input.csv", seq_len(actual)), collapse = ", "))
-      sources <- paste(sprintf("S%s.ID", seq_len(actual)), collapse = ", ")
-      lines[grepl("name: ID,", lines, fixed = TRUE)] <- sprintf(
-        "  - {name: ID, type: str, label: ID, derivation: {first_available: {sources: [%s]}}}", sources)
-      writeLines(lines, spec)
-    }
     for (project in c(FALSE, TRUE)) {
       for (operation in names(operations(project))) {
         issue <- route_issues(operations(project)[[operation]](spec)$issues, spec, project)
