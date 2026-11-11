@@ -351,6 +351,12 @@ term of `window.order_by`, the run fails with `ambiguous_baseline`, reporting
 the shared date, the number of tied rows and the partition; ties among
 earlier rows do not matter.
 
+The remedy for `ambiguous_baseline` is a declared order, not a choice the
+engine makes: write `window.order_by` with the `date` first, then the terms
+that tell same-date rows apart, such as the collection time and then the
+record's sequence number, as below. yamaa adds no term of its own, so rows
+still tied on every declared term fail again.
+
 ```yaml
 - name: ABLFL
   type: str

@@ -320,6 +320,131 @@ key column is checked against the input wherever a read uses it. The output
 `keys` and an input's `key` answer different questions: `keys` identify the
 rows yamaa builds, and `key` states how another dataset reaches them.
 
+## Summarize a group: a value on each row, or a row per group
+
+A group summary takes one of two shapes, and the shape decides where the
+aggregate goes:
+
+| You want | Write | Rows |
+|---|---|---|
+| The group's summary beside each row of the group, such as a treatment group's mean dose on every subject | an unqualified aggregate at column level, its `group_by` naming output columns | unchanged: the value is broadcast to every row of the partition |
+| One new row for each group, such as a visit total | a `rows` entry with `group_by` naming fields of its driver, its derivations reducing the group | one candidate row per group, kept when its `filter` holds |
+
+The first shape, from
+[schema-aggregation](https://elong0527.github.io/yamaa/benchmark/schema-aggregation.html),
+adds a column and no row:
+
+```yaml
+  - name: AVGNDOSE
+    type: float
+    label: Mean Dose Records per Treatment Group
+    derivation:
+      aggregate:
+        expr: "MEAN(NDOSE)"
+        group_by: [TRTGRP]
+```
+
+The second, from
+[schema-row-templates](https://elong0527.github.io/yamaa/benchmark/schema-row-templates.html),
+adds one row per subject and visit. A grouped template reads a driver field
+only as one of its `group_by` fields or through an aggregate, such as
+`SUM(LB.LBSTRESN)` over the group's records:
+
+```yaml
+  - id: visit_total
+    group_by: [LB.USUBJID, LB.VISIT]
+    filter: "AVAL > 100"
+    derivations:
+      PARAMCD: "'TOTAL'"
+      PARAM: "'Total of Components'"
+      AVAL:
+        aggregate: "SUM(LB.LBSTRESN)"
+      DTYPE: "'CALCULATION'"
+```
+
+[LOOKUP-18](../../rules/lookup.md#lookup-18) defines the aggregate contexts,
+and [ROW-4](../../rules/rows.md#row-4) and
+[ROW-5](../../rules/rows.md#row-5) the grouped template.
+
+### Group by a field you derive
+
+When the grouping field is not stored in the input, derive it in a named
+intermediate over that input and drive the grouped template from the
+intermediate ([ROW-2](../../rules/rows.md#row-2)). The intermediate declares
+no `key`: it does not look up one record for a row but hands the template
+every record it keeps, each carrying the derived fields, and `group_by` names
+them through the intermediate's qualifier. In
+[adam-adpp-accumulation-ratio](https://elong0527.github.io/yamaa/benchmark/adam-adpp-accumulation-ratio.html)
+each PK parameter record takes its subject's arm and the arm's steady-state
+visit, and one ratio row is built for each subject, arm and visit:
+
+```yaml
+intermediates:
+  - id: SUBJARM
+    dataset: ADSL
+    key: [STUDYID, USUBJID]
+    columns: [ARMCD]
+    require_match: true
+
+  - id: PPARM
+    dataset: PP
+    derivations:
+      ARMCD: SUBJARM.ARMCD
+      SSVISIT:
+        case:
+          - when: "ARMCD = 'A'"
+            then: "'DAY 7'"
+          - when: "ARMCD = 'B'"
+            then: "'DAY 5'"
+
+rows:
+  - id: arauc
+    dataset: PPARM
+    group_by: [PPARM.STUDYID, PPARM.USUBJID, PPARM.ARMCD, PPARM.SSVISIT]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      STUDYID: PPARM.STUDYID
+      USUBJID: PPARM.USUBJID
+      PARAMCD: "'ARAUC'"
+      PARAM: "'Accumulation Ratio AUCTAU'"
+      AVISIT: PPARM.SSVISIT
+      ARMCD: PPARM.ARMCD
+      SSVAL:
+        aggregate:
+          filter: "PPARM.PPTESTCD = 'AUCTAU' AND PPARM.VISIT = PPARM.SSVISIT"
+          expr: "ONLY(PPARM.PPSTRESN)"
+      D1VAL:
+        aggregate:
+          filter: "PPARM.PPTESTCD = 'AUCTAU' AND PPARM.VISIT = 'DAY 1'"
+          expr: "ONLY(PPARM.PPSTRESN)"
+      AVAL: "SSVAL / NULLIF(D1VAL, 0)"
+      AVALU: "'RATIO'"
+```
+
+The benchmark's full specification also declares the output columns, which
+the template fills, and a record-driven template that keeps every collected
+record.
+
+### One record, or one value
+
+`ONLY(x)` counts records, not values: a group with two records fails with
+`aggregate_multiple_records` even when both carry the same value
+([FORMULA-20](../../rules/formulas.md#formula-20)). Use it where a second
+record is an error, as for the steady-state and day 1 values above. `MIN(x)`
+or `MAX(x)` instead selects one value and checks nothing about the others;
+when the group's records must all agree, select with one of them and verify
+the agreement, for example with `COUNT(x)` and `distinct: true` in a column
+and an `assert` that it is at most 1.
+
+Choosing one record by order is a window's work. A `baseline_flag` that finds
+two eligible rows on the latest date fails with `ambiguous_baseline`; declare
+`window.order_by` with the baseline date first and the terms that tell
+same-date rows apart after it, such as a collection time and a sequence
+number ([WINDOW-9](../../rules/windows.md#window-9),
+[schema-baseline-tie-break](https://elong0527.github.io/yamaa/benchmark/schema-baseline-tie-break.html)).
+Rows still tied on every declared term fail again: yamaa adds no term of its
+own.
+
 ## More examples
 
 - Derive age groups in ADSL:

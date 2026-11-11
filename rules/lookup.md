@@ -1582,6 +1582,13 @@ never changes the row count.
   value while [Column derivation](columns.md) decides whether
   that candidate row is appended.
 
+The unqualified and grouped-input contexts answer different questions. An
+unqualified aggregate keeps the constructed rows and writes each the summary
+of its partition, such as a treatment group's mean beside every subject's
+row. A summary that is a row of its own, one per group, is a grouped row
+template ([ROW-4](rows.md#row-4)), whose grouped-input aggregates fill that
+row.
+
 A single expression naming two datasets, or mixing a qualified identifier with
 an unqualified one, fails. A reduction is not a join: an expression combining
 two dataset relations first binds each relation to a column and then combines
