@@ -836,6 +836,19 @@ Evidence: `negative-multiple-baselines`, `negative-adlb-duplicate-wbc`, `adam-ad
 `ONLY` is the reduction for a grouped calculation that requires one source
 record and must reject duplicates.
 
+Several records that carry the same value are still several records, so
+`ONLY` fails on them as on records that disagree. `MIN` or `MAX` selects one
+value from several records and checks nothing about the others. A group whose
+records must all agree on a value takes it with `MIN` or `MAX` and verifies
+the agreement separately. A column derived as `COUNT(x)` with
+`distinct: true` and an `assert` that it is at most 1 shows that the present
+values agree. `COUNT(x)` skips missing values ([FORMULA-24](#formula-24)), so
+where a missing value also disagrees, a second check asserts that `COUNT(x)`
+is 0 or equals the group's record count, `COUNT(D.*)`. A group with no record
+reduces every count to missing, so each `assert` declares a `when` that
+exempts it, such as the record count being present
+([CHECK-12](verification.md#check-12)).
+
 <a id="formula-21"></a>
 
 ### FORMULA-21. Reductions do not nest

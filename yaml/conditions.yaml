@@ -42,7 +42,7 @@ conditions:
     message: "column {column} holds a value outside its allowed values"
   ambiguous_baseline:
     phases: [derivation]
-    message: "{operation} for {column} cannot choose between {match_count} eligible rows tied on {date}"
+    message: "{operation} for {column} cannot choose between {match_count} eligible rows tied on {date} and on every later window.order_by term, so window.order_by needs a term that tells them apart"
   ambiguous_dictionary:
     phases: [validation]
     message: "the case-insensitive mapping keys {entries} all fold to {folded_key}"

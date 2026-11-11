@@ -116,7 +116,7 @@ then the `filter`, when present, reads the candidate's completed unqualified
 columns, and the candidate is appended only when the result is `TRUE`.
 
 Fails: `invalid_field_type`, `unknown_field`.
-Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_empty_group`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_a_repeated_variable`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unqualified_variable`.
+Evidence: `schema-row-templates`, `schema-lifecycle`, `adam-adpp-accumulation-ratio`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_empty_group`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_a_repeated_variable`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unqualified_variable`.
 
 [Values](values.md) defines equality for strings. Groups follow the
 position of their first driver record, and driver order is kept within each
@@ -126,6 +126,14 @@ record's candidate row after its prewindow derivations ([ROW-3](#row-3)).
 
 An empty or repeated `group_by` fails as `invalid_field_type`. A `group_by`
 variable not qualified to the row template's driver fails as `unknown_field`.
+
+A grouping field the input does not store is derived first: a named
+intermediate that drives the template ([ROW-2](#row-2)) derives it onto each
+of its records, and `group_by` names it through the intermediate's qualifier
+like a stored field, as `adam-adpp-accumulation-ratio` groups by an arm and a
+visit its intermediate derives. A grouped template adds rows; an unqualified
+aggregate ([LOOKUP-18](lookup.md#lookup-18)) instead broadcasts one value to
+every constructed row of its partition and adds none.
 
 <a id="row-5"></a>
 

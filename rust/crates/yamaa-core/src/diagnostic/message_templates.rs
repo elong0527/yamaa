@@ -7,7 +7,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("aggregate_multiple_records", "{expr} reads {record_count} records in one group, but {reducer} takes exactly one"),
     ("all_or_none_failed", "the listed values are neither all missing nor all present in {failure_count} of the rows"),
     ("allowed_values_failed", "column {column} holds a value outside its allowed values"),
-    ("ambiguous_baseline", "{operation} for {column} cannot choose between {match_count} eligible rows tied on {date}"),
+    ("ambiguous_baseline", "{operation} for {column} cannot choose between {match_count} eligible rows tied on {date} and on every later window.order_by term, so window.order_by needs a term that tells them apart"),
     ("ambiguous_dictionary", "the case-insensitive mapping keys {entries} all fold to {folded_key}"),
     ("artifact_outside_document", "the artifact {artifact} of {dataset} is outside the directory of {define}"),
     ("artifact_path_collision", "{spec_path} would write {path}, which another output also writes"),
