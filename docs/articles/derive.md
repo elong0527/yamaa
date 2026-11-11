@@ -433,8 +433,11 @@ record.
 record is an error, as for the steady-state and day 1 values above. `MIN(x)`
 or `MAX(x)` instead selects one value and checks nothing about the others;
 when the group's records must all agree, select with one of them and verify
-the agreement, for example with `COUNT(x)` and `distinct: true` in a column
-and an `assert` that it is at most 1.
+the agreement. `COUNT(x)` with `distinct: true` in a column, and an `assert`
+that it is at most 1, shows that the present values agree. `COUNT(x)` skips
+missing values, so where a missing value also disagrees, also assert that
+`COUNT(x)` is 0 or equals the record count, `COUNT(D.*)`
+([FORMULA-24](../../rules/formulas.md#formula-24)).
 
 Choosing one record by order is a window's work. A `baseline_flag` that finds
 two eligible rows on the latest date fails with `ambiguous_baseline`; declare

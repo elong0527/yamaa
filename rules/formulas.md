@@ -840,8 +840,11 @@ Several records that carry the same value are still several records, so
 `ONLY` fails on them as on records that disagree. `MIN` or `MAX` selects one
 value from several records and checks nothing about the others. A group whose
 records must all agree on a value takes it with `MIN` or `MAX` and verifies
-the agreement separately, for example with a column derived as `COUNT(x)` with
-`distinct: true` and an `assert` that it is at most 1.
+the agreement separately. A column derived as `COUNT(x)` with
+`distinct: true` and an `assert` that it is at most 1 shows that the present
+values agree. `COUNT(x)` skips missing values ([FORMULA-24](#formula-24)), so
+where a missing value also disagrees, a second check asserts that `COUNT(x)`
+is 0 or equals the group's record count, `COUNT(D.*)`.
 
 <a id="formula-21"></a>
 
