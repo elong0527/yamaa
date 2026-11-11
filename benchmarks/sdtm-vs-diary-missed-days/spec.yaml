@@ -1,0 +1,152 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: VS
+keys: [STUDYID, USUBJID, VSTESTCD, VSTPTREF, VSTPTNUM]
+input:
+  VAC:
+    path: input/vaccination.csv
+    types: {DOSENUM: int, VACDAT: date}
+  DAYS:
+    path: input/diary_days.csv
+    types: {DIARYDAY: int}
+  TEMP:
+    path: input/temperature.csv
+    types: {TEMPDAT: date}
+
+output:
+  path: vs.csv
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSTEST, VSORRES,
+            VSORRESU, VSSTAT, VSREASND, VSDTC, VSTPT, VSTPTNUM, VSTPTREF,
+            VSRFTDTC]
+  order_by: [STUDYID, USUBJID, VSSEQ]
+
+intermediates:
+  # Each vaccination paired with each day of the protocol's diary period.
+  # The day of vaccination is Day 1, so a diary day lies its number less one
+  # day after the vaccination date.
+  - id: EXPECTED
+    dataset: VAC
+    inner_join: DAYS
+    key: [STUDYID]
+    derivations:
+      STUDYID: VAC.STUDYID
+      USUBJID: VAC.USUBJID
+      DOSENUM: VAC.DOSENUM
+      VISIT: VAC.VISIT
+      VACDAT: VAC.VACDAT
+      DIARYDAY: DAYS.DIARYDAY
+      DAYLABEL: DAYS.DAYLABEL
+      OFFSET:
+        type: int
+        derivation: "DAYS.DIARYDAY - 1"
+      DIARYDAT:
+        type: date
+        derivation:
+          shift: {type: date, source: VAC.VACDAT, days: OFFSET}
+
+  # The temperature the e-diary transferred for the subject on the diary
+  # date, if any.
+  - id: ENTERED
+    dataset: TEMP
+    key:
+      USUBJID: USUBJID
+      TEMPDAT: VSDTC
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'VS'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation: "'TEMP'"
+
+  - name: VSTEST
+    type: str
+    label: Vital Signs Test Name
+    derivation: "'Temperature'"
+
+  - name: VSDTC
+    type: date
+    label: Date/Time of Measurements
+
+  - name: VSTPT
+    type: str
+    label: Planned Time Point Name
+
+  - name: VSTPTNUM
+    type: int
+    label: Planned Time Point Number
+
+  - name: VSTPTREF
+    type: str
+    label: Time Point Reference
+
+  - name: VSRFTDTC
+    type: date
+    label: Date/Time of Reference Time Point
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: ENTERED.TEMP
+
+  - name: VSORRESU
+    type: str
+    label: Original Units
+    derivation: ENTERED.TEMPU
+
+  # A diary day with no temperature entered is not done.
+  - name: VSSTAT
+    type: str
+    label: Completion Status
+    derivation:
+      case:
+        - when: "ENTERED.TEMP IS NULL"
+          then: "'NOT DONE'"
+    verifications:
+      - allowed_values:
+          values: ["NOT DONE"]
+
+  - name: VSREASND
+    type: str
+    label: Reason Not Performed
+    derivation:
+      case:
+        - when: "ENTERED.TEMP IS NULL"
+          then: "'NOT ENTERED'"
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [VSRFTDTC, VSTPTNUM]
+
+rows:
+  # One record per diary day after each vaccination that was given. A
+  # vaccination with no date was not given and expects no diary.
+  - id: diary
+    dataset: EXPECTED
+    filter: "VSRFTDTC IS NOT NULL"
+    derivations:
+      STUDYID: EXPECTED.STUDYID
+      USUBJID: EXPECTED.USUBJID
+      VSDTC: EXPECTED.DIARYDAT
+      VSTPT: EXPECTED.DAYLABEL
+      VSTPTNUM: EXPECTED.DIARYDAY
+      VSTPTREF: EXPECTED.VISIT
+      VSRFTDTC: EXPECTED.VACDAT
