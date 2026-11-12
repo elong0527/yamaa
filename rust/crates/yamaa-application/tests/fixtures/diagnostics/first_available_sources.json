@@ -1,5 +1,5 @@
 {
-  "about": "first_available's sources name variables (EXPR-9), so a constant written among them fails validation at that source as invalid_field_type, expecting filtered_source (SCHEMA-12). The value returned when every source is missing is the expression's missing, and a constant is never missing, so no source after it is read: a number or a Boolean among the sources, wherever it stands, gets a hint to write it as missing beside sources, spelled as written. A null source is no constant and gets no hint, nor does a constant at another filtered_source, such as a mapping's source. The finding names the file the run loaded, as its source and entry, and check and the build report the same complete rows. The form the hint names is admitted, and a subject whose every source is missing takes the missing value. #4463's reproduction. No engine output supplied these values: each row is the field, path and kind the spec writes, and the saved rows follow EXPR-9 from dm.csv.",
+  "about": "first_available's sources name variables (EXPR-9), so a constant written among them fails validation at that source as invalid_field_type, expecting filtered_source (SCHEMA-12). The value returned when every source is missing is the expression's missing, so a number or a Boolean written as the last source gets a hint to write it as missing beside sources, spelled as written. A constant before another source gets no hint: it is never missing, so it would always be returned, while missing is returned only when every source is missing, and moving it there would change the result. A null source is no constant and gets no hint, nor does a constant at another filtered_source, such as a mapping's source. The finding names the file the run loaded, as its source and entry, and check and the build report the same complete rows. The form the hint names is admitted, and a subject whose every source is missing takes the missing value. #4463's reproduction. No engine output supplied these values: each row is the field, path and kind the spec writes, and the saved rows follow EXPR-9 from dm.csv.",
   "documents": {
     "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nbase: DM\nkeys: [USUBJID]\ninput:\n  DM: {path: dm.csv, types: {AGE: int}}\noutput: {path: out.csv, columns: [USUBJID, V]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: V, type: int, derivation: {first_available: {sources: [DM.AGE], missing: 0}}}\n"
   },
@@ -12,11 +12,18 @@
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[1]"], "context": {"expected": "filtered_source", "actual": "int", "hint": "a source names a variable, so write the constant as missing: 0 beside sources", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
     },
     {
-      "case": "a_boolean_before_a_variable_is_refused_with_the_missing_that_returns_it",
+      "case": "a_boolean_written_last_is_refused_with_the_missing_that_returns_it",
       "operation": ["check", "build"],
-      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [true, DM.AGE]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [DM.AGE, true]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[0]"], "context": {"expected": "filtered_source", "actual": "bool", "hint": "a source names a variable, so write the constant as missing: true beside sources", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[1]"], "context": {"expected": "filtered_source", "actual": "bool", "hint": "a source names a variable, so write the constant as missing: true beside sources", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_constant_before_a_variable_is_refused_without_a_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [0, DM.AGE]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[0]"], "context": {"expected": "filtered_source", "actual": "int", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
     },
     {
       "case": "a_float_source_keeps_its_written_spelling_in_the_hint",

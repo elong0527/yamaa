@@ -550,11 +550,14 @@ impl Run<'_> {
                 _ => None,
             }))
     }
-    /// The hint for a number or a Boolean written among `first_available`'s
-    /// `sources`, which name variables: the value returned when every source
-    /// is missing is the expression's `missing` (EXPR-9). A constant is never
-    /// missing, so no source after it is read, and `missing` means the same
-    /// wherever it stands. A null source is no constant, so it has no hint.
+    /// The hint for a number or a Boolean written as the last of
+    /// `first_available`'s `sources`, which name variables: the value
+    /// returned when every source is missing is the expression's `missing`
+    /// (EXPR-9). Only the last source moves there with the same meaning: a
+    /// constant before another source is never missing, so it would always be
+    /// returned, while `missing` is returned only when every source is
+    /// missing. Such a constant, and a null source, which is no constant, has
+    /// no hint.
     fn constant_source_hint(
         &mut self,
         payload: Site<'_>,
@@ -566,26 +569,27 @@ impl Run<'_> {
         let N::Sequence(items) = &self.input.nodes()[sources] else {
             return Ok(());
         };
+        let Some((index, &item)) = items.iter().enumerate().next_back() else {
+            return Ok(());
+        };
+        if !matches!(
+            self.input.nodes()[item],
+            N::Integer(_) | N::Float(_) | N::Boolean(_)
+        ) {
+            return Ok(());
+        }
         let path = self.keyed(payload.path, "sources", false)?;
-        for (index, &item) in items.iter().enumerate() {
-            if !matches!(
-                self.input.nodes()[item],
-                N::Integer(_) | N::Float(_) | N::Boolean(_)
-            ) {
-                continue;
-            }
-            let at = self.joined(&path, &index.to_string(), true)?;
-            let hint = format!(
-                "a source names a variable, so write the constant as missing: {} beside sources",
-                flow_text(self.input, item, 0)?
-            );
-            for finding in diagnostics
-                .iter_mut()
-                .filter(|finding| finding.code == ConditionCode::SchemaInvalidFieldType)
-                .filter(|finding| finding.path == at)
-            {
-                finding.context.push(("hint", Self::text(hint.as_str())));
-            }
+        let at = self.joined(&path, &index.to_string(), true)?;
+        let hint = format!(
+            "a source names a variable, so write the constant as missing: {} beside sources",
+            flow_text(self.input, item, 0)?
+        );
+        for finding in diagnostics
+            .iter_mut()
+            .filter(|finding| finding.code == ConditionCode::SchemaInvalidFieldType)
+            .filter(|finding| finding.path == at)
+        {
+            finding.context.push(("hint", Self::text(hint.as_str())));
         }
         Ok(())
     }

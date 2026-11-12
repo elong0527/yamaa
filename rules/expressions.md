@@ -294,10 +294,12 @@ Evidence: `schema-expressions`, `adam-adsl-demographics`, `rust/crates/yamaa-app
 
 A source names a variable, so a constant written among `sources` fails as
 `invalid_field_type` at that source
-([SCHEMA-12](reference/schema-language.md#schema-12)). A constant is never
-missing, so no source after it would be read, and the value the expression
-returns when every source is missing is its `missing`: a number or a Boolean
-among the sources carries a `hint` to write it as `missing` beside `sources`.
+([SCHEMA-12](reference/schema-language.md#schema-12)). The value the
+expression returns when every source is missing is its `missing`, so a number
+or a Boolean written as the last source carries a `hint` to write it as
+`missing` beside `sources`. A constant before another source has no hint: it
+is never missing, so it would always be returned, and moving it to `missing`
+would change the result.
 
 A source that is a binding reading through an implicit join answers its own
 absent record first ([LOOKUP-24](lookup.md#lookup-24)); the answer, missing by
