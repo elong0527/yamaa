@@ -127,7 +127,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("range_failed", "column {column} holds a value outside its range in {failure_count} of the rows"),
     ("redundant_declaration", "the declaration repeats what {stated_by} already states"),
     ("redundant_field_type", "input {dataset} types field {field} as {type}, but its source already supplies types"),
-    ("redundant_long_form", "{spec_path} restates its shorthand in a long form; write {shorthand} there instead, as yamaa lint --fix does"),
+    ("redundant_long_form", "{spec_path} restates its shorthand in a long form; write {shorthand} there instead"),
     ("reference_data_repeating_conflict", "dataset {dataset} declares both reference_data and repeating"),
     ("refuted_value_origin", "the {origin_type} origin of value-level entry {entry} of column {column} contradicts its derivation"),
     ("regex_group_out_of_range", "group {group} is not a capture group of {pattern} (group count {group_count})"),
@@ -239,6 +239,6 @@ pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("missing_input", "template_filter", "the string template reads {variable}, which is missing, and {template_filter} runs only after the row's derivations, so it cannot discard the row first"),
     ("multiple_matches", "field", "lookup {intermediate} finds {match_count} matching records named {field} in {dataset} and has no rule to choose one"),
     ("prohibited_function", "hint", "function {function} is not allowed here ({hint})"),
-    ("redundant_long_form", "operation", "{spec_path} only reads {shorthand}; write {shorthand} in place of the whole {operation} expression, as yamaa lint --fix does"),
+    ("redundant_long_form", "operation", "{spec_path} only reads {shorthand}; write {shorthand} in place of the whole {operation} expression"),
     ("unsupported_operation", "hint", "{operation} is not supported by this engine ({hint})"),
 ];

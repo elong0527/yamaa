@@ -412,7 +412,7 @@ mod tests {
                 ConditionCode::SchemaRedundantLongForm,
                 &template_form,
                 vec![("field", text("template")), ("shorthand", text("v-{X.V}"))],
-                "columns.P.derivation.str_template restates its shorthand in a long form; write v-{X.V} there instead, as yamaa lint --fix does",
+                "columns.P.derivation.str_template restates its shorthand in a long form; write v-{X.V} there instead",
             ),
             (
                 ConditionCode::SchemaRedundantLongForm,
@@ -422,7 +422,7 @@ mod tests {
                     ("shorthand", text("X.V")),
                     ("operation", text("source")),
                 ],
-                "columns.P.derivation.source only reads X.V; write X.V in place of the whole source expression, as yamaa lint --fix does",
+                "columns.P.derivation.source only reads X.V; write X.V in place of the whole source expression",
             ),
         ] {
             let issue = record(code, path, &context);

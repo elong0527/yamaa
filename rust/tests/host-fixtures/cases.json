@@ -5862,7 +5862,7 @@
               "file": "spec.yaml",
               "line": 8,
               "column": 39,
-              "message": "columns.V.derivation.source only reads SRC.V; write SRC.V in place of the whole source expression, as yamaa lint --fix does",
+              "message": "columns.V.derivation.source only reads SRC.V; write SRC.V in place of the whole source expression",
               "context": "{\"entry\":\"{entry}\",\"field\":\"variable\",\"operation\":\"source\",\"shorthand\":\"SRC.V\",\"source\":\"{entry}\"}",
               "source_span": null,
               "operand_route": null

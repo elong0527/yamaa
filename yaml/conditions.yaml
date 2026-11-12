@@ -442,10 +442,10 @@ conditions:
     message: "input {dataset} types field {field} as {type}, but its source already supplies types"
   redundant_long_form:
     phases: [validation]
-    message: "{spec_path} restates its shorthand in a long form; write {shorthand} there instead, as yamaa lint --fix does"
+    message: "{spec_path} restates its shorthand in a long form; write {shorthand} there instead"
     message_variants:
       - when: operation
-        message: "{spec_path} only reads {shorthand}; write {shorthand} in place of the whole {operation} expression, as yamaa lint --fix does"
+        message: "{spec_path} only reads {shorthand}; write {shorthand} in place of the whole {operation} expression"
   reference_data_repeating_conflict:
     phases: [validation]
     message: "dataset {dataset} declares both reference_data and repeating"
