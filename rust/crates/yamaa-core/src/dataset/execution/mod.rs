@@ -107,7 +107,6 @@ pub enum Resource {
     SourceRows,
     SourceCells,
     SourceColumns,
-    SourceCount,
     OutputRows,
     OutputCells,
     OutputColumns,

@@ -621,14 +621,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         {
             return Err(Box::new(ExecutionError::SchemaMismatch));
         }
-        let count = self.secondary.len().checked_add(1);
-        if count.is_none_or(|count| count > Limits::SOURCE_OPERANDS) {
-            return Err(Box::new(ExecutionError::Limit {
-                resource: Resource::SourceCount,
-                limit: Limits::SOURCE_OPERANDS,
-                required: count,
-            }));
-        }
         let width = self.primary.schema().columns().len();
         let whole;
         let driver = match driver {
