@@ -510,31 +510,72 @@ mod numeric {
 
         /// Seam: `Failure::syntax_diagnostic`, the standalone syntax projection, and a
         /// refusal's byte position in a derivation or an aggregate, which no issue states.
-        /// Retired calls stay refused, with a replacement in the public finding.
+        /// Retired calls stay refused, with a replacement in the public finding: in a
+        /// derivation and the standalone projection the replacement alone, in a
+        /// predicate, which an expression cannot stand in, the replacement written
+        /// in a derivation, and in an aggregate, whose derivations run before the
+        /// reduction, where it goes for a reduced value and for the result
+        /// (`replaced` in the grammar).
         #[test]
         fn retired_formula_functions_name_their_replacement() {
             use yamaa_core::json::Value as V;
 
-            for (call, function, hint) in [
+            const DERIVED: &str = " in a derivation, and read the value it derives here";
+            const REDUCED: &str = " outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result";
+            const ASCII: &str = "; str_case changes ASCII letters only";
+            for (call, function, hint, derived, note) in [
                 (
                     "cOaLeScE(A, B)",
                     "cOaLeScE",
                     "use the first_available expression",
+                    DERIVED,
+                    "",
                 ),
-                ("GREATEST(A, B)", "GREATEST", "use the greatest expression"),
-                ("least(A, B)", "least", "use the least expression"),
+                (
+                    "GREATEST(A, B)",
+                    "GREATEST",
+                    "use the greatest expression",
+                    DERIVED,
+                    "",
+                ),
+                (
+                    "least(A, B)",
+                    "least",
+                    "use the least expression",
+                    DERIVED,
+                    "",
+                ),
                 (
                     "ROUND(A, 2)",
                     "ROUND",
-                    "use the round_half_away_from_zero operation",
+                    "use the round_half_away_from_zero expression",
+                    DERIVED,
+                    "",
                 ),
                 (
                     "round_half_away_from_zero(A, 2)",
                     "round_half_away_from_zero",
-                    "use the round_half_away_from_zero operation",
+                    "use the round_half_away_from_zero expression",
+                    DERIVED,
+                    "",
                 ),
+                (
+                    "Upper(A)",
+                    "Upper",
+                    "use the str_case expression with to: upper",
+                    DERIVED,
+                    ASCII,
+                ),
+                ("LOG(A)", "LOG", "use LOG10 or LN", "", ""),
             ] {
                 for field in [Context::Derivation, Context::Aggregate, Context::Predicate] {
+                    let suffix = match field {
+                        Context::Derivation => "",
+                        Context::Predicate => derived,
+                        Context::Aggregate if derived.is_empty() => "",
+                        Context::Aggregate => REDUCED,
+                    };
+                    let expected = format!("{hint}{suffix}{note}");
                     let expression = if field == Context::Predicate {
                         format!("{call} > 0")
                     } else {
@@ -556,10 +597,10 @@ mod numeric {
                     assert_eq!(finding.definition().rule, Some("FORMULA-13"));
                     assert_eq!(finding.spec_paths, ["columns.V.derivation"]);
                     assert_eq!(finding.context["function"], V::String(function.into()));
-                    assert_eq!(finding.context["hint"], V::String(hint.into()));
+                    assert_eq!(finding.context["hint"], V::String(expected), "{expression}");
                     assert_eq!(
                         failure.syntax_diagnostic().context["hint"],
-                        V::String(hint.into())
+                        V::String(format!("{hint}{note}"))
                     );
                     assert_eq!(position.byte, expression.find(function).unwrap());
                     assert!(!finding.context.contains_key("argument_count"));

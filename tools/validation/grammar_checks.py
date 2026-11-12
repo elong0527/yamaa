@@ -41,6 +41,7 @@ GRAMMAR_DOCUMENT_KEYS = {
     "imports",
     "vocabulary",
     "reserved",
+    "replaced",
     "cases",
 }
 
@@ -112,6 +113,17 @@ GRAMMAR_COVERS = {
 # The result a function declares, and the argument forms a reducer takes.
 FUNCTION_RESULTS = {"numeric", "boolean"}
 REDUCER_ARGUMENTS = {"expression", "star"}
+# A refused name's replacement: a registered expression with the fields it
+# is written with and a note on where its meaning narrows, or the grammar's
+# own functions.
+REPLACEMENT_KEYS = (
+    {"expression"},
+    {"expression", "with"},
+    {"expression", "note"},
+    {"expression", "with", "note"},
+    {"function"},
+)
+REPLACED_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
 
 
 def render_grammar_block(productions):
@@ -390,6 +402,8 @@ def grammar_vocabulary_errors(contract, document, label):
         errors = [f"ERROR: {label}: vocabulary must be empty"] if vocabulary else []
         if "reserved" in document:
             errors.append(f"ERROR: {label}: the contract reserves no names")
+        if "replaced" in document:
+            errors.append(f"ERROR: {label}: the contract replaces no functions")
         return errors
     errors = []
     unknown = sorted(set(vocabulary) - {"function", "reducer"})
@@ -452,6 +466,70 @@ def grammar_vocabulary_errors(contract, document, label):
         if callable_names:
             errors.append(
                 f"ERROR: {label}: reserved names {callable_names} are also callable"
+            )
+    errors.extend(replaced_errors(document, functions, reducers, label))
+    return errors
+
+
+def replaced_errors(document, functions, reducers, label):
+    """Check the refused function names and their replacements: each name is
+    an upper-case spelling the grammar neither calls nor reserves, and each
+    replacement is an expression, with the fields it is written with, or the
+    grammar's own functions. The generator of core's expression table checks
+    that the expression is registered and admits those fields."""
+    replaced = document.get("replaced", {})
+    if not isinstance(replaced, dict):
+        return [f"ERROR: {label}: replaced must be a mapping"]
+    errors = []
+    reserved = document.get("reserved")
+    taken = set(functions) | set(reducers)
+    if isinstance(reserved, list):
+        taken |= {name for name in reserved if isinstance(name, str)}
+    for name, replacement in replaced.items():
+        if not isinstance(name, str) or not REPLACED_NAME.fullmatch(name):
+            errors.append(f"ERROR: {label}: replaced name {name!r} is not upper case")
+            continue
+        if name in taken:
+            errors.append(
+                f"ERROR: {label}: replaced name {name} is callable or reserved"
+            )
+        if (
+            not isinstance(replacement, dict)
+            or set(replacement) not in REPLACEMENT_KEYS
+        ):
+            errors.append(
+                f"ERROR: {label}: replaced {name} must declare an expression, "
+                "optionally with its fields, or a list of functions"
+            )
+            continue
+        if "function" in replacement:
+            targets = replacement["function"]
+            if (
+                not isinstance(targets, list)
+                or not targets
+                or any(
+                    not isinstance(target, str) or target not in functions
+                    for target in targets
+                )
+            ):
+                errors.append(
+                    f"ERROR: {label}: replaced {name} must name functions of the "
+                    "vocabulary"
+                )
+            continue
+        if not isinstance(replacement["expression"], str):
+            errors.append(f"ERROR: {label}: replaced {name} must name an expression")
+        fields = replacement.get("with", {})
+        if not isinstance(fields, dict) or not all(
+            isinstance(field, str) and isinstance(value, str)
+            for field, value in fields.items()
+        ):
+            errors.append(
+                f"ERROR: {label}: replaced {name} must write each field as text"
+            )
+        if not isinstance(replacement.get("note", ""), str):
+            errors.append(
+                f"ERROR: {label}: replaced {name} must write its note as text"
             )
     return errors
 
