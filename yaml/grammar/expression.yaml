@@ -175,8 +175,6 @@ replaced:
   SUBSTR: {expression: str_substr}
   SUBSTRING: {expression: str_substr}
   LENGTH: {expression: str_length}
-  REPLACE: {expression: str_replace}
-  TRANWRD: {expression: str_replace}
   LOG: {function: [LOG10, LN]}
 cases:
   # Predicates: comparisons, logic and their precedence.

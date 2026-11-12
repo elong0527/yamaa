@@ -665,7 +665,7 @@ pub enum Replacement {
 #[rustfmt::skip]
 impl Replacement {
     /// Each refused name and its replacement, in the grammar file's order.
-    pub const ALL: [(&'static str, Self); 17] = [
+    pub const ALL: [(&'static str, Self); 15] = [
         ("COALESCE", Self::Expression(Verb::FirstAvailable, &[])),
         ("COALESCEC", Self::Expression(Verb::FirstAvailable, &[])),
         ("GREATEST", Self::Expression(Verb::Greatest, &[])),
@@ -680,8 +680,6 @@ impl Replacement {
         ("SUBSTR", Self::Expression(Verb::StrSubstr, &[])),
         ("SUBSTRING", Self::Expression(Verb::StrSubstr, &[])),
         ("LENGTH", Self::Expression(Verb::StrLength, &[])),
-        ("REPLACE", Self::Expression(Verb::StrReplace, &[])),
-        ("TRANWRD", Self::Expression(Verb::StrReplace, &[])),
         ("LOG", Self::Functions(&[Function::Log10, Function::Ln])),
     ];
     /// The replacement of a refused name written in any letter case.
