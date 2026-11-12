@@ -1,0 +1,14 @@
+lifecycle: draft
+standard: SDTM
+domain: VS
+review:
+  concerns:
+    - FDA's CBER guidance on vaccine reactogenicity asks that every day of the
+      diary period after each vaccination be accounted for, so a day with no
+      temperature entered needs its own NOT DONE record rather than a gap.
+    - Three vaccinated subjects cover a complete diary, a single missed day,
+      a diary crossing the end of February, a second dose whose diary has one
+      entry, and a second dose that was never given.
+    - The diary days are counted from the vaccination date with the day of
+      vaccination as Day 1, and a dose never given expects no diary at all,
+      so subject 2003 has no records for its second vaccination.
