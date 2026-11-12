@@ -510,31 +510,55 @@ mod numeric {
 
         /// Seam: `Failure::syntax_diagnostic`, the standalone syntax projection, and a
         /// refusal's byte position in a derivation or an aggregate, which no issue states.
-        /// Retired calls stay refused, with a replacement in the public finding.
+        /// Retired calls stay refused, with a replacement in the public finding: in a
+        /// derivation and the standalone projection the replacement alone, and in a
+        /// predicate or an aggregate, which an expression cannot stand in, the
+        /// replacement written in a derivation (`replaced` in the grammar).
         #[test]
         fn retired_formula_functions_name_their_replacement() {
             use yamaa_core::json::Value as V;
 
-            for (call, function, hint) in [
+            const DERIVED: &str = " in a derivation, and read the value it derives here";
+            for (call, function, hint, derived) in [
                 (
                     "cOaLeScE(A, B)",
                     "cOaLeScE",
                     "use the first_available expression",
+                    DERIVED,
                 ),
-                ("GREATEST(A, B)", "GREATEST", "use the greatest expression"),
-                ("least(A, B)", "least", "use the least expression"),
+                (
+                    "GREATEST(A, B)",
+                    "GREATEST",
+                    "use the greatest expression",
+                    DERIVED,
+                ),
+                ("least(A, B)", "least", "use the least expression", DERIVED),
                 (
                     "ROUND(A, 2)",
                     "ROUND",
-                    "use the round_half_away_from_zero operation",
+                    "use the round_half_away_from_zero expression",
+                    DERIVED,
                 ),
                 (
                     "round_half_away_from_zero(A, 2)",
                     "round_half_away_from_zero",
-                    "use the round_half_away_from_zero operation",
+                    "use the round_half_away_from_zero expression",
+                    DERIVED,
                 ),
+                (
+                    "Upper(A)",
+                    "Upper",
+                    "use the str_case expression with to: upper",
+                    DERIVED,
+                ),
+                ("LOG(A)", "LOG", "use LOG10 or LN", ""),
             ] {
                 for field in [Context::Derivation, Context::Aggregate, Context::Predicate] {
+                    let expected = if field == Context::Derivation {
+                        hint.to_string()
+                    } else {
+                        format!("{hint}{derived}")
+                    };
                     let expression = if field == Context::Predicate {
                         format!("{call} > 0")
                     } else {
@@ -556,7 +580,7 @@ mod numeric {
                     assert_eq!(finding.definition().rule, Some("FORMULA-13"));
                     assert_eq!(finding.spec_paths, ["columns.V.derivation"]);
                     assert_eq!(finding.context["function"], V::String(function.into()));
-                    assert_eq!(finding.context["hint"], V::String(hint.into()));
+                    assert_eq!(finding.context["hint"], V::String(expected), "{expression}");
                     assert_eq!(
                         failure.syntax_diagnostic().context["hint"],
                         V::String(hint.into())

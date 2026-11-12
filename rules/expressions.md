@@ -290,7 +290,14 @@ first source that is not missing. When every source is missing, it returns the
 declared `missing`, or missing when none is declared, counted under `missing`
 either way.
 
-Evidence: `schema-expressions`, `adam-adsl-demographics`, `rust/crates/yamaa-application/tests/fixtures/first_available.json`.
+Evidence: `schema-expressions`, `adam-adsl-demographics`, `rust/crates/yamaa-application/tests/fixtures/first_available.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/first_available_sources.json`.
+
+A source names a variable, so a constant written among `sources` fails as
+`invalid_field_type` at that source
+([SCHEMA-12](reference/schema-language.md#schema-12)). A constant is never
+missing, so no source after it would be read, and the value the expression
+returns when every source is missing is its `missing`: a number or a Boolean
+among the sources carries a `hint` to write it as `missing` beside `sources`.
 
 A source that is a binding reading through an implicit join answers its own
 absent record first ([LOOKUP-24](lookup.md#lookup-24)); the answer, missing by

@@ -154,6 +154,30 @@ reserved:
   - "NULL"
   - "OR"
   - "TRUE"
+# Names that other SQL dialects and SAS give to a function this grammar does
+# not have, each with what to write instead: a registered `expression`, with
+# the fields `with` gives it, or the grammar's own `function`s. A call of a
+# listed name, in any letter case, still fails as prohibited_function, and its
+# finding carries the replacement as its `hint` (FORMULA-13). A listed name is
+# no function, reducer or reserved word, so the list admits no text.
+replaced:
+  COALESCE: {expression: first_available}
+  COALESCEC: {expression: first_available}
+  GREATEST: {expression: greatest}
+  LEAST: {expression: least}
+  ROUND: {expression: round_half_away_from_zero}
+  ROUND_HALF_AWAY_FROM_ZERO: {expression: round_half_away_from_zero}
+  UPPER: {expression: str_case, with: {to: upper}}
+  UPCASE: {expression: str_case, with: {to: upper}}
+  LOWER: {expression: str_case, with: {to: lower}}
+  LOWCASE: {expression: str_case, with: {to: lower}}
+  PROPCASE: {expression: str_case, with: {to: proper}}
+  SUBSTR: {expression: str_substr}
+  SUBSTRING: {expression: str_substr}
+  LENGTH: {expression: str_length}
+  REPLACE: {expression: str_replace}
+  TRANWRD: {expression: str_replace}
+  LOG: {function: [LOG10, LN]}
 cases:
   # Predicates: comparisons, logic and their precedence.
   - id: equality-over-an-unqualified-identifier

@@ -343,6 +343,12 @@ refuses, are:
 The refused long form of a bare keyword is the entry that keyword names with
 nothing in it, and it reports the keyword as both the field and the shorthand.
 
+The message names the long form's path and the shorthand to write there, and
+says that `lint --fix` writes it. A structured `source` holding only its
+variable is reported at its payload, but its shorthand, the bare read, replaces
+the whole `source` mapping, so its finding also names `source` as its
+`operation` and the message says so.
+
 The check runs on the document each author wrote: a standalone specification,
 and each inheritance layer before composition. A composed, pruned or resolved
 document holds the canonical class of every shorthand and is validated

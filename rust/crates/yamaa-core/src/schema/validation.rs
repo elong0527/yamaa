@@ -550,6 +550,45 @@ impl Run<'_> {
                 _ => None,
             }))
     }
+    /// The hint for a number or a Boolean written among `first_available`'s
+    /// `sources`, which name variables: the value returned when every source
+    /// is missing is the expression's `missing` (EXPR-9). A constant is never
+    /// missing, so no source after it is read, and `missing` means the same
+    /// wherever it stands. A null source is no constant, so it has no hint.
+    fn constant_source_hint(
+        &mut self,
+        payload: Site<'_>,
+        diagnostics: &mut [SchemaDiagnostic],
+    ) -> Result<(), ValidationError> {
+        let Some(sources) = self.field(payload.value, "sources")? else {
+            return Ok(());
+        };
+        let N::Sequence(items) = &self.input.nodes()[sources] else {
+            return Ok(());
+        };
+        let path = self.keyed(payload.path, "sources", false)?;
+        for (index, &item) in items.iter().enumerate() {
+            if !matches!(
+                self.input.nodes()[item],
+                N::Integer(_) | N::Float(_) | N::Boolean(_)
+            ) {
+                continue;
+            }
+            let at = self.joined(&path, &index.to_string(), true)?;
+            let hint = format!(
+                "a source names a variable, so write the constant as missing: {} beside sources",
+                flow_text(self.input, item, 0)?
+            );
+            for finding in diagnostics
+                .iter_mut()
+                .filter(|finding| finding.code == ConditionCode::SchemaInvalidFieldType)
+                .filter(|finding| finding.path == at)
+            {
+                finding.context.push(("hint", Self::text(hint.as_str())));
+            }
+        }
+        Ok(())
+    }
     fn key(&mut self, node: usize) -> Result<(String, bool), ValidationError> {
         Ok((
             super::path_render::label(self.input, node)?,
@@ -1000,6 +1039,8 @@ impl Run<'_> {
             vec![
                 ("field", Self::text("variable")),
                 ("shorthand", SchemaContext::InputValue(value)),
+                // The bare read replaces the whole operation, not its payload.
+                ("operation", Self::text(Verb::Source.name())),
             ],
         )]
     }
@@ -1166,12 +1207,17 @@ impl Run<'_> {
                         )]);
                     };
                     let payload = site.child(payload, &path);
-                    let diagnostics = match &entry.shape {
+                    let mut diagnostics = match &entry.shape {
                         SchemaShape::Class(fields) => self.class(fields, &entry.name, payload)?,
                         SchemaShape::Descriptor(descriptor) => {
                             self.descriptor(*descriptor, payload)?
                         }
                     };
+                    if registry.name == "expressions"
+                        && Verb::from_name(&entry.name) == Some(Verb::FirstAvailable)
+                    {
+                        self.constant_source_hint(payload, &mut diagnostics)?;
+                    }
                     if !diagnostics.is_empty() || registry.name != "expressions" {
                         return Ok(diagnostics);
                     }

@@ -48,11 +48,23 @@ accept different specifications.
 | `imports` | each non-terminal another contract defines, and that contract |
 | `vocabulary` | each non-terminal that names tokens rather than deriving them |
 | `reserved` | the spellings a bare identifier may not take |
+| `replaced` | function names the grammar refuses, each with what to write instead |
 | `cases` | the vectors every implementation must reproduce |
 
 The expression vocabulary declares each `function` with its argument bounds
 and its `result`, `numeric` or `boolean`, and each `reducer` with the argument
 forms it takes: `expression`, and `star` for the record star of `COUNT`.
+
+`replaced` lists, by upper-case name, functions that other SQL dialects and SAS
+have and the expression grammar refuses. Each names what to write instead: a
+registered `expression`, with the fields `with` writes it with, or a list of
+the grammar's own `function`s. A listed name is no function, reducer or
+reserved word, so the list admits no text; a refused call of the name carries
+the replacement as its finding's hint
+([FORMULA-13](../../rules/formulas.md#formula-13)).
+`tools.packaging.generate_expression_table` checks that the expression is
+registered and admits each field's value, and writes the list into the
+expression table.
 
 A `definition` is EBNF: a quoted terminal is literal, `[x]` is optional, `x*`
 and `{x}` repeat, `(x | y)` groups alternatives, and `...` spans a scalar

@@ -6,7 +6,7 @@ use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
 use crate::expression::{
     Condition, Context as Field, ErrorKind, EvaluationError, Failure, Step, TypeFinding,
 };
-use crate::expression_table::Verb;
+use crate::expression_table::Replacement;
 use crate::json::Value as V;
 use crate::numeric::{ArithmeticErrorKind, MathFunction};
 use crate::temporal::TemporalError;
@@ -34,6 +34,31 @@ fn canonical_integer(literal: &str) -> String {
     }
 }
 
+/// What a call of a name the grammar refuses, but another dialect gives a
+/// function, is written as instead (`replaced` in
+/// `yaml/grammar/expression.yaml`, FORMULA-13). A registered expression stands
+/// only where an expression field does, so a predicate or an aggregate reads
+/// the value a derivation gives it.
+fn replacement_hint(replacement: Replacement, field: Option<Field>) -> String {
+    match replacement {
+        Replacement::Functions(functions) => {
+            let names: Vec<_> = functions.iter().map(|function| function.name()).collect();
+            format!("use {}", names.join(" or "))
+        }
+        Replacement::Expression(verb, fields) => {
+            let mut hint = format!("use the {} expression", verb.name());
+            if !fields.is_empty() {
+                hint.push_str(" with ");
+                hint.push_str(&fields.join(" and "));
+            }
+            if matches!(field, Some(Field::Predicate | Field::Aggregate)) {
+                hint.push_str(" in a derivation, and read the value it derives here");
+            }
+            hint
+        }
+    }
+}
+
 impl Failure {
     pub fn diagnostic_code(&self) -> C {
         match self {
@@ -58,8 +83,10 @@ impl Failure {
             .rule
             .expect("expression findings have a normative rule")
     }
-    /// The construct, function or reducers a finding names.
-    fn facts(&self, context: &mut Context) {
+    /// The construct, function or reducers a finding names. `field` is the
+    /// field the text is written in, or `None` for the standalone syntax
+    /// facts.
+    fn facts(&self, field: Option<Field>, context: &mut Context) {
         match self {
             Self::ProhibitedConstruct { construct } => {
                 context.insert("construct".into(), text(construct.name()));
@@ -72,22 +99,8 @@ impl Failure {
                 context.insert("function".into(), text(function));
                 if let Some(count) = argument_count {
                     context.insert("argument_count".into(), V::from(*count));
-                } else {
-                    // A function the grammar refuses, by the name a dialect
-                    // gives it, and the expression that replaces it.
-                    let hint = match function.to_ascii_uppercase().as_str() {
-                        "COALESCE" => Some((Verb::FirstAvailable, "expression")),
-                        "GREATEST" => Some((Verb::Greatest, "expression")),
-                        "LEAST" => Some((Verb::Least, "expression")),
-                        "ROUND" | "ROUND_HALF_AWAY_FROM_ZERO" => {
-                            Some((Verb::RoundHalfAwayFromZero, "operation"))
-                        }
-                        _ => None,
-                    };
-                    if let Some((verb, noun)) = hint {
-                        let hint = format!("use the {} {noun}", verb.name());
-                        context.insert("hint".into(), text(&hint));
-                    }
+                } else if let Some(replacement) = Replacement::lookup(function) {
+                    context.insert("hint".into(), text(&replacement_hint(replacement, field)));
                 }
             }
             Self::NestedReduction { outer, inner } => {
@@ -126,7 +139,7 @@ impl Failure {
             context.insert("predicate".into(), text(expression));
             context.insert("position".into(), V::from(position));
         }
-        self.facts(&mut context);
+        self.facts(Some(field), &mut context);
         Diagnostic {
             code: self.diagnostic_code(),
             spec_paths: vec![path.into()],
@@ -155,7 +168,7 @@ impl Failure {
                     }),
                 );
             }
-            _ => self.facts(&mut context),
+            _ => self.facts(None, &mut context),
         }
         Diagnostic {
             code: self.diagnostic_code(),
