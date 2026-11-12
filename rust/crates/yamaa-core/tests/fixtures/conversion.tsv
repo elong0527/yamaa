@@ -81,8 +81,19 @@ bare-inf	str:inf	float	error:VALUE-3:str:inf
 bare-nan	str:NaN	float	error:VALUE-3:str:NaN
 leading-space	str: 42	int	error:VALUE-3:str: 42
 empty-number	str:	float	error:VALUE-3:str:
-leading-dot	str:.5	float	error:VALUE-3:str:.5
-trailing-dot	str:1.	float	error:VALUE-3:str:1.
+leading-dot	str:.5	float	float:3fe0000000000000
+negative-leading-dot	str:-.5	float	float:bfe0000000000000
+plus-leading-dot	str:+.5	float	float:3fe0000000000000
+trailing-dot	str:5.	float	float:4014000000000000
+trailing-dot-to-int	str:5.	int	int:5
+leading-dot-zero-to-int	str:-.0	int	int:0
+leading-dot-fraction-to-int	str:.5	int	error:VALUE-7:float:3fe0000000000000
+leading-dot-exponent	str:.5e-1	float	float:3fa999999999999a
+trailing-dot-exponent	str:5.E3	int	int:5000
+bare-dot	str:.	float	error:VALUE-3:str:.
+signed-bare-dot	str:-.	float	error:VALUE-3:str:-.
+bare-dot-exponent	str:.e1	float	error:VALUE-3:str:.e1
+double-dot	str:1..5	float	error:VALUE-3:str:1..5
 empty-exponent	str:1e+	float	error:VALUE-3:str:1e+
 underscore	str:1_000	int	error:VALUE-3:str:1_000
 hex-number	str:0x10	int	error:VALUE-3:str:0x10

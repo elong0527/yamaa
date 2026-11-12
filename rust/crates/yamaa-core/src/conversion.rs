@@ -70,8 +70,9 @@ fn nonfinite_text(text: &str) -> bool {
         )
 }
 
-/// Validate the closed ASCII number grammar and identify integer-only spelling.
-/// A decimal point requires following digits; an exponent requires its digits.
+/// Validate VALUE-6's closed ASCII numeric-text grammar and identify
+/// integer-only spelling. Digits may stand on either side of a decimal point
+/// but not be absent from both (`.5`, `5.`); an exponent requires its digits.
 fn integer_spelling(text: &str) -> Option<bool> {
     let bytes = text.as_bytes();
     let mut offset = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
@@ -79,9 +80,7 @@ fn integer_spelling(text: &str) -> Option<bool> {
     while bytes.get(offset).is_some_and(u8::is_ascii_digit) {
         offset += 1;
     }
-    if offset == start {
-        return None;
-    }
+    let mut digits = offset > start;
     let mut integer = true;
     if bytes.get(offset) == Some(&b'.') {
         integer = false;
@@ -90,9 +89,10 @@ fn integer_spelling(text: &str) -> Option<bool> {
         while bytes.get(offset).is_some_and(u8::is_ascii_digit) {
             offset += 1;
         }
-        if offset == start {
-            return None;
-        }
+        digits |= offset > start;
+    }
+    if !digits {
+        return None;
     }
     if matches!(bytes.get(offset), Some(b'e' | b'E')) {
         integer = false;

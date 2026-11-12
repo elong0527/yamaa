@@ -232,15 +232,28 @@ not runtime integer values. Non-finite floats become missing under
 
 ### VALUE-6. Numeric text parses by one grammar, and every other spelling fails
 
-Text parses as a number only when it is the expression grammar's `number`
-production with an optional leading `+` or `-` and no surrounding whitespace,
-or exactly `.inf`, `.Inf` or `.INF` with an optional sign, or `.nan`, `.NaN` or
-`.NAN` without a sign. The non-finite spellings parse as floats and become
-missing under [VALUE-4](#value-4) instead of failing. Every other spelling is
-a conversion failure under [VALUE-3](#value-3).
+Text parses as a number only when it is the `numeric_text` production below
+with no surrounding whitespace, or exactly `.inf`, `.Inf` or `.INF` with an
+optional sign, or `.nan`, `.NaN` or `.NAN` without a sign. The non-finite
+spellings parse as floats and become missing under [VALUE-4](#value-4)
+instead of failing. Every other spelling is a conversion failure under
+[VALUE-3](#value-3).
 
 Fails: `conversion_failed`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_digits_on_one_side_reads_as_a_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_no_digit_on_either_side_does_not_parse`.
+
+```text
+numeric_text := ["+" | "-"] (digits ["." [digits]] | "." digits)
+                [("e" | "E") ["+" | "-"] digits]
+```
+
+`digits` is the expression grammar's production. Text that is only signed
+`digits` is an integer spelling; any other numeric text is a float spelling.
+A digit may stand on one side of the decimal point only, so `.5`, `5.` and
+`-.5` read as SAS's `best.` informat and the YAML 1.2 core schema read them;
+`.` alone, `-.` and `.e1` fail. A formula literal is still the expression
+grammar's `number` ([FORMULA-1](formulas.md#formula-1)), which needs digits
+on both sides of a decimal point.
 
 <a id="value-7"></a>
 
