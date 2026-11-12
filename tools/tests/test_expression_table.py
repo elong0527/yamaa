@@ -182,6 +182,58 @@ class ExpressionTableTests(unittest.TestCase):
             },
         )
 
+    def test_a_replacement_is_a_registered_expression_written_with_values_it_admits(
+        self,
+    ):
+        upper = (
+            "  UPPER: {expression: str_case, with: {to: upper},"
+            ' note: "changes ASCII letters only"}'
+        )
+        prefix = f"ERROR: {GRAMMAR}: replaced UPPER"
+        for new, message in (
+            (
+                "  UPPER: {expression: str_upper}",
+                f"{prefix} names str_upper, which no module registers",
+            ),
+            (
+                "  UPPER: {expression: str_case, with: {to: shout}}",
+                f"{prefix}: str_case does not admit to: shout",
+            ),
+            (
+                "  UPPER: {expression: str_case, with: {case: upper}}",
+                f"{prefix}: str_case does not admit case: upper",
+            ),
+        ):
+            with self.subTest(case=new), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                copy(ROOT, root, "yaml")
+                grammar = root / GRAMMAR
+                text = grammar.read_text(encoding="ascii")
+                self.assertIn(upper, text)
+                grammar.write_text(text.replace(upper, new, 1), encoding="ascii")
+                with self.assertRaises(SystemExit) as raised:
+                    generator.render(root)
+                self.assertEqual(raised.exception.code, message)
+
+    def test_a_replacement_s_fields_are_written_as_the_hint_spells_them(self):
+        replaced = {
+            item.name: item for item in generator.replacements(self.declarations)
+        }
+        self.assertEqual(
+            [replaced["UPPER"], replaced["COALESCE"], replaced["LOG"]],
+            [
+                generator.Replacement(
+                    "UPPER",
+                    "str_case",
+                    ("to: upper",),
+                    (),
+                    "changes ASCII letters only",
+                ),
+                generator.Replacement("COALESCE", "first_available", (), ()),
+                generator.Replacement("LOG", None, (), ("LOG10", "LN")),
+            ],
+        )
+
     def test_an_inline_list_of_values_needs_its_enum(self):
         with mock.patch.dict(generator.VALUE_ENUMS, clear=True):
             with self.assertRaises(SystemExit) as raised:

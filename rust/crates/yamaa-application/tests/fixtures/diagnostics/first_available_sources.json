@@ -1,0 +1,59 @@
+{
+  "about": "first_available's sources name variables (EXPR-9), so a constant written among them fails validation at that source as invalid_field_type, expecting filtered_source (SCHEMA-12). The value returned when every source is missing is the expression's missing, so a number or a Boolean written as the last source gets a hint to write it as missing beside sources, spelled as written. A constant before another source gets no hint: it is never missing, so it would always be returned, while missing is returned only when every source is missing, and moving it there would change the result. A null source is no constant and gets no hint, nor does a constant at another filtered_source, such as a mapping's source. The finding names the file the run loaded, as its source and entry, and check and the build report the same complete rows. The form the hint names is admitted, and a subject whose every source is missing takes the missing value. #4463's reproduction. No engine output supplied these values: each row is the field, path and kind the spec writes, and the output and saved rows follow EXPR-9 from dm.csv, with B, whose every source is missing, counted once under first_available.missing (COLUMN-14), as run_report.json's handler rows count it.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nbase: DM\nkeys: [USUBJID]\ninput:\n  DM: {path: dm.csv, types: {AGE: int}}\noutput: {path: out.csv, columns: [USUBJID, V]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: V, type: int, derivation: {first_available: {sources: [DM.AGE], missing: 0}}}\n"
+  },
+  "cases": [
+    {
+      "case": "a_number_after_the_sources_is_refused_with_the_missing_that_returns_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [DM.AGE, 0]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[1]"], "context": {"expected": "filtered_source", "actual": "int", "hint": "a source names a variable, so write the constant as missing: 0 beside sources", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_boolean_written_last_is_refused_with_the_missing_that_returns_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [DM.AGE, true]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[1]"], "context": {"expected": "filtered_source", "actual": "bool", "hint": "a source names a variable, so write the constant as missing: true beside sources", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_constant_before_a_variable_is_refused_without_a_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [0, DM.AGE]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[0]"], "context": {"expected": "filtered_source", "actual": "int", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_float_source_keeps_its_written_spelling_in_the_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [DM.AGE, 1.5]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[1]"], "context": {"expected": "filtered_source", "actual": "float", "hint": "a source names a variable, so write the constant as missing: 1.5 beside sources", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_null_source_is_refused_without_a_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "sources: [DM.AGE], missing: 0", "to": "sources: [DM.AGE, null]"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available.sources[1]"], "context": {"expected": "filtered_source", "actual": "null", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_constant_mapping_source_gets_no_first_available_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{first_available: {sources: [DM.AGE], missing: 0}}", "to": "{mapping: {source: 0, dict: {'34': 1}}}"}]}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.mapping.source"], "context": {"expected": "filtered_source", "actual": "int", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "the_missing_the_hint_names_answers_a_subject_whose_every_source_is_missing",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "dm.csv": "USUBJID,AGE\nA,34\nB,\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [["USUBJID", "V"], ["A", 34], ["B", 0]],
+      "report": {"handler": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"], ["out.csv", "columns.V.derivation.first_available.missing", "missing", null, "V", null, null, null, null, 1, null, null, "{}"]]},
+      "saved": {"out.csv": "USUBJID,V\nA,34\nB,0\n"}
+    }
+  ]
+}

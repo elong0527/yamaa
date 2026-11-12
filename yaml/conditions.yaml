@@ -233,6 +233,9 @@ conditions:
   invalid_field_type:
     phases: [validation]
     message: "{spec_path} has a value of the wrong type or form (expected {expected})"
+    message_variants:
+      - when: hint
+        message: "{spec_path} has a value of the wrong type or form (expected {expected}; {hint})"
   invalid_function_argument:
     phases: [derivation, validation]
     message: "project function {function} receives an argument it does not accept"
@@ -415,6 +418,9 @@ conditions:
   prohibited_function:
     phases: [validation]
     message: "function {function} is not allowed here"
+    message_variants:
+      - when: hint
+        message: "function {function} is not allowed here ({hint})"
   # CT-13
   project_binding_missing:
     phases: [validation]
@@ -436,7 +442,10 @@ conditions:
     message: "input {dataset} types field {field} as {type}, but its source already supplies types"
   redundant_long_form:
     phases: [validation]
-    message: "the long form of {field} only restates its shorthand {shorthand}"
+    message: "{spec_path} restates its shorthand in a long form; write {shorthand} there instead"
+    message_variants:
+      - when: operation
+        message: "{spec_path} only reads {shorthand}; write {shorthand} in place of the whole {operation} expression"
   reference_data_repeating_conflict:
     phases: [validation]
     message: "dataset {dataset} declares both reference_data and repeating"

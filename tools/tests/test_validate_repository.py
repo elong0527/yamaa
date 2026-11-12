@@ -645,6 +645,57 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 self.assertEqual(len(errors), 1, errors)
                 self.assertIn(message, errors[0])
 
+    def test_a_replaced_name_is_uncallable_and_names_its_replacement(self):
+        for old, new, message in (
+            (
+                "  LOG: {function: [LOG10, LN]}",
+                "  ABS: {function: [LOG10, LN]}",
+                "replaced name ABS is callable or reserved",
+            ),
+            (
+                "  LOG: {function: [LOG10, LN]}",
+                "  log: {function: [LOG10, LN]}",
+                "replaced name 'log' is not upper case",
+            ),
+            (
+                "  LOG: {function: [LOG10, LN]}",
+                "  LOG: {function: [LOG2]}",
+                "replaced LOG must name functions of the vocabulary",
+            ),
+            (
+                "  LOG: {function: [LOG10, LN]}",
+                "  LOG: {function: [[LN]]}",
+                "replaced LOG must name functions of the vocabulary",
+            ),
+            (
+                "  LOG: {function: [LOG10, LN]}",
+                "  LOG: {function: [LN], expression: first_available}",
+                "replaced LOG must declare an expression, optionally with its "
+                "fields, or a list of functions",
+            ),
+            (
+                "  UPPER: {expression: str_case, with: {to: upper},"
+                ' note: "changes ASCII letters only"}',
+                "  UPPER: {expression: str_case, with: {to: [upper]},"
+                ' note: "changes ASCII letters only"}',
+                "replaced UPPER must write each field as text",
+            ),
+            (
+                "  LOG: {function: [LOG10, LN]}",
+                "  LOG: {expression: first_available, note: [blanks]}",
+                "replaced LOG must write its note as text",
+            ),
+        ):
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as temp_dir:
+                root = self.contract_root(
+                    temp_dir, **{"yaml/grammar/expression.yaml": (old, new)}
+                )
+                errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
+                    root, "expression"
+                )
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(message, errors[0])
+
     def test_every_named_category_has_an_authored_case(self):
         self.assertIn(
             "rejection", OWNER_GRAMMAR_CHECKS.GRAMMAR_COVERS["string-template"]

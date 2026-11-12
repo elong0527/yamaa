@@ -9,6 +9,10 @@ Two declarations state the expression functions (#3800):
   modules states each registered expression, a verb, with its arguments,
   their types, their defaults and the values they admit.
 
+The grammar's ``replaced`` table names, for each function another dialect has
+and the grammar refuses, the registered expression or the grammar functions
+written instead, which a refusal of the name gives as its hint (FORMULA-13).
+
 This writes both as Rust, ``rust/crates/yamaa-core/src/expression_table.rs``,
 the one place the engine spells a function's name, argument bounds,
 arguments, defaults and admitted contexts, and the enumerations that the
@@ -24,6 +28,8 @@ lowering and the executor dispatch on:
   field (SCHEMA-10) and its defaults. A verb whose arguments include a
   ``window_selection`` is a window verb, one of :data:`STRUCTURES` is a
   structure the lowering builds by hand, and every other is a scalar verb.
+- ``Replacement``, each refused name of ``replaced`` with the verb, and the
+  fields of the verb it is written with, or the functions that replace it.
 - ``ScalarOp`` and ``WindowFunction``, the written parameters of each scalar
   and window verb, read by ``read`` as the declaration types them, with
   ``Slot`` naming each operand field and ``Handlers`` each handler field.
@@ -176,6 +182,19 @@ class Reducer:
 
 
 @dataclass(frozen=True)
+class Replacement:
+    """A name the grammar refuses, and what is written instead: a registered
+    expression with the fields it is written with, each ``field: value``, or
+    the grammar's own functions."""
+
+    name: str
+    expression: str | None
+    fields: tuple
+    functions: tuple
+    note: str | None = None
+
+
+@dataclass(frozen=True)
 class Values:
     """A closed list of values, the enum that spells it and where it is read."""
 
@@ -214,11 +233,15 @@ class Verb:
     shorthand: str | None
 
 
-def grammar(root=ROOT):
-    """The grammar's functions, reducers and contexts, in the file's order."""
-    document = yaml.load(
+def grammar_document(root=ROOT):
+    return yaml.load(
         (root / GRAMMAR).read_text(encoding="ascii"), Loader=UniqueKeyLoader
     )
+
+
+def grammar(root=ROOT):
+    """The grammar's functions, reducers and contexts, in the file's order."""
+    document = grammar_document(root)
     vocabulary = document["vocabulary"]
     functions = [
         Function(name, entry["min_arguments"], entry["max_arguments"], entry["result"])
@@ -234,6 +257,43 @@ def grammar(root=ROOT):
     for item in [*functions, *reducers]:
         camel(item.name)
     return functions, reducers, contexts
+
+
+def replacements(declarations, root=ROOT):
+    """The grammar's refused names, each with the registered expression and
+    the fields it is written with, each a field of the expression and one of
+    the values it admits, or with functions of the grammar. The table's shape,
+    and that each function it names is one of the grammar's, are
+    ``tools.validation.grammar_checks``'s to judge; this judges what needs the
+    schema bundle."""
+    replaced = grammar_document(root).get("replaced", {})
+    verbs = declarations.bundle.registries[REGISTRY]
+    found = []
+    for name, entry in replaced.items():
+        label = f"{GRAMMAR.as_posix()}: replaced {name}"
+        if "function" in entry:
+            found.append(Replacement(name, None, (), tuple(entry["function"])))
+            continue
+        expression = entry["expression"]
+        if expression not in verbs:
+            raise DeclarationError(
+                f"{label} names {expression}, which no module registers"
+            )
+        fields = dict(
+            (field.name, field.descriptor)
+            for field in declarations.payload(expression, verbs[expression])[0]
+        )
+        written = []
+        for field, value in entry.get("with", {}).items():
+            if value not in fields.get(field, {}).get("values", ()):
+                raise DeclarationError(
+                    f"{label}: {expression} does not admit {field}: {value}"
+                )
+            written.append(f"{field}: {value}")
+        found.append(
+            Replacement(name, expression, tuple(written), (), entry.get("note"))
+        )
+    return found
 
 
 class Declarations:
@@ -569,6 +629,46 @@ def reducers_rust(reducers):
             for item in reducers
         ),
         "        }",
+        "    }",
+        "}",
+    ]
+
+
+def replacements_rust(replaced):
+    def value(item):
+        if item.expression is None:
+            functions = ", ".join(f"Function::{camel(name)}" for name in item.functions)
+            return f"Self::Functions(&[{functions}])"
+        fields = ", ".join(literal(field) for field in item.fields)
+        note = "None" if item.note is None else f"Some({literal(item.note)})"
+        return f"Self::Expression(Verb::{camel(item.expression)}, &[{fields}], {note})"
+
+    return [
+        "",
+        "/// A name the grammar refuses that another dialect gives a function, and",
+        "/// what is written instead (FORMULA-13).",
+        "#[rustfmt::skip]",
+        "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+        "pub enum Replacement {",
+        "    /// A registered expression, with the fields it is written with, each",
+        "    /// `field: value`, and what its meaning narrows to, if anything.",
+        "    Expression(Verb, &'static [&'static str], Option<&'static str>),",
+        "    /// Functions of the grammar's vocabulary.",
+        "    Functions(&'static [Function]),",
+        "}",
+        "",
+        "#[rustfmt::skip]",
+        "impl Replacement {",
+        "    /// Each refused name and its replacement, in the grammar file's order.",
+        f"    pub const ALL: [(&'static str, Self); {len(replaced)}] = [",
+        *(f"        ({literal(item.name)}, {value(item)})," for item in replaced),
+        "    ];",
+        "    /// The replacement of a refused name written in any letter case.",
+        "    pub(crate) fn lookup(name: &str) -> Option<Self> {",
+        "        Self::ALL",
+        "            .into_iter()",
+        "            .find(|(spelling, _)| name.eq_ignore_ascii_case(spelling))",
+        "            .map(|(_, replacement)| replacement)",
         "    }",
         "}",
     ]
@@ -964,6 +1064,7 @@ def render(root=ROOT):
         *functions_rust(functions, contexts),
         *reducers_rust(reducers),
         *verbs_rust(declarations),
+        *replacements_rust(replacements(declarations, root)),
         *slots_rust(declarations),
         *handlers_rust(declarations),
         *operations_rust(
@@ -991,8 +1092,9 @@ def render(root=ROOT):
         "// Generated by tools/packaging/generate_expression_table.py --write. Do not edit.",
         f"// Authoritative sources: {GRAMMAR.as_posix()} and the {REGISTRY} registry of yaml/schema_expression_*.yaml.",
         "//! The expression functions as their declarations state them: the",
-        "//! grammar's functions and reducers, and each registered expression with",
-        "//! its form, operands, handlers, defaults and written parameters.",
+        "//! grammar's functions, reducers and replaced names, and each registered",
+        "//! expression with its form, operands, handlers, defaults and written",
+        "//! parameters.",
         "",
         "use crate::ast::{Constant, Dictionary};",
         "use crate::expression::Context;",
