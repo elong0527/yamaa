@@ -49,23 +49,41 @@ columns:
     derivation:
       aggregate: "COUNT(EX.EXDOSE)"
 
-  # Check the full SDTM EX relation, including records outside the DM
-  # population. Every EX record has DOMAIN=EX; this key deliberately avoids
-  # the per-subject match used by the output measures above.
+  # The exposure-units template derives this count over the full EX domain,
+  # including records outside DM. It retains an invalid validation candidate
+  # for this range check even when DM has no subject. Subjects do not derive
+  # this private column; the unit policy lives in that one aggregate.
   - name: NDOSOTHER
     type: int
     label: Number of Recorded Doses Not in Milligrams
-    derivation:
-      aggregate:
-        key: {DOMAIN: "'EX'"}
-        filter: >-
-          EX.EXDOSE IS NOT NULL AND
-          (EX.EXDOSU IS NULL OR EX.EXDOSU <> 'mg')
-        expr: "COUNT(EX.*)"
+    derivation: null
     verifications:
       - range:
           id: doses-standardized-to-mg
           max: 0
+
+rows:
+  # One validation candidate per EX domain, independent of DM. Grouped
+  # filters read their row aggregates. A valid group is dropped; an invalid
+  # one reaches the existing NDOSOTHER range check and refuses the run.
+  - id: exposure-units
+    dataset: EX
+    group_by: [EX.DOMAIN]
+    filter: "NDOSOTHER > 0"
+    derivations:
+      STUDYID: "'(validation)'"
+      USUBJID: "'(validation)'"
+      TRT01P: null
+      NDOSOTHER:
+        aggregate:
+          filter: >-
+            EX.EXDOSE IS NOT NULL AND
+            (EX.EXDOSU IS NULL OR EX.EXDOSU <> 'mg')
+          expr: "COUNT(EX.*)"
+
+  # One ADEX row per DM subject.
+  - id: subjects
+    dataset: DM
 
 verifications:
   - assert:

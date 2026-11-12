@@ -269,12 +269,10 @@ pub(crate) fn admit(
     consumer: &Document,
     links: Links<'_>,
 ) -> Result<Vec<(String, Contract)>, AdmissionError> {
-    crate::limits::Limits::inputs(links.links.len()).map_err(AdmissionError::Limit)?;
     let d = consumer;
     let Some(N::Mapping(inputs)) = d.field(d.root(), "input").map(|id| &d.nodes()[id]) else {
         return Err(AdmissionError::Boundary);
     };
-    crate::limits::Limits::inputs(inputs.len()).map_err(AdmissionError::Limit)?;
     // Preflight every declared type authority before reading any contract.
     let mut findings = Vec::new();
     for &(name, id) in inputs {

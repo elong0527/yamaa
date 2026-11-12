@@ -8641,20 +8641,6 @@
           }
         },
         {
-          "resource": "inputs",
-          "actual": 17,
-          "limit": 16,
-          "issue": {
-            "phase": "engine",
-            "condition": "engine_rejected",
-            "rule": null,
-            "spec_paths": [
-              "input"
-            ],
-            "context": "{\"actual\":17,\"code\":\"compiler_limit\",\"limit\":16,\"resource\":\"inputs\",\"step\":\"prepare\"}"
-          }
-        },
-        {
           "resource": "source_fields",
           "actual": 1025,
           "limit": 1024,
