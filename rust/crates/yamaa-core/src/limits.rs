@@ -44,7 +44,6 @@ impl Limits {
 
     pub const COLUMNS: usize = 1024;
     pub const KEYS: usize = 64;
-    pub const INPUTS: usize = 16;
     pub const SOURCE_OPERANDS: usize = 64;
     pub const PARENT_OCCURRENCES: usize = 8192;
 
@@ -109,10 +108,6 @@ impl Limits {
         check("keys", Some(actual), Self::KEYS)
     }
 
-    pub fn inputs(actual: usize) -> Result<(), LimitExceeded> {
-        check("inputs", Some(actual), Self::INPUTS)
-    }
-
     pub fn source_operands(actual: usize) -> Result<(), LimitExceeded> {
         check("source_operands", Some(actual), Self::SOURCE_OPERANDS)
     }
@@ -157,7 +152,6 @@ mod tests {
             }),
             ("columns", Limits::COLUMNS, Limits::columns),
             ("keys", Limits::KEYS, Limits::keys),
-            ("inputs", Limits::INPUTS, Limits::inputs),
             (
                 "source_operands",
                 Limits::SOURCE_OPERANDS,

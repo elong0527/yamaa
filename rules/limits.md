@@ -22,7 +22,7 @@ Fails: `engine_rejected`.
 Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/tests/host-fixtures/cases.json::pattern_beyond_the_compiled_size_limit`, `rust/tests/host-fixtures/cases.json::a_pair_relation_key_beyond_the_key_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::per_source_resource_and_decoder_limits_keep_original_facts_without_partial_diagnostics`.
 
 `code` is `compiler_limit` for a declaration counted while a specification is
-prepared, such as its columns, inputs or keys, and a code of its own, such as
+prepared, such as its columns or keys, and a code of its own, such as
 `resource_limit` or `output_limit`, for a file, a table or a saved artifact.
 `resource` names what was counted, such as `spec_bytes`, `table_rows`,
 `columns`, `text_bytes` or `regex_size`. A check reports the preparation
@@ -37,10 +37,12 @@ is admitted against the fixed maximum below at the boundary that owns it,
 before it is kept or grown. No caller selects other limits, except the
 archive-member, expanded-byte and XML-depth bounds that `read_odm()` and
 `yamaa read-odm` take ([ODM-1](reference/odm.md#odm-1)); no budget is shared
-between boundaries, and no limit depends on available memory.
+between boundaries, and no limit depends on available memory. The number of
+inputs one specification reads is not limited: each input is bounded as a file
+and a table.
 
 Fails: `engine_rejected`.
-Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa-core/src/limits.rs::table_geometry_is_checked_without_allocating_rows_or_cells`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`.
+Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa-core/src/limits.rs::table_geometry_is_checked_without_allocating_rows_or_cells`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`.
 
 | Boundary | Fixed maximum |
 | --- | ---: |
@@ -51,7 +53,6 @@ Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/y
 | Cells in a decoded or materialized table | 640,000,000 |
 | Columns in a source, output or intermediate table | 1,024 |
 | Keys in one key or grouping declaration | 64 |
-| Inputs to one specification | 16 |
 | Operands in one source selection | 64 |
 | Links followed in one composition, each `parent` and each `include` entry | 8,192 |
 | Compiled program of one regular expression | 10 MiB |

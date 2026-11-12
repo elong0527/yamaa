@@ -21,14 +21,6 @@ pub(in crate::specification) fn limits(spec: &Spec) -> Result<(), PrepareError> 
             ));
         }
     }
-    if spec.inputs.len() > Limits::INPUTS {
-        return Err(PrepareError::limit(
-            "inputs",
-            Limits::INPUTS,
-            Some(spec.inputs.len()),
-            Some("input"),
-        ));
-    }
     if spec.output.columns.len() > Limits::COLUMNS {
         return Err(PrepareError::limit(
             "projected_columns",

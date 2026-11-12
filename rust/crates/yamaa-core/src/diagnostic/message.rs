@@ -262,12 +262,12 @@ mod tests {
         let variable = ("variable", text("LK.LBL"));
         let column = ["columns.R.derivation.source"];
         let operation = ("operation", text("intermediate_driver_column_read"));
-        let input = ["input"];
+        let columns = ["columns"];
         let limit = vec![
             ("step", text("prepare")),
             ("code", text("compiler_limit")),
-            ("resource", text("inputs")),
-            ("limit", number("16")),
+            ("resource", text("columns")),
+            ("limit", number("1024")),
         ];
         let when = ["columns.P.derivation.case[0].when"];
         let otherwise = ["columns.N.derivation.case[1].otherwise"];
@@ -275,15 +275,15 @@ mod tests {
         for (code, path, context, expected) in [
             (
                 ConditionCode::ApplicationRejected,
-                &input,
+                &columns,
                 limit.clone(),
-                "the engine refused the operation in its prepare step: compiler_limit: inputs is above the limit of 16",
+                "the engine refused the operation in its prepare step: compiler_limit: columns is above the limit of 1024",
             ),
             (
                 ConditionCode::ApplicationRejected,
-                &input,
-                [limit.clone(), vec![("actual", number("17"))]].concat(),
-                "the engine refused the operation in its prepare step: compiler_limit: inputs is 17, above the limit of 16",
+                &columns,
+                [limit.clone(), vec![("actual", number("1025"))]].concat(),
+                "the engine refused the operation in its prepare step: compiler_limit: columns is 1025, above the limit of 1024",
             ),
             (
                 ConditionCode::PredicateIncompatiblePair,

@@ -906,5 +906,71 @@ mod schema {
             assert_eq!(resource.actual, Some(1025));
             assert_eq!(resource.spec_paths, ["input.SRC.types"]);
         }
+
+        /// A seam the replay cannot reach: preparation admits a specification
+        /// whatever number of inputs it reads (#4462). One hundred lookups,
+        /// past every other fixed count of 64, each read by an aggregate,
+        /// beside the base input.
+        #[test]
+        fn a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order() {
+            let lookups: Vec<_> = (1..=100).map(|i| format!("L{i:03}")).collect();
+            let counts: Vec<_> = lookups.iter().map(|name| format!("N{name}")).collect();
+            let path = |file: String| Tree::map(vec![("path", Tree::text(file))]);
+            let mut input = vec![("SRC", path("input.csv".into()))];
+            let mut columns = vec![Tree::map(vec![
+                ("name", Tree::text("ID")),
+                ("type", Tree::text("str")),
+                (
+                    "derivation",
+                    Tree::map(vec![("value", Tree::text("SRC.ID"))]),
+                ),
+            ])];
+            let mut projection = vec![Tree::text("ID")];
+            for (lookup, count) in lookups.iter().zip(&counts) {
+                input.push((lookup.as_str(), path(format!("{lookup}.csv"))));
+                columns.push(Tree::map(vec![
+                    ("name", Tree::text(count)),
+                    ("type", Tree::text("int")),
+                    (
+                        "derivation",
+                        Tree::map(vec![(
+                            "aggregate",
+                            Tree::text(format!("COUNT({lookup}.*)")),
+                        )]),
+                    ),
+                ]));
+                projection.push(Tree::text(count));
+            }
+            let mut fields = header();
+            fields.extend([
+                ("domain", Tree::text("TEST")),
+                ("keys", Tree::List(vec![Tree::text("ID")])),
+                ("input", Tree::map(input)),
+                ("base", Tree::text("SRC")),
+                ("columns", Tree::List(columns)),
+                (
+                    "output",
+                    Tree::map(vec![
+                        ("path", Tree::text("result.csv")),
+                        ("columns", Tree::List(projection)),
+                    ]),
+                ),
+            ]);
+            let prepared = prepare(&Tree::map(fields).document())
+                .unwrap_or_else(|error| panic!("101 inputs must prepare: {error:?}"));
+            let expected: Vec<_> = std::iter::once("SRC")
+                .chain(lookups.iter().map(String::as_str))
+                .collect();
+            let sources: Vec<_> = prepared
+                .sources()
+                .iter()
+                .map(|source| source.name.as_str())
+                .collect();
+            assert_eq!(
+                (sources, prepared.driver_index()),
+                (expected, 0),
+                "the base and one hundred lookups"
+            );
+        }
     }
 }
