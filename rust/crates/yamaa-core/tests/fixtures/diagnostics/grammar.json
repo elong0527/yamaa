@@ -185,13 +185,13 @@
       "case": "a_case_conversion_call_in_a_predicate_names_the_expression_a_derivation_writes_for_it",
       "operation": "expression_refusal",
       "input": {"field": "predicate", "expression": "UPPER(X.V) = 'A'", "path": "columns.P.derivation.case[0].when"},
-      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.P.derivation.case[0].when"], "context": {"expr": "UPPER(X.V) = 'A'", "predicate": "UPPER(X.V) = 'A'", "position": 0, "function": "UPPER", "hint": "use the str_case expression with to: upper in a derivation, and read the value it derives here"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.P.derivation.case[0].when"], "context": {"expr": "UPPER(X.V) = 'A'", "predicate": "UPPER(X.V) = 'A'", "position": 0, "function": "UPPER", "hint": "use the str_case expression with to: upper in a derivation, and read the value it derives here; str_case changes ASCII letters only"}}]
     },
     {
       "case": "a_sas_case_function_in_a_derivation_in_any_letter_case_names_the_expression_that_replaces_it",
       "operation": "expression_refusal",
       "input": {"field": "derivation", "expression": "lowcase(X.V)", "path": "columns.P.derivation"},
-      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.P.derivation"], "context": {"expr": "lowcase(X.V)", "function": "lowcase", "hint": "use the str_case expression with to: lower"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.P.derivation"], "context": {"expr": "lowcase(X.V)", "function": "lowcase", "hint": "use the str_case expression with to: lower; str_case changes ASCII letters only"}}]
     },
     {
       "case": "a_coalesce_over_a_reduction_names_where_its_expression_is_written_for_a_reduced_value",

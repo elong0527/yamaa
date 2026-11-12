@@ -57,8 +57,10 @@ forms it takes: `expression`, and `star` for the record star of `COUNT`.
 
 `replaced` lists, by upper-case name, functions that other SQL dialects and SAS
 have and the expression grammar refuses. Each names what to write instead: a
-registered `expression`, with the fields `with` writes it with, or a list of
-the grammar's own `function`s. A listed name is no function, reducer or
+registered `expression`, with the fields `with` writes it with and an optional
+`note` on where its meaning narrows, or a list of the grammar's own
+`function`s. A name is listed only when what replaces it gives the same
+result, within its note. A listed name is no function, reducer or
 reserved word, so the list admits no text; a refused call of the name carries
 the replacement as its finding's hint
 ([FORMULA-13](../../rules/formulas.md#formula-13)).

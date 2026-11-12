@@ -466,7 +466,12 @@ field, not in this text, so in a predicate the hint says to write it in a
 derivation and read the value it derives. An aggregate's derivations run on
 each record before the reduction, so in an aggregate the hint says to write it
 there for a value the aggregate reduces, or in a later column's derivation for
-the aggregate's result. The list admits no call.
+the aggregate's result. A name is listed only when what replaces it gives the
+same result, and a note says where that meaning narrows: `str_case` changes
+ASCII letters only ([TEXT-5](text.md#text-5)). A name whose nearest expression
+differs at a boundary, such as SQL `REPLACE`, whose search text is literal
+where `str_replace` reads a regular expression, is not listed. The list admits
+no call.
 
 Each function is one computation, the same binary64 operations on every
 platform, so it returns the same bits everywhere. `SQRT` is the correctly

@@ -114,8 +114,15 @@ GRAMMAR_COVERS = {
 FUNCTION_RESULTS = {"numeric", "boolean"}
 REDUCER_ARGUMENTS = {"expression", "star"}
 # A refused name's replacement: a registered expression with the fields it
-# is written with, or the grammar's own functions.
-REPLACEMENT_KEYS = ({"expression"}, {"expression", "with"}, {"function"})
+# is written with and a note on where its meaning narrows, or the grammar's
+# own functions.
+REPLACEMENT_KEYS = (
+    {"expression"},
+    {"expression", "with"},
+    {"expression", "note"},
+    {"expression", "with", "note"},
+    {"function"},
+)
 REPLACED_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
 
 
@@ -519,6 +526,10 @@ def replaced_errors(document, functions, reducers, label):
         ):
             errors.append(
                 f"ERROR: {label}: replaced {name} must write each field as text"
+            )
+        if not isinstance(replacement.get("note", ""), str):
+            errors.append(
+                f"ERROR: {label}: replaced {name} must write its note as text"
             )
     return errors
 

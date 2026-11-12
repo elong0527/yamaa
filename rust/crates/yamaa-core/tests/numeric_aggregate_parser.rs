@@ -522,47 +522,60 @@ mod numeric {
 
             const DERIVED: &str = " in a derivation, and read the value it derives here";
             const REDUCED: &str = " outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result";
-            for (call, function, hint, derived) in [
+            const ASCII: &str = "; str_case changes ASCII letters only";
+            for (call, function, hint, derived, note) in [
                 (
                     "cOaLeScE(A, B)",
                     "cOaLeScE",
                     "use the first_available expression",
                     DERIVED,
+                    "",
                 ),
                 (
                     "GREATEST(A, B)",
                     "GREATEST",
                     "use the greatest expression",
                     DERIVED,
+                    "",
                 ),
-                ("least(A, B)", "least", "use the least expression", DERIVED),
+                (
+                    "least(A, B)",
+                    "least",
+                    "use the least expression",
+                    DERIVED,
+                    "",
+                ),
                 (
                     "ROUND(A, 2)",
                     "ROUND",
                     "use the round_half_away_from_zero expression",
                     DERIVED,
+                    "",
                 ),
                 (
                     "round_half_away_from_zero(A, 2)",
                     "round_half_away_from_zero",
                     "use the round_half_away_from_zero expression",
                     DERIVED,
+                    "",
                 ),
                 (
                     "Upper(A)",
                     "Upper",
                     "use the str_case expression with to: upper",
                     DERIVED,
+                    ASCII,
                 ),
-                ("LOG(A)", "LOG", "use LOG10 or LN", ""),
+                ("LOG(A)", "LOG", "use LOG10 or LN", "", ""),
             ] {
                 for field in [Context::Derivation, Context::Aggregate, Context::Predicate] {
-                    let expected = match field {
-                        Context::Derivation => hint.to_string(),
-                        Context::Predicate => format!("{hint}{derived}"),
-                        Context::Aggregate if derived.is_empty() => hint.to_string(),
-                        Context::Aggregate => format!("{hint}{REDUCED}"),
+                    let suffix = match field {
+                        Context::Derivation => "",
+                        Context::Predicate => derived,
+                        Context::Aggregate if derived.is_empty() => "",
+                        Context::Aggregate => REDUCED,
                     };
+                    let expected = format!("{hint}{suffix}{note}");
                     let expression = if field == Context::Predicate {
                         format!("{call} > 0")
                     } else {
@@ -587,7 +600,7 @@ mod numeric {
                     assert_eq!(finding.context["hint"], V::String(expected), "{expression}");
                     assert_eq!(
                         failure.syntax_diagnostic().context["hint"],
-                        V::String(hint.into())
+                        V::String(format!("{hint}{note}"))
                     );
                     assert_eq!(position.byte, expression.find(function).unwrap());
                     assert!(!finding.context.contains_key("argument_count"));

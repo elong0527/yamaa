@@ -47,7 +47,7 @@ fn replacement_hint(replacement: Replacement, field: Option<Field>) -> String {
             let names: Vec<_> = functions.iter().map(|function| function.name()).collect();
             format!("use {}", names.join(" or "))
         }
-        Replacement::Expression(verb, fields) => {
+        Replacement::Expression(verb, fields, note) => {
             let mut hint = format!("use the {} expression", verb.name());
             if !fields.is_empty() {
                 hint.push_str(" with ");
@@ -61,6 +61,9 @@ fn replacement_hint(replacement: Replacement, field: Option<Field>) -> String {
                     " outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result",
                 ),
                 Some(Field::Derivation) | None => {}
+            }
+            if let Some(note) = note {
+                hint.push_str(&format!("; {} {note}", verb.name()));
             }
             hint
         }

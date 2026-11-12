@@ -385,10 +385,10 @@ mod tests {
                     ("function", text("UPPER")),
                     (
                         "hint",
-                        text("use the str_case expression with to: upper in a derivation, and read the value it derives here"),
+                        text("use the str_case expression with to: upper in a derivation, and read the value it derives here; str_case changes ASCII letters only"),
                     ),
                 ],
-                "function UPPER is not allowed here (use the str_case expression with to: upper in a derivation, and read the value it derives here)",
+                "function UPPER is not allowed here (use the str_case expression with to: upper in a derivation, and read the value it derives here; str_case changes ASCII letters only)",
             ),
             (
                 ConditionCode::SchemaInvalidFieldType,

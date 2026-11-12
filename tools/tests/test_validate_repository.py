@@ -674,9 +674,16 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 "fields, or a list of functions",
             ),
             (
-                "  UPPER: {expression: str_case, with: {to: upper}}",
-                "  UPPER: {expression: str_case, with: {to: [upper]}}",
+                "  UPPER: {expression: str_case, with: {to: upper},"
+                ' note: "changes ASCII letters only"}',
+                "  UPPER: {expression: str_case, with: {to: [upper]},"
+                ' note: "changes ASCII letters only"}',
                 "replaced UPPER must write each field as text",
+            ),
+            (
+                "  LOG: {function: [LOG10, LN]}",
+                "  LOG: {expression: first_available, note: [blanks]}",
+                "replaced LOG must write its note as text",
             ),
         ):
             with self.subTest(new=new), tempfile.TemporaryDirectory() as temp_dir:

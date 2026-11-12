@@ -191,6 +191,7 @@ class Replacement:
     expression: str | None
     fields: tuple
     functions: tuple
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -289,7 +290,9 @@ def replacements(declarations, root=ROOT):
                     f"{label}: {expression} does not admit {field}: {value}"
                 )
             written.append(f"{field}: {value}")
-        found.append(Replacement(name, expression, tuple(written), ()))
+        found.append(
+            Replacement(name, expression, tuple(written), (), entry.get("note"))
+        )
     return found
 
 
@@ -637,7 +640,8 @@ def replacements_rust(replaced):
             functions = ", ".join(f"Function::{camel(name)}" for name in item.functions)
             return f"Self::Functions(&[{functions}])"
         fields = ", ".join(literal(field) for field in item.fields)
-        return f"Self::Expression(Verb::{camel(item.expression)}, &[{fields}])"
+        note = "None" if item.note is None else f"Some({literal(item.note)})"
+        return f"Self::Expression(Verb::{camel(item.expression)}, &[{fields}], {note})"
 
     return [
         "",
@@ -647,8 +651,8 @@ def replacements_rust(replaced):
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
         "pub enum Replacement {",
         "    /// A registered expression, with the fields it is written with, each",
-        "    /// `field: value`.",
-        "    Expression(Verb, &'static [&'static str]),",
+        "    /// `field: value`, and what its meaning narrows to, if anything.",
+        "    Expression(Verb, &'static [&'static str], Option<&'static str>),",
         "    /// Functions of the grammar's vocabulary.",
         "    Functions(&'static [Function]),",
         "}",

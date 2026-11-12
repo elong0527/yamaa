@@ -185,7 +185,10 @@ class ExpressionTableTests(unittest.TestCase):
     def test_a_replacement_is_a_registered_expression_written_with_values_it_admits(
         self,
     ):
-        upper = "  UPPER: {expression: str_case, with: {to: upper}}"
+        upper = (
+            "  UPPER: {expression: str_case, with: {to: upper},"
+            ' note: "changes ASCII letters only"}'
+        )
         prefix = f"ERROR: {GRAMMAR}: replaced UPPER"
         for new, message in (
             (
@@ -219,7 +222,13 @@ class ExpressionTableTests(unittest.TestCase):
         self.assertEqual(
             [replaced["UPPER"], replaced["COALESCE"], replaced["LOG"]],
             [
-                generator.Replacement("UPPER", "str_case", ("to: upper",), ()),
+                generator.Replacement(
+                    "UPPER",
+                    "str_case",
+                    ("to: upper",),
+                    (),
+                    "changes ASCII letters only",
+                ),
                 generator.Replacement("COALESCE", "first_available", (), ()),
                 generator.Replacement("LOG", None, (), ("LOG10", "LN")),
             ],

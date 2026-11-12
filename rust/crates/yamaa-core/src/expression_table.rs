@@ -656,8 +656,8 @@ impl Verb {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Replacement {
     /// A registered expression, with the fields it is written with, each
-    /// `field: value`.
-    Expression(Verb, &'static [&'static str]),
+    /// `field: value`, and what its meaning narrows to, if anything.
+    Expression(Verb, &'static [&'static str], Option<&'static str>),
     /// Functions of the grammar's vocabulary.
     Functions(&'static [Function]),
 }
@@ -665,21 +665,17 @@ pub enum Replacement {
 #[rustfmt::skip]
 impl Replacement {
     /// Each refused name and its replacement, in the grammar file's order.
-    pub const ALL: [(&'static str, Self); 15] = [
-        ("COALESCE", Self::Expression(Verb::FirstAvailable, &[])),
-        ("COALESCEC", Self::Expression(Verb::FirstAvailable, &[])),
-        ("GREATEST", Self::Expression(Verb::Greatest, &[])),
-        ("LEAST", Self::Expression(Verb::Least, &[])),
-        ("ROUND", Self::Expression(Verb::RoundHalfAwayFromZero, &[])),
-        ("ROUND_HALF_AWAY_FROM_ZERO", Self::Expression(Verb::RoundHalfAwayFromZero, &[])),
-        ("UPPER", Self::Expression(Verb::StrCase, &["to: upper"])),
-        ("UPCASE", Self::Expression(Verb::StrCase, &["to: upper"])),
-        ("LOWER", Self::Expression(Verb::StrCase, &["to: lower"])),
-        ("LOWCASE", Self::Expression(Verb::StrCase, &["to: lower"])),
-        ("PROPCASE", Self::Expression(Verb::StrCase, &["to: proper"])),
-        ("SUBSTR", Self::Expression(Verb::StrSubstr, &[])),
-        ("SUBSTRING", Self::Expression(Verb::StrSubstr, &[])),
-        ("LENGTH", Self::Expression(Verb::StrLength, &[])),
+    pub const ALL: [(&'static str, Self); 11] = [
+        ("COALESCE", Self::Expression(Verb::FirstAvailable, &[], None)),
+        ("GREATEST", Self::Expression(Verb::Greatest, &[], None)),
+        ("LEAST", Self::Expression(Verb::Least, &[], None)),
+        ("ROUND", Self::Expression(Verb::RoundHalfAwayFromZero, &[], None)),
+        ("ROUND_HALF_AWAY_FROM_ZERO", Self::Expression(Verb::RoundHalfAwayFromZero, &[], None)),
+        ("UPPER", Self::Expression(Verb::StrCase, &["to: upper"], Some("changes ASCII letters only"))),
+        ("UPCASE", Self::Expression(Verb::StrCase, &["to: upper"], Some("changes ASCII letters only"))),
+        ("LOWER", Self::Expression(Verb::StrCase, &["to: lower"], Some("changes ASCII letters only"))),
+        ("LOWCASE", Self::Expression(Verb::StrCase, &["to: lower"], Some("changes ASCII letters only"))),
+        ("PROPCASE", Self::Expression(Verb::StrCase, &["to: proper"], None)),
         ("LOG", Self::Functions(&[Function::Log10, Function::Ln])),
     ];
     /// The replacement of a refused name written in any letter case.
