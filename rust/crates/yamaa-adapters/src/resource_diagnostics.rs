@@ -44,7 +44,6 @@ pub fn resource_name(resource: Resource) -> &'static str {
         Resource::SourceRows => "rows",
         Resource::SourceCells => "cells",
         Resource::SourceColumns => "columns",
-        Resource::SourceCount => "sources",
         Resource::OutputRows => "output_rows",
         Resource::OutputCells => "output_cells",
         Resource::OutputColumns => "output_columns",
