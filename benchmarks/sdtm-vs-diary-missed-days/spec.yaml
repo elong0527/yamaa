@@ -37,13 +37,9 @@ intermediates:
       VACDAT: VAC.VACDAT
       DIARYDAY: DAYS.DIARYDAY
       DAYLABEL: DAYS.DAYLABEL
-      OFFSET:
-        type: int
-        derivation: "DAYS.DIARYDAY - 1"
+      OFFSET: "DAYS.DIARYDAY - 1"
       DIARYDAT:
-        type: date
-        derivation:
-          shift: {type: date, source: VAC.VACDAT, days: OFFSET}
+        shift: {type: date, source: VAC.VACDAT, days: OFFSET}
 
   # The temperature the e-diary transferred for the subject on the diary
   # date, if any.

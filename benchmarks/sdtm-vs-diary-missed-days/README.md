@@ -1,9 +1,9 @@
 # Missed Temperature Diary Days
 
-**Goal:** derive `VSSEQ`, `VSORRES`, `VSORRESU`, `VSSTAT`, `VSREASND`,
-`VSDTC`, `VSTPT`, `VSTPTNUM`, `VSTPTREF` and `VSRFTDTC` for every day of
-the temperature diary after each vaccination in Vital Signs (VS), including
-the days no temperature was entered.
+**Goal:** derive `VSSEQ`, `VSTESTCD`, `VSTEST`, `VSORRES`, `VSORRESU`,
+`VSSTAT`, `VSREASND`, `VSDTC`, `VSTPT`, `VSTPTNUM`, `VSTPTREF` and
+`VSRFTDTC` for every day of the temperature diary after each vaccination in
+Vital Signs (VS), including the days no temperature was entered.
 
 **Input:** the vaccination log, one record per planned vaccination with its
 date when given; the protocol's diary period, one record per diary day with
@@ -13,15 +13,20 @@ its date and unit.
 **Variables:**
 
 - `VSSEQ` numbers the subject's records by vaccination date, then diary day.
-- `VSORRES` and `VSORRESU` are the temperature entered on the diary date and
-  its unit; both are empty on a day with no entry.
+- `VSTESTCD` is always `TEMP`.
+- `VSTEST` is always `Temperature`.
+- `VSORRES` is the temperature entered on the diary date, empty on a day with
+  no entry.
+- `VSORRESU` is the unit of the temperature entered, empty on a day with no
+  entry.
 - `VSSTAT` is `NOT DONE` on a diary day with no temperature entered, and
   empty otherwise.
 - `VSREASND` is `NOT ENTERED` on a day marked `NOT DONE`, and empty
   otherwise.
 - `VSDTC` is the diary date: the vaccination date on Day 1, one day later
   for each later diary day.
-- `VSTPT` and `VSTPTNUM` are the diary day's label and number.
+- `VSTPT` is the diary day's label (`DAY 1`, ...).
+- `VSTPTNUM` is the diary day's number, 1 on the day of vaccination.
 - `VSTPTREF` names the vaccination the diary day follows.
 - `VSRFTDTC` is that vaccination's date.
 
