@@ -123,5 +123,29 @@
       "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n"
     },
     "rows": []
+  },
+  {
+    "id": "no-subjects-unmatched-grams-refused",
+    "files": {
+      "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n",
+      "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,UNMATCHED,1,Other,2,g,2025-02-01\n"
+    },
+    "condition": "range_failed"
+  },
+  {
+    "id": "no-subjects-unmatched-missing-unit-refused",
+    "files": {
+      "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n",
+      "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,UNMATCHED,1,Other,2,,2025-02-01\n"
+    },
+    "condition": "range_failed"
+  },
+  {
+    "id": "no-subjects-unmatched-milligrams-no-rows",
+    "files": {
+      "input/dm.csv": "DOMAIN,STUDYID,USUBJID,ARM\n",
+      "input/ex.csv": "STUDYID,DOMAIN,USUBJID,EXSEQ,EXTRT,EXDOSE,EXDOSU,EXSTDTC\nYAMAA-01,EX,UNMATCHED,1,Other,2,mg,2025-02-01\n"
+    },
+    "rows": []
   }
 ]

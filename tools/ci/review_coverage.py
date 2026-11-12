@@ -43,13 +43,24 @@ WALKTHROUGH = "<!-- walkthrough_start -->"
 FORMAL_REVIEW = (
     "<!-- This is an auto-generated comment by CodeRabbit for review status -->"
 )
-COMMITS_HEADER = "<summary>\U0001f4e5 Commits</summary>"
+# The app's Commits heading: the inbox emoji, or, since November 2026 (#4469),
+# an icon <picture> of an optional dark-scheme <source> and one <img>. The
+# newer section also wraps the range in <dl><dd><br> ... </dd></dl>.
+EMOJI_COMMITS_HEADER = r"<summary>\U0001f4e5 Commits</summary>"
+ICON_COMMITS_HEADER = (
+    r"<summary><picture>(?:<source [^<>]*>)?<img [^<>]*></picture> Commits</summary>"
+)
+COMMITS_HEADER = re.compile(f"(?:{EMOJI_COMMITS_HEADER}|{ICON_COMMITS_HEADER})")
 COMMITS_SECTION = re.compile(
-    r"(?m)^<details>\r?\n"
-    + re.escape(COMMITS_HEADER)
+    r"(?m)^<details>\r?\n(?:"
+    + EMOJI_COMMITS_HEADER
     + r"\r?\n\r?\n"
     + REVIEW_RANGE.pattern
-    + r"\r?\n\r?\n</details>(?=\r?\n|\Z)"
+    + r"\r?\n\r?\n|"
+    + ICON_COMMITS_HEADER
+    + r"\r?\n<dl>\r?\n<dd>\r?\n<br>\r?\n\r?\n"
+    + REVIEW_RANGE.pattern
+    + r"\r?\n\r?\n</dd>\r?\n</dl>\r?\n)</details>(?=\r?\n|\Z)"
 )
 FENCE = re.compile(r" {0,3}(`{3,}|~{3,})(.*)\Z")
 IN_PROGRESS = re.compile(
@@ -445,7 +456,7 @@ def formal_review_ranges(api, number, head, completed_at, authentic):
     require(
         len(ranges) == 1
         and body.count(RANGE_PREFIX) == 1
-        and body.count(COMMITS_HEADER) == 1
+        and len(COMMITS_HEADER.findall(body)) == 1
         and len(sections) == 1
         and published_prefix(body[: sections[0].start()]),
         "formal review range is missing, quoted or ambiguous",
