@@ -200,10 +200,6 @@ class ExpressionTableTests(unittest.TestCase):
                 "  UPPER: {expression: str_case, with: {case: upper}}",
                 f"{prefix}: str_case does not admit case: upper",
             ),
-            (
-                "  UPPER: {function: [LOWER10]}",
-                f"{prefix} names LOWER10, no function",
-            ),
         ):
             with self.subTest(case=new), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -217,10 +213,8 @@ class ExpressionTableTests(unittest.TestCase):
                 self.assertEqual(raised.exception.code, message)
 
     def test_a_replacement_s_fields_are_written_as_the_hint_spells_them(self):
-        functions, _, _ = generator.grammar()
         replaced = {
-            item.name: item
-            for item in generator.replacements(functions, self.declarations)
+            item.name: item for item in generator.replacements(self.declarations)
         }
         self.assertEqual(
             [replaced["UPPER"], replaced["COALESCE"], replaced["LOG"]],

@@ -258,20 +258,19 @@ def grammar(root=ROOT):
     return functions, reducers, contexts
 
 
-def replacements(functions, declarations, root=ROOT):
+def replacements(declarations, root=ROOT):
     """The grammar's refused names, each with the registered expression and
     the fields it is written with, each a field of the expression and one of
-    the values it admits, or with functions of the grammar."""
+    the values it admits, or with functions of the grammar. The table's shape,
+    and that each function it names is one of the grammar's, are
+    ``tools.validation.grammar_checks``'s to judge; this judges what needs the
+    schema bundle."""
     replaced = grammar_document(root).get("replaced", {})
-    names = {item.name for item in functions}
     verbs = declarations.bundle.registries[REGISTRY]
     found = []
     for name, entry in replaced.items():
         label = f"{GRAMMAR.as_posix()}: replaced {name}"
         if "function" in entry:
-            unknown = [target for target in entry["function"] if target not in names]
-            if unknown:
-                raise DeclarationError(f"{label} names {unknown[0]}, no function")
             found.append(Replacement(name, None, (), tuple(entry["function"])))
             continue
         expression = entry["expression"]
@@ -1061,7 +1060,7 @@ def render(root=ROOT):
         *functions_rust(functions, contexts),
         *reducers_rust(reducers),
         *verbs_rust(declarations),
-        *replacements_rust(replacements(functions, declarations, root)),
+        *replacements_rust(replacements(declarations, root)),
         *slots_rust(declarations),
         *handlers_rust(declarations),
         *operations_rust(
