@@ -500,7 +500,10 @@ def replaced_errors(document, functions, reducers, label):
             if (
                 not isinstance(targets, list)
                 or not targets
-                or any(target not in functions for target in targets)
+                or any(
+                    not isinstance(target, str) or target not in functions
+                    for target in targets
+                )
             ):
                 errors.append(
                     f"ERROR: {label}: replaced {name} must name functions of the "

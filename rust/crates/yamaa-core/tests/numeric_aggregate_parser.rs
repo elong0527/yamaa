@@ -511,14 +511,17 @@ mod numeric {
         /// Seam: `Failure::syntax_diagnostic`, the standalone syntax projection, and a
         /// refusal's byte position in a derivation or an aggregate, which no issue states.
         /// Retired calls stay refused, with a replacement in the public finding: in a
-        /// derivation and the standalone projection the replacement alone, and in a
-        /// predicate or an aggregate, which an expression cannot stand in, the
-        /// replacement written in a derivation (`replaced` in the grammar).
+        /// derivation and the standalone projection the replacement alone, in a
+        /// predicate, which an expression cannot stand in, the replacement written
+        /// in a derivation, and in an aggregate, whose derivations run before the
+        /// reduction, where it goes for a reduced value and for the result
+        /// (`replaced` in the grammar).
         #[test]
         fn retired_formula_functions_name_their_replacement() {
             use yamaa_core::json::Value as V;
 
             const DERIVED: &str = " in a derivation, and read the value it derives here";
+            const REDUCED: &str = " outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result";
             for (call, function, hint, derived) in [
                 (
                     "cOaLeScE(A, B)",
@@ -554,10 +557,11 @@ mod numeric {
                 ("LOG(A)", "LOG", "use LOG10 or LN", ""),
             ] {
                 for field in [Context::Derivation, Context::Aggregate, Context::Predicate] {
-                    let expected = if field == Context::Derivation {
-                        hint.to_string()
-                    } else {
-                        format!("{hint}{derived}")
+                    let expected = match field {
+                        Context::Derivation => hint.to_string(),
+                        Context::Predicate => format!("{hint}{derived}"),
+                        Context::Aggregate if derived.is_empty() => hint.to_string(),
+                        Context::Aggregate => format!("{hint}{REDUCED}"),
                     };
                     let expression = if field == Context::Predicate {
                         format!("{call} > 0")

@@ -37,8 +37,10 @@ fn canonical_integer(literal: &str) -> String {
 /// What a call of a name the grammar refuses, but another dialect gives a
 /// function, is written as instead (`replaced` in
 /// `yaml/grammar/expression.yaml`, FORMULA-13). A registered expression stands
-/// only where an expression field does, so a predicate or an aggregate reads
-/// the value a derivation gives it.
+/// only where an expression field does, so a predicate reads the value a
+/// derivation gives it. An aggregate's derivations run on each record before
+/// the reduction, so an expression over a reduced value goes in a later
+/// column's derivation over the aggregate's result instead.
 fn replacement_hint(replacement: Replacement, field: Option<Field>) -> String {
     match replacement {
         Replacement::Functions(functions) => {
@@ -51,8 +53,14 @@ fn replacement_hint(replacement: Replacement, field: Option<Field>) -> String {
                 hint.push_str(" with ");
                 hint.push_str(&fields.join(" and "));
             }
-            if matches!(field, Some(Field::Predicate | Field::Aggregate)) {
-                hint.push_str(" in a derivation, and read the value it derives here");
+            match field {
+                Some(Field::Predicate) => {
+                    hint.push_str(" in a derivation, and read the value it derives here");
+                }
+                Some(Field::Aggregate) => hint.push_str(
+                    " outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result",
+                ),
+                Some(Field::Derivation) | None => {}
             }
             hint
         }

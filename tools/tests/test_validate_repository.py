@@ -664,6 +664,11 @@ class TestClosedGrammarContracts(unittest.TestCase):
             ),
             (
                 "  LOG: {function: [LOG10, LN]}",
+                "  LOG: {function: [[LN]]}",
+                "replaced LOG must name functions of the vocabulary",
+            ),
+            (
+                "  LOG: {function: [LOG10, LN]}",
                 "  LOG: {function: [LN], expression: first_available}",
                 "replaced LOG must declare an expression, optionally with its "
                 "fields, or a list of functions",

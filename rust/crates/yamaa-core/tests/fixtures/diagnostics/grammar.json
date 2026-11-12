@@ -194,10 +194,10 @@
       "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.P.derivation"], "context": {"expr": "lowcase(X.V)", "function": "lowcase", "hint": "use the str_case expression with to: lower"}}]
     },
     {
-      "case": "a_coalesce_over_a_reduction_names_the_expression_a_derivation_writes_for_it",
+      "case": "a_coalesce_over_a_reduction_names_where_its_expression_is_written_for_a_reduced_value",
       "operation": "expression_refusal",
       "input": {"field": "aggregate", "expression": "COALESCE(SUM(Y.V), 0)", "path": "columns.P.derivation.aggregate"},
-      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.P.derivation.aggregate"], "context": {"expr": "COALESCE(SUM(Y.V), 0)", "function": "COALESCE", "hint": "use the first_available expression in a derivation, and read the value it derives here"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.P.derivation.aggregate"], "context": {"expr": "COALESCE(SUM(Y.V), 0)", "function": "COALESCE", "hint": "use the first_available expression outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result"}}]
     },
     {
       "case": "a_log_call_names_the_grammar_functions_that_replace_it",

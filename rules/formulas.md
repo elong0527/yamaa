@@ -462,9 +462,11 @@ A name that another SQL dialect or SAS gives a function, such as `UPPER`,
 in any letter case, also reports that as `hint`: a registered expression with
 the fields that select its behaviour, such as `str_case` with `to: upper`, or
 `LOG10` or `LN` for `LOG`. A registered expression is written in an expression
-field, not in this text, so in a predicate or an aggregate the hint says to
-write it in a derivation and read the value it derives. The list admits no
-call.
+field, not in this text, so in a predicate the hint says to write it in a
+derivation and read the value it derives. An aggregate's derivations run on
+each record before the reduction, so in an aggregate the hint says to write it
+there for a value the aggregate reduces, or in a later column's derivation for
+the aggregate's result. The list admits no call.
 
 Each function is one computation, the same binary64 operations on every
 platform, so it returns the same bits everywhere. `SQRT` is the correctly
