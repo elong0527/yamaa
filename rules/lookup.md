@@ -1706,7 +1706,9 @@ as `unknown_derive_variable`. The map composes by key under
 `aggregate.derivations.<name>`.
 
 The relation a derived aggregate reduces is the one relation its derivations
-and filter name, and naming two relations is an error. A reducer
+and filter name, and naming two relations is an error. An entry reads no field
+of the current input record; a per-record value that reads it is a named
+intermediate's derivation ([LOOKUP-15](#lookup-15)). A reducer
 expression that mixes a bound variable with a qualified identifier is an error
 under [LOOKUP-18](#lookup-18). Qualifiers naming declared named intermediates
 do not count as relations for this rule. An entry may read a named
