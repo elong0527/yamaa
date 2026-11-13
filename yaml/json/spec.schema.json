@@ -1725,7 +1725,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/fragment.intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
+          "description": "Per-record derivations over donor fields, the current input record, the current row's columns qualified by the output domain, and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },
@@ -3887,7 +3887,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
+          "description": "Per-record derivations over donor fields, the current input record, the current row's columns qualified by the output domain, and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },

@@ -200,12 +200,13 @@ Step two asks a lookup's `filter` about each matched record, and only about
 matched records, keeping those for which it is `TRUE` in stored order. Its
 identifiers must name available fields in an admitted scope, or fail: the
 lookup's qualifier reads the donor record, and a named intermediate's filter
-may also read the current row's driver. An aggregate's filter narrows its own
+may also read the current row's driver and, qualified by the output `domain`,
+the current row's output columns. An aggregate's filter narrows its own
 relation, whichever it reduces. A filter on a construct with no records to
 select among fails.
 
 Fails: `unknown_field`, `prohibited_construct`.
-Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
+Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `schema-lookup-intermediate-nearest-donor`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
 `columns` lists bare field names, and every `filter` field is qualified,
@@ -218,7 +219,12 @@ derivation the qualifier must be the driver of every row template that the
 expression can evaluate on. A row template's `filter` reads its lookups for
 that template's rows, and a dataset verification for the rows of every
 template, as a column derivation does. The row driver may be an eligible named
-intermediate under [ROW-2](rows.md#row-2). Other datasets,
+intermediate under [ROW-2](rows.md#row-2). A named intermediate's filter
+reads a column of the current row qualified by the output `domain`
+([NAME-3](names.md#name-3)), under the rules of a key's match value
+([LOOKUP-5](#lookup-5)): the column is derived before the lookup reads it,
+and a row template that reads the lookup before the column phase fails at
+its read ([LOOKUP-2](#lookup-2)). Other datasets,
 intermediates that are not the current driver, and unqualified output names
 are not filter scopes. The filter of a structured source or a qualified
 aggregate reads the donor record only, a qualified aggregate's with the
@@ -1127,7 +1133,7 @@ for matching, `filter`, `order_by` selection and `columns` projection, and
 behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_a_date_and_a_datetime_is_refused_before_any_record_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_text_and_an_int_is_refused_before_any_record_is_read`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-lookup-intermediate-nearest-donor`, `negative-lookup-derivation-reduction`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_a_date_and_a_datetime_is_refused_before_any_record_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::a_window_order_over_text_and_an_int_is_refused_before_any_record_is_read`.
 
 Each entry is either an untyped expression or a typed binding
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
@@ -1157,8 +1163,33 @@ convert to its declared type fails under [VALUE-24](values.md#value-24).
 
 A bare name reads the dataset's stored field or an earlier derived name. A
 qualified name may read the intermediate's dataset, the current input record
-under the same scope as a correlated `filter` ([LOOKUP-8](#lookup-8)), or
-another named intermediate under [LOOKUP-16](#lookup-16). A reference to an
+under the same scope as a correlated `filter` ([LOOKUP-8](#lookup-8)), a
+column of the current row qualified by the output `domain`
+([NAME-3](names.md#name-3)), or another named intermediate under
+[LOOKUP-16](#lookup-16). A current-row column is read as a key's match value
+reads it ([LOOKUP-5](#lookup-5)), so a value the whole output reduces, such as
+a study's standard deviation, reaches the derivation as a column whose
+aggregate expression reduces it; a reducer in the derivation itself fails as
+`prohibited_function` ([FORMULA-13](formulas.md#formula-13)).
+
+```yaml
+columns:
+  - {name: SDAGE, type: float, derivation: {aggregate: {expr: "STDDEV(AGE)", group_by: [STUDYID]}}}
+intermediates:
+  - id: DONOR
+    dataset: SUBJ
+    key: [STUDYID]
+    filter: "SUBJ.OUTCOME IS NOT NULL AND ADLES.OUTCOME IS NULL"
+    order_by: [SUBJ.DIST, SUBJ.USUBJID]
+    keep: first
+    derivations:
+      DIST: "ABS(AGE - ADLES.AGE) / ADLES.SDAGE"
+```
+
+Each subject of `ADLES` whose outcome is missing reads the subject of its
+study with an observed outcome whose age lies nearest its own, scaled by the
+study's standard deviation. Bare `AGE` is the donor's, and `ADLES.AGE` and
+`ADLES.SDAGE` the current row's. A reference to an
 unrelated input dataset, a derivation declared later in the same map, or an
 unknown field fails as `unknown_field`; a derived name that shadows a stored
 column fails as `duplicate_derivation`. A current-record read is checked in

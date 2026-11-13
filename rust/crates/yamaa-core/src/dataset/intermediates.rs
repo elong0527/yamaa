@@ -251,23 +251,12 @@ impl Intermediate {
             .chain(self.nearest.iter().map(|nearest| &nearest.reference))
             .flat_map(|key| key.value.reads())
             .filter_map(MatchRead::output_column)
-            .chain(
-                self.filter
-                    .iter()
-                    .flat_map(|filter| filter.current())
-                    .filter_map(|field| match field.read {
-                        CurrentRead::Output(column) => Some(column),
-                        _ => None,
-                    }),
-            )
-            .chain(
-                self.range
-                    .iter()
-                    .filter_map(|range| match range.current().read {
-                        CurrentRead::Output(column) => Some(column),
-                        _ => None,
-                    }),
-            )
+            // The output columns its filter, range value and derivations read
+            // of the current row (LOOKUP-8, LOOKUP-15).
+            .chain(self.current_fields().filter_map(|field| match field.read {
+                CurrentRead::Output(column) => Some(column),
+                _ => None,
+            }))
     }
     pub fn has_expression_keys(&self) -> bool {
         self.keys.iter().any(|key| key.value.is_expression())

@@ -467,11 +467,15 @@ semantic roots and removes the rest, whether or not the entry file declares a
 verifications read, every column or intermediate that carries its own
 verification, every row template, and the dataset `base` names.
 
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/current_row_columns.json::a_column_only_a_lookup_reads_by_the_domain_survives_pruning`.
+
 Definitions do not make themselves live. From the roots the resolver follows
 every semantic reference recursively: variables in derivations and row
 derivations, filters, grouping and ordering, the closed expression languages,
 string-template placeholders, verifications and lookup matching. A qualified
-variable makes its dataset or lookup live; a live lookup makes its dataset and
+variable makes its dataset or lookup live, and one qualified by the output
+`domain` in a lookup's filter or derivations makes that column live
+([NAME-3](names.md#name-3)); a live lookup makes its dataset and
 matching inputs live; a live row makes its driver, filter inputs, grouping
 inputs and the derivations live columns need live. A row template is itself a
 root, and `base` is live when a surviving row falls back to it. Dead entries

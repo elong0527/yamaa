@@ -57,7 +57,7 @@ such as `AVAL` refers to a column of the output dataset. A reference to an
 unknown dataset identifier or variable fails.
 
 Fails: `unknown_field`, `unresolvable_name`.
-Evidence: `schema-source-binding`, `negative-source-undeclared-field`, `rust/crates/yamaa-application/tests/fixtures/binding_diagnostics.tsv`.
+Evidence: `schema-source-binding`, `negative-source-undeclared-field`, `schema-lookup-intermediate-nearest-donor`, `rust/crates/yamaa-application/tests/fixtures/binding_diagnostics.tsv`.
 
 ```yaml
 derivation: DM.SEX
@@ -76,6 +76,14 @@ only of a driver that every row template has
 ([WINDOW-11](windows.md#window-11)). An unqualified name never falls back to a
 field of the driver's record that no column takes, in a `between` value or a
 key match value alike.
+
+In a named intermediate's `filter` and `derivations`, where a bare name reads
+the lookup's own relation, a name qualified by the output `domain`, such as
+`ADLES.SDAGE`, reads that column of the current row
+([LOOKUP-8](lookup.md#lookup-8), [LOOKUP-15](lookup.md#lookup-15)). No input
+takes the domain's name ([NAME-2](#name-2)), so it never names a dataset.
+Everywhere else a bare name already reads an output column, and a name
+qualified by the domain names no known field and fails.
 
 <a id="name-4"></a>
 

@@ -38,8 +38,9 @@ pub(super) fn typed(
 }
 
 /// Bind a lookup's filter over the relation it reads: a field of the
-/// relation, or a field of another input's current record; with the
-/// predicate's operand types when `static_filter_types`.
+/// relation, a field of another input's current record, or a column of the
+/// current row, qualified by the output `domain` (LOOKUP-8);
+/// with the predicate's operand types when `static_filter_types`.
 pub(super) fn bind(
     plan: &crate::expression::CompiledExpression,
     relation: &intermediates::Donor<'_>,
@@ -56,6 +57,7 @@ pub(super) fn bind(
         kind: donor_kind,
         admits,
         spec,
+        output,
     } = *relation;
     let binder::Inputs {
         sources,
@@ -83,6 +85,17 @@ pub(super) fn bind(
             .filter(|&column| admits(column));
         let read = if let Some(column) = donor_column {
             Some(Read::Source(column))
+        } else if let Some(column) = own
+            .is_none()
+            .then(|| output_column(spec, output, name))
+            .flatten()
+        {
+            let slot = current.len();
+            current.push(CurrentField {
+                identifier: name.into(),
+                read: CurrentRead::Output(column),
+            });
+            Some(Read::Column(slot))
         } else if own.is_none() {
             name.split_once('.')
                 .filter(|(dataset, _)| *dataset != donor_name)
@@ -158,8 +171,12 @@ pub(super) fn bind(
         match binding.read {
             Read::Source(column) => donor_kind(column).map(Into::into),
             Read::Column(slot) => {
-                let CurrentRead::Record { source, column } = current.get(slot)?.read else {
-                    return None;
+                let (source, column) = match current.get(slot)?.read {
+                    CurrentRead::Record { source, column } => (source, column),
+                    CurrentRead::Output(column) => {
+                        return output.columns().get(column).map(|field| field.kind.into())
+                    }
+                    _ => return None,
                 };
                 let index = if source == 0 {
                     driver
@@ -186,6 +203,26 @@ pub(super) fn bind(
         .map_err(BindError::InvalidPredicateBinding)?
         .with_deferred_type_findings(deferred),
     ))
+}
+
+/// The output column `name` reads when it is qualified by the output
+/// `domain`: a lookup's filter and derivations read the current row's
+/// columns so, where a bare name reads the lookup's own relation (LOOKUP-8,
+/// LOOKUP-15). NAME-2 keeps every input from taking the domain's name.
+pub(super) fn output_column(
+    spec: &crate::ast::Spec,
+    output: &TableSchema,
+    name: &str,
+) -> Option<usize> {
+    let (qualifier, field) = name.split_once('.')?;
+    (qualifier == spec.domain.name)
+        .then(|| {
+            output
+                .columns()
+                .iter()
+                .position(|column| column.name == field)
+        })
+        .flatten()
 }
 
 /// The named intermediates that predicates read, as reads [`admit_reads`] and

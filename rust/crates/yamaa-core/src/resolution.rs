@@ -464,6 +464,15 @@ impl<'a> Live<'a> {
             (Kind::Item, None) => {}
             (_, None) => out.push(Declaration::Column(reading.name.clone())),
             (_, Some(owner)) => {
+                // A lookup's filter and derivations read a column of the
+                // current row qualified by the output domain (NAME-3,
+                // LOOKUP-15); an input or a lookup of that name stays live
+                // too, so that its collision is reported (NAME-2, LOOKUP-3).
+                if owner == self.spec.domain.name {
+                    if let Some((_, column)) = reading.name.split_once('.') {
+                        out.push(Declaration::Column(column.into()));
+                    }
+                }
                 if self.declares_input(owner) {
                     out.push(Declaration::Input(owner.into()));
                 }

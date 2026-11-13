@@ -1,0 +1,59 @@
+yamaa: "1.0"
+type: spec
+domain: LESION
+keys: [STUDYID, USUBJID]
+input:
+  SUBJ:
+    path: input/subjects.csv
+    types: {AGE: int, BSCORE: int, OUTCOME: int}
+base: SUBJ
+
+output:
+  path: lesion.csv
+  columns: [STUDYID, USUBJID, AGE, OUTCOME, DONORID, AOUTCOME]
+
+intermediates:
+  # Each donor's distance scales the age difference by the study standard
+  # deviation, reduced inside the derivation, which reads one donor record.
+  - id: DONOR
+    dataset: SUBJ
+    key: [STUDYID]
+    filter: >-
+      SUBJ.OUTCOME IS NOT NULL AND SUBJ.DIST IS NOT NULL
+      AND LESION.OUTCOME IS NULL
+    order_by: [SUBJ.DIST, SUBJ.USUBJID]
+    keep: first
+    columns: [USUBJID, OUTCOME]
+    derivations:
+      DIST: "ABS(AGE - LESION.AGE) / STDDEV(AGE)"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SUBJ.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SUBJ.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age at Baseline
+    derivation: SUBJ.AGE
+
+  - name: OUTCOME
+    type: int
+    label: Observed Lesion Count
+    derivation: SUBJ.OUTCOME
+
+  - name: DONORID
+    type: str
+    label: Donor Subject Identifier
+    derivation: DONOR.USUBJID
+
+  - name: AOUTCOME
+    type: int
+    label: Analysis Lesion Count
+    derivation: {first_available: {sources: [OUTCOME, DONOR.OUTCOME]}}

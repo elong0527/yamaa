@@ -433,7 +433,7 @@ one and `LN(x) / LN(b)` for another base. Widening the vocabulary amends this
 list.
 
 Fails: `prohibited_function`.
-Evidence: `schema-numeric-functions`, `adam-adlb-reference-limits`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-application/tests/fixtures/grammar_diagnostics.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/grammar.json::a_case_conversion_call_in_a_predicate_names_the_expression_a_derivation_writes_for_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/grammar.json::a_log_call_names_the_grammar_functions_that_replace_it`.
+Evidence: `schema-numeric-functions`, `adam-adlb-reference-limits`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-application/tests/fixtures/grammar_diagnostics.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/grammar.json::a_case_conversion_call_in_a_predicate_names_the_expression_a_derivation_writes_for_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/grammar.json::a_log_call_names_the_grammar_functions_that_replace_it`, `negative-lookup-derivation-reduction`.
 
 - `ABS(x)`: absolute value.
 - `CEIL(x)`: least integer value not less than `x`.
@@ -472,6 +472,12 @@ ASCII letters only ([TEXT-5](text.md#text-5)). A name whose nearest expression
 differs at a boundary, such as SQL `REPLACE`, whose search text is literal
 where `str_replace` reads a regular expression, is not listed. The list admits
 no call.
+
+A reducer ([FORMULA-18](#formula-18)) in a named intermediate's
+`derivations` fails the same way, since each derivation reads one donor
+record: its `hint` says to reduce in a column's aggregate expression and read
+that column there qualified by the output `domain`
+([LOOKUP-15](lookup.md#lookup-15)).
 
 Each function is one computation, the same binary64 operations on every
 platform, so it returns the same bits everywhere. `SQRT` is the correctly

@@ -498,6 +498,7 @@ mod tests {
                     Vec::new(),
                     Vec::new(),
                 )),
+                output: &donor,
             },
             &catalog,
             false,

@@ -1,0 +1,51 @@
+{
+  "about": "A named intermediate's filter and derivations read a column of the current row qualified by the output domain (NAME-3, LOOKUP-8, LOOKUP-15; D313 on #4064, #4506), as a key's match value reads it (LOOKUP-5); schema-lookup-intermediate-nearest-donor proves the read, and these cases the column it keeps live and its refusals. The document donors derives DONOR, the subject of the same study with an observed OUTCOME whose AGE lies nearest, scaled by the study's SDAGE, which the column SDAGE reduces; ADLES.AGE, ADLES.SDAGE and ADLES.OUTCOME are the current row's, and bare AGE the donor's. A domain-qualified name the output lacks is unknown where it is read: in a derivation as LOOKUP-15 reports it, and in a filter as a filter's unknown reference is reported (LOOKUP-7), after which DONOR binds nothing and the column that reads it is unknown too (NAME-3). A column that only DONOR reads, SDAGE left out of output.columns, stays live (LAYER-11): subject 3, aged 54, is 4 years from subject 1 and 6 from subject 2, so subject 1 is its donor whatever the standard deviation that scales both. Outside a lookup's filter and derivations a bare name reads the column, so the qualified name names no field (NAME-3). A filter that reads DONORID, the column that reads DONOR, closes a dependency cycle (COLUMN-6). A row template that reads DONOR during row construction, and derives none of the columns DONOR reads, reads AGE, OUTCOME and SDAGE before the column phase completes them, so its read is a phase boundary for each, in column order (LOOKUP-2). Each case is a build at the fields it states, its issues the complete list.",
+  "documents": {
+    "donors": "yamaa: \"1.0\"\ntype: spec\ndomain: ADLES\nkeys: [STUDYID, USUBJID]\ninput:\n  SUBJ: {path: subj.csv, types: {AGE: int, OUTCOME: int}}\nbase: SUBJ\noutput: {path: out.csv, columns: [STUDYID, USUBJID, AGE, OUTCOME, SDAGE, DONORID]}\nintermediates:\n  - id: DONOR\n    dataset: SUBJ\n    key: [STUDYID]\n    filter: \"SUBJ.OUTCOME IS NOT NULL AND ADLES.OUTCOME IS NULL\"\n    order_by: [SUBJ.DIST, SUBJ.USUBJID]\n    keep: first\n    derivations:\n      DIST: \"ABS(AGE - ADLES.AGE) / ADLES.SDAGE\"\ncolumns:\n  - {name: STUDYID, type: str, derivation: SUBJ.STUDYID}\n  - {name: USUBJID, type: str, derivation: SUBJ.USUBJID}\n  - {name: AGE, type: int, derivation: SUBJ.AGE}\n  - {name: OUTCOME, type: int, derivation: SUBJ.OUTCOME}\n  - {name: SDAGE, type: float, derivation: {aggregate: {expr: \"STDDEV(AGE)\", group_by: [STUDYID]}}}\n  - {name: DONORID, type: str, derivation: DONOR.USUBJID}\n",
+    "subjects": "STUDYID,USUBJID,AGE,OUTCOME\nS,1,50,2\nS,2,60,5\nS,3,54,\n"
+  },
+  "cases": [
+    {
+      "case": "a_column_only_a_lookup_reads_by_the_domain_survives_pruning",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "columns: [STUDYID, USUBJID, AGE, OUTCOME, SDAGE, DONORID]", "to": "columns: [STUDYID, USUBJID, AGE, OUTCOME, DONORID]"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,AGE,OUTCOME,DONORID\nS,1,50,2,\nS,2,60,5,\nS,3,54,,1\n"}
+    },
+    {
+      "case": "a_lookup_derivation_naming_a_column_the_output_lacks_is_unknown",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "/ ADLES.SDAGE", "to": "/ ADLES.SDEV"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.DONOR.derivations.DIST"]}]
+    },
+    {
+      "case": "a_lookup_filter_naming_a_column_the_output_lacks_is_unknown",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "ADLES.OUTCOME IS NULL", "to": "ADLES.AOUTCOME IS NULL"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.DONOR.filter"]}, {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.DONORID.derivation.source"]}]
+    },
+    {
+      "case": "a_column_derivation_qualified_by_the_domain_names_no_field",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "derivation: SUBJ.AGE}", "to": "derivation: ADLES.OUTCOME}"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.AGE.derivation.source"]}]
+    },
+    {
+      "case": "a_lookup_filter_reading_the_column_that_reads_the_lookup_is_a_cycle",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "ADLES.OUTCOME IS NULL", "to": "ADLES.DONORID IS NULL"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "dependency_cycle", "rule": "COLUMN-6", "spec_paths": ["columns.DONORID.derivation.source"]}]
+    },
+    {
+      "case": "a_row_template_reading_a_lookup_that_reads_column_phase_columns_reports_each_at_its_read",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "  - {name: DONORID, type: str, derivation: DONOR.USUBJID}\n", "to": "  - {name: DONORID, type: str}\nrows:\n  - id: subjects\n    dataset: SUBJ\n    derivations:\n      DONORID: DONOR.USUBJID\n"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.subjects.derivations.DONORID.source"], "context": {"available_phase": "column_derivation", "identifier": "AGE", "intermediate": "DONOR", "required_phase": "row_construction", "row": "subjects"}}, {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.subjects.derivations.DONORID.source"], "context": {"available_phase": "column_derivation", "identifier": "OUTCOME", "intermediate": "DONOR", "required_phase": "row_construction", "row": "subjects"}}, {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.subjects.derivations.DONORID.source"], "context": {"available_phase": "column_derivation", "identifier": "SDAGE", "intermediate": "DONOR", "required_phase": "row_construction", "row": "subjects"}}]
+    }
+  ]
+}
