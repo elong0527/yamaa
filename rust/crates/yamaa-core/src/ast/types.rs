@@ -263,6 +263,16 @@ mod tests {
                 value("DURATION", temporal("duration_value", "datetime", "hour")),
                 value("WRITTEN", temporal("duration_text", "datetime", "minute")),
                 value(
+                    "CALENDAR",
+                    op(
+                        "calendar_duration",
+                        fields(vec![
+                            ("start", Tree::text("SRC.D")),
+                            ("end", Tree::text("SRC.D")),
+                        ]),
+                    ),
+                ),
+                value(
                     "DTC",
                     op("dtc", fields(vec![("year", Tree::text("SRC.A"))]))
                 ),
@@ -343,6 +353,7 @@ mod tests {
                 ResultType::INT,
                 ResultType::DATETIME,
                 ResultType::FLOAT,
+                ResultType::STR,
                 ResultType::STR,
                 ResultType::STR,
                 ResultType::DATE,

@@ -2747,6 +2747,24 @@
           },
           "additionalProperties": false
         },
+        "calendar_duration": {
+          "type": "object",
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/variable",
+              "description": "Starting date of the calendar duration (TIME-24).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "end": {
+              "$ref": "#/$defs/variable",
+              "description": "Ending date; an earlier end writes the duration of the exchanged dates after one leading minus sign (TIME-24).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            }
+          },
+          "additionalProperties": false
+        },
         "row_number": {
           "type": "object",
           "properties": {
@@ -5274,6 +5292,28 @@
           "required": [
             "source",
             "unit"
+          ],
+          "additionalProperties": false
+        },
+        "calendar_duration": {
+          "type": "object",
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/variable",
+              "description": "Starting date of the calendar duration (TIME-24).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "end": {
+              "$ref": "#/$defs/variable",
+              "description": "Ending date; an earlier end writes the duration of the exchanged dates after one leading minus sign (TIME-24).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            }
+          },
+          "required": [
+            "start",
+            "end"
           ],
           "additionalProperties": false
         },

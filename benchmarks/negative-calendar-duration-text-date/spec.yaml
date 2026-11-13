@@ -1,0 +1,38 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE_RAW: {path: input/ae_raw.csv, types: {AESEQ: int, RFXSTDTC: date}}
+
+output:
+  path: ae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEPREDUR]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  # AE_RAW.AESTDTC has no declared input type, so it is text, and only two
+  # dates give a calendar duration: the specification is rejected before
+  # any data is read.
+  - name: AEPREDUR
+    type: str
+    label: Time From Start of Event to First Dose
+    derivation:
+      calendar_duration:
+        start: AE_RAW.AESTDTC
+        end: AE_RAW.RFXSTDTC

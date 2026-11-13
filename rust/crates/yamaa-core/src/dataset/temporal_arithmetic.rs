@@ -75,6 +75,7 @@ impl Temporal {
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
             TemporalKind::DurationText { .. } => C::DurationTextInput,
+            TemporalKind::CalendarDuration => C::CalendarDurationInput,
             TemporalKind::DateText { .. } => C::DateTextInput,
             TemporalKind::TimeOfDay => C::TimeOfDayInput,
             TemporalKind::ToTime => C::ToTimeInput,

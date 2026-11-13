@@ -194,6 +194,7 @@ pub(super) fn tree_kind(
         ScalarOp::DurationText { unit } => TemporalKind::DurationText {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
         },
+        ScalarOp::CalendarDuration => TemporalKind::CalendarDuration,
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
         ScalarOp::ToTime => TemporalKind::ToTime,
         ScalarOp::Dtc => {

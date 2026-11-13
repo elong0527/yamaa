@@ -284,6 +284,7 @@ pub enum Verb {
     Shift,
     DurationValue,
     DurationText,
+    CalendarDuration,
     RowNumber,
     Rank,
     RowValue,
@@ -297,7 +298,7 @@ pub enum Verb {
 #[rustfmt::skip]
 impl Verb {
     /// Every variant, in the registry's order.
-    pub const ALL: [Self; 40] = [
+    pub const ALL: [Self; 41] = [
         Self::Source,
         Self::FirstAvailable,
         Self::Greatest,
@@ -330,6 +331,7 @@ impl Verb {
         Self::Shift,
         Self::DurationValue,
         Self::DurationText,
+        Self::CalendarDuration,
         Self::RowNumber,
         Self::Rank,
         Self::RowValue,
@@ -374,6 +376,7 @@ impl Verb {
             Self::Shift => "shift",
             Self::DurationValue => "duration_value",
             Self::DurationText => "duration_text",
+            Self::CalendarDuration => "calendar_duration",
             Self::RowNumber => "row_number",
             Self::Rank => "rank",
             Self::RowValue => "row_value",
@@ -470,7 +473,8 @@ impl Verb {
             | Self::ToTime
             | Self::Shift
             | Self::DurationValue
-            | Self::DurationText => Form::Scalar,
+            | Self::DurationText
+            | Self::CalendarDuration => Form::Scalar,
             Self::RowNumber
             | Self::Rank
             | Self::RowValue
@@ -617,6 +621,10 @@ impl Verb {
             ],
             Self::DurationText => &[
                 OperandField { field: "source", slot: Slot::Source, required: true, form: OperandForm::Name },
+            ],
+            Self::CalendarDuration => &[
+                OperandField { field: "start", slot: Slot::Start, required: true, form: OperandForm::Name },
+                OperandField { field: "end", slot: Slot::End, required: true, form: OperandForm::Name },
             ],
             Self::RowValue => &[
                 OperandField { field: "source", slot: Slot::Source, required: true, form: OperandForm::Name },
@@ -907,6 +915,8 @@ pub enum ScalarOp {
     DurationText {
         unit: TimeUnit,
     },
+    /// `calendar_duration`.
+    CalendarDuration,
 }
 
 #[rustfmt::skip]
@@ -942,6 +952,7 @@ impl ScalarOp {
             Self::Shift { .. } => Verb::Shift,
             Self::DurationValue { .. } => Verb::DurationValue,
             Self::DurationText { .. } => Verb::DurationText,
+            Self::CalendarDuration => Verb::CalendarDuration,
         }
     }
     /// The parameters `verb` writes, as its declaration types them, or
@@ -1031,6 +1042,7 @@ impl ScalarOp {
             Verb::DurationText => Self::DurationText {
                 unit: TimeUnit::from_name(&written.text("unit")??)?,
             },
+            Verb::CalendarDuration => Self::CalendarDuration,
             _ => return None,
         })
     }

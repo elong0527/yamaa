@@ -678,6 +678,7 @@ class DerivationShapeTests(unittest.TestCase):
             "time_of_day",
             "to_time",
             "duration_text",
+            "calendar_duration",
             "date_text",
         )
         raw = []
@@ -982,6 +983,18 @@ class DerivationShapeTests(unittest.TestCase):
             ),
             "Write EXDURMIN, a number of minutes, as ISO 8601 duration text with "
             "days as the largest unit.",
+        )
+
+    def test_calendar_duration_names_its_two_dates_and_its_parts(self):
+        # Seam: the describer's own sentence, which a dashboard page only
+        # embeds in a benchmark's mapping sheet.
+        self.assertEqual(
+            mapping_doc.describe_derivation(
+                {"calendar_duration": {"start": "AESTDT", "end": "RFXSTDT"}}
+            ),
+            "Write the calendar time from AESTDT to RFXSTDT as ISO 8601 duration "
+            "text: whole months as years and months, then the remaining days, "
+            "with a leading minus sign when RFXSTDT is earlier.",
         )
 
     def test_str_substr_names_the_characters_it_keeps_and_when_it_is_blank(self):

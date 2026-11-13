@@ -940,6 +940,22 @@ def describe_duration_text(node, ctx=None, depth=0):
     )
 
 
+def describe_calendar_duration(node, ctx=None, depth=0):
+    """The years, months and days between two dates as ISO 8601 text."""
+    start = describe_variable(node.get("start"), ctx, depth)
+    end = describe_variable(node.get("end"), ctx, depth)
+    return sentence(
+        "Write the calendar time from "
+        + start
+        + " to "
+        + end
+        + " as ISO 8601 duration text: whole months as years and months, "
+        + "then the remaining days, with a leading minus sign when "
+        + end
+        + " is earlier"
+    )
+
+
 def invalid_text_phrase(node, ctx=None):
     """What text that is not a date yields; with no handler it is fatal."""
     if "invalid" in node:
@@ -1345,6 +1361,7 @@ DERIVATION_DESCRIBERS = {
     "time_of_day": describe_time_of_day,
     "to_time": describe_to_time,
     "duration_text": describe_duration_text,
+    "calendar_duration": describe_calendar_duration,
     "study_day": describe_study_day,
     "str_case": describe_str_case,
     "str_pad": describe_str_pad,

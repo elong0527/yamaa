@@ -59,10 +59,10 @@ impl ScalarOp {
     /// datetimes in seconds is a whole count and in a longer unit a
     /// fraction; a shift and `impute` keep their declared type; a duration
     /// is a fraction in every unit; `to_date` is a date; assembled date
-    /// parts, dates read from their declared forms, duration text, the other
-    /// text verbs, precisions, imputation flags, decodes and cuts are text; a
-    /// mapping returns the types its dictionary values take; `greatest` and
-    /// `least` take every type their `operands` take.
+    /// parts, dates read from their declared forms, duration text, calendar
+    /// durations, the other text verbs, precisions, imputation flags, decodes
+    /// and cuts are text; a mapping returns the types its dictionary values
+    /// take; `greatest` and `least` take every type their `operands` take.
     pub(crate) fn result_type(&self, operands: &mut dyn Iterator<Item = ResultType>) -> ResultType {
         let temporal = |kind: &ast::TemporalType| match kind {
             ast::TemporalType::Date => ResultType::DATE,
@@ -85,6 +85,7 @@ impl ScalarOp {
             Self::ToDate => ResultType::DATE,
             Self::Dtc
             | Self::DurationText { .. }
+            | Self::CalendarDuration
             | Self::DateText { .. }
             | Self::Precision { .. }
             | Self::ImputationFlag { .. }
@@ -161,6 +162,7 @@ impl ScalarOp {
             | Self::Shift { .. }
             | Self::DurationValue { .. }
             | Self::DurationText { .. }
+            | Self::CalendarDuration
             | Self::Dtc
             | Self::TimeOfDay
             | Self::ToTime => Preflight::Temporal,
@@ -477,6 +479,7 @@ impl Operation {
             | ScalarOp::Shift { .. }
             | ScalarOp::DurationValue { .. }
             | ScalarOp::DurationText { .. }
+            | ScalarOp::CalendarDuration
             | ScalarOp::Dtc
             | ScalarOp::TimeOfDay
             | ScalarOp::ToTime => temporal::from_tree(spec, e),
