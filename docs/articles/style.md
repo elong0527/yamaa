@@ -209,7 +209,7 @@ rules, which read each line break inside it as one space.
 
 ## Canonical spellings
 
-A 1.0 file has one spelling for each value, and the check reads the file
+A 1.0 file has one canonical spelling for each value, and the check reads the file
 through its file type's schema, as validation reads it, to report the
 spellings that depart from it.
 

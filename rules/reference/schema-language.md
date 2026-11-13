@@ -4,7 +4,7 @@ The schema bundles under `yaml/` define the shape of every yamaa file: a
 specification, project file, codelist file or function file. These rules fix
 how a bundle is written and read: its documents and includes, the YAML every
 document is read as, named types and registries, type expressions, shorthand
-unions, the one spelling a written value takes, and descriptor keywords.
+unions, the canonical spelling a written value takes, and descriptor keywords.
 
 ## Bundles and documents
 

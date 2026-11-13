@@ -376,7 +376,7 @@ each one once, in specification order. Do not add a parent or an absent field
 merely because changing it would be another possible repair.
 
 A [schema language](../rules/reference/schema-language.md) shorthand is the
-only spelling of the value its long form would merely restate, and it expands
+canonical spelling of the value its long form would merely restate, and it expands
 to its canonical class before the operation is prepared. A failure inside a
 written shorthand names the operation or the field of that class the operation
 reports: a fault in the text of a lone aggregate formula fails at
