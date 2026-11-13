@@ -1,0 +1,95 @@
+yamaa: "1.0"
+type: spec
+domain: LESION
+keys: [STUDYID, USUBJID]
+input:
+  SUBJ:
+    path: input/subjects.csv
+    types: {AGE: int, BSCORE: int, OUTCOME: int}
+base: SUBJ
+
+output:
+  path: lesion.csv
+  columns:
+    - STUDYID
+    - USUBJID
+    - AGE
+    - BSCORE
+    - OUTCOME
+    - SDAGE
+    - SDBSCORE
+    - DONORID
+    - DONORDST
+    - AOUTCOME
+
+intermediates:
+  # The donor of a subject whose outcome is missing: the subject of the same
+  # study with an observed outcome whose baseline age and score, each scaled
+  # by its study standard deviation, lie nearest the subject's own. The
+  # current row's columns are read qualified by the output domain, LESION;
+  # a bare name is the donor's own field. A donor without a distance is
+  # never chosen, and equally near donors go to the lower subject number.
+  - id: DONOR
+    dataset: SUBJ
+    key: [STUDYID]
+    filter: >-
+      SUBJ.OUTCOME IS NOT NULL AND SUBJ.DIST IS NOT NULL
+      AND LESION.OUTCOME IS NULL
+    order_by: [SUBJ.DIST, SUBJ.USUBJID]
+    keep: first
+    columns: [USUBJID, OUTCOME, DIST]
+    derivations:
+      ZAGE: "(AGE - LESION.AGE) / LESION.SDAGE"
+      ZBSCORE: "(BSCORE - LESION.BSCORE) / LESION.SDBSCORE"
+      DIST: "SQRT(ZAGE * ZAGE + ZBSCORE * ZBSCORE)"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SUBJ.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SUBJ.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age at Baseline
+    derivation: SUBJ.AGE
+
+  - name: BSCORE
+    type: int
+    label: Baseline Score
+    derivation: SUBJ.BSCORE
+
+  - name: OUTCOME
+    type: int
+    label: Observed Lesion Count
+    derivation: SUBJ.OUTCOME
+
+  - name: SDAGE
+    type: float
+    label: Study Standard Deviation of Age
+    derivation: {aggregate: {expr: "STDDEV(AGE)", group_by: [STUDYID]}}
+
+  - name: SDBSCORE
+    type: float
+    label: Study Standard Deviation of Baseline Score
+    derivation: {aggregate: {expr: "STDDEV(BSCORE)", group_by: [STUDYID]}}
+
+  - name: DONORID
+    type: str
+    label: Donor Subject Identifier
+    derivation: DONOR.USUBJID
+
+  - name: DONORDST
+    type: float
+    label: Scaled Distance to the Donor
+    derivation: DONOR.DIST
+
+  - name: AOUTCOME
+    type: int
+    label: Analysis Lesion Count
+    derivation: {first_available: {sources: [OUTCOME, DONOR.OUTCOME]}}

@@ -1,0 +1,9 @@
+phase: validation
+condition: prohibited_function
+spec_paths:
+  - intermediates.DONOR.derivations.DIST
+rule: FORMULA-13
+context:
+  expr: ABS(AGE - LESION.AGE) / STDDEV(AGE)
+  function: STDDEV
+  hint: reduce it in a column's aggregate expression and read that column here as LESION.COLUMN

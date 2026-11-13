@@ -127,6 +127,9 @@ pub(super) struct Donor<'a> {
     pub kind: &'a dyn Fn(usize) -> Option<ColumnType>,
     pub admits: &'a dyn Fn(usize) -> bool,
     pub spec: &'a crate::ast::Spec,
+    /// The output's columns, which the filter reads of the current row
+    /// qualified by the output `domain` (LOOKUP-8).
+    pub output: &'a TableSchema,
 }
 
 /// A lookup's filter over its relation: a read the relation does not
@@ -647,6 +650,7 @@ fn bind_one(
         kind: &donor_kind,
         admits: &admits,
         spec: tree.spec(),
+        output,
     };
     let self_rows = matches!(item.source, self_relations::Relation::SelfRows);
     let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {

@@ -153,6 +153,7 @@ fn resolve_field_kinds(
     let intermediates::Context {
         named,
         inputs,
+        output: current_row,
         tree,
         previous,
         ..
@@ -196,6 +197,10 @@ fn resolve_field_kinds(
                         inputs.source_kind(item, &original_secondary, column)
                     },
                 ))
+            } else if let Some(column) =
+                relation_predicates::output_column(tree.spec(), current_row, name)
+            {
+                ResultType::column(current_row.columns()[column].kind)
             } else {
                 ResultType::declared(
                     inputs
@@ -269,6 +274,16 @@ fn collect_current_fields(cx: intermediates::Context<'_>, lookup: Lookup<'_>) ->
         {
             continue;
         }
+        // A column of the current row, qualified by the output `domain`.
+        if let Some(column) =
+            relation_predicates::output_column(cx.tree.spec(), cx.output, reference)
+        {
+            current.push(CurrentField {
+                identifier: reference.clone(),
+                read: CurrentRead::Output(column),
+            });
+            continue;
+        }
         if let Some((source, column)) = sources.iter().enumerate().find_map(|(index, source)| {
             (source.name == owner)
                 .then(|| schemas[index].position(field).map(|column| (index, column)))
@@ -292,13 +307,18 @@ fn collect_current_fields(cx: intermediates::Context<'_>, lookup: Lookup<'_>) ->
     current
 }
 
+/// The donor plan's record and catalog. `layouts` holds the donor's
+/// output, its stored and derived fields, then the current row's output,
+/// whose columns a derivation reads qualified by the output `domain`.
 fn build_catalog_context(
     inputs: binder::Inputs<'_>,
     lookup: Lookup<'_>,
     current: &[CurrentField],
-    output: &TableSchema,
+    layouts: (&TableSchema, &TableSchema),
     record_types: &[ResultType],
+    domain: &str,
 ) -> Result<(Option<usize>, Vec<SecondarySource>, TableSchema, Catalog), BindError> {
+    let (output, current_row) = layouts;
     let binder::Inputs {
         sources,
         schemas,
@@ -326,21 +346,31 @@ fn build_catalog_context(
         .collect::<Vec<_>>();
     let mut source_fields = output.columns().to_vec();
     for (index, field) in current.iter().enumerate() {
-        let CurrentRead::Record { source, column } = field.read else {
-            unreachable!()
-        };
-        let original = if source == 0 {
-            driver
-        } else if source <= driver {
-            source - 1
-        } else {
-            source
+        let (layout, kind) = match field.read {
+            CurrentRead::Record { source, column } => {
+                let original = if source == 0 {
+                    driver
+                } else if source <= driver {
+                    source - 1
+                } else {
+                    source
+                };
+                (
+                    schemas[original].layout().columns()[column].kind,
+                    schemas[original].kind(column),
+                )
+            }
+            CurrentRead::Output(column) => {
+                let kind = current_row.columns()[column].kind;
+                (kind, Some(kind))
+            }
+            _ => return Err(BindError::Internal),
         };
         source_fields.push(Column {
             name: format!("\\0current{index}"),
-            kind: schemas[original].layout().columns()[column].kind,
+            kind: layout,
         });
-        source_kinds.push(schemas[original].kind(column));
+        source_kinds.push(kind);
     }
     let source = TableSchema::new(source_fields).map_err(|_| BindError::Internal)?;
     let outputs = output
@@ -353,13 +383,19 @@ fn build_catalog_context(
         .collect::<Vec<_>>();
     let mut dataset_fields = Vec::new();
     let mut dataset_names = Vec::new();
-    for declaration in std::iter::once(dataset).chain(
-        sources
-            .iter()
-            .enumerate()
-            .filter(|&(index, _)| Some(index) != donor)
-            .map(|(_, source)| source.name.as_str()),
-    ) {
+    let reads_output = current
+        .iter()
+        .any(|field| matches!(field.read, CurrentRead::Output(_)));
+    for declaration in std::iter::once(dataset)
+        .chain(
+            sources
+                .iter()
+                .enumerate()
+                .filter(|&(index, _)| Some(index) != donor)
+                .map(|(_, source)| source.name.as_str()),
+        )
+        .chain(reads_output.then_some(domain))
+    {
         let mut fields = source
             .columns()
             .iter()
@@ -563,8 +599,14 @@ pub(super) fn bind(
         .chain(field_types)
         .collect::<Vec<_>>();
     let current = collect_current_fields(cx, lookup);
-    let (donor, secondary, source, catalog) =
-        build_catalog_context(cx.inputs, lookup, &current, &output, &record_types)?;
+    let (donor, secondary, source, catalog) = build_catalog_context(
+        cx.inputs,
+        lookup,
+        &current,
+        (&output, cx.output),
+        &record_types,
+        &tree.spec().domain.name,
+    )?;
     let plan = DonorPlan {
         donor,
         name: dataset,
@@ -608,6 +650,7 @@ pub(super) fn bind(
         }
         .bind(declaration.expr, column)?;
         donor_scope_findings(&mut findings[start..], reader, named, &unavailable);
+        reduction_hints(&mut findings[start..], &tree.spec().domain.name);
         if let Some(finding) = declaration
             .typed
             .filter(|_| expression.is_some() && declaration.handler.is_none())
@@ -685,6 +728,42 @@ pub(super) fn bind(
             .collect(),
     }))
 }
+/// A reducer in a lookup's derivation stays refused (FORMULA-13): the
+/// derivation runs once per donor record and reduces nothing. Its finding
+/// gains the `hint` that names what reads a reduction there: a column whose
+/// aggregate expression reduces it, read as `domain.COLUMN` (LOOKUP-15).
+fn reduction_hints(findings: &mut [BindFinding], domain: &str) {
+    use crate::expression::{CompileError, Context as Field, Failure};
+    for finding in findings {
+        let BindFinding::Numeric {
+            path,
+            expression,
+            error: CompileError::Invalid { failure, .. },
+        } = &*finding
+        else {
+            continue;
+        };
+        let Failure::ProhibitedFunction {
+            function,
+            argument_count: None,
+        } = failure
+        else {
+            continue;
+        };
+        if crate::expression_table::Reducer::lookup(function).is_none() {
+            continue;
+        }
+        let mut diagnostic = failure.diagnostic(Field::Derivation, path, expression, 0);
+        diagnostic.context.insert(
+            "hint".into(),
+            crate::json::Value::String(format!(
+                "reduce it in a column's aggregate expression and read that column here as {domain}.COLUMN"
+            )),
+        );
+        *finding = BindFinding::Lookup(LookupFinding::from_diagnostic(diagnostic));
+    }
+}
+
 /// Shared scalar binders report at the authored operand path; donor ownership
 /// changes only the normative cause and its context.
 fn donor_scope_findings(
