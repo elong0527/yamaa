@@ -176,10 +176,10 @@ layer fails under
 [Schema language](reference/schema-language.md) at its contributing file and
 field. [Schema language](reference/schema-language.md) shorthand is expanded
 in every supplied non-null field before composition, so equivalent spellings
-contribute the same value. A long form that only restates its shorthand fails
-in the layer that writes it under
-[SCHEMA-15](reference/schema-language.md#schema-15); the composed document
-holds the expanded classes and is not checked again.
+contribute the same value. A long form that only restates its shorthand means
+the same in the layer that writes it, and the lint reports it there under
+[SCHEMA-15](reference/schema-language.md#schema-15); the composed document holds the
+expanded classes.
 
 A check may compose a fragment on a parent the caller names, a
 specification it gives as the `parent` argument. The fragment composes as it

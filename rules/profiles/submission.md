@@ -563,8 +563,8 @@ A where column written `{comparator: NE, values: [X]}` selects the rows that
 do not hold `X`, and `{comparator: NOTIN, values: [X, Y]}` the rows that hold
 none of its values; a row whose value is missing is among the rows either
 selects. `NE` takes exactly one value and `NOTIN` two or more. A comparison
-class without a comparator restates its list and fails as
-`redundant_long_form` ([SCHEMA-15](../reference/schema-language.md#schema-15)).
+class without a comparator restates its list and means the same; the lint
+reports it as `redundant_long_form` ([SCHEMA-15](../reference/schema-language.md#schema-15)).
 A where column is compared on its completed value under [Values](../values.md)
 equality, and a missing value matches no listed value. Listed values are
 strings, which a value of another type never equals under
@@ -995,8 +995,8 @@ list.
 
 The mapping forms are written only for what they add: a comment mapping
 holding only `text`, a method mapping holding only `description` and a
-document reference holding only `document` restate their string and fail as
-`redundant_long_form` under
+document reference holding only `document` restate their string and mean the
+same; the lint reports each as `redundant_long_form` under
 [SCHEMA-15](../reference/schema-language.md#schema-15).
 
 ## When the profile is checked

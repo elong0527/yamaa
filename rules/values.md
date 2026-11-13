@@ -710,8 +710,8 @@ Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequen
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
 union, whichever operation declares the list, and a mapping holding only
-`variable` restates it and fails as `redundant_long_form` under
-[SCHEMA-15](reference/schema-language.md#schema-15). `direction` defaults to
+`variable` restates it: it means the same, and the lint reports it as
+`redundant_long_form` under [SCHEMA-15](reference/schema-language.md#schema-15). `direction` defaults to
 `asc`.
 `nulls` has no schema default: a resolved specification leaves an omitted
 `nulls` omitted, and the placement it then means follows `direction`. Each

@@ -183,7 +183,7 @@ dataset as this specification reads it, so two specifications may read the
 same delimited file with different declarations. A bare path is
 [Schema language](reference/schema-language.md) shorthand for a
 `dataset_class` with no `types`, and a mapping holding only `path` restates it
-and fails as `redundant_long_form` under
+and means the same, which the lint reports as `redundant_long_form` under
 [SCHEMA-15](reference/schema-language.md#schema-15); both of these are
 declarations:
 

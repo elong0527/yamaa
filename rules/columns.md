@@ -408,8 +408,8 @@ derivation:
 ```
 
 The wrapper is written only beside `unconvertible`: a wrapper holding `value`
-alone restates the bare expression and fails as `redundant_long_form` under
-[SCHEMA-15](reference/schema-language.md#schema-15).
+alone restates the bare expression, means the same, and is reported by the
+lint as `redundant_long_form` under [SCHEMA-15](reference/schema-language.md#schema-15).
 
 [Values](values.md) defines which conversions fail and
 states that a missing input is not converted at all, so `unconvertible` never

@@ -256,8 +256,7 @@ mod tests {
     /// `engine_rejected` on `actual` and then `limit` (LIMIT-1),
     /// `incompatible_input_type` on `hint` and then `left_type` (FORMULA-5),
     /// `invalid_operation_count` on `hint` (SCHEMA-7), `prohibited_function`
-    /// on `hint` (FORMULA-13), `invalid_field_type` on `hint` (SCHEMA-12) and
-    /// `redundant_long_form` on `operation` (SCHEMA-15).
+    /// on `hint` (FORMULA-13) and `invalid_field_type` on `hint` (SCHEMA-12).
     #[test]
     fn a_variant_replaces_the_default_message_when_its_key_is_present() {
         let template = ["rows.matched_only.derivations.TAGGED.str_template"];
@@ -275,8 +274,6 @@ mod tests {
         let otherwise = ["columns.N.derivation.case[1].otherwise"];
         let operations = vec![("registry", text("expressions")), ("count", number("2"))];
         let source = ["columns.V.derivation.first_available.sources[1]"];
-        let template_form = ["columns.P.derivation.str_template"];
-        let read = ["columns.P.derivation.source"];
         for (code, path, context, expected) in [
             (
                 ConditionCode::ApplicationRejected,
@@ -407,22 +404,6 @@ mod tests {
                     ),
                 ],
                 "columns.V.derivation.first_available.sources[1] has a value of the wrong type or form (expected filtered_source; a source names a variable, so write the constant as missing: 0 beside sources)",
-            ),
-            (
-                ConditionCode::SchemaRedundantLongForm,
-                &template_form,
-                vec![("field", text("template")), ("shorthand", text("v-{X.V}"))],
-                "columns.P.derivation.str_template restates its shorthand in a long form; write v-{X.V} there instead",
-            ),
-            (
-                ConditionCode::SchemaRedundantLongForm,
-                &read,
-                vec![
-                    ("field", text("variable")),
-                    ("shorthand", text("X.V")),
-                    ("operation", text("source")),
-                ],
-                "columns.P.derivation.source only reads X.V; write X.V in place of the whole source expression",
             ),
         ] {
             let issue = record(code, path, &context);

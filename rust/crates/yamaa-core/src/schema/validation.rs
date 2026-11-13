@@ -426,9 +426,10 @@ pub enum SiteRole {
     },
     /// A value read as the named value type `name`.
     Alias { name: String },
-    /// A long form that restates the shorthand of its union (SCHEMA-15): the
-    /// field it writes and the node of the shorthand to write instead, or no
-    /// node when the shorthand is the bare keyword `field`. When the long
+    /// A long form that restates the shorthand of its union (SCHEMA-15), which
+    /// validation accepts and the lint reports: the field it writes and the
+    /// node of the shorthand to write instead, or no node when the shorthand
+    /// is the bare keyword `field`. When the long
     /// form is the payload of an operation, `operation` is that operation's
     /// mapping, which the shorthand replaces whole: a bare read replaces
     /// `{source: {variable: X}}` (EXPR-5).
@@ -444,9 +445,10 @@ struct Run<'a> {
     input: &'a Document,
     active: Vec<(usize, usize)>,
     nulls: NullPolicy,
-    /// The input is the document as its author wrote it, where a long form
-    /// that only restates its shorthand fails (SCHEMA-15). A canonical document
-    /// produced by normalization holds those long forms and is never checked.
+    /// The input is the document as its author wrote it, whose long forms that
+    /// only restate their shorthand are recorded as written sites for the lint
+    /// (SCHEMA-15). A canonical document produced by normalization holds those
+    /// long forms as its own spelling, so none of its sites is one.
     written: bool,
     surface: Surface,
     /// The written sites read so far, when the caller asked for them.
@@ -894,28 +896,30 @@ impl Run<'_> {
     }
     /// SCHEMA-15: after a written value matched `member` of `members`, a mapping
     /// that holds only the field a shorthand of the same union fills restates
-    /// that shorthand. `alias` names the value type whose union this is, for the
-    /// source shorthand of EXPR-5.
+    /// that shorthand. It means what the shorthand means, so validation accepts
+    /// it and records it as a written site, which the lint reports. `alias`
+    /// names the value type whose union this is, for the source shorthand of
+    /// EXPR-5.
     fn restated(
         &mut self,
         members: &[TypeExpression],
         member: &TypeExpression,
         alias: Option<&str>,
         site: Site<'_>,
-    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        if !self.written || members.len() < 2 {
-            return Ok(Vec::new());
+    ) {
+        if !self.written || self.sites.is_none() || members.len() < 2 {
+            return;
         }
         // Only a mapping that writes nothing but the shorthand's field restates
         // it; any other written field, even a null, is the author's addition.
         let N::Mapping(items) = &self.input.nodes()[site.value] else {
-            return Ok(Vec::new());
+            return;
         };
         let &[(key, value)] = items.as_slice() else {
-            return Ok(Vec::new());
+            return;
         };
         let N::Text(field) = &self.input.nodes()[key] else {
-            return Ok(Vec::new());
+            return;
         };
         let source = self.surface == Surface::Legacy
             && alias.is_some_and(|name| SOURCE_SHORTHAND.contains(&name));
@@ -945,7 +949,7 @@ impl Run<'_> {
                     .is_some_and(|filled| filled.name == *field)
             });
             if !restates {
-                return Ok(Vec::new());
+                return;
             }
             // A restated handled expression that only copies a source names
             // the bare string a derivation writes for it.
@@ -964,61 +968,45 @@ impl Run<'_> {
             self.record(
                 site,
                 SiteRole::LongForm {
-                    field: field.clone(),
+                    field,
                     shorthand: None,
                     operation: None,
                 },
             );
-            let keyword = Self::text(field);
-            return Ok(vec![self.diagnostic(
-                site,
-                ConditionCode::SchemaRedundantLongForm,
-                vec![("field", keyword.clone()), ("shorthand", keyword)],
-            )]);
+            return;
         } else {
-            return Ok(Vec::new());
+            return;
         };
         let field = field.clone();
         self.record(
             site,
             SiteRole::LongForm {
-                field: field.clone(),
+                field,
                 shorthand: Some(shorthand),
                 operation: None,
             },
         );
-        let shorthand = match &self.input.nodes()[shorthand] {
-            N::Sequence(_) | N::Mapping(_) => Self::text(flow_text(self.input, shorthand, 0)?),
-            _ => SchemaContext::InputValue(shorthand),
-        };
-        Ok(vec![self.diagnostic(
-            site,
-            ConditionCode::SchemaRedundantLongForm,
-            vec![
-                ("field", Self::text(field.as_str())),
-                ("shorthand", shorthand),
-            ],
-        )])
     }
     /// SCHEMA-15 on a 1.x tree: a written `source` operation, at `operation`,
     /// whose payload holds only `variable` restates the bare read of an
     /// expression field, which is that variable's text (EXPR-5). Text the
     /// grammar reads as anything but that one name, such as an unqualified
     /// reserved word, is no read of it, so its long form restates nothing.
-    fn restated_read(&mut self, operation: Site<'_>, payload: Site<'_>) -> Vec<SchemaDiagnostic> {
-        if !self.written || self.surface != Surface::Versioned {
-            return Vec::new();
+    /// Validation accepts the long form and records it for the lint.
+    fn restated_read(&mut self, operation: Site<'_>, payload: Site<'_>) {
+        if !self.written || self.sites.is_none() || self.surface != Surface::Versioned {
+            return;
         }
         let N::Mapping(items) = &self.input.nodes()[payload.value] else {
-            return Vec::new();
+            return;
         };
         let &[(key, value)] = items.as_slice() else {
-            return Vec::new();
+            return;
         };
         let (N::Text(field), N::Text(variable)) =
             (&self.input.nodes()[key], &self.input.nodes()[value])
         else {
-            return Vec::new();
+            return;
         };
         let read = field == "variable"
             && crate::expression::parse(variable).is_ok_and(|parsed| {
@@ -1027,7 +1015,7 @@ impl Run<'_> {
                     && parsed.text(root) == variable
             });
         if !read {
-            return Vec::new();
+            return;
         }
         self.record(
             payload,
@@ -1037,16 +1025,6 @@ impl Run<'_> {
                 operation: Some(operation.value),
             },
         );
-        vec![self.diagnostic(
-            payload,
-            ConditionCode::SchemaRedundantLongForm,
-            vec![
-                ("field", Self::text("variable")),
-                ("shorthand", SchemaContext::InputValue(value)),
-                // The bare read replaces the whole operation, not its payload.
-                ("operation", Self::text(Verb::Source.name())),
-            ],
-        )]
     }
     /// Whether `member`, a registry, matched an entry `{keyword: {}}` whose
     /// empty payload another member of the union writes as the bare
@@ -1101,7 +1079,8 @@ impl Run<'_> {
             let mark = self.mark();
             let result = self.single(member, member.root(), site.deeper())?;
             if result.is_empty() {
-                return self.restated(members, member, alias, site);
+                self.restated(members, member, alias, site);
+                return Ok(Vec::new());
             }
             let sites = self.since(mark);
             attempted.push((member, result, sites));
@@ -1227,7 +1206,10 @@ impl Run<'_> {
                     }
                     match Verb::from_name(&entry.name) {
                         Some(Verb::Case) => self.case_items(payload),
-                        Some(Verb::Source) => Ok(self.restated_read(site, payload)),
+                        Some(Verb::Source) => {
+                            self.restated_read(site, payload);
+                            Ok(diagnostics)
+                        }
                         _ => Ok(diagnostics),
                     }
                 }

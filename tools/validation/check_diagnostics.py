@@ -56,9 +56,10 @@ PRIVATE_TEST_MODULE = Path(
     "rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs"
 )
 # The lint names its findings with a closed list in its own module. One finding
-# shares a registered condition's spelling (`redundant_long_form`, which the
-# lint reports where SCHEMA-15's refusal stands, P-LONG-1), so within the lint
-# module a literal that the list names is a finding, never a diagnostic.
+# shares a condition's spelling (`redundant_long_form`, which 1.0.0 retired when
+# validation began to accept the long form the lint still reports, SCHEMA-15),
+# so within the lint module a literal that the list names is a finding, never
+# a diagnostic.
 LINT_SOURCE = Path("rust/crates/yamaa-adapters/src/lint.rs")
 LINT_MODULE = Path("rust/crates/yamaa-adapters/src/lint")
 LINT_FINDINGS = re.compile(r"pub const FINDINGS: \[&str; \d+\] = \[(.*?)\];", re.S)

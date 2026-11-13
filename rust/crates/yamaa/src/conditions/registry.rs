@@ -130,7 +130,6 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("range_failed", &["verification"], None),
     ("redundant_declaration", &["validation"], None),
     ("redundant_field_type", &["validation"], None),
-    ("redundant_long_form", &["validation"], None),
     ("reference_data_repeating_conflict", &["validation"], None),
     ("refuted_value_origin", &["validation"], None),
     ("regex_group_out_of_range", &["validation"], None),
@@ -237,5 +236,6 @@ pub(super) const RETIRED: &[(&str, &str)] = &[
     ("model_contract_mismatch", "0.6.0"),
     ("month_not_permitted", "0.6.0"),
     ("month_required", "0.6.0"),
+    ("redundant_long_form", "1.0.0"),
     ("window_order_by_forbidden", "0.6.0"),
 ];

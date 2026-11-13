@@ -209,7 +209,7 @@ rules, which read each line break inside it as one space.
 
 ## Canonical spellings
 
-A 1.0 file has one spelling for each value, and the check reads the file
+A 1.0 file has one canonical spelling for each value, and the check reads the file
 through its file type's schema, as validation reads it, to report the
 spellings that depart from it.
 
@@ -284,12 +284,11 @@ domain: ADSL
 ```
 
 **A shorthand is written as itself.** A field that takes several values is a
-list even for one, and a long form that holds only what its shorthand fills,
-such as `{variable: X}` for the order term `X`, `aggregate: {expr: E}`,
-`D: {path: d.csv}` or `- not_missing: {}`, fails validation as
-`redundant_long_form`
-([SCHEMA-15](../../rules/reference/schema-language.md#schema-15)). The check
-reports the same spelling as the finding `redundant_long_form` at the long
+list even for one. A long form that holds only what its shorthand fills, such
+as `{variable: X}` for the order term `X`, `aggregate: {expr: E}`,
+`D: {path: d.csv}` or `- not_missing: {}`, means what the shorthand means and
+runs, but the check reports it as the finding `redundant_long_form`
+([SCHEMA-15](../../rules/reference/schema-language.md#schema-15)) at the long
 form, and `fix` writes the shorthand.
 
 ```yaml

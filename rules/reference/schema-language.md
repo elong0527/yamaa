@@ -4,7 +4,7 @@ The schema bundles under `yaml/` define the shape of every yamaa file: a
 specification, project file, codelist file or function file. These rules fix
 how a bundle is written and read: its documents and includes, the YAML every
 document is read as, named types and registries, type expressions, shorthand
-unions, the one spelling a written value takes, and descriptor keywords.
+unions, the canonical spelling a written value takes, and descriptor keywords.
 
 ## Bundles and documents
 
@@ -310,23 +310,21 @@ not define a different expansion.
 
 <a id="schema-15"></a>
 
-### SCHEMA-15. A written long form that holds only what its shorthand fills is refused
+### SCHEMA-15. A written long form that holds only what its shorthand fills means the shorthand, and the lint reports it
 
-A value written through a shorthand union has one spelling. A written value
-that matches the class of a shorthand union and holds nothing but what a bare
-value of that union fills restates the shorthand and fails validation,
-reporting its path, the restated field if there is one, and the shorthand to
-write instead. A long form that writes any other field, even one restating a
-default, keeps its meaning. The refusal applies to what an author wrote, never
-to the canonical form a validation produces.
+A value written through a shorthand union has a canonical spelling, the
+shorthand. A written value that matches the class of a shorthand union and
+holds nothing but what a bare value of that union fills restates the
+shorthand: it means exactly what the shorthand means, so validation accepts
+it and execution reads it as the shorthand. A long form that writes any other
+field, even one restating a default, keeps its meaning too.
 
-Fails: `redundant_long_form`.
-Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_structured_source_holding_only_its_variable_restates_the_bare_read`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_check_that_declares_no_field_is_written_as_its_bare_keyword`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_check_that_declares_no_field_written_as_a_mapping_restates_its_bare_keyword`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_structured_source_holding_only_its_variable_means_the_bare_read`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_check_that_declares_no_field_is_written_as_its_bare_keyword`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_check_that_declares_no_field_written_as_a_mapping_means_its_bare_keyword`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_dataset_mapping_holding_only_its_path_is_admitted`, `rust/crates/yamaa-adapters/src/lint/tests.rs::a_long_form_is_written_as_its_shorthand`.
 
-The shorthand unions of the specification bundle, and the long form each one
-refuses, are:
+The shorthand unions of the specification bundle, and the long form that
+restates each one, are:
 
-| Written in | Shorthand | Refused long form |
+| Written in | Shorthand | Restating long form |
 |---|---|---|
 | `aggregate` | `aggregate: E` | `aggregate: {expr: E}` |
 | `flag` | `flag: P` | `flag: {condition: P}` |
@@ -340,19 +338,18 @@ refuses, are:
 | a submission comment, method or document reference | `T` | `{text: T}`, `{description: T}`, `{document: T}` |
 | a column verification that declares no field | `- not_missing` | `- not_missing: {}` |
 
-The refused long form of a bare keyword is the entry that keyword names with
-nothing in it, and it reports the keyword as both the field and the shorthand.
+The restating long form of a bare keyword is the entry that keyword names
+with nothing in it. A structured `source` holding only its variable restates
+the bare read, which replaces the whole `source` mapping.
 
-The message names the long form's path and the shorthand to write there. A
-structured `source` holding only its variable is reported at its payload, but
-its shorthand, the bare read, replaces the whole `source` mapping, so its
-finding also names `source` as its `operation` and the message says so.
-
-The check runs on the document each author wrote: a standalone specification,
-and each inheritance layer before composition. A composed, pruned or resolved
-document holds the canonical class of every shorthand and is validated
-without this check. The lint reports a written long form as the finding
-`redundant_long_form`, and `lint --fix` writes its shorthand.
+The lint reads the document each author wrote, a standalone specification
+and each inheritance layer before composition, and reports each restating
+long form as the finding `redundant_long_form`, naming the shorthand to write;
+`lint --fix` writes it where the shorthand fits on the long form's line. A
+composed, pruned or resolved document holds the canonical class of every
+shorthand, so none of its values is a written long form. Before 1.0.0,
+validation refused a restating long form as `redundant_long_form`; that
+condition is retired.
 
 ## Descriptors
 

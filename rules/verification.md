@@ -218,8 +218,8 @@ Evidence: `negative-unique-duplicate`, `negative-unique-repeats-keys`, `rust/cra
 Write an unnamed check as `unique: [SITEID, SUBJID]`. The mapping form
 `unique: {columns: [SITEID, SUBJID], id: site-subject}` also admits an
 optional `severity`, and it is written only to declare one of them: a mapping
-holding only `columns` restates the list and fails as `redundant_long_form`
-under [SCHEMA-15](reference/schema-language.md#schema-15).
+holding only `columns` restates the list, means the same, and is reported by
+the lint as `redundant_long_form` under [SCHEMA-15](reference/schema-language.md#schema-15).
 
 The redundant finding reports the verification's path, its columns and, in
 `stated_by`, `keys`. Equality is between sets: order and a repeated column do

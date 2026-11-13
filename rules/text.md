@@ -314,8 +314,8 @@ str_template: "{METSTATR}|{ECOG0R}|{REGIONUSR}"
 
 The canonical form exposes the optional `missing` handler, and it is written
 only to declare one; a mapping holding only `template` restates the bare
-template and fails as `redundant_long_form` under
-[SCHEMA-15](reference/schema-language.md#schema-15):
+template, means the same, and is reported by the lint as `redundant_long_form`
+under [SCHEMA-15](reference/schema-language.md#schema-15):
 
 ```yaml
 str_template:

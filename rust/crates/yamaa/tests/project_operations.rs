@@ -338,14 +338,17 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
 
 /// A listed specification that fails validation keeps the `domain` its file
 /// writes as its name (PROJECT-5), and selecting it checks it exactly as
-/// naming its file with the project file does (PROJECT-6): here AE restates
-/// its input's path shorthand (`redundant_long_form`, SCHEMA-15).
+/// naming its file with the project file does (PROJECT-6): here AE's input
+/// writes a field its class does not declare (`unknown_field`, SCHEMA-13).
 #[test]
 fn a_listed_specification_with_a_validation_finding_keeps_its_name_and_selects() {
     let study = study();
     let engine = engine();
     let project = study.project();
-    study.write("sdtm/ae.yaml", AE.replace(", types: {AESEQ: int}}", "}"));
+    study.write(
+        "sdtm/ae.yaml",
+        AE.replace(", types: {AESEQ: int}}", ", typos: {AESEQ: int}}"),
+    );
     assert_eq!(
         engine.project(&project).names().unwrap(),
         ["DM", "AE", "ADSL"]
@@ -374,9 +377,9 @@ fn a_listed_specification_with_a_validation_finding_keeps_its_name_and_selects()
             .collect::<Vec<_>>(),
         [(
             "validation",
-            "redundant_long_form",
-            Some("SCHEMA-15"),
-            vec!["input.RAW".to_owned()]
+            "unknown_field",
+            Some("SCHEMA-13"),
+            vec!["input.RAW.typos".to_owned()]
         )]
     );
 }

@@ -539,8 +539,8 @@ impl<'d> Lower<'d> {
                     operands.push(Operand { slot, expr });
                 }
                 // A template written bare, or alone in its long form, which
-                // is the expanded shorthand (SCHEMA-15), reads its
-                // placeholders at the verb.
+                // means the shorthand (SCHEMA-15) and holds what its
+                // expansion holds, reads its placeholders at the verb.
                 OperandForm::Placeholders => {
                     let meta = if node == p || self.entries(p).len() == 1 {
                         site
@@ -779,8 +779,8 @@ impl<'d> Lower<'d> {
             .field(p, "distinct")
             .map(|node| matches!(self.node(node), N::Boolean(true)));
         let quantile = self.bound(site, p, "quantile");
-        // A written long form never holds only `expr` (SCHEMA-15), so such
-        // a payload is the expanded shorthand and its text is the site.
+        // A payload holding only `expr`, the expanded shorthand or a long
+        // form that restates it (SCHEMA-15), names its text at the site.
         let text_meta = if shorthand {
             site
         } else {

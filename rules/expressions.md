@@ -183,8 +183,8 @@ reference, quoted text such as `'DM'` is a literal, and a YAML number,
 Boolean or null is a literal. A forgotten quote therefore fails validation as
 an unknown name. A value field holds a constant, and its bare text is text.
 
-Fails: `unknown_field`, `redundant_long_form`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_derivation_s_source_long_form_restates_the_bare_string_source`.
+Fails: `unknown_field`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_derivation_s_source_long_form_holding_only_the_bare_string_is_admitted`.
 
 Text in an expression field is one expression in the derivation context of
 [FORMULA-27](formulas.md#formula-27): text that holds only a name is a
@@ -277,8 +277,8 @@ A `flag` that declares `false_value` without `missing` fails as
 `missing_value_required` at `missing`. A `flag` whose payload is neither a
 predicate string nor a mapping, whose mapping form lacks `condition` or names a
 non-predicate `condition`, or whose condition is not a valid predicate fails.
-A mapping that holds only `condition` restates the bare predicate and fails as
-`redundant_long_form` under
+A mapping that holds only `condition` restates the bare predicate and means the
+same; the lint reports it as `redundant_long_form` under
 [SCHEMA-15](reference/schema-language.md#schema-15).
 
 <a id="expr-9"></a>

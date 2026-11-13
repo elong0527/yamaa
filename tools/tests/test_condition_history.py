@@ -39,11 +39,14 @@ class ConditionHistory(unittest.TestCase):
             },
         )
 
-    def test_the_retired_conditions_are_the_removals_of_the_table(self):
+    def test_the_conditions_0_6_0_retired_are_the_removals_of_the_table(self):
+        # A later release retires a condition in the registry alone, as 1.0.0
+        # retires redundant_long_form (SCHEMA-15); the table is 0.6.0's.
         self.assertEqual(
             {
                 condition: entry["retired_in"]
                 for condition, entry in self.registry["retired"].items()
+                if entry["retired_in"] == "0.6.0"
             },
             {
                 entry["today"]: "0.6.0"

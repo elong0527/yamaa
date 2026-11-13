@@ -342,8 +342,8 @@ mod schema {
             );
         }
 
-        /// Seam: the normalized document, the origin of each default it fills, and
-        /// normalization's own refusal at `<normalization>`.
+        /// Seam: the normalized document and the origin of each default it fills,
+        /// a written long form normalizing as its shorthand does.
         #[test]
         fn class_shorthand_materializes_defaults_but_fragments_keep_only_authored_values() {
             let schema = bundle(
@@ -411,29 +411,21 @@ mod schema {
                 &normalize(&schema, "item", V::map(vec![]), true).document,
                 V::map(vec![]),
             );
-            // A written long form that holds only the shorthand's field restates
-            // it (SCHEMA-15), in a complete value and in a fragment alike.
-            for fragment in [false, true] {
-                let input = document(V::map(vec![("name", V::text("DM"))]));
-                let descriptor = schema.root_class().fields[1].descriptor;
-                let Err(NormalizationError::Invalid(findings)) =
-                    schema.normalize_descriptor(descriptor, &input, input.root(), fragment)
-                else {
-                    panic!("a restated shorthand must fail");
-                };
-                assert_eq!(
-                    findings
-                        .iter()
-                        .map(|d| (d.path.as_str(), d.definition().condition))
-                        .collect::<Vec<_>>(),
-                    [("<normalization>", "redundant_long_form")]
-                );
-                assert_eq!(
-                    findings[0].context,
-                    [
-                        ("field", C::Text("name".into())),
-                        ("shorthand", C::InputValue(1)),
-                    ]
+            // A written long form that holds only the shorthand's field means
+            // what the shorthand means (SCHEMA-15): it is admitted, and it
+            // normalizes as the class it writes, its default first as above in
+            // a complete value and only its authored field in a fragment.
+            for (fragment, expanded) in [
+                (
+                    false,
+                    V::map(vec![("enabled", V::boolean(true)), ("name", V::text("DM"))]),
+                ),
+                (true, V::map(vec![("name", V::text("DM"))])),
+            ] {
+                let long_form = V::map(vec![("name", V::text("DM"))]);
+                assert_value(
+                    &normalize(&schema, "item", long_form, fragment).document,
+                    expanded,
                 );
             }
         }

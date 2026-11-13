@@ -301,8 +301,9 @@ impl<'a> Read<'a> {
     }
 
     /// `redundant_long_form`: a long form that holds only what its shorthand
-    /// fills, which validation refuses (SCHEMA-15). The shorthand replaces
-    /// the long form, or the whole operation whose payload it is.
+    /// fills, which means the shorthand and which validation accepts
+    /// (SCHEMA-15). The shorthand replaces the long form, or the whole
+    /// operation whose payload it is.
     fn long_forms(&self) -> Vec<Departure> {
         let mut found = Vec::new();
         for site in &self.sites {
