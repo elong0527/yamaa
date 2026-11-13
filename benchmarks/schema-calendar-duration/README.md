@@ -22,9 +22,9 @@ dosed.
   `P1M1D/2007-09-27`: the period of that length that ends on the first dose
   date. Empty when the duration is.
 
-**Note:** `calendar_duration` counts a month as a calendar month from the
-start date, never as 30 days, and when that month has no such day its last
-day stands in, so 31 January 2008 to 29 February 2008 is `P1M`. The same
-number of days therefore gives different text from different start dates,
-which is why the duration is read from the two dates and never from a count
-of days. The interval is the duration and a date joined by `str_template`.
+**Note:** a month is a calendar month counted from the start date, never 30
+days, and when that month has no such day its last day stands in, so 31
+January 2008 to 29 February 2008 is `P1M`. The same number of days therefore
+gives different text from different start dates, which is why the duration
+is read from the two dates and never from a count of days. The timing text
+is the duration, a slash and the first dose date.
