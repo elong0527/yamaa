@@ -194,8 +194,8 @@ derivation: {odm: ODM.IT.DM.AGE}
 even when it holds one, and `filter` takes a predicate over the ODM input's
 schema fields; [NAME-12](#name-12) states how they identify records and
 [NAME-13](#name-13) what the read gives. A mapping holding only `item`
-restates the bare string and fails as `redundant_long_form` under
-[SCHEMA-15](reference/schema-language.md#schema-15).
+restates the bare string and means the same; the lint reports it as
+`redundant_long_form` under [SCHEMA-15](reference/schema-language.md#schema-15).
 
 ```yaml
 derivation: {odm: {item: ODM.IT.DM.SEX, event: [SCREENING]}}

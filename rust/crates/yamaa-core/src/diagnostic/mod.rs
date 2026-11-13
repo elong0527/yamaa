@@ -293,7 +293,6 @@ conditions! {
     // whose JSON Schema `schema` gives.
     ArgumentFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
     SchemaUnknownFieldSince => ("validation", "unknown_field", Some("SCHEMA-2")),
-    SchemaRedundantLongForm => ("validation", "redundant_long_form", Some("SCHEMA-15")),
     SchemaCaseItems => ("validation", "invalid_field_type", Some("EXPR-7")),
     SchemaLayerInvalidClear => ("validation", "invalid_clear", Some("LAYER-9")),
     SchemaLayerIdentifierRepeated => ("validation", "duplicate_identifier", Some("LAYER-4")),

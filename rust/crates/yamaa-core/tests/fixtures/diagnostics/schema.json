@@ -46,7 +46,7 @@
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["$"]}]
     },
     {
-      "case": "a_written_long_form_holding_only_its_shorthand_s_field_restates_it",
+      "case": "a_written_long_form_holding_only_its_shorthand_s_field_is_admitted",
       "operation": "schema_document",
       "input": {
         "schema": {"schema.yaml": {
@@ -57,7 +57,7 @@
         }},
         "document": {"item": {"name": "DM"}}
       },
-      "issues": [{"phase": "validation", "condition": "redundant_long_form", "rule": "SCHEMA-15", "spec_paths": ["item"], "context": {"field": "name", "shorthand": "DM"}}]
+      "issues": []
     },
     {
       "case": "a_registry_value_naming_one_keyword_with_its_payload_is_admitted",
@@ -75,7 +75,7 @@
       "issues": []
     },
     {
-      "case": "a_derivation_s_source_long_form_restates_the_bare_string_source",
+      "case": "a_derivation_s_source_long_form_holding_only_the_bare_string_is_admitted",
       "operation": "schema_document",
       "input": {
         "schema": {"schema.yaml": {
@@ -87,7 +87,7 @@
         }},
         "document": {"derive": {"source": "DM.AGE"}}
       },
-      "issues": [{"phase": "validation", "condition": "redundant_long_form", "rule": "SCHEMA-15", "spec_paths": ["derive"], "context": {"field": "source", "shorthand": "DM.AGE"}}]
+      "issues": []
     },
     {
       "case": "a_registry_value_naming_no_keyword_declares_no_operation",
@@ -778,7 +778,7 @@
       "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["settings.needed"]}]
     },
     {
-      "case": "a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand",
+      "case": "a_dataset_mapping_holding_only_its_path_is_admitted",
       "operation": "schema_layer",
       "input": {
         "schema": {"schema.yaml": {
@@ -804,7 +804,7 @@
           "input": {"DM": {"path": "dm.csv"}, "AE": {"path": "ae.csv", "options": {"needed": "yes"}}, "LB": "lb.csv"}
         }
       },
-      "issues": [{"phase": "validation", "condition": "redundant_long_form", "rule": "SCHEMA-15", "spec_paths": ["input.DM"], "context": {"field": "path", "shorthand": "dm.csv"}}]
+      "issues": []
     },
     {
       "case": "a_window_reference_that_names_no_definition_is_unknown",

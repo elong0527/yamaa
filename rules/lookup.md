@@ -1496,8 +1496,8 @@ derivation of it.
 The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}` also
 admits an optional `severity`, and it is written only to declare one of them;
 both forms test the same donor records, and a mapping holding only `columns`
-restates the list and fails as `redundant_long_form` under
-[SCHEMA-15](reference/schema-language.md#schema-15). Each check may declare an
+restates the list, means the same, and is reported by the lint as
+`redundant_long_form` under [SCHEMA-15](reference/schema-language.md#schema-15). Each check may declare an
 optional `id`, governed by
 [CHECK-3](verification.md#check-3). [LOOKUP-10](#lookup-10) already rejects
 multiple surviving matches without a selection rule.

@@ -284,12 +284,11 @@ domain: ADSL
 ```
 
 **A shorthand is written as itself.** A field that takes several values is a
-list even for one, and a long form that holds only what its shorthand fills,
-such as `{variable: X}` for the order term `X`, `aggregate: {expr: E}`,
-`D: {path: d.csv}` or `- not_missing: {}`, fails validation as
-`redundant_long_form`
-([SCHEMA-15](../../rules/reference/schema-language.md#schema-15)). The check
-reports the same spelling as the finding `redundant_long_form` at the long
+list even for one. A long form that holds only what its shorthand fills, such
+as `{variable: X}` for the order term `X`, `aggregate: {expr: E}`,
+`D: {path: d.csv}` or `- not_missing: {}`, means what the shorthand means and
+runs, but the check reports it as the finding `redundant_long_form`
+([SCHEMA-15](../../rules/reference/schema-language.md#schema-15)) at the long
 form, and `fix` writes the shorthand.
 
 ```yaml

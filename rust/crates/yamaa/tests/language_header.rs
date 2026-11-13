@@ -688,17 +688,10 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
             Value::String("LISTED".into())
         ])
     );
-    // A comparison class without a comparator restates the list (SCHEMA-15).
+    // A comparison class without a comparator restates the list, which it
+    // means (SCHEMA-15), so it is admitted beside a list written bare.
     study.write("xx.yaml", &spec(&entries("{values: [X]}", "[Y]")));
-    let issues = check();
-    let [(condition, _, paths, _)] = issues.as_slice() else {
-        panic!("one issue: {issues:?}")
-    };
-    assert_eq!(condition, "redundant_long_form");
-    assert_eq!(
-        paths,
-        &["columns.VALUE.submission.value_level.OTHER.where.KIND"]
-    );
+    assert_eq!(check(), []);
 }
 
 /// SUB-2: a dataset's `standard` is governed in 1.0, so a 1.0 root

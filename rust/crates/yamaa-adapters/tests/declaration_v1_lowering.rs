@@ -347,12 +347,12 @@ fn a_declared_baseline_order_starts_with_the_date_ascending() {
 }
 
 /// Seam: the lowered check of a bare keyword and its cited path. The long
-/// form's refusal is `one_spelling.json`'s
-/// `a_check_that_declares_no_field_written_as_a_mapping_restates_its_bare_keyword`.
+/// form's admission is `one_spelling.json`'s
+/// `a_check_that_declares_no_field_written_as_a_mapping_means_its_bare_keyword`.
 #[test]
 fn a_check_that_declares_no_field_is_written_as_its_bare_keyword() {
     // `- not_missing` lowers as `- not_missing: {}` did, at the keyword's
-    // path, and the long form restates it (SCHEMA-15, P-HND-4).
+    // path, and the long form means it (SCHEMA-15, P-HND-4).
     let tree = lowered(&spec(&[
         "{name: V, type: int, derivation: SRC.V, verifications: [not_missing]}",
     ]));

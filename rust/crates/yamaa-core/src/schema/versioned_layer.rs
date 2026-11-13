@@ -567,7 +567,7 @@ mod tests {
             [
                 "terms field root_class.terms",
                 "terms[0] alias term",
-                // `{variable: B}` restates its shorthand, which validation refuses.
+                // `{variable: B}` restates its shorthand, which the lint reports.
                 "terms[1] alias term",
                 "terms[1].variable field term_class.variable",
                 "terms[1] long form variable Text(\"B\")",

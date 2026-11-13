@@ -1712,14 +1712,18 @@ fn a_removed_default_that_leaves_a_long_form_is_written_as_the_shorthand() {
             "    order_by:\n      - EX.EXSTDTC\n",
         )
     );
-    // A chain the fixes cannot finish leaves the file as written: here the
-    // comment above `path` keeps the input's long form from its key line.
+    // A chain the fixes cannot finish stops where it must: removing the
+    // default leaves the input's long form, which validation accepts
+    // (SCHEMA-15), but the comment above `path` keeps the shorthand from its
+    // key line, so the long form stays and the lint still reports it.
     let stuck = SPELLED.replace(
         "  EX: input/ex.csv\n",
         "  EX:\n    # The exposure records.\n    path: input/ex.csv\n    relative_to: declaring\n",
     );
     assert_eq!(names(&stuck), ["restated_default"]);
-    assert_eq!(fixed(&stuck), stuck);
+    let long_form = stuck.replace("    relative_to: declaring\n", "");
+    assert_eq!(fixed(&stuck), long_form);
+    assert_eq!(names(&long_form), ["redundant_long_form"]);
 }
 
 #[test]

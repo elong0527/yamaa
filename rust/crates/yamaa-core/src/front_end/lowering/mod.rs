@@ -948,8 +948,9 @@ impl<'d> Lower<'d> {
                         // an optional NE or NOTIN (P-VLM-1), and the tree
                         // keeps which one was written: SUB-12 gives NE one
                         // value and NOTIN two or more. A class holding only
-                        // `values` is the expanded list written bare
-                        // (SCHEMA-15), whose values keep their written paths.
+                        // `values` is the expanded list written bare, or a
+                        // long form restating it (SCHEMA-15), whose values
+                        // keep their written paths.
                         let (comparator, list, list_meta) = match self.field(values, "values") {
                             Some(list) => match self.text_of(values, "comparator") {
                                 Some(written) => (

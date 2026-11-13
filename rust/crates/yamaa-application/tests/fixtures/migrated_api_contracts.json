@@ -450,7 +450,7 @@
     "file_origins.json::a_data_driven_like_keeps_unicode_full_match_truth_at_publication": {"route": "domain", "save": true},
     "file_origins.json::dictionary_invalid_content_retains_original_typed_schema_context_before_study": {"route": "check", "save": null},
     "declaration_vectors.json::original_short_and_named_intermediate_unique_checks_are_admitted": {"route": "check", "save": null},
-    "declaration_vectors.json::an_intermediate_unique_mapping_holding_only_its_columns_restates_the_list": {"route": "check", "save": null},
+    "declaration_vectors.json::an_intermediate_unique_mapping_holding_only_its_columns_means_the_list": {"route": "check", "save": null},
     "declaration_vectors.json::original_singular_intermediate_verification_field_stays_unknown": {"route": "check", "save": null},
     "declaration_vectors.json::original_absent_intermediate_verifications_remain_optional": {"route": "check", "save": null},
     "intermediate_driver_columns.json::underlying_input_is_an_implicit_join_on_the_output_keys": {"route": "domain", "save": true},

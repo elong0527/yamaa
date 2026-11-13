@@ -385,7 +385,8 @@ derivation written as a reference fails at `derivation.source`, the path of
 the `source` binding it keeps, and any other text at `derivation` itself
 ([EXPR-5](../rules/expressions.md#expr-5)). Normalization never invents a
 location outside the expanded class, and a written long form that only
-restates its shorthand fails at its own path as `redundant_long_form`.
+restates its shorthand means the shorthand, so it is no negative case: the
+lint reports it as `redundant_long_form`.
 
 The primary condition and specification paths of a negative case stay solely
 in the independent `expected/error.yaml`; `benchmark.yaml` carries no
