@@ -187,6 +187,15 @@ expressions:
             required: true
             values: [second, minute, hour, day]
             description: Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).
+    calendar_duration: # See TIME-24.
+        - start:
+            type: variable
+            required: true
+            description: Starting date of the calendar duration (TIME-24).
+        - end:
+            type: variable
+            required: true
+            description: Ending date; an earlier end writes the duration of the exchanged dates after one leading minus sign (TIME-24).
 
 temporal_type:
     type: str

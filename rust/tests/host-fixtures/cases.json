@@ -828,6 +828,17 @@
           ]
         },
         {
+          "name": "calendar_duration_writes_years_months_and_days_from_the_monthly_anniversary",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      START: date\n      END: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - START\n  - END\n  - TEXT\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: START\n  type: date\n  label: START\n  derivation: RAW.START\n- name: END\n  type: date\n  label: END\n  derivation: RAW.END\n- name: TEXT\n  type: str\n  label: TEXT\n  derivation:\n    calendar_duration:\n      start: RAW.START\n      end: RAW.END\n",
+          "inputs": {
+            "input.csv": "ID,START,END\n1,2007-08-26,2007-09-27\n2,2025-01-31,2025-02-28\n3,2025-01-31,2025-03-01\n4,2024-02-29,2025-02-28\n5,2024-02-29,2025-03-01\n6,2000-01-15,2003-04-20\n7,2025-01-01,2025-01-10\n8,2025-01-01,2025-01-01\n9,2007-09-27,2007-08-26\n10,2025-03-31,2025-02-28\n11,,2025-01-01\n"
+          },
+          "csv": "ID,START,END,TEXT\n1,2007-08-26,2007-09-27,P1M1D\n2,2025-01-31,2025-02-28,P1M\n3,2025-01-31,2025-03-01,P1M1D\n4,2024-02-29,2025-02-28,P1Y\n5,2024-02-29,2025-03-01,P1Y1D\n6,2000-01-15,2003-04-20,P3Y3M5D\n7,2025-01-01,2025-01-10,P9D\n8,2025-01-01,2025-01-01,P0D\n9,2007-09-27,2007-08-26,-P1M1D\n10,2025-03-31,2025-02-28,-P1M3D\n11,,2025-01-01,\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
           "name": "date_shift_overflow_is_not_output_conversion",
           "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    value:\n      shift:\n        type: date\n        source: RAW.DATE\n        days: 1\n    unconvertible: null\n",
           "inputs": {

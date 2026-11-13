@@ -3,7 +3,7 @@ use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     table::ValueRef,
-    temporal::Date,
+    temporal::{Date, Precision},
     value::Value,
 };
 use std::vec;
@@ -27,6 +27,9 @@ pub enum TemporalKind {
         unit: CalendarUnit,
         bounds: DateBounds,
     },
+    /// `calendar_duration`: the years, months and days from the first date
+    /// to the second as ISO 8601 duration text (TIME-24).
+    CalendarDuration,
     StudyDay,
     EpochDay,
     DateShift,
@@ -142,18 +145,6 @@ impl Temporal {
             .get(index)
             .map(|field| format!("{}.{}", self.path, field))
     }
-    pub(crate) fn input_diagnostic(source: &str, path: &str, actual: &str) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::TemporalOperand,
-            spec_paths: vec![path.into()],
-            context: [("source", source), ("expected", "date"), ("actual", actual)]
-                .into_iter()
-                .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
-                .collect(),
-            source_span: None,
-            operand_route: None,
-        }
-    }
     /// A `unit` the declared `type` does not count in.
     pub(crate) fn unit_diagnostic(path: &str, value: &str, permitted: &[&str]) -> Diagnostic {
         Diagnostic {
@@ -248,7 +239,7 @@ impl Temporal {
         index: usize,
         value: ValueRef<'_>,
     ) -> Option<Result<Option<Date>, Diagnostic>> {
-        let source = self.sources.get(index)?;
+        self.sources.get(index)?;
         self.kind.fields().get(index)?;
         Some(match value {
             ValueRef::Missing => Ok(None),
@@ -258,11 +249,7 @@ impl Temporal {
                     .value_type()
                     .map(crate::value::ValueType::name)
                     .expect("dates and missing handled above");
-                Err(Self::input_diagnostic(
-                    source,
-                    &self.operand_path(index).expect("admitted operand index"),
-                    actual,
-                ))
+                Err(self.operand_diagnostic(index, actual))
             }
         })
     }
@@ -275,27 +262,32 @@ impl Temporal {
             return Some(Value::Missing);
         }
         let first = operands[0].expect("present operand");
-        Some(Value::Int(match self.kind {
+        Some(match self.kind {
             TemporalKind::Difference { unit, bounds } => {
-                whole_units(first, operands[1].unwrap(), unit, bounds)
+                Value::Int(whole_units(first, operands[1].unwrap(), unit, bounds))
+            }
+            TemporalKind::CalendarDuration => {
+                Value::Str(calendar_duration(first, operands[1].unwrap()))
             }
             TemporalKind::StudyDay => {
                 let difference = ordinal(first) - ordinal(operands[1].unwrap());
-                if difference >= 0 {
+                Value::Int(if difference >= 0 {
                     difference + 1
                 } else {
                     difference
-                }
+                })
             }
-            TemporalKind::EpochDay => ordinal(first) - 719_163,
+            TemporalKind::EpochDay => Value::Int(ordinal(first) - 719_163),
             _ => return None,
-        }))
+        })
     }
 }
 impl TemporalKind {
     pub fn fields(self) -> &'static [&'static str] {
         match self {
-            Self::Difference { .. } | Self::DateTimeDifference { .. } => &["start", "end"],
+            Self::Difference { .. } | Self::DateTimeDifference { .. } | Self::CalendarDuration => {
+                &["start", "end"]
+            }
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
             Self::DateTimeShift { .. } => &["source", "amount"],
@@ -353,23 +345,56 @@ fn whole_units(start: Date, end: Date, unit: CalendarUnit, bounds: DateBounds) -
             DateBounds::Between => (days - 1).max(0),
         },
         CalendarUnit::Week => days / 7,
-        CalendarUnit::Month | CalendarUnit::Year => {
-            let (start_year, start_month, start_day) = start.fields();
-            let (end_year, end_month, end_day) = end.fields();
-            let mut months = (i64::from(end_year) - i64::from(start_year)) * 12
-                + i64::from(end_month)
-                - i64::from(start_month);
-            if months > 0
-                && i64::from(start_day).min(month_length(i64::from(end_year), i64::from(end_month)))
-                    > i64::from(end_day)
-            {
-                months -= 1;
-            }
-            if unit == CalendarUnit::Year {
-                months / 12
-            } else {
-                months
-            }
+        CalendarUnit::Month => whole_months(start, end),
+        CalendarUnit::Year => whole_months(start, end) / 12,
+    }
+}
+/// The monthly anniversary of `start` that falls `months` whole months after
+/// it, its day clamped to its month's length (TIME-4): the one calendar step
+/// `diff` counts by and `calendar_duration` measures its days from. `months`
+/// is not negative, and the anniversary's year is at most 9999.
+fn anniversary(start: Date, months: i64) -> Date {
+    let (year, month, day) = start.fields();
+    // Months counted from year zero, so a year boundary needs no carry.
+    let count = i64::from(year) * 12 + i64::from(month) - 1 + months;
+    let (year, month) = (count / 12, count % 12 + 1);
+    let day = i64::from(day).min(month_length(year, month));
+    Date::new(year as u16, month as u8, day as u8, Precision::Day)
+        .expect("a clamped day of an admitted month")
+}
+/// The monthly anniversaries of `start` on or before `end`, which is no
+/// earlier than `start` (TIME-4).
+fn whole_months(start: Date, end: Date) -> i64 {
+    let (start_year, start_month, _) = start.fields();
+    let (end_year, end_month, _) = end.fields();
+    let months = (i64::from(end_year) - i64::from(start_year)) * 12 + i64::from(end_month)
+        - i64::from(start_month);
+    // The anniversary in the month of `end` may fall after `end`.
+    if anniversary(start, months) > end {
+        months - 1
+    } else {
+        months
+    }
+}
+/// The calendar duration from `start` to `end` as ISO 8601 text (TIME-24):
+/// the whole months `diff` counts, written as years and months, then the days
+/// from that monthly anniversary of `start` to `end`, each zero component
+/// omitted; equal dates give `P0D`, and an earlier `end` gives the duration
+/// of the exchanged dates after one leading `-`.
+fn calendar_duration(start: Date, end: Date) -> String {
+    if end < start {
+        return format!("-{}", calendar_duration(end, start));
+    }
+    let months = whole_months(start, end);
+    let days = ordinal(end) - ordinal(anniversary(start, months));
+    let mut text = String::from("P");
+    for (count, designator) in [(months / 12, 'Y'), (months % 12, 'M'), (days, 'D')] {
+        if count > 0 {
+            text.push_str(&format!("{count}{designator}"));
         }
     }
+    if text == "P" {
+        text.push_str("0D");
+    }
+    text
 }

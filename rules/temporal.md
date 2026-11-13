@@ -4,7 +4,7 @@ These operations compute with the `date`, `datetime` and `time` values of
 [VALUE-13](values.md#value-13): differences, study days and times of day,
 reading of declared date forms, assembly and completion of collected dates and
 times, collected precision and imputation flags, and civil arithmetic with
-fixed-length durations.
+fixed-length and calendar durations.
 
 ## Operations
 
@@ -41,6 +41,7 @@ Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negati
 | `shift`, `type: datetime` | `source` is `datetime`; a numeric `amount` and an elapsed `unit` |
 | `duration_value` | `source` is duration text; an elapsed `unit` |
 | `duration_text` | `source` is `int` or `float`; an elapsed `unit` |
+| `calendar_duration` | `start` and `end` are `date` |
 | `dtc` | `year`, `month`, `day`, `hour`, `minute` and `second` are `str` or `int` |
 | `time_of_day` | `source` is `datetime` |
 | `to_time` | `source` is `datetime` |
@@ -647,6 +648,68 @@ than `2^53` in magnitude: those seconds are exact in binary64, and dividing
 them by the unit's seconds gives the amount back. A missing amount gives
 missing. An amount of another type fails validation as
 `incompatible_input_type`, and `duration_text` declares no handler.
+
+<a id="time-24"></a>
+
+### TIME-24. calendar_duration writes the whole months from one date to another, then the remaining days, as ISO 8601 duration text
+
+`calendar_duration` writes the calendar duration from the `start` date to the
+`end` date: the whole months `diff` counts in `month` ([TIME-4](#time-4)),
+written as years, that count divided by 12, and months, the remainder, then
+the days from that monthly anniversary of `start` to `end`. The text is `P`,
+then `nY`, `nM` and `nD`, each zero component omitted; weeks and time
+components are never written. Equal dates give `P0D`, and an earlier `end`
+gives the duration of the exchanged dates after one leading `-`.
+
+Fails: `incompatible_input_type`.
+Evidence: `schema-calendar-duration`, `negative-calendar-duration-text-date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::calendar_duration_refuses_an_operand_that_is_not_a_date`, `rust/tests/host-fixtures/cases.json`.
+
+| `start` | `end` | Text |
+|---|---|---|
+| `2007-08-26` | `2007-09-27` | `P1M1D` |
+| `2025-01-31` | `2025-02-28` | `P1M` |
+| `2025-01-31` | `2025-03-01` | `P1M1D` |
+| `2024-02-29` | `2025-02-28` | `P1Y` |
+| `2024-02-29` | `2025-03-01` | `P1Y1D` |
+| `2000-01-15` | `2003-04-20` | `P3Y3M5D` |
+| `2025-01-01` | `2025-01-10` | `P9D` |
+| `2025-01-01` | `2025-01-01` | `P0D` |
+| `2007-09-27` | `2007-08-26` | `-P1M1D` |
+| `2025-03-31` | `2025-02-28` | `-P1M3D` |
+
+A month is a calendar month counted from `start`, never 30 days, so the text
+is written from the two dates and never from a count of days: 32 days are
+`P1M1D` from `2007-08-26` and `P1M4D` from `2007-02-26`. The anniversary the
+days are counted from is the one [TIME-4](#time-4) counts, its day clamped to
+its month's length: the February anniversary of January 31 is February 28, so
+`2025-01-31` to `2025-03-01` is one month and one day, and the 2025
+anniversary of `2024-02-29` is February 28. Twelve months are always written
+as a year, so 39 months and 5 days are `P3Y3M5D`, and days are never written
+as weeks, so 9 days are `P9D`.
+
+When `end` precedes `start`, the text is the duration from `end` to `start`
+after one leading `-`, as [TIME-4](#time-4) negates `diff`. The months and
+days are counted from the earlier date, so `2025-03-31` to `2025-02-28` is
+`-P1M3D`, the March anniversary of February 28 being March 28; counting back
+from March 31 would give one month and no days.
+
+A missing `start` or `end` gives missing. Both operands are `date` values,
+and an operand of another type fails where the specification is read as
+`incompatible_input_type`, naming the operand, the `date` it expected and the
+type it found. A `datetime` is an incompatible input, never truncated: it
+first becomes a `date` through `to_date` ([TIME-2](#time-2)), as collected
+text does through `to_date` or `impute` ([TIME-8](#time-8)).
+`calendar_duration` declares no handler.
+
+The text is an ISO 8601 duration ([TIME-13](#time-13)), the
+`durationDatetime` form of [SUB-26](profiles/submission.md#sub-26).
+`duration_value` reads no year and no calendar month
+([TIME-17](#time-17)), so it reads the text only when it holds days alone. An
+interval such as `P1M1D/2007-09-27` is the duration and a date in a string
+template ([TEXT-4](text.md#text-4)), which SUB-26 checks as
+`intervalDatetime`. The duration is computed from its two dates, so
+[SUB-19](profiles/submission.md#sub-19) refutes a `Collected` origin for it,
+as for a `diff`.
 
 ## Imputation flags
 

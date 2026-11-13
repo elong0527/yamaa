@@ -100,7 +100,7 @@ Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_resul
 | `cut`, `decode`, `precision`, `imputation_flag`, `baseline_flag`, `odm`, `dtc`, `date_text` | fixed | `str` |
 | `row_number`, `rank`, `study_day`, `to_epoch_day`, `time_of_day`, `str_length` | fixed | `int` |
 | `round_half_away_from_zero`, `duration_value` | fixed | `float` |
-| `duration_text` | fixed | `str` |
+| `duration_text`, `calendar_duration` | fixed | `str` |
 | `to_date` | fixed | `date` |
 | `to_time` | fixed | `time` |
 | `diff` | by parameter | `int` with `type: date`; with `type: datetime`, `int` in `second` and `float` in `minute`, `hour` or `day` |

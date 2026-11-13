@@ -1,7 +1,7 @@
 //! The date and time entry points: civil arithmetic, `dtc` and
-//! `time_of_day` (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), date
-//! completion (TIME-1 to TIME-18), and the date forms `date_text` reads
-//! (TIME-22).
+//! `time_of_day` (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21,
+//! TIME-24), date completion (TIME-1 to TIME-18), and the date forms
+//! `date_text` reads (TIME-22).
 use super::{text, value, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
@@ -32,10 +32,11 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
 /// for each of the operation's operands, each read from the source `sources`
 /// names at its position, or, without `sources`, from a source named as its
 /// operand, `{kind, path, sources, values}`: `kind` is `"date_shift"`,
-/// `"study_day"`, `"epoch_day"`, `"time_of_day"` or `"to_time"`, or one of
-/// `{"difference": <unit>, "bounds": ...}`, `{"datetime_difference":
-/// <unit>}`, `{"datetime_shift": <unit>}`, `{"duration_value": <unit>}`,
-/// `{"duration_text": <unit>}` and `{"date_text": <depth>}`.
+/// `"study_day"`, `"epoch_day"`, `"calendar_duration"`, `"time_of_day"` or
+/// `"to_time"`, or one of `{"difference": <unit>, "bounds": ...}`,
+/// `{"datetime_difference": <unit>}`, `{"datetime_shift": <unit>}`,
+/// `{"duration_value": <unit>}`, `{"duration_text": <unit>}` and
+/// `{"date_text": <depth>}`.
 fn temporal(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["kind", "path", "sources", "values"]);
     let elapsed = |unit: &Json| match unit.text() {
@@ -50,6 +51,7 @@ fn temporal(input: &Json) -> Vec<Diagnostic> {
             "date_shift" => TemporalKind::DateShift,
             "study_day" => TemporalKind::StudyDay,
             "epoch_day" => TemporalKind::EpochDay,
+            "calendar_duration" => TemporalKind::CalendarDuration,
             "time_of_day" => TemporalKind::TimeOfDay,
             "to_time" => TemporalKind::ToTime,
             other => panic!("no date and time operation {other:?}"),

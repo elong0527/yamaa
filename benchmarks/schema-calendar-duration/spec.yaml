@@ -1,0 +1,82 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE_RAW:
+    path: input/ae_raw.csv
+    types: {AESEQ: int, AESTDTC: date, RFXSTDTC: date}
+
+output:
+  path: ae.csv
+  columns:
+    - STUDYID
+    - USUBJID
+    - AESEQ
+    - AETERM
+    - AESTDTC
+    - RFXSTDTC
+    - AEPREDUR
+    - AETIMING
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE_RAW.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE_RAW.AESTDTC
+
+  - name: RFXSTDTC
+    type: str
+    label: Date/Time of First Study Treatment
+    derivation: AE_RAW.RFXSTDTC
+
+  # The calendar time from the event's start to the first dose: the whole
+  # months counted from the start date, as years and months, then the days
+  # left over. Equal dates give P0D, and a missing date gives no duration.
+  - name: AEPREDUR
+    type: str
+    label: Time From Start of Event to First Dose
+    derivation:
+      calendar_duration:
+        start: AE_RAW.AESTDTC
+        end: AE_RAW.RFXSTDTC
+
+  # The duration and the first dose date as one ISO 8601 interval; an event
+  # without a duration has none.
+  - name: AETIMING
+    type: str
+    label: Timing of Event Before First Dose
+    derivation:
+      str_template:
+        template: "{AEPREDUR}/{RFXSTDTC}"
+        missing: null
+
+verifications:
+  - row_count:
+      min: 7
+      max: 7
+  - assert:
+      id: a-duration-gives-a-timing-text
+      when: "AEPREDUR IS NOT NULL"
+      require: "AETIMING IS NOT NULL"

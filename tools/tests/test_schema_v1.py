@@ -408,6 +408,13 @@ EXPECTED = {
             values=("second", "minute", "hour", "day"),
         ),
     ],
+    # #4505: calendar_duration writes the years, months and days between two
+    # dates as ISO 8601 duration text (TIME-24).
+    "new.spec.expressions.calendar_duration": [
+        Keyword("expressions", "calendar_duration", "[]"),
+        Field("expressions.calendar_duration", "start", "variable", True, kind="name"),
+        Field("expressions.calendar_duration", "end", "variable", True, kind="name"),
+    ],
     # D264: the positional text verbs (TEXT-13, TEXT-14).
     "new.spec.expressions.str_substr": [
         Keyword("expressions", "str_substr", "[]"),
