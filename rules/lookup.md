@@ -1048,10 +1048,11 @@ references. All other lookup rules, including matching, missing values,
 ordering and `columns`, apply to `SELF` as they do to input datasets; the
 filter scopes of an input dataset are in [LOOKUP-8](#lookup-8).
 
-A lookup's `filter` reads no other named intermediate. A field qualified by
-another intermediate's id fails as `unknown_field`, with a `hint` to read that
-field in the lookup's own `derivations` ([LOOKUP-16](#lookup-16)) and filter on
-the derived field, qualified by the lookup's `dataset`.
+A lookup's `filter` reads another named intermediate only when it drives the
+current row ([LOOKUP-8](#lookup-8)). A field qualified by any other
+intermediate's id fails as `unknown_field`, with a `hint` to read that field in
+the lookup's own `derivations` ([LOOKUP-16](#lookup-16)) and filter on the
+derived field, qualified by the lookup's `dataset`.
 
 A `key` match value still reads the current row ([LOOKUP-5](#lookup-5)): a
 bare name there is the current row's column, not a donor field. Row templates
