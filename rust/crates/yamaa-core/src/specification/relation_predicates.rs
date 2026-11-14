@@ -149,13 +149,27 @@ pub(super) fn bind(
                 && inputs
                     .schema(donor_name)
                     .is_some_and(|schema| schema.position(bare).is_none());
-            let finding = BindFinding::Lookup(LookupFinding::reference(
+            let mut reference = LookupFinding::reference(
                 plan.spec_path(),
                 name,
                 Some(intermediate),
                 ReferenceCause::Selection,
                 suggestion,
-            ));
+            );
+            // Another intermediate is read for a donor record only in the
+            // reading intermediate's derivations (LOOKUP-16).
+            if let Some((other, _)) = name.split_once('.').filter(|(other, _)| {
+                *other != intermediate
+                    && spec.intermediates.iter().any(|item| item.id.name == *other)
+            }) {
+                reference.text(
+                    "hint",
+                    &format!(
+                        "a filter does not read intermediate {other}; read {name} in the derivations of {intermediate}, and filter on that derivation qualified by {donor_name}"
+                    ),
+                );
+            }
+            let finding = BindFinding::Lookup(reference);
             findings.push(if derived || inputs.decides(donor_name, bare) {
                 finding
             } else {

@@ -183,14 +183,10 @@ impl StringTemplate {
         ) {
             return None;
         }
-        Some(diagnostic(
-            C::StrCaseInput,
-            &format!("{}.template", self.path),
-            [
-                ("source", V::String(source.clone())),
-                ("expected", V::String("str".into())),
-                ("actual", V::String(actual.into())),
-            ],
+        Some(crate::text_position::text_input(
+            source,
+            format!("{}.template", self.path),
+            actual,
         ))
     }
     pub fn unknown_diagnostic(&self, index: usize) -> Option<Diagnostic> {

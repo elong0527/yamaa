@@ -193,6 +193,8 @@ conditions:
         message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared ({hint})"
       - when: left_type
         message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"
+      - when: convert_to
+        message: "{spec_path} reads a value of type {actual}, which it does not accept (derive {source} with type: {convert_to} first, and read the derived value here)"
   inheritance_cycle:
     phases: [validation]
     message: "the layers form a cycle: {cycle}"
@@ -430,7 +432,7 @@ conditions:
     message: "{path} could not be published"
   qualified_identifier:
     phases: [validation]
-    message: "{expr} reads the qualified name {identifier}, which is not visible there"
+    message: "{expr} reads the qualified name {identifier}, which is not visible there; bind {identifier} to a column first and read that column"
   range_failed:
     phases: [verification]
     message: "column {column} holds a value outside its range in {failure_count} of the rows"
@@ -651,6 +653,9 @@ conditions:
   unknown_field:
     phases: [validation]
     message: "{identifier} is not a known field or reference at {spec_path}"
+    message_variants:
+      - when: hint
+        message: "{identifier} is not a known field or reference at {spec_path} ({hint})"
   unknown_intermediate_driver_type:
     phases: [validation]
     message: "intermediate {intermediate} drives rows but exposes fields without a known type: {columns}"
