@@ -10,7 +10,8 @@
       "context": {
         "source": "SITENUM",
         "expected": "str",
-        "actual": "int"
+        "actual": "int",
+        "convert_to": "str"
       }
     }
   ],

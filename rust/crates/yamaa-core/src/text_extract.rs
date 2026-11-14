@@ -159,15 +159,7 @@ impl StringExtract {
         )
     }
     pub fn input_diagnostic(&self, actual: &'static str) -> Diagnostic {
-        diagnostic(
-            C::StrCaseInput,
-            &format!("{}.source", self.path),
-            [
-                ("source", V::String(self.source.clone())),
-                ("expected", V::String("str".into())),
-                ("actual", V::String(actual.into())),
-            ],
-        )
+        crate::text_position::input_diagnostic(&self.source, &self.path, actual)
     }
     /// Matching borrows captures and never allocates a result or handler literal.
     pub fn apply<'a>(&self, value: ValueRef<'a>) -> Result<Step<'a>, Error> {

@@ -101,7 +101,7 @@
         "specification": "spec.yaml"
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.RESULT.derivation.str_replace.source"], "context": {"source": "TEXT", "expected": "str", "actual": "int"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.RESULT.derivation.str_replace.source"], "context": {"source": "TEXT", "expected": "str", "actual": "int", "convert_to": "str"}}]
     },
     {
       "case": "an_unknown_source_fails_validation_at_the_source",

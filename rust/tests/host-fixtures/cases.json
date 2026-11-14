@@ -906,7 +906,8 @@
               "context": {
                 "source": "SRC.NUM",
                 "expected": "str",
-                "actual": "int"
+                "actual": "int",
+                "convert_to": "str"
               }
             }
           ],
@@ -3577,6 +3578,7 @@
               ],
               "context": {
                 "actual": "int",
+                "convert_to": "str",
                 "expected": "str",
                 "source": "A"
               }
@@ -3592,6 +3594,7 @@
               ],
               "context": {
                 "actual": "int",
+                "convert_to": "str",
                 "expected": "str",
                 "source": "A"
               }
@@ -3755,6 +3758,7 @@
               ],
               "context": {
                 "actual": "int",
+                "convert_to": "str",
                 "expected": "str",
                 "source": "A"
               }
@@ -3770,6 +3774,7 @@
               ],
               "context": {
                 "actual": "int",
+                "convert_to": "str",
                 "expected": "str",
                 "source": "A"
               }

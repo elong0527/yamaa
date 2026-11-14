@@ -321,17 +321,25 @@ fn position(text: &str, below: DeclarationError) -> Result<Option<usize>, Declar
 
 /// The refusal of a source that is not text (TEXT-1), at its `source` field.
 pub(crate) fn input_diagnostic(source: &str, path: &str, actual: &'static str) -> Diagnostic {
+    text_input(source, format!("{path}.source"), actual)
+}
+
+/// Every text verb's refusal of a source that is not text (TEXT-1), at
+/// `spec_path`. A type that converts to `str` (VALUE-3) records it as
+/// `convert_to`, the type to derive the source as before reading it.
+pub(crate) fn text_input(source: &str, spec_path: String, actual: &'static str) -> Diagnostic {
+    let mut context: crate::diagnostic::Context =
+        [("source", source), ("expected", "str"), ("actual", actual)]
+            .into_iter()
+            .map(|(name, value)| (name.into(), V::String(value.into())))
+            .collect();
+    if matches!(actual, "int" | "float" | "date" | "datetime" | "time") {
+        context.insert("convert_to".into(), V::String("str".into()));
+    }
     Diagnostic {
         code: C::StrCaseInput,
-        spec_paths: vec![format!("{path}.source")],
-        context: [
-            ("source", Value::Str(source.into())),
-            ("expected", Value::Str("str".into())),
-            ("actual", Value::Str(actual.into())),
-        ]
-        .into_iter()
-        .map(|(name, value)| (name.into(), V::from(value)))
-        .collect(),
+        spec_paths: vec![spec_path],
+        context,
         source_span: None,
         operand_route: None,
     }

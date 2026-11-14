@@ -131,15 +131,7 @@ impl StringCase {
         self.missing.clone().unwrap_or(Value::Missing)
     }
     pub(crate) fn input_diagnostic(&self, actual: &'static str) -> Diagnostic {
-        diagnostic(
-            C::StrCaseInput,
-            &format!("{}.source", self.path),
-            &[
-                ("source", Value::Str(self.source.clone())),
-                ("expected", Value::Str("str".into())),
-                ("actual", Value::Str(actual.into())),
-            ],
-        )
+        crate::text_position::input_diagnostic(&self.source, &self.path, actual)
     }
     pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
         match value {
