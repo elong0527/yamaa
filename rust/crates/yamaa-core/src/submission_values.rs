@@ -230,8 +230,8 @@ pub(crate) fn admitted<'c, 'n>(
 /// the column itself, listing nonempty distinct values their codelists admit
 /// for a `str` column or ordering a column of another type against one value
 /// that converts to it, and no two entries whose where clauses can select one
-/// row. Historical composition keeps structural/name checks without asserting
-/// current rows.
+/// row. Historical composition keeps structural/name checks and the type of
+/// an ordered term, without asserting current rows.
 pub(crate) fn admit<'a, 'b, 'c>(
     entries: impl IntoIterator<Item = (&'a str, &'b Clause<'a>)>,
     column: &str,
@@ -273,21 +273,23 @@ where
                 match declared(name) {
                     None => Some(WhereFault::Undeclared),
                     Some(Declared { output: false, .. }) => Some(WhereFault::NotOutput),
-                    Some(declared) if validated => {
-                        match (ordered, declared.kind == ColumnType::Str) {
-                            (false, false) => Some(WhereFault::NotText),
-                            (true, true) => Some(WhereFault::OrderedText),
-                            (false, true) => {
+                    // An ordered term is checked in historical composition
+                    // too: without its type, it has nothing to compare by.
+                    Some(declared) => match (ordered, declared.kind == ColumnType::Str) {
+                        (false, false) if validated => Some(WhereFault::NotText),
+                        (false, false) => None,
+                        (true, true) => Some(WhereFault::OrderedText),
+                        (false, true) => {
+                            if validated {
                                 codelist = declared.codelist;
-                                None
                             }
-                            (true, false) => {
-                                kind = Some(declared.kind);
-                                None
-                            }
+                            None
                         }
-                    }
-                    Some(_) => None,
+                        (true, false) => {
+                            kind = Some(declared.kind);
+                            None
+                        }
+                    },
                 }
             }
             .or_else(|| values.is_empty().then_some(WhereFault::NoValues))
@@ -448,9 +450,9 @@ fn share(
 
 /// Whether two ordered terms over one column select a common value. Two
 /// bounds on one side always meet; an upper and a lower bound meet when the
-/// lower lies below the upper, or on it when both select it. Over `int` and
-/// `date` columns, `GT x` and `LT y` share no value when `y` is the value
-/// after `x`.
+/// lower lies below the upper, or on it when both select it. Over `int`,
+/// `date`, `datetime` and `time` columns, `GT x` and `LT y` share no value
+/// when `y` is the value after `x`.
 fn meet(left: (Order, &Value), right: (Order, &Value)) -> bool {
     if left.0.upper() == right.0.upper() {
         return true;
@@ -471,20 +473,35 @@ fn meet(left: (Order, &Value), right: (Order, &Value)) -> bool {
 }
 
 /// Whether `upper` is the value right after `lower` in a type with no value
-/// between consecutive ones: the next integer or the next calendar day.
+/// between consecutive ones: the next integer, calendar day or whole second.
 fn adjacent(lower: &Value, upper: &Value) -> bool {
     match (lower, upper) {
         (Value::Int(lower), Value::Int(upper)) => lower.checked_add(1) == Some(*upper),
-        (Value::Date(lower), Value::Date(upper)) => {
-            let (year, month, day) = lower.fields();
-            let next = match crate::temporal::month_length(year, month) {
-                Some(length) if day < length => (year, month, day + 1),
-                _ if month < 12 => (year, month + 1, 1),
-                _ => (year.saturating_add(1), 1, 1),
+        (Value::Date(lower), Value::Date(upper)) => next_day(lower.fields()) == upper.fields(),
+        (Value::Time(lower), Value::Time(upper)) => lower.seconds() + 1 == upper.seconds(),
+        (Value::DateTime(lower), Value::DateTime(upper)) => {
+            let (year, month, day, hour, minute, second) = lower.fields();
+            let next = match (hour, minute, second) {
+                (23, 59, 59) => {
+                    let (year, month, day) = next_day((year, month, day));
+                    (year, month, day, 0, 0, 0)
+                }
+                (hour, 59, 59) => (year, month, day, hour + 1, 0, 0),
+                (hour, minute, 59) => (year, month, day, hour, minute + 1, 0),
+                (hour, minute, second) => (year, month, day, hour, minute, second + 1),
             };
             next == upper.fields()
         }
         _ => false,
+    }
+}
+
+/// The calendar day after `(year, month, day)`.
+fn next_day((year, month, day): (u16, u8, u8)) -> (u16, u8, u8) {
+    match crate::temporal::month_length(year, month) {
+        Some(length) if day < length => (year, month, day + 1),
+        _ if month < 12 => (year, month + 1, 1),
+        _ => (year.saturating_add(1), 1, 1),
     }
 }
 
@@ -837,6 +854,8 @@ mod tests {
         // An internal seam: validation's overlap over converted bounds, which
         // the benchmarks reach only for the one pair each pins.
         let date = |text: &str| Value::Date(text.parse().unwrap());
+        let time = |text: &str| Value::Time(text.parse().unwrap());
+        let moment = |text: &str| Value::DateTime(text.parse().unwrap());
         let term = |order| Term {
             column: "ADT",
             comparator: Comparator::Ordered(order),
@@ -902,6 +921,36 @@ mod tests {
                 (Order::Gt, Value::float(2.0)),
                 true,
                 "every float between 2 and 3",
+            ),
+            (
+                (Order::Lt, time("10:00:01")),
+                (Order::Gt, time("10:00:00")),
+                false,
+                "no time lies between consecutive seconds",
+            ),
+            (
+                (Order::Lt, time("10:00:02")),
+                (Order::Gt, time("10:00:00")),
+                true,
+                "one second lies between",
+            ),
+            (
+                (Order::Lt, moment("2026-03-01T00:00:00")),
+                (Order::Gt, moment("2026-02-28T23:59:59")),
+                false,
+                "consecutive seconds across a day",
+            ),
+            (
+                (Order::Lt, moment("2026-03-01T10:01:00")),
+                (Order::Gt, moment("2026-03-01T10:00:59")),
+                false,
+                "consecutive seconds across a minute",
+            ),
+            (
+                (Order::Lt, moment("2026-03-01T10:00:02")),
+                (Order::Gt, moment("2026-03-01T10:00:00")),
+                true,
+                "one second lies between datetimes",
             ),
         ];
         for ((left, left_bound), (right, right_bound), expected, label) in cases {
@@ -989,6 +1038,26 @@ mod tests {
                     .unwrap(),
             ],
             ["ordered_str", "value_type", "GE"]
+        );
+        // Historical composition still refuses an ordered term it could not
+        // compare by, and asserts no overlap.
+        assert_eq!(
+            admit(
+                entries.iter().map(|(id, clause)| (*id, clause)),
+                "AVAL",
+                SubmissionMode::Historical,
+                declared
+            ),
+            [
+                fault("TEXT", "PARAMCD", WhereFault::OrderedText),
+                fault(
+                    "TWO",
+                    "ADT",
+                    WhereFault::ValueCount(Comparator::Ordered(Order::Ge))
+                ),
+                fault("WORDS", "ADT", WhereFault::ValueType),
+                fault("FRACTION", "AVISITN", WhereFault::ValueType),
+            ]
         );
     }
 

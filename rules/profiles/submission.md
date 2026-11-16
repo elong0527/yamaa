@@ -618,8 +618,8 @@ admits a common value: two lists that meet, a list holding a value an `NE` or
 select the missing value, or two ordered columns whose ranges meet. Two
 bounds on one side always meet; an upper bound (`LT`, `LE`) and a lower bound
 (`GT`, `GE`) meet when the lower value lies below the upper, or equals it
-under `LE` and `GE` both. On an `int` or `date` column, `GT` one value and
-`LT` the next integer or day share no value. The clauses then select at least
+under `LE` and `GE` both. On an `int`, `date`, `datetime` or `time` column,
+`GT` one value and `LT` the next integer, day or second share no value. The clauses then select at least
 one common row whatever the data. `{comparator: NE, values: [X]}` and `[X]` on one column
 admit no common value, so the rows of an ADaM dataset whose `DTYPE` is
 missing and those it derives can each have their own entry, and neither do

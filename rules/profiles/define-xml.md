@@ -963,7 +963,10 @@ inventory or predecessor assertions. Distinct historical datasets may share
 an executable output path; each keeps its own literal metadata and artifact link.
 Value-level where clauses retain structural and output-column name checks,
 but executable types, terminology membership and overlapping row selections
-do not constrain a historical declaration.
+do not constrain a historical declaration. An ordered where column is the
+exception: it still must not be `str`, and its value must convert to its
+type, since the comparison has nothing else to order by
+([SUB-12](submission.md#sub-12)).
 
 Historical codelists, mandatory flags, lengths, origins and value-level
 metadata do not bind execution. They describe received declarations, not the
