@@ -3,7 +3,8 @@ an ADRS dataset with one record per investigator-scored overall response
 assessment.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL
+STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADTF, ADY, AVALC, AVAL,
+ANL01FL
 
 - A record appears only for an assessment the investigator scored as
   overall response, with RSTESTCD "OVRLRESP" and RSEVAL "INVESTIGATOR".
@@ -18,6 +19,8 @@ STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL
 - ADT is the completed analysis date: a fully collected date is used as
   it stands, a year and month without a day complete to the first of the
   month, and a year alone completes to 1 January.
+- ADTF is "D" when the day of ADT was completed and "M" when the month
+  and day were; it has no value for a fully collected date.
 - A completed date counts exactly as a collected one in every
   comparison, so the study day and the per-date flag never depend on how
   much of the date was collected.

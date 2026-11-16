@@ -10,8 +10,8 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID,
-            USUBJID, AGE]
+  columns: [FASFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, STUDYID, USUBJID,
+            AGE]
 
 columns:
   # The earliest exposure start date. MIN skips a missing date, so a subject
@@ -37,7 +37,7 @@ columns:
     derivation: DM.RANDDT
 
   # A working flag, not in the output: ITTFL reads it, so the chain runs
-  # RANDDT -> RANDFL -> ITTFL -> POPFL.
+  # RANDDT -> RANDFL -> ITTFL -> FASFL.
   - name: RANDFL
     type: str
     label: Randomized Population Flag
@@ -56,9 +56,10 @@ columns:
         false_value: "N"
         missing: "N"
 
-  - name: POPFL
+  # The full analysis set: subjects randomized and treated.
+  - name: FASFL
     type: str
-    label: Analysis Population Flag
+    label: Full Analysis Set Population Flag
     derivation:
       flag:
         condition: "SAFFL = 'Y' AND ITTFL = 'Y'"
@@ -91,21 +92,11 @@ columns:
         breaks: [65]
         labels: ["<65", ">=65"]
 
-  # 1 for the youngest subject in the study; USUBJID breaks ties.
-  - name: AGERNK
-    type: int
-    label: Age Rank
-    derivation:
-      row_number:
-        window:
-          group_by: [STUDYID]
-          order_by: [AGE, USUBJID]
-
 verifications:
   - row_count:
       min: 7
       max: 7
   - assert:
-      id: analysis-population-requires-both-flags
-      when: "POPFL = 'Y'"
+      id: full-analysis-set-requires-both-flags
+      when: "FASFL = 'Y'"
       require: "SAFFL = 'Y' AND ITTFL = 'Y'"

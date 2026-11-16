@@ -5,13 +5,12 @@
 data adsl;
   length STUDYID USUBJID $1024;
   infile "/app/input/adsl.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. HEIGHTCM WEIGHTKG;
+  input STUDYID : $char1024. USUBJID : $char1024. HEIGHTBL WEIGHTBL;
 run;
 
 data result;
   set adsl;
-  if not missing(HEIGHTCM) and HEIGHTCM ne 0 and not missing(WEIGHTKG) then BMI=WEIGHTKG/(HEIGHTCM/100)**2;
-  BMI_FN=BMI;
+  if not missing(HEIGHTBL) and HEIGHTBL ne 0 and not missing(WEIGHTBL) then BMIBL=WEIGHTBL/(HEIGHTBL/100)**2;
 run;
 
-proc export data=result(keep=STUDYID USUBJID HEIGHTCM WEIGHTKG BMI BMI_FN) outfile="/app/output/adsl.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID HEIGHTBL WEIGHTBL BMIBL) outfile="/app/output/adsl.csv" dbms=csv replace; run;

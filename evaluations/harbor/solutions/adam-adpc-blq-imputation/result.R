@@ -36,23 +36,26 @@ based <- pc |>
     by = c("STUDYID", "USUBJID", "PCTESTCD", "PCTPTREF")
   )
 
-# A quantified result as recorded; a below-limit result is 0 before the
-# first or after the last quantified result of its profile (and in a
-# profile with no quantified result), and has no value between them. A
-# sample not done has no value.
+# A quantified result as recorded and a below-limit result 0; a sample
+# not done has no value. A below-limit result between the first and the
+# last quantified result of its profile is flagged for exclusion.
 adpc <- based |>
   mutate(
+    BLQ = !is.na(PCSTRESC) & startsWith(PCSTRESC, "<"),
     AVAL = case_when(
       !is.na(PCSTRESN) ~ PCSTRESN,
-      !is.na(PCSTRESC) & startsWith(PCSTRESC, "<") &
-        (is.na(FIRSTQ) | PCTPTNUM < FIRSTQ | PCTPTNUM > LASTQ) ~ 0,
+      BLQ ~ 0,
       .default = NA_real_
+    ),
+    NCAXFL = if_else(
+      BLQ & !is.na(FIRSTQ) & PCTPTNUM > FIRSTQ & PCTPTNUM < LASTQ,
+      "Y", NA_character_
     )
   ) |>
   select(
     STUDYID, USUBJID, PCSEQ,
     PARAMCD = PCTESTCD, ATPTREF = PCTPTREF, ATPT = PCTPT,
-    ATPTN = PCTPTNUM, AVAL, AVALU = PCSTRESU
+    ATPTN = PCTPTNUM, AVAL, AVALU = PCSTRESU, NCAXFL
   )
 
 dir.create("/app/output", showWarnings = FALSE)

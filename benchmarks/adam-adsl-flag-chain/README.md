@@ -1,10 +1,10 @@
 # Derive a Chain of Population Flags
 
-**Goal:** derive the combined population flag `POPFL` from the
+**Goal:** derive the full analysis set flag `FASFL` from the
 safety flag `SAFFL` and the intent-to-treat flag `ITTFL`, plus
-the dates and age they read: first exposure date `TRTSDT`,
-randomization date `RANDDT`, collected age `AGE`, age band
-`AGEGR1`, and age rank `AGERNK`.
+the dates those flags read, first exposure date `TRTSDT` and
+randomization date `RANDDT`, and the collected age `AGE` with its
+age group `AGEGR1`.
 
 **Input:** one demographic record per subject carrying age and
 the randomization date, and exposure records carrying the
@@ -12,8 +12,9 @@ exposure start date.
 
 **Variables:**
 
-- `POPFL` holds `Y` only when both `SAFFL` and `ITTFL` hold `Y`,
-  and `N` otherwise, marking subjects in both populations.
+- `FASFL` holds `Y` only when both `SAFFL` and `ITTFL` hold `Y`,
+  and `N` otherwise, marking subjects who were randomized and
+  started treatment.
 - `SAFFL` holds `Y` when the subject has a first exposure date,
   and `N` otherwise, marking subjects who started treatment.
 - `ITTFL` holds `Y` when the subject was randomized, and `N`
@@ -26,9 +27,7 @@ exposure start date.
   empty when the subject was not randomized.
 - `AGEGR1` holds `<65` when `AGE` is below 65 and `>=65` when it
   is 65 or above; a subject with no age stops the run.
-- `AGERNK` holds the subject rank by `AGE` within the study,
-  youngest first, with `USUBJID` breaking ties.
 
-**Note:** the dates and age are settled before the flags that
-read them: the safety and intent-to-treat flags come from their
-dates, and the combined flag comes from both flags.
+**Note:** the dates are settled before the flags that read them:
+the safety and intent-to-treat flags come from their dates, and
+the full analysis set flag comes from both flags.

@@ -255,7 +255,7 @@ def _output_contract(benchmark: Path, spec: dict) -> dict:
     types = {}
     for column in columns:
         kind = declared.get(column)
-        if kind not in ("str", "int", "float", "date", "datetime"):
+        if kind not in ("str", "int", "float", "date", "datetime", "time"):
             raise BuildError(f"{benchmark.name}: {column} has type {kind!r}")
         types[column] = kind
     with (benchmark / "expected" / name).open(newline="", encoding="utf-8") as handle:
@@ -607,7 +607,7 @@ never enter the agent's container.
 {outputs}
 - Each cell matches the expected value read as its column's type: integers
   exactly, other numbers within a relative 1e-9, dates also as midnight
-  datetimes, text exactly.
+  datetimes, times of day as `hh:mm:ss`, text exactly.
   Column and row order are not graded.
 - `/app/output/{script}`, rerun by the verifier with `{runner}` after its
   output is deleted, writes the same data again.

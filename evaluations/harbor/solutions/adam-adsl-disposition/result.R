@@ -16,17 +16,18 @@ ds <- read_csv(
   col_types = cols(DSSEQ = col_integer(), DSSTDTC = col_date(), .default = col_character())
 )
 
-# The last dated disposition event per track: latest date, highest sequence
-# on a tie. The study track reads every epoch but TREATMENT; the treatment
-# track reads only TREATMENT.
+# The last disposition event per track: latest date, highest sequence on a
+# tie, and an undated event only when the track has no dated one (arrange
+# puts missing dates last). The study track reads every epoch but
+# TREATMENT; the treatment track reads only TREATMENT.
 last_study <- ds |>
-  filter(DSCAT %in% "DISPOSITION EVENT", EPOCH != "TREATMENT", !is.na(DSSTDTC)) |>
+  filter(DSCAT %in% "DISPOSITION EVENT", EPOCH != "TREATMENT") |>
   arrange(STUDYID, USUBJID, desc(DSSTDTC), desc(DSSEQ)) |>
   distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
   transmute(STUDYID, USUBJID, EOSDT = DSSTDTC, EOSDECOD = DSDECOD, EOSREAS = DSTERM)
 
 last_trt <- ds |>
-  filter(DSCAT %in% "DISPOSITION EVENT", EPOCH %in% "TREATMENT", !is.na(DSSTDTC)) |>
+  filter(DSCAT %in% "DISPOSITION EVENT", EPOCH %in% "TREATMENT") |>
   arrange(STUDYID, USUBJID, desc(DSSTDTC), desc(DSSEQ)) |>
   distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
   transmute(STUDYID, USUBJID, EOTDT = DSSTDTC, EOTDECOD = DSDECOD, EOTREAS = DSTERM)
@@ -40,18 +41,20 @@ adsl <- dm |>
       !is.na(EOSDECOD) ~ "DISCONTINUED",
       .default = "ONGOING"
     ),
-    DCSREAS = if_else(EOSSTT == "DISCONTINUED", EOSREAS, NA_character_),
+    DCSREAS = if_else(EOSSTT == "DISCONTINUED", EOSDECOD, NA_character_),
+    # A subject never treated has no treatment status.
     EOTSTT = case_when(
+      is.na(RFXSTDTC) ~ NA_character_,
       EOTDECOD == "COMPLETED" ~ "COMPLETED",
-      !is.na(EOTDT) ~ "DISCONTINUED",
+      !is.na(EOTDECOD) ~ "DISCONTINUED",
       .default = "ONGOING"
     ),
-    DCTREAS = if_else(EOTSTT == "DISCONTINUED", EOTREAS, NA_character_),
-    DCSREASP = if_else(EOTDECOD %in% "OTHER", EOTREAS, NA_character_)
+    DCTREAS = if_else(EOTSTT %in% "DISCONTINUED", EOTDECOD, NA_character_),
+    DCTREASP = if_else(DCTREAS %in% "OTHER", EOTREAS, NA_character_)
   ) |>
   select(
     STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS,
-    EOTDT, EOTSTT, DCTREAS, DCSREASP
+    EOTDT, EOTSTT, DCTREAS, DCTREASP
   )
 
 dir.create("/app/output", showWarnings = FALSE)

@@ -6,9 +6,9 @@
 
 """Create ADSL from DM: one record per subject with COUNTRY and REGION1.
 
-COUNTRY is the collected country in upper case, or "UNKNOWN" when no
-country was collected. REGION1 is "North America" for USA/CAN, "Europe"
-for DEU, and "Rest of World" for any other country, including "UNKNOWN".
+COUNTRY is the country in DM, as collected. REGION1 is "North America"
+for USA/CAN, "Europe" for DEU/ESP/FRA/GBR, and "Rest of World" for any
+other country.
 """
 
 import csv
@@ -22,7 +22,7 @@ OUTPUT_COLUMNS = ["STUDYID", "USUBJID", "COUNTRY", "REGION1"]
 def region_for(country):
     if country in ("USA", "CAN"):
         return "North America"
-    if country == "DEU":
+    if country in ("DEU", "ESP", "FRA", "GBR"):
         return "Europe"
     return "Rest of World"
 
@@ -33,8 +33,7 @@ def main():
 
     rows = []
     for record in dm:
-        collected = (record.get("COUNTRY") or "").strip()
-        country = collected.upper() if collected else "UNKNOWN"
+        country = record["COUNTRY"]
         rows.append(
             {
                 "STUDYID": record["STUDYID"],

@@ -23,9 +23,10 @@ record gives one output record, identified by its sequence number
   `DRUG X` for the parent drug (`DRGX`) and its metabolite (`MET1`) and
   `DRUG Y` for `DRGY`; empty when the subject has no dose of that drug.
 - `PCRFTDTM`: start of the reference dose, the latest dose of that drug
-  starting at or before the sample, so a sample taken at a dose time refers
-  to that dose; for a sample taken before every dose, the first dose.
-  Empty when `ADTM` or `FANLDTM` is empty.
+  starting before the sample. A sample taken at a dose time was taken
+  before that dose, so it refers to the dose before; for a sample taken
+  before or at the first dose, the first dose. Empty when `ADTM` or
+  `FANLDTM` is empty.
 - `AFRLT`: hours from `FANLDTM` to `ADTM`, not rounded; negative before the
   first dose; empty when either is empty.
 - `ARRLT`: hours from `PCRFTDTM` to `ADTM`, not rounded. It starts again at

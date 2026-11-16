@@ -5,6 +5,8 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
+  CO: {path: input/co.csv, types: {COSEQ: int}, key: [STUDYID, USUBJID]}
+base: DM
 
 output:
   path: adsl.csv
@@ -22,16 +24,28 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # Read as collected: the source file's quoting keeps a comma, a doubled
-  # quote and a line break inside one comment. A field with no character
-  # other than white space, empty or holding only spaces, is no comment.
+  # Each comment read as collected: the source file's quoting keeps a comma,
+  # a doubled quote and a line break inside it. A comment longer than 200
+  # characters continues in COVAL1, split between words, so the two parts
+  # join with one space; an empty COVAL1, quoted or not, adds nothing. A
+  # subject's comments join in COSEQ order.
   - name: CMNT
     type: str
     label: Investigator Comment
     derivation:
-      case:
-        - when: "str_contains(DM.COMMENT, '\\S')"
-          then: DM.COMMENT
+      aggregate:
+        derivations:
+          COTEXT:
+            type: str
+            derivation:
+              case:
+                - when: "CO.COVAL1 IS NULL"
+                  then: CO.COVAL
+                - otherwise:
+                    str_template: "{CO.COVAL} {CO.COVAL1}"
+        order_by: [CO.COSEQ]
+        separator: "; "
+        expr: "STR_JOIN(COTEXT)"
 
   - name: CMNTFL
     type: str

@@ -3,8 +3,8 @@
 **Goal:** carry each investigator-scored overall response assessment
 into the analysis dataset as one record under the `OVR` (Overall
 Response by Investigator) parameter, adding the completed date
-(`ADT`), the study day (`ADY`), the response rank (`AVAL`), and the
-per-date flag (`ANL01FL`).
+(`ADT`) with its imputation flag (`ADTF`), the study day (`ADY`), the
+response rank (`AVAL`), and the per-date flag (`ANL01FL`).
 
 **Input:** one record per collected response assessment carrying the
 test code `RSTESTCD`, the evaluator `RSEVAL`, the assessment date
@@ -23,6 +23,8 @@ assessor (`INDEPENDENT ASSESSOR`) assessment leave none.
   used as it stands; a year and month without a day complete to the
   first of the month, and a year alone to 1 January. An assessment
   with no readable date stops the run.
+- `ADTF` is `D` when the day of `ADT` was completed and `M` when the
+  month and day were; empty for a fully collected date.
 - `ADY` is the study day of the assessment, counting the treatment
   start as day one.
 - `AVALC` is the collected response: complete response (`CR`),
@@ -37,8 +39,12 @@ assessor (`INDEPENDENT ASSESSOR`) assessment leave none.
   breaking ties when a day carries the same worst response twice. It
   is empty otherwise.
 
-**Note:** a completed date counts exactly as a collected one in every
-comparison that follows, so grouping by date and measuring from the
-treatment start never depend on how much of the date was collected. An
-assessment dated exactly on the treatment start lands on study day
-one.
+**Note:** the study's statistical analysis plan (SAP) sets these rules:
+this parameter holds the investigator's overall response alone (other
+evaluators and tests would be parameters of their own), a partial date
+completes to its first possible day and is flagged, and the worst
+response of a date is the one analysed. A completed date counts exactly
+as a collected one in every comparison that follows, so grouping by
+date and measuring from the treatment start never depend on how much of
+the date was collected. An assessment dated exactly on the treatment
+start lands on study day one.

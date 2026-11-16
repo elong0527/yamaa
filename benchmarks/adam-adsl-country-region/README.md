@@ -1,22 +1,20 @@
-# Normalize the Collected Country and Assign Its Region
+# Assign Each Subject's Region from Its Country
 
-**Goal:** give each subject a normalized country in `COUNTRY`
-and its region in `REGION1`.
+**Goal:** carry each subject's country in `COUNTRY` and give its
+region in `REGION1`.
 
-**Input:** demographics (`DM`) rows carrying the collected country
-(`COUNTRY`) as reported, in mixed case or empty, including a country
-outside the three listed below.
+**Input:** demographics (`DM`) rows carrying the country of the
+investigational site (`COUNTRY`) as the upper-case three-letter
+ISO 3166 code SDTM collects, including countries outside the
+regions listed below.
 
 **Variables:**
 
-- `COUNTRY` is the collected country from demographics in upper
-  case; a subject with no collected country is `UNKNOWN`. Every
-  collected country passes through: there is no allowed-countries
-  check, so the run never stops on a new country.
-- `REGION1` is the region for that country: `USA` and `CAN` give
-  `North America`, `DEU` gives `Europe`, and any other country
-  (including `UNKNOWN`) gives `Rest of World`.
+- `COUNTRY` is the country from demographics, as collected; every
+  subject has one.
+- `REGION1` is the study's region for that country: `USA` and `CAN`
+  give `North America`; `DEU`, `ESP`, `FRA` and `GBR` give `Europe`;
+  and any other country gives `Rest of World`.
 
-**Note:** case differences never split a country (`usa` and `USA`
-are one), and the fallback values mean every subject has both a
-country and a region.
+**Note:** a country outside the listed regions never stops the run;
+it falls in `Rest of World`, so every subject has a region.

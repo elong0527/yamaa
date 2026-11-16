@@ -144,11 +144,12 @@ data when the reference agrees. A reference failure is a verifier error.
 
 Integer cells compare exactly, other numbers within relative `1e-9`, and
 text including spaces exactly. Empty cells, `NA` and `.` mean no value;
-dates also accept midnight datetimes. Row and column order are reported
-without affecting the score. Extra rows or columns reduce partial accuracy,
-and symlink outputs are rejected. Execution or policy failures receive zero
-partial credit. Reward is one only when every required comparison passes.
-The verifier saves `grade.json`, `reward.json` and per-file cell differences.
+dates also accept midnight datetimes, and times of day compare as times.
+Row and column order are reported without affecting the score. Extra rows
+or columns reduce partial accuracy, and symlink outputs are rejected.
+Execution or policy failures receive zero partial credit. Reward is one
+only when every required comparison passes. The verifier saves
+`grade.json`, `reward.json` and per-file cell differences.
 
 ## Versioned leaderboards
 

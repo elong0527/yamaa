@@ -66,11 +66,11 @@ def main():
                 "RSSEQ": rec["rsseq"],
                 "ADT": rec["adt"],
                 "AVALC": rec["avalc"],
-                "CONFIRMED": rec["confirmed"],
+                "CONFFL": rec["confirmed"],
             }
         )
 
-    fieldnames = ["STUDYID", "USUBJID", "PARAMCD", "RSSEQ", "ADT", "AVALC", "CONFIRMED"]
+    fieldnames = ["STUDYID", "USUBJID", "PARAMCD", "RSSEQ", "ADT", "AVALC", "CONFFL"]
     with open(OUTPUT_DIR + "/adrs.csv", "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()

@@ -2,9 +2,10 @@
 
 ## 1. A spec.yaml is one Dataset-sheet row plus a slice of the Variable sheet
 
-Here is the same specification written twice. It is
+Here is the same specification written twice. It is adapted from
 [`adam-adsl-bmi`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi), which reads a subject-level source and
-derives `BMI` from height and weight with an inline expression.
+derives baseline BMI (`BMIBL`) from height and weight; here an inline
+expression derives it.
 
 **As you would write it today.** A Dataset sheet row:
 
@@ -18,9 +19,9 @@ and five Variable sheet rows:
 |---|---|---|---|---|---|---|---|---|---|---|
 | STUDYID | Study Identifier | Char | 20 | | Predecessor | Req | SOURCE.STUDYID | ADSL | 1 | |
 | USUBJID | Unique Subject Identifier | Char | 30 | | Predecessor | Req | SOURCE.USUBJID | ADSL | 2 | |
-| HEIGHTCM | Height (cm) | Num | 8 | | Predecessor | Perm | SOURCE.HEIGHTCM | ADSL | 3 | |
-| WEIGHTKG | Weight (kg) | Num | 8 | | Predecessor | Perm | SOURCE.WEIGHTKG | ADSL | 4 | |
-| BMI | Body Mass Index (kg/m2) | Num | 8 | | Derived | Perm | `BMI = WEIGHTKG / (HEIGHTCM/100)**2` | ADSL | 5 | |
+| HEIGHTBL | Baseline Height (cm) | Num | 8 | | Predecessor | Perm | SOURCE.HEIGHTBL | ADSL | 3 | |
+| WEIGHTBL | Baseline Weight (kg) | Num | 8 | | Predecessor | Perm | SOURCE.WEIGHTBL | ADSL | 4 | |
+| BMIBL | Baseline BMI (kg/m2) | Num | 8 | | Derived | Perm | `BMIBL = WEIGHTBL / (HEIGHTBL/100)**2` | ADSL | 5 | |
 
 **As yamaa writes it,** annotated with the cell each line replaces:
 
@@ -37,7 +38,7 @@ base: SOURCE                   # Dataset sheet -> Structure, as the row driver
 output:                        # <- no cell: the file, and its format
   path: adsl.csv
   # What ships, in which order:
-  columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]
+  columns: [STUDYID, USUBJID, HEIGHTBL, WEIGHTBL, BMIBL]
 
 columns:                       # this section is the Variable sheet
   - name: STUDYID              # Variable Name
@@ -50,31 +51,31 @@ columns:                       # this section is the Variable sheet
     label: Unique Subject Identifier
     derivation: SOURCE.USUBJID
 
-  - name: HEIGHTCM
+  - name: HEIGHTBL
     type: float
-    label: Height (cm)
-    derivation: SOURCE.HEIGHTCM
+    label: Baseline Height (cm)
+    derivation: SOURCE.HEIGHTBL
 
-  - name: WEIGHTKG
+  - name: WEIGHTBL
     type: float
-    label: Weight (kg)
-    derivation: SOURCE.WEIGHTKG
+    label: Baseline Weight (kg)
+    derivation: SOURCE.WEIGHTBL
 
   # The Conversion Definition, but executable:
-  - name: BMI
+  - name: BMIBL
     type: float
-    label: Body Mass Index (kg/m2)
-    derivation: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+    label: Baseline BMI (kg/m2)
+    derivation: "WEIGHTBL / POWER(NULLIF(HEIGHTBL, 0) / 100, 2)"
 
 verifications:                 # <- no cell for this either
   - assert:
       id: bmi-missing-only-without-usable-inputs
-      when: "BMI IS NULL"
-      require: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
+      when: "BMIBL IS NULL"
+      require: "HEIGHTBL IS NULL OR HEIGHTBL = 0 OR WEIGHTBL IS NULL"
 ```
 
 A derivation is an expression or a verb from a closed registry. In an
-expression, a bare name such as `SOURCE.STUDYID` or `WEIGHTKG` reads a column,
+expression, a bare name such as `SOURCE.STUDYID` or `WEIGHTBL` reads a column,
 text is quoted (`"'Y'"`), and YAML `null` is the missing value.
 
 ### What the two tables above have no cell for
@@ -84,14 +85,14 @@ what has no Excel counterpart at all. Four things:
 
 1. **Which file the data comes from.** `Origin` says `Predecessor` and
    `Conversion Definition` names a *variable*; neither names a *file*.
-2. **`NULLIF(HEIGHTCM, 0)`.** There is no cell that says what happens when
+2. **`NULLIF(HEIGHTBL, 0)`.** There is no cell that says what happens when
    height is zero -- missing, an error, or `Inf` are all plausible, and each
    programmer picks differently.
 3. **Dependency order vs delivery order.** One `Variable Order` column does both
    jobs. yamaa splits them into `columns` order and `output.columns`.
 4. **The checks.** `Key Variables` looks like it asserts uniqueness, but
    nothing executes it; `keys` does, so no separate uniqueness check is
-   written. The `assert` rule -- "BMI is empty only when height or weight is
+   written. The `assert` rule -- "BMIBL is empty only when height or weight is
    unusable" -- normally survives as a sentence in a review email.
 
 Going the other way, every one of the eleven columns has a yamaa field --
@@ -224,7 +225,7 @@ In R and Python, `check(parent = )` does the same
 | `Origin` = Derived | an expression or a verb | See [the derivation vocabulary](schema-intro.md#the-derivation-vocabulary) |
 | `Core` (`Req` / `Exp` / `Perm` for SDTM and SEND; `Req` / `Cond` / `Perm` for ADaM) | `submission.core` | Conformance classification; it says nothing about derivation |
 | `Conversion Definition` | `derivation:` | From a sentence a person reads to an expression a machine runs |
-| A sponsor macro the definition calls | `function: {name: bmi, args: {weight_kg: WEIGHTKG, height_cm: HEIGHTCM}}` | A `function` file declares the routine once, with its parameters, return type, tests and each host's implementation; the project lists the file under `functions`, and a spec that calls it runs with its project |
+| A sponsor macro the definition calls | `function: {name: bmi, args: {weight_kg: WEIGHTBL, height_cm: HEIGHTBL}}` | A `function` file declares the routine once, with its parameters, return type, tests and each host's implementation; the project lists the file under `functions`, and a spec that calls it runs with its project |
 | `Variable Order` | `columns` order **and** `output.columns` | One Excel column doing two jobs |
 | `Comments for Define` | `submission.comment` | Sponsor note carried with the column definition, for define generation |
 | Variable-level review checks | `column.verifications` | `not_missing`, `allowed_values`, `range`, `max_length`, `matches` |
@@ -457,11 +458,11 @@ What changed:
 
 ### Example 2: a Comment sentence becomes an expression
 
-*Source: [`adam-adsl-bmi`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi)*
+*Adapted from: [`adam-adsl-bmi`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi)*
 
 | Variable | Type | Origin | Comment |
 |---|---|---|---|
-| BMI | Num | Derived | BMI = WEIGHTKG / (HEIGHTCM/100)**2, rounded to 1 decimal |
+| BMIBL | Num | Derived | BMIBL = WEIGHTBL / (HEIGHTBL/100)**2, rounded to 1 decimal |
 
 ```yaml
 yamaa: "1.0"
@@ -474,7 +475,7 @@ input:
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, BMI]
+  columns: [STUDYID, USUBJID, BMIBL]
 
 columns:
   - name: STUDYID
@@ -489,30 +490,30 @@ columns:
 
   # The formula reads columns, so height and weight are declared; they are
   # not in output.columns, so they are not published.
-  - name: HEIGHTCM
+  - name: HEIGHTBL
     type: float
-    label: Height (cm)
-    derivation: SOURCE.HEIGHTCM
+    label: Baseline Height (cm)
+    derivation: SOURCE.HEIGHTBL
 
-  - name: WEIGHTKG
+  - name: WEIGHTBL
     type: float
-    label: Weight (kg)
-    derivation: SOURCE.WEIGHTKG
+    label: Baseline Weight (kg)
+    derivation: SOURCE.WEIGHTBL
 
   # The Excel row's "rounded to 1 decimal" is display-only here: the source
   # benchmark stores the unrounded value, so the rounding is a display
   # format in submission metadata, not part of the formula.
-  - name: BMI
+  - name: BMIBL
     type: float
-    label: Body Mass Index (kg/m2)
-    derivation: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+    label: Baseline BMI (kg/m2)
+    derivation: "WEIGHTBL / POWER(NULLIF(HEIGHTBL, 0) / 100, 2)"
 ```
 
 What changed:
 
 - The sentence becomes the derivation itself: an expression in which each
   bare name reads a column declared above it.
-- `NULLIF(HEIGHTCM, 0)` writes the "what if height is zero" case -- almost never
+- `NULLIF(HEIGHTBL, 0)` writes the "what if height is zero" case -- almost never
   stated in an Excel spec -- **into the formula**. Division by zero is a
   failure, so it has to be stated.
 - **"rounded to 1 decimal" translates to `round_half_away_from_zero`** (with

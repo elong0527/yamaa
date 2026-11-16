@@ -11,10 +11,8 @@ run;
 data result;
   length REGION1 $20;
   set dm;
-  COUNTRY=upcase(COUNTRY);
-  if missing(COUNTRY) then COUNTRY='UNKNOWN';
   if COUNTRY in ('USA','CAN') then REGION1='North America';
-  else if COUNTRY='DEU' then REGION1='Europe';
+  else if COUNTRY in ('DEU','ESP','FRA','GBR') then REGION1='Europe';
   else REGION1='Rest of World';
 run;
 

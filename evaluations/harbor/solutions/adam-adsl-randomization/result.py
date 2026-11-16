@@ -9,16 +9,15 @@
 One record per subject with columns:
 STUDYID, USUBJID, RANDDT, RANDDY, RANDDTC
 
-- RANDDT is the subject's randomization date from DM.
+- RANDDT is the subject's randomization date from DM, or the date of the
+  collected moment RANDDTTM when no date was collected.
 - RANDDY is the study day of RANDDT measured from RFSTDTC (the subject's
   reference start date): there is no study day 0, so a randomization on
   RFSTDTC is day 1 and the day before RFSTDTC is day -1. RANDDY has no
   value when RANDDT or RFSTDTC has no value.
 - RANDDTC is the collected randomization moment RANDDTTM written as text
   at whole-second precision (date and time joined by T, seconds always
-  shown). It is written independently of the collected date, so a
-  subject with a collected moment but no collected date still has
-  RANDDTC while RANDDT and RANDDY have no value.
+  shown).
 """
 
 import polars as pl
@@ -73,6 +72,9 @@ def main() -> None:
     dm = pl.read_parquet(f"{INPUT_DIR}/dm.parquet")
     check_odm_agrees_with_dm(dm)
 
+    dm = dm.with_columns(
+        pl.coalesce(pl.col("RANDDT"), pl.col("RANDDTTM").dt.date()).alias("RANDDT")
+    )
     diff_days = (pl.col("RANDDT") - pl.col("RFSTDTC")).dt.total_days()
     adsl = dm.select(
         "STUDYID",

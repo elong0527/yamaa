@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import datetime
 import functools
 import importlib
 import json
@@ -888,6 +889,19 @@ def test_a_text_value_of_spaces_is_not_missing():
     assert grade.normalize("", "str") is None
     assert grade.normalize(" NA ", "str") is None
     assert grade.normalize("  ", "int") is None
+
+
+def test_a_time_of_day_compares_as_a_time():
+    # Seam: the grader's cell parsing for a `time` column, which no reference
+    # solution reaches with an invalid or differently spelled value.
+    cases = [
+        ("08:30:15", datetime.time(8, 30, 15), "a time to the second"),
+        ("08:30", datetime.time(8, 30), "a time to the minute"),
+        ("", None, "an empty cell"),
+        ("30615", ("unparsed", "30615"), "seconds since midnight"),
+    ]
+    for text, expected, label in cases:
+        assert grade.normalize(text, "time") == expected, label
 
 
 def _rerun(tmp_path: Path, benchmark: str, write) -> dict:

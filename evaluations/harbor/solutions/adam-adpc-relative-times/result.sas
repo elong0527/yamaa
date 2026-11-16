@@ -40,7 +40,7 @@ proc sql;
     from doses group by USUBJID, DRUG;
   create table latest as select s.USUBJID, s.PCSEQ, max(d.START) as LATESTN
     from samples as s inner join doses as d on s.USUBJID=d.USUBJID and s.DRUG=d.DRUG
-    where not missing(s.ADTMN) and d.START <= s.ADTMN
+    where not missing(s.ADTMN) and d.START < s.ADTMN
     group by s.USUBJID, s.PCSEQ;
   create table joined as select s.*, f.FIRSTN, l.LATESTN
     from samples as s
@@ -54,7 +54,7 @@ data result;
   set joined;
   PARAMCD=PCTESTCD; ATPT=PCTPT;
   ADTM=''; FANLDTM=''; PCRFTDTM='';
-  /* A sample taken before every dose refers to the first dose. */
+  /* A sample taken before or at the first dose refers to the first dose. */
   REFN=.;
   if not missing(ADTMN) and not missing(FIRSTN) then REFN=coalesce(LATESTN, FIRSTN);
   if not missing(ADTMN) then ADTM=put(ADTMN, e8601dt19.);

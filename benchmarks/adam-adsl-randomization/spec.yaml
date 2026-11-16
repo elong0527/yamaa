@@ -23,17 +23,24 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # The collected date, or the date of the collected moment when the date
+  # item is missing.
   - name: RANDDT
     type: date
     label: Date of Randomization
-    derivation: DM.RANDDT
+    derivation:
+      case:
+        - when: "DM.RANDDT IS NOT NULL"
+          then: DM.RANDDT
+        - otherwise:
+            to_date: {source: DM.RANDDTTM}
 
   - name: RANDDY
     type: int
     label: Randomization Study Day
     derivation:
       study_day:
-        source: DM.RANDDT
+        source: RANDDT
         reference: DM.RFSTDTC
 
   # DM holds the moment as a datetime; written as text it always carries

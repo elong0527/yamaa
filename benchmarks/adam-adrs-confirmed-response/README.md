@@ -1,6 +1,6 @@
 # Confirmed Response
 
-**Goal:** derive the confirmation flag `CONFIRMED` for tumor
+**Goal:** derive the confirmed response flag `CONFFL` for tumor
 response assessments.
 
 **Input:** response assessments within a subject, each with a
@@ -9,7 +9,7 @@ standardized result `RSSTRESC`.
 
 **Variables:**
 
-- `CONFIRMED`: `Y` when the analysis result `AVALC` is progressive
+- `CONFFL`: `Y` when the analysis result `AVALC` is progressive
   disease (`PD`), which needs no confirmation, or when a partial
   (`PR`) or complete (`CR`) response is followed at least 28 days
   later by another partial or complete response; `N` when the current

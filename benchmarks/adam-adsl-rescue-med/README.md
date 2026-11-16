@@ -1,21 +1,34 @@
 # First Rescue Medication
 
-**Goal:** carry each subject's first rescue medication in `RESCTRT`.
+**Goal:** flag whether each subject took rescue medication
+(`RESCFL`), and give the start date of the first rescue medication
+(`RESCDT`), its imputation flag (`RESCDTF`) and its standardized
+name (`RESCTRT`).
 
 **Input:** one subject-level table listing the subjects, plus
-medication records carrying a treatment name (`CMTRT`), a category
-(`CMCAT`), a start date (`CMSTDTC`), and a sequence number (`CMSEQ`).
+concomitant medication (`CM`) records carrying the reported name
+(`CMTRT`), the standardized name (`CMDECOD`), a category (`CMCAT`),
+a start date (`CMSTDTC`) collected in full or in part, and a
+sequence number (`CMSEQ`).
 
 **Variables:**
 
-- `RESCTRT` is the treatment name of the subject's first rescue
-  medication: a record whose category (`CMCAT`) is
-  `RESCUE MEDICATION`, picked by the earliest start date
-  (`CMSTDTC`), with the smaller sequence number (`CMSEQ`) breaking a
-  tie. It is left blank, never filled with placeholder text, when
-  the subject took no rescue medication, whether the subject took
-  other medications or has no medication records at all. A rescue
-  record with no recorded start date still counts; a duplicated
-  record does not change the answer. A start date with only year
-  and month compares as written, so it falls before any full date
-  in the same month.
+- `RESCFL` is `Y` when the subject has a record whose category
+  (`CMCAT`) is `RESCUE MEDICATION`, and `N` otherwise, including a
+  subject with no medication records at all.
+- `RESCDT` is the start date of the first rescue medication: the one
+  with the earliest start date, the smaller sequence number (`CMSEQ`)
+  breaking a tie. A start collected as a year and month completes to
+  the first of the month, and a year alone to 1 January, before the
+  dates are compared. It is empty when the first rescue medication has
+  no start date or the subject took none.
+- `RESCDTF` is `D` when the day of `RESCDT` was imputed and `M` when
+  the month and day were; empty when the date was collected in full or
+  `RESCDT` is empty.
+- `RESCTRT` is the standardized name (`CMDECOD`) of that first rescue
+  medication; empty when the subject took none, never filled with
+  placeholder text.
+
+**Note:** a rescue record with no start date still makes the subject
+`Y`, but it is the first rescue medication only when the subject has
+no dated one. A duplicated record does not change the answer.

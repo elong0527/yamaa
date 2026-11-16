@@ -3,10 +3,10 @@ standard: ADaM
 domain: ADSL
 review:
   concerns:
-    - Subgroup analyses by region need one spelling per country and a region for
-      every subject.
-    - Nine subjects cover mixed-case country codes, empty countries, the text
-      unknown, and a country outside the three listed (fra).
-    - Case never splits a country (usa, UsA and USA are one), a missing country
-      becomes UNKNOWN, and an unlisted country such as FRA goes to Rest of World
-      instead of stopping the run.
+    - Subgroup analyses by region need a region for every subject, assigned
+      from the country of the investigational site.
+    - Nine subjects cover two North American countries, four European ones,
+      and two countries outside the listed regions (JPN and BRA).
+    - A country outside the listed regions, such as JPN, goes to Rest of World
+      instead of stopping the run, and the country itself is the ISO 3166 code
+      DM collects, carried as it stands.

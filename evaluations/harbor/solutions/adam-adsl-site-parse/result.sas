@@ -12,12 +12,10 @@ data result;
   length SITEIDP SUBJREF $1024;
   set dm;
   if prxmatch('/^[^-]+-([^-]+)-[0-9]{4}$/',strip(USUBJID)) then SITEIDP=scan(USUBJID,2,'-');
-  if not missing(SITEIDP) then SITEID=SITEIDP;
-  else if missing(SITEID) then SITEID='UNKNOWN';
-  if missing(SUBJID) then SUBJREF='UNKNOWN'; else SUBJREF=catx(':',SITEID,SUBJID);
+  SUBJREF=catx(':',SITEID,SUBJID);
 run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, SUBJID, SITEIDP, SITEID, SUBJREF from result;
+  create table final as select STUDYID, USUBJID, SUBJID, SITEID, SITEIDP, SUBJREF from result;
 quit;
 proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;

@@ -36,7 +36,7 @@ adsl = (
         .otherwise(pl.lit("N")),
     )
     .with_columns(
-        POPFL=pl.when((pl.col("SAFFL") == "Y") & (pl.col("ITTFL") == "Y"))
+        FASFL=pl.when((pl.col("SAFFL") == "Y") & (pl.col("ITTFL") == "Y"))
         .then(pl.lit("Y"))
         .otherwise(pl.lit("N")),
         AGEGR1=pl.when(pl.col("AGE") < 65)
@@ -47,26 +47,17 @@ adsl = (
     )
 )
 
-# Rank by age within the study, youngest first, USUBJID breaking ties.
-ranked = (
-    adsl.with_columns(__idx=pl.int_range(pl.len()))
-    .sort(["STUDYID", "AGE", "USUBJID"], nulls_last=True)
-    .with_columns(AGERNK=pl.int_range(1, pl.len() + 1).over("STUDYID"))
-    .sort("__idx")
-    .drop("__idx")
-    .select(
-        "POPFL",
-        "SAFFL",
-        "ITTFL",
-        "TRTSDT",
-        "RANDDT",
-        "AGEGR1",
-        "AGERNK",
-        "STUDYID",
-        "USUBJID",
-        "AGE",
-    )
+adsl = adsl.select(
+    "FASFL",
+    "SAFFL",
+    "ITTFL",
+    "TRTSDT",
+    "RANDDT",
+    "AGEGR1",
+    "STUDYID",
+    "USUBJID",
+    "AGE",
 )
 
 Path("/app/output").mkdir(exist_ok=True)
-ranked.write_csv("/app/output/adsl.csv")
+adsl.write_csv("/app/output/adsl.csv")

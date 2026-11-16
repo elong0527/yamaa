@@ -4,9 +4,12 @@ domain: ADSL
 review:
   concerns:
     - Subgroup analyses by baseline BMI quartile need cutpoints computed from
-      the study's own data.
-    - Thirteen subjects cover twelve baseline values across the range and one
-      subject with no baseline value.
+      the study's own data, here every subject with a baseline value, not from
+      external norms.
+    - Thirteen subjects cover twelve baseline values across the range, two
+      subjects with the same value on the median, and one subject with no
+      baseline value.
     - Quartiles follow R's type 7, so a cutpoint need not be an observed value
       (23.625) and the first and third quartiles differ from SAS's default; a
-      value on a cutpoint falls in the lower group.
+      value on a cutpoint falls in the lower group (subjects 104 and 111, on
+      the median of 25.5, are Quartile 2).

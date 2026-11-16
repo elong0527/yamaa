@@ -4,12 +4,12 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create ADSL (one record per subject) from DM.
+"""Create ADSL (one record per subject) from DM and CO.
 
-CMNT carries the investigator comment exactly as recorded; CMNTFL is
-"Y" when a comment was collected and "N" when none was. A comment
-field that is empty (quoted or not) or holds only spaces counts as no
-comment.
+Each CO record is one comment: COVAL, then COVAL1 after one space when
+the comment continues there. CMNT joins a subject's comments in COSEQ
+order with "; "; CMNTFL is "Y" when the subject has a comment and "N"
+when none was collected.
 """
 
 import csv
@@ -21,22 +21,29 @@ OUTPUT_DIR = "/app/output"
 FIELDNAMES = ["STUDYID", "USUBJID", "CMNT", "CMNTFL"]
 
 
+def read(name):
+    with open(os.path.join(INPUT_DIR, name), newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
 def main():
-    with open(
-        os.path.join(INPUT_DIR, "dm.csv"), newline="", encoding="utf-8"
-    ) as handle:
-        dm_rows = list(csv.DictReader(handle))
+    dm_rows = read("dm.csv")
+    comments = {}
+    for row in sorted(read("co.csv"), key=lambda r: int(r["COSEQ"])):
+        text = row["COVAL"]
+        if row["COVAL1"]:
+            text += " " + row["COVAL1"]
+        comments.setdefault(row["USUBJID"], []).append(text)
 
     adsl_rows = []
     for row in dm_rows:
-        comment = row.get("COMMENT") or ""
-        collected = comment.strip() != ""
+        texts = comments.get(row["USUBJID"], [])
         adsl_rows.append(
             {
                 "STUDYID": row["STUDYID"],
                 "USUBJID": row["USUBJID"],
-                "CMNT": comment if collected else "",
-                "CMNTFL": "Y" if collected else "N",
+                "CMNT": "; ".join(texts),
+                "CMNTFL": "Y" if texts else "N",
             }
         )
 

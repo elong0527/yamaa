@@ -5,6 +5,7 @@
 # be solved and that the grader scores a correct answer 1.
 
 import csv
+from datetime import date
 from pathlib import Path
 
 INPUT = Path("/app/input")
@@ -16,40 +17,54 @@ def read_rows(name):
         return list(csv.DictReader(f))
 
 
+def complete(text):
+    """A start date completed to its first possible day, with its flag."""
+    parts = text.split("-")
+    if len(parts) == 1:
+        return date(int(parts[0]), 1, 1), "M"
+    if len(parts) == 2:
+        return date(int(parts[0]), int(parts[1]), 1), "D"
+    return date.fromisoformat(text), ""
+
+
 def main():
     dm = read_rows("dm.csv")
     cm = read_rows("cm.csv")
 
     rescue = {}
     for row in cm:
-        if (row.get("CMCAT") or "") != "RESCUE MEDICATION":
+        if row["CMCAT"] != "RESCUE MEDICATION":
             continue
-        key = (row.get("STUDYID") or "", row.get("USUBJID") or "")
-        # Compare the start date as written: a year-month value such as
-        # "2025-03" sorts before any full date in the same month under
-        # plain string ordering. A missing date sorts as the empty string.
-        date_key = row.get("CMSTDTC") or ""
-        try:
-            seq_key = int(row.get("CMSEQ") or "")
-        except ValueError:
-            try:
-                seq_key = float(row.get("CMSEQ") or "")
-            except ValueError:
-                seq_key = 0
-        sort_key = (date_key, seq_key)
+        key = (row["STUDYID"], row["USUBJID"])
+        start, flag = complete(row["CMSTDTC"]) if row["CMSTDTC"] else (None, "")
+        # A dated record sorts before an undated one, then by date and
+        # sequence number.
+        sort_key = (start is None, start or date.min, int(row["CMSEQ"]))
         if key not in rescue or sort_key < rescue[key][0]:
-            rescue[key] = (sort_key, row.get("CMTRT") or "")
+            rescue[key] = (sort_key, start, flag, row["CMDECOD"])
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT / "adsl.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["STUDYID", "USUBJID", "RESCTRT"])
+        writer.writerow(
+            ["STUDYID", "USUBJID", "RESCFL", "RESCDT", "RESCDTF", "RESCTRT"]
+        )
         for row in dm:
-            studyid = row.get("STUDYID") or ""
-            usubjid = row.get("USUBJID") or ""
-            entry = rescue.get((studyid, usubjid))
-            resctrt = entry[1] if entry else ""
-            writer.writerow([studyid, usubjid, resctrt])
+            entry = rescue.get((row["STUDYID"], row["USUBJID"]))
+            if entry is None:
+                writer.writerow([row["STUDYID"], row["USUBJID"], "N", "", "", ""])
+                continue
+            _, start, flag, name = entry
+            writer.writerow(
+                [
+                    row["STUDYID"],
+                    row["USUBJID"],
+                    "Y",
+                    start.isoformat() if start else "",
+                    flag,
+                    name,
+                ]
+            )
 
 
 if __name__ == "__main__":

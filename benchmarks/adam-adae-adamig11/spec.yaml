@@ -91,19 +91,17 @@ columns:
         - type: Derived
       method: Date part of ASTDTM.
 
-  # The time of day of the start in seconds since midnight, shown as
-  # hh:mm:ss.
+  # The time of day of the start, a time value: the transport file carries
+  # it as SAS seconds since midnight shown with TIME8.
   - name: ASTTM
-    type: int
+    type: time
     label: Analysis Start Time
     derivation:
-      time_of_day:
+      to_time:
         source: ASTDTM
     submission:
       core: Perm
       mandatory: false
-      length: 8
-      display_format: TIME8.
       origins:
         - type: Derived
       method: Time part of ASTDTM as seconds since midnight.

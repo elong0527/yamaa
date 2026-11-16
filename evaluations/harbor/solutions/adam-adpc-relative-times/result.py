@@ -58,14 +58,14 @@ def main():
         fanldtm_text = subject_doses[0][1] if subject_doses else ""
 
         # Reference dose: the latest dose of the analyte's drug starting
-        # at or before the sample; a sample before every dose refers to
-        # the first dose. No value when ADTM or FANLDTM has no value.
+        # before the sample; a sample at a dose time refers to the dose
+        # before, and a sample before or at the first dose refers to it. No value when ADTM or FANLDTM has no value.
         pcrftdtm = None
         pcrftdtm_text = ""
         if adtm is not None and fanldtm is not None:
             ref = subject_doses[0]
             for dose in subject_doses:
-                if dose[0] <= adtm:
+                if dose[0] < adtm:
                     ref = dose
                 else:
                     break

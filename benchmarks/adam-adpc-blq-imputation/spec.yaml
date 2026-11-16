@@ -12,7 +12,7 @@ base: PC
 output:
   path: adpc.csv
   columns: [STUDYID, USUBJID, PCSEQ, PARAMCD, ATPTREF, ATPT, ATPTN, AVAL,
-            AVALU]
+            AVALU, NCAXFL]
 
 columns:
   - name: STUDYID
@@ -74,11 +74,7 @@ columns:
         filter: "PC.PCSTRESN IS NOT NULL"
         expr: "MAX(PC.PCTPTNUM)"
 
-  # PKNCA v0.12.1 clean.conc.blq() with its default
-  # conc.blq = list(first = "keep", middle = "drop", last = "keep"), where a
-  # kept below-limit value is 0: 0 before the first and after the last
-  # quantified result, no value between them. A profile without a quantified
-  # result is 0 throughout. A sample not done stays without a value.
+  # Every below-limit result is 0; a sample not done stays without a value.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -86,8 +82,7 @@ columns:
       case:
         - when: "PC.PCSTRESN IS NOT NULL"
           then: PC.PCSTRESN
-        - when: "PC.PCSTRESC LIKE '<%' AND (FIRSTQ IS NULL OR ATPTN < FIRSTQ
-            OR ATPTN > LASTQ)"
+        - when: "PC.PCSTRESC LIKE '<%'"
           then: 0.0
 
   - name: AVALU
@@ -95,12 +90,24 @@ columns:
     label: Analysis Value Unit
     derivation: PC.PCSTRESU
 
+  # PKNCA v0.12.1 clean.conc.blq() with its default
+  # conc.blq = list(first = "keep", middle = "drop", last = "keep"): a
+  # below-limit result between the first and the last quantified result of
+  # its profile is dropped from the noncompartmental analysis, so it is
+  # flagged for exclusion. One before the first or after the last, or in a
+  # profile with no quantified result, is kept as 0.
+  - name: NCAXFL
+    type: str
+    label: NCA Exclusion Flag
+    derivation:
+      flag: "PC.PCSTRESC LIKE '<%' AND ATPTN > FIRSTQ AND ATPTN < LASTQ"
+
 verifications:
   - unique: [STUDYID, USUBJID, PARAMCD, ATPTREF, ATPTN]
   - row_count:
       min: 20
       max: 20
   - assert:
-      id: zero-lies-outside-the-quantified-span
-      when: "AVAL = 0"
-      require: "FIRSTQ IS NULL OR ATPTN < FIRSTQ OR ATPTN > LASTQ"
+      id: an-excluded-result-is-below-the-limit
+      when: "NCAXFL = 'Y'"
+      require: "AVAL = 0"

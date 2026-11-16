@@ -3,49 +3,52 @@
 **Goal:** give each subject a single end-of-study summary holding
 `EOSDT`, `EOSDECOD`, `EOSREAS`, `EOSSTT`, and `DCSREAS`, plus an
 independent end-of-treatment summary holding `EOTDT`, `EOTSTT`,
-`DCTREAS`, and `DCSREASP`.
+`DCTREAS`, and `DCTREASP`.
 
-**Input:** demographics rows identifying each subject, plus
-disposition records (`DS`) with category (`DSCAT`), epoch
-(`EPOCH`), coded term (`DSDECOD`), reported term (`DSTERM`), start
-date (`DSSTDTC`), and sequence number (`DSSEQ`). Records with
-`EPOCH = 'TREATMENT'` describe treatment disposition; the study
-summary reads every other epoch.
+**Input:** demographics rows carrying the date of first study
+treatment (`RFXSTDTC`), plus disposition records (`DS`) with
+category (`DSCAT`), epoch (`EPOCH`), coded term (`DSDECOD`),
+reported term (`DSTERM`), start date (`DSSTDTC`), and sequence
+number (`DSSEQ`). Records with `EPOCH = 'TREATMENT'` describe
+treatment disposition; the study summary reads every other epoch.
 
 **Variables:**
 
-- `EOSDT` is the latest start date (`DSSTDTC`) among the subject's
-  records whose category (`DSCAT`) is `DISPOSITION EVENT` and whose
-  epoch is not `TREATMENT`; a record without a date never counts,
-  and a subject with no dated disposition record is empty.
-- `EOSDECOD` is the coded term (`DSDECOD`) on the subject's last
-  dated study disposition record, the one with the latest start
-  date; empty when the subject has no dated disposition record.
-  The coded term names the specific reason (for example
-  `WITHDRAWAL BY SUBJECT`), never a generic status.
-- `EOSREAS` is the reported term (`DSTERM`) on that same last
-  record; empty when the subject has no dated disposition record.
+- `EOSDT` is the start date (`DSSTDTC`) of the subject's last study
+  disposition event: a record whose category (`DSCAT`) is
+  `DISPOSITION EVENT` and whose epoch is not `TREATMENT`. It is
+  empty when that event has no date or the subject has no such
+  record.
+- `EOSDECOD` is the coded term (`DSDECOD`) on that last event; empty
+  when the subject has no study disposition event. The coded term
+  names the specific reason (for example `WITHDRAWAL BY SUBJECT`),
+  never a generic status.
+- `EOSREAS` is the reported term (`DSTERM`) on that same last event.
 - `EOSSTT` is `COMPLETED` when the last coded term is `COMPLETED`,
   `DISCONTINUED` for any other recorded term, and `ONGOING` when the
-  subject has no dated disposition record.
-- `DCSREAS` repeats the end-of-study reason (`EOSREAS`) for a
-  subject whose status is `DISCONTINUED`; empty otherwise.
-- `EOTDT` is the latest start date among the subject's dated
-  treatment disposition records (`EPOCH = 'TREATMENT'`); empty when
-  the subject has none.
+  subject has no study disposition event.
+- `DCSREAS` is the coded term (`EOSDECOD`) for a subject whose
+  status is `DISCONTINUED`; empty otherwise.
+- `EOTDT` is the start date of the subject's last treatment
+  disposition event (`EPOCH = 'TREATMENT'`); empty when that event
+  has no date or the subject has none.
 - `EOTSTT` is `COMPLETED` when the last treatment coded term is
   `COMPLETED`, `DISCONTINUED` for any other recorded term, and
-  `ONGOING` when the subject has no dated treatment record.
-- `DCTREAS` is the reported term on the last treatment record for a
+  `ONGOING` when the subject has no treatment disposition event. It
+  is empty for a subject who never received study treatment (no
+  `RFXSTDTC`), such as a screen failure.
+- `DCTREAS` is the coded term on the last treatment event for a
   subject whose treatment status is `DISCONTINUED`; empty otherwise.
-- `DCSREASP` carries that reported term again when the coded
-  treatment term is `OTHER` - the specify text; empty otherwise.
+- `DCTREASP` is the reported term on that event when its coded term
+  is `OTHER` - the specify text; empty otherwise.
 
 **Note:** date, term, and reason come from a single last event, so
-the three always describe the same event: when two events share the
-latest date, the higher sequence number (`DSSEQ`) decides. Records
-in other categories, such as protocol milestones, and records
-without a date never count, so a subject whose disposition record
-has no date is `ONGOING`. The study and treatment tracks are
-independent: a subject who stops treatment but completes the study
-is `DISCONTINUED` for treatment and `COMPLETED` for study.
+the three always describe the same event. The last event is the one
+with the latest date, and when two events share that date, the
+higher sequence number (`DSSEQ`) decides. An event without a date is
+the last event only when the subject has no dated one, so an undated
+withdrawal still makes the subject `DISCONTINUED`, with no end date.
+Records in other categories, such as protocol milestones, never
+count. The study and treatment tracks are independent: a subject who
+stops treatment but completes the study is `DISCONTINUED` for
+treatment and `COMPLETED` for study.

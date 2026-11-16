@@ -23,12 +23,12 @@ intermediates:
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
 
-  # The latest dose starting at or before the sample, the sample's own dose
-  # time included.
+  # The latest dose starting before the sample. A sample taken at a dose time
+  # was taken before that dose, so the dose at its own time is left out.
   - id: PRIORDOSE
     dataset: EX
     key: {STUDYID: STUDYID, USUBJID: USUBJID, EXTRT: DRUG}
-    between: {value: ADTM, lower: EXSTDTC}
+    between: {value: ADTM, lower: EXSTDTC, closed: neither}
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: last
 
@@ -99,8 +99,9 @@ columns:
     label: First Dose Date/Time of the Analyte's Drug
     derivation: FIRSTDOSE.EXSTDTC
 
-  # The reference dose: the latest dose at or before the sample, or the first
-  # dose for a sample taken before every dose; none without a sample time.
+  # The reference dose: the latest dose before the sample, or the first dose
+  # for a sample taken before or at the first dose; none without a sample
+  # time.
   - name: PCRFTDTM
     type: datetime
     label: Date/Time of Reference Dose
