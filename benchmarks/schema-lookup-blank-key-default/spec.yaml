@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  SUPPDM: input/suppdm.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, ITTFL]
+
+intermediates:
+  # A subject's own qualifier record.
+  - id: ITT_SUBJECT
+    dataset: SUPPDM
+    key: [STUDYID, USUBJID]
+    filter: "SUPPDM.QNAM = 'ITTFL'"
+
+  # The record that leaves the subject blank: matched on the study alone, so
+  # every subject of the study reads it.
+  - id: ITT_STUDY
+    dataset: SUPPDM
+    key: [STUDYID]
+    filter: "SUPPDM.USUBJID IS NULL AND SUPPDM.QNAM = 'ITTFL'"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: ITTFL
+    type: str
+    label: Intent-To-Treat Population Flag
+    derivation:
+      first_available: {sources: [ITT_SUBJECT.QVAL, ITT_STUDY.QVAL]}

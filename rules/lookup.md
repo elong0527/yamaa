@@ -81,7 +81,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `schema-between-endpoints`, `schema-between-adjacent-windows`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `negative-lookup-bad-range`, `schema-lookup-blank-key-default`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `schema-between-endpoints`, `schema-between-adjacent-windows`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/tests/host-fixtures/cases.json`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -92,6 +92,14 @@ expression ([LOOKUP-6](#lookup-6)), cannot compare fails as
 every kind of lookup; a type decided per value fails the same way when that
 value is compared. `int` and `float` compare exactly, and every other type
 must match exactly.
+
+A record missing a key is matched through no key that names that column. A
+record that applies to every current row, such as a qualifier record whose
+subject is blank, is read by a named intermediate whose `key` leaves that
+column out, or writes `none` ([LOOKUP-5](#lookup-5)), and whose `filter`
+keeps the records missing it. A record of the current row's own, read beside
+it by a second lookup, takes precedence when a derivation reads that lookup
+first, as `first_available` does.
 
 `between` declares `value` and `lower`, `upper` or both, each bound a field of
 the lookup's relation: a stored field, a name an intermediate derives
