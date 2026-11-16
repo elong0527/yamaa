@@ -63,6 +63,8 @@ def main():
                 "PARAM": "Overall Response by Investigator",
                 "RSDTC": row["RSDTC"],
                 "ADT": adt.isoformat(),
+                # D when the day was completed, M when the month and day were.
+                "ADTF": {4: "M", 7: "D"}.get(len(row["RSDTC"]), ""),
                 "ADY": ady,
                 "AVALC": avalc,
                 "AVAL": AVAL_MAP[avalc],
@@ -83,7 +85,7 @@ def main():
 
     fieldnames = [
         "STUDYID", "USUBJID", "RSSEQ", "PARAMCD", "PARAM", "RSDTC",
-        "ADT", "ADY", "AVALC", "AVAL", "ANL01FL",
+        "ADT", "ADTF", "ADY", "AVALC", "AVAL", "ANL01FL",
     ]
     with open(f"{OUTPUT_DIR}/adrs.csv", "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

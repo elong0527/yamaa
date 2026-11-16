@@ -4,24 +4,24 @@ model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: input/dm.csv
+  DM: {path: input/dm.csv, types: {RFXSTDTC: date}}
   DS: {path: input/ds.csv, types: {DSSEQ: int}, key: [STUDYID, USUBJID]}
 base: DM
 
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS,
-            EOTDT, EOTSTT, DCTREAS, DCSREASP]
+            EOTDT, EOTSTT, DCTREAS, DCTREASP]
 
-# The subject's last dated treatment disposition record: latest DSSTDTC,
-# then higher DSSEQ on the same day. Treatment records carry
-# EPOCH = 'TREATMENT'; study disposition lives on the other epochs.
+# The subject's last treatment disposition record: latest DSSTDTC, then
+# higher DSSEQ on the same day. An undated record sorts first, so it is the
+# last record only when the subject has no dated one. Treatment records
+# carry EPOCH = 'TREATMENT'; study disposition lives on the other epochs.
 intermediates:
   - id: LASTTRT
     dataset: DS
     key: [STUDYID, USUBJID]
-    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT'
-      AND DS.DSSTDTC IS NOT NULL"
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT'"
     order_by: [DS.DSSTDTC, DS.DSSEQ]
     keep: last
 
@@ -36,12 +36,12 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # All three read the subject's last dated study disposition record:
-  # latest DSSTDTC, then higher DSSEQ on the same day. Treatment records
+  # All three read the subject's last study disposition record: latest
+  # DSSTDTC, then higher DSSEQ on the same day. An undated record sorts
+  # first, so it is the last record only when the subject has no dated one,
+  # and then the end-of-study date stays empty. Treatment records
   # (EPOCH = 'TREATMENT') belong to the end-of-treatment track below and
-  # never count here. The date guard matters for the term and reason: an
-  # undated record sorts first, so without it a subject whose only record
-  # is undated would keep that record.
+  # never count here.
   - name: EOSDT
     type: date
     label: End of Study Date
@@ -57,8 +57,7 @@ columns:
     derivation:
       source:
         variable: DS.DSDECOD
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT'
-          AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT'"
         order_by: [DS.DSSTDTC, DS.DSSEQ]
         keep: last
 
@@ -68,13 +67,12 @@ columns:
     derivation:
       source:
         variable: DS.DSTERM
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT'
-          AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT'"
         order_by: [DS.DSSTDTC, DS.DSSEQ]
         keep: last
 
   # Any coded term but COMPLETED is a discontinuation; no coded term, as
-  # with no dated disposition event, is ONGOING.
+  # with no disposition event, is ONGOING.
   - name: EOSSTT
     type: str
     label: End of Study Status
@@ -89,17 +87,19 @@ columns:
       - allowed_values:
           values: [COMPLETED, DISCONTINUED, ONGOING]
 
+  # The coded reason; the reported term stays in EOSREAS.
   - name: DCSREAS
     type: str
-    label: Reason for Discontinuation
+    label: Reason for Discontinuation from Study
     derivation:
       case:
         - when: "EOSSTT = 'DISCONTINUED'"
-          then: EOSREAS
+          then: EOSDECOD
 
   # End-of-treatment track, mirroring the study track above. A subject who
   # stops treatment but completes the study (YAMAA-01-107) is DISCONTINUED
-  # here and COMPLETED above: the two tracks are independent.
+  # here and COMPLETED above: the two tracks are independent. A subject who
+  # never received study treatment (no RFXSTDTC) has no treatment status.
   - name: EOTDT
     type: date
     label: End of Treatment Date
@@ -114,9 +114,11 @@ columns:
     label: End of Treatment Status
     derivation:
       case:
+        - when: "DM.RFXSTDTC IS NULL"
+          then: null
         - when: "LASTTRT.DSDECOD = 'COMPLETED'"
           then: "'COMPLETED'"
-        - when: "EOTDT IS NOT NULL"
+        - when: "LASTTRT.DSDECOD IS NOT NULL"
           then: "'DISCONTINUED'"
         - otherwise: "'ONGOING'"
     verifications:
@@ -129,13 +131,13 @@ columns:
     derivation:
       case:
         - when: "EOTSTT = 'DISCONTINUED'"
-          then: LASTTRT.DSTERM
+          then: LASTTRT.DSDECOD
 
   # Specify text: only when the coded treatment term is OTHER does the
   # reported term carry extra meaning beyond the code.
-  - name: DCSREASP
+  - name: DCTREASP
     type: str
-    label: Specify Text for Discontinuation of Treatment
+    label: Reason Spec for Discont of Treatment
     derivation:
       case:
         - when: "EOTSTT = 'DISCONTINUED' AND LASTTRT.DSDECOD = 'OTHER'"
@@ -155,5 +157,5 @@ verifications:
       require: "DCTREAS IS NOT NULL"
   - assert:
       id: specify-only-for-other
-      when: "DCSREASP IS NOT NULL"
+      when: "DCTREASP IS NOT NULL"
       require: "EOTSTT = 'DISCONTINUED'"

@@ -8,7 +8,7 @@ review:
     - Three subjects cover samples before and after doses, a sample exactly at a
       dose time, a date-only sample, a metabolite, a second drug dosed in
       between, and a subject never dosed.
-    - A sample taken at a dose time refers to that dose (subject 001's pre-dose
-      sample at 08:00 is 0 hours after it), a date-only sample gets no times
-      rather than an assumed one, and a dose of another drug never counts as the
-      reference.
+    - A sample taken at a dose time was taken before that dose, so it refers to
+      the dose before (subject 001's pre-dose sample at 08:00 on day 2 is 24
+      hours after the day 1 dose), a date-only sample gets no times rather than
+      an assumed one, and a dose of another drug never counts as the reference.

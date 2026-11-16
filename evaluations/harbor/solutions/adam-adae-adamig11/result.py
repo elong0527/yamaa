@@ -52,7 +52,7 @@ def derive_start(value):
     return {
         "ASTDTM": start.isoformat(timespec="seconds"),
         "ASTDT": start.date().isoformat(),
-        "ASTTM": start.hour * 3600 + start.minute * 60 + start.second,
+        "ASTTM": start.time().isoformat(timespec="seconds"),
         "ASTTMF": flag,
     }
 

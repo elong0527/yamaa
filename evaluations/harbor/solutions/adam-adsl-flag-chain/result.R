@@ -29,18 +29,11 @@ adsl <- dm |>
     SAFFL = if_else(!is.na(TRTSDT), "Y", "N"),
     RANDFL = if_else(!is.na(RANDDT), "Y", "N"),
     ITTFL = if_else(RANDFL == "Y", "Y", "N"),
-    POPFL = if_else(SAFFL == "Y" & ITTFL == "Y", "Y", "N"),
+    FASFL = if_else(SAFFL == "Y" & ITTFL == "Y", "Y", "N"),
     AGEGR1 = if_else(AGE < 65, "<65", ">=65")
   ) |>
-  mutate(.idx = row_number()) |>
-  arrange(STUDYID, AGE, USUBJID) |>
-  group_by(STUDYID) |>
-  mutate(AGERNK = row_number()) |>
-  ungroup() |>
-  arrange(.idx) |>
   select(
-    POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK,
-    STUDYID, USUBJID, AGE
+    FASFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, STUDYID, USUBJID, AGE
   )
 
 dir.create("/app/output", showWarnings = FALSE)

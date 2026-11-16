@@ -10,17 +10,17 @@ run;
 
 proc sort data=rs out=ordered; by STUDYID USUBJID descending RSDTC descending RSSEQ; run;
 data result;
-  length PARAMCD $16 ADT $10 AVALC $1024 CONFIRMED $1 nextresult $1024 nextdate $10;
+  length PARAMCD $16 ADT $10 AVALC $1024 CONFFL $1 nextresult $1024 nextdate $10;
   retain nextresult nextdate;
   set ordered; by STUDYID USUBJID;
   if first.USUBJID then do; nextresult=''; nextdate=''; end;
-  PARAMCD='CONFRESP'; ADT=RSDTC; AVALC=RSSTRESC; CONFIRMED='N';
-  if AVALC='PD' then CONFIRMED='Y';
-  else if AVALC in ('PR','CR') and nextresult in ('PR','CR') and not missing(ADT) and not missing(nextdate) and input(nextdate,yymmdd10.)-input(ADT,yymmdd10.)>=28 then CONFIRMED='Y';
+  PARAMCD='CONFRESP'; ADT=RSDTC; AVALC=RSSTRESC; CONFFL='N';
+  if AVALC='PD' then CONFFL='Y';
+  else if AVALC in ('PR','CR') and nextresult in ('PR','CR') and not missing(ADT) and not missing(nextdate) and input(nextdate,yymmdd10.)-input(ADT,yymmdd10.)>=28 then CONFFL='Y';
   nextresult=AVALC; nextdate=ADT;
 run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED from result;
+  create table final as select STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFFL from result;
 quit;
 proc export data=final outfile="/app/output/adrs.csv" dbms=csv replace; run;

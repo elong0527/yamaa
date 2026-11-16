@@ -10,13 +10,14 @@ second has its collected value, a start collected to the minute has seconds
 date without a time has time 00:00:00. ASTDTM has no value when AESTDTC lacks
 a complete calendar date.
 
-ASTDT is the calendar date of ASTDTM and ASTTM is its time of day as whole
-seconds since midnight; both have no value when ASTDTM has no value.
+ASTDT is the calendar date of ASTDTM and ASTTM is its time of day, written
+hh:mm:ss; both have no value when ASTDTM has no value.
 
 ASTTMF is "H" for a start collected as a complete date without a time, "M"
 for a start collected to the hour, and "S" for a start collected to the
 minute. ASTTMF has no value when the start was collected to the second or
-ASTDTM has no value. An ASTTM of 0 with ASTTMF "H" is imputed midnight.
+ASTDTM has no value. An ASTTM of 00:00:00 with ASTTMF "H" is imputed
+midnight.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adae.csv.

@@ -12,4 +12,5 @@ review:
       time, a missing reference date, and a time with no date.
     - The day before the reference date is day -1 with no day zero, a time
       without seconds gains :00 (10:30 becomes 10:30:00), and a collected time
-      with no date still gives RANDDTC (subject 108).
+      with no collected date gives its own date as RANDDT (subject 108's
+      2024-11-22, study day 3).

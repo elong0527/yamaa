@@ -271,14 +271,13 @@ def test_simultaneous_severity_and_grade_changes_create_one_period(
     assert all(row["ATOXGRN"] == "2" for row in headache[1:])
 
 
-def test_missing_age_has_no_group_and_ranks_last(tmp_path, language):
+def test_missing_age_has_no_group(tmp_path, language):
     name = "adam-adsl-flag-chain"
     dm = _input(name, "dm.csv")
     dm.append({**dm[0], "USUBJID": "AGE-MISSING", "AGE": ""})
     rows = _run(tmp_path, name, language, {"dm.csv": dm})["adsl.csv"]
     missing = next(r for r in rows if r["USUBJID"] == "AGE-MISSING")
     assert missing["AGEGR1"] == ""
-    assert int(missing["AGERNK"]) == len(rows)
 
 
 @pytest.mark.parametrize("only_temperature", [False, True])
@@ -644,14 +643,15 @@ def test_race_keeps_the_subject_key_in_dm_and_suppdm(tmp_path, language):
         assert r["USUBJID"] == r["IDVARVAL"] == "COLLECTED-SUBJECT"
 
 
-@pytest.mark.parametrize("coded_term", ["", "OTHER"])
+@pytest.mark.parametrize("coded_term", ["ADVERSE EVENT", "OTHER"])
 def test_treatment_disposition_uses_date_and_numeric_sequence(
     tmp_path, language, coded_term
 ):
     name = "adam-adsl-disposition"
     dm = _input(name, "dm.csv")
     template = next(r for r in _input(name, "ds.csv") if r["EPOCH"] == "TREATMENT")
-    base = {**template, **dm[0], "DSSTDTC": "2025-02-01"}
+    subject = {"STUDYID": dm[0]["STUDYID"], "USUBJID": dm[0]["USUBJID"]}
+    base = {**template, **subject, "DSSTDTC": "2025-02-01"}
     records = [
         {**base, "DSSEQ": "2", "DSDECOD": "COMPLETED", "DSTERM": "Completed"},
         {**base, "DSSEQ": "10", "DSDECOD": coded_term, "DSTERM": "Stopped dosing"},
@@ -661,8 +661,8 @@ def test_treatment_disposition_uses_date_and_numeric_sequence(
     row = next(r for r in rows if r["USUBJID"] == dm[0]["USUBJID"])
     assert row["EOTDT"] == "2025-02-01"
     assert row["EOTSTT"] == "DISCONTINUED"
-    assert row["DCTREAS"] == "Stopped dosing"
-    assert row["DCSREASP"] == ("Stopped dosing" if coded_term == "OTHER" else "")
+    assert row["DCTREAS"] == coded_term
+    assert row["DCTREASP"] == ("Stopped dosing" if coded_term == "OTHER" else "")
     assert row["EOSSTT"] == "ONGOING"
     assert row["EOSDT"] == row["DCSREAS"] == ""
 
@@ -860,15 +860,14 @@ def test_site_parse_accepts_any_prefix_and_exactly_two_dashes(tmp_path, language
     name = "adam-adsl-site-parse"
     row = _input(name, "dm.csv")[0]
     records = [
-        {**row, "USUBJID": "OTHER-SITE-1234", "SITEID": "FALLBACK"},
-        {**row, "USUBJID": "OTHER-EXTRA-SITE-1234", "SITEID": "FALLBACK"},
+        {**row, "USUBJID": "OTHER-SITE-1234", "SITEID": "COLLECTED"},
+        {**row, "USUBJID": "OTHER-EXTRA-SITE-1234", "SITEID": "COLLECTED"},
     ]
     rows = _run(tmp_path, name, language, {"dm.csv": records})["adsl.csv"]
     valid = next(r for r in rows if r["USUBJID"] == "OTHER-SITE-1234")
-    assert valid["SITEIDP"] == valid["SITEID"] == "SITE"
+    assert (valid["SITEIDP"], valid["SITEID"]) == ("SITE", "COLLECTED")
     invalid = next(r for r in rows if r["USUBJID"] == "OTHER-EXTRA-SITE-1234")
-    assert invalid["SITEIDP"] == ""
-    assert invalid["SITEID"] == "FALLBACK"
+    assert (invalid["SITEIDP"], invalid["SITEID"]) == ("", "COLLECTED")
 
 
 @pytest.fixture(params=["yamaa", "python", "r", "opensas"])

@@ -15,18 +15,18 @@ drug is "DRUG X" for the parent drug DRGX and its metabolite MET1, and
 earliest dose of the analyte's drug. FANLDTM has no value when the
 subject has no dose of that drug. A dose of another drug is never a
 first dose or a reference dose. PCRFTDTM is the start date and time of
-the reference dose, the latest dose of the analyte's drug starting at
-or before the sample, so a sample taken at a dose time refers to that
-dose. For a sample taken before every dose, the reference dose is the
-first dose. PCRFTDTM has no value when ADTM or FANLDTM has no value.
-AFRLT is the number of hours from FANLDTM to ADTM, not rounded. AFRLT
-is negative for a sample taken before the first dose, and it has no
-value when FANLDTM or ADTM has no value. ARRLT is the number of hours
-from PCRFTDTM to ADTM, not rounded. ARRLT starts again at each dose
-while AFRLT keeps growing, and ARRLT is negative only for a sample
-taken before the first dose. ARRLT has no value when PCRFTDTM or ADTM
-has no value. Date/times are clock readings taken as written, with no
-time zone.
+the reference dose, the latest dose of the analyte's drug starting
+before the sample. A sample taken at a dose time was taken before that
+dose, so it refers to the dose before. For a sample taken before or at
+the first dose, the reference dose is the first dose. PCRFTDTM has no
+value when ADTM or FANLDTM has no value. AFRLT is the number of hours
+from FANLDTM to ADTM, not rounded. AFRLT is negative for a sample taken
+before the first dose, and it has no value when FANLDTM or ADTM has no
+value. ARRLT is the number of hours from PCRFTDTM to ADTM, not rounded.
+ARRLT starts again at each dose while AFRLT keeps growing, and ARRLT is
+negative only for a sample taken before the first dose. ARRLT has no
+value when PCRFTDTM or ADTM has no value. Date/times are clock readings
+taken as written, with no time zone.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adpc.csv.

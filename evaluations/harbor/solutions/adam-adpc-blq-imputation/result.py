@@ -6,11 +6,11 @@
 
 """Build ADPC from PC with BLQ imputation.
 
-One record per sample. AVAL is the quantified concentration as recorded;
-a below-limit result ("<...") is 0 before the first or after the last
-quantified result of its profile (subject, analyte, dose), and blank
-between them. A not-done sample has no AVAL and neither starts nor ends
-the quantified span.
+One record per sample. AVAL is the quantified concentration as recorded,
+and 0 for a below-limit result ("<..."). NCAXFL is "Y" for a below-limit
+result between the first and the last quantified result of its profile
+(subject, analyte, dose), and blank otherwise. A not-done sample has no
+AVAL and neither starts nor ends the quantified span.
 """
 
 import csv
@@ -44,19 +44,19 @@ def main() -> None:
         members.sort(key=lambda r: (float(r["PCTPTNUM"]), int(r["PCSEQ"])))
         quant_pos = [i for i, r in enumerate(members) if r["_kind"] == "quant"]
         for i, r in enumerate(members):
+            r["_ncaxfl"] = ""
             if r["_kind"] == "quant":
                 r["_aval"] = (r.get("PCSTRESN") or "").strip()
             elif r["_kind"] == "blq":
-                if not quant_pos or i < quant_pos[0] or i > quant_pos[-1]:
-                    r["_aval"] = "0"
-                else:
-                    r["_aval"] = ""
+                r["_aval"] = "0"
+                if quant_pos and quant_pos[0] < i < quant_pos[-1]:
+                    r["_ncaxfl"] = "Y"
             else:
                 r["_aval"] = ""
 
     out_fields = [
         "STUDYID", "USUBJID", "PCSEQ", "PARAMCD", "ATPTREF",
-        "ATPT", "ATPTN", "AVAL", "AVALU",
+        "ATPT", "ATPTN", "AVAL", "AVALU", "NCAXFL",
     ]
     OUTPUT.mkdir(parents=True, exist_ok=True)
     with (OUTPUT / "adpc.csv").open("w", newline="") as f:
@@ -73,6 +73,7 @@ def main() -> None:
                 "ATPTN": r["PCTPTNUM"],
                 "AVAL": r["_aval"],
                 "AVALU": "ng/mL",
+                "NCAXFL": r["_ncaxfl"],
             })
 
 

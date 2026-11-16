@@ -5,12 +5,30 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  CM: {path: input/cm.csv, types: {CMSEQ: int}, key: [STUDYID, USUBJID]}
+  CM: {path: input/cm.csv, types: {CMSEQ: int}}
 base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, RESCTRT]
+  columns: [STUDYID, USUBJID, RESCFL, RESCDT, RESCDTF, RESCTRT]
+
+# The subject's first rescue medication: the earliest start date, a partial
+# date completed to its first day, then the lower sequence number. A record
+# with no start date sorts last, so it is first only when it is the
+# subject's only rescue record.
+intermediates:
+  - id: FIRSTRESC
+    dataset: CM
+    key: [STUDYID, USUBJID]
+    filter: "CM.CMCAT = 'RESCUE MEDICATION'"
+    order_by: [{variable: CM.CMSTDT, nulls: last}, CM.CMSEQ]
+    keep: first
+    columns: [CMSEQ, CMDECOD, CMSTDTC]
+    derivations:
+      CMSTDT:
+        type: date
+        derivation:
+          impute: {type: date, source: CM.CMSTDTC, month: 1, day: first}
 
 columns:
   - name: STUDYID
@@ -23,19 +41,45 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # The subject's earliest rescue medication: smallest start date, then the
-  # lower sequence number. No rescue record at all leaves it empty.
+  - name: RESCFL
+    type: str
+    label: Rescue Medication Flag
+    derivation:
+      flag:
+        condition: "FIRSTRESC.CMSEQ IS NOT NULL"
+        false_value: "N"
+        missing: "N"
+
+  # The start of the first rescue medication, completed to the first day
+  # of its month or year when only part of it was collected.
+  - name: RESCDT
+    type: date
+    label: First Rescue Medication Date
+    derivation:
+      impute:
+        type: date
+        source: FIRSTRESC.CMSTDTC
+        month: 1
+        day: first
+
+  - name: RESCDTF
+    type: str
+    label: First Rescue Med Date Imputation Flag
+    derivation:
+      imputation_flag:
+        source: RESCDT
+        part: date
+
   - name: RESCTRT
     type: str
-    label: Rescue Medication
-    derivation:
-      source:
-        variable: CM.CMTRT
-        filter: "CM.CMCAT = 'RESCUE MEDICATION'"
-        order_by: [CM.CMSTDTC, CM.CMSEQ]
-        keep: first
+    label: First Rescue Medication
+    derivation: FIRSTRESC.CMDECOD
 
 verifications:
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
+  - assert:
+      id: rescue-medication-has-a-name
+      when: "RESCFL = 'Y'"
+      require: "RESCTRT IS NOT NULL"

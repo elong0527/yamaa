@@ -16,20 +16,32 @@ cm <- read_csv(
   col_types = cols(CMSEQ = col_integer(), .default = col_character())
 )
 
-# The first rescue medication by earliest start date, with the smaller
-# sequence number breaking a tie. A start holding only year and month
-# compares as written, so it falls before any full date in the same
-# month; a record with no start date still counts.
+# A partial start completes to its first possible day: a year and month to
+# the first of the month (flag D), a year alone to January 1 (flag M).
 first <- cm |>
   filter(CMCAT == "RESCUE MEDICATION") |>
-  mutate(sortkey = coalesce(CMSTDTC, "")) |>
-  arrange(sortkey, CMSEQ) |>
+  mutate(
+    RESCDTF = case_when(
+      nchar(CMSTDTC) == 4 ~ "M",
+      nchar(CMSTDTC) == 7 ~ "D",
+      .default = NA_character_
+    ),
+    RESCDT = as.Date(case_when(
+      nchar(CMSTDTC) == 4 ~ paste0(CMSTDTC, "-01-01"),
+      nchar(CMSTDTC) == 7 ~ paste0(CMSTDTC, "-01"),
+      .default = CMSTDTC
+    ))
+  ) |>
+  # arrange puts a missing date last, so an undated record is first only
+  # when the subject has no dated one.
+  arrange(STUDYID, USUBJID, RESCDT, CMSEQ) |>
   distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
-  select(STUDYID, USUBJID, RESCTRT = CMTRT)
+  select(STUDYID, USUBJID, RESCDT, RESCDTF, RESCTRT = CMDECOD)
 
 adsl <- dm |>
   left_join(first, by = c("STUDYID", "USUBJID")) |>
-  select(STUDYID, USUBJID, RESCTRT) |>
+  mutate(RESCFL = if_else(is.na(RESCTRT), "N", "Y")) |>
+  select(STUDYID, USUBJID, RESCFL, RESCDT, RESCDTF, RESCTRT) |>
   arrange(USUBJID)
 
 dir.create("/app/output", showWarnings = FALSE)

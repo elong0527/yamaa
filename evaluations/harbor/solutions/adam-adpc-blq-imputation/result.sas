@@ -32,10 +32,11 @@ proc sql;
       and a.PCTESTCD = s.PCTESTCD and a.PCTPTREF = s.PCTPTREF;
 quit;
 
-/* A quantified result as recorded; a below-limit result is 0 before the
-   first or after the last quantified result of its profile (and in a
-   profile with no quantified result), and has no value between them. */
+/* A quantified result as recorded and a below-limit result 0. A
+   below-limit result between the first and the last quantified result of
+   its profile is flagged for exclusion. */
 data result;
+  length NCAXFL $1;
   set joined;
   PARAMCD = PCTESTCD;
   ATPTREF = PCTPTREF;
@@ -43,11 +44,13 @@ data result;
   ATPTN = PCTPTNUM;
   AVALU = PCSTRESU;
   if not missing(PCSTRESN) then AVAL = PCSTRESN;
-  else if substr(PCSTRESC, 1, 1) = '<' and (missing(FIRSTQ) or PCTPTNUM < FIRSTQ or PCTPTNUM > LASTQ) then AVAL = 0;
+  else if substr(PCSTRESC, 1, 1) = '<' then AVAL = 0;
   else AVAL = .;
+  NCAXFL = '';
+  if substr(PCSTRESC, 1, 1) = '<' and not missing(FIRSTQ) and FIRSTQ < PCTPTNUM < LASTQ then NCAXFL = 'Y';
 run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, PCSEQ, PARAMCD, ATPTREF, ATPT, ATPTN, AVAL, AVALU from result;
+  create table final as select STUDYID, USUBJID, PCSEQ, PARAMCD, ATPTREF, ATPT, ATPTN, AVAL, AVALU, NCAXFL from result;
 quit;
 proc export data=final outfile="/app/output/adpc.csv" dbms=csv replace; run;

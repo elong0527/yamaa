@@ -3,8 +3,9 @@ standard: ADaM
 domain: ADSL
 review:
   concerns:
-    - Demographics tables and subgroup analyses pool subjects into age groups
-      such as under 18, 18 to 64, and over 64.
+    - Demographics tables and subgroup analyses pool subjects into the age
+      groups the study's SAP defines, here under 18, 18 to 64, and over 64;
+      CDISC fixes no cutoffs, so another SAP can choose others.
     - Ten subjects cover each group, the boundary ages 17, 18, 64 and 65, and a
       missing age.
     - Boundary ages belong to the middle band (18 and 64 are both 18-64), and a

@@ -3,7 +3,8 @@ an ADRS dataset with one record per investigator-scored overall response
 assessment.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL
+STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADTF, ADY, AVALC, AVAL,
+ANL01FL
 
 PARAMCD is "OVR" and PARAM is "Overall Response by Investigator" on
 every record. ADY is the study day of the assessment, counting the

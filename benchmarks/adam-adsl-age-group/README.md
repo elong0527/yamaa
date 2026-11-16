@@ -15,6 +15,9 @@ units (`AGEU`).
 - `AGEGR1N` is the numeric rank of `AGEGR1`: `1` for `<18`, `2` for
   `18-64`, and `3` for `>64`; empty when `AGE` is missing.
 
-**Note:** both variables share the same bands, so the number always
-matches the text for each subject. A subject aged exactly 18 or 64
-falls in `18-64`: boundary ages belong to the middle band.
+**Note:** the bands are this study's choice, as its statistical
+analysis plan (SAP) states them; CDISC fixes no age cutoffs, and
+another therapeutic area or SAP can use other bands. Both variables
+share the same bands, so the number always matches the text for each
+subject. A subject aged exactly 18 or 64 falls in `18-64`: boundary
+ages belong to the middle band.

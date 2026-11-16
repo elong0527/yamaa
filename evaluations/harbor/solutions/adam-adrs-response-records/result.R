@@ -32,6 +32,12 @@ base <- rs |>
       str_detect(RSDTC, "^[0-9]{4}$") ~ suppressWarnings(ymd(paste0(RSDTC, "-01-01"), quiet = TRUE)),
       .default = as.Date(NA)
     ),
+    # D when the day was completed, M when the month and day were.
+    ADTF = case_when(
+      str_detect(RSDTC, "^[0-9]{4}-[0-9]{2}$") ~ "D",
+      str_detect(RSDTC, "^[0-9]{4}$") ~ "M",
+      .default = NA_character_
+    ),
     ADY = case_when(
       is.na(ADT) | is.na(TRTSDT) ~ NA_integer_,
       ADT >= TRTSDT ~ as.integer(ADT - TRTSDT) + 1L,
@@ -62,7 +68,7 @@ flagged <- base |>
 
 adrs <- flagged |>
   select(
-    STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY,
+    STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADTF, ADY,
     AVALC, AVAL, ANL01FL
   ) |>
   arrange(USUBJID, ADT, RSSEQ)

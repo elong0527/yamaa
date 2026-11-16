@@ -12,6 +12,8 @@ run;
 data result;
   length RANDDTC $19;
   set dm;
+  /* The collected date, or the date of the collected moment. */
+  if missing(RANDDT) and not missing(RANDDTTM) then RANDDT=substr(RANDDTTM,1,10);
   if not missing(RANDDT) and not missing(RFSTDTC) then do;
     RANDDY=input(RANDDT,yymmdd10.)-input(RFSTDTC,yymmdd10.);
     if RANDDY>=0 then RANDDY=RANDDY+1;

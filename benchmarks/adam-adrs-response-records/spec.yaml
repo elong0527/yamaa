@@ -13,8 +13,8 @@ filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
 
 output:
   path: adrs.csv
-  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC,
-            AVAL, ANL01FL]
+  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADTF, ADY,
+            AVALC, AVAL, ANL01FL]
 
 columns:
   - name: STUDYID
@@ -61,6 +61,15 @@ columns:
         day: 1
     verifications:
       - not_missing
+
+  # D when the day was supplied, M when the month and day were.
+  - name: ADTF
+    type: str
+    label: Analysis Date Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ADT
+        part: date
 
   - name: AVALC
     type: str

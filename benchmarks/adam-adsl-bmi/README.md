@@ -1,21 +1,21 @@
-# Derive BMI Two Ways
+# Derive Baseline BMI with a Sponsor Routine
 
-**Goal:** derive body mass index (`BMI`) two ways - once as an inline
-expression and once via a routine the project supplies (`BMI_FN`) -
-and show both columns carry the same value on every record.
+**Goal:** derive baseline body mass index (`BMIBL`) with the routine the
+project supplies, the way a sponsor's standard macro would, and check it
+against the formula written inline.
 
-**Input:** subject-level records carrying height in centimetres
-(`HEIGHTCM`) and weight in kilograms (`WEIGHTKG`); both are carried
-through unchanged.
+**Input:** subject-level records carrying baseline height in
+centimetres (`HEIGHTBL`) and baseline weight in kilograms (`WEIGHTBL`);
+both are carried through unchanged.
 
 **Variables:**
 
-- `BMI` holds body mass index: `WEIGHTKG` divided by the square of
-  height in metres (`HEIGHTCM` divided by 100). It is empty when
-  `HEIGHTCM` is missing or zero, or when `WEIGHTKG` is missing.
-- `BMI_FN` carries the same index as calculated by the project
-  routine from `HEIGHTCM` and `WEIGHTKG`; empty when height or
-  weight is missing.
+- `BMIBL` holds the baseline body mass index from the project routine:
+  `WEIGHTBL` divided by the square of height in metres (`HEIGHTBL`
+  divided by 100), not rounded. It is empty when `HEIGHTBL` or
+  `WEIGHTBL` is missing.
 
-**Note:** both columns agree on every record: a zero weight gives a
-zero index, and a missing height or weight leaves both empty.
+**Note:** before the dataset is written, every value of the routine is
+compared with the same index computed by the formula itself, and the run
+stops on any difference; the formula's value is not published. A zero
+weight gives an index of zero.

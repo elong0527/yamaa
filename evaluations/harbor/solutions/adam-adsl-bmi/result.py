@@ -4,17 +4,16 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create an ADSL dataset with BMI derived from height and weight.
+"""Create an ADSL dataset with baseline BMI from baseline height and weight.
 
 Reads the ADSL dataset from /app/input and writes /app/output/adsl.csv
-with one record per subject and the columns STUDYID, USUBJID, HEIGHTCM,
-WEIGHTKG, BMI, BMI_FN.
+with one record per subject and the columns STUDYID, USUBJID, HEIGHTBL,
+WEIGHTBL, BMIBL.
 
-BMI is WEIGHTKG divided by the square of the height in metres
-(HEIGHTCM / 100). BMI has no value when HEIGHTCM has no value or is zero,
-or when WEIGHTKG has no value. A WEIGHTKG of zero gives a BMI of zero.
-BMI_FN is the same body mass index from a project routine and agrees with
-BMI on every record. Neither value is rounded.
+BMIBL is WEIGHTBL divided by the square of the height in metres
+(HEIGHTBL / 100). BMIBL has no value when HEIGHTBL has no value or is
+zero, or when WEIGHTBL has no value. A WEIGHTBL of zero gives a BMIBL of
+zero. The value is not rounded.
 """
 
 import csv
@@ -32,20 +31,6 @@ def bmi(height_cm, weight_kg):
     return weight_kg / (height_m * height_m)
 
 
-def bmi_fn(height_cm, weight_kg):
-    """Project routine for the body mass index.
-
-    Has no value when HEIGHTCM or WEIGHTKG has no value, and agrees with
-    BMI on every record.
-    """
-    if height_cm is None or weight_kg is None:
-        return None
-    if height_cm == 0:
-        return None
-    height_m = height_cm / 100
-    return weight_kg / (height_m * height_m)
-
-
 def number(text):
     if text is None or text == "":
         return None
@@ -56,23 +41,19 @@ def main():
     with open("/app/input/adsl.csv", newline="") as handle:
         rows = list(csv.DictReader(handle))
 
-    columns = ["STUDYID", "USUBJID", "HEIGHTCM", "WEIGHTKG", "BMI", "BMI_FN"]
+    columns = ["STUDYID", "USUBJID", "HEIGHTBL", "WEIGHTBL", "BMIBL"]
     with open("/app/output/adsl.csv", "w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
         writer.writeheader()
         for row in rows:
-            height = number(row["HEIGHTCM"])
-            weight = number(row["WEIGHTKG"])
-            bmi_value = bmi(height, weight)
-            bmi_fn_value = bmi_fn(height, weight)
+            value = bmi(number(row["HEIGHTBL"]), number(row["WEIGHTBL"]))
             writer.writerow(
                 {
                     "STUDYID": row["STUDYID"],
                     "USUBJID": row["USUBJID"],
-                    "HEIGHTCM": row["HEIGHTCM"],
-                    "WEIGHTKG": row["WEIGHTKG"],
-                    "BMI": "" if bmi_value is None else bmi_value,
-                    "BMI_FN": "" if bmi_fn_value is None else bmi_fn_value,
+                    "HEIGHTBL": row["HEIGHTBL"],
+                    "WEIGHTBL": row["WEIGHTBL"],
+                    "BMIBL": "" if value is None else value,
                 }
             )
 

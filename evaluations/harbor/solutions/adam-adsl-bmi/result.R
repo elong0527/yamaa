@@ -10,22 +10,21 @@ library(readr)
 src <- read_csv(
   "/app/input/adsl.csv",
   col_types = cols(
-    HEIGHTCM = col_double(),
-    WEIGHTKG = col_double(),
+    HEIGHTBL = col_double(),
+    WEIGHTBL = col_double(),
     .default = col_character()
   )
 )
 
 adsl <- src |>
   mutate(
-    BMI = if_else(
-      is.na(HEIGHTCM) | HEIGHTCM == 0 | is.na(WEIGHTKG),
+    BMIBL = if_else(
+      is.na(HEIGHTBL) | HEIGHTBL == 0 | is.na(WEIGHTBL),
       NA_real_,
-      WEIGHTKG / ((HEIGHTCM / 100)^2)
-    ),
-    BMI_FN = BMI
+      WEIGHTBL / ((HEIGHTBL / 100)^2)
+    )
   ) |>
-  select(STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI, BMI_FN)
+  select(STUDYID, USUBJID, HEIGHTBL, WEIGHTBL, BMIBL)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(adsl, "/app/output/adsl.csv", na = "")

@@ -6,11 +6,13 @@ the imputation flags (`TRTSTMF`, `TRTETMF`), the treatment duration in days
 (`TRTDURD`), and the safety population flag (`SAFFL`).
 
 **Input:** one demographics (DM) record per subject carrying the
-actual arm (`ACTARM`), plus exposure (EX) records carrying the
-treatment name (`EXTRT`), sequence number (`EXSEQ`), start date
-(`EXSTDTC`), and end date (`EXENDTC`). Records are built from the
-demographics records, so an exposure record with no matching
-demographics record adds no record.
+actual arm (`ACTARM`), which is empty for a subject never treated,
+with the reason in `ARMNRS` (`ASSIGNED, NOT TREATED` or
+`SCREEN FAILURE`), plus exposure (EX) records of the study
+treatment carrying the treatment name (`EXTRT`), sequence number
+(`EXSEQ`), start date (`EXSTDTC`), and end date (`EXENDTC`).
+Records are built from the demographics records, so an exposure
+record with no matching demographics record adds no record.
 
 **Variables:**
 

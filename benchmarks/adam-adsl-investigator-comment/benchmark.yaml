@@ -4,10 +4,12 @@ domain: ADSL
 review:
   concerns:
     - Investigator comments are free text that must reach ADSL exactly as
-      written, with a flag for whether one was collected.
+      written, from the SDTM comments domain, with a flag for whether one was
+      collected.
     - Six subjects cover a comment with a comma, one with quotation marks, one
-      with a line break, empty fields, and a field of only spaces.
-    - Commas, quotes and line breaks pass through unchanged, and a field that
-      is empty or holds only spaces counts as no comment, so subject 106's
-      two-space field gives no comment and CMNTFL N, as missing text does in
-      SAS.
+      with a line break, a comment split across COVAL and COVAL1, a subject
+      with two comments, and a subject with none.
+    - Commas, quotes and line breaks pass through unchanged, a split comment
+      joins back with one space (subject 105), and two comments join in COSEQ
+      order with a semicolon (subject 106's comment 1 comes first though it is
+      the second record).

@@ -39,11 +39,12 @@ first <- doses |>
   group_by(USUBJID, DRUG) |>
   summarise(FIRSTM = min(START), .groups = "drop")
 
-# The latest dose of the drug at or before the sample.
+# The latest dose of the drug before the sample; a sample at a dose time
+# was taken before that dose.
 latest <- samples |>
   filter(!is.na(ADTMM)) |>
   inner_join(doses, by = c("USUBJID", "DRUG"), relationship = "many-to-many") |>
-  filter(START <= ADTMM) |>
+  filter(START < ADTMM) |>
   group_by(USUBJID, PCSEQ) |>
   summarise(LATESTM = max(START), .groups = "drop")
 
@@ -51,7 +52,7 @@ adpc <- samples |>
   left_join(first, by = c("USUBJID", "DRUG")) |>
   left_join(latest, by = c("USUBJID", "PCSEQ")) |>
   mutate(
-    # A sample taken before every dose refers to the first dose.
+    # A sample taken before or at the first dose refers to the first dose.
     REFM = if_else(is.na(ADTMM) | is.na(FIRSTM), as.POSIXct(NA, tz = "UTC"),
                    coalesce(LATESTM, FIRSTM)),
     PARAMCD = PCTESTCD,
