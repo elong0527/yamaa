@@ -1,0 +1,19 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: LAB01
+  name: LAB01
+  description: Example study whose central laboratory changed on 2026-03-01
+  protocol_name: LAB-01
+
+adam:
+  specs:
+    - spec.yaml
+  standards:
+    - name: ADaMIG
+      version: "1.3"
+      status: Final
+  define: define.xml
+  context: Other
+  source_system_version: "1.0"

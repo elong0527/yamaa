@@ -4,7 +4,7 @@ pub use crate::bound_expression::BoundNumeric;
 use crate::bound_expression::Read;
 use crate::{
     bound_expression::{BindingError, BoundPredicate},
-    table::TableSchema,
+    table::{TableSchema, ValueRef},
     value::Value,
 };
 use std::{collections::BTreeMap, vec};
@@ -459,20 +459,17 @@ pub enum Check {
     ScopedRowCount(RowCount),
 }
 
-/// One value-level where clause over completed `str` columns: a row is
-/// selected when every term selects it.
+/// One value-level where clause over completed columns: a row is selected
+/// when every term selects it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WhereClause {
     pub terms: Vec<WhereTerm>,
 }
 impl WhereClause {
     pub fn selects(&self, row: &[Value]) -> bool {
-        self.terms.iter().all(|term| {
-            term.selects(match &row[term.column] {
-                Value::Str(value) => Some(value),
-                _ => None,
-            })
-        })
+        self.terms
+            .iter()
+            .all(|term| term.selects((&row[term.column]).into()))
     }
     /// The columns the clause reads.
     pub fn columns(&self) -> impl Iterator<Item = usize> + '_ {
@@ -481,14 +478,24 @@ impl WhereClause {
 }
 
 /// One where column of a clause and the values it lists (SUB-12). A term
-/// selects a row whose column holds one of the values, or, when it
+/// selects a row whose `str` column holds one of the values, or, when it
 /// `excludes` (NE and NOTIN), a row whose column holds none of them, a
-/// missing value included.
+/// missing value included. A term with a `bound` (LT, LE, GT, GE) instead
+/// selects a row whose present value orders against the bound as its
+/// comparator states (D314); `values` then holds the one value as written.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WhereTerm {
     pub column: usize,
     pub values: Vec<String>,
     pub excludes: bool,
+    pub bound: Option<WhereBound>,
+}
+/// The value an ordered where term compares a column with, converted to the
+/// column's type, and its comparator.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WhereBound {
+    pub order: crate::ast::Order,
+    pub value: Value,
 }
 impl WhereTerm {
     /// A term over `column` listing `values`, as a bare list writes it.
@@ -497,12 +504,36 @@ impl WhereTerm {
             column,
             values,
             excludes: false,
+            bound: None,
         }
     }
-    /// Whether the term selects a row whose column holds `value`, `None`
-    /// when the value is missing.
-    pub fn selects(&self, value: Option<&str>) -> bool {
-        value.is_some_and(|value| self.values.iter().any(|listed| listed == value)) != self.excludes
+    /// Whether the term selects a row whose column holds `value`. A missing
+    /// value is selected only by an exclusion, and a value whose type cannot
+    /// compare with an ordered term's bound is not selected.
+    pub fn selects(&self, value: ValueRef<'_>) -> bool {
+        match &self.bound {
+            Some(bound) => crate::value::compare_present_refs(value, (&bound.value).into())
+                .is_ok_and(|ordering| bound.order.holds(ordering)),
+            None => {
+                let held = match value {
+                    ValueRef::Str(value) => self.values.iter().any(|listed| listed == value),
+                    _ => false,
+                };
+                held != self.excludes
+            }
+        }
+    }
+    /// The comparator Define-XML writes for the term (DEFINE-27): EQ for one
+    /// listed value and IN for several, NE and NOTIN for an exclusion, and an
+    /// ordered term's own.
+    pub fn comparator(&self) -> &'static str {
+        match (&self.bound, self.excludes, self.values.len()) {
+            (Some(bound), _, _) => bound.order.name(),
+            (None, false, 1) => "EQ",
+            (None, false, _) => "IN",
+            (None, true, 1) => "NE",
+            (None, true, _) => "NOTIN",
+        }
     }
 }
 

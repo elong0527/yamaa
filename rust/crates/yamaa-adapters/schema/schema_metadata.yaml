@@ -74,7 +74,7 @@ submission_value_class:
     - where:
         type: "dict[identifier, where_condition]"
         required: true
-        description: Declared str output columns and the values that select the entry's rows; a row is selected when every listed column meets its condition (SUB-12).
+        description: Declared output columns and the values that select the entry's rows; a row is selected when every listed column meets its condition (SUB-12).
     - label:
         type: str
         required: false
@@ -91,8 +91,8 @@ where_comparison_class:
     - comparator:
         type: str
         required: false
-        values: [NE, NOTIN]
-        description: Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them (SUB-12).
+        values: [NE, NOTIN, LT, LE, GT, GE]
+        description: Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).
     - values:
         type: "list[where_value]"
         required: true
@@ -101,7 +101,7 @@ where_comparison_class:
 where_value:
     type: str
     min_length: 1
-    description: One value a where clause selects rows by (SUB-12).
+    description: One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator (SUB-12).
 
 submission_role_fields:
     - core:

@@ -1,0 +1,48 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [USUBJID, PARAMCD, AVISIT]
+input:
+  LB:
+    path: input/lb.csv
+    types: {LBSTRESN: float}
+
+output:
+  path: adlb.csv
+  columns: [USUBJID, PARAMCD, AVISIT, AVAL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: LB.VISIT
+
+  # The later visits are selected by ordering the visit's name, which is
+  # text.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+    submission:
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Predecessor
+          description: LB.LBSTRESN
+      value_level:
+        - id: LATE
+          where:
+            PARAMCD: [GLUC]
+            AVISIT: {comparator: GE, values: [WEEK 4]}
+          label: Glucose (mg/dL) from week 4 on

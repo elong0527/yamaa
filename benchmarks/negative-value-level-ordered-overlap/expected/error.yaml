@@ -1,0 +1,9 @@
+phase: validation
+condition: value_level_overlap
+spec_paths:
+  - columns.AVAL.submission.value_level.LAB_A.where
+  - columns.AVAL.submission.value_level.LAB_B.where
+rule: SUB-12
+context:
+  column: AVAL
+  entries: [LAB_A, LAB_B]

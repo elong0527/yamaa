@@ -346,6 +346,7 @@ own derivation. `AVAL` is the standard case -- alanine aminotransferase where
 | The VLM metadata when PARAMCD = "ALT" (origin, codelist, precision) | One `submission.value_level` entry on the column, with `where: {PARAMCD: [ALT]}` |
 | A Where Clause on several values or columns (PARAMCD in ALT, AST; LBSPEC = URINE) | A list of values: one value is EQ, several are IN, and several columns must all hold, as in `where: {LBTESTCD: [GLUC], LBSPEC: [URINE]}` |
 | A Where Clause with NE or NOT IN (DTYPE is not AVERAGE) | `where: {PARAMCD: [SYSBP], DTYPE: {comparator: NE, values: [AVERAGE]}}`; `comparator: NOTIN` takes two or more values. A missing value matches no listed value, so NE and NOTIN select it and EQ and IN never do |
+| A Where Clause with LT, LE, GT or GE (ADT is on or after the lab switch) | `where: {PARAMCD: [GLUC], ADT: {comparator: GE, values: ['2026-03-01']}}` on a column that is not text, one value converted to its type; a missing value is never selected |
 | "this PARAM is derived from another PARAM" | Another row template with its own PARAMCD, written as quoted text such as `"'BMI'"` |
 | "one collected record yields several analysis records" | Several row templates, appended in order |
 

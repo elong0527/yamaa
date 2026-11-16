@@ -277,19 +277,17 @@ fn width(value: ValueRef<'_>) -> usize {
 }
 
 /// Whether a value-level entry selects one held row: every where column's
-/// value is one of the values its clause lists, or none of them under `NE`
-/// and `NOTIN`.
+/// value meets its term (SUB-12).
 fn selects<T: TableAccess>(
     dataset: &Dataset,
     table: &T,
     row: usize,
     value: &crate::submission_composition::ValueDefinition,
 ) -> Result<bool, Finding> {
-    value.selects(|column, listed| {
-        let cell = table
+    value.selects(|column| {
+        table
             .cell(row, column)
-            .map_err(|_| artifact_mismatch(dataset, "held artifact where column access"))?;
-        Ok(matches!(cell, ValueRef::Str(text) if listed.iter().any(|value| value == text)))
+            .map_err(|_| artifact_mismatch(dataset, "held artifact where column access"))
     })
 }
 

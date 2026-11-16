@@ -3,11 +3,13 @@
 //! each row construction proves about the rows an entry selects. Shared by the
 //! domain build, which reads the typed tree, and by composition, which still
 //! reads each specification's document; no study, host or data access.
-use crate::ast::{self, CodelistType, Comparator, ExprId, ExprKind, Literal};
+use crate::ast::{self, CodelistType, Comparator, ExprId, ExprKind, Literal, Order};
+use crate::dataset::{WhereBound, WhereTerm};
 use crate::project_terminology::Catalogue;
 use crate::schema::{Document, DocumentNode as N};
 use crate::specification_submission_document::SubmissionMode;
-use crate::value::Value;
+use crate::value::{ColumnType, Value};
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 /// One where column as written: its name, its comparator and the values it
@@ -19,9 +21,9 @@ pub(crate) struct Term<'a> {
     pub(crate) values: Vec<&'a str>,
 }
 impl Term<'_> {
-    /// Whether the term selects a row whose column holds `value`, `None`
-    /// when it is missing: one of the values, or under `NE` and `NOTIN` none
-    /// of them, a missing value included.
+    /// Whether a listed term selects a row whose column holds the text
+    /// `value`, `None` when it is missing: one of the values, or under `NE`
+    /// and `NOTIN` none of them, a missing value included.
     pub(crate) fn selects(&self, value: Option<&str>) -> bool {
         value.is_some_and(|value| self.values.contains(&value)) != self.comparator.excludes()
     }
@@ -116,8 +118,11 @@ pub(crate) enum WhereFault<'a> {
     Undeclared,
     /// The clause names a declared column `output.columns` does not carry.
     NotOutput,
-    /// The clause names a column whose declared type is not `str`.
+    /// The clause lists values for a column whose declared type is not
+    /// `str`.
     NotText,
+    /// The clause orders a column whose declared type is `str` (D314).
+    OrderedText,
     /// A clause column lists no value.
     NoValues,
     /// A clause column lists a number of values its comparator does not
@@ -125,6 +130,9 @@ pub(crate) enum WhereFault<'a> {
     ValueCount(Comparator),
     /// A clause column lists one value twice.
     DuplicateValue,
+    /// An ordered clause column's value does not convert to the column's
+    /// declared type (VALUE-3).
+    ValueType,
     /// A clause column lists values its codelists do not admit: those
     /// values, in declared order.
     NotInCodelist(Vec<&'a str>),
@@ -137,9 +145,11 @@ impl<'a> WhereFault<'a> {
             Self::Undeclared => "undeclared",
             Self::NotOutput => "not_output",
             Self::NotText => "not_str",
+            Self::OrderedText => "ordered_str",
             Self::NoValues => "no_values",
             Self::ValueCount(_) => "value_count",
             Self::DuplicateValue => "duplicate_value",
+            Self::ValueType => "value_type",
             Self::NotInCodelist(_) => "not_in_codelist",
         }
     }
@@ -177,12 +187,12 @@ pub(crate) enum Finding<'a> {
 }
 
 /// A declared column a where clause may name: whether `output.columns`
-/// carries it, whether its declared type is `str`, and the values its
-/// codelists admit when they govern every one of its rows.
+/// carries it, its declared type, and the values its codelists admit when
+/// they govern every one of its rows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Declared<'c> {
     pub(crate) output: bool,
-    pub(crate) text: bool,
+    pub(crate) kind: ColumnType,
     pub(crate) codelist: Option<BTreeSet<&'c str>>,
 }
 
@@ -216,10 +226,12 @@ pub(crate) fn admitted<'c, 'n>(
 }
 
 /// The static checks of SUB-12 over one column's entries: identifiers unique
-/// within the column, where clauses over declared `str` output columns other
-/// than the column itself with nonempty distinct values their codelists
-/// admit, and no two entries whose where clauses can select one row. Historical
-/// composition keeps structural/name checks without asserting current rows.
+/// within the column, where clauses over declared output columns other than
+/// the column itself, listing nonempty distinct values their codelists admit
+/// for a `str` column or ordering a column of another type against one value
+/// that converts to it, and no two entries whose where clauses can select one
+/// row. Historical composition keeps structural/name checks without asserting
+/// current rows.
 pub(crate) fn admit<'a, 'b, 'c>(
     entries: impl IntoIterator<Item = (&'a str, &'b Clause<'a>)>,
     column: &str,
@@ -229,9 +241,10 @@ pub(crate) fn admit<'a, 'b, 'c>(
 where
     'a: 'b,
 {
+    let validated = mode == SubmissionMode::Validated;
     let mut findings = Vec::new();
     let mut ids = BTreeSet::new();
-    let mut valid = Vec::<(&'a str, &'b Clause<'a>)>::new();
+    let mut valid = Vec::<(&'a str, &'b Clause<'a>, Vec<Option<Value>>)>::new();
     for (id, clause) in entries {
         if !ids.insert(id) {
             findings.push(Finding::DuplicateId { id });
@@ -244,28 +257,37 @@ where
                 fault: WhereFault::NoColumns,
             });
         }
+        let mut bounds = Vec::with_capacity(clause.len());
         for Term {
             column: name,
             comparator,
             values,
         } in clause
         {
+            let ordered = comparator.order().is_some();
             let mut codelist = None;
+            let mut kind = None;
             let fault = if *name == column {
                 Some(WhereFault::Itself)
             } else {
                 match declared(name) {
                     None => Some(WhereFault::Undeclared),
                     Some(Declared { output: false, .. }) => Some(WhereFault::NotOutput),
-                    Some(Declared { text: false, .. }) if mode == SubmissionMode::Validated => {
-                        Some(WhereFault::NotText)
-                    }
-                    Some(declared) => {
-                        if mode == SubmissionMode::Validated {
-                            codelist = declared.codelist;
+                    Some(declared) if validated => {
+                        match (ordered, declared.kind == ColumnType::Str) {
+                            (false, false) => Some(WhereFault::NotText),
+                            (true, true) => Some(WhereFault::OrderedText),
+                            (false, true) => {
+                                codelist = declared.codelist;
+                                None
+                            }
+                            (true, false) => {
+                                kind = Some(declared.kind);
+                                None
+                            }
                         }
-                        None
                     }
+                    Some(_) => None,
                 }
             }
             .or_else(|| values.is_empty().then_some(WhereFault::NoValues))
@@ -287,7 +309,17 @@ where
                     .filter(|value| !admitted.contains(*value))
                     .collect::<Vec<_>>();
                 (!refused.is_empty()).then_some(WhereFault::NotInCodelist(refused))
+            })
+            .or_else(|| {
+                converted(values.first()?, kind?)
+                    .is_none()
+                    .then_some(WhereFault::ValueType)
             });
+            // The ordered term's converted value, for the overlap check.
+            bounds.push(
+                kind.zip(values.first())
+                    .and_then(|(kind, value)| converted(value, kind)),
+            );
             if let Some(fault) = fault {
                 findings.push(Finding::Where {
                     id,
@@ -299,38 +331,107 @@ where
         if findings.len() != before {
             continue;
         }
-        if mode == SubmissionMode::Validated {
-            if let Some(&(other, _)) = valid.iter().find(|(_, other)| overlap(other, clause)) {
+        if validated {
+            if let Some(&(other, _, _)) = valid
+                .iter()
+                .find(|(_, other, others)| overlap(other, others, clause, &bounds))
+            {
                 findings.push(Finding::Overlap { id, other });
             }
         }
-        valid.push((id, clause));
+        valid.push((id, clause, bounds));
     }
     findings
 }
 
+/// An ordered term's value as the where column's type `kind` holds it, when
+/// it converts under VALUE-3 to a present value.
+fn converted(value: &str, kind: ColumnType) -> Option<Value> {
+    crate::conversion::convert(&Value::Str(value.to_owned()), kind)
+        .ok()
+        .filter(|value| *value != Value::Missing)
+}
+
+/// The executable form of one where column at `column` of the output row:
+/// its listed values, or, under an ordered comparator, its one value
+/// converted to `kind`, the where column's type. `None` when an ordered term
+/// orders a `str` column or its value does not convert, which admission
+/// refuses first.
+pub(crate) fn where_term(
+    column: usize,
+    comparator: Comparator,
+    values: Vec<String>,
+    kind: ColumnType,
+) -> Option<WhereTerm> {
+    let bound = match comparator.order() {
+        Some(order) => {
+            let [value] = values.as_slice() else {
+                return None;
+            };
+            if kind == ColumnType::Str {
+                return None;
+            }
+            Some(WhereBound {
+                order,
+                value: converted(value, kind)?,
+            })
+        }
+        None => None,
+    };
+    Some(WhereTerm {
+        column,
+        values,
+        excludes: comparator.excludes(),
+        bound,
+    })
+}
+
 /// Whether two where clauses can select one row, as validation decides it:
 /// one clause's columns are all columns of the other, and every column they
-/// share admits a common value. Two clauses over columns neither of which
-/// contains the other are left to the build, which fails a row both select.
-pub(crate) fn overlap(left: &[Term<'_>], right: &[Term<'_>]) -> bool {
+/// share admits a common value. Each clause comes with the converted value of
+/// each of its ordered terms, in term order. Two clauses over columns neither
+/// of which contains the other are left to the build, which fails a row both
+/// select.
+pub(crate) fn overlap(
+    left: &[Term<'_>],
+    left_bounds: &[Option<Value>],
+    right: &[Term<'_>],
+    right_bounds: &[Option<Value>],
+) -> bool {
     fn columns<'a>(clause: &[Term<'a>]) -> BTreeSet<&'a str> {
         clause.iter().map(|term| term.column).collect()
     }
     let (a, b) = (columns(left), columns(right));
     (a.is_subset(&b) || b.is_subset(&a))
-        && left.iter().all(
-            |term| match right.iter().find(|other| other.column == term.column) {
-                Some(other) => share(term, other),
+        && left.iter().zip(left_bounds).all(|(term, bound)| {
+            match right
+                .iter()
+                .zip(right_bounds)
+                .find(|(other, _)| other.column == term.column)
+            {
+                Some((other, other_bound)) => share((term, bound), (other, other_bound)),
                 None => true,
-            },
-        )
+            }
+        })
 }
 
 /// Whether two terms over one column admit a common value: two lists that
-/// meet, a list holding a value an exclusion does not list, and any two
-/// exclusions, which both select the missing value (SUB-12).
-fn share(left: &Term<'_>, right: &Term<'_>) -> bool {
+/// meet, a list holding a value an exclusion does not list, any two
+/// exclusions, which both select the missing value, and two ordered terms
+/// whose half-lines meet (SUB-12). A list and an ordered term never share a
+/// column that admission passes, and such a pair is taken to meet.
+fn share(
+    (left, left_bound): (&Term<'_>, &Option<Value>),
+    (right, right_bound): (&Term<'_>, &Option<Value>),
+) -> bool {
+    match (
+        left.comparator.order().zip(left_bound.as_ref()),
+        right.comparator.order().zip(right_bound.as_ref()),
+    ) {
+        (Some(left), Some(right)) => return meet(left, right),
+        (None, None) => {}
+        _ => return true,
+    }
     match (left.comparator.excludes(), right.comparator.excludes()) {
         (false, false) => left.values.iter().any(|value| right.values.contains(value)),
         (false, true) => left
@@ -342,6 +443,48 @@ fn share(left: &Term<'_>, right: &Term<'_>) -> bool {
             .iter()
             .any(|value| !left.values.contains(value)),
         (true, true) => true,
+    }
+}
+
+/// Whether two ordered terms over one column select a common value. Two
+/// bounds on one side always meet; an upper and a lower bound meet when the
+/// lower lies below the upper, or on it when both select it. Over `int` and
+/// `date` columns, `GT x` and `LT y` share no value when `y` is the value
+/// after `x`.
+fn meet(left: (Order, &Value), right: (Order, &Value)) -> bool {
+    if left.0.upper() == right.0.upper() {
+        return true;
+    }
+    let (upper, lower) = if left.0.upper() {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    match crate::value::compare_present(lower.1, upper.1) {
+        Ok(Ordering::Less) => {
+            upper.0.inclusive() || lower.0.inclusive() || !adjacent(lower.1, upper.1)
+        }
+        Ok(Ordering::Equal) => upper.0.inclusive() && lower.0.inclusive(),
+        Ok(Ordering::Greater) => false,
+        Err(_) => true,
+    }
+}
+
+/// Whether `upper` is the value right after `lower` in a type with no value
+/// between consecutive ones: the next integer or the next calendar day.
+fn adjacent(lower: &Value, upper: &Value) -> bool {
+    match (lower, upper) {
+        (Value::Int(lower), Value::Int(upper)) => lower.checked_add(1) == Some(*upper),
+        (Value::Date(lower), Value::Date(upper)) => {
+            let (year, month, day) = lower.fields();
+            let next = match crate::temporal::month_length(year, month) {
+                Some(length) if day < length => (year, month, day + 1),
+                _ if month < 12 => (year, month + 1, 1),
+                _ => (year.saturating_add(1), 1, 1),
+            };
+            next == upper.fields()
+        }
+        _ => false,
     }
 }
 
@@ -427,10 +570,13 @@ fn reach_of(spec: &ast::Spec, construction: Option<&ast::Template>, clause: &[Te
                 ExprKind::Literal(Literal::Missing) => Some(None),
                 _ => None,
             });
-        match literal {
-            Some(value) if term.selects(value) => {}
-            Some(_) => return Reach::Never,
-            None => every = false,
+        // An ordered term never selects a missing value, and its other
+        // literals are left to the build.
+        match (literal, term.comparator.order()) {
+            (Some(None), Some(_)) => return Reach::Never,
+            (_, Some(_)) | (None, None) => every = false,
+            (Some(value), None) if term.selects(value) => {}
+            (Some(_), None) => return Reach::Never,
         }
     }
     if every {
@@ -491,6 +637,16 @@ mod tests {
             .collect()
     }
 
+    /// Whether two clauses without an ordered term can select one row.
+    fn listed_overlap(left: &[Term<'_>], right: &[Term<'_>]) -> bool {
+        overlap(
+            left,
+            &vec![None; left.len()],
+            right,
+            &vec![None; right.len()],
+        )
+    }
+
     /// One term over `column` under `comparator`.
     fn compared<'a>(column: &'a str, comparator: Comparator, values: &[&'a str]) -> Clause<'a> {
         vec![Term {
@@ -505,19 +661,19 @@ mod tests {
         let average = clause(&[("DTYPE", &["AVERAGE"])]);
         let observed = compared("DTYPE", Comparator::Ne, &["AVERAGE"]);
         // `NE [X]` and `[X]` on one column share no value.
-        assert!(!overlap(&observed, &average));
-        assert!(!overlap(&average, &observed));
+        assert!(!listed_overlap(&observed, &average));
+        assert!(!listed_overlap(&average, &observed));
         // A list holding another value meets the exclusion.
         let both = clause(&[("DTYPE", &["AVERAGE", "LOCF"])]);
-        assert!(overlap(&observed, &both));
-        assert!(overlap(&both, &observed));
+        assert!(listed_overlap(&observed, &both));
+        assert!(listed_overlap(&both, &observed));
         // Two exclusions on one column always share the missing value.
         let not_locf = compared("DTYPE", Comparator::Ne, &["LOCF"]);
-        assert!(overlap(&observed, &not_locf));
+        assert!(listed_overlap(&observed, &not_locf));
         let neither = compared("DTYPE", Comparator::NotIn, &["AVERAGE", "LOCF"]);
-        assert!(overlap(&neither, &observed));
+        assert!(listed_overlap(&neither, &observed));
         // NOTIN [X, Y] and [X, Y] share no value.
-        assert!(!overlap(&neither, &both));
+        assert!(!listed_overlap(&neither, &both));
     }
 
     #[test]
@@ -525,7 +681,7 @@ mod tests {
         let declared = |_: &str| {
             Some(Declared {
                 output: true,
-                text: true,
+                kind: ColumnType::Str,
                 codelist: None,
             })
         };
@@ -591,8 +747,8 @@ mod tests {
                 false,
             ),
         ] {
-            assert_eq!(overlap(&paramcd, &other), expected, "{other:?}");
-            assert_eq!(overlap(&other, &paramcd), expected, "{other:?}");
+            assert_eq!(listed_overlap(&paramcd, &other), expected, "{other:?}");
+            assert_eq!(listed_overlap(&other, &paramcd), expected, "{other:?}");
         }
     }
 
@@ -602,22 +758,22 @@ mod tests {
         let declared = |name: &str| match name {
             "PARAMCD" => Some(Declared {
                 output: true,
-                text: true,
+                kind: ColumnType::Str,
                 codelist: Some(BTreeSet::from(["X", "Y"])),
             }),
             "AVISIT" => Some(Declared {
                 output: true,
-                text: true,
+                kind: ColumnType::Str,
                 codelist: None,
             }),
             "INTERNAL" => Some(Declared {
                 output: false,
-                text: true,
+                kind: ColumnType::Str,
                 codelist: None,
             }),
             "AVISITN" => Some(Declared {
                 output: true,
-                text: false,
+                kind: ColumnType::Int,
                 codelist: None,
             }),
             _ => None,
@@ -673,6 +829,214 @@ mod tests {
                 ),
                 fault("K", Some("PARAMCD"), WhereFault::DuplicateValue),
             ]
+        );
+    }
+
+    #[test]
+    fn ordered_terms_overlap_where_their_ranges_meet() {
+        // An internal seam: validation's overlap over converted bounds, which
+        // the benchmarks reach only for the one pair each pins.
+        let date = |text: &str| Value::Date(text.parse().unwrap());
+        let term = |order| Term {
+            column: "ADT",
+            comparator: Comparator::Ordered(order),
+            values: vec!["?"],
+        };
+        let cases = [
+            (
+                (Order::Lt, date("2026-03-01")),
+                (Order::Ge, date("2026-03-01")),
+                false,
+                "LT and GE of one day",
+            ),
+            (
+                (Order::Le, date("2026-03-01")),
+                (Order::Ge, date("2026-03-01")),
+                true,
+                "LE and GE share the day",
+            ),
+            (
+                (Order::Lt, date("2026-03-01")),
+                (Order::Gt, date("2026-02-28")),
+                false,
+                "no day lies between consecutive days",
+            ),
+            (
+                (Order::Lt, date("2026-03-02")),
+                (Order::Gt, date("2026-02-28")),
+                true,
+                "one day lies between",
+            ),
+            (
+                (Order::Lt, date("2026-01-01")),
+                (Order::Gt, date("2025-12-31")),
+                false,
+                "consecutive days across a year",
+            ),
+            (
+                (Order::Lt, date("2026-03-01")),
+                (Order::Lt, date("2025-01-01")),
+                true,
+                "two upper bounds",
+            ),
+            (
+                (Order::Ge, date("2026-03-01")),
+                (Order::Gt, date("2027-01-01")),
+                true,
+                "two lower bounds",
+            ),
+            (
+                (Order::Le, date("2026-01-01")),
+                (Order::Ge, date("2026-03-01")),
+                false,
+                "the lower bound above the upper",
+            ),
+            (
+                (Order::Lt, Value::Int(3)),
+                (Order::Gt, Value::Int(2)),
+                false,
+                "no integer lies between 2 and 3",
+            ),
+            (
+                (Order::Lt, Value::float(3.0)),
+                (Order::Gt, Value::float(2.0)),
+                true,
+                "every float between 2 and 3",
+            ),
+        ];
+        for ((left, left_bound), (right, right_bound), expected, label) in cases {
+            for (a, a_bound, b, b_bound) in [
+                (left, &left_bound, right, &right_bound),
+                (right, &right_bound, left, &left_bound),
+            ] {
+                assert_eq!(
+                    overlap(
+                        &[term(a)],
+                        &[Some(a_bound.clone())],
+                        &[term(b)],
+                        &[Some(b_bound.clone())]
+                    ),
+                    expected,
+                    "{label}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_ordered_comparator_takes_one_value_of_a_where_column_that_is_not_text() {
+        // An internal seam: the static faults of ordered terms, beside the
+        // listed ones `static_findings_name_the_entry_column_and_fault` pins.
+        let declared = |name: &str| {
+            Some(Declared {
+                output: true,
+                kind: match name {
+                    "PARAMCD" => ColumnType::Str,
+                    "AVISITN" => ColumnType::Int,
+                    _ => ColumnType::Date,
+                },
+                codelist: None,
+            })
+        };
+        let ordered = |column, order, values: &[&'static str]| {
+            compared(column, Comparator::Ordered(order), values)
+        };
+        let entries = [
+            ("TEXT", ordered("PARAMCD", Order::Lt, &["M"])),
+            (
+                "TWO",
+                ordered("ADT", Order::Ge, &["2026-01-01", "2026-02-01"]),
+            ),
+            ("WORDS", ordered("ADT", Order::Ge, &["March 2026"])),
+            ("FRACTION", ordered("AVISITN", Order::Gt, &["2.5"])),
+            ("EARLY", ordered("ADT", Order::Lt, &["2026-03-01"])),
+            ("LATE", ordered("ADT", Order::Ge, &["2026-03-01"])),
+            ("LATER", ordered("ADT", Order::Gt, &["2026-06-30"])),
+        ];
+        let fault = |id, column, fault| Finding::Where {
+            id,
+            column: Some(column),
+            fault,
+        };
+        assert_eq!(
+            admit(
+                entries.iter().map(|(id, clause)| (*id, clause)),
+                "AVAL",
+                SubmissionMode::Validated,
+                declared
+            ),
+            [
+                fault("TEXT", "PARAMCD", WhereFault::OrderedText),
+                fault(
+                    "TWO",
+                    "ADT",
+                    WhereFault::ValueCount(Comparator::Ordered(Order::Ge))
+                ),
+                fault("WORDS", "ADT", WhereFault::ValueType),
+                fault("FRACTION", "AVISITN", WhereFault::ValueType),
+                Finding::Overlap {
+                    id: "LATER",
+                    other: "LATE"
+                },
+            ]
+        );
+        assert_eq!(
+            [
+                WhereFault::OrderedText.reason(),
+                WhereFault::ValueType.reason(),
+                WhereFault::ValueCount(Comparator::Ordered(Order::Ge))
+                    .comparator()
+                    .unwrap(),
+            ],
+            ["ordered_str", "value_type", "GE"]
+        );
+    }
+
+    #[test]
+    fn an_ordered_term_selects_present_values_on_its_side_of_the_bound() {
+        // An internal seam: the executable term each row check, composition
+        // and the transport share, including the missing value no benchmark
+        // row can show apart from an unselected one.
+        use crate::table::ValueRef;
+        let date = |text: &str| text.parse().unwrap();
+        let term = |comparator| {
+            where_term(0, comparator, vec!["2026-03-01".into()], ColumnType::Date).unwrap()
+        };
+        let rows = [
+            ValueRef::Date(date("2026-02-28")),
+            ValueRef::Date(date("2026-03-01")),
+            ValueRef::Date(date("2026-03-02")),
+            ValueRef::Missing,
+        ];
+        for (order, expected) in [
+            (Order::Lt, [true, false, false, false]),
+            (Order::Le, [true, true, false, false]),
+            (Order::Gt, [false, false, true, false]),
+            (Order::Ge, [false, true, true, false]),
+        ] {
+            let term = term(Comparator::Ordered(order));
+            assert_eq!(rows.map(|row| term.selects(row)), expected, "{order:?}");
+            assert_eq!(term.comparator(), order.name(), "{order:?}");
+        }
+        // A value that does not convert, or an ordered str column, builds no
+        // term; admission has refused both.
+        assert_eq!(
+            where_term(
+                0,
+                Comparator::Ordered(Order::Lt),
+                vec!["soon".into()],
+                ColumnType::Date
+            ),
+            None
+        );
+        assert_eq!(
+            where_term(
+                0,
+                Comparator::Ordered(Order::Lt),
+                vec!["M".into()],
+                ColumnType::Str
+            ),
+            None
         );
     }
 }

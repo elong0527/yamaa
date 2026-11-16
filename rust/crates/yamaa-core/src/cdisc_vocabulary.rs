@@ -598,6 +598,10 @@ impl DefineContext {
 pub enum WhereComparator {
     Ne,
     Notin,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }
 
 #[rustfmt::skip]
@@ -606,12 +610,20 @@ impl WhereComparator {
     pub const VALUES: &'static [(&'static str, Self)] = &[
         ("NE", Self::Ne),
         ("NOTIN", Self::Notin),
+        ("LT", Self::Lt),
+        ("LE", Self::Le),
+        ("GT", Self::Gt),
+        ("GE", Self::Ge),
     ];
     /// The value's spelling.
     pub fn name(self) -> &'static str {
         match self {
             Self::Ne => "NE",
             Self::Notin => "NOTIN",
+            Self::Lt => "LT",
+            Self::Le => "LE",
+            Self::Gt => "GT",
+            Self::Ge => "GE",
         }
     }
     /// The value a spelling names, or `None` for any other text.

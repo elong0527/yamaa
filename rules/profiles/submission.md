@@ -527,17 +527,17 @@ it is not redundant.
 
 ### SUB-12. A column's `value_level` entries give the rows their where clause selects their own metadata
 
-A column's `submission` may declare `value_level` entries. Each entry has an
-`id` unique within the column, a `where` clause, and metadata fields that
-override the column's on the rows the clause selects. `where` maps declared
-`str` output columns, other than the column itself, to nonempty lists of
-distinct values, and selects a row when every listed column holds one of its
-values or, under the comparator `NE` or `NOTIN`, none of them, missing
-included. Two entries whose where clauses can select one row fail
-validation.
+A column's `submission` may declare `value_level` entries, each with an `id`
+unique within the column, a `where` clause, and metadata overriding the
+column's on the rows the clause selects. `where` maps declared output
+columns, other than the column itself, to conditions a selected row meets
+together: a `str` column holds one of its distinct listed values or, under
+`NE` or `NOTIN`, none, missing included; another type orders against one
+value by `LT`, `LE`, `GT` or `GE`, missing excluded. Two entries whose where
+clauses can select one row fail validation.
 
 Fails: `value_level_where_invalid`, `duplicate_identifier`, `value_level_overlap`.
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `negative-value-level-overlap`, `negative-value-level-excluded-overlap`, `negative-value-level-comparator-count`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-core/src/submission_values.rs::an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value`, `rust/crates/yamaa-core/src/submission_values.rs::ne_takes_one_value_and_notin_two_or_more`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_whose_clause_holds_another_s_rows_overlaps_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_where_column_listing_no_values_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_text_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_its_own_column_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::value_level_clauses_over_columns_neither_of_which_holds_the_other_compose`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_neither_codelist_admits_are_refused_in_the_order_the_clause_lists_them`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_outside_the_where_columns_codelist_fails_before_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_sponsor_addition_to_the_where_columns_extensible_list_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_of_a_list_an_entry_of_the_where_column_binds_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_external_dictionary_on_an_entry_of_the_where_column_admits_every_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_column_without_a_codelist_admits_every_value`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `negative-value-level-ordered-text`, `negative-value-level-ordered-value`, `negative-value-level-ordered-overlap`, `negative-value-level-overlap`, `negative-value-level-excluded-overlap`, `negative-value-level-comparator-count`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-core/src/submission_values.rs::an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value`, `rust/crates/yamaa-core/src/submission_values.rs::ne_takes_one_value_and_notin_two_or_more`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_comparator_takes_one_value_of_a_where_column_that_is_not_text`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_terms_overlap_where_their_ranges_meet`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_term_selects_present_values_on_its_side_of_the_bound`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_whose_clause_holds_another_s_rows_overlaps_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_where_column_listing_no_values_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_text_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_its_own_column_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::value_level_clauses_over_columns_neither_of_which_holds_the_other_compose`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_neither_codelist_admits_are_refused_in_the_order_the_clause_lists_them`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_outside_the_where_columns_codelist_fails_before_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_sponsor_addition_to_the_where_columns_extensible_list_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_of_a_list_an_entry_of_the_where_column_binds_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_external_dictionary_on_an_entry_of_the_where_column_admits_every_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_column_without_a_codelist_admits_every_value`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`.
 
 The column-level `submission` stays the shared declaration for the column,
 and each entry supplies the metadata of the rows its where clause selects. An
@@ -568,17 +568,33 @@ reports it as `redundant_long_form` ([SCHEMA-15](../reference/schema-language.md
 A where column is compared on its completed value under [Values](../values.md)
 equality, and a missing value matches no listed value. Listed values are
 strings, which a value of another type never equals under
-[VALUE-19](../values.md#value-19), so a where column must be `str`. A where
-clause that names no column, or a where column that is the column itself, is
-not a declared column, is not in `output.columns`, is not of type `str`, lists
-no value, lists a number of values its comparator does not take, lists one
-value twice or lists a value its codelists do not admit, fails with
-`value_level_where_invalid` at `<entry>.where.<where column>`, or at
-`<entry>.where` for a clause without columns, reporting the column, the entry,
-the where column and the `reason`: `no_columns`, `self`, `undeclared`,
-`not_output`, `not_str`, `no_values`, `value_count`, `duplicate_value` or
-`not_in_codelist`. With `value_count` it also reports the comparator, `NE`
-or `NOTIN`, in `comparator`. With `not_in_codelist` it also reports, in
+[VALUE-19](../values.md#value-19), so a column that lists values must be
+`str`.
+
+A where column of another type is ordered instead: `{comparator: GE, values:
+['2026-03-01']}` on a `date` column selects the rows on or after that day,
+and `LT`, `LE` and `GT` select the rows before it, on or before it and after
+it. An ordered comparator takes exactly one value, written as text and
+converted to the where column's type under [VALUE-3](../values.md#value-3)
+before any data is read; the column's completed value is compared with it
+under [VALUE-19](../values.md#value-19), and a row whose value is missing is
+never selected. An ordered value is checked against no codelist. Ordering a
+`str` column is refused, so one where column is either listed or ordered,
+never both; a clause selecting a band, such as at least 3 and below 6, has no
+spelling.
+
+A where clause that names no column, or a where column that is the column
+itself, is not a declared column, is not in `output.columns`, lists values
+but is not of type `str`, is ordered but is of type `str`, lists no value,
+lists a number of values its comparator does not take, lists one value twice,
+lists a value its codelists do not admit or orders against a value that does
+not convert to its type, fails with `value_level_where_invalid` at
+`<entry>.where.<where column>`, or at `<entry>.where` for a clause without
+columns, reporting the column, the entry, the where column and the `reason`:
+`no_columns`, `self`, `undeclared`, `not_output`, `not_str`, `ordered_str`,
+`no_values`, `value_count`, `duplicate_value`, `not_in_codelist` or
+`value_type`. With `value_count` it also reports the comparator, `NE`,
+`NOTIN`, `LT`, `LE`, `GT` or `GE`, in `comparator`. With `not_in_codelist` it also reports, in
 `values`, the listed values that none of the where column's codelists
 admits, in their declared order.
 A schema-valid `id` is an identifier; two entries of one column with the same
@@ -598,11 +614,16 @@ codelists.
 Validation decides that two where clauses can select one row when one
 clause's columns are all columns of the other and every column they share
 admits a common value: two lists that meet, a list holding a value an `NE` or
-`NOTIN` column does not list, or any two `NE` or `NOTIN` columns, which both
-select the missing value. The clauses then select at least one common row
-whatever the data. `{comparator: NE, values: [X]}` and `[X]` on one column
+`NOTIN` column does not list, any two `NE` or `NOTIN` columns, which both
+select the missing value, or two ordered columns whose ranges meet. Two
+bounds on one side always meet; an upper bound (`LT`, `LE`) and a lower bound
+(`GT`, `GE`) meet when the lower value lies below the upper, or equals it
+under `LE` and `GE` both. On an `int` or `date` column, `GT` one value and
+`LT` the next integer or day share no value. The clauses then select at least
+one common row whatever the data. `{comparator: NE, values: [X]}` and `[X]` on one column
 admit no common value, so the rows of an ADaM dataset whose `DTYPE` is
-missing and those it derives can each have their own entry. The failure is `value_level_overlap`, naming both where
+missing and those it derives can each have their own entry, and neither do
+`LT` and `GE` of one value, so the rows before a date and those from it can. The failure is `value_level_overlap`, naming both where
 clauses in declaration order and reporting the column and both entries. Two
 clauses over columns neither of which contains the other's are admitted, and
 [SUB-13](#sub-13) fails a row both select.

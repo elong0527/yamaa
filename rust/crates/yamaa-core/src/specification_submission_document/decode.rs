@@ -568,8 +568,8 @@ impl<'a> Parser<'a> {
                 true,
             )?;
             // A resolved 1.0 specification holds its where condition in the
-            // long form, `{values: [...]}`, with an `NE` or `NOTIN`
-            // comparator when one is written (P-VLM-1).
+            // long form, `{values: [...]}`, with its comparator when one is
+            // written (P-VLM-1, D314).
             let (comparator, list) = match &self.input.nodes()[value] {
                 N::Mapping(_) => (
                     match self
