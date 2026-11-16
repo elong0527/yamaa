@@ -8,7 +8,7 @@ input:
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, SUBJID, SITEIDP, SITEID, SUBJREF]
+  columns: [STUDYID, USUBJID, SUBJID, SITEID, SITEIDP, SUBJREF]
 
 columns:
   - name: STUDYID
@@ -25,9 +25,20 @@ columns:
     type: str
     label: Subject Identifier for the Study
     derivation: DM.SUBJID
+    verifications:
+      - not_missing
 
-  # The site part of a USUBJID shaped YAMAA-<site>-<four digits>; any other
-  # shape leaves it empty.
+  # The collected site, which DM requires.
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation: DM.SITEID
+    verifications:
+      - not_missing
+
+  # A check on the identifier: the site part of a USUBJID shaped
+  # YAMAA-<site>-<four digits>, kept beside SITEID so a disagreement shows,
+  # never in its place; any other shape leaves it empty.
   - name: SITEIDP
     type: str
     label: Parsed Study Site Identifier
@@ -38,26 +49,11 @@ columns:
         group: 1
         no_match: null
 
-  - name: SITEID
-    type: str
-    label: Study Site Identifier
-    derivation:
-      first_available:
-        sources: [SITEIDP, DM.SITEID]
-        missing: UNKNOWN
-    verifications:
-      - not_missing
-
-  # SITEID is never missing, so UNKNOWN here means SUBJID is missing.
   - name: SUBJREF
     type: str
     label: Subject Display Reference
     derivation:
-      str_template:
-        template: "{SITEID}:{SUBJID}"
-        missing: UNKNOWN
-    verifications:
-      - not_missing
+      str_template: "{SITEID}:{SUBJID}"
 
 verifications:
   - row_count:

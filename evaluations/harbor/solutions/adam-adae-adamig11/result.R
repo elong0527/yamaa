@@ -8,7 +8,7 @@ n <- nrow(ae)
 adae <- ae[c("STUDYID", "USUBJID", "AESEQ", "AETERM")]
 adae$ASTDTM <- rep(NA_character_, n)
 adae$ASTDT <- rep(NA_character_, n)
-adae$ASTTM <- rep(NA_integer_, n)
+adae$ASTTM <- rep(NA_character_, n)
 adae$ASTTMF <- rep(NA_character_, n)
 
 for (i in seq_len(n)) {
@@ -26,7 +26,7 @@ for (i in seq_len(n)) {
   if (hour > 23L || minute > 59L || second > 59L) next
   adae$ASTDTM[i] <- sprintf("%sT%02d:%02d:%02d", date_text, hour, minute, second)
   adae$ASTDT[i] <- date_text
-  adae$ASTTM[i] <- hour * 3600L + minute * 60L + second
+  adae$ASTTM[i] <- sprintf("%02d:%02d:%02d", hour, minute, second)
   adae$ASTTMF[i] <- switch(as.character(precision), `10` = "H", `13` = "M",
                          `16` = "S", NA_character_)
 }

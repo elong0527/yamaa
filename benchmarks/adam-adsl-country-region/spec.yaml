@@ -21,19 +21,15 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # Upper case, so 'usa' and 'USA' are one country; an empty country is
-  # UNKNOWN. Any other country passes through to the region mapping.
+  # The ISO 3166 alpha-3 code SDTM collects, as it stands.
   - name: COUNTRY
     type: str
     label: Country
-    derivation:
-      str_case:
-        source: DM.COUNTRY
-        to: upper
-        missing: UNKNOWN
+    derivation: DM.COUNTRY
+    verifications:
+      - not_missing
 
-  # The same fallback answers an unlisted country and an empty one, so
-  # UNKNOWN and countries outside the three listed below reach it.
+  # The study's regions; a country outside them is Rest of World.
   - name: REGION1
     type: str
     label: Geographic Region 1
@@ -44,7 +40,9 @@ columns:
           USA: North America
           CAN: North America
           DEU: Europe
-        missing: Rest of World
+          ESP: Europe
+          FRA: Europe
+          GBR: Europe
         unmapped: Rest of World
     verifications:
       - allowed_values:

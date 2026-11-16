@@ -16,11 +16,12 @@ run;
 
 proc sql; create table joined as select a.*,b.TRTSDT from rs as a left join adsl as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID where a.RSTESTCD='OVRLRESP' and a.RSEVAL='INVESTIGATOR'; quit;
 data assessments;
-  length PARAMCD $8 PARAM $40 ADT $10 AVALC $16;
+  length PARAMCD $8 PARAM $40 ADT $10 ADTF $1 AVALC $16;
   set joined; PARAMCD='OVR'; PARAM='Overall Response by Investigator';
   ADT=RSDTC;
-  if lengthn(RSDTC)=7 then ADT=cats(RSDTC,'-01');
-  if lengthn(RSDTC)=4 then ADT=cats(RSDTC,'-01-01');
+  ADTF='';
+  if lengthn(RSDTC)=7 then do; ADT=cats(RSDTC,'-01'); ADTF='D'; end;
+  if lengthn(RSDTC)=4 then do; ADT=cats(RSDTC,'-01-01'); ADTF='M'; end;
   if not missing(ADT) and not missing(TRTSDT) then do;
     ADY=input(ADT,yymmdd10.)-input(TRTSDT,yymmdd10.); if ADY>=0 then ADY=ADY+1;
   end;
@@ -30,6 +31,6 @@ proc sort data=assessments; by STUDYID USUBJID ADT descending AVAL RSSEQ; run;
 data result; length ANL01FL $1; set assessments; by STUDYID USUBJID ADT; if first.ADT then ANL01FL='Y'; run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL from result;
+  create table final as select STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADTF, ADY, AVALC, AVAL, ANL01FL from result;
 quit;
 proc export data=final outfile="/app/output/adrs.csv" dbms=csv replace; run;

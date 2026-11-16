@@ -17,28 +17,30 @@ def read_csv(path):
 
 
 def last_record(records):
-    """Last record: latest DSSTDTC, ties broken by higher DSSEQ."""
+    """Last record: latest DSSTDTC, ties broken by higher DSSEQ; an undated
+    record is last only when no record has a DSSTDTC."""
     if not records:
         return None
-    return max(records, key=lambda r: (r["DSSTDTC"], float(r["DSSEQ"])))
+    return max(
+        records,
+        key=lambda r: (r["DSSTDTC"] != "", r["DSSTDTC"], float(r["DSSEQ"])),
+    )
 
 
 def main():
     dm = read_csv(INPUT_DIR + "/dm.csv")
     ds = read_csv(INPUT_DIR + "/ds.csv")
 
-    # Only DISPOSITION EVENT records with a date ever count.
+    # Only DISPOSITION EVENT records ever count.
     counted = {}
     for row in ds:
         if row["DSCAT"] != "DISPOSITION EVENT":
-            continue
-        if not row["DSSTDTC"]:
             continue
         counted.setdefault(row["USUBJID"], []).append(row)
 
     fieldnames = [
         "STUDYID", "USUBJID", "EOSDT", "EOSDECOD", "EOSREAS", "EOSSTT",
-        "DCSREAS", "EOTDT", "EOTSTT", "DCTREAS", "DCSREASP",
+        "DCSREAS", "EOTDT", "EOTSTT", "DCTREAS", "DCTREASP",
     ]
 
     out_rows = []
@@ -60,10 +62,14 @@ def main():
             eosdecod = last_study["DSDECOD"]
             eosreas = last_study["DSTERM"]
             eosstt = "COMPLETED" if eosdecod == "COMPLETED" else "DISCONTINUED"
-        dcsreas = eosreas if eosstt == "DISCONTINUED" else ""
+        dcsreas = eosdecod if eosstt == "DISCONTINUED" else ""
 
-        # End-of-treatment summary.
-        if last_treat is None:
+        # End-of-treatment summary; none for a subject never treated.
+        if not subj["RFXSTDTC"]:
+            eotdt = eotstt = treat_term = treat_decod = ""
+            if last_treat is not None:
+                eotdt = last_treat["DSSTDTC"]
+        elif last_treat is None:
             eotdt = ""
             eotstt = "ONGOING"
             treat_term = ""
@@ -73,8 +79,8 @@ def main():
             treat_decod = last_treat["DSDECOD"]
             treat_term = last_treat["DSTERM"]
             eotstt = "COMPLETED" if treat_decod == "COMPLETED" else "DISCONTINUED"
-        dctreas = treat_term if eotstt == "DISCONTINUED" else ""
-        dcsreasp = treat_term if treat_decod == "OTHER" else ""
+        dctreas = treat_decod if eotstt == "DISCONTINUED" else ""
+        dctreasp = treat_term if dctreas == "OTHER" else ""
 
         out_rows.append({
             "STUDYID": subj["STUDYID"],
@@ -87,7 +93,7 @@ def main():
             "EOTDT": eotdt,
             "EOTSTT": eotstt,
             "DCTREAS": dctreas,
-            "DCSREASP": dcsreasp,
+            "DCTREASP": dctreasp,
         })
 
     with open(OUTPUT_FILE, "w", newline="") as f:

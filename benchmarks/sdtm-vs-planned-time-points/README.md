@@ -3,8 +3,8 @@
 **Goal:** carry each collected vital-signs result with its actual
 collection datetime, and add the planned time point it was
 scheduled for and the dose it is timed from: `VSTESTCD`,
-`VSORRES`, `VSTPT`, `VSTPTNUM`, `VSELTM`, `VSTPTREF`, `VSRFTDTC`,
-`VSDTC`, and `VSDY`.
+`VSORRES`, `VSDTC`, `VSDY`, `VSTPT`, `VSTPTNUM`, `VSELTM`,
+`VSTPTREF`, and `VSRFTDTC`.
 
 **Input:** long-form Operational Data Model (ODM) data with one row
 per collected item, carrying the collection form (`FormOID`), the
@@ -21,18 +21,6 @@ datetime rides along on the dosing form `FO.EX`.
 - `VSSEQ` numbers the records per subject in schedule order, then
   pulse, systolic, and diastolic blood pressure within each time
   point.
-- `VSTPT` is the planned time point name for the collection
-  form: `PRE-DOSE`, `30 MIN POST-DOSE`, `1 H POST-DOSE`, or
-  `4 H POST-DOSE`.
-- `VSTPTNUM` is the planned time point number for the form:
-  1 through 4 in schedule order.
-- `VSELTM` is the planned elapsed time since the first dose for
-  the form, in ISO 8601 duration form: `-PT15M` before the dose,
-  then `PT30M`, `PT1H`, and `PT4H` after it.
-- `VSTPTREF` names the reference time point the planned elapsed
-  time counts from: `FIRST DOSE` on every record.
-- `VSRFTDTC` is the date and time of that reference time point,
-  the first-dose datetime from the subject's dosing form.
 - `VSTESTCD` is the test short name, looked up from the test
   dictionary by item: `PULSE`, `SYSBP`, or `DIABP`. Items with no
   dictionary entry (the datetime and dosing items) give no record.
@@ -52,6 +40,18 @@ datetime rides along on the dosing form `FO.EX`.
   from the subject's reference start date: that date is day 1,
   there is no day zero, and dates before it count back from -1;
   missing when the subject has no reference start date.
+- `VSTPT` is the planned time point name for the collection
+  form: `PRE-DOSE`, `30 MIN POST-DOSE`, `1 H POST-DOSE`, or
+  `4 H POST-DOSE`.
+- `VSTPTNUM` is the planned time point number for the form:
+  1 through 4 in schedule order.
+- `VSELTM` is the planned elapsed time since the first dose for
+  the form, in ISO 8601 duration form: `-PT15M` before the dose,
+  then `PT30M`, `PT1H`, and `PT4H` after it.
+- `VSTPTREF` names the reference time point the planned elapsed
+  time counts from: `FIRST DOSE` on every record.
+- `VSRFTDTC` is the date and time of that reference time point,
+  the first-dose datetime from the subject's dosing form.
 
 **Note:** the planned elapsed time stays in duration form next to
 the actual collection datetime, so a reading taken later than

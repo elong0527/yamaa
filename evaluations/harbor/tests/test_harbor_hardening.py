@@ -510,7 +510,7 @@ def test_minute_precision_fever_reference_passes_complete_changed_input_challeng
 
 
 @pytest.mark.parametrize(
-    "benchmark", ["adam-clinsite-site-level", "adam-adsl-flag-chain"]
+    "benchmark", ["adam-clinsite-site-level", "adam-adsl-bmi-quartile-group"]
 )
 @pytest.mark.parametrize("agent", ["reference", "hardcode"])
 def test_held_out_recomputes_aggregate_and_cross_subject_answers(

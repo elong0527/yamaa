@@ -6,7 +6,6 @@
 
 library(dplyr, warn.conflicts = FALSE)
 library(readr)
-library(stringr)
 
 dm <- read_csv(
   "/app/input/dm.csv",
@@ -15,11 +14,9 @@ dm <- read_csv(
 
 adsl <- dm |>
   mutate(
-    COUNTRY = str_trim(coalesce(COUNTRY, "")),
-    COUNTRY = if_else(COUNTRY == "", "UNKNOWN", str_to_upper(COUNTRY)),
     REGION1 = case_when(
       COUNTRY %in% c("USA", "CAN") ~ "North America",
-      COUNTRY == "DEU" ~ "Europe",
+      COUNTRY %in% c("DEU", "ESP", "FRA", "GBR") ~ "Europe",
       .default = "Rest of World"
     )
   ) |>

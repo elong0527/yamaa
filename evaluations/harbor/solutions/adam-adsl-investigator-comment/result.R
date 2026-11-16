@@ -10,16 +10,27 @@ library(readr)
 dm <- read_csv(
   "/app/input/dm.csv",
   col_types = cols(.default = col_character()),
+  na = ""
+)
+co <- read_csv(
+  "/app/input/co.csv",
+  col_types = cols(COSEQ = col_integer(), .default = col_character()),
+  na = "",
   trim_ws = FALSE
 )
 
-# A comment field that is empty, quoted or not, or holds only spaces
-# counts as no comment collected; any other comment is kept as recorded.
+# Each comment is COVAL, then COVAL1 after one space when it continues
+# there; a subject's comments join in COSEQ order with "; ".
+comments <- co |>
+  mutate(TEXT = if_else(is.na(COVAL1) | COVAL1 == "", COVAL,
+                        paste(COVAL, COVAL1))) |>
+  arrange(USUBJID, COSEQ) |>
+  group_by(USUBJID) |>
+  summarise(CMNT = paste(TEXT, collapse = "; "), .groups = "drop")
+
 adsl <- dm |>
-  mutate(
-    CMNT = if_else(grepl("\\S", COMMENT), COMMENT, NA_character_),
-    CMNTFL = if_else(is.na(CMNT), "N", "Y")
-  ) |>
+  left_join(comments, by = "USUBJID") |>
+  mutate(CMNTFL = if_else(is.na(CMNT), "N", "Y")) |>
   select(STUDYID, USUBJID, CMNT, CMNTFL) |>
   arrange(USUBJID)
 

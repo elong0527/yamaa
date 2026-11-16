@@ -8,7 +8,7 @@ input:
 
 output:
   path: adrs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED]
+  columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFFL]
 
 windows:
   RESPONSE_ORDER:
@@ -80,9 +80,9 @@ columns:
   # Progressive disease needs no confirmation. A PR or CR is confirmed only
   # by a PR or CR at the very next assessment, 28 or more days later; with
   # no next assessment the test is unknown, so the record falls to N.
-  - name: CONFIRMED
+  - name: CONFFL
     type: str
-    label: Confirmation Flag
+    label: Confirmed Response Flag
     derivation:
       case:
         - when: "AVALC = 'PD'"

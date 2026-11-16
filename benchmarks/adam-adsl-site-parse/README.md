@@ -1,21 +1,22 @@
-# Parse the Site from the Subject Identifier
+# Check the Site in the Subject Identifier
 
-**Goal:** derive the parsed site, the site to use, and the display
-reference (`SITEIDP`, `SITEID`, and `SUBJREF`) for each subject.
+**Goal:** carry the site (`SITEID`), read the site from the subject
+identifier as a check (`SITEIDP`), and build the display reference
+(`SUBJREF`) for each subject.
 
 **Input:** demographics with the study identifier, the unique subject
-identifier, the collected subject number, and the collected site.
+identifier, the collected subject number, and the collected site, which
+every subject has.
 
 **Variables:**
 
-- `SITEIDP` is the site code read from the middle of the unique
-  subject identifier when it has the form `YAMAA-<site>-<four digits>`;
-  empty when the identifier has any other shape.
-- `SITEID` is the site to use: the parsed site when present, otherwise
-  the collected site, otherwise `UNKNOWN`.
-- `SUBJREF` combines the site to use and the collected subject number
-  with a colon; `UNKNOWN` when the subject number is missing.
+- `SITEID` is the site collected in demographics, as it stands.
+- `SITEIDP` is the site code read from the middle of the unique subject
+  identifier when it has the form `YAMAA-<site>-<four digits>`; empty
+  when the identifier has any other shape. It never replaces `SITEID`.
+- `SUBJREF` combines `SITEID` and the collected subject number with a
+  colon.
 
-**Note:** keeping both the parsed and the final site shows which
-subjects fell back to the collected site and which had no usable site
-at all.
+**Note:** keeping the site read from the identifier beside the collected
+one shows a subject whose identifier names another site, and which
+identifiers do not have the expected shape.

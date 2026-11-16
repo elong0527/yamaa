@@ -14,6 +14,8 @@ dm <- nanoparquet::read_parquet("/app/input/dm.parquet")
 # no day 0, so the day before is day -1.
 adsl <- dm |>
   mutate(
+    # The collected date, or the date of the collected moment.
+    RANDDT = coalesce(RANDDT, as.Date(RANDDTTM, tz = "UTC")),
     .diff = as.integer(RANDDT - RFSTDTC),
     RANDDY = case_when(
       is.na(.diff) ~ NA_integer_,
@@ -21,7 +23,7 @@ adsl <- dm |>
       .default = .diff
     ),
     # The collected moment as ISO 8601 text with a T, at whole-second
-    # precision, written from what was collected even when no date was.
+    # precision.
     RANDDTC = format(RANDDTTM, "%Y-%m-%dT%H:%M:%S", tz = "UTC")
   ) |>
   select(STUDYID, USUBJID, RANDDT, RANDDY, RANDDTC) |>

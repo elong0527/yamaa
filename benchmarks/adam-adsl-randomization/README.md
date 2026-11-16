@@ -17,8 +17,9 @@ collected date.
 
 **Variables:**
 
-- `RANDDT` is the randomization date as collected. It stays
-  empty when no randomization date was collected.
+- `RANDDT` is the randomization date as collected. When only the
+  moment was collected, it is the date of that moment. It stays
+  empty when neither was collected.
 - `RANDDY` is the study day of randomization measured from
   `RFSTDTC`: the reference date itself is day `1`, later dates
   count forward inclusively, and earlier dates count backward
@@ -29,7 +30,7 @@ collected date.
   `10:30` becomes `10:30:00`. It stays empty when no moment was
   collected.
 
-**Note:** the moment is written from what was collected,
-independently of the date: a subject with a collected moment but
-no collected date still gets `RANDDTC`, while `RANDDT` and
-`RANDDY` stay empty.
+**Note:** a subject with a collected moment but no collected date
+takes the moment's date as `RANDDT`, so `RANDDY` counts from it
+too, and `RANDDTC` is written from the moment as for every other
+subject.

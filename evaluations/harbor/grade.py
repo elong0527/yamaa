@@ -39,7 +39,7 @@ import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import (
     ROUND_CEILING,
     ROUND_FLOOR,
@@ -168,6 +168,11 @@ def normalize(value: str, kind: str) -> object:
             return datetime.fromisoformat(text.replace("Z", "+00:00"))
         except ValueError:
             return ("unparsed", text)
+    if kind == "time":
+        try:
+            return time.fromisoformat(text)
+        except ValueError:
+            return ("unparsed", text)
     return ("unparsed", text)
 
 
@@ -229,7 +234,7 @@ def display(value: object) -> str:
         return ""
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
-    if isinstance(value, (date, datetime)):
+    if isinstance(value, (date, datetime, time)):
         return value.isoformat()
     return str(value)
 

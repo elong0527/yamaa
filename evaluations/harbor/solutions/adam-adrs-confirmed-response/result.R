@@ -27,7 +27,7 @@ ordered <- rs |>
     NEXT_AVALC = lead(AVALC),
     NEXT_ADT = lead(ADT),
     DAYS = as.integer(NEXT_ADT - ADT),
-    CONFIRMED = case_when(
+    CONFFL = case_when(
       AVALC %in% "PD" ~ "Y",
       AVALC %in% c("PR", "CR") &
         NEXT_AVALC %in% c("PR", "CR") &
@@ -36,7 +36,7 @@ ordered <- rs |>
     )
   ) |>
   ungroup() |>
-  select(STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED) |>
+  select(STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFFL) |>
   arrange(USUBJID, ADT, RSSEQ)
 
 dir.create("/app/output", showWarnings = FALSE)

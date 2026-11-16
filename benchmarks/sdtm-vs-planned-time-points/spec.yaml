@@ -11,9 +11,9 @@ base: ODM
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTPT, VSTPTNUM, VSELTM,
-    VSTPTREF, VSRFTDTC, VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU, VSDTC,
-    VSDY]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSORRESU,
+    VSSTRESN, VSSTRESU, VISIT, VSDTC, VSDY, VSTPT, VSTPTNUM, VSELTM, VSTPTREF,
+    VSRFTDTC]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 # The subject's first-dose date-time, from the dosing form's start item: the

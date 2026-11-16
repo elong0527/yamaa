@@ -3,9 +3,9 @@
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data dm;
-  length STUDYID USUBJID ACTARM $1024;
+  length STUDYID USUBJID ACTARM ARMNRS $1024;
   infile "/app/input/dm.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. ACTARM : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. ACTARM : $char1024. ARMNRS : $char1024.;
 run;
 
 data ex;

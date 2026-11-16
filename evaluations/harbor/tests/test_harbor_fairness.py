@@ -571,7 +571,7 @@ def test_site_parse_reference_still_exercises_four_digit_subjects(tmp_path):
         == sum(bool(row["SITEIDP"]) for row in original)
         == 4
     )
-    assert any(row["SITEID"] == "UCLA" for row in changed)
+    assert any(row["SITEIDP"] == "UCLA" for row in changed)
 
 
 def test_measurement_challenges_keep_standardized_results_and_groups_consistent(
