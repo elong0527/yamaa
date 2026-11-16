@@ -600,13 +600,13 @@ impl Run<'_> {
         if beside.is_empty() || !beside.iter().all(|key| fields.contains(key)) {
             return Ok(None);
         }
-        let (named, is, it) = match beside.as_slice() {
-            [one] => ((*one).to_owned(), "is a field", "it"),
-            many => (many.join(" and "), "are fields", "them"),
+        let (named, is, operations, it) = match beside.as_slice() {
+            [one] => ((*one).to_owned(), "is a field", "an operation", "it"),
+            many => (many.join(" and "), "are fields", "operations", "them"),
         };
         let name = &operation.name;
         Ok(Some(format!(
-            "{named} {is} of {name}, not an operation; write {it} inside the mapping of {name}, whose fields are {}",
+            "{named} {is} of {name}, not {operations}; write {it} inside the mapping of {name}, whose fields are {}",
             fields.join(", ")
         )))
     }

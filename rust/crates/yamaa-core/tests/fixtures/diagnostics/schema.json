@@ -290,6 +290,22 @@
       "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["check"], "context": {"registry": "dataset_verifications", "count": 2, "hint": "severity is a field of unique, not an operation; write it inside the mapping of unique, whose fields are id, columns, severity"}}]
     },
     {
+      "case": "two_fields_of_the_operation_written_beside_it_are_named_together",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"check": {"type": "dataset_verification"}}],
+          "dataset_verification": {"registry": "dataset_verifications"},
+          "dataset_verifications": {"unique": {"type": ["list[str]", "unique_arguments"]}, "assert": [{"require": {"type": "str", "required": true}}, {"severity": {"type": "str"}}]},
+          "unique_arguments": [{"id": {"type": "str"}}, {"columns": {"type": "list[str]", "required": true}}, {"severity": {"type": "str"}}]
+        }},
+        "document": {"check": {"unique": ["K", "P"], "severity": "warning", "id": "U1"}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["check"], "context": {"registry": "dataset_verifications", "count": 3, "hint": "severity and id are fields of unique, not operations; write them inside the mapping of unique, whose fields are id, columns, severity"}}]
+    },
+    {
       "case": "a_key_beside_the_operation_that_is_none_of_its_fields_has_no_hint",
       "operation": "schema_document",
       "input": {

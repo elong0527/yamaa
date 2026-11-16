@@ -157,10 +157,17 @@ pub(super) fn bind(
                 suggestion,
             );
             // Another intermediate is read for a donor record only in the
-            // reading intermediate's derivations (LOOKUP-16).
+            // reading intermediate's derivations (LOOKUP-16), which read a
+            // lookup that selects from an input. `SELF`, a pair relation, and
+            // an intermediate that drives a row template or is a pair
+            // relation's side are not read there, so they have no hint.
             if let Some((other, _)) = name.split_once('.').filter(|(other, _)| {
                 *other != intermediate
-                    && spec.intermediates.iter().any(|item| item.id.name == *other)
+                    && spec.intermediates.iter().any(|item| {
+                        item.id.name == *other && item.dataset.name != "SELF" && !item.pairs()
+                    })
+                    && !spec.drives_rows(other)
+                    && !spec.pairs_with(other)
             }) {
                 reference.text(
                     "hint",
