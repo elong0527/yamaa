@@ -106,13 +106,13 @@
       "case": "str_substr_refuses_a_source_that_is_not_text",
       "operation": "str_substr_apply",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "1", "value": {"date": "2024-03-10"}},
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_substr.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "date"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_substr.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "date", "convert_to": "str"}}]
     },
     {
       "case": "str_length_refuses_a_source_that_is_not_text",
       "operation": "str_length",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_length", "value": 1.5},
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_length.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "float"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_length.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "float", "convert_to": "str"}}]
     },
     {
       "case": "str_decimal_refuses_decimals_below_zero",
@@ -154,7 +154,13 @@
       "case": "str_case_refuses_a_source_that_is_not_text",
       "operation": "str_case",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_case", "case": "title", "value": 1},
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_case.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "int"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_case.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "int", "convert_to": "str"}}]
+    },
+    {
+      "case": "str_case_refuses_a_boolean_source_without_naming_a_conversion",
+      "operation": "str_case",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_case", "case": "title", "value": true},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_case.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "bool"}}]
     },
     {
       "case": "str_case_takes_delimiters_only_with_proper",
@@ -238,7 +244,7 @@
       "case": "str_extract_refuses_a_source_that_is_not_text",
       "operation": "str_extract_apply",
       "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "(a)", "group": "1", "value": 7},
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.TEXT.derivation.str_extract.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "int"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.TEXT.derivation.str_extract.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "int", "convert_to": "str"}}]
     },
     {
       "case": "str_extract_fails_where_its_pattern_matches_nowhere",

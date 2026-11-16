@@ -2,7 +2,7 @@
 
 use super::{
     ConstraintViolation, Document, DocumentKind, DocumentNode as N, SchemaAliasKind, SchemaClass,
-    SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
+    SchemaField, SchemaRegistry, SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
 };
 use crate::diagnostic::{ConditionCode, Definition};
 use crate::expression_table::{TemporalType, Verb};
@@ -551,6 +551,64 @@ impl Run<'_> {
                 ),
                 _ => None,
             }))
+    }
+    /// The hint for a mapping that writes one operation of `registry` beside
+    /// fields of that operation's own mapping, such as `severity` beside a
+    /// short-form `unique` (SCHEMA-7): those fields go inside the operation,
+    /// whose mapping is its class, or each class its descriptor's union names.
+    /// A key that names another operation, or no field of this one, has no
+    /// hint.
+    fn payload_field_hint(
+        &mut self,
+        registry: &SchemaRegistry,
+        items: &[(usize, usize)],
+    ) -> Result<Option<String>, ValidationError> {
+        let mut keys = Vec::with_capacity(items.len());
+        for (key, _) in items {
+            keys.push(self.key(*key)?.0);
+        }
+        let entry = |key: &str| registry.entries.iter().find(|entry| entry.name == key);
+        let mut operations = keys.iter().filter_map(|key| entry(key));
+        let (Some(operation), None) = (operations.next(), operations.next()) else {
+            return Ok(None);
+        };
+        let schema = self.schema;
+        let classes: Vec<&[SchemaField]> = match &operation.shape {
+            SchemaShape::Class(own) => vec![own.as_slice()],
+            SchemaShape::Descriptor(id) => schema.descriptors()[*id]
+                .descriptor
+                .members()
+                .iter()
+                .filter_map(|member| match &member.nodes()[member.root()] {
+                    TypeNode::Name(span) => schema.class_named(&member.expression()[span.clone()]),
+                    _ => None,
+                })
+                .map(|class| class.fields.as_slice())
+                .collect(),
+        };
+        let mut fields: Vec<&str> = Vec::new();
+        for field in classes.into_iter().flatten() {
+            if !fields.contains(&field.name.as_str()) {
+                fields.push(&field.name);
+            }
+        }
+        let beside: Vec<&str> = keys
+            .iter()
+            .map(String::as_str)
+            .filter(|key| *key != operation.name)
+            .collect();
+        if beside.is_empty() || !beside.iter().all(|key| fields.contains(key)) {
+            return Ok(None);
+        }
+        let (named, is, it) = match beside.as_slice() {
+            [one] => ((*one).to_owned(), "is a field", "it"),
+            many => (many.join(" and "), "are fields", "them"),
+        };
+        let name = &operation.name;
+        Ok(Some(format!(
+            "{named} {is} of {name}, not an operation; write {it} inside the mapping of {name}, whose fields are {}",
+            fields.join(", ")
+        )))
     }
     /// The hint for a number or a Boolean written as the last of
     /// `first_available`'s `sources`, which name variables: the value
@@ -1137,10 +1195,17 @@ impl Run<'_> {
                             ("registry", Self::text(&registry.name)),
                             ("count", SchemaContext::Count(items.len())),
                         ];
-                        if registry.name == "expressions" {
-                            if let Some(hint) = self.result_wrapper_hint(items)? {
-                                context.push(("hint", Self::text(hint)));
-                            }
+                        let wrapper = if registry.name == "expressions" {
+                            self.result_wrapper_hint(items)?.map(String::from)
+                        } else {
+                            None
+                        };
+                        let hint = match wrapper {
+                            Some(hint) => Some(hint),
+                            None => self.payload_field_hint(registry, items)?,
+                        };
+                        if let Some(hint) = hint {
+                            context.push(("hint", Self::text(hint)));
                         }
                         return Ok(vec![self.diagnostic(
                             site,

@@ -18,9 +18,14 @@ specification.
 rather than being converted.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-str-case-number`, `negative-str-length-number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_a_source_that_is_not_text`, `rust/tests/host-fixtures/cases.json::a_piece_of_a_number_in_a_row_template_is_refused_before_input`.
+Evidence: `negative-str-case-number`, `negative-str-length-number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_a_source_that_is_not_text`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_a_boolean_source_without_naming_a_conversion`, `rust/tests/host-fixtures/cases.json::a_piece_of_a_number_in_a_row_template_is_refused_before_input`.
 
-A source of another type fails under [VALUE-2](values.md#value-2).
+A source of another type fails under [VALUE-2](values.md#value-2). A source
+whose type converts to `str` under [VALUE-3](values.md#value-3), an `int`,
+`float`, `date`, `datetime` or `time`, records `convert_to: str`, and the
+message says to derive the source with that type first and read the derived
+value, as a column or an intermediate's derivation of `type: str` does. A
+`bool` converts to no `str`, so its refusal records no `convert_to`.
 
 <a id="text-2"></a>
 

@@ -785,7 +785,8 @@
         "context": {
           "source": "N",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       }
     ]
@@ -856,7 +857,8 @@
         "context": {
           "source": "SRC.N",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       }
     ]
@@ -1203,7 +1205,8 @@
         "context": {
           "source": "N",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       }
     ]
@@ -1285,7 +1288,8 @@
         "context": {
           "source": "N",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       }
     ]
@@ -1356,7 +1360,8 @@
         "context": {
           "source": "N",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       },
       {
@@ -2637,7 +2642,8 @@
         "context": {
           "source": "N",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       },
       {
@@ -3236,7 +3242,8 @@
           "context": {
             "source": "A",
             "expected": "str",
-            "actual": "int"
+            "actual": "int",
+            "convert_to": "str"
           },
           "applicable_handler": null,
           "rule": "TEXT-1",

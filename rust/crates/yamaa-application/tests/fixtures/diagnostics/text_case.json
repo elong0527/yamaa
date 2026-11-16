@@ -69,7 +69,7 @@
         "specification": "spec.yaml"
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "int"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "int", "convert_to": "str"}}]
     },
     {
       "case": "a_declared_float_source_is_rejected_in_row_scope_before_data_capture",
@@ -81,7 +81,7 @@
         "specification": "spec.yaml"
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "float"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "float", "convert_to": "str"}}]
     },
     {
       "case": "a_declared_date_source_is_rejected_in_row_scope_before_data_capture",
@@ -93,7 +93,7 @@
         "specification": "spec.yaml"
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "date"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "date", "convert_to": "str"}}]
     },
     {
       "case": "a_declared_datetime_source_is_rejected_in_row_scope_before_data_capture",
@@ -105,7 +105,7 @@
         "specification": "spec.yaml"
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "datetime"}}]
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "datetime", "convert_to": "str"}}]
     }
   ]
 }

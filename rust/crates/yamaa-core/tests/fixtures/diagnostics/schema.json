@@ -1,5 +1,5 @@
 {
-  "about": "The schema language's own findings in a pass over a complete document or a layer (SCHEMA-5, SCHEMA-7, SCHEMA-9, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. `schema_document` reads a complete document as an author wrote it, a list member named by the text of its `name` or `id` and otherwise by a rendering of what it holds; `schema_layer` reads a layer, inside each member of a keyed collection (`input`, `windows`, `columns`, `rows`, `intermediates`) and inside each block (`output`, `submission`) as a fragment whose requiredness waits for the resolved specification. A case that names both operations states that a fragment reports what the complete document reports. A case compares a complete list where its source stated every finding, and otherwise finds each finding by its cause among those the pass reports; its rows compare phase, condition, rule and path, with the context or the `expected` of the context where its source stated them. A value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). The rows from the Rust tests of schema_validation.rs and schema_references.rs keep those tests' paths, conditions and context; each phase is the registry's (yaml/conditions.yaml) and each rule the one the cause cites in the condition table. A mapping of exactly a result wrapper's value and unconvertible, written where only an expression fits, carries a hint the innermost type it sits in chooses: one named derivation takes the wrapper around its whole expression (COLUMN-13), one named intermediate_derivation takes type, derivation and unconvertible instead (LOOKUP-15), and outside both there is no hint; the schema of those cases mirrors the specification schema's two derivation types. A class validated by itself (schema_types), which no version gates, reports its missing required field, a field of the wrong type and an unknown field in that order, each with its context, names a list member by its index, and admits an int field's integer beyond 64 bits as written; these rows are declaration_schema_capture.rs's, whose tests read the class from a captured schema and the document from YAML.",
+  "about": "The schema language's own findings in a pass over a complete document or a layer (SCHEMA-5, SCHEMA-7, SCHEMA-9, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. `schema_document` reads a complete document as an author wrote it, a list member named by the text of its `name` or `id` and otherwise by a rendering of what it holds; `schema_layer` reads a layer, inside each member of a keyed collection (`input`, `windows`, `columns`, `rows`, `intermediates`) and inside each block (`output`, `submission`) as a fragment whose requiredness waits for the resolved specification. A case that names both operations states that a fragment reports what the complete document reports. A case compares a complete list where its source stated every finding, and otherwise finds each finding by its cause among those the pass reports; its rows compare phase, condition, rule and path, with the context or the `expected` of the context where its source stated them. A value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). The rows from the Rust tests of schema_validation.rs and schema_references.rs keep those tests' paths, conditions and context; each phase is the registry's (yaml/conditions.yaml) and each rule the one the cause cites in the condition table. A mapping of exactly a result wrapper's value and unconvertible, written where only an expression fits, carries a hint the innermost type it sits in chooses: one named derivation takes the wrapper around its whole expression (COLUMN-13), one named intermediate_derivation takes type, derivation and unconvertible instead (LOOKUP-15), and outside both there is no hint; a mapping that writes one operation beside fields of that operation's own mapping, such as severity beside a short-form unique, carries a hint naming them and the operation's fields, and a key that is no field of it, or a second operation, has no hint; the schema of those cases mirrors the specification schema's two derivation types. A class validated by itself (schema_types), which no version gates, reports its missing required field, a field of the wrong type and an unknown field in that order, each with its context, names a list member by its index, and admits an int field's integer beyond 64 bits as written; these rows are declaration_schema_capture.rs's, whose tests read the class from a captured schema and the document from YAML.",
   "cases": [
     {
       "case": "classes_keep_schema_then_input_order_in_a_complete_document",
@@ -272,6 +272,54 @@
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["derive.case[1].otherwise.literal"]}]
+    },
+    {
+      "case": "a_field_of_the_operation_written_beside_it_hints_that_it_goes_inside",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"check": {"type": "dataset_verification"}}],
+          "dataset_verification": {"registry": "dataset_verifications"},
+          "dataset_verifications": {"unique": {"type": ["list[str]", "unique_arguments"]}, "assert": [{"require": {"type": "str", "required": true}}, {"severity": {"type": "str"}}]},
+          "unique_arguments": [{"id": {"type": "str"}}, {"columns": {"type": "list[str]", "required": true}}, {"severity": {"type": "str"}}]
+        }},
+        "document": {"check": {"unique": ["K", "P"], "severity": "warning"}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["check"], "context": {"registry": "dataset_verifications", "count": 2, "hint": "severity is a field of unique, not an operation; write it inside the mapping of unique, whose fields are id, columns, severity"}}]
+    },
+    {
+      "case": "a_key_beside_the_operation_that_is_none_of_its_fields_has_no_hint",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"check": {"type": "dataset_verification"}}],
+          "dataset_verification": {"registry": "dataset_verifications"},
+          "dataset_verifications": {"unique": {"type": ["list[str]", "unique_arguments"]}, "assert": [{"require": {"type": "str", "required": true}}, {"severity": {"type": "str"}}]},
+          "unique_arguments": [{"id": {"type": "str"}}, {"columns": {"type": "list[str]", "required": true}}, {"severity": {"type": "str"}}]
+        }},
+        "document": {"check": {"unique": ["K", "P"], "colour": "red"}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["check"], "context": {"registry": "dataset_verifications", "count": 2}}]
+    },
+    {
+      "case": "two_operations_side_by_side_have_no_hint",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"check": {"type": "dataset_verification"}}],
+          "dataset_verification": {"registry": "dataset_verifications"},
+          "dataset_verifications": {"unique": {"type": ["list[str]", "unique_arguments"]}, "assert": [{"require": {"type": "str", "required": true}}, {"severity": {"type": "str"}}]},
+          "unique_arguments": [{"id": {"type": "str"}}, {"columns": {"type": "list[str]", "required": true}}, {"severity": {"type": "str"}}]
+        }},
+        "document": {"check": {"unique": ["K"], "assert": {"require": "K > 0"}}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["check"], "context": {"registry": "dataset_verifications", "count": 2}}]
     },
     {
       "case": "a_result_wrapper_in_a_case_otherwise_hints_that_it_goes_on_the_derivation",

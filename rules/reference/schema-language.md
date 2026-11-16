@@ -195,7 +195,7 @@ one-entry mapping whose key exists in the referenced registry and whose value
 matches that entry's payload shape.
 
 Fails: `invalid_operation_count`, `unknown_operation`.
-Evidence: `negative-literal-structure`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_no_keyword_declares_no_operation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_a_keyword_the_registry_lacks_is_an_unknown_operation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_result_wrapper_in_a_case_otherwise_hints_that_it_goes_on_the_derivation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_result_wrapper_as_an_intermediate_derivation_hints_at_the_intermediate_wrapper`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_result_wrapper_outside_any_derivation_has_no_hint`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/case_item_order.json::a_result_wrapper_as_a_column_case_otherwise_goes_on_the_derivation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/case_item_order.json::a_result_wrapper_as_an_intermediate_case_otherwise_takes_the_intermediate_wrapper`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
+Evidence: `negative-literal-structure`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_no_keyword_declares_no_operation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_a_keyword_the_registry_lacks_is_an_unknown_operation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_result_wrapper_in_a_case_otherwise_hints_that_it_goes_on_the_derivation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_result_wrapper_as_an_intermediate_derivation_hints_at_the_intermediate_wrapper`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_result_wrapper_outside_any_derivation_has_no_hint`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/case_item_order.json::a_result_wrapper_as_a_column_case_otherwise_goes_on_the_derivation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/case_item_order.json::a_result_wrapper_as_an_intermediate_case_otherwise_takes_the_intermediate_wrapper`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_field_of_the_operation_written_beside_it_hints_that_it_goes_inside`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_key_beside_the_operation_that_is_none_of_its_fields_has_no_hint`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::two_operations_side_by_side_have_no_hint`.
 
 A two-entry mapping holding exactly a result wrapper's `value` and
 `unconvertible`, written where only an expression fits, such as a case's
@@ -206,6 +206,13 @@ wrapper around its whole expression
 writes `type`, `derivation` and `unconvertible` instead
 ([LOOKUP-15](../lookup.md#lookup-15)). Outside both, the refusal has no
 `hint`.
+
+A mapping that writes one keyword beside keys that are fields of that
+keyword's own payload, such as `severity` beside a short-form `unique`, is
+refused with a `hint` naming those keys and the payload's fields, the fields
+of its class or of each class its descriptor names: they go inside the
+keyword's mapping. A key that is no field of the payload, or a second keyword,
+leaves the refusal without a `hint`.
 
 ```yaml
 expressions:

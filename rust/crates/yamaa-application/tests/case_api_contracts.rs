@@ -197,14 +197,14 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     }
     assert_eq!(
         counts,
-        [176, 237, 33, 89],
+        [176, 238, 33, 89],
         "every migrated case retains its API contract"
     );
     assert_eq!(
         row_phase_saves, 15,
         "the save cases moved from execution_row_phase_reads.rs"
     );
-    assert_eq!((subsequences, first_issues, executions), (12, 162, 605));
+    assert_eq!((subsequences, first_issues, executions), (12, 163, 607));
     assert_eq!(single_routes, 22, "every moved single-route row-scope case");
 }
 

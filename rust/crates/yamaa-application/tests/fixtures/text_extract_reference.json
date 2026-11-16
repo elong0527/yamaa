@@ -239,7 +239,8 @@
         "context": {
           "source": "TEXT",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       }
     ]
@@ -928,7 +929,8 @@
         "context": {
           "source": "TEXT",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       }
     ]
@@ -1046,7 +1048,8 @@
         "context": {
           "source": "TEXT",
           "expected": "str",
-          "actual": "int"
+          "actual": "int",
+          "convert_to": "str"
         }
       }
     ]
