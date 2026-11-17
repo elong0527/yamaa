@@ -97,9 +97,10 @@ A record missing a key is matched through no key that names that column. A
 record that applies to every current row, such as a qualifier record whose
 subject is blank, is read by a named intermediate whose `key` leaves that
 column out, or writes `none` ([LOOKUP-5](#lookup-5)), and whose `filter`
-keeps the records missing it. A record of the current row's own, read beside
-it by a second lookup, takes precedence when a derivation reads that lookup
-first, as `first_available` does.
+keeps the records missing it. A non-missing value from the current row's own
+record, read beside it by a second lookup, takes precedence when
+`first_available` reads that lookup first. A missing value continues to the
+next source ([EXPR-9](expressions.md#expr-9)).
 
 `between` declares `value` and `lower`, `upper` or both, each bound a field of
 the lookup's relation: a stored field, a name an intermediate derives
