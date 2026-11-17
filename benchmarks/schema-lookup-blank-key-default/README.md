@@ -9,10 +9,10 @@ set the flag for the whole study, or name the subject it applies to.
 
 **Variables:**
 
-- `ITTFL` is the subject's own non-missing intent-to-treat flag when a qualifier
-  record names the subject, and otherwise the flag of the record that leaves the
-  subject blank. A qualifier of another name, such as the safety flag, does
-  not set it.
+- `ITTFL` is the subject's own non-missing intent-to-treat flag when a
+  qualifier record names the subject, and otherwise the flag of the record
+  that leaves the subject blank. A qualifier of another name, such as the
+  safety flag, does not set it.
 
 **Note:** a record whose subject is blank names no subject, so it is not found
 by looking up a subject. It is found by looking up the study alone and keeping
