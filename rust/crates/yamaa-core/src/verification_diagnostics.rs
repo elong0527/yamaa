@@ -66,14 +66,14 @@ fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
 fn keys<'a>(names: &[&'a str], rows: &'a [RowIdentity]) -> Result<Vec<Fact<'a>>, Error> {
     rows.iter()
         .map(|row| {
-            if names.len() != row.values.as_slice().len() {
+            if names.len() != row.values.len() {
                 return Err(Error::InvalidObservation);
             }
             Ok(Fact::Object(
                 names
                     .iter()
                     .copied()
-                    .zip(row.values.as_slice().iter().map(Fact::Scalar))
+                    .zip(row.values.iter().map(Fact::Scalar))
                     .collect(),
             ))
         })
