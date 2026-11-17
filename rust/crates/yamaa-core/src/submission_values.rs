@@ -390,7 +390,8 @@ pub(crate) fn where_term(
 
 /// Whether two where clauses can select one row, as validation decides it:
 /// one clause's columns are all columns of the other, and every column they
-/// share admits a common value. Each clause comes with the converted value of
+/// share admits a common value. A clause with an empty ordered term cannot
+/// select a row. Each clause comes with the converted value of
 /// each of its ordered terms, in term order. Two clauses over columns neither
 /// of which contains the other are left to the build, which fails a row both
 /// select.
@@ -402,6 +403,17 @@ pub(crate) fn overlap(
 ) -> bool {
     fn columns<'a>(clause: &[Term<'a>]) -> BTreeSet<&'a str> {
         clause.iter().map(|term| term.column).collect()
+    }
+    fn empty_clause(clause: &[Term<'_>], bounds: &[Option<Value>]) -> bool {
+        clause.iter().zip(bounds).any(|(term, bound)| {
+            term.comparator
+                .order()
+                .zip(bound.as_ref())
+                .is_some_and(empty)
+        })
+    }
+    if empty_clause(left, left_bounds) || empty_clause(right, right_bounds) {
+        return false;
     }
     let (a, b) = (columns(left), columns(right));
     (a.is_subset(&b) || b.is_subset(&a))
@@ -1101,6 +1113,24 @@ mod tests {
             assert_eq!(meet((Order::Lt, &upper), (Order::Gt, &lower)), shared);
             assert!(meet((Order::Ge, &lower), (Order::Lt, &upper)));
             assert!(meet((Order::Gt, &lower), (Order::Le, &upper)));
+        }
+    }
+
+    #[test]
+    fn an_empty_unshared_ordered_term_prevents_overlap_in_both_clause_orders() {
+        // Internal seam: subset clauses may share only listed columns, so
+        // their empty ordered term need not reach the pairwise comparison.
+        let broad = clause(&[("FLAG", &["Y"])]);
+        for (order, expected) in [(Order::Gt, false), (Order::Ge, true)] {
+            let mut narrow = broad.clone();
+            narrow.extend(compared(
+                "N",
+                Comparator::Ordered(order),
+                &["9223372036854775807"],
+            ));
+            let bounds = [None, Some(Value::Int(i64::MAX))];
+            assert_eq!(overlap(&narrow, &bounds, &broad, &[None]), expected);
+            assert_eq!(overlap(&broad, &[None], &narrow, &bounds), expected);
         }
     }
 

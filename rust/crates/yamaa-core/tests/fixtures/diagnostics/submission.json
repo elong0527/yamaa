@@ -881,6 +881,19 @@
       "issues": []
     },
     {
+      "case": "an_empty_extra_where_column_prevents_overlap_with_a_broader_clause",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [{"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}, {"name": "D0TESTCD", "type": "str", "label": "Independent flag", "derivation": "'Y'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}, {"name": "N", "type": "int", "label": "Independent number", "derivation": 1, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "D0TESTCD", "N"]},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "EMPTY", "where": {"D0TESTCD": ["Y"], "N": {"comparator": "GT", "values": ["9223372036854775807"]}}}, {"id": "BROAD", "where": {"D0TESTCD": ["Y"]}}]}
+        ]
+      },
+      "issues": []
+    },
+    {
       "case": "a_predecessor_column_composes_when_no_section_declares_its_predecessor",
       "operation": "compose",
       "input": {
