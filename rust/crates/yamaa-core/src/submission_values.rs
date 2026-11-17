@@ -579,21 +579,32 @@ fn reach_of(spec: &ast::Spec, construction: Option<&ast::Template>, clause: &[Te
             every = false;
             continue;
         };
-        // A bare `literal` gives every row the same value, which an `NE` or
-        // `NOTIN` term selects when it is missing.
-        let literal =
+        // A bare literal gives every row the same value. Ordered terms read
+        // it after the column's VALUE-3 conversion, using the same term as
+        // execution; a conversion that cannot be proved stays unknown.
+        let selected =
             derivation_of(construction, column).and_then(|expr| match &spec.expr(expr).kind {
-                ExprKind::Literal(Literal::Text(value)) => Some(Some(value.as_str())),
-                ExprKind::Literal(Literal::Missing) => Some(None),
+                ExprKind::Literal(literal) if term.comparator.order().is_some() => {
+                    let value = crate::conversion::convert(&literal.value()?, column.kind).ok()?;
+                    let comparison = where_term(
+                        0,
+                        term.comparator,
+                        term.values
+                            .iter()
+                            .map(|value| (*value).to_owned())
+                            .collect(),
+                        column.kind,
+                    )?;
+                    Some(comparison.selects((&value).into()))
+                }
+                ExprKind::Literal(Literal::Text(value)) => Some(term.selects(Some(value))),
+                ExprKind::Literal(Literal::Missing) => Some(term.selects(None)),
                 _ => None,
             });
-        // An ordered term never selects a missing value, and its other
-        // literals are left to the build.
-        match (literal, term.comparator.order()) {
-            (Some(None), Some(_)) => return Reach::Never,
-            (_, Some(_)) | (None, None) => every = false,
-            (Some(value), None) if term.selects(value) => {}
-            (Some(_), None) => return Reach::Never,
+        match selected {
+            Some(true) => {}
+            Some(false) => return Reach::Never,
+            None => every = false,
         }
     }
     if every {
