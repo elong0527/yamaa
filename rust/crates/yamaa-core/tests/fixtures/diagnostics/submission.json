@@ -854,6 +854,46 @@
       "issues": []
     },
     {
+      "case": "an_empty_ordered_range_does_not_overlap_a_nonempty_entry",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "1", "type"], "to": "int"},
+          {"set": ["specs", "0", "columns", "1", "derivation"], "to": 1},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "EMPTY", "where": {"D0TESTCD": {"comparator": "GT", "values": ["9223372036854775807"]}}}, {"id": "PRESENT", "where": {"D0TESTCD": {"comparator": "GE", "values": ["0"]}}}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "exclusive_consecutive_float_bounds_do_not_overlap",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "1", "type"], "to": "float"},
+          {"set": ["specs", "0", "columns", "1", "derivation"], "to": 1},
+          {"set": ["specs", "0", "columns", "1", "submission", "significant_digits"], "to": 1},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "LOWER", "where": {"D0TESTCD": {"comparator": "GT", "values": ["1"]}}}, {"id": "UPPER", "where": {"D0TESTCD": {"comparator": "LT", "values": ["1.0000000000000002"]}}}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_empty_extra_where_column_prevents_overlap_with_a_broader_clause",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [{"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}, {"name": "D0TESTCD", "type": "str", "label": "Independent flag", "derivation": "'Y'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}, {"name": "N", "type": "int", "label": "Independent number", "derivation": 1, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "D0TESTCD", "N"]},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "EMPTY", "where": {"D0TESTCD": ["Y"], "N": {"comparator": "GT", "values": ["9223372036854775807"]}}}, {"id": "BROAD", "where": {"D0TESTCD": ["Y"]}}]}
+        ]
+      },
+      "issues": []
+    },
+    {
       "case": "a_predecessor_column_composes_when_no_section_declares_its_predecessor",
       "operation": "compose",
       "input": {
