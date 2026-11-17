@@ -24,6 +24,7 @@ authors = [
   { name = "Peng Zhang" },
   { name = "Bingjun Wang" },
   { name = "Jingwei Xiong" },
+  { name = "Runcheng Li" },
 ]
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",

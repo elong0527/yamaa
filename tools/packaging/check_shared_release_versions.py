@@ -23,6 +23,7 @@ SELECTED_PEOPLE = [
     ("Peng Zhang", None),
     ("Bingjun Wang", None),
     ("Jingwei Xiong", None),
+    ("Runcheng Li", None),
 ]
 COLLECTIVE_HOLDER = "yamaa contributors"
 # The R DESCRIPTION alone also credits the authors of the third-party code that

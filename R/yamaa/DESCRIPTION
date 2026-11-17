@@ -8,6 +8,7 @@ Authors@R: c(
     person("Peng", "Zhang", role = "ctb"),
     person("Bingjun", "Wang", role = "ctb"),
     person("Jingwei", "Xiong", role = "ctb"),
+    person("Runcheng", "Li", role = "ctb"),
     person("The authors of the bundled Rust crates", role = c("ctb", "cph"),
            comment = "listed in inst/AUTHORS"),
     person("Evan Miller and the ReadStat authors", role = c("ctb", "cph"),
