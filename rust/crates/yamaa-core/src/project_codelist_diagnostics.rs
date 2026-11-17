@@ -62,13 +62,12 @@ pub fn diagnostics<'a>(
             .ok_or(Error::InvalidObservation)?;
         let mut previous = None;
         for (row, value) in record.offending_rows.iter().zip(&observation.values) {
-            if row.values.as_slice().len() != names.len()
+            if row.values.len() != names.len()
                 || row.position >= record.output_rows
                 || previous.is_some_and(|position| row.position <= position)
                 || matches!(value, Value::Missing)
                 || row
                     .values
-                    .as_slice()
                     .iter()
                     .any(|value| matches!(value, Value::Missing))
             {
