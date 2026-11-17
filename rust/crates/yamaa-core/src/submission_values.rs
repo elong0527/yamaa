@@ -449,11 +449,14 @@ fn share(
 }
 
 /// Whether two ordered terms over one column select a common value. Two
-/// bounds on one side always meet; an upper and a lower bound meet when the
-/// lower lies below the upper, or on it when both select it. Over `int`,
-/// `date`, `datetime` and `time` columns, `GT x` and `LT y` share no value
-/// when `y` is the value after `x`.
+/// nonempty bounds on one side always meet; an upper and a lower bound meet
+/// when the lower lies below the upper, or on it when both select it. Two
+/// exclusive bounds share no value when their endpoints are consecutive
+/// values of the column's type, including finite binary64 floats.
 fn meet(left: (Order, &Value), right: (Order, &Value)) -> bool {
+    if empty(left) || empty(right) {
+        return false;
+    }
     if left.0.upper() == right.0.upper() {
         return true;
     }
@@ -472,11 +475,58 @@ fn meet(left: (Order, &Value), right: (Order, &Value)) -> bool {
     }
 }
 
+/// An exclusive bound beyond its type's first or last value selects no row.
+fn empty((order, value): (Order, &Value)) -> bool {
+    let first = match order {
+        Order::Lt => true,
+        Order::Gt => false,
+        Order::Le | Order::Ge => return false,
+    };
+    let second = if first {
+        0
+    } else {
+        crate::temporal::Time::DAY_SECONDS - 1
+    };
+    match value {
+        Value::Int(value) => *value == if first { i64::MIN } else { i64::MAX },
+        Value::Float(value) => value.get() == if first { -f64::MAX } else { f64::MAX },
+        Value::Date(date) => calendar_endpoint(*date, first),
+        Value::DateTime(moment) => {
+            calendar_endpoint(moment.date(), first) && moment.time().seconds() == second
+        }
+        Value::Time(time) => time.seconds() == second,
+        _ => false,
+    }
+}
+
+/// The calendar type owns its year range; probe the adjacent year's validity
+/// instead of restating that range here.
+fn calendar_endpoint(date: crate::temporal::Date, first: bool) -> bool {
+    let (year, month, day) = date.fields();
+    let end = if first { (1, 1) } else { (12, 31) };
+    let beyond = if first { year - 1 } else { year + 1 };
+    (month, day) == end
+        && crate::temporal::Date::new(beyond, 1, 1, crate::temporal::Precision::Day).is_err()
+}
+
 /// Whether `upper` is the value right after `lower` in a type with no value
-/// between consecutive ones: the next integer, calendar day or whole second.
+/// between consecutive ones: the next integer, binary64, day or whole second.
 fn adjacent(lower: &Value, upper: &Value) -> bool {
     match (lower, upper) {
         (Value::Int(lower), Value::Int(upper)) => lower.checked_add(1) == Some(*upper),
+        (Value::Float(lower), Value::Float(upper)) => {
+            // IEEE-754 encodings step toward positive infinity, except that
+            // both zero signs step to the least positive subnormal.
+            let value = lower.get();
+            let bits = if value == 0.0 {
+                1
+            } else if value < 0.0 {
+                value.to_bits() - 1
+            } else {
+                value.to_bits() + 1
+            };
+            f64::from_bits(bits) == upper.get()
+        }
         (Value::Date(lower), Value::Date(upper)) => next_day(lower.fields()) == upper.fields(),
         (Value::Time(lower), Value::Time(upper)) => lower.seconds() + 1 == upper.seconds(),
         (Value::DateTime(lower), Value::DateTime(upper)) => {
@@ -980,6 +1030,77 @@ mod tests {
                     "{label}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn ordered_bounds_beyond_type_endpoints_select_no_common_value() {
+        // Internal seam: typed half-lines at VALUE-7/13/15/21 endpoints,
+        // including inclusive singleton ranges that must stay nonempty.
+        let endpoints = [
+            (Value::Int(i64::MIN), Value::Int(0), Value::Int(i64::MAX)),
+            (
+                Value::float(-f64::MAX),
+                Value::float(0.0),
+                Value::float(f64::MAX),
+            ),
+            (
+                Value::Date("0001-01-01".parse().unwrap()),
+                Value::Date("2026-01-01".parse().unwrap()),
+                Value::Date("9999-12-31".parse().unwrap()),
+            ),
+            (
+                Value::DateTime("0001-01-01T00:00:00".parse().unwrap()),
+                Value::DateTime("2026-01-01T12:00:00".parse().unwrap()),
+                Value::DateTime("9999-12-31T23:59:59".parse().unwrap()),
+            ),
+            (
+                Value::Time("00:00:00".parse().unwrap()),
+                Value::Time("12:00:00".parse().unwrap()),
+                Value::Time("23:59:59".parse().unwrap()),
+            ),
+        ];
+        for (first, middle, last) in endpoints {
+            for empty in [(Order::Lt, &first), (Order::Gt, &last)] {
+                assert!(!meet(empty, empty), "{empty:?} is empty");
+                for nonempty in [
+                    (Order::Lt, &middle),
+                    (Order::Le, &first),
+                    (Order::Gt, &middle),
+                    (Order::Ge, &last),
+                ] {
+                    assert!(!meet(empty, nonempty), "{empty:?} and {nonempty:?}");
+                    assert!(!meet(nonempty, empty), "{nonempty:?} and {empty:?}");
+                }
+            }
+            assert!(meet((Order::Le, &first), (Order::Ge, &first)));
+            assert!(meet((Order::Ge, &last), (Order::Le, &last)));
+        }
+    }
+
+    #[test]
+    fn ordered_bounds_between_consecutive_binary64_values_do_not_overlap() {
+        // Internal seam: binary64 spacing, including both zero signs and
+        // the smallest subnormal. Inclusive bounds retain their endpoint.
+        for (lower, upper, shared) in [
+            (1.0, 1.0000000000000002, false),
+            (-1.0000000000000002, -1.0, false),
+            (-f64::from_bits(1), 0.0, false),
+            (-0.0, f64::from_bits(1), false),
+            (1.7976931348623155e308, f64::MAX, false),
+            (0.0, f64::from_bits(2), true),
+            (-f64::from_bits(2), 0.0, true),
+            (1.0, 1.0000000000000004, true),
+        ] {
+            let (lower, upper) = (Value::float(lower), Value::float(upper));
+            assert_eq!(
+                meet((Order::Gt, &lower), (Order::Lt, &upper)),
+                shared,
+                "{lower:?} to {upper:?}"
+            );
+            assert_eq!(meet((Order::Lt, &upper), (Order::Gt, &lower)), shared);
+            assert!(meet((Order::Ge, &lower), (Order::Lt, &upper)));
+            assert!(meet((Order::Gt, &lower), (Order::Le, &upper)));
         }
     }
 
