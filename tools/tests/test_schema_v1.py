@@ -287,7 +287,8 @@ EXPECTED = {
     "new.codelists.standard.name=closed": [
         Values("terminology_standard_class", "name", vocabulary("standard_name"))
     ],
-    # P-VLM-1 and D66: NE and NOTIN beside the list of values.
+    # P-VLM-1, D66 and D314: NE, NOTIN and the ordered comparators beside the
+    # list of values.
     "new.spec.value_level.comparator": [
         Field(
             "submission_value_class",
@@ -295,7 +296,12 @@ EXPECTED = {
             "dict[identifier, where_condition]",
             required=True,
         ),
-        Field("where_comparison_class", "comparator", "str", values=("NE", "NOTIN")),
+        Field(
+            "where_comparison_class",
+            "comparator",
+            "str",
+            values=("NE", "NOTIN", "LT", "LE", "GT", "GE"),
+        ),
         Field("where_comparison_class", "values", "list[where_value]", required=True),
     ],
     "new.spec.model": [
@@ -1135,13 +1141,6 @@ def origin_documents(document):
 # Each reserved spelling of the table, written where it would sit: the 1.0
 # schema has no such field or value, and the JSON Schema refuses it.
 RESERVED = {
-    ("{comparator: LT | LE | GT | GE, values: [V]}", "a value-level where column"): (
-        "spec",
-        [("where_comparison_class", "comparator")],
-        lambda d: value_level(d)["where"].update(
-            DOMAIN={"comparator": "LT", "values": ["DM"]}
-        ),
-    ),
     ("where_any: [{COLUMN: [V, ...]}, ...]", "a value-level entry, instead of where"): (
         "spec",
         [("submission_value_class", "where_any")],
@@ -1240,7 +1239,6 @@ RESERVED = {
         ),
     ),
 }
-RESERVED_VALUES = {("where_comparison_class", "comparator"): ("LT", "LE", "GT", "GE")}
 
 
 class ReservedSpellingTests(unittest.TestCase):
@@ -1260,14 +1258,7 @@ class ReservedSpellingTests(unittest.TestCase):
         for (spelling, where), (file_type, fields, write) in RESERVED.items():
             with self.subTest(spelling=spelling, where=where):
                 for owner, name in fields:
-                    if (owner, name) in RESERVED_VALUES:
-                        spelled = v1_bundle().values(
-                            v1_fields()[(owner, name)].descriptor
-                        )
-                        for value in RESERVED_VALUES[(owner, name)]:
-                            self.assertNotIn(value, spelled)
-                    else:
-                        self.assertNotIn((owner, name), v1_fields())
+                    self.assertNotIn((owner, name), v1_fields())
                 document = copy.deepcopy(self.documents[file_type])
                 write(document)
                 self.assertNotEqual(messages(validator(file_type), document), [])

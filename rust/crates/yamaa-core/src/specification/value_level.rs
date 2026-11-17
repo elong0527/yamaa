@@ -6,7 +6,7 @@ use super::*;
 use crate::json::Value as V;
 use crate::{
     ast,
-    dataset::{Check, Verification, WhereClause, WhereTerm},
+    dataset::{Check, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
     project_terminology::Catalogue,
     specification_submission_document::SubmissionMode,
@@ -15,9 +15,11 @@ use crate::{
 use std::collections::BTreeSet;
 
 /// An entry's where clause over the declared columns, when every where column
-/// is a declared `str` column other than `own` listing a value; static
-/// admission reports every other clause. An `NE` or `NOTIN` term selects the
-/// rows that hold none of its values, a missing value included (SUB-12).
+/// is a declared column other than `own` that its comparator admits: a `str`
+/// column listing values, or another type ordered against one value that
+/// converts to it; static admission reports every other clause. An `NE` or
+/// `NOTIN` term selects the rows that hold none of its values, a missing value
+/// included, and an ordered term never selects one (SUB-12, D314).
 pub(super) fn clause(
     entry: &ast::ValueLevel,
     output: &TableSchema,
@@ -31,18 +33,22 @@ pub(super) fn clause(
                 .columns()
                 .iter()
                 .position(|column| column.name == condition.column.name)?;
-            (column != own
-                && output.columns()[column].kind == ColumnType::Str
-                && !condition.values.is_empty())
-            .then(|| WhereTerm {
-                column,
-                values: condition
-                    .values
-                    .iter()
-                    .map(|value| value.text.clone())
-                    .collect(),
-                excludes: condition.comparator.excludes(),
-            })
+            let kind = output.columns()[column].kind;
+            let listed = condition.comparator.order().is_none();
+            (column != own && listed == (kind == ColumnType::Str) && !condition.values.is_empty())
+                .then(|| {
+                    values::where_term(
+                        column,
+                        condition.comparator,
+                        condition
+                            .values
+                            .iter()
+                            .map(|value| value.text.clone())
+                            .collect(),
+                        kind,
+                    )
+                })
+                .flatten()
         })
         .collect::<Option<Vec<_>>>()?;
     (!terms.is_empty()).then_some(WhereClause { terms })
@@ -175,7 +181,7 @@ pub(super) fn admit(
                 .position(|column| column.name == where_column)?;
             Some(Declared {
                 output: carried.contains(where_column),
-                text: output.columns()[index].kind == ColumnType::Str,
+                kind: output.columns()[index].kind,
                 codelist: catalogue.and_then(|catalogue| codelist(catalogue, &spec.columns[index])),
             })
         });

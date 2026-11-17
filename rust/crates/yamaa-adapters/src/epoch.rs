@@ -2,6 +2,7 @@
 //! date, a datetime and a time, Parquet's and SAS's stored temporals, and
 //! the facade's epoch day and second accessors.
 
+use yamaa_core::table::ValueRef;
 use yamaa_core::temporal::{Date, DateTime, Precision, Time};
 
 /// Days from 0001-01-01 to 1970-01-01 in the proleptic Gregorian calendar.
@@ -90,6 +91,21 @@ pub fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateT
         precision,
     )
     .ok()
+}
+
+/// Days from 1960-01-01, the SAS date origin, to 1970-01-01.
+const SAS_EPOCH_DAYS: i64 = 3653;
+
+/// A date, datetime or time as SAS stores it: days since 1960-01-01, seconds
+/// since 1960-01-01T00:00:00 or seconds since midnight (SUB-25, XPT-6); None
+/// for any other value.
+pub fn sas_number(value: ValueRef<'_>) -> Option<i64> {
+    match value {
+        ValueRef::Date(date) => Some(i64::from(date_days(date)) + SAS_EPOCH_DAYS),
+        ValueRef::DateTime(moment) => Some(datetime_seconds(moment) + SAS_EPOCH_DAYS * 86_400),
+        ValueRef::Time(time) => Some(i64::from(time.seconds())),
+        _ => None,
+    }
 }
 
 /// The time of day `seconds` after midnight, or None outside 0 to 86399.

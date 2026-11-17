@@ -1,0 +1,10 @@
+phase: validation
+condition: value_level_where_invalid
+spec_paths:
+  - columns.AVAL.submission.value_level.LAB_A.where.ADT
+rule: SUB-12
+context:
+  column: AVAL
+  entry: LAB_A
+  where_column: ADT
+  reason: value_type

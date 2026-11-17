@@ -182,8 +182,6 @@ pub fn admit<T: TableAccess>(
     Ok(())
 }
 
-/// Days from 1960-01-01, the SAS date origin, to 1970-01-01.
-const SAS_EPOCH_DAYS: i64 = 3653;
 /// The SAS release and operating system the first header records name.
 const VERSION: &str = "9.4";
 const SYSTEM: &str = "yamaa";
@@ -396,14 +394,10 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
                 (_, ValueRef::Missing) => writer.bytes(&[b'.', 0, 0, 0, 0, 0, 0, 0])?,
                 (XptKind::Number, ValueRef::Int(value)) => writer.number(value as f64)?,
                 (XptKind::Number, ValueRef::Float(value)) => writer.number(value.get())?,
-                (XptKind::Date, ValueRef::Date(date)) => writer
-                    .number((i64::from(crate::epoch::date_days(date)) + SAS_EPOCH_DAYS) as f64)?,
-                (XptKind::DateTime, ValueRef::DateTime(moment)) => writer.number(
-                    (crate::epoch::datetime_seconds(moment) + SAS_EPOCH_DAYS * 86_400) as f64,
-                )?,
-                (XptKind::Time, ValueRef::Time(time)) => {
-                    writer.number(f64::from(time.seconds()))?
-                }
+                (XptKind::Date, ValueRef::Date(_))
+                | (XptKind::DateTime, ValueRef::DateTime(_))
+                | (XptKind::Time, ValueRef::Time(_)) => writer
+                    .number(crate::epoch::sas_number(value).expect("a temporal value") as f64)?,
                 _ => return Err(writer.failure("held cell does not match its variable")),
             }
         }

@@ -153,8 +153,8 @@ impl OriginDefinition {
 #[derive(Clone, Debug)]
 pub struct ValueDefinition {
     pub(crate) id: String,
-    /// Each where column's position in the dataset's columns, the values it
-    /// lists and whether it excludes them (`NE`, `NOTIN`), in written order.
+    /// Each where column's position in the dataset's columns and its
+    /// comparison, in written order.
     pub(crate) clause: Vec<crate::dataset::WhereTerm>,
     pub(crate) path: String,
     pub(crate) column: Column,
@@ -337,15 +337,7 @@ impl Column {
         self.has_no_data
     }
     pub fn runtime_type(&self) -> crate::value::ColumnType {
-        use crate::value::ColumnType as T;
-        match self.declaration.column_type.value {
-            spec::ColumnType::String => T::Str,
-            spec::ColumnType::Integer => T::Int,
-            spec::ColumnType::Float => T::Float,
-            spec::ColumnType::Date => T::Date,
-            spec::ColumnType::Datetime => T::DateTime,
-            spec::ColumnType::Time => T::Time,
-        }
+        runtime_type(self.declaration.column_type.value)
     }
     pub fn values(&self) -> &[ValueDefinition] {
         &self.values
@@ -355,8 +347,8 @@ impl ValueDefinition {
     pub fn id(&self) -> &str {
         &self.id
     }
-    /// Each where column's position in the dataset's columns, the values it
-    /// lists and whether it excludes them (`NE`, `NOTIN`), in written order.
+    /// Each where column's position in the dataset's columns and its
+    /// comparison, in written order.
     pub fn clause(&self) -> &[crate::dataset::WhereTerm] {
         &self.clause
     }
@@ -367,20 +359,30 @@ impl ValueDefinition {
     pub fn column(&self) -> &Column {
         &self.column
     }
-    /// Whether the entry's where clause selects a row: `holds` answers whether
-    /// the row's value of one where column is one of the listed values, and
-    /// an `NE` or `NOTIN` term selects the rows where it is not, a missing
-    /// value included (SUB-12).
-    pub(crate) fn selects<E>(
+    /// Whether the entry's where clause selects a row: `cell` reads the row's
+    /// value of one where column, and every term must select it (SUB-12).
+    pub(crate) fn selects<'r, E>(
         &self,
-        mut holds: impl FnMut(usize, &[String]) -> Result<bool, E>,
+        mut cell: impl FnMut(usize) -> Result<crate::table::ValueRef<'r>, E>,
     ) -> Result<bool, E> {
         for term in &self.clause {
-            if holds(term.column, &term.values)? == term.excludes {
+            if !term.selects(cell(term.column)?) {
                 return Ok(false);
             }
         }
         Ok(true)
+    }
+}
+/// The runtime type of a declared column type.
+fn runtime_type(declared: spec::ColumnType) -> crate::value::ColumnType {
+    use crate::value::ColumnType as T;
+    match declared {
+        spec::ColumnType::String => T::Str,
+        spec::ColumnType::Integer => T::Int,
+        spec::ColumnType::Float => T::Float,
+        spec::ColumnType::Date => T::Date,
+        spec::ColumnType::Datetime => T::DateTime,
+        spec::ColumnType::Time => T::Time,
     }
 }
 pub fn family_name(family: Submission) -> &'static str {
@@ -1414,7 +1416,7 @@ fn compose_values(
             let declared = columns.iter().find(|c| c.name.value == where_column)?;
             Some(values::Declared {
                 output: output_columns.iter().any(|c| c == where_column),
-                text: declared.column_type.value == spec::ColumnType::String,
+                kind: runtime_type(declared.column_type.value),
                 codelist: declared.submission.as_ref().and_then(|metadata| {
                     values::admitted(
                         admission.catalogue,
@@ -1505,14 +1507,16 @@ fn compose_values(
                     positions
                         .iter()
                         .position(|column| column == &term.column.value)
-                        .map(|index| crate::dataset::WhereTerm {
-                            column: index,
-                            values: term
-                                .values
-                                .iter()
-                                .map(|value| value.value.clone())
-                                .collect(),
-                            excludes: term.comparator.excludes(),
+                        .and_then(|index| {
+                            values::where_term(
+                                index,
+                                term.comparator,
+                                term.values
+                                    .iter()
+                                    .map(|value| value.value.clone())
+                                    .collect(),
+                                selected[index].runtime_type(),
+                            )
                         })
                 })
                 .collect::<Option<Vec<_>>>();

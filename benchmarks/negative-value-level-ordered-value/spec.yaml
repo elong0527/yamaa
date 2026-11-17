@@ -1,0 +1,52 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [USUBJID, PARAMCD, ADT]
+input:
+  LB:
+    path: input/lb.csv
+    types: {LBDTC: date, LBSTRESN: float}
+
+output:
+  path: adlb.csv
+  columns: [USUBJID, PARAMCD, ADT, AVAL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: LB.LBDTC
+
+  # The day of the laboratory change is written as a SAS date, not as a
+  # date.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+    submission:
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Predecessor
+          description: LB.LBSTRESN
+      value_level:
+        - id: LAB_A
+          where:
+            PARAMCD: [GLUC]
+            ADT: {comparator: LT, values: [01MAR2026]}
+          significant_digits: 0
+        - id: LAB_B
+          where:
+            PARAMCD: [GLUC]
+            ADT: {comparator: GE, values: ['2026-03-01']}

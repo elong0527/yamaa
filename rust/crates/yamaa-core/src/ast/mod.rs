@@ -624,45 +624,103 @@ pub struct WhereClause {
 /// How a value-level where column compares with its values (SUB-12). A bare
 /// list is `In`, written EQ for one value and IN for several (D17); `Ne` and
 /// `NotIn` are written `comparator: NE` and `comparator: NOTIN` (D66,
-/// P-VLM-1).
+/// P-VLM-1), and `Ordered` is `comparator: LT`, `LE`, `GT` or `GE` (D314).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Comparator {
     In,
     Ne,
     NotIn,
+    Ordered(Order),
 }
 
 impl Comparator {
     /// Whether the comparison selects the rows that hold none of the values,
     /// a missing value included, instead of one of them.
     pub fn excludes(self) -> bool {
-        !matches!(self, Self::In)
+        matches!(self, Self::Ne | Self::NotIn)
     }
-    /// Whether the comparison takes `count` values: `NE` exactly one and
-    /// `NOTIN` two or more; a bare list takes any nonempty list.
+    /// The ordered comparison the comparator states, if it is one.
+    pub fn order(self) -> Option<Order> {
+        match self {
+            Self::Ordered(order) => Some(order),
+            _ => None,
+        }
+    }
+    /// Whether the comparison takes `count` values: `NE` and each ordered
+    /// comparator exactly one and `NOTIN` two or more; a bare list takes any
+    /// nonempty list.
     pub fn takes(self, count: usize) -> bool {
         match self {
             Self::In => true,
-            Self::Ne => count == 1,
+            Self::Ne | Self::Ordered(_) => count == 1,
             Self::NotIn => count >= 2,
         }
     }
-    /// The comparison a written `comparator` states: `NE`, or else `NOTIN`,
-    /// the one other spelling admission leaves.
+    /// The comparison a written `comparator` states; a spelling admission
+    /// refuses, which never reaches a compiled specification, reads as
+    /// `NOTIN`.
     pub fn written_as(spelling: &str) -> Self {
         match WhereComparator::from_name(spelling) {
             Some(WhereComparator::Ne) => Self::Ne,
+            Some(WhereComparator::Lt) => Self::Ordered(Order::Lt),
+            Some(WhereComparator::Le) => Self::Ordered(Order::Le),
+            Some(WhereComparator::Gt) => Self::Ordered(Order::Gt),
+            Some(WhereComparator::Ge) => Self::Ordered(Order::Ge),
             Some(WhereComparator::Notin) | None => Self::NotIn,
         }
     }
-    /// The spelling a written comparator has (`NE` or `NOTIN`), or none for
-    /// a bare list.
+    /// The spelling a written comparator has, or none for a bare list.
     pub fn written(self) -> Option<&'static str> {
         match self {
             Self::In => None,
             Self::Ne => Some(WhereComparator::Ne.name()),
             Self::NotIn => Some(WhereComparator::Notin.name()),
+            Self::Ordered(order) => Some(order.name()),
         }
+    }
+}
+
+/// An ordered comparison of a where column with one value (SUB-12, D314): the
+/// column is less than (`Lt`), at most (`Le`), greater than (`Gt`) or at least
+/// (`Ge`) the value. A missing column value is never selected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Order {
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+impl Order {
+    /// Whether a column value that orders `ordering` against the comparison's
+    /// value is selected.
+    pub fn holds(self, ordering: std::cmp::Ordering) -> bool {
+        use std::cmp::Ordering::{Greater, Less};
+        match self {
+            Self::Lt => ordering == Less,
+            Self::Le => ordering != Greater,
+            Self::Gt => ordering == Greater,
+            Self::Ge => ordering != Less,
+        }
+    }
+    /// Whether the comparison bounds the column from above (`LT`, `LE`)
+    /// rather than from below (`GT`, `GE`).
+    pub fn upper(self) -> bool {
+        matches!(self, Self::Lt | Self::Le)
+    }
+    /// Whether the comparison selects its own value (`LE`, `GE`).
+    pub fn inclusive(self) -> bool {
+        matches!(self, Self::Le | Self::Ge)
+    }
+    /// The comparator's spelling, `LT`, `LE`, `GT` or `GE`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Lt => WhereComparator::Lt,
+            Self::Le => WhereComparator::Le,
+            Self::Gt => WhereComparator::Gt,
+            Self::Ge => WhereComparator::Ge,
+        }
+        .name()
     }
 }
 

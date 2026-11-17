@@ -36,12 +36,10 @@ impl TableAccess for Completed<'_> {
 }
 
 fn selects(clause: &WhereClause, frame: &Frame, row: usize) -> bool {
-    clause.terms.iter().all(|term| {
-        term.selects(match frame.get(row, term.column) {
-            ValueRef::Str(value) => Some(value),
-            _ => None,
-        })
-    })
+    clause
+        .terms
+        .iter()
+        .all(|term| term.selects(frame.get(row, term.column)))
 }
 
 fn scope_selects(scope: &RowScope, frame: &Frame, row: usize) -> bool {

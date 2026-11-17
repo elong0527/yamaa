@@ -1,0 +1,97 @@
+yamaa: "1.0"
+
+type: spec
+
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD, ADT]
+input:
+  LB:
+    path: input/lb.csv
+    types: {LBDTC: date, LBSTRESN: float}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, ADT, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 5
+      origins:
+        - type: Predecessor
+          description: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 9
+      origins:
+        - type: Predecessor
+          description: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      origins:
+        - type: Predecessor
+          description: LB.LBTESTCD
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: LB.LBDTC
+    submission:
+      core: Perm
+      mandatory: true
+      origins:
+        - type: Predecessor
+          description: LB.LBDTC
+
+  # The laboratory that measured a value is known only from its date, so the
+  # two precisions are selected by ordering the analysis date against the
+  # day of the switch.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+    submission:
+      core: Cond
+      mandatory: true
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Predecessor
+          description: LB.LBSTRESN
+      value_level:
+        - id: LAB_A
+          where:
+            PARAMCD: [GLUC]
+            ADT: {comparator: LT, values: ['2026-03-01']}
+          label: Glucose (mg/dL) from the first central laboratory
+          significant_digits: 0
+        - id: LAB_B
+          where:
+            PARAMCD: [GLUC]
+            ADT: {comparator: GE, values: ['2026-03-01']}
+          label: Glucose (mg/dL) from the second central laboratory
+
+submission:
+  label: Laboratory Analysis Dataset
+  class: BASIC DATA STRUCTURE
+  structure: One record per subject per parameter per analysis date
+  repeating: true

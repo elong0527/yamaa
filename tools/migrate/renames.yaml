@@ -105,7 +105,7 @@ summary:
     value, decided: 5
   conditions: 20
   paths: 13
-  reserved: 18
+  reserved: 17
 transforms:
   header: replace schema_version with yamaa (same version text, quoted) and type
   environment_to_function_files: 'merge each function''s python and r definitions into one type: function
@@ -7295,12 +7295,13 @@ entries:
   path: columns[].submission.value_level[].where.*
   today: null
   kind: new
-  proposed: '{comparator: NE | NOTIN, values: [V, ...]} beside today''s list of values'
-  decision: decided (D58)
+  proposed: '{comparator: NE | NOTIN | LT | LE | GT | GE, values: [V, ...]} beside today''s list of values'
+  decision: decided (D58; D314 admits the D58 reserved spelling)
   ref: P-VLM-1
   reason: D17 reserves more comparators; this RFC proposes to admit NE and NOTIN in 1.0, so rows that
     differ only by DTYPE can be described (#3048). The list stays the spelling of EQ and IN; the class
-    is its SCHEMA-10 long form, refused when it restates the list. LT, LE, GT, GE and OR stay reserved.
+    is its SCHEMA-10 long form, refused when it restates the list. D314 admits LT, LE, GT and GE, each
+    ordering a where column that is not str against one value; OR stays reserved.
   field_kind: value
   convert: {action: none}
 - id: new.any.suppression_comment
@@ -7997,11 +7998,6 @@ issues_columns:
   reason: The twelve frozen columns are severity, phase, condition, rule, spec_paths, file, line, column,
     message, context, source_span and operand_route.
 reserved:
-- spelling: '{comparator: LT | LE | GT | GE, values: [V]}'
-  where: a value-level where column
-  ref: P-VLM-1
-  decision: decided (D58)
-  meaning: Define-XML RangeCheck comparators beyond EQ, IN, NE and NOTIN.
 - spelling: 'where_any: [{COLUMN: [V, ...]}, ...]'
   where: a value-level entry, instead of where
   ref: P-VLM-1

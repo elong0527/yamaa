@@ -795,6 +795,65 @@
       "issues": []
     },
     {
+      "case": "an_ordered_entry_does_not_take_the_literal_origin_of_an_excluded_template",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "1", "type"], "to": "int"},
+          {"set": ["specs", "0", "columns", "1", "derivation"], "to": 1},
+          {"set": ["specs", "0", "rows"], "to": [{"id": "assigned", "derivations": {"D0TESTCD": 1, "VALUE": "'X'"}}, {"id": "derived", "derivations": {"D0TESTCD": 2, "VALUE": {"compute": "1 + 1"}}}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "ORDERED", "where": {"D0TESTCD": {"comparator": "GE", "values": ["2"]}}, "origins": [{"type": "Derived", "source": "Sponsor"}], "method": "Add two constants"}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_ordered_entry_converts_a_template_text_literal_to_its_column_type",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "1", "type"], "to": "int"},
+          {"set": ["specs", "0", "columns", "1", "derivation"], "to": 1},
+          {"set": ["specs", "0", "rows"], "to": [{"id": "assigned", "derivations": {"D0TESTCD": "'1'", "VALUE": "'X'"}}, {"id": "derived", "derivations": {"D0TESTCD": "'2'", "VALUE": {"compute": "1 + 1"}}}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "ORDERED", "where": {"D0TESTCD": {"comparator": "GE", "values": ["2"]}}, "origins": [{"type": "Derived", "source": "Sponsor"}], "method": "Add two constants"}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_ordered_entry_refutes_a_derived_origin_for_the_literal_template_it_selects",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "1", "type"], "to": "int"},
+          {"set": ["specs", "0", "columns", "1", "derivation"], "to": 1},
+          {"set": ["specs", "0", "rows"], "to": [{"id": "assigned", "derivations": {"D0TESTCD": 1, "VALUE": "'X'"}}, {"id": "derived", "derivations": {"D0TESTCD": 2, "VALUE": {"compute": "1 + 1"}}}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "ORDERED", "where": {"D0TESTCD": {"comparator": "LT", "values": ["2"]}}, "origins": [{"type": "Derived", "source": "Sponsor"}], "method": "Add two constants"}]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.derivation_kind", "context.entry", "context.origin_type"],
+      "issues": [{"phase": "validation", "condition": "refuted_value_origin", "rule": "SUB-13", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.ORDERED"], "context": {"column": "VALUE", "derivation_kind": "literal", "entry": "ORDERED", "origin_type": "Derived"}}]
+    },
+    {
+      "case": "an_ordered_entry_owns_the_literal_template_instead_of_the_column_origin",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "columns", "1", "type"], "to": "int"},
+          {"set": ["specs", "0", "columns", "1", "derivation"], "to": 1},
+          {"set": ["specs", "0", "rows"], "to": [{"id": "assigned", "derivations": {"D0TESTCD": 1, "VALUE": "'X'"}}, {"id": "derived", "derivations": {"D0TESTCD": 2, "VALUE": {"compute": "1 + 1"}}}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "ORDERED", "where": {"D0TESTCD": {"comparator": "LT", "values": ["2"]}}, "origins": [{"type": "Assigned", "source": "Sponsor"}], "method": "Add two constants"}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "type"], "to": "Derived"},
+          {"set": ["specs", "0", "columns", "0", "submission", "method"], "to": "Add two constants"}
+        ]
+      },
+      "issues": []
+    },
+    {
       "case": "a_predecessor_column_composes_when_no_section_declares_its_predecessor",
       "operation": "compose",
       "input": {

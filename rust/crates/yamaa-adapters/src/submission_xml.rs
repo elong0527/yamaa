@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use yamaa_core::{
     application_issue::{Fault, Step},
     ast,
-    cdisc_vocabulary::{OriginType, PublishingSet, StandardName},
+    cdisc_vocabulary::{DataType, OriginType, PublishingSet, StandardName},
     define_diagnostics::{xml_invalid, xml_whitespace},
     diagnostic::ConditionCode,
     limits::Limits,
@@ -401,24 +401,31 @@ fn push_where_clauses(metadata: &mut Element, study: &Study) {
                 let mut clause = Element::new("def:WhereClauseDef", value.path())
                     .attr("OID", format!("WC.{identity}"));
                 // One range check per where column, in written order: one
-                // value is an equality and several a membership, and an
-                // exclusion is NE for one value and NOTIN for several
-                // (DEFINE-27).
+                // value is an equality and several a membership, an
+                // exclusion is NE for one value and NOTIN for several, and
+                // an ordered term writes its own comparator (DEFINE-27).
                 for term in value.clause() {
-                    let target = &dataset.columns()[term.column].declaration().name.value;
-                    let comparator = match (term.excludes, term.values.len()) {
-                        (false, 1) => "EQ",
-                        (false, _) => "IN",
-                        (true, 1) => "NE",
-                        (true, _) => "NOTIN",
-                    };
+                    let where_column = &dataset.columns()[term.column];
+                    let target = &where_column.declaration().name.value;
                     let mut check = Element::new("RangeCheck", value.path())
-                        .attr("Comparator", comparator)
+                        .attr("Comparator", term.comparator())
                         .attr("SoftHard", "Soft")
                         .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id()));
-                    for checked in &term.values {
+                    // An ordered term's value is written as the where
+                    // column's ItemDef types it: an ADaM date, datetime or
+                    // time as its SAS number (SUB-25), any other as written.
+                    let submitted = term
+                        .bound
+                        .as_ref()
+                        .filter(|_| where_column.data_type() == DataType::Integer)
+                        .and_then(|bound| crate::epoch::sas_number((&bound.value).into()));
+                    let values = match submitted {
+                        Some(number) => vec![number.to_string()],
+                        None => term.values.clone(),
+                    };
+                    for checked in values {
                         let mut code = Element::new("CheckValue", value.path());
-                        code.text = Some(checked.clone());
+                        code.text = Some(checked);
                         check.push(code);
                     }
                     clause.push(check);
