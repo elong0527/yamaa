@@ -316,8 +316,8 @@ and each kind of read treats them in its own way:
   covers, pairs the same way with a table of consecutive day numbers. A table
   that is too short, or that leaves a day out, drops rows without an issue, so
   the specification states the cover itself: the record requires a match for
-  its last day in the table, and an `assert` checks that each record builds as
-  many rows as the days it covers
+  its last day in the table, and checks on the built rows require as many rows
+  as the days it covers, numbered from the first
   ([ROW-7](../../rules/rows.md#row-7)).
 
 A qualified read of an input that declares no `key` fails validation with

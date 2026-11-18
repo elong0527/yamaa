@@ -226,12 +226,15 @@ relation's record at its own number through a lookup that declares
 [LOOKUP-24](lookup.md#lookup-24)), and the `filter` keeps the pairs up to the
 number that read gives, so a record whose number the relation does not hold
 fails the run as `unmatched_key` before any row is built. That lookup reads
-one record of the relation and none below it, so an `assert` that each record
-builds as many rows as its number ([CHECK-12](verification.md#check-12)) fails
-the run as `assert_failed` when the relation pairs a record with more or fewer
-numbers than its own, as one that leaves a number out does. A number the
-relation repeats builds a repeated key combination, which fails as the next
-paragraph states. `schema-lookup-inner-join-counted-rows` shows both parts.
+one record of the relation and none below it, so the built rows carry the
+rest: a `range` keeps each row's number from the first
+([CHECK-7](verification.md#check-7)), the `filter` keeps it up to the record's
+own, the output `keys` keep the numbers of one record distinct, as the next
+paragraph states, and an `assert` that each record builds as many rows as its
+number ([CHECK-12](verification.md#check-12)) then admits only every number
+once. A relation that leaves a number out, repeats one or holds one below the
+first then fails the run. `schema-lookup-inner-join-counted-rows` shows both
+parts.
 
 The built rows must still match the `keys`: repeating a key combination fails
 at the output gate under [OUTPUT-3](output.md#output-3). A

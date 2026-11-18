@@ -97,9 +97,14 @@ columns:
     type: str
     label: Dose Units
 
+  # No administration is numbered before the first: a dosing period that
+  # holds a day before day 1 rejects the run.
   - name: ADOSEN
     type: int
     label: Administration Sequence Number
+    verifications:
+      - range:
+          min: 1
 
   - name: ASTDT
     type: date
@@ -135,9 +140,10 @@ rows:
       NDAYS: ADMIN.NDAYS
 
 verifications:
-  # The record read only its last day from the dosing period. A period that
-  # leaves an earlier day out, or holds a day before the first, builds a
-  # different number of administrations than the record covers.
+  # The record read only its last day from the dosing period. Its
+  # administrations are numbered from 1 to that day and no number repeats
+  # within a record, so as many administrations as the days it covers are
+  # every day once, and a period that leaves an earlier day out builds fewer.
   - assert:
       id: a-record-builds-an-administration-for-every-day-it-covers
       require: "NBUILT = NDAYS"
