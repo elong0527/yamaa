@@ -75,7 +75,7 @@ quick-xml = { version = "0.41.0", default-features = false, optional = true }
 
 # Safe descriptor-relative filesystem IO for the native R resource transport.
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1.1.5", features = ["fs", "process"] }
+rustix = { version = "1.1.6", features = ["fs", "process"] }
 
 # User-mode, handle-relative Windows filesystem transport only.
 [target.'cfg(windows)'.dependencies]

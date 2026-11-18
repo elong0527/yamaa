@@ -42,7 +42,7 @@ parquet = { version = "=55.2.0", default-features = false, features = ["arrow", 
 
 # A test holds a directory lock as another process would.
 [target.'cfg(unix)'.dev-dependencies]
-rustix = { version = "1.1.5", features = ["fs", "process"] }
+rustix = { version = "1.1.6", features = ["fs", "process"] }
 
 [lints]
 workspace = true

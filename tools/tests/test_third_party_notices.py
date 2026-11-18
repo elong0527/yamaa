@@ -26,6 +26,11 @@ BSD = (
     "Copyright (c) 2016 Example, Inc.\n\nRedistribution and use in source and "
     "binary forms are permitted.\n3. Neither the name of the copyright holder.\n"
 )
+# The 2-clause license lacks the third clause, which BSD names.
+BSD_2 = (
+    "Copyright (C) 2013-2016, Yann Collet.\n\nRedistribution and use in source "
+    "and binary forms are permitted.\n"
+)
 CC0 = "Creative Commons Legal Code\n\nCC0 1.0 Universal\n"
 # r-efi's AUTHORS states its three licenses, one of them a GNU license.
 AUTHORS = (
@@ -583,6 +588,7 @@ class ExpressionChoice(unittest.TestCase):
             ("MIT OR Apache-2.0 OR LGPL-2.1-or-later", {"MIT"}),
             ("(MIT OR Apache-2.0) AND Unicode-3.0", {"MIT", "Unicode-3.0"}),
             ("BSD-3-Clause AND MIT", {"MIT", "BSD-3-Clause"}),
+            ("BSD-3-Clause AND BSD-2-Clause", {"BSD-3-Clause", "BSD-2-Clause"}),
             ("Apache-2.0 WITH LLVM-exception", {"Apache-2.0 WITH LLVM-exception"}),
         ]
         for expression, expected in cases:
@@ -1310,28 +1316,75 @@ class LockedClosure(unittest.TestCase):
     def test_zstd_sys_carries_the_bundled_library_text_it_is_relied_on_under(self):
         # zstd-sys compiles the bundled zstd library, offered under BSD-3-Clause
         # or GPL-2.0-only: the BSD text below the crate root must be rendered,
-        # and the GPL text it is not relied on under must not.
-        graph = Graph(self.root / "zstd")
-        python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
-        graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
-        graph.crate("yamaa-cli", "0.4.0", "MIT", member=True)
+        # and the GPL text it is not relied on under must not. From 2.1.3 the
+        # crate also declares BSD-2-Clause, the license of zstd's legacy-format
+        # decoders, and ships it as LICENSE.BSD-2-Clause (#4633); a BSD-3-Clause
+        # text does not hold it, so without that file the SPDX text stands in.
         library = BSD.replace("Example, Inc.", "Meta Platforms, Inc.")
-        zstd = graph.crate(
-            "zstd-sys",
-            "2.1.1+zstd.1.5.7",
-            "BSD-3-Clause",
-            {
-                "zstd/LICENSE": library,
-                "zstd/COPYING": "GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n",
-            },
-        )
-        graph.depend(python, zstd)
-        (notice,) = notices.notices_for(graph.metadata(), graph.closures()["python"])
-        self.assertEqual(notice.relied, ("BSD-3-Clause",))
-        self.assertEqual([name for name, _ in notice.texts], ["zstd/LICENSE"])
-        rendered = notices.render([notice], LIBRARY, "python")
-        self.assertIn("Copyright (c) 2016 Meta Platforms, Inc.", rendered)
-        self.assertNotIn("GNU GENERAL PUBLIC LICENSE", rendered)
+        bindings = BSD.replace("Example, Inc.", "Alexandre Bury")
+        bundled = {
+            "zstd/LICENSE": library,
+            "zstd/COPYING": "GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n",
+        }
+        cases = [
+            (
+                "2.1.2+zstd.1.5.7",
+                "BSD-3-Clause",
+                {},
+                ("BSD-3-Clause",),
+                ["zstd/LICENSE"],
+                (),
+            ),
+            (
+                "2.1.3+zstd.1.5.7",
+                "BSD-3-Clause AND BSD-2-Clause",
+                {
+                    "LICENSE": bindings,
+                    "LICENSE.BSD-2-Clause": BSD_2,
+                    "LICENSE.BSD-3-Clause": bindings,
+                },
+                ("BSD-3-Clause", "BSD-2-Clause"),
+                [
+                    "LICENSE",
+                    "LICENSE.BSD-2-Clause",
+                    "LICENSE.BSD-3-Clause",
+                    "zstd/LICENSE",
+                ],
+                (),
+            ),
+            (
+                "2.1.3+zstd.1.5.7",
+                "BSD-3-Clause AND BSD-2-Clause",
+                {"LICENSE.BSD-3-Clause": bindings},
+                ("BSD-3-Clause", "BSD-2-Clause"),
+                ["LICENSE.BSD-3-Clause", "zstd/LICENSE"],
+                ("BSD-2-Clause",),
+            ),
+        ]
+        for index, (version, declared, root, relied, texts, fallbacks) in enumerate(
+            cases
+        ):
+            with self.subTest(case=f"{version} ships {sorted(root)}"):
+                graph = Graph(self.root / f"zstd-{index}")
+                python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
+                graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
+                graph.crate("yamaa-cli", "0.4.0", "MIT", member=True)
+                zstd = graph.crate("zstd-sys", version, declared, root | bundled)
+                graph.depend(python, zstd)
+                (notice,) = notices.notices_for(
+                    graph.metadata(), graph.closures()["python"]
+                )
+                self.assertEqual(
+                    (
+                        notice.relied,
+                        [name for name, _ in notice.texts],
+                        notice.fallbacks,
+                    ),
+                    (relied, texts, fallbacks),
+                )
+                rendered = notices.render([notice], LIBRARY, "python")
+                self.assertIn("Copyright (c) 2016 Meta Platforms, Inc.", rendered)
+                self.assertNotIn("GNU GENERAL PUBLIC LICENSE", rendered)
 
     def test_unclassified_mislabelled_or_missing_notices_stop_generation(self):
         package = self.graph.packages["pyo3@0.27.2"]

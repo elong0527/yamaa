@@ -141,10 +141,13 @@ WIDTH = 78
 # is relied on. A crate usable only under another license stops generation
 # until its license has been reviewed and added here. Zlib is zlib-rs's only
 # license: the adapters select that flate2 backend, as Parquet 55 did (#3878).
+# BSD-2-Clause is the license of the legacy-format decoders in zstd's sources,
+# which zstd-sys declares beside BSD-3-Clause from 2.1.3 (#4633).
 ACCEPTED = (
     "MIT",
     "Apache-2.0",
     "BSD-3-Clause",
+    "BSD-2-Clause",
     "Unicode-3.0",
     "Apache-2.0 WITH LLVM-exception",
     "CC0-1.0",
@@ -163,6 +166,7 @@ MARKERS = {
         "redistribution and use in source and binary forms",
         "neither the name",
     ),
+    "BSD-2-Clause": ("redistribution and use in source and binary forms",),
     "Unicode-3.0": ("unicode license v3",),
     "Apache-2.0 WITH LLVM-exception": (
         "terms and conditions for use, reproduction, and distribution",
@@ -174,6 +178,9 @@ MARKERS = {
         "permission is granted to anyone to use this software for any purpose",
     ),
 }
+# Phrases that a license's text never contains, where its MARKERS are also in
+# another license's text: BSD-3-Clause adds a third clause to BSD-2-Clause.
+EXCLUSIONS = {"BSD-2-Clause": MARKERS["BSD-3-Clause"][1:]}
 
 # A GNU license named in a text: its full name, or an abbreviation such as
 # GPLv2, LGPL-2.1-or-later or AGPL. The abbreviations match in capitals only,
@@ -206,6 +213,7 @@ NAMED_FILES = {
     "license-apache.md": "Apache-2.0",
     "license-boost": "BSL-1.0",
     "license-bsd": "BSD-2-Clause",
+    "license.bsd-2-clause": "BSD-2-Clause",
     "license-mit": "MIT",
     "license-mit.md": "MIT",
     "license-unicode": "Unicode-3.0",
@@ -531,6 +539,7 @@ def detect(text):
         license
         for license, phrases in MARKERS.items()
         if all(phrase in flat for phrase in phrases)
+        and not any(phrase in flat for phrase in EXCLUSIONS.get(license, ()))
     )
 
 

@@ -75,7 +75,7 @@ regex	1.13.1	MIT	crates.io	linear-time matching for the portable regex subset (y
 regex-automata	0.4.18	MIT	crates.io	transitive dependency of regex: its matching engines
 regex-syntax	0.8.11	MIT	crates.io	transitive dependency of regex: its pattern parser
 rustc_version	0.4.1	MIT	crates.io	build script: the compiler version check of flatbuffers
-rustix	1.1.5	MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
+rustix	1.1.6	MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
 rustversion	1.0.23	MIT	crates.io	procedural macro: compiler version conditions in indoc's build script, which only the Python binding compiles, and in wasm-bindgen's, which no supported target compiles
 ryu	1.0.23	Apache-2.0	crates.io	shortest round-trip formatting of floating-point numbers (yamaa-core); arrow-cast uses it too
 semver	1.0.28	MIT	crates.io	build script: version parsing for rustc_version
