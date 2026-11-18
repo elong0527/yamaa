@@ -774,6 +774,30 @@
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "A"}}]
     },
     {
+      "case": "a_verification_reads_no_field_of_a_record_relation",
+      "operation": "verification_declarations",
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.ID > 0"},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "SEL.ID"}]},
+          {"set": ["verifications"], "to": [{"assert": {"require": "LM.ID > 0"}}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "LM.ID"}}]
+    },
+    {
+      "case": "a_verification_reads_no_field_of_a_pair_relation",
+      "operation": "verification_declarations",
+      "input": {"base": "pairs", "edits": [{"set": ["verifications"], "to": [{"assert": {"require": "P.ID > 0"}}]}]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "P.ID"}}]
+    },
+    {
       "case": "a_verification_id_is_nonempty_text",
       "operation": "verification_declarations",
       "input": {"base": "verified", "edits": [{"set": ["verifications"], "to": [{"unique": {"id": "", "columns": ["V"]}}]}]},

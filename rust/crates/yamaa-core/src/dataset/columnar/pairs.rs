@@ -102,6 +102,9 @@ fn driver_records<'t, E>(
 /// The records of the record relation `relation`'s port (LOOKUP-3): the
 /// records a row template driving on it reads, each with the fields the
 /// port exposes, `columns` of its layout, in order.
+/// The port is a table of its own, held to the table limit before it is
+/// allocated (LIMIT-1), and a failed cell read names the relation and the
+/// source row.
 pub(super) fn record_port<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -109,7 +112,20 @@ pub(super) fn record_port<E>(
     columns: &[usize],
 ) -> Result<Frame, Fail<E>> {
     let side = driver_records(run, cx, relation)?;
-    copy_records(side.table(), &side.rows, columns, columns.len())
+    let path = &relations::item(run.plan, relation).path;
+    Limits::table(side.rows.len(), columns.len()).map_err(|error| {
+        Box::new(ExecutionError::ScopedLimit {
+            resource: match error.resource {
+                "columns" => Resource::SourceColumns,
+                "table_cells" => Resource::SourceCells,
+                _ => Resource::SourceRows,
+            },
+            limit: error.limit,
+            required: error.actual,
+            spec_paths: vec![path.clone()],
+        })
+    })?;
+    copy_records(side.table(), &side.rows, columns, columns.len(), Some(path))
 }
 
 /// The pair relation `relation`'s records, built once a run: its joined
@@ -373,25 +389,31 @@ pub(super) fn port_records<E>(
 ) -> Result<Frame, Fail<E>> {
     let table: Table<'_, E> = built.table();
     let records = (0..table.row_count()).collect::<Vec<_>>();
-    copy_records(table, &records, columns, fields.columns().len())
+    copy_records(table, &records, columns, fields.columns().len(), None)
 }
 
 /// A port's records, `width` fields wide: each of `records` of `table`, in
-/// order, with its `columns`, in order.
+/// order, with its `columns`, in order. A failed read names `path` and the
+/// source row when the records are read from a relation's source; a pair
+/// relation's completed frame has no source row to name.
 fn copy_records<E>(
     table: Table<'_, E>,
     records: &[usize],
     columns: &[usize],
     width: usize,
+    path: Option<&str>,
 ) -> Result<Frame, Fail<E>> {
     let mut frame = Frame::new(width);
     reserved(frame.try_reserve(records.len(), records.len()))?;
     for &record in records {
         let row = frame.push(NO_TEMPLATE, Identity::Candidate(record), &[record]);
         for (offset, &column) in columns.iter().enumerate() {
-            let value = table
-                .get(record, column)
-                .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
+            let value = match path {
+                Some(path) => read(table, path, record, column)?,
+                None => table
+                    .get(record, column)
+                    .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?,
+            };
             frame.complete(row, offset, value);
         }
     }

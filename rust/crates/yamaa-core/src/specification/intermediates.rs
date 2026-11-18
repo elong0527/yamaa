@@ -57,6 +57,9 @@ pub(super) struct Declaration {
     /// The `dataset` path of each intermediate that reads this one's records
     /// as a record relation, which gives it a port (LOOKUP-3).
     readers: Vec<String>,
+    /// A record relation's position among the ports after the inputs, which
+    /// it shares with the pair relations in derivation order (LOOKUP-3).
+    record_slot: Option<usize>,
 }
 impl Declaration {
     /// Whether the intermediate selects one record of several: by `keep`,
@@ -1251,15 +1254,16 @@ impl Declarations {
                 dataset: match item.source {
                     self_relations::Relation::Input(index) => match sources.get(index) {
                         Some(source) => &source.name,
-                        // An intermediate over a pair relation, whose
-                        // records are the relation's (LOOKUP-27).
+                        // An intermediate over a pair relation or a record
+                        // relation, whose records are the relation's
+                        // (LOOKUP-27, LOOKUP-3).
                         None => self
                             .0
                             .iter()
-                            .find(|pair| {
-                                pair.pair
-                                    .as_ref()
-                                    .is_some_and(|pair| pair.slot == index - sources.len())
+                            .find(|relation| {
+                                let slot = index - sources.len();
+                                relation.pair.as_ref().is_some_and(|pair| pair.slot == slot)
+                                    || relation.record_slot == Some(slot)
                             })?
                             .name
                             .as_str(),
@@ -1309,9 +1313,21 @@ impl Declarations {
         }
         let calls = project.is_some();
         result.2 = sources.len();
-        // Each pair relation takes the next position after the inputs, in the
-        // order the intermediates are derived (LOOKUP-27).
+        // Each pair relation and each record relation takes the next position
+        // after the inputs, in the order the intermediates are derived
+        // (LOOKUP-27, LOOKUP-3).
         let mut slots: Vec<&str> = Vec::new();
+        // The `dataset` path of each intermediate that reads a record
+        // relation, by the relation's name, resolved once.
+        let mut record_readers = BTreeMap::<&str, Vec<String>>::new();
+        for reader in &spec.intermediates {
+            if let Some(relation) = spec.record_relation(reader) {
+                record_readers
+                    .entry(relation.id.name.as_str())
+                    .or_default()
+                    .push(checks::render(spec, reader.dataset.meta));
+            }
+        }
         for index in derivation_order(spec, calls)? {
             let item = &spec.intermediates[index];
             let path = checks::render(spec, item.meta);
@@ -1474,6 +1490,10 @@ impl Declarations {
                     intermediates: &result,
                 },
             )?;
+            // A record relation's records follow the inputs as a pair
+            // relation's do, read through its id (LOOKUP-3).
+            let readers = record_readers.remove(name).unwrap_or_default();
+            let record_slot = (!readers.is_empty()).then_some(slots.len());
             std::sync::Arc::get_mut(&mut result.0)
                 .ok_or(PrepareError::Internal)?
                 .push(Declaration {
@@ -1500,19 +1520,10 @@ impl Declarations {
                         .key
                         .is_none()
                         .then(|| format!("{}.key", checks::render(spec, item.meta))),
-                    readers: spec
-                        .intermediates
-                        .iter()
-                        .filter(|reader| {
-                            spec.record_relation(reader)
-                                .is_some_and(|relation| relation.id.name == name)
-                        })
-                        .map(|reader| checks::render(spec, reader.dataset.meta))
-                        .collect(),
+                    record_slot,
+                    readers,
                 });
-            // A record relation's records follow the inputs as a pair
-            // relation's do, read through its id (LOOKUP-3).
-            if spec.read_as_records(name) {
+            if record_slot.is_some() {
                 slots.push(name);
             }
         }

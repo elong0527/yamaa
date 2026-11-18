@@ -626,9 +626,19 @@ impl ResolvedPlan {
                 .next()
                 .map_or("", |binding| &self.binding(binding).path),
             Step::Checks(check) => &self.check(check).path,
+            // The first relation port, a pair relation's or a record
+            // relation's (LOOKUP-27, LOOKUP-3), or else the verified driver
+            // intermediate, holds the run whole.
             Step::VerifyIntermediates { self_rows: false } => self
                 .region_relations(RegionId::DATASET)
-                .find(|&relation| self.relation(relation).donor == Donor::Pairs)
+                .find(|&relation| {
+                    let node = self.relation(relation);
+                    node.donor == Donor::Pairs
+                        || node
+                            .named
+                            .as_ref()
+                            .is_some_and(|item| item.records.is_some())
+                })
                 .or_else(|| self.verified_driver_intermediate())
                 .map_or("", |relation| &self.relation(relation).path),
             Step::Driver(template) => {

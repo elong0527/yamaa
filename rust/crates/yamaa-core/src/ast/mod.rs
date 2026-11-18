@@ -175,6 +175,13 @@ pub struct Spec {
     pub codelists: Vec<Codelist>,
 }
 
+/// Whether `reader`, an intermediate that is not a pair relation, names the
+/// other intermediate `name` as its `dataset`, which makes `name` a record
+/// relation when it is not a pair relation either (LOOKUP-3).
+fn reads_records_of(reader: &Intermediate, name: &str) -> bool {
+    !reader.pairs() && reader.dataset.name == name && reader.id.name != name
+}
+
 impl Spec {
     pub fn expr(&self, id: ExprId) -> &Expr {
         &self.exprs[id.index()]
@@ -210,23 +217,21 @@ impl Spec {
     /// reads its records as a row template driving on it would (LOOKUP-3,
     /// ROW-2). A pair relation is read through its id already (LOOKUP-27).
     pub fn read_as_records(&self, name: &str) -> bool {
-        self.intermediates.iter().any(|reader| {
-            self.record_relation(reader)
-                .is_some_and(|relation| relation.id.name == name)
-        })
+        self.intermediates
+            .iter()
+            .any(|item| item.id.name == name && !item.pairs())
+            && self
+                .intermediates
+                .iter()
+                .any(|reader| reads_records_of(reader, name))
     }
     /// The record relation the intermediate `reader` reads: the other named
     /// intermediate, not a pair relation, that its `dataset` names
     /// (LOOKUP-3). A pair relation reads its sides instead (LOOKUP-27).
     pub fn record_relation(&self, reader: &Intermediate) -> Option<&Intermediate> {
-        if reader.pairs() {
-            return None;
-        }
-        self.intermediates.iter().find(|other| {
-            other.id.name == reader.dataset.name
-                && other.id.name != reader.id.name
-                && !other.pairs()
-        })
+        self.intermediates
+            .iter()
+            .find(|other| !other.pairs() && reads_records_of(reader, &other.id.name))
     }
     /// Whether the intermediate `item` lacks the `key` it requires: it
     /// declares none and neither drives a row template, is a side of a pair

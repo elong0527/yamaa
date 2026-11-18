@@ -25,7 +25,8 @@ concentration records (PC), each with a sample datetime.
 - `FADTM`: the start of the subject's earliest dose record.
 - `PADTM`: the start of the latest dose record that starts strictly before
   `ADTM`; empty when none does, so a dose row never takes its own record and
-  a sample taken at a dose's start takes the dose before it.
+  a sample taken at a dose's start takes the dose before it, if there is
+  one.
 
 **Note:** each dose record's completed start, end and dosing interval are
 calculated once. The dose row, the subject's first-dose selection and each
