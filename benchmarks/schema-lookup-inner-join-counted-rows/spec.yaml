@@ -97,8 +97,8 @@ columns:
     type: str
     label: Dose Units
 
-  # No administration is numbered before the first: a dosing period that
-  # holds a day before day 1 rejects the run.
+  # No administration is numbered before the first: a record that the dosing
+  # period gives a day before day 1 rejects the run.
   - name: ADOSEN
     type: int
     label: Administration Sequence Number

@@ -74,7 +74,7 @@ intermediates:
 The requirement is checked only where a record reads `LAST`, so the
 read in `EXREC` is what rejects the run. Checks that each record
 builds as many administrations as it counts, numbered from `1`, then
-also reject a dosing period that leaves a day out.
+also reject a dosing period that leaves out a day a record counts.
 
 If the analysis genuinely needs only the totals, drop the administration level
 and key on the collected record instead:

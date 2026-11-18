@@ -232,9 +232,10 @@ rest: a `range` keeps each row's number from the first
 own, the output `keys` keep the numbers of one record distinct, as the next
 paragraph states, and an `assert` that each record builds as many rows as its
 number ([CHECK-12](verification.md#check-12)) then admits only every number
-once. A relation that leaves a number out, repeats one or holds one below the
-first then fails the run. `schema-lookup-inner-join-counted-rows` shows both
-parts.
+once. The run then fails for any record whose numbers the relation leaves
+out, repeats or extends below the first, and a relation is not checked beyond
+the numbers its records span. `schema-lookup-inner-join-counted-rows` shows
+both parts.
 
 The built rows must still match the `keys`: repeating a key combination fails
 at the output gate under [OUTPUT-3](output.md#output-3). A

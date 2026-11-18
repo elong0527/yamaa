@@ -22,6 +22,8 @@ per day of it, the days numbered from `1`.
 from its start date through its end date, and for a single administration
 on its start date when it has no end date. A record that covers more days
 than the protocol's dosing period has, ends before it starts, or has no
-start date rejects the run, and so does a dosing period that does not hold
-each of its days once, numbered from `1`, so no record builds fewer
-administrations than it stands for.
+start date rejects the run. So does a record for which the dosing period
+leaves out or repeats a day it covers, or holds a day before day `1`. Every
+record of a run that succeeds therefore has exactly one administration for
+each day it covers; a dosing period is not checked beyond the days its
+records cover.
