@@ -21,12 +21,11 @@ out <- data.frame(
   STUDYID = lb$STUDYID,
   USUBJID = lb$USUBJID,
   PARAMCD = lb$LBTESTCD,
-  PARAM = "Alanine Aminotransferase",
+  PARAM = "Alanine Aminotransferase (U/L)",
   ADT = adt,
   TRT01A = adsl$TRT01A[subject_match],
   ADY = as.integer(ady),
   AVAL = aval,
-  AVALU = lb$LBSTRESU,
   ABLFL = ablfl,
   BASE = NA_real_,
   CHG = NA_real_,
@@ -41,7 +40,8 @@ for (key in unique(parameter_key)) {
     out$BASE[rows] <- out$AVAL[baseline_rows]
   }
 }
-out$CHG <- out$AVAL - out$BASE
+# Change only after the first treatment date.
+out$CHG <- ifelse(adt > trtsdt, out$AVAL - out$BASE, NA_real_)
 out <- out[order(out$STUDYID, out$USUBJID, out$PARAMCD, out$ADT), , drop = FALSE]
 stopifnot(!anyDuplicated(out[c("STUDYID", "USUBJID", "PARAMCD", "ADT")]))
 write.csv(out, "/app/output/adlb.csv", row.names = FALSE, na = "")

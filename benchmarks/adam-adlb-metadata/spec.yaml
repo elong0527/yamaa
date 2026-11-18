@@ -10,7 +10,7 @@ input:
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVALC, AVALU]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVALC]
 
 columns:
   - name: STUDYID
@@ -108,25 +108,6 @@ columns:
           where: {PARAMCD: [HCG]}
           mandatory: true
           codelist: HCGRS
-
-  # One entry covers both numeric parameters: their unit is required and
-  # drawn from the units codelist.
-  - name: AVALU
-    type: str
-    label: Analysis Value Unit
-    derivation: LB.LBSTRESU
-    submission:
-      core: Perm
-      mandatory: false
-      length: 8
-      origins:
-        - type: Predecessor
-          description: LB.LBSTRESU
-      value_level:
-        - id: NUMERIC
-          where: {PARAMCD: [GLUC, CREAT]}
-          mandatory: true
-          codelist: UNIT
 
 submission:
   label: Laboratory Analysis Dataset

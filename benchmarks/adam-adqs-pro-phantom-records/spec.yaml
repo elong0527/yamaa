@@ -12,7 +12,7 @@ input:
     types: {VISITNUM: int, VISITDY: int}
   QS:
     path: input/qs.csv
-    types: {QSSEQ: int, QSSTRESN: float, VISITNUM: int}
+    types: {QSSEQ: int, QSSTRESN: float, VISITNUM: int, QSDTC: date}
 
 # The record frame is every randomized subject at every planned assessment:
 # the subjects paired with the planned schedule, which holds one record per
@@ -22,8 +22,9 @@ input:
 
 output:
   path: adqs.csv
-  columns: [STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, AVISIT, AVISITN, AVAL,
-            DTYPE, QSSTAT, QSREASND, AREASND, PROEX1FL, PROEX2FL, PROSCMFL]
+  columns: [STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, AVISIT, AVISITN, ADT,
+            AVAL, DTYPE, QSSTAT, QSREASND, AREASND, PROEX1FL, PROEX2FL,
+            PROSCMFL]
   order_by: [USUBJID, AVISITN, PARAMCD]
 
 intermediates:
@@ -128,6 +129,11 @@ columns:
   # The collected item record, empty on a score record and on an item that
   # was not collected. None of these but QSSTAT and QSREASND is in the
   # output.
+  - name: ITEMDT
+    type: date
+    label: Item Collection Date
+    derivation: ITEMREC.QSDTC
+
   - name: ITEMSEQ
     type: int
     label: Item Sequence Number
@@ -182,6 +188,21 @@ columns:
       aggregate:
         expr: "MAX(QSREASND)"
         group_by: [STUDYID, USUBJID, AVISITN]
+
+  # The date the questionnaire was completed: an item's own, and on a score
+  # the date of the items collected at its timepoint. A record added for a
+  # missed assessment has none.
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      case:
+        - when: "PARCAT2 = 'ITEM'"
+          then: ITEMDT
+        - otherwise:
+            aggregate:
+              expr: "MAX(ITEMDT)"
+              group_by: [STUDYID, USUBJID, AVISITN]
 
   # An item keeps its response; the total score is the sum of both items,
   # and has no value unless both were answered.
@@ -276,7 +297,9 @@ verifications:
   - assert:
       id: added-record-holds-nothing-collected
       when: "DTYPE = 'PHANTOM'"
-      require: "AVAL IS NULL AND QSSTAT IS NULL AND QSREASND IS NULL"
+      require: >-
+        AVAL IS NULL AND ADT IS NULL AND QSSTAT IS NULL
+        AND QSREASND IS NULL
   # A reason is given only where the value is missing.
   - assert:
       id: reason-only-without-a-value

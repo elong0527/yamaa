@@ -33,12 +33,13 @@ ANL01FL
   ("PR"), stable disease ("SD"), neither complete response nor
   progressive disease ("NON-CR/NON-PD"), progressive disease ("PD"), and
   not evaluable ("NE").
-- AVAL ranks the response from best to worst: 1 for "CR", 2 for "PR",
-  3 for "SD", 4 for "NON-CR/NON-PD", 5 for "PD", and 6 for "NE".
+- AVAL is 1 for "CR", 2 for "PR", 3 for "SD", 4 for "NON-CR/NON-PD",
+  5 for "PD", and 6 for "NE".
 - ANL01FL is "Y" for one record at each assessment date (ADT): the
-  record carrying the worst response that day, the largest AVAL, with
-  the lowest RSSEQ breaking ties when a day carries the same worst
-  response twice.
+  record carrying the worst evaluable response that day, the largest
+  AVAL other than "NE", with the lowest RSSEQ breaking ties when a day
+  carries the same worst response twice. A record with "NE" is flagged
+  only when the date has no other response.
 - ANL01FL has no value on every other record.
 
 Read the source datasets from /app/input and save the completed dataset as

@@ -9,17 +9,17 @@ data lb;
 run;
 
 data collected;
-  length PARAMCD $16 PARAM $1024 AVISIT $1024 DTYPE $11;
+  length PARAMCD $16 PARAM $1024 AVISIT $1024;
   set lb; PARAMCD=LBTESTCD; PARAM=LBTEST; AVISIT=VISIT; AVAL=LBSTRESN;
 run;
 proc sort data=collected; by STUDYID USUBJID AVISIT LBSEQ; run;
 data totals;
-  length PARAMCD $16 PARAM $1024 DTYPE $11;
+  length PARAMCD $16 PARAM $1024;
   set collected; by STUDYID USUBJID AVISIT;
   if first.AVISIT then do; total=0; count=0; end;
   if not missing(AVAL) then do; total+AVAL; count+1; end;
   if last.AVISIT then do;
-    PARAMCD='TOTAL'; PARAM='Total of Components'; DTYPE='CALCULATION';
+    PARAMCD='TOTAL'; PARAM='Total of Components';
     AVAL=.; if count>0 then AVAL=total;
     output;
   end;
@@ -27,6 +27,6 @@ run;
 data result; set collected totals; run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, DTYPE from result;
+  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL from result;
 quit;
 proc export data=final outfile="/app/output/adlb.csv" dbms=csv replace; run;

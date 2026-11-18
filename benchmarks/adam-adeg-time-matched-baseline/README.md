@@ -27,6 +27,8 @@ holding the average of the replicate ECGs taken at that time (`AVAL`, unit
   and the time point, for example "Period 2 Baseline Day 2 h", on every
   record, including those with no baseline.
 
-**Note:** every period has its own baseline day, so a subject has one
-baseline record per period and time point, and each of them has a baseline
-type of its own.
+**Note:** day -1 is a day without dosing, and its time points are taken at
+the clock times of the dosing day's time points, so its 2 h record is not
+taken after a dose. Every period has its own baseline day, so a subject has
+one baseline record per period and time point, and each of them has a
+baseline type of its own: each baseline type has exactly one baseline record.

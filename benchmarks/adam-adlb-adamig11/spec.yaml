@@ -33,7 +33,6 @@ output:
   - TRT01A
   - ADY
   - AVAL
-  - AVALU
   - ABLFL
   - BASE
   - CHG
@@ -78,7 +77,7 @@ columns:
 - name: PARAM
   type: str
   label: Parameter
-  derivation: '''Alanine Aminotransferase'''
+  derivation: '''Alanine Aminotransferase (U/L)'''
   submission:
     core: Req
     mandatory: true
@@ -141,18 +140,6 @@ columns:
     - type: Predecessor
       description: LB.LBSTRESN
 
-- name: AVALU
-  type: str
-  label: Analysis Value Unit
-  derivation: LB.LBSTRESU
-  submission:
-    core: Perm
-    mandatory: false
-    length: 80
-    origins:
-    - type: Predecessor
-      description: LB.LBSTRESU
-
 - name: ABLFL
   type: str
   label: Baseline Record Flag
@@ -185,10 +172,15 @@ columns:
     - type: Derived
     method: Repeat the flagged baseline value within subject and parameter.
 
+# A change only after the first treatment date: none on the baseline record
+# or on any record before treatment.
 - name: CHG
   type: float
   label: Change from Baseline
-  derivation: AVAL - BASE
+  derivation:
+    case:
+    - when: ADT > TRTSDT
+      then: AVAL - BASE
   submission:
     core: Cond
     mandatory: false
@@ -196,7 +188,8 @@ columns:
     significant_digits: 1
     origins:
     - type: Derived
-    method: Analysis value minus baseline; missing when no baseline exists.
+    method: Analysis value minus baseline after the first treatment date;
+      missing on the baseline record and when no baseline exists.
 
 submission:
   label: Laboratory Analysis Dataset

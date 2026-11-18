@@ -122,6 +122,16 @@ ADSL_ROWS = [
     ["CATH", "CATH-MCGILL-0003", "NOT TREATED", 52, 165.2, None, None],
 ]
 
+# adam-adsl-adamig11/expected/adsl.csv and its ADaMIG 1.2 twin: the same
+# subjects with the time imputation flag, S where the seconds were imputed.
+ADSL_TMF_VARIABLES = [
+    *ADSL_VARIABLES,
+    character("TRTSTMF", "Time of First Exposure Imput. Flag", 1),
+]
+ADSL_TMF_ROWS = [
+    [*row, flag] for row, flag in zip(ADSL_ROWS, ["S", None, None], strict=True)
+]
+
 # schema-define-non-standard/expected/ze.csv, authored from the examination
 # transfer. Character widths are the longest literal values in each column.
 ZE_VARIABLES = [
@@ -175,16 +185,16 @@ GOLDENS.extend(
             "adsl.xpt",
             "ADSL",
             "Subject-Level Analysis Dataset",
-            ADSL_VARIABLES,
-            ADSL_ROWS,
+            ADSL_TMF_VARIABLES,
+            ADSL_TMF_ROWS,
         ),
         (
             "adam-adsl-adamig12",
             "adsl.xpt",
             "ADSL",
             "Subject-Level Analysis Dataset",
-            ADSL_VARIABLES,
-            ADSL_ROWS,
+            ADSL_TMF_VARIABLES,
+            ADSL_TMF_ROWS,
         ),
         (
             "sdtm-sv-sdtmig33",
@@ -408,7 +418,7 @@ GOLDENS.extend(
                     name="PARAM",
                     label="Parameter",
                     character=True,
-                    width=24,
+                    width=30,
                     format=None,
                 ),
                 Variable(
@@ -440,13 +450,6 @@ GOLDENS.extend(
                     format=None,
                 ),
                 Variable(
-                    name="AVALU",
-                    label="Analysis Value Unit",
-                    character=True,
-                    width=3,
-                    format=None,
-                ),
-                Variable(
                     name="ABLFL",
                     label="Baseline Record Flag",
                     character=True,
@@ -473,26 +476,24 @@ GOLDENS.extend(
                     "CATH",
                     "CATH-01",
                     "ALT",
-                    "Alanine Aminotransferase",
+                    "Alanine Aminotransferase (U/L)",
                     23748,
                     "DRUG",
                     -1,
                     10.0,
-                    "U/L",
                     "Y",
                     10.0,
-                    0.0,
+                    None,
                 ],
                 [
                     "CATH",
                     "CATH-01",
                     "ALT",
-                    "Alanine Aminotransferase",
+                    "Alanine Aminotransferase (U/L)",
                     23750,
                     "DRUG",
                     2,
                     15.0,
-                    "U/L",
                     None,
                     10.0,
                     5.0,
@@ -501,12 +502,11 @@ GOLDENS.extend(
                     "CATH",
                     "CATH-02",
                     "ALT",
-                    "Alanine Aminotransferase",
+                    "Alanine Aminotransferase (U/L)",
                     23750,
                     "PLACEBO",
                     2,
                     20.0,
-                    "U/L",
                     None,
                     None,
                     None,

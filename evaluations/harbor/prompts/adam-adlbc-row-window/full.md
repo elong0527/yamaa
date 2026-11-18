@@ -7,13 +7,13 @@ STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, PREV_AVAL, CHG
 - The dataset holds rows only for LB records with test code ALB or BILI
   and a numeric result; records with another test code or no numeric
   result have no row.
-- PARAMCD is "_ALB" for an albumin (ALB) record and "_BILI" for a
-  bilirubin (BILI) record.
+- PARAMCD is "ALB" for an albumin record and "BILI" for a bilirubin
+  record.
 - AVISITN is the lab visit number, and AVAL is the numeric lab result
   for the visit.
 - PREV_AVAL is the AVAL of the latest earlier visit with a result for
-  the same subject and parameter in AVISITN order, so an "_ALB" row
-  never takes a value from a "_BILI" row.
+  the same subject and parameter in AVISITN order, so an "ALB" row
+  never takes a value from a "BILI" row.
 - PREV_AVAL has no value for the earliest visit with a result for a
   subject and parameter.
 - CHG is AVAL - PREV_AVAL, the change since the previous visit rather

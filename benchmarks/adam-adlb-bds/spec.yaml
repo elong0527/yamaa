@@ -9,8 +9,8 @@ input:
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, ADT, TRTSDT, TRT01A, AVAL, AVALU,
-            ABLFL, BASE, CHG, PCHG, ASEQ]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, ADT, TRTSDT, TRT01A, AVAL, ABLFL,
+            BASE, CHG, PCHG, ASEQ]
 
 columns:
   - name: STUDYID
@@ -50,10 +50,6 @@ columns:
     type: float
     label: Analysis Value
 
-  - name: AVALU
-    type: str
-    label: Analysis Value Unit
-
   # Baseline is the latest record on or before treatment start, per subject
   # and parameter; BASE repeats its value on every record.
   - name: ABLFL
@@ -76,12 +72,18 @@ columns:
         group_by: [STUDYID, USUBJID, PARAMCD]
         expr: "ONLY(AVAL)"
 
+  # A change only after the treatment start date: none on the baseline
+  # record, which is on or before it.
   - name: CHG
     type: float
     label: Change from Baseline
-    derivation: "AVAL - BASE"
+    derivation:
+      case:
+        - when: "ADT > TRTSDT"
+          then: "AVAL - BASE"
 
-  # NULLIF leaves the percentage empty when the baseline value is zero.
+  # Empty wherever the change is, and NULLIF leaves it empty when the
+  # baseline value is zero.
   - name: PCHG
     type: float
     label: Percent Change from Baseline
@@ -104,27 +106,24 @@ rows:
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD: "'ALT'"
-      PARAM: "'Alanine Aminotransferase'"
+      PARAM: "'Alanine Aminotransferase (U/L)'"
       AVAL: LB.LBSTRESN
-      AVALU: LB.LBSTRESU
 
   - id: alt_si
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD: "'ALTSI'"
-      PARAM: "'Alanine Aminotransferase (SI)'"
+      PARAM: "'Alanine Aminotransferase (ukat/L)'"
       AVAL: "LB.LBSTRESN * 0.0167"
-      AVALU: "'ukat/L'"
 
   - id: ast
     dataset: LB
     filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD: "'AST'"
-      PARAM: "'Aspartate Aminotransferase'"
+      PARAM: "'Aspartate Aminotransferase (U/L)'"
       AVAL: LB.LBSTRESN
-      AVALU: LB.LBSTRESU
 
 verifications:
   - row_count:

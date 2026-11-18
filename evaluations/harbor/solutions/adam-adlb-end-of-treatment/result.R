@@ -13,6 +13,7 @@ lb <- read_csv(
   col_types = cols(
     LBSEQ = col_integer(),
     VISITNUM = col_integer(),
+    LBDTC = col_date(),
     LBSTRESN = col_double(),
     .default = col_character()
   )
@@ -20,6 +21,10 @@ lb <- read_csv(
 supp <- read_csv(
   "/app/input/supplb.csv",
   col_types = cols(.default = col_character())
+)
+adsl <- read_csv(
+  "/app/input/adsl.csv",
+  col_types = cols(TRTEDT = col_date(), .default = col_character())
 )
 
 # ENDPOINT is Y when a supplemental endpoint qualifier with the same
@@ -38,14 +43,19 @@ marked <- lb |>
   left_join(endpoint_keys, by = c("STUDYID", "USUBJID", "SEQ_TRIM")) |>
   select(-SEQ_TRIM)
 
-# EOTFL is Y on one record per subject and test: the endpoint-marked
+# EOTFL is Y on one record per subject and test, among the records
+# collected on or before the end of treatment date: the endpoint-marked
 # record when there is one, otherwise the record from the latest visit.
-endpoint_winners <- marked |>
+on_treatment <- marked |>
+  left_join(adsl |> select(STUDYID, USUBJID, TRTEDT), by = c("STUDYID", "USUBJID")) |>
+  filter(!is.na(LBDTC), !is.na(TRTEDT), LBDTC <= TRTEDT)
+
+endpoint_winners <- on_treatment |>
   filter(ENDPOINT %in% "Y") |>
   group_by(STUDYID, USUBJID, LBTESTCD) |>
   summarise(WIN_ENDPOINT = min(LBSEQ), .groups = "drop")
 
-latest_winners <- marked |>
+latest_winners <- on_treatment |>
   arrange(desc(VISITNUM), desc(LBSEQ)) |>
   distinct(STUDYID, USUBJID, LBTESTCD, .keep_all = TRUE) |>
   transmute(STUDYID, USUBJID, LBTESTCD, WIN_LATEST = LBSEQ)

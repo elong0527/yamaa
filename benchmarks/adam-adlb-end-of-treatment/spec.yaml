@@ -4,8 +4,11 @@ model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
-  LB: {path: input/lb.csv, types: {LBSEQ: int, VISITNUM: int, LBSTRESN: float}}
+  LB:
+    path: input/lb.csv
+    types: {LBSEQ: int, VISITNUM: int, LBDTC: date, LBSTRESN: float}
   SUPPLB: input/supplb.csv
+  ADSL: {path: input/adsl.csv, types: {TRTEDT: date}}
 base: LB
 
 output:
@@ -26,20 +29,34 @@ intermediates:
     verifications:
       - unique: [STUDYID, USUBJID, IDVARVAL]
 
-  # Every laboratory record carries its own endpoint qualifier before the
-  # window ranks the records of each subject and test: the endpoint
-  # record first, then the latest visit.
+  # The subject's end of treatment; every laboratory subject has one.
+  - id: TRT
+    dataset: ADSL
+    key: [STUDYID, USUBJID]
+    require_match: true
+
+  # Every laboratory record carries its own endpoint qualifier, and whether
+  # it was collected on or before the end of treatment, before the window
+  # ranks the records of each subject and test: records on treatment first,
+  # then the endpoint record, then the latest visit. A record collected
+  # after the end of treatment is a follow-up record.
   - id: EOT_RANK
     dataset: LB
     key: [STUDYID, USUBJID, LBSEQ]
     require_match: true
     derivations:
       ENDPOINT: SUPP_EP.QVAL
+      ONTRT:
+        case:
+          - when: "LB.LBDTC <= TRT.TRTEDT"
+            then: "'Y'"
+          - otherwise: "'N'"
       EOT_SEQ:
         row_number:
           window:
             group_by: [LB.USUBJID, LB.LBTESTCD]
             order_by:
+              - {variable: ONTRT, direction: desc}
               - {variable: ENDPOINT, direction: desc}
               - {variable: LB.VISITNUM, direction: desc}
 
@@ -79,13 +96,15 @@ columns:
     label: Protocol Endpoint Record
     derivation: EOT_RANK.ENDPOINT
 
+  # A follow-up record never carries the flag, even when it ranks first
+  # because the subject and test have no record on treatment.
   - name: EOTFL
     type: str
     label: End of Treatment Record Flag
     derivation:
-      flag: "EOT_RANK.EOT_SEQ = 1"
+      flag: "EOT_RANK.EOT_SEQ = 1 AND EOT_RANK.ONTRT = 'Y'"
 
 verifications:
   - row_count:
-      min: 12
-      max: 12
+      min: 13
+      max: 13

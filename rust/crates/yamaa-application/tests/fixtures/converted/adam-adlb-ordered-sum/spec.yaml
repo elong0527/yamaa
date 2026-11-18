@@ -8,7 +8,7 @@ input:
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, DTYPE]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL]
 
 columns:
   - name: STUDYID
@@ -38,10 +38,6 @@ columns:
     type: float
     label: Analysis Value
 
-  - name: DTYPE
-    type: str
-    label: Derivation Type
-
 rows:
   # Every collected component result, unchanged.
   - id: collected
@@ -49,7 +45,6 @@ rows:
       PARAMCD: LB.LBTESTCD
       PARAM: LB.LBTEST
       AVAL: LB.LBSTRESN
-      DTYPE: null
 
   # One TOTAL record per subject and visit, adding the results in stored
   # record order. A missing result is skipped; if all are missing, the total
@@ -61,7 +56,6 @@ rows:
       PARAM: "'Total of Components'"
       AVAL:
         aggregate: "SUM(LB.LBSTRESN)"
-      DTYPE: "'CALCULATION'"
 
 verifications:
   - row_count:

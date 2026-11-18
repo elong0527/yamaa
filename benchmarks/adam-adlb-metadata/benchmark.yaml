@@ -14,3 +14,5 @@ review:
     - The pregnancy test has a text result only, required to be NEGATIVE or
       POSITIVE, while glucose is described with no decimals and creatinine with
       one, and a definition without its own description keeps the variable's.
+      The unit is part of the parameter name (Glucose (mg/dL)), as ADaMIG has
+      no unit variable.

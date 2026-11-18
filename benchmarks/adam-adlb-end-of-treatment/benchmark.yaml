@@ -4,10 +4,16 @@ domain: ADLB
 review:
   concerns:
     - End-of-treatment lab summaries use the protocol's endpoint record where
-      one is marked, and otherwise the last visit.
-    - Five subjects cover an endpoint qualifier before the last visit, other
-      qualifiers, an endpoint qualifier for a record that does not exist, an
-      endpoint record with no result, and single-record groups.
-    - The endpoint qualifier wins even when a later visit exists (subject 101's
-      albumin at visit 2) and even when its result is missing (subject 104),
-      matched through the space-padded sequence text in SUPPLB.
+      one is marked, and otherwise the last visit on treatment. Labs from the
+      safety follow-up period, after the end of treatment date (TRTEDT), are
+      not end-of-treatment values.
+    - Five subjects cover an endpoint qualifier before the last visit, a
+      follow-up visit after the end of treatment, a result on the end of
+      treatment date, other qualifiers, an endpoint qualifier for a record that
+      does not exist, an endpoint record with no result, and single-record
+      groups.
+    - Subject 101's creatinine at visit 4 (2025-03-31) comes after the end of
+      treatment (2025-03-10), so visit 3 is flagged. The endpoint qualifier
+      wins even when a later visit on treatment exists (subject 101's albumin
+      at visit 2) and even when its result is missing (subject 104), matched
+      through the space-padded sequence text in SUPPLB.

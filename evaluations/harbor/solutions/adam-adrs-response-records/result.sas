@@ -27,7 +27,9 @@ data assessments;
   end;
   AVALC=RSSTRESC; select(AVALC); when('CR') AVAL=1; when('PR') AVAL=2; when('SD') AVAL=3; when('NON-CR/NON-PD') AVAL=4; when('PD') AVAL=5; when('NE') AVAL=6; otherwise AVAL=.; end;
 run;
-proc sort data=assessments; by STUDYID USUBJID ADT descending AVAL RSSEQ; run;
+/* NE ranks below every evaluable response when choosing the date's record. */
+data assessments; set assessments; SELRANK=AVAL; if AVALC='NE' then SELRANK=0; run;
+proc sort data=assessments; by STUDYID USUBJID ADT descending SELRANK RSSEQ; run;
 data result; length ANL01FL $1; set assessments; by STUDYID USUBJID ADT; if first.ADT then ANL01FL='Y'; run;
 
 proc sql;
