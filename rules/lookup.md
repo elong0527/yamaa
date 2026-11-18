@@ -8,7 +8,10 @@ narrows them by a filter, selects one record or reduces them, and answers
 absence. The kinds of lookup differ only in the steps they declare. A named
 intermediate that writes `inner_join` is a fourth kind, the pair relation: it
 matches and narrows the records of one relation for every record of another
-and keeps every pair ([LOOKUP-27](#lookup-27)).
+and keeps every pair ([LOOKUP-27](#lookup-27)). A named intermediate, not a
+pair relation, that another intermediate other than a pair relation names as
+its `dataset` is a record relation: its derived records are read as an
+input's ([LOOKUP-3](#lookup-3)).
 
 ## The lookup model
 
@@ -929,14 +932,14 @@ derivation's read does ([COLUMN-4](columns.md#column-4)), at `between.value`.
 
 An entry of `intermediates` declares `id`, `dataset`, the relation it reads,
 and `key`, its match ([LOOKUP-5](#lookup-5)), unless it drives a row
-template or is a side of a pair relation, which declare none
-([ROW-2](rows.md#row-2), [LOOKUP-27](#lookup-27)). Its `id` shares one naming
+template, is a side of a pair relation or is a record relation, which
+declare none ([ROW-2](rows.md#row-2), [LOOKUP-27](#lookup-27)). Its `id` shares one naming
 list with dataset identifiers, other lookup ids and the output `domain`, and a
 collision fails. An intermediate read as a lookup without `key` fails as
 `missing_required_field`.
 
-Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_is_refused_at_its_key_and_keeps_no_input_live`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_or_filter_is_refused_at_its_key_and_keeps_no_input_live`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
+Fails: `duplicate_identifier`, `missing_required_field`, `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `schema-lookup-intermediate-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_record_relation_is_an_intermediate_a_row_template_could_drive_on`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_record_relation_reads_an_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::an_intermediate_is_no_record_relation_of_itself`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_record_relation_reads_no_current_row`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_record_relation_exposes_fields_of_one_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_read_through_a_record_relation_s_implicit_join_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_verification_reads_no_field_of_a_record_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_read_of_a_pair_relation_side_is_refused_at_its_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_formula_read_of_a_pair_relation_side_is_refused_at_its_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_case_result_read_of_a_pair_relation_side_is_refused_at_its_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_case_condition_read_of_a_pair_relation_side_is_refused_at_its_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_verification_read_of_a_pair_relation_side_is_refused_at_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_is_refused_at_its_key_and_keeps_no_input_live`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_or_filter_is_refused_at_its_key_and_keeps_no_input_live`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -951,14 +954,69 @@ relation's own `key` pairs its two sides, not a current row, and an
 intermediate that is a side of one declares no `key`, as a row driver does
 ([ROW-2](rows.md#row-2)).
 
+The `dataset` of an intermediate that is not a pair relation, when it names
+another named intermediate that is not a pair relation either, reads that
+intermediate's records as a row template driving on it
+reads them ([ROW-2](rows.md#row-2)): those its filter keeps, in stored
+order, each with its derivations complete and with every field its `columns`
+leaves visible, stored and derived. The intermediate named is a record
+relation. Its records are built once, before any row is built, and every
+intermediate that names it reads them as it reads an input's, through the
+relation's id and with a `key` of its own, so several lookups read one
+declaration of derived fields instead of repeating it. A record relation
+declares no `key`, as a row driver does, and may drive row templates itself.
+It reads an input and declares none of `key`, `between`, `order_by`, `keep`,
+`nearest`, `pivot`, `absent`, `require_match` and `inner_join`, or the
+intermediate that reads it fails as `invalid_intermediate_driver` at its
+`dataset` before any input is read, naming the relation as `intermediate`
+and each such field, `dataset` among them when it reads no input; so a
+record relation reads no other intermediate. A record relation whose filter
+or derivations read a current row fails the same way at each reader's
+`dataset`, naming `filter` or `derivations`, and one that exposes a field
+without one column type ([EXPR-14](expressions.md#expr-14)) fails as
+`unknown_intermediate_driver_type` there, naming the fields as `columns`. A
+`dataset` that names its own intermediate names no relation and fails as
+`unknown_field` ([NAME-1](names.md#name-1)). Outside the row templates
+that drive on it, a name a record relation qualifies reads its records as
+an input's, never the relation as a lookup: through an intermediate whose
+`dataset` names it, or a qualified aggregate with a `key` of its own
+([LOOKUP-18](#lookup-18)). It declares no input `key`, so a read through its
+implicit join, and a qualified aggregate over it without `key`, fail as
+`no_applicable_keys` ([LOOKUP-5](#lookup-5)), whose hint names those routes.
+
+```yaml
+intermediates:
+  - id: EXREC
+    dataset: EX
+    derivations:
+      STDTM: {type: datetime, derivation: {impute: {type: datetime, source: EXSTDTC, time: first}}}
+  - id: FIRSTREC
+    dataset: EXREC
+    key: {USUBJID: USUBJID}
+    order_by: [EXREC.STDTM]
+    keep: first
+  - id: PRIOR
+    dataset: EXREC
+    key: {USUBJID: USUBJID}
+    between: {value: ADTM, lower: STDTM, closed: neither}
+    order_by: [EXREC.STDTM]
+    keep: last
+```
+
+`STDTM` is derived once. Both lookups match on `USUBJID` and order their
+candidates by `STDTM`, and `PRIOR` also bounds its range by it, as each would
+by a stored field.
+
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
 rule cited. An intermediate that drives no row template, is no side of a pair
-relation and declares no `key`, or a pair relation without one, fails as
+relation, is no record relation and declares no `key`, or a pair relation without one, fails as
 `missing_required_field` at its `key` before any input is read, even when
 nothing reads it, its context naming the field and its class as the schema's
 does; a row template's driver read as a lookup by the rows another template
-builds fails the same way. An intermediate other than a pair relation that
+builds fails the same way, and so does a pair relation's side read by a
+column, a formula, a `case` or a dataset verification of a dataset built at
+its key grain, where only its pair relation reads it. An intermediate other than a pair relation that
 lacks its `key` and that nothing reads survives pruning only to reach this
 refusal: it reads nothing, so an input that only it names is pruned
 ([LAYER-11](inheritance.md#layer-11)) and is not held to the fields it lacks. An intermediate never falls back to its input's
@@ -1516,7 +1574,7 @@ are reported and the selection chooses. A lookup whose key is verified unique
 at `error` needs no selection.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_unique_key_holding_an_int_and_an_equal_float_repeats_as_key_matching_meets_them`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_warning_unique_reports_an_int_and_an_equal_float_and_the_selection_chooses_between_them`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_unique_key_counts_two_missing_values_as_one_combination_though_no_row_matches_them`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_unique_key_holding_an_int_and_an_equal_float_repeats_as_key_matching_meets_them`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_warning_unique_reports_an_int_and_an_equal_float_and_the_selection_chooses_between_them`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/unique_key_equality.json::a_unique_key_counts_two_missing_values_as_one_combination_though_no_row_matches_them`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_warning_unique_over_a_record_relation_reports_the_relation_it_reads`.
 
 ```yaml
 - id: DS_EOS

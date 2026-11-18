@@ -5,6 +5,11 @@ use crate::dataset::{Intermediate, SecondarySource};
 /// The named intermediate a qualified name reads through, by its position.
 pub(super) fn declared(spec: &crate::ast::Spec, name: &str) -> Option<usize> {
     let (relation, _) = name.split_once('.')?;
+    // A pair relation or a record relation is read as an input is, never as
+    // a lookup (LOOKUP-27, LOOKUP-3), so a verification reads no field of it.
+    if spec.pair_relation(relation).is_some() || spec.read_as_records(relation) {
+        return None;
+    }
     spec.intermediates
         .iter()
         .position(|item| item.id.name == relation)

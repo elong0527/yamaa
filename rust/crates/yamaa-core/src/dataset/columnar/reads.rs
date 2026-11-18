@@ -491,6 +491,7 @@ mod tests {
             unique: Vec::new(),
             derivations: None,
             pending_schema: None,
+            records: None,
         };
         let site = Site {
             expr: None,

@@ -643,6 +643,10 @@ conditions! {
     LookupPairKeyType => ("validation", "incompatible_input_type", Some("LOOKUP-27")),
     LookupPairReference => ("validation", "unknown_field", Some("LOOKUP-27")),
     LookupPairFieldType => ("validation", "unknown_intermediate_driver_type", Some("LOOKUP-27")),
+    // A lookup's `dataset` that names an intermediate whose records no row
+    // template could drive on (LOOKUP-3, ROW-2).
+    LookupRecordsSide => ("validation", "invalid_intermediate_driver", Some("LOOKUP-3")),
+    LookupRecordsFieldType => ("validation", "unknown_intermediate_driver_type", Some("LOOKUP-3")),
     FlagMissingValueRequired => ("validation", "missing_value_required", Some("EXPR-8")),
     PredicateUnknownField => ("validation", "unknown_field", Some("FORMULA-9")),
     PredicateUnresolvableName => ("validation", "unresolvable_name", Some("FORMULA-9")),

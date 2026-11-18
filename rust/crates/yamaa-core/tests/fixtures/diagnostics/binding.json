@@ -140,6 +140,153 @@
       "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"fields": ["filter"], "intermediate": "LM"}}]
     },
     {
+      "case": "a_record_relation_reads_no_current_row",
+      "operation": ["check", "bind"],
+      "prefix": true,
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.K = R.K"},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "SEL.ID"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.SEL.dataset"], "context": {"fields": ["filter"], "intermediate": "LM"}}]
+    },
+    {
+      "case": "a_record_relation_exposes_fields_of_one_type",
+      "operation": ["check", "bind"],
+      "prefix": true,
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "derivations": {"FLAG": true}},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "SEL.ID"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_intermediate_driver_type", "rule": "LOOKUP-3", "spec_paths": ["intermediates.SEL.dataset"], "context": {"columns": ["FLAG"], "intermediate": "LM"}}]
+    },
+    {
+      "case": "a_column_read_of_a_pair_relation_side_is_refused_at_its_key",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "L"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.ID > 0"},
+            {"id": "P", "dataset": "LM", "inner_join": "R", "key": ["K"], "derivations": {"ID": "LM.ID", "RID": "R.ID"}}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "RID", "type": "int", "derivation": "LM.ID"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.LM.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_formula_read_of_a_pair_relation_side_is_refused_at_its_key",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "L"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.ID > 0"},
+            {"id": "P", "dataset": "LM", "inner_join": "R", "key": ["K"], "derivations": {"ID": "LM.ID", "RID": "R.ID"}}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "RID", "type": "int", "derivation": "LM.ID + 1"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.LM.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_case_result_read_of_a_pair_relation_side_is_refused_at_its_key",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "L"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.ID > 0"},
+            {"id": "P", "dataset": "LM", "inner_join": "R", "key": ["K"], "derivations": {"ID": "LM.ID", "RID": "R.ID"}}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "RID", "type": "int", "derivation": {"case": [{"when": "L.ID > 0", "then": "LM.ID"}, {"otherwise": 0}]}}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.LM.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_case_condition_read_of_a_pair_relation_side_is_refused_at_its_key",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "L"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.ID > 0"},
+            {"id": "P", "dataset": "LM", "inner_join": "R", "key": ["K"], "derivations": {"ID": "LM.ID", "RID": "R.ID"}}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "RID", "type": "int", "derivation": {"case": [{"when": "LM.ID > 0", "then": 1}, {"otherwise": 0}]}}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.LM.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_verification_read_of_a_pair_relation_side_is_refused_at_its_key",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "L"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.ID > 0"},
+            {"id": "P", "dataset": "LM", "inner_join": "R", "key": ["K"], "derivations": {"ID": "LM.ID", "RID": "R.ID"}}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "RID", "type": "int", "derivation": "L.ID"}]},
+          {"set": ["verifications"], "to": [{"assert": {"id": "side-read", "require": "LM.ID > 0"}}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.LM.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_read_through_a_record_relation_s_implicit_join_has_no_applicable_keys",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "derivations": {"TWICE": {"type": "int", "derivation": "ID * 2"}}},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "LM.TWICE"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.RID.derivation.source"], "context": {"dataset": "LM", "hint": "read it through a named intermediate or an aggregate with a `key` of its own"}}]
+    },
+    {
       "case": "a_pair_relation_exposes_fields_of_one_type",
       "operation": ["check", "bind"],
       "input": {
@@ -625,6 +772,30 @@
         }
       },
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "A"}}]
+    },
+    {
+      "case": "a_verification_reads_no_field_of_a_record_relation",
+      "operation": "verification_declarations",
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.ID > 0"},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "SEL.ID"}]},
+          {"set": ["verifications"], "to": [{"assert": {"require": "LM.ID > 0"}}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "LM.ID"}}]
+    },
+    {
+      "case": "a_verification_reads_no_field_of_a_pair_relation",
+      "operation": "verification_declarations",
+      "input": {"base": "pairs", "edits": [{"set": ["verifications"], "to": [{"assert": {"require": "P.ID > 0"}}]}]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "P.ID"}}]
     },
     {
       "case": "a_verification_id_is_nonempty_text",
