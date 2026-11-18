@@ -1,8 +1,9 @@
 # Read One Dose Span From Several Lookups
 
-**Goal:** give each dose and sample row of a population PK dataset the
-datetime of the subject's first dose and of the latest dose before the row,
-while each dose row carries its number of additional doses (`ADDL`) and
+**Goal:** give each dose and sample row of a population pharmacokinetic
+(PK) dataset the datetime of the subject's first dose and of the latest
+dose before the row, while each dose row carries its number of additional
+doses (`ADDL`) and
 interdose interval (`II`), all from each dose record's span, stated once.
 
 **Input:** one `spec.yaml` over collected exposure records (EX), each with a
@@ -26,6 +27,6 @@ concentration records (PC), each with a sample datetime.
   `ADTM`; empty when none does, so a dose row never takes its own record and
   a sample taken at a dose's start takes the dose before it.
 
-**Note:** the span is stated once, on the intermediate that drives the dose
-rows. The two lookups name that intermediate as their `dataset` and read its
-records, its derived fields included, as they would read an input's.
+**Note:** each dose record's completed start, end and dosing interval are
+calculated once. The dose row, the subject's first-dose selection and each
+prior-dose selection all read those same completed values.
