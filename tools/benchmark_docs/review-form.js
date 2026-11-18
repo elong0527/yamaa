@@ -21,8 +21,10 @@
   const feedback = form.querySelector(".review-feedback");
   const prepared = form.querySelector(".review-prepared");
   const preparedText = prepared.querySelector("textarea");
-  const storageUnavailable =
-    new URLSearchParams(window.location.search).get("review-storage") === "unavailable";
+  const params = new URLSearchParams(window.location.search);
+  const storageUnavailable = params.get("review-storage") === "unavailable";
+  // Without storage the queue names the reviewer here, to be handed back.
+  const reviewer = params.get("reviewer");
 
   function answer(fieldset) {
     const checked = fieldset.querySelector("input:checked");
@@ -75,6 +77,7 @@
   function nextUrl(stored) {
     const url = new URL(form.dataset.nextUrl, window.location.href);
     if (storageUnavailable || !stored) url.searchParams.set("review-storage", "unavailable");
+    if (reviewer) url.searchParams.set("reviewer", reviewer);
     return url.href;
   }
 

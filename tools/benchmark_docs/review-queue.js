@@ -3,7 +3,10 @@
 // The review queue: sends a reviewer to the next benchmark that still needs a
 // review and that they have neither submitted nor skipped. What they have done
 // stays in this browser; `after` names the benchmark they just left, so the
-// queue moves on without storage.
+// queue moves on without storage. The published reviews of this round name
+// their reviewers too, so the queue asks for the reviewer's GitHub username
+// once and never offers them a benchmark they reviewed in this round, in any
+// browser.
 //
 // Nobody assigns benchmarks, and no benchmark goes to everyone first: each
 // browser walks the benchmarks under review in gallery order from its own
@@ -12,7 +15,9 @@
 // published review does not change, so a site rebuild does not move it.
 (() => {
   const { doneKey, reviewUrl, benchmarks, unsettled } = JSON.parse(document.getElementById("review-queue").textContent);
-  const waiting = new Set(unsettled);
+  const REVIEWER_KEY = "yamaa-benchmark-reviewer";
+  // GitHub usernames: letters, digits and hyphens, not starting with a hyphen.
+  const USERNAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 
   // Storage can be unavailable (private windows, blocked site data). Nothing
   // marks a benchmark done then, so the queue walks forward once and stops.
@@ -38,8 +43,54 @@
     return chosen;
   }
 
+  function username(text) {
+    const name = (text || "").trim().replace(/^@/, "");
+    return USERNAME.test(name) ? name : null;
+  }
+
+  // The address names the reviewer when they answer the question below, and
+  // without storage, where the review form hands it back to the queue.
+  function knownReviewer(params, marks) {
+    const given = username(params.get("reviewer"));
+    if (given && marks) {
+      try { marks.setItem(REVIEWER_KEY, given); }
+      catch (error) { /* The queue asks again next time. */ }
+    }
+    return given || (marks ? username(marks.getItem(REVIEWER_KEY)) : null);
+  }
+
+  // A plain form that reloads this page with the answer and every other
+  // parameter it came with.
+  function askReviewer(params) {
+    document.querySelector(".queue-status").hidden = true;
+    const form = document.querySelector(".queue-reviewer");
+    params.forEach((value, key) => {
+      if (key === "reviewer") return;
+      const field = document.createElement("input");
+      field.type = "hidden";
+      field.name = key;
+      field.value = value;
+      form.append(field);
+    });
+    form.querySelector(".queue-reviewer-retry").hidden = !params.has("reviewer");
+    form.hidden = false;
+    form.elements.reviewer.focus();
+  }
+
   const params = new URLSearchParams(window.location.search);
   const marks = params.get("review-storage") === "unavailable" ? null : storage();
+  const reviewer = knownReviewer(params, marks);
+  if (!reviewer) {
+    askReviewer(params);
+    return;
+  }
+  // GitHub compares usernames without case.
+  const me = reviewer.toLowerCase();
+  const waiting = new Set(
+    Object.keys(unsettled).filter(
+      (name) => !unsettled[name].some((login) => login.toLowerCase() === me),
+    ),
+  );
   const place = marks ? startingPlace(marks) : 0;
   const after = params.get("after");
   const position = benchmarks.indexOf(after);
@@ -51,7 +102,10 @@
   );
   if (next) {
     const url = new URL("../../" + encodeURIComponent(next) + ".html", window.location.href);
-    if (!marks) url.searchParams.set("review-storage", "unavailable");
+    if (!marks) {
+      url.searchParams.set("review-storage", "unavailable");
+      url.searchParams.set("reviewer", reviewer);
+    }
     window.location.replace(url.href);
   } else {
     document.querySelector(".queue-status").hidden = true;

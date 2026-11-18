@@ -944,7 +944,7 @@ class DashboardTests(unittest.TestCase):
             f'<li><a href="{source}plot.png">The plot</a></li>',
         )
 
-    def test_review_queue_lists_every_benchmark_and_those_still_unsettled(self):
+    def test_review_queue_lists_every_benchmark_and_who_reviewed_the_unsettled(self):
         # The seam is the queue data review-queue.js walks, outside fixture readers.
         entries = [
             ("adam-adsl-second", "Second", "ADSL"),
@@ -993,20 +993,25 @@ class DashboardTests(unittest.TestCase):
                     "adam-adsl-first",
                     "adam-adsl-second",
                 ],
-                "unsettled": [
-                    "send-bw-weight",
-                    "sdtm-dm-basic",
-                    "adam-adsl-first",
-                    "adam-adsl-second",
-                ],
+                "unsettled": {
+                    "send-bw-weight": [],
+                    "sdtm-dm-basic": [],
+                    "adam-adsl-first": ["a"],
+                    "adam-adsl-second": [],
+                },
             },
-            "gallery order, sdtm before adam; two approvals settle adam-adae-event",
+            "gallery order, sdtm before adam; two approvals settle adam-adae-event; "
+            "adam-adsl-first names its reviewer, whom the queue skips",
         )
 
-    def test_a_new_round_reopens_a_previously_completed_benchmark(self):
+    def test_a_new_round_reopens_reworked_benchmarks_but_not_to_carried_reviewers(
+        self,
+    ):
         # The seam is the form/queue completion protocol, outside fixture readers.
-        name = "adam-adsl-reworked"
-        entries = [(name, "Reworked", "ADSL")]
+        # The fresh completion marks of a new round reopen every benchmark in the
+        # browser, so a review carried into the round must still name its reviewer.
+        name, carried = "adam-adsl-reworked", "adam-adsl-carried"
+        entries = [(name, "Reworked", "ADSL"), (carried, "Carried", "ADSL")]
         saved = {
             "updated": "2026-11-06 10:00 UTC",
             "reviews": [
@@ -1017,6 +1022,14 @@ class DashboardTests(unittest.TestCase):
                     "overall": "Not approve",
                 }
                 for reviewer in ("a", "b")
+            ]
+            + [
+                {
+                    "benchmark": carried,
+                    "reviewer": "a",
+                    "posted": "2026-11-02T10:00:00Z",
+                    "overall": "Approve",
+                }
             ],
         }
         queues, keys = [], []
@@ -1040,8 +1053,9 @@ class DashboardTests(unittest.TestCase):
                 queues[1]["doneKey"] == keys[1],
                 keys[0] != keys[1],
             ),
-            ([], [name], True, True, True),
-            "rework clears votes and previous browser completion in the next round",
+            ({carried: ["a"]}, {carried: ["a"], name: []}, True, True, True),
+            "rework clears votes and previous browser completion in the next round; "
+            "the review carried over still keeps its reviewer from the benchmark",
         )
 
     def test_review_is_read_from_a_discussion_the_dashboard_wrote(self):
