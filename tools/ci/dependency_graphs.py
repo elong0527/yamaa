@@ -125,6 +125,10 @@ def prepare(source, destination, graph):
         raise ValueError("Dependency graphs must be outside the source checkout")
     if destination.exists():
         raise ValueError(f"Graph destination already exists: {destination}")
+    if (source / "python").is_symlink() or (
+        source / "python/pyproject.toml"
+    ).is_symlink():
+        raise ValueError("Dependency graph Python manifest must not be symlinked")
     # Conformance tooling records the source revision. Give the copy its own Git
     # refs/index; sharing read-only objects does not share checkout mutations.
     subprocess.run(
@@ -269,13 +273,8 @@ def run_graph(source, destination, graph, python, prepare_only=False):
         # Its Python License-Expression must describe this graph before install.
         # The repository check still compares the committed notices with the
         # canonical lock.
-        run(
-            interpreter,
-            "-m",
-            "tools.packaging.generate_third_party_notices",
-            "--write",
-            "--write-python-license",
-        )
+        generate = ("-m", "tools.packaging.generate_third_party_notices")
+        run(interpreter, *generate, "--write", "--write-python-license")
         run(
             "uv",
             "pip",

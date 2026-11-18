@@ -26,10 +26,12 @@ BSD = (
     "Copyright (c) 2016 Example, Inc.\n\nRedistribution and use in source and "
     "binary forms are permitted.\n3. Neither the name of the copyright holder.\n"
 )
-# The 2-clause license lacks the third clause, which BSD names.
+# The complete reviewed SPDX input supplies both conditions and the disclaimer;
+# a quotation of the shared opening alone does not grant this license.
 BSD_2 = (
-    "Copyright (C) 2013-2016, Yann Collet.\n\nRedistribution and use in source "
-    "and binary forms are permitted.\n"
+    (notices.SPDX_TEXTS / "BSD-2-Clause.txt")
+    .read_text()
+    .replace("<year> <owner>", "2013-2016, Yann Collet.")
 )
 # The distinguishing grant in SPDX BSD-2-Clause-Patent 3.29.0; a two-clause
 # opening does not make the additional patent license BSD-2-Clause.
@@ -599,9 +601,29 @@ class ExpressionChoice(unittest.TestCase):
             ("three then two", BSD + BSD_2, {"BSD-2-Clause", "BSD-3-Clause"}),
             ("patent then two", BSD_PATENT + BSD_2, {"BSD-2-Clause"}),
             ("two then patent", BSD_2 + BSD_PATENT, {"BSD-2-Clause"}),
+            (
+                "quoted opening",
+                '"redistribution and use in source and binary forms"',
+                set(),
+            ),
+            (
+                "three clauses then quoted opening",
+                BSD + '\n"redistribution and use in source and binary forms"',
+                {"BSD-3-Clause"},
+            ),
         ):
             with self.subTest(case=label):
                 self.assertEqual(notices.detect(text), expected, label)
+
+    def test_an_exception_before_its_license_keeps_whole_file_detection(self):
+        # Internal seam: exception markers can precede the complete base text.
+        exception = "LLVM Exceptions to the Apache 2.0 License\n" + LLVM_CLAUSE
+        for text in (exception + APACHE, APACHE + exception):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    notices.detect(text),
+                    {"Apache-2.0", "Apache-2.0 WITH LLVM-exception"},
+                )
 
     def test_choices_prefer_mit_then_follow_the_shipped_texts(self):
         cases = [
@@ -1471,6 +1493,45 @@ class LockedClosure(unittest.TestCase):
                     else canonical
                 )
                 self.assertEqual(path.read_text(), expected)
+
+    def test_python_license_rewrite_preserves_utf8_and_line_ending_bytes(self):
+        # Internal seam: the one-field update preserves bytes in all other lines.
+        path = notices.PYTHON / "pyproject.toml"
+        original = (
+            b'# caf\xc3\xa9\r\n[project]\r\nname = "yamaa"\r\n'
+            b'license = "MIT"\r\n[tool.extra]\nvalue = "unchanged"\n'
+        )
+        path.write_bytes(original)
+        notices.write_python_license("MIT AND BSD-2-Clause")
+        self.assertEqual(
+            path.read_bytes(),
+            original.replace(b'license = "MIT"', b'license = "MIT AND BSD-2-Clause"'),
+        )
+
+    def test_an_already_correct_project_license_leaves_other_tables_unchanged(self):
+        # Internal seam: another table's double-quoted license is not the target.
+        path = notices.PYTHON / "pyproject.toml"
+        original = (
+            b"[project]\nlicense = 'MIT'\n[tool.other]\nlicense = \"Apache-2.0\"\n"
+        )
+        path.write_bytes(original)
+        notices.write_python_license("MIT")
+        self.assertEqual(path.read_bytes(), original)
+
+    def test_python_license_rewrite_refuses_a_symlink_without_changing_its_target(self):
+        # Internal seam: a copied absolute link must not modify the source file.
+        path = notices.PYTHON / "pyproject.toml"
+        original = self.root / "source-pyproject.toml"
+        original.write_bytes(path.read_bytes())
+        expected = original.read_bytes()
+        path.unlink()
+        try:
+            path.symlink_to(original)
+        except OSError as error:
+            self.skipTest(f"symlinks are unavailable: {error}")
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            notices.write_python_license("MIT AND BSD-2-Clause")
+        self.assertEqual((original.read_bytes(), path.is_symlink()), (expected, True))
 
     def test_python_license_rewrite_refuses_another_manifest_shape(self):
         # Internal seam: an isolated copy's metadata edit must fail closed before

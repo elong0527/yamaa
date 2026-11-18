@@ -168,7 +168,13 @@ MARKERS = {
         "redistribution and use in source and binary forms",
         "neither the name",
     ),
-    "BSD-2-Clause": ("redistribution and use in source and binary forms",),
+    "BSD-2-Clause": (
+        "redistribution and use in source and binary forms",
+        "redistributions of source code must retain the above copyright notice",
+        "redistributions in binary form must reproduce the above copyright notice",
+        "this software is provided",
+        "are disclaimed",
+    ),
     "Unicode-3.0": ("unicode license v3",),
     "Apache-2.0 WITH LLVM-exception": (
         "terms and conditions for use, reproduction, and distribution",
@@ -540,16 +546,20 @@ def ordered(licenses):
 def detect(text):
     """Name the accepted licenses whose text appears in a file."""
     flat = " ".join(text.lower().split())
-    return frozenset(
-        license
-        for license, phrases in MARKERS.items()
+    found = set()
+    for license, phrases in MARKERS.items():
+        blocks = [flat]
+        if license in EXCLUSIONS:
+            # Shared BSD openings delimit candidates, including quotations that
+            # the full redistribution conditions and disclaimer must rule out.
+            blocks = [phrases[0] + part for part in flat.split(phrases[0])[1:]]
         if any(
             all(phrase in block for phrase in phrases)
             and not any(phrase in block for phrase in EXCLUSIONS.get(license, ()))
-            # A later complete license must not exclude an earlier block.
-            for block in re.split(rf"(?={re.escape(phrases[0])})", flat)[1:]
-        )
-    )
+            for block in blocks
+        ):
+            found.add(license)
+    return frozenset(found)
 
 
 def gnu_licenses(text):
@@ -1455,17 +1465,29 @@ def write_python_license(expression):
     """Refresh an isolated graph's single project license without reformatting
     the manifest; a different TOML shape needs review before it is rewritten."""
     path = PYTHON / "pyproject.toml"
+    if (
+        PYTHON.is_symlink()
+        or path.is_symlink()
+        or not path.resolve().is_relative_to(ROOT.resolve())
+    ):
+        raise ValueError("python/pyproject.toml: symlinked manifests are not writable")
+    original = path.read_bytes().decode("utf-8")
+    document = tomllib.loads(original)
+    project = document.get("project")
+    message = "python/pyproject.toml: expected one [project].license string"
+    if not isinstance(project, dict) or not isinstance(project.get("license"), str):
+        raise ValueError(message)
+    if project["license"] == expression:
+        return
     text, count = re.subn(
         r'(?m)^(license\s*=\s*)"[^"\n]*"([^\S\n]*)$',
         lambda match: match[1] + json.dumps(expression) + match[2],
-        path.read_text(encoding="utf-8"),
+        original,
     )
-    if (
-        count != 1
-        or tomllib.loads(text).get("project", {}).get("license") != expression
-    ):
-        raise ValueError("python/pyproject.toml: expected one [project].license string")
-    path.write_text(text, encoding="utf-8")
+    expected = document | {"project": project | {"license": expression}}
+    if count != 1 or tomllib.loads(text) != expected:
+        raise ValueError(message)
+    path.write_bytes(text.encode("utf-8"))
 
 
 def check_copies(project):

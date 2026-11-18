@@ -228,6 +228,29 @@ class DependencyGraphsTests(unittest.TestCase):
                         self.assertEqual(selected[name], [">=" + floor])
             self.assertFalse((stage / "rust/Cargo.lock").exists())
 
+    def test_prepare_refuses_a_symlinked_python_manifest(self):
+        # Internal seam: preserve benchmark links, while rejecting a writable
+        # manifest link that an isolated license refresh could follow to source.
+        with tempfile.TemporaryDirectory() as temporary:
+            checkout = support.Repository(Path(temporary) / "checkout")
+            for path, text in SCRATCH_CHECKOUT.items():
+                if path != "python/pyproject.toml":
+                    checkout.write(path, text)
+            target = checkout.write(
+                "metadata/pyproject.toml", SCRATCH_CHECKOUT["python/pyproject.toml"]
+            )
+            linked = checkout.root / "python/pyproject.toml"
+            linked.parent.mkdir(parents=True)
+            try:
+                linked.symlink_to(target)
+            except OSError as error:
+                self.skipTest(f"symlinks are unavailable: {error}")
+            checkout.commit()
+            expected = target.read_bytes()
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                prepare(checkout.root, Path(temporary) / "graph", "newest")
+            self.assertEqual(target.read_bytes(), expected)
+
     def test_the_copy_keeps_a_symbolic_link_a_link(self):
         """A graph tests the checkout as Git holds it: a benchmark whose input
         is a symbolic link, refused for it (FILE-8), keeps the link."""
