@@ -369,7 +369,7 @@ EXPECTED = {
     "new.spec.intermediate.inner_join": [
         Field("intermediate_class", "inner_join", "identifier")
     ],
-    # D-next on #4628: a named intermediate's repeat gives each record of its
+    # D316 on #4628: a named intermediate's repeat gives each record of its
     # dataset once for each whole number up to the record's count
     # (LOOKUP-29).
     "new.spec.intermediate.repeat": [

@@ -7503,7 +7503,7 @@ entries:
   today: null
   kind: new
   proposed: 'repeat: {count: VALUE, index: NAME}'
-  decision: decided (D-next)
+  decision: decided (D316)
   reason: 'An addition to the approved table under D27 (#4628). Optional, with no default (I5): a named
     intermediate writing it is the counted relation, one record of its `dataset` for each whole number
     from 1 to that record''s `count`, an int read as a pair relation''s key value is, each number read by
