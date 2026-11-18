@@ -1,0 +1,197 @@
+{
+ "about": "A csv artifact's declared missing text through the file route (CSV-4, CSV-17, INPUT-10). With output.missing of '.', every missing value of every type is written as a bare dot, while a collected empty string is still two quote characters and a value keeps its CSV-5 text, or under output.decimals its CSV-7 fixed-point text. A str value equal to the dot fails the output with the column and the number of its rows that hold it, and nothing is published; the declaration on a Parquet output is not applicable; a text other than the dot is outside the schema's closed values; and a consumer may not link a producer that declares one, since its linked read would take the dot for a value. Each saved file is written by hand from CSV-3, CSV-4, CSV-5, CSV-7 and CSV-17 over the input rows: the empty fields of the input are missing (CSV-14), and 4.686 at two decimals is 4.69. No engine output supplied these values.",
+ "documents": {
+  "missing": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, DV: float, AMT: int, VISIT: date}}}\noutput: {path: output.csv, columns: [ID, DV, AMT, VISIT, NOTE, BLANK], missing: MISSING}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: DV, type: float, derivation: SRC.DV}\n  - {name: AMT, type: int, derivation: SRC.AMT}\n  - {name: VISIT, type: date, derivation: SRC.VISIT}\n  - {name: NOTE, type: str, derivation: SRC.NOTE}\n  - {name: BLANK, type: str, derivation: \"''\"}\n",
+  "producer": "yamaa: \"1.0\"\ntype: spec\ndomain: PC\nkeys: [ID]\ninput: {RAW: {path: ../raw/raw.csv, types: {ID: int, DV: float}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: DV, type: float, label: Dependent variable, derivation: RAW.DV}\noutput: {path: ../generated/pc.csv, columns: [ID, DV], missing: '.'}\n",
+  "consumer": "yamaa: \"1.0\"\ntype: spec\ndomain: ROOT\nkeys: [ID]\ninput: {PC: {path: ../generated/pc.csv, schema: ../producer/p.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: PC.ID}\noutput: {path: ../generated/root.csv, columns: [ID]}\n"
+ },
+ "cases": [
+  {
+   "case": "a_declared_missing_text_is_written_bare_for_every_missing_value_and_the_empty_string_stays_quoted",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "ID,DV,AMT,VISIT,NOTE\n1,,100,2024-01-02,\n2,4.686,,,dosed\n",
+     "spec.yaml": {
+      "base": "missing",
+      "edits": [
+       {
+        "from": "MISSING",
+        "to": "'.'"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,DV,AMT,VISIT,NOTE,BLANK\n1,.,100,2024-01-02,.,\"\"\n2,4.686,.,.,dosed,\"\"\n"
+   }
+  },
+  {
+   "case": "a_missing_text_beside_decimals_rounds_the_values_and_writes_the_missing_ones_as_its_text",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "ID,DV,AMT,VISIT,NOTE\n1,,100,2024-01-02,\n2,4.686,,,dosed\n",
+     "spec.yaml": {
+      "base": "missing",
+      "edits": [
+       {
+        "from": "MISSING",
+        "to": "'.', decimals: 2"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,DV,AMT,VISIT,NOTE,BLANK\n1,.,100,2024-01-02,.,\"\"\n2,4.69,.,.,dosed,\"\"\n"
+   }
+  },
+  {
+   "case": "a_str_value_equal_to_the_missing_text_fails_the_output_and_publishes_nothing",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "ID,DV,AMT,VISIT,NOTE\n1,,100,2024-01-02,.\n2,4.686,,,dosed\n3,1.5,50,2024-01-03,.\n",
+     "spec.yaml": {
+      "base": "missing",
+      "edits": [
+       {
+        "from": "MISSING",
+        "to": "'.'"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "output",
+     "condition": "missing_text_collision",
+     "rule": "CSV-17",
+     "spec_paths": [
+      "output.missing"
+     ],
+     "context": {
+      "column": "NOTE",
+      "missing": ".",
+      "collision_count": 2
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_missing_text_on_a_parquet_output_is_not_applicable_and_publishes_nothing",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "ID,DV,AMT,VISIT,NOTE\n1,,100,2024-01-02,\n2,4.686,,,dosed\n",
+     "spec.yaml": {
+      "base": "missing",
+      "edits": [
+       {
+        "from": "MISSING",
+        "to": "'.'"
+       },
+       {
+        "from": "output.csv",
+        "to": "output.parquet"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "missing_text_not_applicable",
+     "rule": "CSV-17",
+     "spec_paths": [
+      "output.missing"
+     ],
+     "context": {
+      "path": "output.parquet",
+      "profile": "parquet"
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_missing_text_other_than_the_dot_is_not_permitted",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "missing",
+      "edits": [
+       {
+        "from": "MISSING",
+        "to": "NA"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "compares": [
+    "condition",
+    "spec_paths",
+    "context.value",
+    "context.permitted"
+   ],
+   "issues": [
+    {
+     "condition": "value_not_permitted",
+     "spec_paths": [
+      "output.missing"
+     ],
+     "context": {
+      "value": "NA",
+      "permitted": [
+       "."
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "case": "a_consumer_may_not_link_a_producer_that_declares_a_missing_text",
+   "operation": "check",
+   "input": {
+    "files": {
+     "raw/raw.csv": "ID,DV\n1,\n2,4.686\n",
+     "producer/p.yaml": {
+      "base": "producer"
+     },
+     "consumer/root.yaml": {
+      "base": "consumer"
+     }
+    },
+    "specification": "consumer/root.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "missing_text_not_applicable",
+     "rule": "CSV-17",
+     "spec_paths": [
+      "input.PC.schema.output.missing"
+     ],
+     "context": {
+      "dataset": "PC",
+      "path": "../generated/pc.csv"
+     }
+    }
+   ]
+  }
+ ]
+}

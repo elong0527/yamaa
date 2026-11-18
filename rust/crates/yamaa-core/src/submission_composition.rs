@@ -1843,7 +1843,7 @@ fn compose_datasets(
                 &id,
             ));
         }
-        transport_decimals(section, doc, index, &path, &id, findings);
+        transport_presentation(section, doc, index, &path, &id, findings);
         let declarations = match spec::decode(doc, doc.root()) {
             Ok(value) => value,
             Err(_) => {
@@ -2020,8 +2020,9 @@ fn compose_datasets(
 }
 
 /// JSON-5: a transport re-reads the published artifact, so display digits
-/// the csv profile writes would become the submitted values.
-fn transport_decimals(
+/// the csv profile writes would become the submitted values, and a declared
+/// missing text would be read as a value (CSV-17).
+fn transport_presentation(
     section: &ast::Section,
     doc: &Document,
     index: usize,
@@ -2029,43 +2030,58 @@ fn transport_decimals(
     id: &str,
     findings: &mut Vec<Finding>,
 ) {
-    if section.transport.is_some() {
-        if let Some(decimals) = doc
-            .field(doc.root(), "output")
-            .and_then(|output| doc.field(output, "decimals"))
-        {
-            let mut finding = Finding::cause(
-                ConditionCode::SubmissionTransportDecimals,
-                &format!("{path}.output.decimals"),
-                "display precision would become the submitted values",
-            );
-            finding
-                .context
-                .insert("dataset".into(), crate::json::Value::String(id.into()));
-            // The artifact the decimals would round, as `output.path`
-            // writes it (CSV-6).
-            let written = doc
-                .field(doc.root(), "output")
-                .and_then(|output| text(doc, output, "path"));
+    if section.transport.is_none() {
+        return;
+    }
+    let output = doc.field(doc.root(), "output");
+    for (field, code, detail) in [
+        (
+            "decimals",
+            ConditionCode::SubmissionTransportDecimals,
+            "display precision would become the submitted values",
+        ),
+        (
+            "missing",
+            ConditionCode::SubmissionTransportMissingText,
+            "the missing text would become a submitted value",
+        ),
+    ] {
+        let Some(declared) = output.and_then(|output| doc.field(output, field)) else {
+            continue;
+        };
+        let mut finding = Finding::cause(code, &format!("{path}.output.{field}"), detail);
+        finding
+            .context
+            .insert("dataset".into(), crate::json::Value::String(id.into()));
+        // The artifact the declaration would spell, as `output.path` writes
+        // it (CSV-6, CSV-17).
+        let written = output.and_then(|output| text(doc, output, "path"));
+        finding.context.insert(
+            "path".into(),
+            written.map_or(crate::json::Value::Null, crate::json::Value::String),
+        );
+        if let Some(written) = section.specs.get(index) {
             finding.context.insert(
-                "path".into(),
-                written.map_or(crate::json::Value::Null, crate::json::Value::String),
+                "specification".into(),
+                crate::json::Value::String(written.text.clone()),
             );
-            if let Some(written) = section.specs.get(index) {
-                finding.context.insert(
-                    "specification".into(),
-                    crate::json::Value::String(written.text.clone()),
-                );
-            }
-            if let N::Integer(value) = &doc.nodes()[decimals] {
+        }
+        match &doc.nodes()[declared] {
+            N::Integer(value) => {
                 if let Ok(number) = value.parse() {
                     finding
                         .context
                         .insert("decimals".into(), crate::json::Value::Number(number));
                 }
             }
-            findings.push(finding);
+            N::Text(value) => {
+                finding
+                    .context
+                    .insert("missing".into(), crate::json::Value::String(value.clone()));
+            }
+            _ => {}
         }
+        findings.push(finding);
     }
 }
 

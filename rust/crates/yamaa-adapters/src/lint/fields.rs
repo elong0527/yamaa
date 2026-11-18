@@ -28,7 +28,7 @@ static DATASET_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static OUTPUT_CLASS: Class = Class {
-    fields: &["path", "relative_to", "decimals", "columns", "report", "order_by"],
+    fields: &["path", "relative_to", "decimals", "missing", "columns", "report", "order_by"],
     members: &[],
 };
 
