@@ -1060,6 +1060,19 @@ impl Declarations {
     pub(super) fn key_required(&self, index: usize) -> Option<&str> {
         self.0.get(index)?.key_required.as_deref()
     }
+    /// The refusal of a read of the intermediate at `index`, bound as
+    /// `item`, as a keyed lookup when it declares no `key`: a row driver or
+    /// a pair relation's side, whose records are read only as a driver's,
+    /// refused at its `key` (LOOKUP-3, ROW-2, LOOKUP-27).
+    pub(super) fn keyless_read(&self, index: usize, item: &Intermediate) -> Option<BindFinding> {
+        self.key_required(index)
+            .filter(|_| item.keys.is_empty())
+            .map(|key| {
+                BindFinding::Lookup(LookupFinding::from_diagnostic(
+                    crate::diagnostic::lookup::key_required(key),
+                ))
+            })
+    }
     pub(super) fn driver_findings(
         &self,
         name: &str,

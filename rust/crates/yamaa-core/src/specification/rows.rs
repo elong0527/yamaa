@@ -392,6 +392,15 @@ impl Implicit {
             None,
             &mut findings,
         );
+        row_intermediates::admit_keyless(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads),
+            &intermediates,
+            &prepared.intermediates,
+            &mut findings,
+        );
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
