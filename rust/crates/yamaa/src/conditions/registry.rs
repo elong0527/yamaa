@@ -187,7 +187,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("submission_length_not_applicable", &["validation"], None),
     ("submission_metadata_missing", &["validation"], None),
     ("submission_not_output_column", &["validation"], None),
-    ("text_date_order", &["derivation", "row_construction"], None),
+    ("text_date_order", &["derivation"], None),
     ("transport_dataset_empty", &["output"], None),
     ("transport_label_invalid", &["validation"], None),
     ("transport_path_collision", &["validation"], None),

@@ -12,6 +12,7 @@ use crate::expression::Truth;
 use crate::limits::Limits;
 use crate::table::{TableAccess, TableSchema, ValueRef};
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -166,6 +167,11 @@ struct WindowRun {
     /// How each group's partition stands to the order terms, found for
     /// every group when the first partition is completed ([`standings`]).
     standings: Option<Vec<Standing>>,
+    /// What text order decided between date texts as the filter was asked
+    /// about a completed group's rows, by group, until a row reads that
+    /// group's partition (CHECK-27); a group with nothing decided has no
+    /// entry.
+    decided: BTreeMap<usize, crate::text_date_order::TextDateOrders>,
     scratch: Scratch,
 }
 
@@ -425,6 +431,7 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
             ambiguous: IdentityMap::default(),
         },
         standings: None,
+        decided: BTreeMap::new(),
         scratch: Scratch::default(),
     };
     if !matches!(window.kind, WindowKind::BaselineFlag { .. }) && !window.order_by.is_empty() {
@@ -477,7 +484,7 @@ fn filter_truths<E>(
         .iter()
         .map(|&row| cx.frame.members(row).first().copied())
         .collect::<Option<_>>()?;
-    super::predicates::record_truths(cx.dates, filter, cx.table, &records, |column| {
+    super::predicates::record_truths_ahead(filter, cx.table, &records, |column| {
         if column < built.width {
             super::predicates::Operand::Frame(cx.frame.column(column), &rows)
         } else {
@@ -548,6 +555,18 @@ fn answers<E>(
         } else if let Some(&row) = rows.first() {
             let group = built.grouping.group_of[row - built.start];
             complete(&mut built, cx, group)?;
+        }
+        // A row reports what text order decided in the partition it reads.
+        // A batch completes partitions that no row of it reads, where a
+        // replay or a divided run completes only those its rows reach, so
+        // a partition no row reads reports nothing (CHECK-27).
+        if !built.decided.is_empty() {
+            for &row in rows {
+                let group = built.grouping.group_of[row - built.start];
+                if let Some(orders) = built.decided.remove(&group) {
+                    cx.dates.borrow_mut().merge(orders);
+                }
+            }
         }
         write(plan, &built, cx, expr, rows)
     })();
@@ -644,9 +663,14 @@ fn complete<E>(built: &mut WindowRun, cx: &Cx<'_, E>, group: usize) -> Result<()
     scratch
         .members
         .extend_from_slice(built.grouping.groups.group(group));
-    let result = partition(built, cx, group, &mut scratch, &mut answers);
+    let dates = super::TextDates::default();
+    let result = partition(built, cx, (group, &dates), &mut scratch, &mut answers);
     built.answers = answers;
     built.scratch = scratch;
+    let decided = dates.into_inner();
+    if !decided.is_empty() {
+        built.decided.insert(group, decided);
+    }
     result
 }
 
@@ -815,10 +839,12 @@ pub(super) fn row_order<E>(
 
 /// Number one partition, `scratch.members` in construction order: sort it,
 /// then evaluate every filter in sorted order before numbering any row.
+/// What text order decides between date texts as the filter is asked is
+/// recorded in `dates`, the group's own, apart from the run (CHECK-27).
 fn partition<E>(
     built: &WindowRun,
     cx: &Cx<'_, E>,
-    group: usize,
+    (group, dates): (usize, &super::TextDates),
     scratch: &mut Scratch,
     answers: &mut Answers,
 ) -> Result<(), Fail<E>> {
@@ -833,7 +859,7 @@ fn partition<E>(
                 None => {
                     let row = built.start + member;
                     let source_row = cx.frame.members(row)[0];
-                    super::predicates::row_truth(cx.dates, filter, cx.table, source_row, |column| {
+                    super::predicates::row_truth(dates, filter, cx.table, source_row, |column| {
                         built.get(cx, member, column)
                     })
                     .map_err(|error| {

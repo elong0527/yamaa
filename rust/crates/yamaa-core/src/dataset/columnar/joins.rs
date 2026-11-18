@@ -278,11 +278,23 @@ fn read_rows<'c, E>(
     let (values, picks) = answers.finish()?;
     match (shared, signature) {
         (Some(held), _) => run.relations.keep_joined(held),
-        (None, Some(signature)) => run.relations.keep_joined(Shared {
-            signature,
-            identities,
-            picks,
-        }),
+        (None, Some(signature)) => {
+            // A selection whose order text order decided between date
+            // texts is not shared: another read of it then compares for
+            // itself, and so reports at its own path what this read
+            // reports at its own (CHECK-27).
+            let decided = signature.selection.is_some() && {
+                let dates = run.dates.borrow();
+                !dates.is_empty() && dates.met(&super::relations::order_path(owner.path))
+            };
+            if !decided {
+                run.relations.keep_joined(Shared {
+                    signature,
+                    identities,
+                    picks,
+                });
+            }
+        }
         (None, None) => (),
     }
     Ok(values)

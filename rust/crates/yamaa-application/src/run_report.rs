@@ -380,18 +380,20 @@ fn facts(
     execution: Option<&Execution>,
 ) -> Result<Facts, Error> {
     let compiled = run.compiled();
-    let (outcome, columns) = match (condition, execution) {
+    let (outcome, columns, text_date_orders) = match (condition, execution) {
         (Some(condition), _) => (
             core::Run::Failed {
                 condition: condition.into(),
             },
             Vec::new(),
+            &[][..],
         ),
         (None, Some(execution)) => (
             core::Run::Succeeded {
                 rows: execution.dataset.row_count(),
             },
             columns(run, execution)?,
+            execution.text_date_orders.as_slice(),
         ),
         (None, None) => return invalid(),
     };
@@ -446,6 +448,15 @@ fn facts(
             }
         })
         .collect();
+    // The places where text order decided between date texts follow the
+    // evaluated checks, in path order, and only a successful run reports
+    // them, as only it reports its columns (CHECK-27).
+    let mut checks = checks(run, report)?;
+    checks.extend(
+        text_date_orders
+            .iter()
+            .map(yamaa_core::text_date_order::TextDateOrder::check),
+    );
     Ok(Facts {
         artifact: compiled.output_path().into(),
         run: outcome,
@@ -453,7 +464,7 @@ fn facts(
         rows,
         handlers: handlers(report)?,
         columns,
-        checks: checks(run, report)?,
+        checks,
     })
 }
 
