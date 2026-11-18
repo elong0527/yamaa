@@ -96,7 +96,13 @@
   }
 
   function body(overall, skipped) {
-    const page = window.location.href.split("#")[0];
+    // The published link leaves out this visit's state: whoever follows it
+    // would otherwise review as this reviewer.
+    const link = new URL(window.location.href);
+    link.hash = "";
+    link.searchParams.delete("reviewer");
+    link.searchParams.delete("review-storage");
+    const page = link.href;
     const rows = questions.map((fieldset) => {
       const prompt = fieldset.querySelector(".review-prompt").textContent;
       return "| **" + cell(fieldset.dataset.label) + ":** " + cell(prompt) + " | " + cell(answer(fieldset)) + " |";

@@ -48,15 +48,16 @@
     return USERNAME.test(name) ? name : null;
   }
 
-  // The address names the reviewer when they answer the question below, and
-  // without storage, where the review form hands it back to the queue.
-  function knownReviewer(params, marks) {
-    const given = username(params.get("reviewer"));
-    if (given && marks) {
-      try { marks.setItem(REVIEWER_KEY, given); }
-      catch (error) { /* The queue asks again next time. */ }
+  // Whether storage keeps the username; one it cannot keep stays in the
+  // address, where the review form hands it back to the queue.
+  function keep(name, marks) {
+    if (!marks) return false;
+    try {
+      marks.setItem(REVIEWER_KEY, name);
+      return true;
+    } catch (error) {
+      return false;
     }
-    return given || (marks ? username(marks.getItem(REVIEWER_KEY)) : null);
   }
 
   // A plain form that reloads this page with the answer and every other
@@ -79,11 +80,14 @@
 
   const params = new URLSearchParams(window.location.search);
   const marks = params.get("review-storage") === "unavailable" ? null : storage();
-  const reviewer = knownReviewer(params, marks);
+  // The address names the reviewer when they answer the question below.
+  const given = username(params.get("reviewer"));
+  const reviewer = given || (marks ? username(marks.getItem(REVIEWER_KEY)) : null);
   if (!reviewer) {
     askReviewer(params);
     return;
   }
+  const carried = given !== null && !keep(given, marks);
   // GitHub compares usernames without case.
   const me = reviewer.toLowerCase();
   const waiting = new Set(
@@ -102,10 +106,8 @@
   );
   if (next) {
     const url = new URL("../../" + encodeURIComponent(next) + ".html", window.location.href);
-    if (!marks) {
-      url.searchParams.set("review-storage", "unavailable");
-      url.searchParams.set("reviewer", reviewer);
-    }
+    if (!marks) url.searchParams.set("review-storage", "unavailable");
+    if (carried) url.searchParams.set("reviewer", reviewer);
     window.location.replace(url.href);
   } else {
     document.querySelector(".queue-status").hidden = true;
