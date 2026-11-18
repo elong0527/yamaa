@@ -10,13 +10,22 @@
   <style>
     body { margin: 0 auto; max-width: 40rem; padding: 3rem 1rem; color: #1f2933; font: 16px/1.5 system-ui, sans-serif; }
     h1 { margin: 0 0 .5rem; font-size: 1.5rem; }
+    label { display: block; margin: 1rem 0 .25rem; font-weight: 600; }
+    input, button { font: inherit; padding: .4rem .6rem; }
   </style>
 </head>
 <body>
   <main>
     <h1>Benchmark review</h1>
     <p class="queue-status" role="status">Finding your next benchmark&hellip;</p>
-    <p class="queue-done" hidden>You have no more benchmarks to review in this browser. Thank you. <a href="../">Back to the review page</a>.</p>
+    <form class="queue-reviewer" hidden>
+      <p>Enter your GitHub username once, so the queue does not offer you a benchmark you have already reviewed in this round, in this browser or any other.</p>
+      <p class="queue-reviewer-retry" hidden>That is not a GitHub username. It has only letters, digits and hyphens, such as <code>octocat</code>.</p>
+      <label for="queue-reviewer-name">GitHub username</label>
+      <input id="queue-reviewer-name" name="reviewer" required maxlength="40" autocomplete="username" autocapitalize="none" spellcheck="false">
+      <button type="submit">Continue</button>
+    </form>
+    <p class="queue-done" hidden>You have no more benchmarks to review. Thank you. <a href="../">Back to the review page</a>.</p>
     <p class="queue-skips" hidden>You skipped <span class="queue-skip-count"></span> that none of your reviews has reported yet. <a target="_blank" rel="noopener">Publish your skips on GitHub</a> and select <strong>Start discussion</strong>, so the review page can count them.</p>
     <noscript><p>The review queue needs JavaScript. Pick a benchmark from the <a href="../../">gallery</a>.</p></noscript>
   </main>

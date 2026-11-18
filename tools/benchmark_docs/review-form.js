@@ -21,8 +21,10 @@
   const feedback = form.querySelector(".review-feedback");
   const prepared = form.querySelector(".review-prepared");
   const preparedText = prepared.querySelector("textarea");
-  const storageUnavailable =
-    new URLSearchParams(window.location.search).get("review-storage") === "unavailable";
+  const params = new URLSearchParams(window.location.search);
+  const storageUnavailable = params.get("review-storage") === "unavailable";
+  // Without storage the queue names the reviewer here, to be handed back.
+  const reviewer = params.get("reviewer");
 
   function answer(fieldset) {
     const checked = fieldset.querySelector("input:checked");
@@ -75,6 +77,7 @@
   function nextUrl(stored) {
     const url = new URL(form.dataset.nextUrl, window.location.href);
     if (storageUnavailable || !stored) url.searchParams.set("review-storage", "unavailable");
+    if (reviewer) url.searchParams.set("reviewer", reviewer);
     return url.href;
   }
 
@@ -93,7 +96,13 @@
   }
 
   function body(overall, skipped) {
-    const page = window.location.href.split("#")[0];
+    // The published link leaves out this visit's state: whoever follows it
+    // would otherwise review as this reviewer.
+    const link = new URL(window.location.href);
+    link.hash = "";
+    link.searchParams.delete("reviewer");
+    link.searchParams.delete("review-storage");
+    const page = link.href;
     const rows = questions.map((fieldset) => {
       const prompt = fieldset.querySelector(".review-prompt").textContent;
       return "| **" + cell(fieldset.dataset.label) + ":** " + cell(prompt) + " | " + cell(answer(fieldset)) + " |";

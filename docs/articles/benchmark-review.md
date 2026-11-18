@@ -35,7 +35,9 @@ approval, and the coordinator confirms the reviewers before a benchmark is
 finalized.
 
 1. Sign in to GitHub in your browser.
-2. Select **Start reviewing**.
+2. Select **Start reviewing**. The first time, enter your GitHub username, so
+   the queue does not offer you a benchmark you have already reviewed in this
+   round, in any browser.
 3. Read the Summary, Inputs and Expected output.
 4. Answer each question with Agree or Disagree: Task, Inputs, and, where
    shown, the AI-assisted review of three potential concerns. If you disagree,

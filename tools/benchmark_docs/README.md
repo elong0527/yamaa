@@ -71,9 +71,14 @@ counts how many reviewers skipped each benchmark; a skip decides nothing.
 Submitting or skipping a review moves the page to `review/next/`, the review
 queue `generate.py` writes beside the dashboards. Nobody assigns benchmarks. The
 queue lists every `sdtm` and `adam` benchmark under review in gallery order, and
-those still short of the reviews that settle them. `review-queue.js` walks the
-list from the browser's own random place to the next of those this browser has
-not marked done, so the same link also resumes a review. The place is a share of
+those still short of the reviews that settle them, each with the reviewers its
+published reviews in the current round name. The queue asks for the reviewer's
+GitHub username once per browser, and keeps it in the address when the browser
+cannot store it. `review-queue.js` walks the list from the browser's own random
+place to the next of those that this browser has not marked done and whose
+reviewers do not include the username, so the same link also resumes a review
+and a reviewer who changes browsers is not offered a benchmark again. A wrong
+username only loses that protection. The place is a share of
 the whole list, which a published review does not change, so a site rebuild
 does not move it. No benchmark goes to everyone first: a room of reviewers who
 start together would all read it, and each site rebuild would send them to the
@@ -100,7 +105,8 @@ benchmark that needs rework starts the next round with no reviews, and other
 reviews carry over. Approval freezes as soon as the required reviewers approve,
 including within a round.
 Each new round uses fresh browser completion marks, so a reworked benchmark is
-offered again even to someone who reviewed it before.
+offered again even to someone who reviewed it before, while a review that
+carries over still keeps its benchmark from its reviewer.
 
 Rework does not wait for a round. When a `Review:` discussion is created or
 edited, the Benchmark review workflow runs `review_rework.py`, which reads it the
