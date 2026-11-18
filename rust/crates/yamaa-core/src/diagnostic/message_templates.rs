@@ -90,6 +90,8 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("missing_key", "key column {column} is missing in {missing_count} of the rows"),
     ("missing_report", "the warning verifications {warnings} need output.report, which is not declared"),
     ("missing_required_field", "{spec_path} lacks the field {field}, which it requires"),
+    ("missing_text_collision", "column {column} holds the output.missing text {missing} as a value in {collision_count} of the rows"),
+    ("missing_text_not_applicable", "output.missing of {path} applies only to a csv artifact that no other specification or transport file reads"),
     ("missing_value_required", "a flag that declares false_value {false_value} must also declare missing"),
     ("mixed_relations", "{expr} mixes the relations {relations}"),
     ("month_out_of_range", "month {month} is outside 1 to 12"),

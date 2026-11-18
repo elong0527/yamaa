@@ -1,5 +1,5 @@
 {
-  "about": "What preparation refuses in a 1.0 specification before any input is read: the declarations of inputs, keys, columns, row templates, named intermediates and the output, and the temporal operations' fields (SPEC, NAME, INPUT, SAS-2, OUTPUT, CSV-6, ROW, LOOKUP, TIME, CHECK-22, VALUE-5); then what output declarations, binding a root filter and admitting a generated ordinal report. The specification `spec` reads two inputs from `base` SRC, and `one_input` reads SRC alone, naming no `base`; each writes one key column ID.",
+  "about": "What preparation refuses in a 1.0 specification before any input is read: the declarations of inputs, keys, columns, row templates, named intermediates and the output, and the temporal operations' fields (SPEC, NAME, INPUT, SAS-2, OUTPUT, CSV-6, CSV-17, ROW, LOOKUP, TIME, CHECK-22, VALUE-5); then what output declarations, binding a root filter and admitting a generated ordinal report. The specification `spec` reads two inputs from `base` SRC, and `one_input` reads SRC alone, naming no `base`; each writes one key column ID. A `missing_text` case gives the output rows a declared missing text is checked against, as `columns` and `rows`: a str value equal to the text collides, and a missing value or another text does not.",
   "documents": {
     "spec": {
       "yamaa": "1.0",
@@ -559,6 +559,28 @@
       "input": {"base": "spec", "edits": [{"set": ["output"], "to": {"path": "result.parquet", "decimals": 2, "columns": ["ID"]}}]},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [{"phase": "validation", "condition": "decimals_not_applicable", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"path": "result.parquet", "profile": "parquet"}}]
+    },
+    {
+      "case": "a_missing_text_does_not_apply_to_a_parquet_output",
+      "operation": "output",
+      "input": {"base": "spec", "edits": [{"set": ["output"], "to": {"path": "result.parquet", "missing": ".", "columns": ["ID"]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "missing_text_not_applicable", "rule": "CSV-17", "spec_paths": ["output.missing"], "context": {"path": "result.parquet", "profile": "parquet"}}]
+    },
+    {
+      "case": "a_str_value_equal_to_the_missing_text_collides_in_each_row_that_holds_it",
+      "operation": "missing_text",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}, {"name": "NOTE", "type": "str", "derivation": {"value": "SRC.NOTE"}}]},
+          {"set": ["output"], "to": {"path": "result.csv", "missing": ".", "columns": ["ID", "NOTE"]}}
+        ],
+        "columns": [["ID", "int"], ["NOTE", "str"]],
+        "rows": [[1, "."], [2, null], [3, "."], [4, ".."]]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "output", "condition": "missing_text_collision", "rule": "CSV-17", "spec_paths": ["output.missing"], "context": {"column": "NOTE", "missing": ".", "collision_count": 2}}]
     },
     {
       "case": "an_output_order_term_is_refused_where_it_repeats_a_column",

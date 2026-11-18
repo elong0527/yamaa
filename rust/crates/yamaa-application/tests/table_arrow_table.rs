@@ -550,8 +550,16 @@ mod table {
             ];
             for (label, partitions, ends) in cases {
                 assert_eq!(
-                    csv_artifact::render_partitions(&table, &[2, 1, 0], Some("2"), &partitions)
-                        .unwrap(),
+                    csv_artifact::render_partitions(
+                        &table,
+                        &[2, 1, 0],
+                        csv_artifact::Text {
+                            decimals: Some("2"),
+                            missing: None
+                        },
+                        &partitions
+                    )
+                    .unwrap(),
                     (expected.clone(), ends),
                     "{label}"
                 );
