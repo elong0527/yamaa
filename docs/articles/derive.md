@@ -313,9 +313,11 @@ and each kind of read treats them in its own way:
   ([LOOKUP-27](../../rules/lookup.md#lookup-27)). A lookup never builds more
   rows: choosing one of several records with `keep` drops the others. A record
   that stands for several rows, such as an exposure record for each day it
-  covers, pairs the same way with a table of day numbers. It must also require
-  that the table holds its last day, because a table that is too short drops
-  the remaining rows without an issue
+  covers, pairs the same way with a table of consecutive day numbers. A table
+  that is too short, or that leaves a day out, drops rows without an issue, so
+  the specification states the cover itself: the record requires a match for
+  its last day in the table, and an `assert` checks that each record builds as
+  many rows as the days it covers
   ([ROW-7](../../rules/rows.md#row-7)).
 
 A qualified read of an input that declares no `key` fails validation with

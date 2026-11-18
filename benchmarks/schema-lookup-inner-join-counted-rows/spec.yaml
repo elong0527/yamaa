@@ -66,6 +66,7 @@ intermediates:
       EXTRT: EXREC.EXTRT
       EXDOSE: EXREC.EXDOSE
       EXDOSU: EXREC.EXDOSU
+      NDAYS: EXREC.NDAYS
       ADOSEN: DAYS.DOSEDAY
       OFFSET: "DAYS.DOSEDAY - 1"
       ASTDT:
@@ -104,6 +105,20 @@ columns:
     type: date
     label: Analysis Start Date
 
+  # How many days the collected record covers, and how many administrations
+  # were built from it. Neither is in the output.
+  - name: NDAYS
+    type: int
+    label: Number of Days Covered
+
+  - name: NBUILT
+    type: int
+    label: Number of Administrations Built
+    derivation:
+      aggregate:
+        group_by: [STUDYID, USUBJID, EXSEQ]
+        expr: "COUNT(ADOSEN)"
+
 rows:
   # One record per administration.
   - id: administration
@@ -117,3 +132,12 @@ rows:
       EXDOSU: ADMIN.EXDOSU
       ADOSEN: ADMIN.ADOSEN
       ASTDT: ADMIN.ASTDT
+      NDAYS: ADMIN.NDAYS
+
+verifications:
+  # The record read only its last day from the dosing period. A period that
+  # leaves an earlier day out, or holds a day before the first, builds a
+  # different number of administrations than the record covers.
+  - assert:
+      id: a-record-builds-an-administration-for-every-day-it-covers
+      require: "NBUILT = NDAYS"

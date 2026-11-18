@@ -198,9 +198,8 @@ templates build rows finer than input records only as this rule permits.
 A pair of records is a record of a pair relation: one record of each of two
 declared relations whose key values are equal ([LOOKUP-27](lookup.md#lookup-27)).
 The pairs are bounded by the records of the two relations, so no count read
-from the data decides how many rows a record yields, and the partner's key
-joins the output `keys`, so [OUTPUT-3](output.md#output-3) still checks every
-row's identity. A lookup never multiplies rows
+from the data yields a row beyond them, and the partner's key joins the output
+`keys`, so [OUTPUT-3](output.md#output-3) still checks every row's identity. A lookup never multiplies rows
 ([LOOKUP-10](lookup.md#lookup-10)): reading one of several partners with
 `order_by` and `keep` builds one row, not one for each partner.
 
@@ -211,20 +210,28 @@ and may be enriched from collected relations through record intermediates.
 Dynamically counted expansion happens upstream, and the expanded records enter
 the specification as ordinary input.
 
-A record that stands for a number of rows held in its own values, such as an
-exposure record for each day between its dates, builds them inside the
-specification only as pairs with a declared relation of whole numbers: one
-record for each number, and a `filter` that keeps each pair up to the
-record's own number ([LOOKUP-27](lookup.md#lookup-27)). That relation's
-records bound the rows: a record whose number is past the relation's last is
-in fewer pairs than it stands for, one whose number is missing or below the
-relation's first is in none, and no condition reports either. Only the
-specification can state the cover. The paired side reads the relation's
-record at its own number through a lookup that declares `require_match: true`
-([LOOKUP-16](lookup.md#lookup-16), [LOOKUP-24](lookup.md#lookup-24)), and the
-`filter` keeps the pairs up to the number that read gives, so a record the
-relation does not hold fails the run as `unmatched_key` before any row is
-built, as in `schema-lookup-inner-join-counted-rows`.
+One counted expansion is built inside the specification: the one a declared
+relation bounds. A record that stands for a number of rows held in its own
+values, such as an exposure record for each day between its dates, pairs with
+a declared relation of consecutive whole numbers, one record for each, and a
+`filter` keeps each pair up to the record's own number
+([LOOKUP-27](lookup.md#lookup-27)). That relation's records bound the rows,
+and no condition reports a record they do not cover: one whose number is past
+the relation's last is in fewer pairs than it stands for, one whose number is
+missing or below the relation's first is in none, and a number the relation
+leaves out is a row left out of every record that spans it. Only the
+specification can state the cover, in two parts. The paired side reads the
+relation's record at its own number through a lookup that declares
+`require_match: true` ([LOOKUP-16](lookup.md#lookup-16),
+[LOOKUP-24](lookup.md#lookup-24)), and the `filter` keeps the pairs up to the
+number that read gives, so a record whose number the relation does not hold
+fails the run as `unmatched_key` before any row is built. That lookup reads
+one record of the relation and none below it, so an `assert` that each record
+builds as many rows as its number ([CHECK-12](verification.md#check-12)) fails
+the run as `assert_failed` when the relation pairs a record with more or fewer
+numbers than its own, as one that leaves a number out does. A number the
+relation repeats builds a repeated key combination, which fails as the next
+paragraph states. `schema-lookup-inner-join-counted-rows` shows both parts.
 
 The built rows must still match the `keys`: repeating a key combination fails
 at the output gate under [OUTPUT-3](output.md#output-3). A

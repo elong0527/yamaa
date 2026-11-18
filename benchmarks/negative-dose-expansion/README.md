@@ -42,12 +42,13 @@ expected-but-uncollected rows, use the long-form planning input in
 data.
 
 When the administrations must be built here, pair each collected
-record with the protocol's dosing period, one record per day of it,
-and require that the period holds the day of the record's last
-administration, as `schema-lookup-inner-join-counted-rows` does. A
-record that counts more administrations than the period has days
-then rejects the run instead of losing them, and so does a record
-with a zero or missing count:
+record with the protocol's dosing period, one record per day of it
+numbered from `1`, and have each record read the period's day of its
+last administration, requiring a match, as
+`schema-lookup-inner-join-counted-rows` does. A record that counts
+more administrations than the period has days then rejects the run
+instead of losing them, and so does a record with a zero or missing
+count:
 
 ```yaml
 intermediates:
@@ -55,7 +56,25 @@ intermediates:
     dataset: DAYS
     key: {STUDYID: STUDYID, DOSEDAY: EXDOSCNT}
     require_match: true
+  - id: EXREC
+    dataset: EX
+    derivations:
+      LASTDAY: {type: int, derivation: LAST.DOSEDAY}
+  - id: ADMIN
+    dataset: EXREC
+    inner_join: DAYS
+    key: [STUDYID]
+    filter: "DAYS.DOSEDAY <= EXREC.LASTDAY"
+    derivations:
+      USUBJID: EXREC.USUBJID
+      EXSEQ: EXREC.EXSEQ
+      ADOSEN: DAYS.DOSEDAY
 ```
+
+The requirement is checked only where a record reads `LAST`, so the
+read in `EXREC` is what rejects the run. A check that each record
+builds as many administrations as it counts then also rejects a
+dosing period that leaves a day out.
 
 If the analysis genuinely needs only the totals, drop the administration level
 and key on the collected record instead:

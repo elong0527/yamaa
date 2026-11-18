@@ -8,7 +8,7 @@ in `ASTDT`.
 **Input:** one `spec.yaml` over collected exposure records of once-daily
 dosing, each with its treatment, dose, unit, and the first and last day it
 covers (`EXSTDTC`, `EXENDTC`), and the protocol's dosing period, one record
-per day of it.
+per day of it, the days numbered from `1`.
 
 **Variables:**
 
@@ -22,5 +22,5 @@ per day of it.
 from its start date through its end date, and for a single administration
 on its start date when it has no end date. A record that covers more days
 than the protocol's dosing period has, ends before it starts, or has no
-start date rejects the run, so no record builds fewer administrations than
-it stands for.
+start date rejects the run, and so does a dosing period that leaves out or
+repeats a day, so no record builds fewer administrations than it stands for.
