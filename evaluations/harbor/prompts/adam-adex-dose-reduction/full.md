@@ -11,8 +11,9 @@ administrations that share a start date/time ordered by sequence number
 (EXSEQ), and the previous dose is the dose of the administration just before
 in that order. DOSREDFL has no value for the subject's first administration
 and whenever the current dose or the previous dose is zero or has no value.
-The previous dose is never an earlier nonzero dose: a pause in dosing, where
-the dose is zero, is not flagged, and neither is the administration after it.
+The previous dose is never an earlier nonzero dose: a dose interruption, where
+the dose is zero and no drug was given, is not flagged, and neither is the
+administration after it.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adex.csv.

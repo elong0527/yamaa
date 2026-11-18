@@ -22,10 +22,9 @@
         <ItemRef ItemOID="IT.ADLB.TRT01A" OrderNumber="6" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADLB.ADY" OrderNumber="7" Mandatory="Yes" MethodOID="MT.ADLB.ADY"/>
         <ItemRef ItemOID="IT.ADLB.AVAL" OrderNumber="8" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ADLB.AVALU" OrderNumber="9" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADLB.ABLFL" OrderNumber="10" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADLB.BASE" OrderNumber="11" Mandatory="No" MethodOID="MT.ADLB.BASE"/>
-        <ItemRef ItemOID="IT.ADLB.CHG" OrderNumber="12" Mandatory="No" MethodOID="MT.ADLB.CHG"/>
+        <ItemRef ItemOID="IT.ADLB.ABLFL" OrderNumber="9" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADLB.BASE" OrderNumber="10" Mandatory="No" MethodOID="MT.ADLB.BASE"/>
+        <ItemRef ItemOID="IT.ADLB.CHG" OrderNumber="11" Mandatory="No" MethodOID="MT.ADLB.CHG"/>
         <def:Class Name="BASIC DATA STRUCTURE"/>
         <def:leaf ID="LF.ADLB" xlink:href="adlb.xpt">
           <def:title>adlb.xpt</def:title>
@@ -61,7 +60,7 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADLB.PARAM" Name="PARAM" DataType="text" Length="24" SASFieldName="PARAM">
+      <ItemDef OID="IT.ADLB.PARAM" Name="PARAM" DataType="text" Length="30" SASFieldName="PARAM">
         <Description>
           <TranslatedText xml:lang="en">Parameter</TranslatedText>
         </Description>
@@ -103,16 +102,6 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADLB.AVALU" Name="AVALU" DataType="text" Length="3" SASFieldName="AVALU">
-        <Description>
-          <TranslatedText xml:lang="en">Analysis Value Unit</TranslatedText>
-        </Description>
-        <def:Origin Type="Predecessor">
-          <Description>
-            <TranslatedText xml:lang="en">LB.LBSTRESU</TranslatedText>
-          </Description>
-        </def:Origin>
-      </ItemDef>
       <ItemDef OID="IT.ADLB.ABLFL" Name="ABLFL" DataType="text" Length="1" SASFieldName="ABLFL">
         <Description>
           <TranslatedText xml:lang="en">Baseline Record Flag</TranslatedText>
@@ -147,7 +136,7 @@
       </MethodDef>
       <MethodDef OID="MT.ADLB.CHG" Name="ADLB.CHG" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Analysis value minus baseline; missing when no baseline exists.</TranslatedText>
+          <TranslatedText xml:lang="en">Analysis value minus baseline after the first treatment date; missing on the baseline record and when no baseline exists.</TranslatedText>
         </Description>
       </MethodDef>
     </MetaDataVersion>

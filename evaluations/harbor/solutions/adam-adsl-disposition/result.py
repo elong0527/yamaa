@@ -39,7 +39,7 @@ def main():
         counted.setdefault(row["USUBJID"], []).append(row)
 
     fieldnames = [
-        "STUDYID", "USUBJID", "EOSDT", "EOSDECOD", "EOSREAS", "EOSSTT",
+        "STUDYID", "USUBJID", "EOSDT", "EOSREAS", "EOSSTT",
         "DCSREAS", "EOTDT", "EOTSTT", "DCTREAS", "DCTREASP",
     ]
 
@@ -61,7 +61,13 @@ def main():
             eosdt = last_study["DSSTDTC"]
             eosdecod = last_study["DSDECOD"]
             eosreas = last_study["DSTERM"]
-            eosstt = "COMPLETED" if eosdecod == "COMPLETED" else "DISCONTINUED"
+            if eosdecod == "SCREEN FAILURE":
+                # A screen failure never entered the study: no status.
+                eosstt = ""
+            elif eosdecod == "COMPLETED":
+                eosstt = "COMPLETED"
+            else:
+                eosstt = "DISCONTINUED"
         dcsreas = eosdecod if eosstt == "DISCONTINUED" else ""
 
         # End-of-treatment summary; none for a subject never treated.
@@ -86,7 +92,6 @@ def main():
             "STUDYID": subj["STUDYID"],
             "USUBJID": usubjid,
             "EOSDT": eosdt,
-            "EOSDECOD": eosdecod,
             "EOSREAS": eosreas,
             "EOSSTT": eosstt,
             "DCSREAS": dcsreas,

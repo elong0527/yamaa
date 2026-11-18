@@ -2,8 +2,8 @@ Following CDISC ADaM standards, use the provided DM and DS datasets to create
 an ADSL dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS, EOTDT, EOTSTT,
-DCTREAS, DCTREASP
+STUDYID, USUBJID, EOSDT, EOSREAS, EOSSTT, DCSREAS, EOTDT, EOTSTT, DCTREAS,
+DCTREASP
 
 Only DS records with DSCAT "DISPOSITION EVENT" count; records in any other
 category never count. The end-of-study summary reads the subject's
@@ -15,14 +15,15 @@ one with the higher DSSEQ is the last record. A record with no DSSTDTC is the
 last record only when the subject has no counted record with a DSSTDTC; among
 several such records, the one with the higher DSSEQ is the last record.
 
-EOSDT is the DSSTDTC of the last record of the study summary, and EOSDECOD
-and EOSREAS are the DSDECOD and DSTERM on that same record. EOSDT has no
-value when that record has no DSSTDTC. EOSDT, EOSDECOD, and EOSREAS have no
-value when the subject has no study disposition record. EOSSTT is
-"COMPLETED" when EOSDECOD is "COMPLETED", "DISCONTINUED" when EOSDECOD is any
-other recorded term, and "ONGOING" when the subject has no study disposition
-record. DCSREAS is EOSDECOD when EOSSTT is "DISCONTINUED"; it has no value
-otherwise.
+EOSDT is the DSSTDTC of the last record of the study summary, and EOSREAS
+is the DSTERM on that same record. EOSDT has no value when that record has
+no DSSTDTC. EOSDT and EOSREAS have no value when the subject has no study
+disposition record. EOSSTT has no value for a screen failure, whose last
+record of the study summary has DSDECOD "SCREEN FAILURE". Otherwise EOSSTT
+is "COMPLETED" when the DSDECOD on that record is "COMPLETED",
+"DISCONTINUED" when it is any other recorded term, and "ONGOING" when the
+subject has no study disposition record. DCSREAS is the DSDECOD on that
+record when EOSSTT is "DISCONTINUED"; it has no value otherwise.
 
 EOTDT is the DSSTDTC of the last record of the treatment summary; it has no
 value when that record has no DSSTDTC or the subject has no treatment

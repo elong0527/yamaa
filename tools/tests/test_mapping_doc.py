@@ -383,7 +383,7 @@ class SheetStructureTests(unittest.TestCase):
         self.assertEqual(headers[:4], ["Template", "Include when", "PARAMCD", "PARAM"])
         templates = {row[0]: row for row in rows}
         self.assertIn("ALTSI", templates["alt_si"][2])
-        self.assertIn("Alanine Aminotransferase (SI)", templates["alt_si"][3])
+        self.assertIn("Alanine Aminotransferase (ukat/L)", templates["alt_si"][3])
 
     def test_a_template_cell_tells_a_written_null_from_an_absent_variable(self):
         # A written null is the missing literal (#3030 D18); a variable that

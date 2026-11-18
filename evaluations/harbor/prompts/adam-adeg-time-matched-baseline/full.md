@@ -6,6 +6,8 @@ The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, APERIOD, APERDAY, ATPT, ATPTN, AVAL, AVALU,
 ABLFL, BASE, CHG, BASETYPE
 
+- Day -1 of a period is a day without dosing; its time points are taken at
+  the clock times of the dosing day's time points.
 - ABLFL is "Y" on every record of day -1 of a period, that period's baseline
   day; it has no value on every other day.
 - BASE is the AVAL recorded at the same nominal time point on the same

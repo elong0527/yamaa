@@ -651,6 +651,10 @@ conditions! {
     LookupRepeatCountReference => ("validation", "unknown_field", Some("LOOKUP-29")),
     LookupRepeatCountType => ("validation", "incompatible_input_type", Some("LOOKUP-29")),
     LookupRepeatCount => ("join", "invalid_repeat_count", Some("LOOKUP-29")),
+    // A lookup's `dataset` that names an intermediate whose records no row
+    // template could drive on (LOOKUP-3, ROW-2).
+    LookupRecordsSide => ("validation", "invalid_intermediate_driver", Some("LOOKUP-3")),
+    LookupRecordsFieldType => ("validation", "unknown_intermediate_driver_type", Some("LOOKUP-3")),
     FlagMissingValueRequired => ("validation", "missing_value_required", Some("EXPR-8")),
     PredicateUnknownField => ("validation", "unknown_field", Some("FORMULA-9")),
     PredicateUnresolvableName => ("validation", "unresolvable_name", Some("FORMULA-9")),

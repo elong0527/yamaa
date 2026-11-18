@@ -1,9 +1,8 @@
 # Derive absolute differential records
 
-**Goal:** add absolute differential records (`LYMPH`, `NEUT`,
+**Goal:** add absolute differential records (`LYM`, `NEUT`,
 `MONO`, `EOS`, `BASO`) whose analysis value (`AVAL`) is the
-white blood cell count times the matching differential fraction,
-and flag them with the record-type flag (`DTYPE`).
+white blood cell count times the matching differential fraction.
 
 **Input:** SDTM laboratory records (`LB`) carrying the subject
 identifier (`USUBJID`), visit (`VISIT`), test code (`LBTESTCD`),
@@ -14,11 +13,13 @@ differentials, and unrelated parameters.
 
 **Variables:**
 
+- `PARAMCD` and `PARAM`: the collected test code and name on a
+  collected record; on an added absolute record, the absolute
+  test code (`LYM`, `NEUT`, `MONO`, `EOS` or `BASO`) and its
+  name with its unit, such as `Lymphocytes Abs (10^9/L)`.
 - `AVAL`: the collected result on a collected record; on an
   added absolute record, the `WBC` count times the matching
   differential fraction for the same subject and visit.
-- `DTYPE`: `CALCULATION` on an added absolute record; empty on
-  a collected record.
 
 **Note:** one record is added per subject, visit, and
 differential: only when both a `WBC` count and that differential's

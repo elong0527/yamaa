@@ -13,7 +13,7 @@ OUTPUT = Path("/app/output")
 
 COLUMNS = [
     "STUDYID", "USUBJID", "PARCAT2", "PARAMCD", "PARAM", "AVISIT", "AVISITN",
-    "AVAL", "DTYPE", "QSSTAT", "QSREASND", "AREASND", "PROEX1FL", "PROEX2FL",
+    "ADT", "AVAL", "DTYPE", "QSSTAT", "QSREASND", "AREASND", "PROEX1FL", "PROEX2FL",
     "PROSCMFL",
 ]
 ITEMS = ["FAT01", "FAT02"]
@@ -33,6 +33,7 @@ qs = pl.read_csv(
     schema_overrides={
         "STUDYID": STR, "USUBJID": STR, "QSTESTCD": STR, "QSSTAT": STR,
         "QSREASND": STR, "VISIT": STR, "QSSTRESN": pl.Float64, "VISITNUM": pl.Float64,
+        "QSDTC": STR,
     },
 )
 sched = pl.read_csv(
@@ -50,7 +51,7 @@ def blank_to_null(df, cols):
 
 
 adsl = blank_to_null(adsl, ["SAFFL", "DCTREAS"])
-qs = blank_to_null(qs, ["QSSTAT", "QSREASND", "QSTESTCD"])
+qs = blank_to_null(qs, ["QSSTAT", "QSREASND", "QSTESTCD", "QSDTC"])
 
 # Study day of an event, counted from RANDDT as day 1.
 adsl = adsl.with_columns(
@@ -74,7 +75,7 @@ qs_items = (
     .select(
         "USUBJID", "VISITNUM",
         pl.col("QSTESTCD").alias("PARAMCD"),
-        "QSSTRESN", "QSSTAT", "QSREASND",
+        "QSSTRESN", "QSSTAT", "QSREASND", "QSDTC",
         pl.lit(True).alias("_COLL"),
     )
 )
@@ -100,8 +101,15 @@ wide = wide.with_columns(
     _TOT_R=pl.coalesce([pl.col(f"_{i}_R") for i in ITEMS]),
 ).select("USUBJID", "VISITNUM", "_TOT_N", "_TOT_C", "_TOT_R")
 
-df = skel.join(qs_items, on=["USUBJID", "VISITNUM", "PARAMCD"], how="left").join(
-    wide, on=["USUBJID", "VISITNUM"], how="left"
+# The date of the items collected at a visit, for the total score.
+visit_dates = qs_items.group_by(["USUBJID", "VISITNUM"]).agg(
+    pl.col("QSDTC").max().alias("_TOT_D")
+)
+
+df = (
+    skel.join(qs_items, on=["USUBJID", "VISITNUM", "PARAMCD"], how="left")
+    .join(wide, on=["USUBJID", "VISITNUM"], how="left")
+    .join(visit_dates, on=["USUBJID", "VISITNUM"], how="left")
 )
 
 is_tot = pl.col("PARAMCD") == TOTAL
@@ -118,6 +126,9 @@ phantom = ~pl.col("_COLL")
 
 df = df.with_columns(
     DTYPE=pl.when(phantom).then(pl.lit("PHANTOM")).otherwise(None),
+    ADT=pl.when(phantom).then(None)
+    .when(is_tot).then(pl.col("_TOT_D"))
+    .otherwise(pl.col("QSDTC")),
     QSSTAT=pl.when(phantom | is_tot).then(None).otherwise(pl.col("QSSTAT")),
     QSREASND=pl.when(phantom | is_tot).then(None).otherwise(pl.col("QSREASND")),
     AREASND=pl.when(pl.col("AVAL").is_not_null()).then(None)

@@ -7,7 +7,9 @@ from pathlib import Path
 
 INPUT = Path("/app/input/adsl_raw.csv")
 OUTPUT = Path("/app/output/adsl.csv")
-COLUMNS = ["STUDYID", "USUBJID", "TRT01A", "AGE", "HEIGHTBL", "TRTSDT", "TRTSDTM"]
+COLUMNS = [
+    "STUDYID", "USUBJID", "TRT01A", "AGE", "HEIGHTBL", "TRTSDT", "TRTSDTM", "TRTSTMF",
+]
 
 
 def main():
@@ -21,6 +23,7 @@ def main():
             subjects[key] = {name: raw.get(name, "") for name in COLUMNS[:5]}
             subjects[key]["TRTSDT"] = ""
             subjects[key]["TRTSDTM"] = ""
+            subjects[key]["TRTSTMF"] = ""
         collected = raw.get("TRTSDTC", "").strip()
         if collected:
             # Missing seconds in a collected minute-level timestamp become 00.
@@ -30,6 +33,8 @@ def main():
             if not existing or timestamp < existing:
                 subjects[key]["TRTSDTM"] = timestamp
                 subjects[key]["TRTSDT"] = exposure.date().isoformat()
+                # Seconds are collected for other subjects: flag imputed ones.
+                subjects[key]["TRTSTMF"] = "S" if len(collected) == 16 else ""
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT.open("w", newline="", encoding="utf-8") as target:

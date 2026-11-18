@@ -11,17 +11,16 @@ run;
 
 data result;
   set lb;
-  length PARAMCD $8 PARAM $40 AVALC $200 AVALU $200;
+  length PARAMCD $8 PARAM $40 AVALC $200;
   PARAMCD = LBTESTCD;
   if LBTESTCD = 'GLUC' then PARAM = 'Glucose (mg/dL)';
   else if LBTESTCD = 'CREAT' then PARAM = 'Creatinine (umol/L)';
   else if LBTESTCD = 'HCG' then PARAM = 'Choriogonadotropin Beta';
   AVAL = LBSTRESN;
   AVALC = LBSTRESC;
-  AVALU = LBSTRESU;
 run;
 proc sql;
-  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVALC, AVALU
+  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVALC
     from result;
 quit;
 proc export data=final outfile="/app/output/adlb.csv" dbms=csv replace; run;

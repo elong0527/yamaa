@@ -19,7 +19,7 @@ proc sql; create table combined as select a.*,b.AVAL as BASE,b.ANRIND as BNRIND 
 data result;
   length SHIFT1 $20 CRIT1 $30 CRIT2 $30 CRIT1FL CRIT2FL $1;
   set combined;
-  if not missing(ANRIND) and not missing(BNRIND) then SHIFT1=catx(' to ',BNRIND,ANRIND);
+  if ABLFL ne 'Y' and not missing(ANRIND) and not missing(BNRIND) then SHIFT1=catx(' to ',BNRIND,ANRIND);
   if not missing(AVAL) and not missing(BASE) and BASE ne 0 then R2BASE=AVAL/BASE;
   if not missing(AVAL) and not missing(ANRHI) then do;
     CRIT1='Result greater than 3 x ULN'; CRIT1FL='N'; if AVAL>3*ANRHI then CRIT1FL='Y';

@@ -8,7 +8,8 @@ input:
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TRT01A, AGE, HEIGHTBL, TRTSDT, TRTSDTM]
+  columns: [STUDYID, USUBJID, TRT01A, AGE, HEIGHTBL, TRTSDT, TRTSDTM,
+            TRTSTMF]
 
 columns:
   - name: STUDYID
@@ -74,16 +75,42 @@ columns:
         - type: Predecessor
           description: ADSL_RAW.HEIGHTBL
 
+  # Seconds are collected for some subjects, so a time collected to the
+  # minute takes 00 seconds, and the flag below says so.
   - name: TRTSDTM
     type: datetime
     label: Datetime of First Exposure to Treatment
-    derivation: ADSL_RAW.TRTSDTC
+    derivation:
+      impute:
+        type: datetime
+        source: ADSL_RAW.TRTSDTC
+        time: first
     submission:
       core: Perm
       mandatory: false
       origins:
-        - type: Predecessor
-          description: ADSL_RAW.TRTSDTC
+        - type: Derived
+      method: TRTSDTC, with seconds 00 when the time was collected to the
+        minute.
+
+  - name: TRTSTMF
+    type: str
+    label: Time of First Exposure Imput. Flag
+    derivation:
+      imputation_flag:
+        source: TRTSDTM
+        part: time
+    verifications:
+      - allowed_values:
+          values: [H, M, S]
+    submission:
+      core: Cond
+      mandatory: false
+      length: 1
+      origins:
+        - type: Derived
+      method: S when the time of first exposure was collected to the minute,
+        so its seconds are imputed as 00.
 
   - name: TRTSDT
     type: date

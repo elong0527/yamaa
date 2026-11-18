@@ -40,7 +40,7 @@ pub use relation_range::{
 mod self_relations;
 pub use self_relations::IntermediateSource;
 mod pairs;
-pub use pairs::{PairCount, PairJoin, PairKey, PairRecords, PairSide, PairValue};
+pub use pairs::{PairCount, PairJoin, PairKey, PairRecords, PairSide, PairValue, RecordPort};
 mod match_expression;
 mod match_values;
 pub use match_expression::MatchExpression;

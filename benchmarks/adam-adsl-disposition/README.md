@@ -1,7 +1,7 @@
 # Summarize End-of-Study and End-of-Treatment Disposition
 
 **Goal:** give each subject a single end-of-study summary holding
-`EOSDT`, `EOSDECOD`, `EOSREAS`, `EOSSTT`, and `DCSREAS`, plus an
+`EOSDT`, `EOSREAS`, `EOSSTT`, and `DCSREAS`, plus an
 independent end-of-treatment summary holding `EOTDT`, `EOTSTT`,
 `DCTREAS`, and `DCTREASP`.
 
@@ -19,16 +19,16 @@ treatment disposition; the study summary reads every other epoch.
   `DISPOSITION EVENT` and whose epoch is not `TREATMENT`. It is
   empty when that event has no date or the subject has no such
   record.
-- `EOSDECOD` is the coded term (`DSDECOD`) on that last event; empty
-  when the subject has no study disposition event. The coded term
-  names the specific reason (for example `WITHDRAWAL BY SUBJECT`),
-  never a generic status.
 - `EOSREAS` is the reported term (`DSTERM`) on that same last event.
-- `EOSSTT` is `COMPLETED` when the last coded term is `COMPLETED`,
-  `DISCONTINUED` for any other recorded term, and `ONGOING` when the
-  subject has no study disposition event.
-- `DCSREAS` is the coded term (`EOSDECOD`) for a subject whose
-  status is `DISCONTINUED`; empty otherwise.
+- `EOSSTT` is `COMPLETED` when the last coded term (`DSDECOD`) is
+  `COMPLETED`, `DISCONTINUED` for any other recorded term, and
+  `ONGOING` when the subject has no study disposition event. It is
+  empty for a screen failure (last coded term `SCREEN FAILURE`), who
+  never entered the study.
+- `DCSREAS` is the last coded term for a subject whose status is
+  `DISCONTINUED`, naming the specific reason (for example
+  `WITHDRAWAL BY SUBJECT`); empty otherwise, including for a screen
+  failure.
 - `EOTDT` is the start date of the subject's last treatment
   disposition event (`EPOCH = 'TREATMENT'`); empty when that event
   has no date or the subject has none.

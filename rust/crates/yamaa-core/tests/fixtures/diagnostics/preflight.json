@@ -493,6 +493,37 @@
       "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.Q.dataset"], "context": {"intermediate": "OVER", "fields": ["dataset"]}}]
     },
     {
+      "case": "a_record_relation_is_an_intermediate_a_row_template_could_drive_on",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [
+          {"id": "R", "dataset": "SECOND", "key": ["ID"], "order_by": ["SECOND.ID"], "keep": "first"},
+          {"id": "L", "dataset": "R", "key": ["ID"], "order_by": ["R.ID"], "keep": "last"}
+        ]}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.L.dataset"], "context": {"intermediate": "R", "fields": ["key", "order_by", "keep"]}}]
+    },
+    {
+      "case": "a_record_relation_reads_an_input",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [
+          {"id": "A", "dataset": "SECOND", "filter": "SECOND.ID > 0"},
+          {"id": "B", "dataset": "A", "filter": "A.ID > 1"},
+          {"id": "C", "dataset": "B", "key": ["ID"], "order_by": ["B.ID"], "keep": "first"}
+        ]}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.C.dataset"], "context": {"intermediate": "B", "fields": ["dataset"]}}]
+    },
+    {
+      "case": "an_intermediate_is_no_record_relation_of_itself",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "LOOK", "dataset": "LOOK", "key": ["ID"], "order_by": ["LOOK.ID"], "keep": "first"}]}]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-1", "spec_paths": ["intermediates.LOOK.dataset"], "context": {"identifier": "LOOK", "intermediate": "LOOK"}}]
+    },
+    {
       "case": "a_repeated_row_template_id_is_refused_at_the_path_both_share",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["rows"], "to": [{"id": "repeated", "dataset": "SRC"}, {"id": "repeated", "dataset": "SRC"}]}]},

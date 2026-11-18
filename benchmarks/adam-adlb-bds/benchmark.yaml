@@ -9,6 +9,8 @@ review:
       baseline, a missing result, a result on the start date, a single result,
       and a subject with no results.
     - Baseline is the latest result on or before treatment start, so subject
-      106's result on 2025-01-02 counts, percent change is empty when the
-      baseline is 0 (subject 103), and the SI factor 0.0167 is applied without
-      rounding.
+      106's result on 2025-01-02 counts. Change and percent change are given
+      only after treatment start, so the baseline record has neither. Percent
+      change is empty when the baseline is 0 (subject 103), the unit is part of
+      the parameter name, as ADaMIG has no unit variable, and the SI factor
+      0.0167 is applied without rounding.

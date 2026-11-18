@@ -11,6 +11,7 @@ never_treated <- !is.na(raw$TRT01A) &
 has_exposure <- !never_treated & !is.na(source_datetime) &
   nzchar(source_datetime)
 trtsdtm <- rep(NA_character_, nrow(raw))
+trtstmf <- rep(NA_character_, nrow(raw))
 
 if (any(has_exposure)) {
   values <- source_datetime[has_exposure]
@@ -19,6 +20,8 @@ if (any(has_exposure)) {
     values
   )
   if (!all(valid_shape)) stop("Exposure datetime has an unsupported format")
+  # Seconds are collected for other subjects, so imputed seconds are flagged.
+  trtstmf[has_exposure] <- ifelse(nchar(values) == 16L, "S", NA_character_)
   values[nchar(values) == 16L] <- paste0(values[nchar(values) == 16L], ":00")
   parsed <- as.POSIXct(values, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
   normalized <- format(parsed, "%Y-%m-%dT%H:%M:%S", tz = "UTC")
@@ -31,6 +34,7 @@ if (any(has_exposure)) {
 adsl <- raw[c("STUDYID", "USUBJID", "TRT01A", "AGE", "HEIGHTBL")]
 adsl$TRTSDT <- substr(trtsdtm, 1L, 10L)
 adsl$TRTSDTM <- trtsdtm
+adsl$TRTSTMF <- trtstmf
 stopifnot(nrow(adsl) == nrow(raw), !anyDuplicated(adsl$USUBJID))
 stopifnot(all(is.na(adsl$TRTSDT[never_treated])),
           all(is.na(adsl$TRTSDTM[never_treated])))

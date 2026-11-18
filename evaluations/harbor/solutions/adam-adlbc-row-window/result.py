@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 INPUT_CSV = "/app/input/lb.csv"
 OUTPUT_CSV = "/app/output/adlbc.csv"
 
-PARAM_BY_TEST = {"ALB": "_ALB", "BILI": "_BILI"}
+PARAM_BY_TEST = {"ALB": "ALB", "BILI": "BILI"}
 
 
 def parse_number(text):

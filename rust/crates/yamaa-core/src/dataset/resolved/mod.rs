@@ -1039,15 +1039,15 @@ impl ResolvedPlan {
         &self.region(id).conversions
     }
     /// How many secondary ports of the dataset follow its inputs: one for
-    /// each pair relation, which the run fills before any row is built
-    /// (LOOKUP-27).
+    /// each pair relation and each record relation, which the run fills
+    /// before any row is built (LOOKUP-27, LOOKUP-3).
     pub fn pair_ports(&self) -> usize {
         self.region_relations(RegionId::DATASET)
             .filter(|&relation| {
                 self.relation(relation)
                     .named
                     .as_ref()
-                    .is_some_and(|item| item.source.pairs().is_some())
+                    .is_some_and(|item| item.source.pairs().is_some() || item.records.is_some())
             })
             .count()
     }

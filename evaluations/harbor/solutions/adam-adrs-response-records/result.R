@@ -54,17 +54,19 @@ base <- rs |>
     )
   )
 
-# One flagged record at each assessment date: the worst response that day,
-# with the lowest sequence number breaking ties.
+# One flagged record at each assessment date: the worst evaluable response
+# that day (NE ranks below every other response), with the lowest sequence
+# number breaking ties.
 flagged <- base |>
+  mutate(SELRANK = if_else(AVALC == "NE", 0L, AVAL)) |>
   group_by(STUDYID, USUBJID, ADT) |>
-  arrange(desc(AVAL), RSSEQ, .by_group = TRUE) |>
+  arrange(desc(SELRANK), RSSEQ, .by_group = TRUE) |>
   mutate(
     rank = row_number(),
     ANL01FL = if_else(rank == 1L, "Y", NA_character_)
   ) |>
   ungroup() |>
-  select(-rank)
+  select(-rank, -SELRANK)
 
 adrs <- flagged |>
   select(

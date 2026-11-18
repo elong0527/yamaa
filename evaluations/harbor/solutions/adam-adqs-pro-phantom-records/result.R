@@ -49,7 +49,7 @@ qi <- qi[order(qi$USUBJID, qi$VISITNUM, qi$QSTESTCD, qi$QSSEQ), ]
 qi <- qi[!duplicated(qi[, c("USUBJID", "VISITNUM", "QSTESTCD")]), ]
 qi <- data.frame(USUBJID = qi$USUBJID, VISITNUM = qi$VISITNUM, PARAMCD = qi$QSTESTCD,
                  QSSTRESN = qi$QSSTRESN, QS_STAT = qi$QSSTAT, QS_REASND = qi$QSREASND,
-                 collected = TRUE, stringsAsFactors = FALSE)
+                 QS_DTC = qi$QSDTC, collected = TRUE, stringsAsFactors = FALSE)
 
 # Total score summary per subject/visit
 keys <- unique(qi[, c("USUBJID", "VISITNUM")])
@@ -62,6 +62,7 @@ tot <- do.call(rbind, lapply(seq_len(nrow(keys)), function(i) {
              n_coll = sum(!is.na(g$PARAMCD)),
              tot_val = if (all(answered)) sum(g$QSSTRESN) else NA_real_,
              tot_reasnd = if (length(r) == 0) NA_character_ else r[1],
+             tot_dt = if (all(is.na(g$QS_DTC))) NA_character_ else max(g$QS_DTC, na.rm = TRUE),
              stringsAsFactors = FALSE)
 }))
 
@@ -75,6 +76,9 @@ phantom <- ifelse(is_tot, d$n_coll == 0, !d$collected)
 
 aval <- ifelse(is_tot, d$tot_val, d$QSSTRESN)
 aval[phantom] <- NA_real_
+
+adt <- ifelse(is_tot, d$tot_dt, d$QS_DTC)
+adt[phantom] <- NA_character_
 
 qsstat   <- ifelse(phantom | is_tot, NA_character_, d$QS_STAT)
 qsreasnd <- ifelse(phantom | is_tot, NA_character_, d$QS_REASND)
@@ -98,6 +102,7 @@ out <- data.frame(
   PARAM    = d$PARAM,
   AVISIT   = d$VISIT,
   AVISITN  = d$VISITNUM,
+  ADT      = adt,
   AVAL     = aval,
   DTYPE    = ifelse(phantom, "PHANTOM", NA_character_),
   QSSTAT   = qsstat,

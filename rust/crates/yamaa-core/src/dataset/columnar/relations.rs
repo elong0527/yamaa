@@ -1253,6 +1253,12 @@ fn pivot_candidates<E>(
 /// the column program (#4199) answers for all of them. A program that does
 /// not answer every record leaves each to be decided when it first matches,
 /// where its failure, if any, is reported.
+///
+/// The filter is asked only about matched records (LOOKUP-8), so what text
+/// order decides between date texts on a record no row matches is not the
+/// run's to report (CHECK-27). The program therefore records apart from the
+/// run, and one that met such a pair answers nothing: each record is then
+/// decided, and its pair recorded, when it first matches.
 fn narrow_all<E>(
     run: &mut Run<'_, '_, E>,
     relation: RelationId,
@@ -1269,14 +1275,20 @@ fn narrow_all<E>(
     let mut records = Vec::new();
     super::reserved(records.try_reserve_exact(count))?;
     records.extend(0..count);
+    let dates = super::TextDates::default();
     let truths =
-        super::predicates::record_truths(run.dates, filter.predicate(), table, &records, |_| {
+        super::predicates::record_truths(&dates, filter.predicate(), table, &records, |_| {
             super::predicates::Operand::Values(super::buffer::Values::missing(count))
         });
     if let Some(truths) = truths {
         let mut narrowed = Vec::new();
         super::reserved(narrowed.try_reserve_exact(count))?;
-        narrowed.extend(truths.iter().map(|&truth| Some(truth == Truth::True)));
+        if dates.borrow().is_empty() {
+            narrowed.extend(truths.iter().map(|&truth| Some(truth == Truth::True)));
+        } else {
+            // No answer is kept, and the program does not run again.
+            narrowed.resize(count, None);
+        }
         run.relations.named(relation).narrowed = Some(narrowed);
     }
     Ok(())
@@ -2010,6 +2022,12 @@ pub(super) fn candidates<'t, S, E>(
     Ok(found)
 }
 
+/// The path of the `order_by` of the selection declared at `path`, where
+/// [`select`] records what text order decided between date texts (CHECK-27).
+pub(super) fn order_path(path: &str) -> String {
+    format!("{path}.order_by")
+}
+
 /// The first or last of several candidates by `order_by`; the earlier
 /// stored record wins a tie under `first`, the later one under `last`.
 /// Each candidate is compared with the one chosen so far, and a term whose
@@ -2029,8 +2047,9 @@ pub(super) fn select<'t, E>(
             if let (ValueRef::Str(candidate), ValueRef::Str(chosen)) = (candidate, chosen) {
                 if let Some((shorter, longer)) = crate::text_date_order::decided(candidate, chosen)
                 {
-                    let path = format!("{path}.order_by");
-                    dates.borrow_mut().record(&path, shorter, longer);
+                    dates
+                        .borrow_mut()
+                        .record(&order_path(path), shorter, longer);
                 }
             }
             order = compare(candidate, chosen, term)

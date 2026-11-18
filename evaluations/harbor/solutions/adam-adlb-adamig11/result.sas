@@ -15,10 +15,10 @@ proc sql;
 quit;
 
 data derived;
-  length PARAMCD $8 PARAM $40 AVALU $20 ABLFL $1;
+  length PARAMCD $8 PARAM $40 ABLFL $1;
   set source;
   PARAMCD=LBTESTCD;
-  PARAM='Alanine Aminotransferase';
+  PARAM='Alanine Aminotransferase (U/L)';
   ADT=LBDTC;
   _TRTSDT=TRTSDT;
   if ADT ne . and _TRTSDT ne . then do;
@@ -26,7 +26,6 @@ data derived;
     else ADY=ADT-_TRTSDT+1;
   end;
   AVAL=LBSTRESN;
-  AVALU=LBSTRESU;
   ABLFL=LBBLFL;
   format ADT yymmdd10.;
 run;
@@ -35,8 +34,9 @@ proc sql;
   create table adlb_joined as
   select d.STUDYID, d.USUBJID, d.PARAMCD, d.PARAM,
          d.ADT format=yymmdd10., d.TRT01A, d.ADY, d.AVAL,
-         d.AVALU, d.ABLFL, b.AVAL as BASE,
-         case when d.AVAL is not null and b.AVAL is not null then d.AVAL-b.AVAL else . end as CHG
+         d.ABLFL, b.AVAL as BASE,
+         case when d.AVAL is not null and b.AVAL is not null and d.ADT > d._TRTSDT
+              then d.AVAL-b.AVAL else . end as CHG
   from derived as d
   left join derived as b
     on d.STUDYID=b.STUDYID and d.USUBJID=b.USUBJID
@@ -52,7 +52,7 @@ run;
 proc sql;
   create table adlb_csv as
   select STUDYID, USUBJID, PARAMCD, PARAM,
-         put(ADT,yymmdd10.) as ADT, TRT01A, ADY, AVAL, AVALU,
+         put(ADT,yymmdd10.) as ADT, TRT01A, ADY, AVAL,
          ABLFL, BASE, CHG
   from adlb;
 quit;

@@ -104,8 +104,8 @@ pub(crate) struct JoinedRelation {
     /// declared column the specification does not declare (LOOKUP-1).
     pub keys: std::vec::Vec<(String, Option<usize>)>,
     pub schema: std::sync::Arc<crate::table::TableSchema>,
-    /// A pair relation's port, which declares no input `key`
-    /// (LOOKUP-27).
+    /// A pair relation's or a record relation's port, which declares no
+    /// input `key` (LOOKUP-27, LOOKUP-3).
     pub pair: bool,
 }
 

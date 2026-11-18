@@ -37,7 +37,9 @@ quit;
 data result;
   length EOSSTT $12 DCSREAS $1024 EOTSTT $12 DCTREAS $1024 DCTREASP $1024;
   set joined;
-  if missing(EOSDECOD) then EOSSTT='ONGOING';
+  /* A screen failure never entered the study, so it has no status. */
+  if EOSDECOD='SCREEN FAILURE' then EOSSTT='';
+  else if missing(EOSDECOD) then EOSSTT='ONGOING';
   else if EOSDECOD='COMPLETED' then EOSSTT='COMPLETED';
   else EOSSTT='DISCONTINUED';
   if EOSSTT='DISCONTINUED' then DCSREAS=EOSDECOD;
@@ -51,6 +53,6 @@ data result;
 run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS, EOTDT, EOTSTT, DCTREAS, DCTREASP from result;
+  create table final as select STUDYID, USUBJID, EOSDT, EOSREAS, EOSSTT, DCSREAS, EOTDT, EOTSTT, DCTREAS, DCTREASP from result;
 quit;
 proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;

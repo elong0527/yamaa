@@ -8,9 +8,31 @@ data lb;
   input STUDYID : $char1024. USUBJID : $char1024. LBSEQ LBTESTCD : $char1024. LBSTRESN;
 run;
 
+data collected;
+  length PARAMCD $1024 DTYPE $7;
+  set lb;
+  PARAMCD=LBTESTCD; AVAL=LBSTRESN; DTYPE=''; ORD=0;
+run;
+
 proc sql;
-  create table result as
-  select a.*,a.LBTESTCD as PARAMCD,a.LBSTRESN as AVAL,b.AVALMEAN from lb as a left join (select STUDYID,USUBJID,LBTESTCD,mean(LBSTRESN) as AVALMEAN from lb group by STUDYID,USUBJID,LBTESTCD) as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.LBTESTCD=b.LBTESTCD;
+  create table averages as
+  select STUDYID, USUBJID, LBTESTCD as PARAMCD length=1024, . as LBSEQ,
+         mean(LBSTRESN) as AVAL, 'AVERAGE' as DTYPE length=7, 1 as ORD
+  from lb where not missing(LBSTRESN)
+  group by STUDYID, USUBJID, LBTESTCD;
 quit;
 
-proc export data=result(keep=STUDYID USUBJID LBSEQ PARAMCD AVAL AVALMEAN) outfile="/app/output/adlb.csv" dbms=csv replace; run;
+data both; set collected averages; run;
+proc sort data=both; by STUDYID USUBJID PARAMCD ORD LBSEQ; run;
+data result;
+  set both; by STUDYID USUBJID;
+  if first.USUBJID then ASEQ=0;
+  ASEQ+1;
+run;
+proc sort data=result; by USUBJID ASEQ; run;
+
+proc sql;
+  create table final as
+  select STUDYID, USUBJID, ASEQ, LBSEQ, PARAMCD, AVAL, DTYPE from result;
+quit;
+proc export data=final outfile="/app/output/adlb.csv" dbms=csv replace; run;

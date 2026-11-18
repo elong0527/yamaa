@@ -9,6 +9,7 @@ review:
       limit, a missing result, a zero baseline, and tests missing one or both
       normal limits.
     - A result exactly at a limit reads NORMAL and exactly 3 x ULN would not
-      meet the criterion, a zero baseline leaves the ratio to baseline empty
-      (subject 203's eosinophils), and a missing upper limit still allows the
-      low criterion (GGT).
+      meet the criterion, the baseline record has no shift, as a shift is only
+      meaningful after baseline, a zero baseline leaves the ratio to baseline
+      empty (subject 203's eosinophils), and a missing upper limit still allows
+      the low criterion (GGT).

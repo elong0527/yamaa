@@ -14,7 +14,7 @@ import os
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
-COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL", "DTYPE"]
+COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL"]
 
 
 def main():
@@ -42,7 +42,6 @@ def main():
                     "PARAM": row["LBTEST"],
                     "AVISIT": row["VISIT"],
                     "AVAL": result,
-                    "DTYPE": "",
                 },
             )
         )
@@ -61,7 +60,6 @@ def main():
                     "PARAM": "Total of Components",
                     "AVISIT": key[2],
                     "AVAL": "" if total is None else repr(total),
-                    "DTYPE": "CALCULATION",
                 }
             )
 

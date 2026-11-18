@@ -53,18 +53,12 @@ columns:
 
 rows:
   # One row per albumin or bilirubin record with a numeric result. The
-  # test code becomes the change parameter (_ALB, _BILI). PREV_AVAL
-  # reads the row just before in visit order for the same subject and
-  # parameter, so an _ALB row never reads a _BILI value; the first
-  # visit for a subject and parameter has no previous value, and CHG
-  # is empty there too. Other test codes are read before the filter drops
-  # them, so they map to nothing rather than stop the run.
+  # test code is the parameter code (ALB, BILI). PREV_AVAL reads the row
+  # just before in visit order for the same subject and parameter, so an
+  # ALB row never reads a BILI value; the first visit for a subject and
+  # parameter has no previous value, and CHG is empty there too.
   - id: change_params
     dataset: LB
     filter: "LB.LBTESTCD IN ('ALB', 'BILI') AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD:
-        mapping:
-          source: LB.LBTESTCD
-          dict: {ALB: "_ALB", BILI: "_BILI"}
-          unmapped: null
+      PARAMCD: LB.LBTESTCD

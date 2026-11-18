@@ -55,12 +55,24 @@ pub(super) struct Declaration {
     /// The `key` path of a row driver, which declares no key, so a read of it
     /// as a lookup is refused there (LOOKUP-3, ROW-2).
     key_required: Option<String>,
+    /// The `dataset` path of each intermediate that reads this one's records
+    /// as a record relation, which gives it a port (LOOKUP-3).
+    readers: Vec<String>,
+    /// A record relation's position among the ports after the inputs, which
+    /// it shares with the pair relations in derivation order (LOOKUP-3).
+    record_slot: Option<usize>,
 }
 impl Declaration {
     /// Whether the intermediate selects one record of several: by `keep`,
     /// or by `nearest` (LOOKUP-10, LOOKUP-26).
     fn selects(&self) -> bool {
         self.keep.is_some() || self.nearest.is_some()
+    }
+    /// Whether a name the intermediate qualifies reads it as a lookup: every
+    /// one but a pair relation or a record relation, whose records are read
+    /// as an input's (LOOKUP-27, LOOKUP-3).
+    fn looked_up(&self) -> bool {
+        self.pair.is_none() && self.readers.is_empty()
     }
 }
 
@@ -822,6 +834,8 @@ fn bind_one(
         unique,
         derivations,
         pending_schema,
+        // A record relation's port is set once binding gives it its fields.
+        records: None,
 
         range,
         columns,
@@ -1003,11 +1017,19 @@ impl Declarations {
             .is_some_and(|item| matches!(item.source, self_relations::Relation::SelfRows))
     }
     /// Whether `name` is a named intermediate read as a lookup: every one but
-    /// a pair relation, which is read as an input is (LOOKUP-27).
+    /// a pair relation or a record relation, which are read as inputs are
+    /// (LOOKUP-27, LOOKUP-3).
     pub fn contains(&self, name: &str) -> bool {
         self.0
             .iter()
-            .any(|item| item.name == name && item.pair.is_none())
+            .any(|item| item.name == name && item.looked_up())
+    }
+    /// The position of the intermediate `name` a row template drives on
+    /// (ROW-2): any but a pair relation, which drives rows as an input does.
+    pub(super) fn driver(&self, name: &str) -> Option<usize> {
+        self.0
+            .iter()
+            .position(|item| item.name == name && item.pair.is_none())
     }
     /// The input a named intermediate reads; a row it drives reads that input's records.
     pub(super) fn input(&self, name: &str) -> Option<usize> {
@@ -1041,6 +1063,19 @@ impl Declarations {
     /// refused: its `key`, which it does not declare (LOOKUP-3, ROW-2).
     pub(super) fn key_required(&self, index: usize) -> Option<&str> {
         self.0.get(index)?.key_required.as_deref()
+    }
+    /// The refusal of a read of the intermediate at `index`, bound as
+    /// `item`, as a keyed lookup when it declares no `key`: a row driver or
+    /// a pair relation's side, whose records are read only as a driver's,
+    /// refused at its `key` (LOOKUP-3, ROW-2, LOOKUP-27).
+    pub(super) fn keyless_read(&self, index: usize, item: &Intermediate) -> Option<BindFinding> {
+        self.key_required(index)
+            .filter(|_| item.keys.is_empty())
+            .map(|key| {
+                BindFinding::Lookup(LookupFinding::from_diagnostic(
+                    crate::diagnostic::lookup::key_required(key),
+                ))
+            })
     }
     pub(super) fn driver_findings(
         &self,
@@ -1111,13 +1146,14 @@ impl Declarations {
         }
         Ok(())
     }
-    /// The lookup a qualified `name` reads and its field. A pair relation is
-    /// read as an input is, never as a lookup (LOOKUP-27).
+    /// The lookup a qualified `name` reads and its field. A pair relation or
+    /// a record relation is read as an input is, never as a lookup
+    /// (LOOKUP-27, LOOKUP-3).
     pub fn reference<'a>(&self, name: &'a str) -> Option<(usize, &'a str)> {
         let (relation, field) = name.split_once('.')?;
         self.0
             .iter()
-            .position(|item| item.name == relation && item.pair.is_none())
+            .position(|item| item.name == relation && item.looked_up())
             .map(|index| (index, field))
     }
     pub(super) fn match_declaration(
@@ -1159,7 +1195,7 @@ impl Declarations {
     pub(super) fn earlier_contains(&self, name: &str) -> bool {
         self.earlier()
             .iter()
-            .any(|item| item.name == name && item.pair.is_none())
+            .any(|item| item.name == name && item.looked_up())
     }
     /// Whether `name` is an intermediate derived before the reading one that
     /// selects one record: it declares `keep` or `nearest` (LOOKUP-22).
@@ -1219,15 +1255,16 @@ impl Declarations {
                 dataset: match item.source {
                     self_relations::Relation::Input(index) => match sources.get(index) {
                         Some(source) => &source.name,
-                        // An intermediate over a pair relation, whose
-                        // records are the relation's (LOOKUP-27).
+                        // An intermediate over a pair relation or a record
+                        // relation, whose records are the relation's
+                        // (LOOKUP-27, LOOKUP-3).
                         None => self
                             .0
                             .iter()
-                            .find(|pair| {
-                                pair.pair
-                                    .as_ref()
-                                    .is_some_and(|pair| pair.slot == index - sources.len())
+                            .find(|relation| {
+                                let slot = index - sources.len();
+                                relation.pair.as_ref().is_some_and(|pair| pair.slot == slot)
+                                    || relation.record_slot == Some(slot)
                             })?
                             .name
                             .as_str(),
@@ -1277,9 +1314,21 @@ impl Declarations {
         }
         let calls = project.is_some();
         result.2 = sources.len();
-        // Each pair relation takes the next position after the inputs, in the
-        // order the intermediates are derived (LOOKUP-27).
+        // Each pair relation and each record relation takes the next position
+        // after the inputs, in the order the intermediates are derived
+        // (LOOKUP-27, LOOKUP-3).
         let mut slots: Vec<&str> = Vec::new();
+        // The `dataset` path of each intermediate that reads a record
+        // relation, by the relation's name, resolved once.
+        let mut record_readers = BTreeMap::<&str, Vec<String>>::new();
+        for reader in &spec.intermediates {
+            if let Some(relation) = spec.record_relation(reader) {
+                record_readers
+                    .entry(relation.id.name.as_str())
+                    .or_default()
+                    .push(checks::render(spec, reader.dataset.meta));
+            }
+        }
         for index in derivation_order(spec, calls)? {
             let item = &spec.intermediates[index];
             let path = checks::render(spec, item.meta);
@@ -1442,6 +1491,10 @@ impl Declarations {
                     intermediates: &result,
                 },
             )?;
+            // A record relation's records follow the inputs as a pair
+            // relation's do, read through its id (LOOKUP-3).
+            let readers = record_readers.remove(name).unwrap_or_default();
+            let record_slot = (!readers.is_empty()).then_some(slots.len());
             std::sync::Arc::get_mut(&mut result.0)
                 .ok_or(PrepareError::Internal)?
                 .push(Declaration {
@@ -1468,7 +1521,12 @@ impl Declarations {
                         .key
                         .is_none()
                         .then(|| format!("{}.key", checks::render(spec, item.meta))),
+                    record_slot,
+                    readers,
                 });
+            if record_slot.is_some() {
+                slots.push(name);
+            }
         }
         Ok(result)
     }
@@ -1496,6 +1554,9 @@ impl Declarations {
         let mut relations = std::borrow::Cow::Borrowed(sources);
         let mut relation_schemas = std::borrow::Cow::Borrowed(schemas);
         let mut result = Vec::new();
+        // The record relations that bound but whose records no reader can
+        // read (LOOKUP-3).
+        let mut refused: Vec<String> = Vec::new();
         for item in self.0.iter() {
             let schemas = &*relation_schemas;
             if let Some(pair) = &item.pair {
@@ -1532,13 +1593,15 @@ impl Declarations {
                 result.push(bound);
                 continue;
             }
-            // An intermediate over a pair relation that did not bind reads
-            // nothing; the relation's findings are reported.
+            // An intermediate over a pair relation or a record relation that
+            // did not bind reads nothing; the relation's findings are
+            // reported.
             if let self_relations::Relation::Input(index) = item.source {
                 if index >= sources.len()
-                    && self.0.iter().zip(&result).any(|(other, bound)| {
-                        other.name == relations[index].name && bound.is_none()
-                    })
+                    && (refused.contains(&relations[index].name)
+                        || self.0.iter().zip(&result).any(|(other, bound)| {
+                            other.name == relations[index].name && bound.is_none()
+                        }))
                 {
                     result.push(None);
                     continue;
@@ -1573,6 +1636,45 @@ impl Declarations {
             {
                 withheld.push(item.name.clone());
             }
+            let mut bound = bound;
+            // A record relation's records follow the inputs once it binds,
+            // read as an input's by every intermediate that names it
+            // (LOOKUP-3).
+            if !item.readers.is_empty() {
+                let inputs = binder::Inputs {
+                    sources: &relations,
+                    schemas,
+                    driver,
+                };
+                let fields = match &bound {
+                    Some(bound) => record_fields(item, bound, &inputs, &secondary, findings)?,
+                    None => None,
+                };
+                let fields = fields.unwrap_or_else(|| {
+                    refused.push(item.name.clone());
+                    Vec::new()
+                });
+                let schema = InputSchema::new(
+                    fields
+                        .iter()
+                        .map(|field| (field.name.clone(), field.kind, true))
+                        .collect(),
+                    true,
+                )?;
+                if let Some(bound) = bound.as_mut() {
+                    bound.records = Some(crate::dataset::RecordPort {
+                        port: relations.len() - 1,
+                        columns: fields.iter().map(|field| field.column).collect(),
+                        fields: schema.layout().clone(),
+                    });
+                }
+                relations.to_mut().push(pairs::pseudo_input(&item.name));
+                secondary.push(SecondarySource {
+                    name: item.name.clone(),
+                    schema: schema.layout().clone(),
+                });
+                relation_schemas.to_mut().push(schema);
+            }
             result.push(bound);
         }
         Ok(Bound {
@@ -1585,6 +1687,41 @@ impl Declarations {
     pub(super) fn position(&self, name: &str) -> Option<usize> {
         self.0.iter().position(|item| item.name == name)
     }
+}
+
+/// The fields the record relation `item`, bound as `bound`, exposes to the
+/// intermediates that read it: those a row template driving on it would
+/// read (ROW-2, LOOKUP-3). None, with a finding at each reader's `dataset`,
+/// when its records are not its own or a field has no one column type; and
+/// None alone when it did not bind as declared, which its own findings
+/// explain.
+fn record_fields(
+    item: &Declaration,
+    bound: &Intermediate,
+    inputs: &binder::Inputs<'_>,
+    secondary: &[SecondarySource],
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Vec<pairs::Field>>, BindError> {
+    let driver = pairs::driver_fields(bound, inputs, secondary)?;
+    for path in &item.readers {
+        let diagnostic = match &driver {
+            pairs::DriverFields::Fields(_) | pairs::DriverFields::Unbound => break,
+            pairs::DriverFields::Current(prohibited) => {
+                crate::diagnostic::lookup::records_side(path, &item.name, prohibited)
+            }
+            pairs::DriverFields::Untyped(untyped) => {
+                let untyped = untyped.iter().map(String::as_str).collect::<Vec<_>>();
+                crate::diagnostic::lookup::records_field_type(path, &item.name, &untyped)
+            }
+        };
+        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+            diagnostic,
+        )));
+    }
+    Ok(match driver {
+        pairs::DriverFields::Fields(fields) => Some(fields),
+        _ => None,
+    })
 }
 
 /// The named intermediates as binding bound them ([`Declarations::bind`]):
@@ -1653,11 +1790,13 @@ fn derivation_order(spec: &ast::Spec, calls: bool) -> Result<Vec<usize>, Prepare
         }
         // A pair relation reads the records of the intermediates its sides
         // name, a counted relation those of its dataset, and an intermediate
-        // over a pair relation reads the relation's records (LOOKUP-27,
-        // LOOKUP-29).
+        // over a pair relation or a record relation reads the relation's
+        // records (LOOKUP-27, LOOKUP-29, LOOKUP-3).
         let relations: Vec<&ast::Named> = if item.pairs() {
             item.sides().collect()
-        } else if spec.pair_relation(&item.dataset.name).is_some() {
+        } else if spec.pair_relation(&item.dataset.name).is_some()
+            || spec.record_relation(item).is_some()
+        {
             vec![&item.dataset]
         } else {
             Vec::new()

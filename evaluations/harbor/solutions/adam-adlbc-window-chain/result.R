@@ -20,7 +20,7 @@ lb <- read_csv(
 # so the lag compares against the latest earlier visit with a result.
 alb <- lb |>
   filter(LBTESTCD %in% "ALB", !is.na(LBSTRESN)) |>
-  mutate(PARAMCD = "_ALB", AVISITN = VISITNUM, AVAL = LBSTRESN) |>
+  mutate(PARAMCD = "ALB", AVISITN = VISITNUM, AVAL = LBSTRESN) |>
   arrange(STUDYID, USUBJID, AVISITN)
 
 # The change since the previous visit with a result, and its lag: the

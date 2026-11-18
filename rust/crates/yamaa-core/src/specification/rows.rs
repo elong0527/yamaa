@@ -392,6 +392,15 @@ impl Implicit {
             None,
             &mut findings,
         );
+        row_intermediates::admit_keyless(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads),
+            &intermediates,
+            &prepared.intermediates,
+            &mut findings,
+        );
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
@@ -885,8 +894,8 @@ fn bind_template(
     } = cx.donors;
     let filter_path = format!("{}.filter", template.path);
     if named
-        .reference(&format!("{}.driver", template.driver))
-        .is_some_and(|(index, _)| intermediates.get(index).is_some_and(Option::is_none))
+        .driver(&template.driver)
+        .is_some_and(|index| intermediates.get(index).is_some_and(Option::is_none))
         && !findings.is_empty()
     {
         return Ok(None);

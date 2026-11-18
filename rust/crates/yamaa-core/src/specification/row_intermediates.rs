@@ -47,6 +47,35 @@ pub(super) fn reported(findings: &[BindFinding], finding: &BindFinding) -> bool 
     })
 }
 
+/// Refuse each read of an intermediate that declares no `key` among
+/// `expressions`, the columns and verifications of a dataset built at its
+/// key grain, where no row template drives on it: a pair relation's side is
+/// then read only by its pair relation, so any other read takes it as a
+/// keyed lookup (LOOKUP-3, LOOKUP-27). Each intermediate is reported once.
+pub(super) fn admit_keyless<'a>(
+    expressions: impl IntoIterator<Item = &'a Expression>,
+    intermediates: &[Option<crate::dataset::Intermediate>],
+    declarations: &intermediates::Declarations,
+    findings: &mut Vec<BindFinding>,
+) {
+    let mut read = std::collections::BTreeSet::new();
+    for expression in expressions {
+        crate::dataset::relation_predicates::visit(expression, &mut |index| {
+            read.insert(index);
+        });
+    }
+    for index in read {
+        let Some(item) = intermediates.get(index).and_then(Option::as_ref) else {
+            continue;
+        };
+        if let Some(finding) = declarations.keyless_read(index, item) {
+            if !reported(findings, &finding) {
+                findings.push(finding);
+            }
+        }
+    }
+}
+
 pub(super) fn dependencies(
     index: usize,
     items: &[Option<crate::dataset::Intermediate>],
@@ -231,13 +260,8 @@ pub(super) fn bind(
     // rows, never as a keyed lookup (LOOKUP-3, ROW-2). Each such read reports
     // it: a read refused without a finding of its own would leave its
     // formula, predicate or filter to bind without it.
-    if let Some(key) = declarations
-        .key_required(index)
-        .filter(|_| item.keys.is_empty())
-    {
-        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
-            crate::diagnostic::lookup::key_required(key),
-        )));
+    if let Some(finding) = declarations.keyless_read(index, item) {
+        findings.push(finding);
         return Ok(None);
     }
     for key in &item.keys {

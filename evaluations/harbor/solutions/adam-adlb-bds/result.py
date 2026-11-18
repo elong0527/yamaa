@@ -28,8 +28,8 @@ def main():
             adsl[row["USUBJID"]] = row
 
     params = {
-        "ALT": ("ALT", "Alanine Aminotransferase"),
-        "AST": ("AST", "Aspartate Aminotransferase"),
+        "ALT": ("ALT", "Alanine Aminotransferase (U/L)"),
+        "AST": ("AST", "Aspartate Aminotransferase (U/L)"),
     }
 
     records = []
@@ -60,17 +60,15 @@ def main():
                 "PARAM": param,
                 "AVAL": aval,
                 "AVAL_TEXT": raw,
-                "AVALU": row["LBSTRESU"],
             })
             records.append(rec)
             if testcd == "ALT":
                 si = dict(base_rec)
                 si.update({
                     "PARAMCD": "ALTSI",
-                    "PARAM": "Alanine Aminotransferase (SI)",
+                    "PARAM": "Alanine Aminotransferase (ukat/L)",
                     "AVAL": aval * 0.0167,
                     "AVAL_TEXT": None,
-                    "AVALU": "ukat/L",
                 })
                 records.append(si)
 
@@ -93,10 +91,15 @@ def main():
                 rec["PCHG"] = None
             else:
                 base = baseline["AVAL"]
-                chg = rec["AVAL"] - base
                 rec["BASE"] = base
-                rec["CHG"] = chg
-                rec["PCHG"] = None if base == 0 else 100.0 * chg / base
+                # Change only after the treatment start date.
+                if rec["ADT"] > rec["TRTSDT"]:
+                    chg = rec["AVAL"] - base
+                    rec["CHG"] = chg
+                    rec["PCHG"] = None if base == 0 else 100.0 * chg / base
+                else:
+                    rec["CHG"] = None
+                    rec["PCHG"] = None
 
     records.sort(key=lambda r: (r["USUBJID"], r["PARAMCD"], r["ADT"]))
 
@@ -108,8 +111,7 @@ def main():
             rec["ASEQ"] = i
 
     columns = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "ADT", "TRTSDT",
-               "TRT01A", "AVAL", "AVALU", "ABLFL", "BASE", "CHG", "PCHG",
-               "ASEQ"]
+               "TRT01A", "AVAL", "ABLFL", "BASE", "CHG", "PCHG", "ASEQ"]
     with open(f"{OUTPUT_DIR}/adlb.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(columns)
@@ -124,7 +126,6 @@ def main():
                 rec["TRT01A"],
                 rec["AVAL_TEXT"] if rec["AVAL_TEXT"] is not None
                 else fmt(rec["AVAL"]),
-                rec["AVALU"],
                 rec["ABLFL"],
                 fmt(rec["BASE"]),
                 fmt(rec["CHG"]),

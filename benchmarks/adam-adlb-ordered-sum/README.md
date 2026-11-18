@@ -2,8 +2,7 @@
 
 **Goal:** add one total laboratory record per subject and visit whose
 analysis value (`AVAL`) is the collected component results added in the
-order the source records were stored, flagged with the record-type flag
-(`DTYPE`).
+order the source records were stored.
 
 **Input:** collected laboratory records carrying the study identifier,
 subject identifier, sequence number, test code and name, visit, and
@@ -19,8 +18,6 @@ standardized result. The component values are deliberately simple
   with no collected result contributes nothing, and a subject and visit
   with no collected results at all leaves the total empty rather than
   zero.
-- `DTYPE`: empty on the collected records; `CALCULATION` on the total
-  record, marking it as calculated rather than collected.
 
 **Note:** binary floating-point addition makes the total sensitive to
 that order: one subject's records stored as `0.1`, `0.2`, `0.3` total

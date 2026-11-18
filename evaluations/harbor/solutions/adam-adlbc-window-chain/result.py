@@ -60,7 +60,7 @@ def main():
             {
                 "STUDYID": rec["STUDYID"],
                 "USUBJID": subj,
-                "PARAMCD": "_ALB",
+                "PARAMCD": "ALB",
                 "AVISITN": rec["AVISITN"],
                 "AVAL": rec["AVAL"],
                 "PREV_AVAL": p_aval,
