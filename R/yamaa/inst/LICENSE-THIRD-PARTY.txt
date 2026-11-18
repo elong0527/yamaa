@@ -22,10 +22,10 @@ crates.io unless an entry names another source.
 
 Where a crate offers a choice of licenses, yamaa relies on the first license
 in this order that the crate offers and whose text the crate ships: MIT,
-Apache-2.0, BSD-3-Clause, Unicode-3.0, Apache-2.0 WITH LLVM-exception,
-CC0-1.0, Zlib. Each entry names only the license relied on. Texts that only
-grant another license are not reproduced; the crate's general license,
-copyright, NOTICE and AUTHORS files are.
+Apache-2.0, BSD-3-Clause, BSD-2-Clause, Unicode-3.0, Apache-2.0 WITH
+LLVM-exception, CC0-1.0, Zlib. Each entry names only the license relied on.
+Texts that only grant another license are not reproduced; the crate's general
+license, copyright, NOTICE and AUTHORS files are.
 
 Texts are reproduced verbatim, with LF line endings and a final newline.
 Identical texts are printed once and numbered; each entry names the numbered
@@ -231,7 +231,7 @@ Crate: regex-syntax 0.8.11
     License: MIT
     Texts: [7] LICENSE-MIT
 
-Crate: rustix 1.1.5
+Crate: rustix 1.1.6
     License: MIT
     Texts: [29] COPYRIGHT, [21] LICENSE-MIT
 
@@ -1498,7 +1498,7 @@ DEALINGS IN THE SOFTWARE.
 ==============================================================================
 [21] Shipped by: itoa 1.0.18 (LICENSE-MIT),
     linux-raw-sys 0.12.1 (LICENSE-MIT), once_cell 1.21.4 (LICENSE-MIT),
-    rustix 1.1.5 (LICENSE-MIT), serde 1.0.229 (LICENSE-MIT),
+    rustix 1.1.6 (LICENSE-MIT), serde 1.0.229 (LICENSE-MIT),
     serde_core 1.0.229 (LICENSE-MIT), serde_json 1.0.154 (LICENSE-MIT),
     thiserror 2.0.21 (LICENSE-MIT), zmij 1.0.23 (LICENSE-MIT),
     adler2 2.0.1 (LICENSE-MIT)
@@ -1944,7 +1944,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-[29] Shipped by: rustix 1.1.5 (COPYRIGHT)
+[29] Shipped by: rustix 1.1.6 (COPYRIGHT)
 ==============================================================================
 
 Short version for non-lawyers:

@@ -14,8 +14,8 @@ from packaging.requirements import Requirement
 
 from tools.ci import dependency_graphs
 from tools.ci.dependency_graphs import (
-    LOCKS,
     NOTICES,
+    SOURCE_INPUTS,
     assert_msrv,
     minimum_cargo,
     minimum_python,
@@ -228,6 +228,29 @@ class DependencyGraphsTests(unittest.TestCase):
                         self.assertEqual(selected[name], [">=" + floor])
             self.assertFalse((stage / "rust/Cargo.lock").exists())
 
+    def test_prepare_refuses_a_symlinked_python_manifest(self):
+        # Internal seam: preserve benchmark links, while rejecting a writable
+        # manifest link that an isolated license refresh could follow to source.
+        with tempfile.TemporaryDirectory() as temporary:
+            checkout = support.Repository(Path(temporary) / "checkout")
+            for path, text in SCRATCH_CHECKOUT.items():
+                if path != "python/pyproject.toml":
+                    checkout.write(path, text)
+            target = checkout.write(
+                "metadata/pyproject.toml", SCRATCH_CHECKOUT["python/pyproject.toml"]
+            )
+            linked = checkout.root / "python/pyproject.toml"
+            linked.parent.mkdir(parents=True)
+            try:
+                linked.symlink_to(target)
+            except OSError as error:
+                self.skipTest(f"symlinks are unavailable: {error}")
+            checkout.commit()
+            expected = target.read_bytes()
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                prepare(checkout.root, Path(temporary) / "graph", "newest")
+            self.assertEqual(target.read_bytes(), expected)
+
     def test_the_copy_keeps_a_symbolic_link_a_link(self):
         """A graph tests the checkout as Git holds it: a benchmark whose input
         is a symbolic link, refused for it (FILE-8), keeps the link."""
@@ -342,7 +365,10 @@ class DependencyGraphsTests(unittest.TestCase):
         # before the extension and the R package are built from that graph.
         generate = (python, "-m", "tools.packaging.generate_third_party_notices")
         notices = step(*generate)
-        self.assertEqual(commands[notices], ((*generate, "--write"), destination))
+        self.assertEqual(
+            commands[notices],
+            ((*generate, "--write", "--write-python-license"), destination),
+        )
         for earlier in (("cargo", "generate-lockfile"), (*install, "--editable")):
             self.assertLess(step(*earlier), notices)
         for later in (
@@ -370,7 +396,7 @@ class DependencyGraphsTests(unittest.TestCase):
             [arguments[:4] for arguments in ran],
         )
 
-    def test_lane_refuses_to_change_the_checkout_notices(self):
+    def test_lane_refuses_to_change_the_checkout_notices_or_python_manifest(self):
         self.assertEqual(
             NOTICES,
             tuple(
@@ -378,19 +404,21 @@ class DependencyGraphsTests(unittest.TestCase):
                 for directory in notice_generator.copies().values()
             ),
         )
-        with tempfile.TemporaryDirectory() as temporary:
-            source, destination = Path(temporary) / "source", Path(temporary) / "graph"
-            for path in LOCKS + NOTICES:
-                (source / path).parent.mkdir(parents=True, exist_ok=True)
-                (source / path).write_text("canonical\n")
-            destination.mkdir()
+        for changed in (NOTICES[1], "python/pyproject.toml"):
+            with self.subTest(path=changed), tempfile.TemporaryDirectory() as temporary:
+                source = Path(temporary) / "source"
+                destination = Path(temporary) / "graph"
+                for path in SOURCE_INPUTS:
+                    (source / path).parent.mkdir(parents=True, exist_ok=True)
+                    (source / path).write_text("canonical\n")
+                destination.mkdir()
 
-            def write_checkout_notices(arguments):
-                if "--write" in arguments:
-                    (source / NOTICES[1]).write_text("lane\n")
+                def write_checkout_input(arguments):
+                    if "--write" in arguments:
+                        (source / changed).write_text("lane\n")
 
-            with self.assertRaisesRegex(RuntimeError, re.escape(NOTICES[1])):
-                self.lane_commands(source, destination, write_checkout_notices)
+                with self.assertRaisesRegex(RuntimeError, re.escape(changed)):
+                    self.lane_commands(source, destination, write_checkout_input)
 
 
 if __name__ == "__main__":
