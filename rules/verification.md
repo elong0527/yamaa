@@ -657,7 +657,10 @@ fields are all known as their dates: `2025-03-10` precedes
 though each pair may name one time. An equality is not an order and is not
 reported, and neither is a comparison whose operand is missing. An unknown
 field, written `-`, sorts before every known one; that is no choice between
-two precisions, and the check does not report it.
+two precisions, and the check does not report it. Nor does it report a
+prefix whose longer text adds only fields at or after an unknown one, such as
+`2025` and `2025---15`: [TIME-7](temporal.md#time-7) reads both to the
+year.
 
 The check row's `SPEC_PATH` is the path of the expression that compared, such
 as `intermediates.LAST_DOSE.filter`, or of the `order_by` of the selection,

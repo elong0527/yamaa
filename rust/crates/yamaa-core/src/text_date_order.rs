@@ -33,11 +33,19 @@ fn by_length<'t, T: AsRef<[u8]> + ?Sized>(left: &'t T, right: &'t T) -> Option<(
     }
 }
 
-/// Whether `longer` begins with `shorter` and both are collected date text.
+/// Whether `longer` begins with `shorter`, both are collected date text, and
+/// `longer` is read to a finer precision: more of its fields are known before
+/// its first unknown one. Fields that begin with or follow an unknown one
+/// add no precision TIME-7 reads, so text order chose no precision there.
 fn judged(shorter: &[u8], longer: &[u8]) -> bool {
-    longer.starts_with(shorter)
-        && crate::iso8601::collected_bytes(shorter).is_some()
-        && crate::iso8601::collected_bytes(longer).is_some()
+    use crate::iso8601::{collected_bytes, known_prefix};
+    if !longer.starts_with(shorter) {
+        return false;
+    }
+    let (Some(shorter), Some(longer)) = (collected_bytes(shorter), collected_bytes(longer)) else {
+        return false;
+    };
+    known_prefix(&longer).len() > known_prefix(&shorter).len()
 }
 
 /// Collected date text is ASCII, so each of its bytes is one character.
@@ -199,7 +207,7 @@ mod tests {
 
     #[test]
     fn text_order_decides_only_a_proper_prefix_between_collected_date_texts() {
-        let cases: [Case; 9] = [
+        let cases: [Case; 17] = [
             (
                 "2025-03-11",
                 "2025-03-11T07:30",
@@ -219,6 +227,21 @@ mod tests {
             ("2025-03-11", "2025-03-11 08:00", None),
             ("Week 1", "Week 10", None),
             ("", "2025", None),
+            // An unknown field ends the precision TIME-7 reads, so what
+            // begins with it or follows it chooses no precision.
+            ("2025", "2025---15", None),
+            ("2025-03", "2025-03--T07", None),
+            ("2025-03-11", "2025-03-11T-:30", None),
+            ("2025---15", "2025---15T07:30", None),
+            ("--03-11", "--03-11T07:30", None),
+            ("2025-03-11T-", "2025-03-11T-:30", None),
+            // Known fields before an unknown one still add precision.
+            (
+                "2025-03-11",
+                "2025-03-11T07:-",
+                Some(("2025-03-11", "2025-03-11T07:-")),
+            ),
+            ("2025", "2025-03--T07", Some(("2025", "2025-03--T07"))),
         ];
         for (left, right, expected) in cases {
             assert_eq!(decided(left, right), expected, "{left} against {right}");
