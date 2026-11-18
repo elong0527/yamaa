@@ -187,9 +187,10 @@ fn current_group<E>(
                 records.extend_from_slice(cx.frame.members(row));
             }
             let count = records.len();
-            let truths = super::predicates::record_truths(filter, donor, &records, |_| {
-                Operand::Values(Values::missing(count))
-            });
+            let truths =
+                super::predicates::record_truths(cx.dates, filter, donor, &records, |_| {
+                    Operand::Values(Values::missing(count))
+                });
             let Some(truths) = truths else {
                 return Ok(None);
             };
@@ -310,10 +311,13 @@ fn output<E>(
                 None => None,
                 Some(filter) => {
                     let positions: Vec<usize> = (0..range.len()).collect();
-                    let truths =
-                        super::predicates::record_truths(filter, donor, &positions, |_| {
-                            Operand::Values(Values::missing(range.len()))
-                        });
+                    let truths = super::predicates::record_truths(
+                        cx.dates,
+                        filter,
+                        donor,
+                        &positions,
+                        |_| Operand::Values(Values::missing(range.len())),
+                    );
                     let Some(truths) = truths else {
                         return Ok(None);
                     };
@@ -397,7 +401,13 @@ fn aggregate_value<E>(
             schema,
         };
         if let Some(range_value) = selected.deferred.take() {
-            let members = narrow(bound, &enriched, coordinate, range_value.as_ref())?;
+            let members = narrow(
+                run.dates,
+                bound,
+                &enriched,
+                coordinate,
+                range_value.as_ref(),
+            )?;
             let narrowed = Selected {
                 members,
                 representative: selected.representative,
@@ -435,19 +445,22 @@ fn cell<'t, T: TableAccess + ?Sized>(
 }
 
 fn filter<E>(
+    dates: &super::TextDates,
     table: Table<'_, E>,
     bound: &BoundAggregate,
     source_row: usize,
 ) -> Result<bool, Fail<E>> {
     if let Some(filter) = bound.filter() {
-        return super::predicates::row_truth(filter, table, source_row, |_| ValueRef::Missing)
-            .map(|truth| truth == crate::expression::Truth::True)
-            .map_err(|error| {
-                Box::new(ExecutionError::Predicate {
-                    source_row,
-                    error: *error,
-                })
-            });
+        return super::predicates::row_truth(dates, filter, table, source_row, |_| {
+            ValueRef::Missing
+        })
+        .map(|truth| truth == crate::expression::Truth::True)
+        .map_err(|error| {
+            Box::new(ExecutionError::Predicate {
+                source_row,
+                error: *error,
+            })
+        });
     }
     Ok(true)
 }
@@ -456,6 +469,7 @@ fn filter<E>(
 /// keep, in stored order: both may read a binding (LOOKUP-22). The filter
 /// reads the record's bindings, so its answer is not kept for another row.
 fn narrow<E>(
+    dates: &super::TextDates,
     bound: &BoundAggregate,
     enriched: &Enriched<'_, Table<'_, E>>,
     coordinate: Coordinate,
@@ -478,7 +492,7 @@ fn narrow<E>(
                 continue;
             }
         }
-        if filter(Table::Source(enriched), bound, source_row)? {
+        if filter(dates, Table::Source(enriched), bound, source_row)? {
             members.push(source_row);
         }
     }
@@ -501,7 +515,7 @@ fn select<E>(
             let all = cx.frame.members(row);
             let mut members = Vec::with_capacity(all.len());
             for &source_row in all {
-                if filter(donor, bound, source_row)? {
+                if filter(run.dates, donor, bound, source_row)? {
                     members.push(source_row);
                 }
             }
@@ -544,7 +558,7 @@ fn select<E>(
                 let kept = match answers[source_row] {
                     Some(kept) => kept,
                     None => {
-                        let kept = filter(donor, bound, source_row)?;
+                        let kept = filter(run.dates, donor, bound, source_row)?;
                         run.windows
                             .outputs
                             .filters
@@ -641,8 +655,10 @@ fn select<E>(
                         return Ok(true);
                     }
                     // The filter reads only the record: one answer each.
-                    run.ports
-                        .kept(expr, donor, source_row, || filter(donor, bound, source_row))
+                    let dates = run.dates;
+                    run.ports.kept(expr, donor, source_row, || {
+                        filter(dates, donor, bound, source_row)
+                    })
                 },
                 run,
             )

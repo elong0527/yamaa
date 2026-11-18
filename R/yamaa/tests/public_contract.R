@@ -925,20 +925,22 @@ qualify_issue_parity <- function() {
 }
 qualify_issue_parity()
 
-# A value-level entry that selects no row is a warning in the run's report,
-# never an issue (SUB-13); Python compares the same rows. COUNT and TOTAL are
-# doubles in R, and a missing cell is NA.
-qualify_value_level_report <- function() {
-  root <- tempfile("yamaa-value-level-"); dir.create(root)
+# A value-level entry that selects no row (SUB-13) and text order between
+# date texts (CHECK-27) are each a warning in the run's report, never an
+# issue, named as the case's rows name it; Python compares the same rows.
+# COUNT and TOTAL are doubles in R, and a missing cell is NA.
+qualify_report_warning <- function(key) {
+  root <- tempfile("yamaa-report-warning-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
-  case <- host_truth[["value_level_report"]]
+  case <- host_truth[[key]]
   spec <- file.path(root, "spec.yaml")
   writeBin(charToRaw(enc2utf8(case$specification_yaml)), spec)
   writeBin(charToRaw(enc2utf8(case$input_csv)), file.path(root, "input.csv"))
   run <- yamaa_spec(spec)$run()
   stopifnot(nrow(check_issues(run$issues)) == 0L)
   report <- run$report
-  checks <- report[!is.na(report$NAME) & report$NAME == "value_level", , drop = FALSE]
+  name <- case$checks[[1]]$NAME
+  checks <- report[!is.na(report$NAME) & report$NAME == name, , drop = FALSE]
   columns <- fixture_strings(host_truth[["report_columns"]])
   cells <- function(name) lapply(case$checks, `[[`, name)
   expected <- lapply(columns, function(name) {
@@ -952,12 +954,12 @@ qualify_value_level_report <- function() {
   names(expected) <- names(actual) <- columns
   if (!identical(actual, expected)) {
     str(actual); str(expected)
-    stop("value-level report rows differ from the shared truth")
+    stop(key, " report rows differ from the shared truth")
   }
   stopifnot(identical(checks$CONDITION[checks$OUTCOME == "violated"], case$condition))
-  cat("a value-level entry that selects no row warns in the run's report\n")
+  cat(key, ": the warning is a row of the run's report\n", sep = "")
 }
-qualify_value_level_report()
+for (key in c("value_level_report", "text_date_order_report")) qualify_report_warning(key)
 
 qualify_resolve <- function() {
   root <- tempfile("yamaa-resolve-"); dir.create(root)

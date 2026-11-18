@@ -437,22 +437,26 @@ pub(super) fn check_unobserved_filter_types<E>(plan: &ResolvedPlan) -> Result<()
 
 /// Whether a filter that reads only the donor records keeps one of them.
 pub(super) fn keeps<E>(
+    dates: &super::TextDates,
     table: Table<'_, E>,
     filter: &RelationPredicate,
     source_row: usize,
 ) -> Result<bool, Fail<E>> {
-    super::predicates::row_truth(filter.predicate(), table, source_row, |_| ValueRef::Missing)
-        .map(|truth| truth == Truth::True)
-        .map_err(|error| {
-            Box::new(ExecutionError::Predicate {
-                source_row,
-                error: *error,
-            })
+    super::predicates::row_truth(dates, filter.predicate(), table, source_row, |_| {
+        ValueRef::Missing
+    })
+    .map(|truth| truth == Truth::True)
+    .map_err(|error| {
+        Box::new(ExecutionError::Predicate {
+            source_row,
+            error: *error,
         })
+    })
 }
 
 /// Every donor record a filter that reads only the donor records keeps.
 pub(super) fn eligibility<E>(
+    dates: &super::TextDates,
     table: Table<'_, E>,
     item: &Intermediate,
 ) -> Result<Vec<usize>, Fail<E>> {
@@ -461,7 +465,7 @@ pub(super) fn eligibility<E>(
     super::reserved(eligible.try_reserve_exact(table.row_count()))?;
     for source_row in 0..table.row_count() {
         if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
-            if !keeps(table, filter, source_row)? {
+            if !keeps(dates, table, filter, source_row)? {
                 continue;
             }
         }
@@ -543,7 +547,7 @@ pub(super) fn driver<'a: 's, 's, E>(
             }
         },
     };
-    let eligible = eligibility(table, item)?;
+    let eligible = eligibility(run.dates, table, item)?;
     Ok(Driver {
         materialized: prepared,
         eligible: Some(eligible),
@@ -584,7 +588,7 @@ pub(super) fn verify<'a: 's, 's, E>(
             None => source_table(item, &cx),
         };
         let name = source_name(item, &plan.region(region).secondary);
-        let eligible = eligibility(table, item)?;
+        let eligible = eligibility(run.dates, table, item)?;
         let filtered = Filtered {
             table,
             rows: &eligible,
@@ -1122,7 +1126,7 @@ pub(super) fn resolve_sought<E>(
                         return Ok(*kept);
                     }
                 }
-                let kept = keeps(table, filter, source_row)?;
+                let kept = keeps(run.dates, table, filter, source_row)?;
                 if reusable {
                     let named = run.relations.named(relation);
                     if named.narrowed.is_none() {
@@ -1159,9 +1163,12 @@ pub(super) fn resolve_sought<E>(
             })?;
         } else if count > 1 {
             if let Some(selection) = &item.selection {
-                selected = Some(select(&rows, selection, |source_row, column| {
-                    cell(table, item, source_row, column)
-                })?);
+                selected = Some(select(
+                    &rows,
+                    selection,
+                    (run.dates, &item.path),
+                    |source_row, column| cell(table, item, source_row, column),
+                )?);
             } else {
                 return Err(Box::new(ExecutionError::MultipleMatches {
                     path: item.path.clone(),
@@ -1262,9 +1269,10 @@ fn narrow_all<E>(
     let mut records = Vec::new();
     super::reserved(records.try_reserve_exact(count))?;
     records.extend(0..count);
-    let truths = super::predicates::record_truths(filter.predicate(), table, &records, |_| {
-        super::predicates::Operand::Values(super::buffer::Values::missing(count))
-    });
+    let truths =
+        super::predicates::record_truths(run.dates, filter.predicate(), table, &records, |_| {
+            super::predicates::Operand::Values(super::buffer::Values::missing(count))
+        });
     if let Some(truths) = truths {
         let mut narrowed = Vec::new();
         super::reserved(narrowed.try_reserve_exact(count))?;
@@ -1571,6 +1579,12 @@ fn correlated<E>(
                 }
             };
             Ok(crate::value::Selection::Present(value))
+        }
+        fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+            self.cx
+                .dates
+                .borrow_mut()
+                .record(spec_path, shorter, longer);
         }
     }
     filter
@@ -1998,16 +2012,28 @@ pub(super) fn candidates<'t, S, E>(
 
 /// The first or last of several candidates by `order_by`; the earlier
 /// stored record wins a tie under `first`, the later one under `last`.
+/// Each candidate is compared with the one chosen so far, and a term whose
+/// text order decides that comparison between collected date texts is
+/// recorded at the `order_by` of `path` (CHECK-27).
 pub(super) fn select<'t, E>(
     candidates: &[usize],
     selection: &SourceSelection,
+    (dates, path): (&super::TextDates, &str),
     mut read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
 ) -> Result<usize, Fail<E>> {
     let mut best = candidates[0];
     for &row in &candidates[1..] {
         let mut order = Ordering::Equal;
         for term in &selection.order_by {
-            order = compare(read(row, term.column)?, read(best, term.column)?, term)
+            let (candidate, chosen) = (read(row, term.column)?, read(best, term.column)?);
+            if let (ValueRef::Str(candidate), ValueRef::Str(chosen)) = (candidate, chosen) {
+                if let Some((shorter, longer)) = crate::text_date_order::decided(candidate, chosen)
+                {
+                    let path = format!("{path}.order_by");
+                    dates.borrow_mut().record(&path, shorter, longer);
+                }
+            }
+            order = compare(candidate, chosen, term)
                 .map_err(|_| Box::new(ExecutionError::SchemaMismatch))?;
             if order != Ordering::Equal {
                 break;
