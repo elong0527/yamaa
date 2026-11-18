@@ -641,9 +641,10 @@ verification refuses the build, and no partial report is returned or written.
 
 An ordering comparison (`<`, `<=`, `>`, `>=` or `BETWEEN`) or a lookup
 selection's `order_by` term that compares two `str` values, both collected
-date text ([TIME-7](temporal.md#time-7)) and one a proper prefix of the other,
-is decided by text order's length rule ([VALUE-20](values.md#value-20)), not
-by the time either names. A successful run reports each expression or
+date text ([TIME-7](temporal.md#time-7)), one a proper prefix of the other and
+the longer with more known fields before its first unknown one, is decided by
+text order's length rule ([VALUE-20](values.md#value-20)), not by the time
+either names. A successful run reports each expression or
 `order_by` where that happened as one violated `warning` check: it fails
 nothing and changes no value.
 

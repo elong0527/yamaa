@@ -14,7 +14,7 @@
 //! rows every spelling and division must report.
 use std::num::NonZeroUsize;
 
-use crate::support::Scratch;
+use crate::support::{Edit, Scratch};
 use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, Partitions, Status};
 
 /// A specification of domain TEST with `keys`, over `input`, that saves its
@@ -361,7 +361,7 @@ fn a_window_and_an_aggregate_report_what_text_order_decided_where_a_row_read() {
 #[test]
 fn a_run_that_fails_after_deriving_reports_no_text_date_order() {
     let spec = named("EX.EXSTDTC <= EX.EXENDTC")
-        .replace("report: checks.csv,", "report: checks.csv, decimals: 19,");
+        .edit("report: checks.csv,", "report: checks.csv, decimals: 19,");
     assert_eq!(
         saved(&spec, &[("pc.csv", PC), ("ex.csv", ONE_DOSE)], None),
         (
