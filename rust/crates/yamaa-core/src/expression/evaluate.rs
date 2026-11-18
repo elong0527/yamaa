@@ -74,6 +74,12 @@ pub trait Resolver {
             Selection::Present(value) => Resolved::Owned(value),
         })
     }
+
+    /// Note that text order decided a comparison of the expression at
+    /// `spec_path` between two collected date texts, `shorter` a proper
+    /// prefix of `longer` (CHECK-27). A site of a run records it; the
+    /// default records nothing.
+    fn text_date_order(&mut self, _spec_path: &str, _shorter: &str, _longer: &str) {}
 }
 
 /// A borrow survives only until the evaluator has copied the operand.
@@ -290,6 +296,7 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
             } => {
                 let left = self.operand(*left, Step::Left)?;
                 let right = self.operand(*right, Step::Right)?;
+                self.note(*operator, &left, &right);
                 compare(*operator, (&left).into(), (&right).into())
             }
             NodeKind::IsNull { value, negated } => {
@@ -322,6 +329,8 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                 let lower = self.operand(*lower, Step::Lower)?;
                 let second = self.operand(*value, Step::RepeatedValue)?;
                 let upper = self.operand(*upper, Step::Upper)?;
+                self.note(Comparison::GreaterEqual, &first, &lower);
+                self.note(Comparison::LessEqual, &second, &upper);
                 between(
                     [(&first).into(), (&lower).into()],
                     [(&second).into(), (&upper).into()],
@@ -346,6 +355,15 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
             _ => unreachable!("the binder admits only truth values here"),
         };
         truth.map_err(|condition| self.condition(condition, None))
+    }
+
+    /// Tell the resolver when text order decides this comparison between
+    /// collected date texts (CHECK-27).
+    fn note(&mut self, operator: Comparison, left: &Value, right: &Value) {
+        if let Some((shorter, longer)) = text_date_pair(operator, left.into(), right.into()) {
+            self.resolver
+                .text_date_order(&self.compiled.spec_path, shorter, longer);
+        }
     }
 
     fn operand(&mut self, id: usize, step: Step) -> Result<Value, Box<EvaluationError<R::Error>>> {
@@ -501,6 +519,23 @@ pub(super) fn compare(
         right: right.value_type().expect("present"),
     })?;
     Ok(Truth::from_bool(holds(operator, ordering)))
+}
+
+/// The operands of an ordering comparison, shorter first, when text order
+/// decides between them as collected date texts of two precisions
+/// (CHECK-27); none for an equality, which text order does not decide.
+pub(super) fn text_date_pair<'v>(
+    operator: Comparison,
+    left: ValueRef<'v>,
+    right: ValueRef<'v>,
+) -> Option<(&'v str, &'v str)> {
+    match (operator, left, right) {
+        (Comparison::Equal | Comparison::NotEqual, ..) => None,
+        (_, ValueRef::Str(left), ValueRef::Str(right)) => {
+            crate::text_date_order::decided(left, right)
+        }
+        _ => None,
+    }
 }
 
 /// Whether two present operands in `ordering` satisfy `operator`.

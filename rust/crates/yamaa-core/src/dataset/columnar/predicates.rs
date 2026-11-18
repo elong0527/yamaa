@@ -291,6 +291,12 @@ impl<'r, E> ColumnResolver for FormulaColumns<'r, '_, '_, '_, E> {
         )
         .map(Some)
     }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.cx
+            .dates
+            .borrow_mut()
+            .record(spec_path, shorter, longer);
+    }
 }
 
 struct Formula<'r, 'p, 'a, 'c, E> {
@@ -320,6 +326,12 @@ impl<E> Resolver for Formula<'_, '_, '_, '_, E> {
             Observe::Operand,
         )
         .map(Selection::Present)
+    }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.cx
+            .dates
+            .borrow_mut()
+            .record(spec_path, shorter, longer);
     }
 }
 
@@ -454,6 +466,12 @@ impl<E> Resolver for FlagOperands<'_, '_, '_, '_, E> {
         };
         Ok(Selection::Present(value))
     }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.cx
+            .dates
+            .borrow_mut()
+            .record(spec_path, shorter, longer);
+    }
 }
 
 /// A flag's operands over the selection, read as `FlagOperands` reads them.
@@ -494,6 +512,12 @@ impl<'r, E> ColumnResolver for FlagColumns<'r, '_, '_, '_, E> {
             }
         }
         .map(Some)
+    }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.cx
+            .dates
+            .borrow_mut()
+            .record(spec_path, shorter, longer);
     }
 }
 
@@ -605,6 +629,12 @@ impl<E> Resolver for Condition<'_, '_, '_, '_, E> {
         )
         .map(Selection::Present)
     }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.cx
+            .dates
+            .borrow_mut()
+            .record(spec_path, shorter, longer);
+    }
 }
 
 /// A condition's operands over the selection, read as `Condition` reads them.
@@ -645,6 +675,12 @@ impl<'r, E> ColumnResolver for ConditionColumns<'r, '_, '_, '_, E> {
             Observe::Predicate,
         )
         .map(Some)
+    }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.cx
+            .dates
+            .borrow_mut()
+            .record(spec_path, shorter, longer);
     }
 }
 
@@ -805,7 +841,7 @@ pub(super) fn filter<E>(
             condition_truth(run, cx, Site::node(plan, expr), expr, row)?
         } else {
             let source_row = cx.frame.members(row)[0];
-            row_truth(predicate, cx.table, source_row, |column| {
+            row_truth(cx.dates, predicate, cx.table, source_row, |column| {
                 cx.frame.get(row, column)
             })
             .map_err(|error| {
@@ -821,6 +857,7 @@ pub(super) fn filter<E>(
 }
 
 struct RowResolver<'r, E, F> {
+    dates: &'r super::TextDates,
     table: Table<'r, E>,
     source_row: usize,
     columns: F,
@@ -854,6 +891,9 @@ impl<'r, E, F: Fn(usize) -> ValueRef<'r>> Resolver for RowResolver<'r, E, F> {
             BoundRead::Column(column) => Ok(Resolved::Borrowed((self.columns)(column))),
         }
     }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.dates.borrow_mut().record(spec_path, shorter, longer);
+    }
 }
 
 /// A predicate's operands over the selection's driver records and completed
@@ -885,6 +925,12 @@ impl<'r, E> ColumnResolver for RowColumns<'r, '_, E> {
             BoundRead::Column(column) => Ok(Some(Operand::Frame(cx.frame.column(column), rows))),
         }
     }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.cx
+            .dates
+            .borrow_mut()
+            .record(spec_path, shorter, longer);
+    }
 }
 
 /// The truth of a predicate on each of `records`, records of `table`, as
@@ -894,6 +940,7 @@ impl<'r, E> ColumnResolver for RowColumns<'r, '_, E> {
 /// none, and each record evaluates through [`row_truth`], which reports the
 /// failure. Nothing is counted either way.
 pub(super) fn record_truths<'r, E>(
+    dates: &'r super::TextDates,
     predicate: &'r BoundPredicate,
     table: Table<'r, E>,
     records: &'r [usize],
@@ -907,6 +954,7 @@ pub(super) fn record_truths<'r, E>(
         .truth_column(
             records.len(),
             &mut RecordColumns {
+                dates,
                 table,
                 records,
                 columns,
@@ -919,6 +967,7 @@ pub(super) fn record_truths<'r, E>(
 /// A predicate's operands over records of a table, read as `RowResolver`
 /// reads them.
 struct RecordColumns<'r, E, F> {
+    dates: &'r super::TextDates,
     table: Table<'r, E>,
     records: &'r [usize],
     columns: F,
@@ -967,17 +1016,22 @@ impl<'r, E, F: FnMut(usize) -> Operand<'r>> ColumnResolver for RecordColumns<'r,
             BoundRead::Column(column) => Ok(Some((self.columns)(column))),
         }
     }
+    fn text_date_order(&mut self, spec_path: &str, shorter: &str, longer: &str) {
+        self.dates.borrow_mut().record(spec_path, shorter, longer);
+    }
 }
 
 /// A predicate over one record of a table and a row's completed values,
 /// resolved lazily in written order.
 pub(super) fn row_truth<'r, E>(
+    dates: &'r super::TextDates,
     predicate: &'r BoundPredicate,
     table: Table<'r, E>,
     source_row: usize,
     columns: impl Fn(usize) -> ValueRef<'r>,
 ) -> Result<Truth, Box<EvaluationError<CellError<E>>>> {
     predicate.plan().evaluate_truth(&mut RowResolver {
+        dates,
         table,
         source_row,
         columns,
@@ -1026,14 +1080,15 @@ pub(super) fn collect_lent<'a, E>(
         };
         let mut kept = Vec::with_capacity(members.len());
         for &source_row in members {
-            let truth = row_truth(predicate, table, source_row, |_| ValueRef::Missing).map_err(
-                |error| {
-                    Box::new(ExecutionError::Predicate {
-                        source_row,
-                        error: *error,
-                    })
-                },
-            )?;
+            let truth = row_truth(cx.dates, predicate, table, source_row, |_| {
+                ValueRef::Missing
+            })
+            .map_err(|error| {
+                Box::new(ExecutionError::Predicate {
+                    source_row,
+                    error: *error,
+                })
+            })?;
             if truth == Truth::True {
                 kept.push(source_row);
             }
@@ -1076,15 +1131,20 @@ pub(super) fn collect_lent<'a, E>(
     }
     if distinct.len() > 1 {
         if let Some(selection) = collection.selection {
-            let chosen = super::relations::select(&carrying, selection, |source_row, column| {
-                table.get(source_row, column).map_err(|error| {
-                    Box::new(ExecutionError::Cell {
-                        path: collection.path.into(),
-                        source_row,
-                        error,
+            let chosen = super::relations::select(
+                &carrying,
+                selection,
+                (run.dates, collection.path),
+                |source_row, column| {
+                    table.get(source_row, column).map_err(|error| {
+                        Box::new(ExecutionError::Cell {
+                            path: collection.path.into(),
+                            source_row,
+                            error,
+                        })
                     })
-                })
-            })?;
+                },
+            )?;
             let value = table.get(chosen, collection.column).map_err(|error| {
                 Box::new(ExecutionError::Cell {
                     path: collection.path.into(),

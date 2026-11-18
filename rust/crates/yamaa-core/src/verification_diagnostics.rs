@@ -502,3 +502,61 @@ pub fn project<'a>(
         diagnostics,
     })
 }
+
+/// The report observation of each site where text order decided between
+/// collected date texts of two precisions (CHECK-27), in path order: a
+/// `warning` check that examines its site as one unit and is violated there,
+/// with the least pair it decided as its context. It raises no issue.
+pub fn text_date_observations<'a>(
+    orders: &'a [crate::text_date_order::TextDateOrder],
+    specification: &'a str,
+) -> Vec<Fact<'a>> {
+    let mapping = ConditionCode::TextDateOrder.definition();
+    let rule = mapping.rule.expect("registered normative check");
+    let severity = VerificationSeverity::Warning.name();
+    orders
+        .iter()
+        .map(|order| {
+            let keys = vec![Fact::Object(Context::new())];
+            let mut context: Context<'a> = [
+                ("failure_count", Fact::Unsigned(1)),
+                ("longer", Fact::Text(order.longer.as_str())),
+                ("shorter", Fact::Text(order.shorter.as_str())),
+            ]
+            .into();
+            let mut log_context = context.clone();
+            log_context.insert("keys", Fact::Sequence(keys.clone()));
+            context.insert("keys", Fact::Sequence(keys.clone()));
+            let failure = Fact::Object(
+                [
+                    ("phase", Fact::Text(mapping.phase)),
+                    ("condition", Fact::Text(mapping.condition)),
+                    ("rule", Fact::Text(rule)),
+                    (
+                        "spec_paths",
+                        Fact::Sequence(vec![Fact::Text(order.path.as_str())]),
+                    ),
+                    ("context", Fact::Object(context)),
+                    ("severity", Fact::Text(severity)),
+                    ("offending_keys", Fact::Sequence(keys)),
+                    ("log_context", Fact::Object(log_context)),
+                ]
+                .into(),
+            );
+            Fact::Object(
+                [
+                    ("specification", Fact::Text(specification)),
+                    ("spec_path", Fact::Text(order.path.as_str())),
+                    ("check", Fact::Text(mapping.condition)),
+                    ("target", Fact::Null),
+                    ("rule", Fact::Text(rule)),
+                    ("verification_id", Fact::Null),
+                    ("severity", Fact::Text(severity)),
+                    ("evaluated_count", Fact::Unsigned(1)),
+                    ("failure", failure),
+                ]
+                .into(),
+            )
+        })
+        .collect()
+}

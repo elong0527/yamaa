@@ -279,7 +279,13 @@ pub fn interval_or_duration(text: &str) -> bool {
 /// zone. Returns every component read, or `None` when the text is not
 /// collected date text.
 pub(crate) fn collected(text: &str) -> Option<Vec<Field>> {
-    let mut cursor = Cursor::new(text);
+    collected_bytes(text.as_bytes())
+}
+
+/// As [`collected`], over a text's bytes: collected date text is ASCII, so
+/// bytes that are collected date text are each one character.
+pub(crate) fn collected_bytes(bytes: &[u8]) -> Option<Vec<Field>> {
+    let mut cursor = Cursor { bytes, at: 0 };
     let fields = components(&mut cursor, 0, SECOND, true)?;
     (cursor.done() && fields.iter().any(Option::is_some)).then_some(fields)
 }

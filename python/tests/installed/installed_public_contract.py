@@ -844,20 +844,28 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(runs.save(), paths_of(case / "test.csv"))
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
 
-    def test_a_value_level_entry_that_selects_no_row_warns_in_the_report(self):
-        # The warning is a row of the run's report, never an issue (SUB-13);
-        # R compares the same rows.
-        case = TRUTH["value_level_report"]
-        self.spec.write_text(case["specification_yaml"], encoding="utf-8")
-        (self.root / "input.csv").write_bytes(case["input_csv"].encode("utf-8"))
-        run = yamaa.spec(self.spec).run()
-        self.assertTrue(self.issues(run).is_empty())
-        checks = [row for row in run.report.to_pylist() if row["NAME"] == "value_level"]
-        self.assertEqual(checks, case["checks"])
-        self.assertEqual(
-            [row["CONDITION"] for row in checks if row["OUTCOME"] == "violated"],
-            [case["condition"]],
-        )
+    def test_a_warning_the_engine_finds_is_a_report_row_never_an_issue(self):
+        # A value-level entry that selects no row (SUB-13) and text order
+        # between date texts (CHECK-27) each warn in a row of the run's
+        # report, named as the case's rows name it; R compares the same rows.
+        for key in ("value_level_report", "text_date_order_report"):
+            with self.subTest(case=key):
+                case = TRUTH[key]
+                self.spec.write_text(case["specification_yaml"], encoding="utf-8")
+                (self.root / "input.csv").write_bytes(case["input_csv"].encode("utf-8"))
+                run = yamaa.spec(self.spec).run()
+                self.assertTrue(self.issues(run).is_empty())
+                name = case["checks"][0]["NAME"]
+                checks = [row for row in run.report.to_pylist() if row["NAME"] == name]
+                self.assertEqual(checks, case["checks"])
+                self.assertEqual(
+                    [
+                        row["CONDITION"]
+                        for row in checks
+                        if row["OUTCOME"] == "violated"
+                    ],
+                    [case["condition"]],
+                )
 
     def test_every_save_rewrites_what_the_result_holds_without_rereading(self):
         def restored(directory, names, save):

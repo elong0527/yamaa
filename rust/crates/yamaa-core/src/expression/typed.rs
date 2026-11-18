@@ -25,6 +25,7 @@ use crate::numeric::{float_operation, zero_divisor, BinaryOperator, Number};
 use crate::portable_regex::Pattern as Regex;
 use crate::table::{ColumnValues, ValueRef};
 use crate::temporal::{Date, DateTime, Time};
+use crate::text_date_order::Least;
 use crate::value::{compare_numeric, FiniteFloat, Numeric};
 
 /// Where each selected row's value lies in a lent view's payloads.
@@ -596,12 +597,14 @@ fn each<A: Cells>(
 }
 
 /// A comparison of two operands, or None for a pair of kinds the row
-/// evaluator refuses.
+/// evaluator refuses. An ordering of two texts offers `decided` each pair
+/// that text order decides by length (CHECK-27).
 pub(super) fn compare(
     rows: usize,
     operator: Comparison,
     left: Typed<'_>,
     right: Typed<'_>,
+    decided: &mut Least,
 ) -> Option<Result<Vec<Truth>, TryReserveError>> {
     Some(match (left, right) {
         (Typed::Numbers(left), Typed::Numbers(right)) => numbers!(left, left => {
@@ -617,11 +620,28 @@ pub(super) fn compare(
                     same_bytes(a, b) == (operator == Comparison::Equal)
                 }))
             }),
-            _ => text_bytes!(left, left => {
-                text_bytes!(right, right => pairwise(rows, left, right, move |a: &[u8], b: &[u8]| {
-                    holds(operator, a.cmp(b))
-                }))
-            }),
+            // Text order over the common prefix, then by length, as slice
+            // order reads it, so a pair the length decides is known at no
+            // further cost.
+            _ => {
+                let least = std::cell::RefCell::new(std::mem::take(decided));
+                let offer = &least;
+                let truths = text_bytes!(left, left => {
+                    text_bytes!(right, right => pairwise(rows, left, right, move |a: &[u8], b: &[u8]| {
+                        let common = a.len().min(b.len());
+                        let order = a[..common].cmp(&b[..common]).then_with(|| {
+                            let order = a.len().cmp(&b.len());
+                            if order != Ordering::Equal {
+                                offer.borrow_mut().offer_bytes(a, b);
+                            }
+                            order
+                        });
+                        holds(operator, order)
+                    }))
+                });
+                *decided = least.into_inner();
+                truths
+            }
         },
         (Typed::Dates(left), Typed::Dates(right)) => temporal!(left, left => {
             temporal!(right, right => pairwise(rows, left, right, move |a: Date, b: Date| {

@@ -404,6 +404,10 @@ pub struct CodelistObservation {
 pub struct Execution {
     pub dataset: Dataset,
     pub verifications: Vec<CheckRecord>,
+    /// Each site where text order decided between collected date texts of
+    /// two precisions, with the least pair it decided there, in path order
+    /// (CHECK-27).
+    pub text_date_orders: Vec<crate::text_date_order::TextDateOrder>,
     /// The most rows one partition of the output holds (D264). A
     /// partitioned run that divided every step admitted its output in
     /// consecutive partitions of at most as many rows as its largest driver

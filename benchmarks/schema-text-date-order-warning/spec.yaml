@@ -1,0 +1,51 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPC
+keys: [USUBJID, PCSEQ]
+input:
+  PC: {path: input/pc.csv, types: {PCSEQ: int}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+base: PC
+
+output:
+  path: adpc.csv
+  columns: [USUBJID, PCSEQ, PCDTC, LDOSDTC]
+  # The warnings' lines in the run report name the comparisons that text
+  # order decided, which needs a report file.
+  report: adpc-checks.csv
+
+intermediates:
+  # Each sample's latest dose at or before it, chosen by comparing the
+  # collected date text as text. Text order puts a date or time recorded
+  # to fewer fields before one recorded to more, so a dose without a time
+  # counts as before a sample on its day, and a dose recorded to the second
+  # as after a sample recorded to the minute at the same time. The run
+  # still succeeds, and reports each place text order decided such a pair.
+  - id: LAST_DOSE
+    dataset: EX
+    key: [USUBJID]
+    filter: "EX.EXSTDTC <= PC.PCDTC"
+    order_by: [EX.EXSTDTC]
+    keep: last
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PC.USUBJID
+
+  - name: PCSEQ
+    type: int
+    label: Sequence Number
+    derivation: PC.PCSEQ
+
+  - name: PCDTC
+    type: str
+    label: Date/Time of Specimen Collection
+    derivation: PC.PCDTC
+
+  - name: LDOSDTC
+    type: str
+    label: Date/Time of Last Dose
+    derivation: LAST_DOSE.EXSTDTC
