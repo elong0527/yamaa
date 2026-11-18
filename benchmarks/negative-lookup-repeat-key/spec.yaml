@@ -1,0 +1,77 @@
+yamaa: "1.0"
+type: spec
+domain: ADEX
+keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, ADOSEN, NDOSE]
+
+intermediates:
+  # Each collected record once for each administration it counts, the
+  # administration's number read as N. It also writes a key, which a
+  # counted relation has no use for.
+  - id: ADMIN
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    repeat: {count: EX.EXDOSCNT, index: N}
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      EXSEQ: EX.EXSEQ
+      EXTRT: EX.EXTRT
+      EXDOSE: EX.EXDOSE
+      EXDOSU: EX.EXDOSU
+      ADOSEN: N
+      NDOSE: EX.EXDOSCNT
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+
+  - name: EXDOSU
+    type: str
+    label: Dose Units
+
+  - name: ADOSEN
+    type: int
+    label: Administration Sequence Number
+
+  - name: NDOSE
+    type: int
+    label: Number of Administrations
+
+rows:
+  # One record per administration.
+  - id: administration
+    dataset: ADMIN
+    derivations:
+      STUDYID: ADMIN.STUDYID
+      USUBJID: ADMIN.USUBJID
+      EXSEQ: ADMIN.EXSEQ
+      EXTRT: ADMIN.EXTRT
+      EXDOSE: ADMIN.EXDOSE
+      EXDOSU: ADMIN.EXDOSU
+      ADOSEN: ADMIN.ADOSEN
+      NDOSE: ADMIN.NDOSE

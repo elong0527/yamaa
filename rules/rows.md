@@ -62,7 +62,9 @@ input's: each record, a matching pair, builds one candidate row, its fields
 are the relation's exposed derivations, read through the relation's id, and
 the template may group them. The sides of a pair relation are read as a driver
 intermediate is, so a side that names an intermediate obeys this rule
-([LOOKUP-27](lookup.md#lookup-27)).
+([LOOKUP-27](lookup.md#lookup-27)). A counted relation drives rows as a pair
+relation does, and its `dataset` is read as a pair relation's side is
+([LOOKUP-29](lookup.md#lookup-29)).
 
 The template's own `derivations` read every field the intermediate exposes,
 derived fields included. A column-level derivation completed for the rows the
@@ -184,58 +186,70 @@ When `rows` is present, row templates construct the rows. Each row template is
 one section, and each driver record or group its `filter` retains yields one
 row. Sections are appended in specification order; a record-driven section
 keeps driver record order and a group-driven section keeps first-occurrence
-group order. Every output row is a record, or a pair of records, of declared
-inputs: no operation repeats a candidate a data-dependent number of times, and
-one row per related pair is a row template driving on an `inner_join`
-([LOOKUP-27](lookup.md#lookup-27)).
+group order. Every output row is a declared input's record, a pair of such
+records, or such a record at one number of its declared count; a row template
+repeats no candidate, and drives on pairs
+([LOOKUP-27](lookup.md#lookup-27)) or counted records
+([LOOKUP-29](lookup.md#lookup-29)).
 
-Evidence: `schema-row-templates`, `adam-adex-uncollected`, `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`, `schema-lookup-inner-join-counted-rows`.
+Evidence: `schema-row-templates`, `adam-adex-uncollected`, `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`, `schema-lookup-inner-join-counted-rows`, `schema-lookup-repeat-rows`.
 
-No generated index supports such repetition. A source value may decide whether
-a written row template keeps one candidate; it cannot create more rows. Row
-templates build rows finer than input records only as this rule permits.
+A row template builds no more rows than its driver has records. A source
+value may decide whether a written row template keeps one candidate; it
+cannot create more rows. Rows finer than input records come from the relation
+a row template drives on, only as this rule permits.
 
 A pair of records is a record of a pair relation: one record of each of two
 declared relations whose key values are equal ([LOOKUP-27](lookup.md#lookup-27)).
 The pairs are bounded by the records of the two relations, so no count read
 from the data yields a row beyond them, and the partner's key joins the output
-`keys`, so [OUTPUT-3](output.md#output-3) still checks every row's identity. A lookup never multiplies rows
-([LOOKUP-10](lookup.md#lookup-10)): reading one of several partners with
-`order_by` and `keep` builds one row, not one for each partner.
+`keys`, so [OUTPUT-3](output.md#output-3) still checks every row's identity. A
+lookup never multiplies rows ([LOOKUP-10](lookup.md#lookup-10)): reading one of
+several partners with `order_by` and `keep` builds one row, not one for each
+partner.
 
-When the required artifact has one row per observation, administration, or
-planned event, an input dataset must contain one input record per required row.
+A record at one number of its count is a record of a counted relation: a
+record of a declared relation, once for each whole number from 1 to the count
+its own values give ([LOOKUP-29](lookup.md#lookup-29)). The specification
+declares the count and the record gives its value, a missing or negative
+count fails the run, and the table limits bound the rows
+([LIMIT-2](limits.md#limit-2)). The number joins the output `keys`, so
+[OUTPUT-3](output.md#output-3) still checks every row's identity.
+
+When the required artifact has one row per observation or planned event, an
+input dataset must contain one input record per required row.
 Expected-but-uncollected rows use an explicit planning relation at those keys
 and may be enriched from collected relations through record intermediates.
-Dynamically counted expansion happens upstream, and the expanded records enter
-the specification as ordinary input.
+One row for each unit of a count a record holds, such as each administration
+of an exposure record, is a record of a counted relation. Expansion that
+neither a declared count nor a declared relation states, such as one row for
+each item of a delimited value, happens upstream, and the expanded records
+enter the specification as ordinary input.
 
-One counted expansion is built inside the specification: the one a declared
-relation bounds. A record that stands for a number of rows held in its own
-values, such as an exposure record for each day between its dates, pairs with
-a declared relation of consecutive whole numbers, one record for each, and a
-`filter` keeps each pair up to the record's own number
-([LOOKUP-27](lookup.md#lookup-27)). That relation's records bound the rows,
-and no condition reports a record they do not cover: one whose number is past
-the relation's last is in fewer pairs than it stands for, one whose number is
-missing or below the relation's first is in none, and a number the relation
-leaves out is a row left out of every record that spans it. Only the
-specification can state the cover, in two parts. The paired side reads the
-relation's record at its own number through a lookup that declares
-`require_match: true` ([LOOKUP-16](lookup.md#lookup-16),
-[LOOKUP-24](lookup.md#lookup-24)), and the `filter` keeps the pairs up to the
-number that read gives, so a record whose number the relation does not hold
-fails the run as `unmatched_key` before any row is built. That lookup reads
-one record of the relation and none below it, so the built rows carry the
-rest: a `range` keeps each row's number from the first
-([CHECK-7](verification.md#check-7)), the `filter` keeps it up to the record's
-own, the output `keys` keep the numbers of one record distinct, as the next
-paragraph states, and an `assert` that each record builds as many rows as its
-number ([CHECK-12](verification.md#check-12)) then admits only every number
-once. The run then fails for any record whose numbers the relation leaves
-out, repeats or extends below the first, and a relation is not checked beyond
-the numbers its records span. `schema-lookup-inner-join-counted-rows` shows
-both parts.
+A count is built as pairs instead when the numbers come with more than their
+value, such as each day's label: the record pairs with a declared relation of
+consecutive whole numbers, one record for each, and a `filter` keeps each
+pair up to the record's own number ([LOOKUP-27](lookup.md#lookup-27)). That
+relation's records bound the rows, and no condition reports a record they do
+not cover: one whose number is past the relation's last is in fewer pairs
+than it stands for, one whose number is missing or below the relation's first
+is in none, and a number the relation leaves out is a row left out of every
+record that spans it. Only the specification can state the cover, in two
+parts. The paired side reads the relation's record at its own number through
+a lookup that declares `require_match: true`
+([LOOKUP-16](lookup.md#lookup-16), [LOOKUP-24](lookup.md#lookup-24)), and the
+`filter` keeps the pairs up to the number that read gives, so a record whose
+number the relation does not hold fails the run as `unmatched_key` before any
+row is built. That lookup reads one record of the relation and none below it,
+so the built rows carry the rest: a `range` keeps each row's number from the
+first ([CHECK-7](verification.md#check-7)), the `filter` keeps it up to the
+record's own, the output `keys` keep the numbers of one record distinct, as
+the next paragraph states, and an `assert` that each record builds as many
+rows as its number ([CHECK-12](verification.md#check-12)) then admits only
+every number once. The run then fails for any record whose numbers the
+relation leaves out, repeats or extends below the first, and a relation is
+not checked beyond the numbers its records span.
+`schema-lookup-inner-join-counted-rows` shows both parts.
 
 The built rows must still match the `keys`: repeating a key combination fails
 at the output gate under [OUTPUT-3](output.md#output-3). A

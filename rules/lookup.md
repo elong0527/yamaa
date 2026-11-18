@@ -8,7 +8,10 @@ narrows them by a filter, selects one record or reduces them, and answers
 absence. The kinds of lookup differ only in the steps they declare. A named
 intermediate that writes `inner_join` is a fourth kind, the pair relation: it
 matches and narrows the records of one relation for every record of another
-and keeps every pair ([LOOKUP-27](#lookup-27)).
+and keeps every pair ([LOOKUP-27](#lookup-27)). One that writes `repeat` is
+the counted relation: it matches nothing, and keeps each record of one
+relation once for every whole number up to the record's count
+([LOOKUP-29](#lookup-29)).
 
 ## The lookup model
 
@@ -1907,3 +1910,116 @@ input `key`, so a read through its implicit join, and a qualified aggregate
 over it without `key`, fail as `no_applicable_keys` ([LOOKUP-5](#lookup-5)),
 whose hint names the routes that read it: a named intermediate or an
 aggregate with a `key` of its own.
+
+## The counted relation
+
+<a id="lookup-29"></a>
+
+### LOOKUP-29. A named intermediate that writes repeat is a counted relation, one record for each whole number from 1 to the count of each record of its dataset
+
+A named intermediate that writes `repeat` is a counted relation. For each
+record of its `dataset`, an input or an intermediate a row template could
+drive on ([ROW-2](rows.md#row-2)), its records are that record once for each
+whole number from 1 to the record's `count`, in stored order and then by
+number. `index` names the number, an `int` its `filter` and `derivations`
+read. It requires `derivations` and is read as a pair relation is
+([LOOKUP-27](#lookup-27)).
+
+Fails: FAILS-TO-FILL
+Evidence: EVIDENCE-TO-FILL
+
+```yaml
+intermediates:
+  - id: EXREC
+    dataset: EX
+    derivations:
+      NDAYS:
+        type: int
+        derivation:
+          diff: {type: date, start: EX.EXSTDTC, end: EX.EXENDTC, unit: day, closed: both}
+  - id: ADMIN
+    dataset: EXREC
+    repeat: {count: EXREC.NDAYS, index: N}
+    derivations:
+      USUBJID: EXREC.USUBJID
+      EXSEQ: EXREC.EXSEQ
+      ADOSEN: N
+      OFFSET: "N - 1"
+      ASTDT:
+        shift: {type: date, source: EXREC.EXSTDTC, days: OFFSET}
+rows:
+  - id: administration
+    dataset: ADMIN
+    derivations: {USUBJID: ADMIN.USUBJID, EXSEQ: ADMIN.EXSEQ, ADOSEN: ADMIN.ADOSEN, ASTDT: ADMIN.ASTDT}
+```
+
+An exposure record that covers three days builds three records, numbered 1
+to 3, each dated its number less one day after the record's start, and each
+builds one row.
+
+`dataset` is read as the left side of a pair relation is
+([LOOKUP-27](#lookup-27)). An input gives every record. An intermediate gives
+the records a row template driving on it would read: those its filter keeps,
+its derivations complete, before any count is read. Such an intermediate
+reads an input and declares none of `key`, `between`, `order_by`, `keep`,
+`nearest`, `pivot`, `absent`, `require_match`, `inner_join` and `repeat`, or
+the counted relation fails as `invalid_intermediate_driver` at `dataset`,
+naming the intermediate and each such field. So a counted relation counts
+neither a pair relation nor another counted relation, and it is no side of a
+pair relation.
+
+`count` is read as the value of a pair relation's key mapping is
+([LOOKUP-6](#lookup-6)): the dataset's field, qualified by the dataset's
+name, or an expression over the dataset's fields, which each record
+evaluates before any record of the relation is built. Its static result type
+is `int`. Any other type, and a type decided per value, fails as
+`incompatible_input_type` at `repeat.count` before any input is read, and a
+name written alone that reads no field of the dataset fails as
+`unknown_field` there. A count of zero builds no record. A missing or
+negative count is no count: the run fails as `invalid_repeat_count` at
+`repeat.count`, reporting the relation as `intermediate`, its `dataset`, the
+`record`, the one-based position of the record among those the dataset
+gives, and the `count` read. A record the relation is not to count is left
+out by the filter of the intermediate its `dataset` names, which is asked
+before the count is read.
+
+`index` names the number of each record, an `int` from 1 to the record's
+count. The relation's `filter` and `derivations` read it by that name alone;
+it is no field of the relation until a derivation copies it. INDEX-NAME-TO-FILL
+
+`filter`, `derivations`, `columns` and `unique` checks are a pair relation's
+([LOOKUP-27](#lookup-27)), the number standing where the right side's fields
+stand. `filter` is asked of every counted record before any derivation is
+evaluated, and reads the dataset's fields qualified by the dataset's name
+and the number by its name. `derivations` names the fields the relation
+exposes, in declaration order: each reads those names and the derivations
+declared before it, and each exposed field has one column type. A name none
+of these gives, a field without one column type, and a missing or empty
+`derivations` fail as they do for a pair relation.
+
+The table limits bound the relation as they bound every built table
+([LIMIT-2](limits.md#limit-2)). Each record's count is added to the rows
+before that record's records are built, so a count past the limits refuses
+the run as `engine_rejected` ([LIMIT-1](limits.md#limit-1)) without building
+them. No count is otherwise too large: a bound a study knows, such as the
+longest exposure record its protocol allows, is a `range` or an `assert` on
+the column a row template copies the number into
+([CHECK-7](verification.md#check-7), [CHECK-12](verification.md#check-12)).
+
+A counted relation matches nothing, selects nothing, ranges over nothing and
+answers no absence: `inner_join`, `key`, `between`, `order_by`, `keep`,
+`nearest`, `pivot`, `absent` and `require_match` written beside `repeat`,
+and `SELF` as its `dataset`, fail before any input is read as
+`prohibited_construct`, naming each of them and then `repeat`, in the order
+listed here, with the relation's id as `intermediate` and the first of them
+as `construct`: a field's name, or `SELF`.
+
+The relation is built once, before any row is built and before any
+intermediate's `unique` check runs, and is read as an input is, through its
+id, as a pair relation is: a row template drives on it, each record building
+one candidate row ([ROW-2](rows.md#row-2)); a named intermediate whose
+`dataset` names it looks it up with a `key` of its own
+([LOOKUP-3](#lookup-3)); and a qualified aggregate with a `key` of its own
+reduces it ([LOOKUP-18](#lookup-18)). It declares no input `key`, so a read
+through its implicit join, and a qualified aggregate over it without `key`,
+fail as `no_applicable_keys` ([LOOKUP-5](#lookup-5)).

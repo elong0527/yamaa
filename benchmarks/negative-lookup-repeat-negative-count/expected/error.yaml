@@ -1,0 +1,10 @@
+phase: join
+condition: invalid_repeat_count
+spec_paths:
+  - intermediates.ADMIN.repeat.count
+rule: LOOKUP-29
+context:
+  intermediate: ADMIN
+  dataset: EXREC
+  record: 2
+  count: -3
