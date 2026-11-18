@@ -31,6 +31,16 @@ BSD_2 = (
     "Copyright (C) 2013-2016, Yann Collet.\n\nRedistribution and use in source "
     "and binary forms are permitted.\n"
 )
+# The distinguishing grant in SPDX BSD-2-Clause-Patent 3.29.0; a two-clause
+# opening does not make the additional patent license BSD-2-Clause.
+BSD_PATENT = BSD_2 + (
+    "Subject to the terms and conditions of this license, each copyright holder "
+    "and contributor hereby grants to those receiving rights under this license "
+    "a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable "
+    "(except for failure to satisfy the conditions of this license) patent "
+    "license to make, have made, use, offer to sell, sell, import, and otherwise "
+    "transfer this software.\n"
+)
 CC0 = "Creative Commons Legal Code\n\nCC0 1.0 Universal\n"
 # r-efi's AUTHORS states its three licenses, one of them a GNU license.
 AUTHORS = (
@@ -578,6 +588,20 @@ def shipped_graph(root):
 class ExpressionChoice(unittest.TestCase):
     def relied(self, expression, shipped=notices.ACCEPTED):
         return notices.choose(notices.parse_expression(expression), frozenset(shipped))
+
+    def test_bsd_detection_distinguishes_each_text_and_its_patent_grant(self):
+        # Internal seam: text recognition precedes a crate's declared choice.
+        for label, text, expected in (
+            ("two clauses", BSD_2, {"BSD-2-Clause"}),
+            ("three clauses", BSD, {"BSD-3-Clause"}),
+            ("patent grant", BSD_PATENT, set()),
+            ("two then three", BSD_2 + BSD, {"BSD-2-Clause", "BSD-3-Clause"}),
+            ("three then two", BSD + BSD_2, {"BSD-2-Clause", "BSD-3-Clause"}),
+            ("patent then two", BSD_PATENT + BSD_2, {"BSD-2-Clause"}),
+            ("two then patent", BSD_2 + BSD_PATENT, {"BSD-2-Clause"}),
+        ):
+            with self.subTest(case=label):
+                self.assertEqual(notices.detect(text), expected, label)
 
     def test_choices_prefer_mit_then_follow_the_shipped_texts(self):
         cases = [
@@ -1385,6 +1409,83 @@ class LockedClosure(unittest.TestCase):
                 rendered = notices.render([notice], LIBRARY, "python")
                 self.assertIn("Copyright (c) 2016 Meta Platforms, Inc.", rendered)
                 self.assertNotIn("GNU GENERAL PUBLIC LICENSE", rendered)
+
+    def test_separate_bsd_blocks_supply_both_declared_licenses(self):
+        # Internal seam: the crate notice binds detected blocks to SPDX fallback.
+        for index, text in enumerate((BSD_2 + BSD, BSD + BSD_2)):
+            with self.subTest(order=index):
+                identity = self.graph.crate(
+                    f"combined-bsd-{index}",
+                    "1.0.0",
+                    "BSD-3-Clause AND BSD-2-Clause",
+                    {"LICENSE": text},
+                )
+                self.assertEqual(
+                    notices.crate_notice(self.graph.packages[identity]),
+                    notices.Notice(
+                        f"combined-bsd-{index}",
+                        "1.0.0",
+                        None,
+                        ("BSD-3-Clause", "BSD-2-Clause"),
+                        (("LICENSE", text),),
+                        (),
+                    ),
+                )
+
+    def test_a_named_bsd_two_clause_file_cannot_add_a_patent_grant(self):
+        # Internal seam: the file's classified name must agree with its text.
+        identity = self.graph.crate(
+            "patent-text", "1.0.0", "BSD-2-Clause", {"LICENSE.BSD-2-Clause": BSD_PATENT}
+        )
+        with self.assertRaisesRegex(
+            ValueError, "LICENSE.BSD-2-Clause lacks the BSD-2-Clause text"
+        ):
+            notices.crate_notice(self.graph.packages[identity])
+
+    def test_only_requested_python_license_metadata_follows_the_resolved_graph(self):
+        # Internal seam: graph lanes update metadata before installing their copy;
+        # the canonical notice-writing route retains its authored manifest.
+        identity = self.graph.crate(
+            "bsd-two", "1.0.0", "BSD-2-Clause", {"LICENSE.BSD-2-Clause": BSD_2}
+        )
+        self.graph.depend("yamaa-python@0.4.0", identity)
+        metadata, closures = self.built()
+        canonical = (notices.PYTHON / "pyproject.toml").read_text()
+        expression = "MIT AND Apache-2.0 AND BSD-2-Clause AND Unicode-3.0"
+        for update in (False, True):
+            with self.subTest(update=update):
+                path = notices.PYTHON / "pyproject.toml"
+                path.write_text(canonical)
+                if update:
+                    notices.write(
+                        metadata, closures, LIBRARY, update_python_license=True
+                    )
+                else:
+                    notices.write(metadata, closures, LIBRARY)
+                expected = (
+                    canonical.replace(
+                        'license = "MIT AND Apache-2.0 AND Unicode-3.0"',
+                        f'license = "{expression}"',
+                    )
+                    if update
+                    else canonical
+                )
+                self.assertEqual(path.read_text(), expected)
+
+    def test_python_license_rewrite_refuses_another_manifest_shape(self):
+        # Internal seam: an isolated copy's metadata edit must fail closed before
+        # touching a file whose license field is absent, ambiguous or structured.
+        for text in (
+            '[project]\nlicense = {file = "LICENSE"}\n',
+            '[tool.other]\nlicense = "MIT"\n[project]\nlicense = "MIT"\n',
+            '[tool.other]\nlicense = "MIT"\n[project]\nname = "yamaa"\n',
+        ):
+            with self.subTest(text=text):
+                path = notices.PYTHON / "pyproject.toml"
+                path.write_text(text)
+                with self.assertRaisesRegex(ValueError, r"one \[project\].license"):
+                    notices.write_python_license("MIT AND BSD-2-Clause")
+                self.assertEqual(path.read_text(), text)
 
     def test_unclassified_mislabelled_or_missing_notices_stop_generation(self):
         package = self.graph.packages["pyo3@0.27.2"]

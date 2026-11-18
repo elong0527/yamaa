@@ -14,8 +14,8 @@ from packaging.requirements import Requirement
 
 from tools.ci import dependency_graphs
 from tools.ci.dependency_graphs import (
-    LOCKS,
     NOTICES,
+    SOURCE_INPUTS,
     assert_msrv,
     minimum_cargo,
     minimum_python,
@@ -342,7 +342,10 @@ class DependencyGraphsTests(unittest.TestCase):
         # before the extension and the R package are built from that graph.
         generate = (python, "-m", "tools.packaging.generate_third_party_notices")
         notices = step(*generate)
-        self.assertEqual(commands[notices], ((*generate, "--write"), destination))
+        self.assertEqual(
+            commands[notices],
+            ((*generate, "--write", "--write-python-license"), destination),
+        )
         for earlier in (("cargo", "generate-lockfile"), (*install, "--editable")):
             self.assertLess(step(*earlier), notices)
         for later in (
@@ -370,7 +373,7 @@ class DependencyGraphsTests(unittest.TestCase):
             [arguments[:4] for arguments in ran],
         )
 
-    def test_lane_refuses_to_change_the_checkout_notices(self):
+    def test_lane_refuses_to_change_the_checkout_notices_or_python_manifest(self):
         self.assertEqual(
             NOTICES,
             tuple(
@@ -378,19 +381,21 @@ class DependencyGraphsTests(unittest.TestCase):
                 for directory in notice_generator.copies().values()
             ),
         )
-        with tempfile.TemporaryDirectory() as temporary:
-            source, destination = Path(temporary) / "source", Path(temporary) / "graph"
-            for path in LOCKS + NOTICES:
-                (source / path).parent.mkdir(parents=True, exist_ok=True)
-                (source / path).write_text("canonical\n")
-            destination.mkdir()
+        for changed in (NOTICES[1], "python/pyproject.toml"):
+            with self.subTest(path=changed), tempfile.TemporaryDirectory() as temporary:
+                source = Path(temporary) / "source"
+                destination = Path(temporary) / "graph"
+                for path in SOURCE_INPUTS:
+                    (source / path).parent.mkdir(parents=True, exist_ok=True)
+                    (source / path).write_text("canonical\n")
+                destination.mkdir()
 
-            def write_checkout_notices(arguments):
-                if "--write" in arguments:
-                    (source / NOTICES[1]).write_text("lane\n")
+                def write_checkout_input(arguments):
+                    if "--write" in arguments:
+                        (source / changed).write_text("lane\n")
 
-            with self.assertRaisesRegex(RuntimeError, re.escape(NOTICES[1])):
-                self.lane_commands(source, destination, write_checkout_notices)
+                with self.assertRaisesRegex(RuntimeError, re.escape(changed)):
+                    self.lane_commands(source, destination, write_checkout_input)
 
 
 if __name__ == "__main__":

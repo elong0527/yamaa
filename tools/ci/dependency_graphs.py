@@ -24,6 +24,9 @@ NOTICES = (
     "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
     "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt",
 )
+# An isolated resolution and its Python metadata refresh leave every one of
+# these release inputs in the source checkout byte-for-byte unchanged.
+SOURCE_INPUTS = (*LOCKS, *NOTICES, "python/pyproject.toml")
 IGNORED = {
     ".git",
     ".venv",
@@ -197,7 +200,7 @@ def run_graph(source, destination, graph, python, prepare_only=False):
                 "Install the development prerequisites before testing a graph: "
                 + ", ".join(missing)
             )
-    originals = {path: (source / path).read_bytes() for path in LOCKS + NOTICES}
+    originals = {path: (source / path).read_bytes() for path in SOURCE_INPUTS}
     try:
         msrv = prepare(source, destination, graph)
         if prepare_only:
@@ -263,10 +266,15 @@ def run_graph(source, destination, graph, python, prepare_only=False):
         # copy replaced. Regenerate them from the graph that the lane resolved,
         # with the copy's own tools, so that the extension, the staged R package
         # and every notice check below cover the crates that the lane builds.
+        # Its Python License-Expression must describe this graph before install.
         # The repository check still compares the committed notices with the
         # canonical lock.
         run(
-            interpreter, "-m", "tools.packaging.generate_third_party_notices", "--write"
+            interpreter,
+            "-m",
+            "tools.packaging.generate_third_party_notices",
+            "--write",
+            "--write-python-license",
         )
         run(
             "uv",

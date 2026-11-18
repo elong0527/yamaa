@@ -48,6 +48,8 @@ against their sources, and the Python License-Expression against the licenses
 that the crates linked into the Python binding, and those that the standard
 library links, are relied on under (#3030 D185). `--write` regenerates the
 notices and the license copies.
+Isolated dependency graphs also use --write-python-license to refresh their
+Python License-Expression before the copy is installed.
 """
 
 import argparse
@@ -179,8 +181,11 @@ MARKERS = {
     ),
 }
 # Phrases that a license's text never contains, where its MARKERS are also in
-# another license's text: BSD-3-Clause adds a third clause to BSD-2-Clause.
-EXCLUSIONS = {"BSD-2-Clause": MARKERS["BSD-3-Clause"][1:]}
+# another license's text: BSD-3-Clause adds a third clause to BSD-2-Clause,
+# and BSD-2-Clause-Patent adds an explicit patent grant.
+EXCLUSIONS = {
+    "BSD-2-Clause": (*MARKERS["BSD-3-Clause"][1:], "patent license to make"),
+}
 
 # A GNU license named in a text: its full name, or an abbreviation such as
 # GPLv2, LGPL-2.1-or-later or AGPL. The abbreviations match in capitals only,
@@ -538,8 +543,12 @@ def detect(text):
     return frozenset(
         license
         for license, phrases in MARKERS.items()
-        if all(phrase in flat for phrase in phrases)
-        and not any(phrase in flat for phrase in EXCLUSIONS.get(license, ()))
+        if any(
+            all(phrase in block for phrase in phrases)
+            and not any(phrase in block for phrase in EXCLUSIONS.get(license, ()))
+            # A later complete license must not exclude an earlier block.
+            for block in re.split(rf"(?={re.escape(phrases[0])})", flat)[1:]
+        )
     )
 
 
@@ -1442,6 +1451,23 @@ def python_project():
     ]
 
 
+def write_python_license(expression):
+    """Refresh an isolated graph's single project license without reformatting
+    the manifest; a different TOML shape needs review before it is rewritten."""
+    path = PYTHON / "pyproject.toml"
+    text, count = re.subn(
+        r'(?m)^(license\s*=\s*)"[^"\n]*"([^\S\n]*)$',
+        lambda match: match[1] + json.dumps(expression) + match[2],
+        path.read_text(encoding="utf-8"),
+    )
+    if (
+        count != 1
+        or tomllib.loads(text).get("project", {}).get("license") != expression
+    ):
+        raise ValueError("python/pyproject.toml: expected one [project].license string")
+    path.write_text(text, encoding="utf-8")
+
+
 def check_copies(project):
     """Require the package copies of the project license and notices to agree.
 
@@ -1561,9 +1587,9 @@ def check(metadata, closures, library):
     return selected, errors
 
 
-def write(metadata, closures, library):
+def write(metadata, closures, library, *, update_python_license=False):
     """Write each host's notices and project license copy; return each host's
-    notices."""
+    notices. Isolated graphs may also refresh their Python license metadata."""
     project_license = (ROOT / "LICENSE").read_bytes()
     selected = {}
     for host, directory in copies().items():
@@ -1573,6 +1599,12 @@ def write(metadata, closures, library):
         # The command line's archives carry the Python packages' copy.
         if host != "cli":
             (directory / PROJECT_LICENSE).write_bytes(project_license)
+    if update_python_license:
+        write_python_license(
+            license_expression(
+                metadata, closures["python"], selected["python"], library
+            )
+        )
     return selected
 
 
@@ -1583,14 +1615,26 @@ def main():
         action="store_true",
         help="regenerate the notices and the project license copies",
     )
+    parser.add_argument(
+        "--write-python-license",
+        action="store_true",
+        help="with --write, refresh this isolated graph's Python license expression",
+    )
     args = parser.parse_args()
+    if args.write_python_license and not args.write:
+        parser.error("--write-python-license requires --write")
     errors = []
     try:
         metadata = locked_metadata()
         closures = linked_packages(metadata)
         library = standard_library()
         if args.write:
-            selected = write(metadata, closures, library)
+            selected = write(
+                metadata,
+                closures,
+                library,
+                update_python_license=args.write_python_license,
+            )
         else:
             selected, errors = check(metadata, closures, library)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
