@@ -438,6 +438,7 @@ pub(super) fn derive<E>(
                         output: 0..frame.rows(),
                         operands: None,
                         record: None,
+                        dates: run.dates,
                     };
                     if prepare {
                         // A direct window over every donor record is built first;

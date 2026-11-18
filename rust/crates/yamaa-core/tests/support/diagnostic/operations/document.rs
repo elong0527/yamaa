@@ -4,7 +4,7 @@
 //! its members in written order; each operation prepares it as the 1.0 front
 //! end lowers it (D76). An operation a single table needs belongs in its
 //! part's module, not here.
-use super::{column_type, File};
+use super::{column_type, value, File};
 use crate::support::{diagnostic::json::Json, document::Tree, specification::prepare};
 use yamaa_core::{
     diagnostic::Diagnostic,
@@ -19,6 +19,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     Some(match operation {
         "bind" => bind(input),
         "check" => check(input),
+        "missing_text" => missing_text(input),
         "output" => output(input),
         "prepare" => prepared_findings(input),
         _ => return None,
@@ -132,6 +133,38 @@ pub(super) fn schemas(input: &Json) -> Vec<TableSchema> {
 fn output(input: &Json) -> Vec<Diagnostic> {
     prepared(input.closed(&["document"]))
         .output_findings()
+        .iter()
+        .map(|finding| finding.diagnostic())
+        .collect()
+}
+
+/// The CSV-17 collisions of a prepared `document` over the output rows it
+/// would write, `{document, columns, rows}`: `columns` are the projected
+/// `[name, type]` pairs in artifact order and each row writes its values as
+/// [`value`] reads them. The seam is the check over completed rows, which
+/// the file route reaches only through a whole run.
+fn missing_text(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["document", "columns", "rows"]);
+    let columns = input
+        .field("columns")
+        .items()
+        .iter()
+        .map(|column| match column.items() {
+            [name, kind] => (name.text(), column_type(kind)),
+            other => panic!("a column is a [name, type] pair: {other:?}"),
+        })
+        .collect::<Vec<_>>();
+    let rows = input
+        .field("rows")
+        .items()
+        .iter()
+        .map(|row| row.items().iter().map(value).collect())
+        .collect();
+    let table = crate::support::dataset::table(&columns, rows);
+    let projection = (0..columns.len()).collect::<Vec<_>>();
+    prepared(input)
+        .missing_text_findings(&table, &projection)
+        .expect("every cell reads")
         .iter()
         .map(|finding| finding.diagnostic())
         .collect()

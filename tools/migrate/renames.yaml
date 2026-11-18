@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 675
-  changes: 106
+  entries: 676
+  changes: 107
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 60
+    new, decided: 61
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7373,6 +7373,21 @@ entries:
     an input that another profile reads, the field fails as value_not_permitted (CSV-10). A CSV `encoding`
     value was not taken, because `encoding` stays SAS-only (P-UNU-1, SAS-2). No 0.5 file declares a
     mark, so the converter writes none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.output.missing
+  file_type: spec
+  path: output.missing
+  today: null
+  kind: new
+  proposed: 'missing: "."'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4631), pending the owner decision on it. Optional,
+    with no default (I5): a csv artifact writes each missing value as the declared text, bare, in place of
+    the empty field of CSV-4, and `.` is the one text admitted. On a parquet output, an artifact a consumer
+    links or one a transport reads it fails as missing_text_not_applicable, and a str value equal to it
+    fails as missing_text_collision (CSV-17, JSON-5). No 0.5 file declares it, so the converter writes
+    none.'
   field_kind: value
   convert: {action: none}
 - id: new.spec.odm_input

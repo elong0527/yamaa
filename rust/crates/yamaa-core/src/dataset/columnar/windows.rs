@@ -477,7 +477,7 @@ fn filter_truths<E>(
         .iter()
         .map(|&row| cx.frame.members(row).first().copied())
         .collect::<Option<_>>()?;
-    super::predicates::record_truths(filter, cx.table, &records, |column| {
+    super::predicates::record_truths(cx.dates, filter, cx.table, &records, |column| {
         if column < built.width {
             super::predicates::Operand::Frame(cx.frame.column(column), &rows)
         } else {
@@ -833,7 +833,7 @@ fn partition<E>(
                 None => {
                     let row = built.start + member;
                     let source_row = cx.frame.members(row)[0];
-                    super::predicates::row_truth(filter, cx.table, source_row, |column| {
+                    super::predicates::row_truth(cx.dates, filter, cx.table, source_row, |column| {
                         built.get(cx, member, column)
                     })
                     .map_err(|error| {

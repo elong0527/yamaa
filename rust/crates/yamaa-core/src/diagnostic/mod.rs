@@ -359,6 +359,7 @@ conditions! {
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("INPUT-10")),
     ProducerRedundantSourceType => ("validation", "redundant_field_type", Some("INPUT-6")),
     ProducerContractMismatch => ("validation", "producer_contract_mismatch", Some("INPUT-11")),
+    ProducerMissingText => ("validation", "missing_text_not_applicable", Some("CSV-17")),
     ProjectDuplicateName => ("validation", "duplicate_specification_name", Some("PROJECT-5")),
     ProjectUnknownName => ("validation", "unknown_specification_name", Some("PROJECT-6")),
     ProjectUnknownSection => ("validation", "unknown_section", Some("PROJECT-14")),
@@ -375,6 +376,8 @@ conditions! {
     ReportPathCollision => ("validation", "artifact_path_collision", Some("OUTPUT-9")),
     OutputInvalidDecimals => ("validation", "invalid_field_type", Some("CSV-6")),
     OutputDecimalsNotApplicable => ("validation", "decimals_not_applicable", Some("CSV-6")),
+    OutputMissingTextNotApplicable => ("validation", "missing_text_not_applicable", Some("CSV-17")),
+    OutputMissingTextCollision => ("output", "missing_text_collision", Some("CSV-17")),
     OutputDuplicateColumn => ("validation", "duplicate_identifier", Some("OUTPUT-1")),
     OutputUndeclaredColumn => ("validation", "undeclared_column", Some("OUTPUT-1")),
     OutputInternalKey => ("validation", "internal_column_in_keys", Some("OUTPUT-2")),
@@ -463,6 +466,9 @@ conditions! {
     IntermediateDriverType => ("validation", "unknown_intermediate_driver_type", Some("ROW-2")),
     IntermediateUniqueCorrelatedDerivation => ("validation", "correlated_derivation_with_unique_verification", Some("LOOKUP-17")),
     IntermediateDuplicateRecords => ("verification", "duplicate_intermediate_records", Some("LOOKUP-17")),
+    // Text order deciding between collected date texts of two precisions: a
+    // warning row of the run report, never an issue (CHECK-27).
+    TextDateOrder => ("derivation", "text_date_order", Some("CHECK-27")),
     IntermediateUniqueField => ("validation", "unknown_field", Some("LOOKUP-17")),
     IntermediateUniqueCorrelatedFilter => ("validation", "correlated_filter_with_unique_verification", Some("LOOKUP-17")),
     // A `warning` unique on an intermediate without `keep` and `order_by`
@@ -558,6 +564,7 @@ conditions! {
     XptValueOutOfRange => ("output", "xpt_value_out_of_range", Some("XPT-8")),
     XptDisplayFormatInvalid => ("validation", "xpt_display_format_invalid", Some("XPT-9")),
     SubmissionTransportDecimals => ("validation", "decimals_not_applicable", Some("JSON-5")),
+    SubmissionTransportMissingText => ("validation", "missing_text_not_applicable", Some("JSON-5")),
     XptFileTooLarge => ("output", "xpt_file_too_large", Some("XPT-10")),
     XptLastRowBlank => ("output", "xpt_last_row_blank", Some("XPT-10")),
     SubmissionColumnNotOutput => ("validation", "submission_not_output_column", Some("SUB-1")),

@@ -90,7 +90,7 @@ fn side<'t, E>(
                 table,
                 rows: Vec::new(),
             };
-            side.rows = relations::eligibility(side.table(), item)?;
+            side.rows = relations::eligibility(run.dates, side.table(), item)?;
             Ok(Some(side))
         }
     }
@@ -139,7 +139,7 @@ pub(super) fn materialize<E>(
     reserved(kept.try_reserve_exact(joined.rows()))?;
     for row in 0..joined.rows() {
         if let Some(filter) = &join.filter {
-            if !relations::keeps(table, filter, row)? {
+            if !relations::keeps(run.dates, table, filter, row)? {
                 continue;
             }
         }

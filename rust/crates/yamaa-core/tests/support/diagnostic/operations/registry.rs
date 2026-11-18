@@ -30,6 +30,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     Some(match operation {
         "application_issue" => vec![application_issue(input)],
         "column_diagnostic" => column_diagnostic(input),
+        "text_date_order" => text_date_order(input),
         "convert" => convert(input),
         "evaluate_number" => evaluate_number(input),
         "function_file_scalars" => function_file_scalars(input),
@@ -198,6 +199,18 @@ fn not_missing(input: &Json) -> Vec<Diagnostic> {
 
 /// The finding of a column `check` that `failures` rows of `column` fail, at
 /// `path`, `{check, path, column, failures}`, or none when no row fails.
+/// The warning of a place where text order decided between two collected
+/// date texts (CHECK-27), as its run report row records it.
+fn text_date_order(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["path", "shorter", "longer"]);
+    vec![yamaa_core::text_date_order::TextDateOrder {
+        path: text(input, "path").into(),
+        shorter: text(input, "shorter").into(),
+        longer: text(input, "longer").into(),
+    }
+    .diagnostic()]
+}
+
 fn column_diagnostic(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["check", "path", "column", "failures"]);
     dataset_checks::column_diagnostic(

@@ -101,6 +101,11 @@ output_class:
         type: int
         required: false
         description: Fixed display digits for every float column of a csv artifact; the CSV profile defines the rounding and rejects it for parquet.
+    - missing:
+        type: str
+        required: false
+        values: ["."]
+        description: Text a csv artifact writes for a missing value in place of an empty field; refused for parquet, for an artifact another specification links or a transport reads, and when a str value equals it (CSV-17).
     - columns:
         type: "list[identifier]"
         required: true

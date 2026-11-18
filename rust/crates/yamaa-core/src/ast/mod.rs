@@ -588,6 +588,8 @@ pub struct Output {
     pub path: Text,
     pub relative_to: PathBase,
     pub decimals: Option<Constant>,
+    /// The text a csv artifact writes for a missing value (CSV-17).
+    pub missing: Option<Text>,
     pub columns: Vec<Named>,
     pub report: Option<Text>,
     pub order_by: Vec<OrderTerm>,

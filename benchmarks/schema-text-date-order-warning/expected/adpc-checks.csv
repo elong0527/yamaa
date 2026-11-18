@@ -1,0 +1,13 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+adpc.csv,run,output,,,,,,succeeded,,4,,,{}
+adpc.csv,input,input.PC,PC,,,,,,,4,,,"{""bytes"":108,""path"":""input/pc.csv"",""profile"":""csv""}"
+adpc.csv,input,input.EX,EX,,,,,,,6,,,"{""bytes"":145,""path"":""input/ex.csv"",""profile"":""csv""}"
+adpc.csv,rows,base,PC,,,,,,,4,4,,{}
+adpc.csv,handler,columns.LDOSDTC.derivation.source.multiple_matches,multiple_matches,,LDOSDTC,LOOKUP-10,,,,3,,,{}
+adpc.csv,handler,columns.LDOSDTC.derivation.source.absent,absent,,LDOSDTC,LOOKUP-24,,,,0,,,{}
+adpc.csv,column,columns.USUBJID,USUBJID,,,,,,,0,4,,"{""max_length"":2}"
+adpc.csv,column,columns.PCSEQ,PCSEQ,,,,,,,0,4,,{}
+adpc.csv,column,columns.PCDTC,PCDTC,,,,,,,0,4,,"{""max_length"":16}"
+adpc.csv,column,columns.LDOSDTC,LDOSDTC,,,,,,,0,4,,"{""max_length"":19}"
+adpc.csv,check,intermediates.LAST_DOSE.filter,text_date_order,,,CHECK-27,warning,violated,text_date_order,1,1,[{}],"{""longer"":""2025-03-11T07:30"",""shorter"":""2025-03-11""}"
+adpc.csv,check,intermediates.LAST_DOSE.order_by,text_date_order,,,CHECK-27,warning,violated,text_date_order,1,1,[{}],"{""longer"":""2025-03-12T06:00"",""shorter"":""2025-03-12""}"

@@ -3009,6 +3009,15 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
+        "missing": {
+          "type": "string",
+          "enum": [
+            "."
+          ],
+          "description": "Text a csv artifact writes for a missing value in place of an empty field; refused for parquet, for an artifact another specification links or a transport reads, and when a str value equals it (CSV-17).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "columns": {
           "type": "array",
           "items": {
@@ -5629,6 +5638,15 @@
           "description": "Fixed display digits for every float column of a csv artifact; the CSV profile defines the rounding and rejects it for parquet.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
+        },
+        "missing": {
+          "type": "string",
+          "enum": [
+            "."
+          ],
+          "description": "Text a csv artifact writes for a missing value in place of an empty field; refused for parquet, for an artifact another specification links or a transport reads, and when a str value equals it (CSV-17).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         },
         "columns": {
           "type": "array",

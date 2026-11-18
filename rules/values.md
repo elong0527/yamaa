@@ -663,6 +663,11 @@ Predicates, ordering terms, `greatest`, `least` and aggregate `MIN` and `MAX`
 use this order. Their owning operations define missing placement or empty
 results separately.
 
+Collected date text ([TIME-7](temporal.md#time-7)) recorded to two precisions
+orders by this rule, not by time: `2025-03-11` precedes `2025-03-11T07:30`.
+A run reports where a comparison or a lookup's `order_by` met such a pair
+([CHECK-27](verification.md#check-27)).
+
 <a id="value-21"></a>
 
 ### VALUE-21. Values of one temporal type order chronologically, whatever their collected precision

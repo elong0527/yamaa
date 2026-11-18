@@ -394,6 +394,8 @@ struct Part<E> {
     marks: Marks,
     /// Its handler counts where it ended.
     counts: HandlerMark,
+    /// The text date orders its comparisons met (CHECK-27).
+    dates: crate::text_date_order::TextDateOrders,
     /// The key grain's group of each of its candidates (#4211).
     key_groups: Option<Vec<usize>>,
     /// Its failure, at the last mark it entered, and what its positions
@@ -413,6 +415,7 @@ impl<E> Part<E> {
             checked: Vec::new(),
             marks: Marks::new(0, false),
             counts,
+            dates: Default::default(),
             key_groups: None,
             failure: None,
         }
@@ -653,7 +656,8 @@ impl ResolvedPlan {
             error: std::marker::PhantomData,
         };
         self.observed(observer, |observer| {
-            let mut outer = Run::new(self, (&empty, secondary), functions, cancelled);
+            let dates = super::TextDates::default();
+            let mut outer = Run::new(self, (&empty, secondary), functions, cancelled, &dates);
             match self.divided(&mut outer, input, observer) {
                 Ok(found) => found,
                 Err(error) => Found {
@@ -838,7 +842,8 @@ impl ResolvedPlan {
             output_partition,
             publish,
         } = placement;
-        let mut run = Run::new(self, (primary, secondary), functions, cancelled);
+        let dates = super::TextDates::default();
+        let mut run = Run::new(self, (primary, secondary), functions, cancelled, &dates);
         run.output_partition = output_partition;
         let mut marks = Marks::new(limit, first);
         marks.opened = opened;
@@ -879,6 +884,7 @@ impl ResolvedPlan {
             templates,
             checked,
             counts: run.handlers.mark(),
+            dates: dates.take(),
             key_groups,
             marks,
             failure,
@@ -1010,6 +1016,12 @@ impl ResolvedPlan {
         outer
             .handlers
             .restore(compose(&parts, |_, part| &part.counts));
+        for part in &mut parts {
+            outer
+                .dates
+                .borrow_mut()
+                .merge(std::mem::take(&mut part.dates));
+        }
         let templates = template_rows(&parts, reference, end);
         if publishing {
             let result = self.finish_published(outer, &mut parts, &blocks, &mut records, observer);
@@ -1215,6 +1227,7 @@ impl ResolvedPlan {
         Ok(Execution {
             dataset,
             verifications: std::mem::take(records),
+            text_date_orders: outer.dates.take().into_orders(),
             partition_rows: outer.output_partition,
         })
     }

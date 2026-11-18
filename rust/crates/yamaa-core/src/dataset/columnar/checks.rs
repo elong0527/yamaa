@@ -131,7 +131,7 @@ pub(super) fn check_columns<E>(
             }
             let start = records.len();
             for &check in &group {
-                column_check(plan, frame, &keys, check, *next, records)?;
+                column_check(run.dates, plan, frame, &keys, check, *next, records)?;
             }
             if records[start..].iter().any(|record| {
                 record.failed_count != 0
@@ -163,6 +163,7 @@ fn severity(plan: &ResolvedPlan, path: &str) -> VerificationSeverity {
 }
 
 fn column_check<E>(
+    dates: &super::TextDates,
     plan: &ResolvedPlan,
     frame: &Frame,
     keys: &[usize],
@@ -247,7 +248,7 @@ fn column_check<E>(
                     validate_predicate(plan, when, &dataset, records)?;
                     let mut checked = Vec::new();
                     for row in 0..rows {
-                        if completed_truth(when, &dataset, row, records)? == Truth::True {
+                        if completed_truth(dates, when, &dataset, row, records)? == Truth::True {
                             checked.push(row);
                         }
                     }
@@ -859,7 +860,10 @@ fn validate_predicate<E>(
     let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
         .expect("admitted verification names");
     let table = DatasetTable(dataset);
+    // Samples are not data: what text order decides between them is not
+    // recorded (CHECK-27).
     match super::predicates::row_truth(
+        &super::TextDates::default(),
         &sample_predicate,
         Table::<Infallible>::Source(&table),
         0,
@@ -895,6 +899,7 @@ impl TableAccess for DatasetTable<'_, '_> {
 /// One row's truth of a verification predicate that reads completed columns
 /// alone.
 fn completed_truth<E>(
+    dates: &super::TextDates,
     predicate: &BoundPredicate,
     dataset: &Completed<'_>,
     row: usize,
@@ -902,6 +907,7 @@ fn completed_truth<E>(
 ) -> Result<Truth, Fail<E>> {
     let table = DatasetTable(dataset);
     super::predicates::row_truth(
+        dates,
         predicate,
         Table::<Infallible>::Source(&table),
         0,
@@ -941,7 +947,7 @@ fn evaluate_predicate<'a: 's, 's, E>(
         .iter()
         .any(|binding| matches!(binding.read, BoundRead::Intermediate { .. }))
     {
-        return completed_truth(predicate, dataset, row, records);
+        return completed_truth(run.dates, predicate, dataset, row, records);
     }
     let mut cx = run.template_cx(
         frame,
