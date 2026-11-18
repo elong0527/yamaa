@@ -182,6 +182,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("submission_length_not_applicable", "column {column} declares {field}, which its data type does not take"),
     ("submission_metadata_missing", "{spec_path} lacks the {field} metadata that define.xml needs"),
     ("submission_not_output_column", "column {column} has submission metadata but is not an output column"),
+    ("text_date_order", "text order places {shorter} before {longer} at {spec_path}, though both may name the same time; compare them as date or datetime values"),
     ("transport_dataset_empty", "dataset {dataset} has no rows and does not declare has_no_data"),
     ("transport_label_invalid", "label '{label}' of {dataset} cannot be transported: {detail}"),
     ("transport_path_collision", "{spec_path} names {path}, which another writer of the submission also writes"),

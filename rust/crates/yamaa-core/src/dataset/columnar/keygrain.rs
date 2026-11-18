@@ -50,13 +50,15 @@ pub(super) fn construct<'a: 's, 's, E>(
             else {
                 unreachable!("a filter holds its predicate")
             };
-            let truth = super::predicates::row_truth(predicate, table, row, |_| ValueRef::Missing)
-                .map_err(|error| {
-                    Box::new(ExecutionError::Predicate {
-                        source_row: row,
-                        error: *error,
-                    })
-                })?;
+            let truth = super::predicates::row_truth(run.dates, predicate, table, row, |_| {
+                ValueRef::Missing
+            })
+            .map_err(|error| {
+                Box::new(ExecutionError::Predicate {
+                    source_row: row,
+                    error: *error,
+                })
+            })?;
             if truth != crate::expression::Truth::True {
                 continue;
             }

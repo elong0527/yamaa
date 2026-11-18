@@ -463,6 +463,9 @@ conditions! {
     IntermediateDriverType => ("validation", "unknown_intermediate_driver_type", Some("ROW-2")),
     IntermediateUniqueCorrelatedDerivation => ("validation", "correlated_derivation_with_unique_verification", Some("LOOKUP-17")),
     IntermediateDuplicateRecords => ("verification", "duplicate_intermediate_records", Some("LOOKUP-17")),
+    // Text order deciding between collected date texts of two precisions: a
+    // warning row of the run report, never an issue (CHECK-27).
+    TextDateOrder => ("derivation", "text_date_order", Some("CHECK-27")),
     IntermediateUniqueField => ("validation", "unknown_field", Some("LOOKUP-17")),
     IntermediateUniqueCorrelatedFilter => ("validation", "correlated_filter_with_unique_verification", Some("LOOKUP-17")),
     // A `warning` unique on an intermediate without `keep` and `order_by`

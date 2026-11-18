@@ -115,6 +115,7 @@ impl<E> Part<E> {
             checked: self.checked,
             marks: self.marks,
             counts: self.counts,
+            dates: self.dates,
             key_groups: self.key_groups,
             failure: None,
         });
@@ -135,6 +136,7 @@ impl Part<Infallible> {
             checked: self.checked,
             marks: self.marks,
             counts: self.counts,
+            dates: self.dates,
             key_groups: self.key_groups,
             failure: None,
         }

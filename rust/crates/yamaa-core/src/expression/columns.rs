@@ -21,13 +21,14 @@
 
 use super::bind::CompiledExpression;
 use super::evaluate::{
-    between, compare, contains_truth, is_null, like_truth, Arithmetic, Condition, LikePattern,
-    Truth,
+    between, compare, contains_truth, is_null, like_truth, text_date_pair, Arithmetic, Condition,
+    LikePattern, Truth,
 };
 use super::syntax::{Comparison, NodeKind};
 use super::typed::{self, Floats, Other, Typed};
 use crate::numeric::{float_binary, zero_divisor, ArithmeticError, Number};
 use crate::table::{ColumnRef, ValueRef};
+use crate::text_date_order::Least;
 use std::collections::TryReserveError;
 
 /// One identifier occurrence's values over the selection, one per row.
@@ -59,6 +60,12 @@ pub trait ColumnResolver {
     /// Read one occurrence for every row of the selection, or answer None
     /// when the name is absent.
     fn column(&mut self, identifier: &str) -> Result<Option<Self::Column>, Self::Error>;
+
+    /// As [`Resolver::text_date_order`](super::Resolver::text_date_order):
+    /// text order decided a comparison of the expression at `spec_path`
+    /// between two collected date texts (CHECK-27). The default records
+    /// nothing.
+    fn text_date_order(&mut self, _spec_path: &str, _shorter: &str, _longer: &str) {}
 }
 
 /// Why a column evaluation stopped. Either way the site evaluates the
@@ -201,6 +208,16 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
         Ok(results)
     }
 
+    /// Tell the resolver the least pair whose comparison text order decided
+    /// between collected date texts over the selection (CHECK-27), as the
+    /// row evaluator tells it each.
+    fn note(&mut self, decided: &Least) {
+        if let Some((shorter, longer)) = decided.pair() {
+            self.resolver
+                .text_date_order(&self.compiled.spec_path, shorter, longer);
+        }
+    }
+
     fn read(&mut self, id: usize) -> Result<R::Column, Stop<R::Error>> {
         let identifier = self.compiled.syntax.text(id);
         match self.resolver.column(identifier) {
@@ -245,13 +262,23 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
             } => {
                 let left = self.lane(*left)?;
                 let right = self.lane(*right)?;
+                let mut decided = Least::default();
                 let typed = left.typed().zip(right.typed());
-                if let Some(truths) = typed
-                    .and_then(|(left, right)| typed::compare(self.rows, *operator, left, right))
-                {
+                if let Some(truths) = typed.and_then(|(left, right)| {
+                    typed::compare(self.rows, *operator, left, right, &mut decided)
+                }) {
+                    self.note(&decided);
                     return Ok(truths?);
                 }
-                self.each(|row| compare(*operator, left.get(row), right.get(row)))
+                let truths = self.each(|row| {
+                    let (left, right) = (left.get(row), right.get(row));
+                    if let Some((shorter, longer)) = text_date_pair(*operator, left, right) {
+                        decided.offer(shorter, longer);
+                    }
+                    compare(*operator, left, right)
+                });
+                self.note(&decided);
+                truths
             }
             NodeKind::IsNull { value, negated } => {
                 let value = self.lane(*value)?;
@@ -299,18 +326,31 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
                 let lower = self.lane(*lower)?;
                 let second = self.lane(*value)?;
                 let upper = self.lane(*upper)?;
+                let mut decided = Least::default();
                 if let Some(truths) =
-                    self.typed_between([&first, &lower, &second, &upper], *negated)
+                    self.typed_between([&first, &lower, &second, &upper], *negated, &mut decided)
                 {
+                    self.note(&decided);
                     return Ok(truths?);
                 }
-                self.each(|row| {
+                let truths = self.each(|row| {
+                    let pairs = [
+                        (Comparison::GreaterEqual, first.get(row), lower.get(row)),
+                        (Comparison::LessEqual, second.get(row), upper.get(row)),
+                    ];
+                    for (operator, left, right) in pairs {
+                        if let Some((shorter, longer)) = text_date_pair(operator, left, right) {
+                            decided.offer(shorter, longer);
+                        }
+                    }
                     between(
                         [first.get(row), lower.get(row)],
                         [second.get(row), upper.get(row)],
                         *negated,
                     )
-                })
+                });
+                self.note(&decided);
+                truths
             }
             NodeKind::Like {
                 value,
@@ -354,11 +394,12 @@ impl<'a, R: ColumnResolver> Columns<'a, R> {
         &self,
         [first, lower, second, upper]: [&Lane<'a, R::Column>; 4],
         negated: bool,
+        decided: &mut Least,
     ) -> Option<Result<Vec<Truth>, TryReserveError>> {
         let (first, lower) = (first.typed()?, lower.typed()?);
         let (second, upper) = (second.typed()?, upper.typed()?);
-        let low = typed::compare(self.rows, Comparison::GreaterEqual, first, lower)?;
-        let high = typed::compare(self.rows, Comparison::LessEqual, second, upper)?;
+        let low = typed::compare(self.rows, Comparison::GreaterEqual, first, lower, decided)?;
+        let high = typed::compare(self.rows, Comparison::LessEqual, second, upper, decided)?;
         Some(low.and_then(|mut truths| {
             for (truth, high) in truths.iter_mut().zip(high?) {
                 let both = truth.and(high);

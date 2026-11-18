@@ -15,9 +15,10 @@
 //!   canonical JSON text that the binary printed, so no reader chooses a
 //!   number type.
 //! - **Run reports.** The command line sees a run's report in the file its
-//!   save writes (OUTPUT-10). `public-contract.value_level_report` declares
-//!   one, whose value-level rows are compared with the case's, all fourteen
-//!   columns (`public-contract.report_columns`). The failed run of
+//!   save writes (OUTPUT-10). `public-contract.value_level_report` and
+//!   `public-contract.text_date_order_report` each declare one, whose warning
+//!   rows are compared with the case's, all fourteen columns
+//!   (`public-contract.report_columns`). The failed run of
 //!   `public-contract`, assembled as both hosts assemble it, saves only its
 //!   report, whose bytes are compared with `failed_report_csv`.
 //! - **Fragments.** Each check case of `include-fragments` prints every issue
@@ -698,64 +699,71 @@ fn an_invalid_parquet_file_prints_the_issue_row_both_hosts_return() {
     );
 }
 
-/// `public-contract.value_level_report`: the run succeeds with no issue and
-/// saves the report its specification declares, then its output; the
-/// report's value-level rows are the rows both hosts' reports hold, all
-/// fourteen columns in order.
+/// `public-contract.value_level_report` and `.text_date_order_report`: each
+/// run succeeds with no issue and saves the report its specification
+/// declares, then its output; the report's rows named as the case's rows
+/// are the rows both hosts' reports hold, all fourteen columns in order.
 #[test]
-fn a_run_saves_the_value_level_report_rows_both_hosts_report() {
-    let case = &family("public-contract")["value_level_report"];
-    let directory = Scratch::new("parity");
-    directory.write("spec.yaml", text(case, "specification_yaml"));
-    directory.write("input.csv", text(case, "input_csv"));
-    let document = document(&directory, &["run", "spec.yaml"], "value_level_report");
-    assert_eq!(
-        printed_rows(&document, "value_level_report"),
-        Vec::<Row>::new(),
-        "the value-level run's issues"
-    );
-    assert_eq!(
-        paths(&document, "value_level_report"),
-        [
-            directory.spelled("report.csv"),
-            directory.spelled("output.csv")
-        ],
-        "the files the value-level run saved"
-    );
-    let columns = report_columns();
-    let row = |cells: Vec<Option<String>>| -> Row {
+fn a_run_saves_the_warning_report_rows_both_hosts_report() {
+    for key in ["value_level_report", "text_date_order_report"] {
+        let case = &family("public-contract")[key];
+        let directory = Scratch::new("parity");
+        directory.write("spec.yaml", text(case, "specification_yaml"));
+        directory.write("input.csv", text(case, "input_csv"));
+        let document = document(&directory, &["run", "spec.yaml"], key);
         assert_eq!(
-            cells.len(),
-            columns.len(),
-            "a report row's cells: {cells:?}"
+            printed_rows(&document, key),
+            Vec::<Row>::new(),
+            "{key}: the run's issues"
         );
-        let values = cells
-            .into_iter()
-            .map(|cell| cell.map_or(Value::Null, Value::String));
-        columns.iter().copied().zip(values).collect()
-    };
-    let records = csv_records(&std::fs::read_to_string(directory.join("report.csv")).unwrap());
-    let header = records[0].iter().map(|name| name.as_deref().unwrap());
-    assert_eq!(header.collect::<Vec<_>>(), columns, "the report's columns");
-    let name = columns.iter().position(|column| *column == "NAME").unwrap();
-    let saved = records[1..]
-        .iter()
-        .filter(|record| record[name].as_deref() == Some("value_level"))
-        .map(|record| row(record.clone()))
-        .collect::<Vec<_>>();
-    // A truth cell is text, a count, or null for a missing value.
-    let cell = |value: &Value| match value {
-        Value::Null => None,
-        Value::String(text) => Some(text.clone()),
-        other => Some(other.to_string()),
-    };
-    let authored = case["checks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|check| row(columns.iter().map(|&column| cell(&check[column])).collect()))
-        .collect::<Vec<_>>();
-    assert_eq!(saved, authored, "the value-level report rows");
+        assert_eq!(
+            paths(&document, key),
+            [
+                directory.spelled("report.csv"),
+                directory.spelled("output.csv")
+            ],
+            "{key}: the files the run saved"
+        );
+        let columns = report_columns();
+        let row = |cells: Vec<Option<String>>| -> Row {
+            assert_eq!(
+                cells.len(),
+                columns.len(),
+                "a report row's cells: {cells:?}"
+            );
+            let values = cells
+                .into_iter()
+                .map(|cell| cell.map_or(Value::Null, Value::String));
+            columns.iter().copied().zip(values).collect()
+        };
+        let records = csv_records(&std::fs::read_to_string(directory.join("report.csv")).unwrap());
+        let header = records[0].iter().map(|name| name.as_deref().unwrap());
+        assert_eq!(
+            header.collect::<Vec<_>>(),
+            columns,
+            "{key}: the report's columns"
+        );
+        let named = case["checks"][0]["NAME"].as_str().unwrap();
+        let name = columns.iter().position(|column| *column == "NAME").unwrap();
+        let saved = records[1..]
+            .iter()
+            .filter(|record| record[name].as_deref() == Some(named))
+            .map(|record| row(record.clone()))
+            .collect::<Vec<_>>();
+        // A truth cell is text, a count, or null for a missing value.
+        let cell = |value: &Value| match value {
+            Value::Null => None,
+            Value::String(text) => Some(text.clone()),
+            other => Some(other.to_string()),
+        };
+        let authored = case["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|check| row(columns.iter().map(|&column| cell(&check[column])).collect()))
+            .collect::<Vec<_>>();
+        assert_eq!(saved, authored, "{key}: the warning report rows");
+    }
 }
 
 /// The failed run of `public-contract`, whose specification both hosts

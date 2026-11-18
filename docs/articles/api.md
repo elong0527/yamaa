@@ -505,8 +505,10 @@ project run that did not run, because a specification it reads from did not
 complete, is `skipped`.
 
 Printing a result shows its status, its size, its issue count and its first
-issue with its location. The engine writes the text, so R, Python and the
-command line print the same words. A project run lists each specification on
+issue with its location. A run whose report holds a violated `warning` check
+adds their count, as in `0 issues, 1 warning`; the checks are rows of its
+`report` ([CHECK-2](../../rules/verification.md#check-2)). The engine writes
+the text, so R, Python and the command line print the same words. A project run lists each specification on
 a line of its own, and one of its runs prints like any run:
 
 === "R"

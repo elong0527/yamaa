@@ -168,6 +168,9 @@ pub(crate) struct Head<'a> {
     pub(crate) status: Status,
     /// The size; a check, which reads no data, has none.
     pub(crate) size: Option<String>,
+    /// The violated warnings its run reports ([`warnings`]); a check and a
+    /// submission, which build no run report, have none.
+    pub(crate) warnings: usize,
 }
 
 /// One member line of a project run's summary.
@@ -176,10 +179,12 @@ pub(crate) struct MemberLine {
     pub(crate) status: Status,
     pub(crate) size: String,
     pub(crate) issues: usize,
+    pub(crate) warnings: usize,
 }
 
 /// A result's summary: `yamaa <kind> of <subject>: <status>[, <size>], <n>
-/// issues`, then the member lines, then the first of `issues`.
+/// issues[, <w> warnings]`, then the member lines, then the first of
+/// `issues`. The warning count is written only when there is one.
 pub(crate) fn summary(head: Head<'_>, members: &[MemberLine], issues: &[Diagnostic]) -> Summary {
     let mut line = format!(
         "yamaa {} of {}: {}",
@@ -191,6 +196,9 @@ pub(crate) fn summary(head: Head<'_>, members: &[MemberLine], issues: &[Diagnost
         let _ = write!(line, ", {size}");
     }
     let _ = write!(line, ", {}", count(issues.len(), "issue", "issues"));
+    if head.warnings > 0 {
+        let _ = write!(line, ", {}", count(head.warnings, "warning", "warnings"));
+    }
     let directory = current_directory();
     Summary {
         line: ascii(&line),
@@ -202,8 +210,8 @@ pub(crate) fn summary(head: Head<'_>, members: &[MemberLine], issues: &[Diagnost
 }
 
 /// Two spaces, the name padded to the longest name, the status padded to 9
-/// characters, then the size and the issue count, each column two spaces
-/// apart (rule 4).
+/// characters, then the size, the issue count and any warning count, each
+/// column two spaces apart (rule 4).
 fn member_lines(members: &[MemberLine]) -> Vec<String> {
     let names = members
         .iter()
@@ -214,14 +222,41 @@ fn member_lines(members: &[MemberLine]) -> Vec<String> {
         .iter()
         .zip(names)
         .map(|(member, name)| {
-            format!(
+            let mut line = format!(
                 "  {name:<width$}  {:<9}  {}, {}",
                 member.status.as_str(),
                 ascii(&member.size),
                 count(member.issues, "issue", "issues")
-            )
+            );
+            if member.warnings > 0 {
+                let _ = write!(line, ", {}", count(member.warnings, "warning", "warnings"));
+            }
+            line
         })
         .collect()
+}
+
+/// The violated warnings of a run report: its `check` rows of `warning`
+/// severity whose outcome is `violated` (CHECK-2, CHECK-27).
+pub(crate) fn warnings(report: Option<&crate::Table>) -> usize {
+    use yamaa_adapters::public_table::PublicColumn;
+    let Some(report) = report.map(crate::Table::public) else {
+        return 0;
+    };
+    let column = |name: &str| {
+        report
+            .names()
+            .position(|column| column == name)
+            .map(|index| report.column(index))
+    };
+    match (column("SEVERITY"), column("OUTCOME")) {
+        (Some(PublicColumn::Str(severity)), Some(PublicColumn::Str(outcome))) => (0..report.rows())
+            .filter(|&row| {
+                severity.get(row) == Some("warning") && outcome.get(row) == Some("violated")
+            })
+            .count(),
+        _ => 0,
+    }
 }
 
 /// The size of a run from its output's rows and columns: `<r> rows x <c>
@@ -828,6 +863,7 @@ mod tests {
             status,
             size: size.to_owned(),
             issues,
+            warnings: 0,
         };
         let lines = member_lines(&[
             member("ADSL", Status::Succeeded, "254 rows x 48 columns", 0),

@@ -149,6 +149,7 @@ impl Check {
             subject: &self.subject,
             status: self.status(),
             size: None,
+            warnings: 0,
         };
         text::summary(head, &[], &self.diagnostics())
     }
@@ -207,6 +208,7 @@ impl Run {
             subject: self.build.subject(),
             status: self.status(),
             size: Some(text::output_size(self.build.dimensions())),
+            warnings: text::warnings(self.build.run_report()),
         };
         text::summary(head, &[], &self.build.report().diagnostics)
     }
@@ -1070,6 +1072,7 @@ impl ProjectRun {
                 status: run.status(),
                 size: text::output_size(run.build.dimensions()),
                 issues: run.build.report().len(),
+                warnings: text::warnings(run.build.run_report()),
             })
             .collect::<Vec<_>>();
         let head = Head {
@@ -1077,6 +1080,7 @@ impl ProjectRun {
             subject: &self.subject,
             status: self.status(),
             size: Some(text::specifications(self.outcome.members.len())),
+            warnings: members.iter().map(|member| member.warnings).sum(),
         };
         text::summary(head, &members, &self.diagnostics())
     }
@@ -1181,6 +1185,7 @@ impl Submission {
             subject: &self.subject,
             status: self.status(),
             size: Some(text::submission_size(defines, transports)),
+            warnings: 0,
         };
         text::summary(head, &[], &self.diagnostics())
     }

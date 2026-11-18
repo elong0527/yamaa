@@ -58,6 +58,8 @@ use frame::{Frame, Identity};
 use handlers::{HandlerMark, Handlers};
 
 type Fail<E> = Box<ExecutionError<E>>;
+/// The text date orders of one run (CHECK-27).
+type TextDates = std::cell::RefCell<crate::text_date_order::TextDateOrders>;
 
 /// A row binding's failure on a candidate row that its template's filter has
 /// yet to read names that filter, `rows.<id>.filter`, as `template_filter`
@@ -240,6 +242,9 @@ struct Cx<'a, E> {
     pub operands: Option<&'a [Value]>,
     /// The donor record an aggregate derivation enriches, per selected row.
     pub record: Option<&'a relations::Record<'a, E>>,
+    /// Where the run keeps the text date orders its comparisons meet
+    /// (CHECK-27).
+    pub dates: &'a TextDates,
 }
 
 impl<E> Clone for Cx<'_, E> {
@@ -255,6 +260,7 @@ impl<E> Clone for Cx<'_, E> {
             output: self.output.clone(),
             operands: self.operands,
             record: self.record,
+            dates: self.dates,
         }
     }
 }
@@ -298,6 +304,10 @@ struct Run<'p, 'a, E> {
     pub ports: index::Ports,
     /// The run's cancellation probe (#2822).
     pub cancelled: &'a dyn Fn() -> bool,
+    /// The least pair each site's text order decided between collected
+    /// date texts (CHECK-27), kept outside the run so that every context
+    /// of it records there.
+    pub dates: &'a TextDates,
     /// Whether the probe has answered true: a run stays cancelled, even when
     /// a probe of a lookup swallowed the poll's failure.
     pub stopped: std::cell::Cell<bool>,
@@ -342,6 +352,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         ),
         functions: &'a mut dyn FunctionPort<Error = E>,
         cancelled: &'a dyn Fn() -> bool,
+        dates: &'a TextDates,
     ) -> Self {
         Self {
             plan,
@@ -354,6 +365,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             calls: false,
             ports: index::Ports::default(),
             cancelled,
+            dates,
             stopped: std::cell::Cell::new(false),
             output_partition: None,
             marks: None,
@@ -482,7 +494,8 @@ impl ResolvedPlan {
     ) -> ExecutionAttempt<T::Error> {
         let primary = Borrowed(table);
         self.observed(observer, |observer| {
-            let mut run = Run::new(self, (&primary, secondary), functions, cancelled);
+            let dates = TextDates::default();
+            let mut run = Run::new(self, (&primary, secondary), functions, cancelled, &dates);
             let mut records = Vec::new();
             let mut templates = Vec::new();
             let result = run.execute_inner(&mut records, &mut templates, observer);
@@ -766,6 +779,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 rows,
             ),
             verifications: std::mem::take(records),
+            text_date_orders: self.dates.take().into_orders(),
             partition_rows: self.output_partition,
         })
     }
@@ -1199,6 +1213,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             output: 0..0,
             operands: None,
             record: None,
+            dates: self.dates,
         }
     }
 

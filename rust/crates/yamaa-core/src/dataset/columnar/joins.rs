@@ -735,14 +735,16 @@ fn resolve<E>(
             None => Ok(true),
             Some(filter) => {
                 let evaluate = || {
-                    super::predicates::row_truth(filter, table, source_row, |_| ValueRef::Missing)
-                        .map(|truth| truth == crate::expression::Truth::True)
-                        .map_err(|error| {
-                            Box::new(ExecutionError::Predicate {
-                                source_row,
-                                error: *error,
-                            })
+                    super::predicates::row_truth(run.dates, filter, table, source_row, |_| {
+                        ValueRef::Missing
+                    })
+                    .map(|truth| truth == crate::expression::Truth::True)
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
                         })
+                    })
                 };
                 match expr {
                     // The filter reads only the record: one answer each.
@@ -808,9 +810,12 @@ fn pick<E>(
             identity: run.failure_identity(cx, row),
         }));
     };
-    let chosen = select(&candidates, selection, |source_row, field| {
-        cell(donor, path, source_row, field)
-    })?;
+    let chosen = select(
+        &candidates,
+        selection,
+        (run.dates, path),
+        |source_row, field| cell(donor, path, source_row, field),
+    )?;
     Ok(Pick::Several(chosen))
 }
 

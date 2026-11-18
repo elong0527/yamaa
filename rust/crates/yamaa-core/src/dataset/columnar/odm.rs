@@ -157,14 +157,15 @@ fn odm_value<E>(
             continue;
         }
         if let Some(filter) = &read.filter {
-            let truth =
-                super::predicates::row_truth(filter, table, source_row, |_| ValueRef::Missing)
-                    .map_err(|error| {
-                        Box::new(ExecutionError::Predicate {
-                            source_row,
-                            error: *error,
-                        })
-                    })?;
+            let truth = super::predicates::row_truth(run.dates, filter, table, source_row, |_| {
+                ValueRef::Missing
+            })
+            .map_err(|error| {
+                Box::new(ExecutionError::Predicate {
+                    source_row,
+                    error: *error,
+                })
+            })?;
             if truth != crate::expression::Truth::True {
                 continue;
             }
