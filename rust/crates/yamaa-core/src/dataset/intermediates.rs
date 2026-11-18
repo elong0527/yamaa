@@ -210,6 +210,9 @@ pub struct Intermediate {
     pub derivations: Option<IntermediateDerivations>,
     /// Retained compilation metadata for a rejected augmentation; never executable.
     pub pending_schema: Option<TableSchema>,
+    /// The port another intermediate reads this one's records through,
+    /// when one names it as its `dataset` (LOOKUP-3).
+    pub records: Option<RecordPort>,
 }
 
 impl Intermediate {

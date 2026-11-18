@@ -1,0 +1,95 @@
+yamaa: "1.0"
+type: spec
+domain: PK
+keys: [USUBJID, EVID, SEQ]
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
+  PC: {path: input/pc.csv, types: {PCSEQ: int}}
+
+output:
+  path: pk.csv
+  columns: [USUBJID, EVID, SEQ, ADTM, AMT, ADDL, II, FADTM, PADTM]
+  order_by: [USUBJID, ADTM, EVID]
+
+intermediates:
+  # The span of each dose record, derived once: its start and end as
+  # datetimes, the dosing interval in hours, the hours it covers and the
+  # number of administrations after the first.
+  - id: EXREC
+    dataset: EX
+    derivations:
+      STDTM:
+        type: datetime
+        derivation: {impute: {type: datetime, source: EXSTDTC, time: first}}
+      ENDTM:
+        type: datetime
+        derivation: {impute: {type: datetime, source: EXENDTC, time: last}}
+      IIH:
+        type: int
+        derivation: {mapping: {source: EXDOSFRQ, dict: {QD: 24, BID: 12}}}
+      SPAN:
+        type: float
+        derivation:
+          diff: {type: datetime, start: STDTM, end: ENDTM, unit: hour}
+      MORE: {type: int, derivation: "FLOOR(SPAN / IIH)"}
+
+  # The subject's first dose record, read from the records of EXREC, its
+  # derived fields included, with a key of its own.
+  - id: FIRSTREC
+    dataset: EXREC
+    key: {USUBJID: USUBJID}
+    order_by: [EXREC.STDTM]
+    keep: first
+
+  # The latest dose record that starts before the row's time. A dose row's
+  # own record starts at its time, so it is left out.
+  - id: PRIOR
+    dataset: EXREC
+    key: {USUBJID: USUBJID}
+    between: {value: ADTM, lower: STDTM, closed: neither}
+    order_by: [EXREC.STDTM]
+    keep: last
+
+columns:
+  - {name: USUBJID, type: str, label: Unique Subject Identifier}
+  - {name: EVID, type: int, label: Event Identifier}
+  - {name: SEQ, type: int, label: Sequence Number}
+  - {name: ADTM, type: datetime, label: Analysis Datetime}
+  - {name: AMT, type: float, label: Dose Amount}
+  - {name: ADDL, type: int, label: Number of Additional Doses}
+  - {name: II, type: int, label: Interdose Interval (h)}
+
+  - name: FADTM
+    type: datetime
+    label: First Dose Datetime
+    derivation: FIRSTREC.STDTM
+
+  - name: PADTM
+    type: datetime
+    label: Prior Dose Datetime
+    derivation: PRIOR.STDTM
+
+rows:
+  # One dose row per dose record, driven by EXREC itself.
+  - id: dose
+    dataset: EXREC
+    derivations:
+      USUBJID: EXREC.USUBJID
+      EVID: 1
+      SEQ: EXREC.EXSEQ
+      ADTM: EXREC.STDTM
+      AMT: EXREC.EXDOSE
+      ADDL: EXREC.MORE
+      II: EXREC.IIH
+
+  # One sample row per concentration record.
+  - id: sample
+    dataset: PC
+    derivations:
+      USUBJID: PC.USUBJID
+      EVID: 0
+      SEQ: PC.PCSEQ
+      ADTM: {impute: {type: datetime, source: PC.PCDTC, time: first}}
+      AMT: null
+      ADDL: null
+      II: null

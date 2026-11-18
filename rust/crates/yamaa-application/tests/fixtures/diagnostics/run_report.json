@@ -371,6 +371,26 @@
       }
     },
     {
+      "case": "a_warning_unique_over_a_record_relation_reports_the_relation_it_reads",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: REF\ninput:\n  REF: {path: input/ref.csv, types: {ID: int}}\n  VIS: {path: input/visits.csv, types: {ID: int, VDT: date, N: int}}\noutput: {path: out.csv, columns: [ID, VAL], report: report.csv}\nintermediates:\n  - id: RECS\n    dataset: VIS\n    derivations:\n      DOUBLE: {type: int, derivation: \"N * 2\"}\n  - id: LAST\n    dataset: RECS\n    key: [ID]\n    order_by: [RECS.VDT]\n    keep: last\n    verifications:\n      - unique: {columns: [ID], severity: warning}\ncolumns:\n  - {name: ID, type: int, derivation: REF.ID}\n  - {name: VAL, type: int, derivation: LAST.DOUBLE}\n", "input/ref.csv": "ID\n1\n2\n", "input/visits.csv": "ID,VDT,N\n1,2025-01-01,1\n1,2025-01-12,2\n2,2025-01-09,3\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["ID", "VAL"],
+        [1, 4],
+        [2, 6]
+      ],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "intermediates.LAST.verifications[0].unique", "unique", null, null, "LOOKUP-17", "warning", "violated", "duplicate_intermediate_records", 1, 2, "[{\"ID\":1}]", "{\"columns\":[\"ID\"],\"dataset\":\"RECS\",\"intermediate\":\"LAST\"}"]
+        ]
+      }
+    },
+    {
       "case": "a_not_missing_when_waits_for_the_later_column_it_reads",
       "operation": "build",
       "input": {

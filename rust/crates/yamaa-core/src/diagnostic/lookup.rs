@@ -347,8 +347,28 @@ pub(crate) fn pair_required(path: &str, field: &str) -> Diagnostic {
 /// field a row driver may not, or that reads no input (ROW-2), named with
 /// each such field.
 pub(crate) fn pair_side(path: &str, side: &str, fields: &[&str]) -> Diagnostic {
+    side_finding(C::LookupPairSide, path, side, fields)
+}
+
+/// A record relation that its records cannot come from, at the `dataset`
+/// of the lookup that reads it (LOOKUP-3): an intermediate that declares a
+/// field a row driver may not, that reads no input, or whose filter or
+/// derivations read a current row (ROW-2), named with each such field.
+pub(crate) fn records_side(path: &str, relation: &str, fields: &[&str]) -> Diagnostic {
+    side_finding(C::LookupRecordsSide, path, relation, fields)
+}
+
+/// Fields without one column type (EXPR-14) that a record relation would
+/// expose, at the `dataset` of the lookup that reads it (LOOKUP-3).
+pub(crate) fn records_field_type(path: &str, relation: &str, columns: &[&str]) -> Diagnostic {
+    field_type_finding(C::LookupRecordsFieldType, path, relation, columns)
+}
+
+/// An intermediate whose records a reader cannot read as a row driver's,
+/// at the reader's field that names it, with each field that prevents it.
+fn side_finding(code: C, path: &str, side: &str, fields: &[&str]) -> Diagnostic {
     finding(
-        C::LookupPairSide,
+        code,
         vec![path.into()],
         [
             ("intermediate".into(), text(side)),
@@ -376,8 +396,14 @@ pub(crate) fn pair_side_repeated(
 /// that exposes them (LOOKUP-27): a side intermediate's derived fields at
 /// the side's field, or the pair relation's own derivations.
 pub(crate) fn pair_field_type(path: &str, intermediate: &str, columns: &[&str]) -> Diagnostic {
+    field_type_finding(C::LookupPairFieldType, path, intermediate, columns)
+}
+
+/// Fields of a relation read as a row driver's records that have no one
+/// column type (EXPR-14), at the reader's field that names the relation.
+fn field_type_finding(code: C, path: &str, intermediate: &str, columns: &[&str]) -> Diagnostic {
     finding(
-        C::LookupPairFieldType,
+        code,
         vec![path.into()],
         [
             ("intermediate".into(), text(intermediate)),

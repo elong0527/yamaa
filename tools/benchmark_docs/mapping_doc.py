@@ -320,11 +320,13 @@ def record_phrase(lookup, column=None, ctx=None, depth=0):
         clauses.append("ordered by " + ordering)
     derivations = lookup.get("derivations") or {}
     if column in derivations and depth < MAX_LOOKUP_DEPTH:
+        entry = derivations[column]
+        # A typed entry converts its expression's result (LOOKUP-15); the
+        # expression is what the reviewer reads.
+        if isinstance(entry, dict) and {"type", "derivation"} <= set(entry):
+            entry = entry["derivation"]
         clauses.append(
-            "where "
-            + str(column)
-            + " is derived as "
-            + value_phrase(derivations[column], ctx, depth)
+            "where " + str(column) + " is derived as " + value_phrase(entry, ctx, depth)
         )
     return noun + (" " + ", ".join(clauses) if clauses else "")
 

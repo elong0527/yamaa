@@ -104,7 +104,7 @@ pub(super) fn extend_catalog(
                     fields: &fields[index],
                 },
                 declared_key(spec, name),
-                spec.pair_relation(name).is_some(),
+                spec.pair_relation(name).is_some() || spec.read_as_records(name),
             )
         })
         .collect::<Vec<_>>();
@@ -121,7 +121,7 @@ pub(super) fn select<'a>(
     if selected == primary {
         return Ok((0, source, None));
     }
-    if let Some((index, _)) = named.reference(&format!("{selected}.driver")) {
+    if let Some(index) = named.driver(selected) {
         let item = items
             .get(index)
             .and_then(Option::as_ref)
