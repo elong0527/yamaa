@@ -1,0 +1,16 @@
+lifecycle: draft
+standard: ADaM
+domain: ADPPK
+review:
+  concerns:
+    - A population PK model reads doses and concentrations as one sequence of
+      events per subject, so the dataset needs both kinds of record in time
+      order with the event type, compartment, amount and concentration.
+    - Four subjects cover two analytes sampled together, a result below the
+      limit of quantification, a sample at a dose's own time, a sample not
+      done, a dose of zero and a placebo subject.
+    - A sample taken at the time of a dose is placed before the dose (subject
+      001's 24 h samples at 08:00 on day 2 come before that day's dose), a
+      result below the limit keeps its record with no concentration rather
+      than a substituted value, and a placebo subject is left out rather
+      than kept with concentration records only.

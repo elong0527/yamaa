@@ -1,0 +1,147 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPPK
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDTC: datetime}
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCSTRESN: float, PCDTC: datetime}
+
+output:
+  path: adppk.csv
+  columns: [STUDYID, USUBJID, ID, ASEQ, ADTM, EVID, CMT, PARAMCD, AMT, DV, MDV]
+  order_by: [STUDYID, USUBJID, ASEQ]
+
+# A subject's first administration with an amount. A subject who never
+# received one has no event records, so a sample row is kept only when this
+# finds a record.
+intermediates:
+  - id: DOSED
+    dataset: EX
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+    filter: "EX.EXDOSE > 0"
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: first
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+
+  - name: EVID
+    type: int
+    label: Event ID
+    verifications:
+      - allowed_values:
+          values: [0, 1]
+
+  - name: CMT
+    type: int
+    label: Compartment
+    verifications:
+      - allowed_values:
+          values: [1, 2, 3]
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: AMT
+    type: float
+    label: Actual Amount of Dose Received
+
+  - name: DV
+    type: float
+    label: Dependent Variable Result
+
+  # A dose record carries no result, and neither does a sample reported
+  # below the limit of quantification.
+  - name: MDV
+    type: int
+    label: Missing Dependent Variable Result
+    derivation:
+      case:
+        - when: "DV IS NULL"
+          then: 1
+        - otherwise: 0
+
+  # The subjects that have event records, numbered in identifier order.
+  - name: ID
+    type: int
+    label: Subject Identifier for the Analysis
+    derivation:
+      rank:
+        method: dense
+        window:
+          order_by: [STUDYID, USUBJID]
+
+  # At one date/time a sample comes before the dose: it was drawn before
+  # the dose was given. Samples at one time follow their compartments.
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADTM, EVID, CMT]
+
+rows:
+  # One dose record per administration with an amount.
+  - id: dose
+    dataset: EX
+    filter: "EX.EXDOSE > 0"
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      ADTM: EX.EXSTDTC
+      EVID: 1
+      CMT: 1
+      PARAMCD: "'DOSE'"
+      AMT: EX.EXDOSE
+      DV: null
+
+  # One observation record per sample that was done, for a dosed subject.
+  - id: observation
+    dataset: PC
+    filter: "PC.PCSTAT IS NULL AND DOSED.EXSEQ IS NOT NULL"
+    derivations:
+      STUDYID: PC.STUDYID
+      USUBJID: PC.USUBJID
+      ADTM: PC.PCDTC
+      EVID: 0
+      CMT:
+        mapping:
+          source: PC.PCTESTCD
+          dict: {DRGX: 2, MET1: 3}
+      PARAMCD: PC.PCTESTCD
+      AMT: null
+      DV: PC.PCSTRESN
+
+verifications:
+  - row_count:
+      min: 12
+      max: 12
+  - assert:
+      id: dose-records-carry-an-amount-and-no-result
+      when: "EVID = 1"
+      require: "AMT > 0 AND DV IS NULL AND CMT = 1"
+  - assert:
+      id: observation-records-carry-no-amount
+      when: "EVID = 0"
+      require: "AMT IS NULL AND CMT > 1"
+  - assert:
+      id: a-missing-result-is-flagged
+      require: "(MDV = 1 AND DV IS NULL) OR (MDV = 0 AND DV IS NOT NULL)"
