@@ -189,7 +189,7 @@ inputs: no operation repeats a candidate a data-dependent number of times, and
 one row per related pair is a row template driving on an `inner_join`
 ([LOOKUP-27](lookup.md#lookup-27)).
 
-Evidence: `schema-row-templates`, `adam-adex-uncollected`, `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`.
+Evidence: `schema-row-templates`, `adam-adex-uncollected`, `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`, `schema-lookup-inner-join-counted-rows`.
 
 No generated index supports such repetition. A source value may decide whether
 a written row template keeps one candidate; it cannot create more rows. Row
@@ -210,6 +210,21 @@ Expected-but-uncollected rows use an explicit planning relation at those keys
 and may be enriched from collected relations through record intermediates.
 Dynamically counted expansion happens upstream, and the expanded records enter
 the specification as ordinary input.
+
+A record that stands for a number of rows held in its own values, such as an
+exposure record for each day between its dates, builds them inside the
+specification only as pairs with a declared relation of whole numbers: one
+record for each number, and a `filter` that keeps each pair up to the
+record's own number ([LOOKUP-27](lookup.md#lookup-27)). That relation's
+records bound the rows: a record whose number is past the relation's last is
+in fewer pairs than it stands for, one whose number is missing or below the
+relation's first is in none, and no condition reports either. Only the
+specification can state the cover. The paired side reads the relation's
+record at its own number through a lookup that declares `require_match: true`
+([LOOKUP-16](lookup.md#lookup-16), [LOOKUP-24](lookup.md#lookup-24)), and the
+`filter` keeps the pairs up to the number that read gives, so a record the
+relation does not hold fails the run as `unmatched_key` before any row is
+built, as in `schema-lookup-inner-join-counted-rows`.
 
 The built rows must still match the `keys`: repeating a key combination fails
 at the output gate under [OUTPUT-3](output.md#output-3). A
