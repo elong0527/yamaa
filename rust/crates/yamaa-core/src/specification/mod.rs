@@ -385,6 +385,8 @@ pub struct PreparedSpecification {
     output_path: String,
     output_report: Option<String>,
     output_decimals: Option<String>,
+    /// The text a csv artifact writes for a missing value (CSV-17).
+    output_missing: Option<String>,
     output_order: Vec<(String, bool, bool)>,
     keys: Vec<usize>,
     /// How the rows are built: the implicit template of a spec without
@@ -612,6 +614,7 @@ struct PreparedOutputDeclarations {
     output_order: Vec<(String, bool, bool)>,
     output_path: String,
     output_decimals: Option<String>,
+    output_missing: Option<String>,
     projection: Vec<String>,
     keys: Vec<usize>,
     verifications: verifications::Verifications,
@@ -679,6 +682,7 @@ fn prepare_output_declarations(
             _ => Err(PrepareError::Internal),
         })
         .transpose()?;
+    let output_missing = declared.missing.as_ref().map(|text| text.text.clone());
     // Output declaration errors retain their post-verification phase.
     let projection = declared
         .columns
@@ -725,6 +729,7 @@ fn prepare_output_declarations(
         output_order,
         output_path,
         output_decimals,
+        output_missing,
         projection,
         keys,
         verifications,
@@ -918,6 +923,7 @@ impl PreparedSpecification {
             output_order,
             output_path,
             output_decimals,
+            output_missing,
             projection,
             keys,
             verifications,
@@ -966,6 +972,7 @@ impl PreparedSpecification {
             output_path,
             output_report,
             output_decimals,
+            output_missing,
             output_order,
             keys,
             rows,
@@ -1222,6 +1229,11 @@ impl PreparedSpecification {
     pub fn output_decimals(&self) -> Option<&str> {
         self.output_decimals.as_deref()
     }
+    /// The text `output.missing` declares for a missing value, if any
+    /// (CSV-17).
+    pub fn output_missing(&self) -> Option<&str> {
+        self.output_missing.as_deref()
+    }
     pub fn output_name(&self) -> &str {
         let name = output_basename(&self.output_path);
         name.rsplit_once('.')
@@ -1249,6 +1261,11 @@ impl PreparedSpecification {
                     path: self.output_path.clone(),
                 });
             }
+        }
+        if self.output_missing.is_some() && self.output_profile() == Some("parquet") {
+            findings.push(OutputFinding::MissingTextNotApplicable {
+                path: self.output_path.clone(),
+            });
         }
         for (position, name) in self.projection.iter().enumerate() {
             if self.projection[..position].contains(name) {
@@ -1294,6 +1311,43 @@ impl PreparedSpecification {
             }
         }
         findings
+    }
+
+    /// CSV-17: a `str` value of a projected column that equals the declared
+    /// missing text would read as missing, so each such column fails with
+    /// the number of its rows that hold it. `projection` gives the artifact's
+    /// columns of `table`. Invoke only once [`Self::output_findings`] is
+    /// empty, before the artifact is encoded.
+    pub fn missing_text_findings<T: crate::table::TableAccess>(
+        &self,
+        table: &T,
+        projection: &[usize],
+    ) -> Result<Vec<OutputFinding>, crate::table::CellError<T::Error>> {
+        let Some(missing) = self.output_missing.as_deref() else {
+            return Ok(Vec::new());
+        };
+        let mut findings = Vec::new();
+        for &column in projection {
+            let declared = &table.schema().columns()[column];
+            if declared.kind != crate::value::ColumnType::Str {
+                continue;
+            }
+            let mut count = 0;
+            for row in 0..table.row_count() {
+                if matches!(table.cell(row, column)?, crate::table::ValueRef::Str(text) if text == missing)
+                {
+                    count += 1;
+                }
+            }
+            if count > 0 {
+                findings.push(OutputFinding::MissingTextCollision {
+                    column: declared.name.clone(),
+                    missing: missing.into(),
+                    count,
+                });
+            }
+        }
+        Ok(findings)
     }
 
     fn bound_output_order(&self) -> Vec<crate::dataset::OrderTerm> {
@@ -1387,14 +1441,45 @@ impl PreparedSpecification {
 
 #[derive(Debug)]
 pub enum OutputFinding {
-    UnknownProfile { path: String },
-    InvalidDecimals { value: String },
-    DecimalsNotApplicable { path: String },
-    DuplicateColumn { position: usize, name: String },
-    UndeclaredColumn { position: usize, name: String },
-    InternalKey { position: usize, name: String },
-    DuplicateOrderTerm { position: usize, name: String },
-    UndeclaredOrderColumn { position: usize, name: String },
+    UnknownProfile {
+        path: String,
+    },
+    InvalidDecimals {
+        value: String,
+    },
+    DecimalsNotApplicable {
+        path: String,
+    },
+    MissingTextNotApplicable {
+        path: String,
+    },
+    /// A projected `str` column holds the declared missing text in `count`
+    /// rows (CSV-17).
+    MissingTextCollision {
+        column: String,
+        missing: String,
+        count: usize,
+    },
+    DuplicateColumn {
+        position: usize,
+        name: String,
+    },
+    UndeclaredColumn {
+        position: usize,
+        name: String,
+    },
+    InternalKey {
+        position: usize,
+        name: String,
+    },
+    DuplicateOrderTerm {
+        position: usize,
+        name: String,
+    },
+    UndeclaredOrderColumn {
+        position: usize,
+        name: String,
+    },
 }
 fn output_basename(path: &str) -> &str {
     path.split('/')

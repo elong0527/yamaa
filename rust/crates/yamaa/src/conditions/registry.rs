@@ -93,6 +93,8 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("missing_key", &["output"], None),
     ("missing_report", &["validation"], None),
     ("missing_required_field", &["validation"], None),
+    ("missing_text_collision", &["output"], None),
+    ("missing_text_not_applicable", &["validation"], None),
     ("missing_value_required", &["validation"], None),
     ("mixed_relations", &["validation"], None),
     ("month_out_of_range", &["validation"], None),

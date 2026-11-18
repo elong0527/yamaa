@@ -2,8 +2,8 @@
 
 The `csv` profile writes an artifact as one canonical spelling of delimited
 text and reads a delimited source exactly as it is stored. These rules fix the
-bytes a writer produces, the display precision of `float` values, and the
-spellings a reader admits.
+bytes a writer produces, the display precision of `float` values, the text
+that may stand for a missing value, and the spellings a reader admits.
 
 ## Writing
 
@@ -57,9 +57,10 @@ output.
 
 ### CSV-4. Missing is written as an empty bare field and the empty string as two quote characters
 
-A missing value is written as no characters at all, unquoted. A collected
-empty string is written as two quote characters. The two forms stay apart in
-the artifact, and no text stands in for absence. Reading does not restore the
+A missing value is written as no characters at all, unquoted, unless the
+artifact declares `output.missing` ([CSV-17](#csv-17)). A collected empty
+string is written as two quote characters. The two forms stay apart in the
+artifact, and no other text stands in for absence. Reading does not restore the
 pair: [INPUT-8](../inputs.md#input-8) reads an empty field as
 missing whether it was bare or quoted.
 
@@ -182,6 +183,51 @@ its tie, inside the window, so it rounds up as a decimal reader expects;
 A routine that sends an exact tie to the even digit reports `0.12` for
 `0.125` and does not conform. Rounding a value another stage can observe
 ([CSV-8](#csv-8)) is not an implementation option.
+
+## Missing text
+
+<a id="csv-17"></a>
+
+### CSV-17. `output.missing` writes each missing value as its bare text, where no str value and no reader can take it for a value
+
+`output.missing` is optional and is `.`, the one text it admits. When it is
+declared, each missing value of every column type is written as that text,
+bare, in place of the empty field of [CSV-4](#csv-4); a collected empty string
+and every value are written as before. It applies to the `csv` profile alone,
+and a projected `str` column that holds the text as a value fails the output
+before any field is written.
+
+Fails: `value_not_permitted`, `missing_text_not_applicable`, `missing_text_collision`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_missing_text.json::a_declared_missing_text_is_written_bare_for_every_missing_value_and_the_empty_string_stays_quoted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_missing_text.json::a_missing_text_beside_decimals_rounds_the_values_and_writes_the_missing_ones_as_its_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_missing_text.json::a_str_value_equal_to_the_missing_text_fails_the_output_and_publishes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_missing_text.json::a_missing_text_on_a_parquet_output_is_not_applicable_and_publishes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_missing_text.json::a_missing_text_other_than_the_dot_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_missing_text.json::a_consumer_may_not_link_a_producer_that_declares_a_missing_text`.
+
+A declaration on an output path the extension mapping resolves to `parquet`
+fails validation with `missing_text_not_applicable` at `output.missing`. A
+`str` collision fails with `missing_text_collision` at `output.missing`, its
+context naming the column, the text and the number of the column's rows that
+hold it, and nothing is published.
+
+The text serves a consumer outside yamaa, such as a population
+pharmacokinetic modelling program that reads `.` as missing and an empty field
+as zero. The dataset stays typed: the same columns can publish an artifact
+with the empty field and one with the declared text. No yamaa reader treats
+the text as missing ([CSV-15](#csv-15)), so an artifact that declares it is
+never read back. A consumer that links a producer declaring
+`output.missing` fails with `missing_text_not_applicable` at
+`input.<dataset>.schema.output.missing` ([INPUT-10](../inputs.md#input-10)),
+and so does a composed specification under a transport
+([JSON-5](../profiles/dataset-json.md#json-5)). Any other text fails with
+`value_not_permitted`; a text is added to the closed values only when it
+cannot be the [CSV-5](#csv-5) text of a value and is written bare under
+[CSV-3](#csv-3).
+
+```text
+ID,DV,AMT,NOTE
+1,.,100,""
+2,4.686,.,dosed
+```
+
+With `missing: "."`, the first row's `DV` and the second row's `AMT` are
+missing, and the first row's `NOTE` is a collected empty string.
 
 ## Reading
 

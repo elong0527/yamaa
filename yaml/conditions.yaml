@@ -319,6 +319,12 @@ conditions:
   missing_required_field:
     phases: [validation]
     message: "{spec_path} lacks the field {field}, which it requires"
+  missing_text_collision:
+    phases: [output]
+    message: "column {column} holds the output.missing text {missing} as a value in {collision_count} of the rows"
+  missing_text_not_applicable:
+    phases: [validation]
+    message: "output.missing of {path} applies only to a csv artifact that no other specification or transport file reads"
   missing_value_required:
     phases: [validation]
     message: "a flag that declares false_value {false_value} must also declare missing"

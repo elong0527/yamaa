@@ -996,9 +996,21 @@ fn prepare_output(
                 .ok_or(Error::InvalidObservation)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let collisions = compiled
+        .missing_text_findings(&execution.dataset, &projection)
+        .map_err(|_| Error::InvalidObservation)?;
+    if !collisions.is_empty() {
+        let mut report = observations;
+        report.set_diagnostics(output_diagnostics(&collisions));
+        return Ok(PreparedOutput::failed(report));
+    }
+    let text = crate::csv_artifact::Text {
+        decimals: compiled.output_decimals(),
+        missing: compiled.output_missing(),
+    };
     let (bytes, partitions) = encode(
         compiled.output_profile(),
-        compiled.output_decimals(),
+        text,
         execution,
         (&projection, threads),
     )?;
@@ -1074,7 +1086,7 @@ pub(crate) fn output_diagnostics(
         .collect()
 }
 /// Encode the projected output under the specification's output `profile`,
-/// with its CSV display `decimals`, one partition of the output at a time
+/// with its CSV display `decimals` and `missing` text, one partition of the output at a time
 /// (D264): its bytes, and where each partition's bytes end, the last at
 /// their length. An output admitted whole is one partition. Each codec
 /// bounds its allocation as it encodes; the caller bounds the bytes it
@@ -1082,7 +1094,7 @@ pub(crate) fn output_diagnostics(
 /// CSV writer writes on the calling thread.
 fn encode(
     profile: Option<&'static str>,
-    decimals: Option<&str>,
+    text: crate::csv_artifact::Text<'_>,
     execution: &yamaa_core::dataset::Execution,
     (projection, threads): (&[usize], std::num::NonZeroUsize),
 ) -> Result<(Vec<u8>, Vec<usize>), Error> {
@@ -1090,8 +1102,8 @@ fn encode(
     let partitions = execution.output_partitions();
     match profile {
         Some("csv") => {
-            crate::csv_artifact::render_partitions(dataset, projection, decimals, &partitions)
-                .map_err(|error| match error {
+            crate::csv_artifact::render_partitions(dataset, projection, text, &partitions).map_err(
+                |error| match error {
                     crate::csv_artifact::Error::Limit {
                         resource,
                         limit,
@@ -1109,7 +1121,8 @@ fn encode(
                         .into()],
                     )),
                     _ => Error::InvalidObservation,
-                })
+                },
+            )
         }
         Some("parquet") => {
             crate::parquet_artifact::render_partitions(dataset, projection, &partitions, threads)
