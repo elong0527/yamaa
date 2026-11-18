@@ -5272,6 +5272,29 @@
           }
         ]
       },
+      "text_date_order_report": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADEX\nkeys: [USUBJID]\ninput:\n  EX: {path: input.csv}\nfilter: \"EX.START <= EX.END\"\noutput:\n  path: output.csv\n  report: report.csv\n  columns: [USUBJID]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: EX.USUBJID\n",
+        "input_csv": "USUBJID,START,END\nS-001,2025-03-11,2025-03-11T07:30\nS-002,2025-03-12T08:00,2025-03-12T09:00\n",
+        "condition": "text_date_order",
+        "checks": [
+          {
+            "ARTIFACT": "output.csv",
+            "KIND": "check",
+            "SPEC_PATH": "filter",
+            "NAME": "text_date_order",
+            "ID": null,
+            "TARGET": null,
+            "RULE": "CHECK-27",
+            "SEVERITY": "warning",
+            "OUTCOME": "violated",
+            "CONDITION": "text_date_order",
+            "COUNT": 1,
+            "TOTAL": 1,
+            "KEYS": "[{}]",
+            "DETAILS": "{\"longer\":\"2025-03-11T07:30\",\"shorter\":\"2025-03-11\"}"
+          }
+        ]
+      },
       "interrupt_message": "public contract activation interrupt",
       "signal_interrupt_calls": 3,
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
@@ -6965,7 +6988,7 @@
         "sqrt_of_negative", "stale_artifact", "standard_model_mismatch",
         "submission_data_type_not_admitted", "submission_length_invalid",
         "submission_length_missing", "submission_length_not_applicable",
-        "submission_metadata_missing", "submission_not_output_column",
+        "submission_metadata_missing", "submission_not_output_column", "text_date_order",
         "transport_dataset_empty", "transport_label_invalid", "transport_path_collision",
         "transport_text_invalid", "undeclared_column", "unexpected_file_type",
         "ungrouped_driver_field", "unique_failed", "unknown_artifact_profile",

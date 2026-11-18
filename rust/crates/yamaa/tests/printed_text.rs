@@ -171,6 +171,56 @@ fn a_check_prints_the_path_as_given_and_no_size() {
     );
 }
 
+/// ADEX keeps a record whose dose start, `2025-03-11`, text order places
+/// before its end, `2025-03-11T07:30`: one text date order (CHECK-27).
+const ADEX: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADEX\nkeys: [USUBJID]\ninput: {EX: ../raw/ex.csv}\nfilter: \"EX.START <= EX.END\"\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}\noutput: {path: ../out/adex.csv, columns: [USUBJID]}\n";
+/// ADCK filters as ADEX does, and its declared `warning` check rejects S2:
+/// two violated warnings (CHECK-2).
+const ADCK: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADCK\nkeys: [USUBJID]\ninput: {EX: ../raw/ex.csv}\nfilter: \"EX.START <= EX.END\"\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID, verifications: [{allowed_values: {values: [S1], severity: warning}}]}\noutput: {path: ../out/adck.csv, columns: [USUBJID], report: ../out/adck-checks.csv}\n";
+
+/// A run whose report holds violated warnings counts them after its issues,
+/// and a project run counts its runs' on its own line and on each member's;
+/// a run with none prints no count, as every case above shows.
+#[test]
+fn a_run_counts_the_violated_warnings_its_report_holds() {
+    let study = Study::new();
+    study.write(
+        "raw/ex.csv",
+        "USUBJID,START,END\nS1,2025-03-11,2025-03-11T07:30\nS2,2025-03-12T08:00,2025-03-12T09:00\n",
+    );
+    study.write("adam/adex.yaml", ADEX);
+    study.write("adam/adck.yaml", ADCK);
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adam/adex.yaml, adam/adck.yaml]\n",
+    );
+    std::fs::create_dir_all(study.0.join("out")).unwrap();
+    let cases = [
+        (
+            "adam/adex.yaml",
+            "yamaa run of ADEX: succeeded, 2 rows x 1 column, 0 issues, 1 warning",
+        ),
+        (
+            "adam/adck.yaml",
+            "yamaa run of ADCK: succeeded, 2 rows x 1 column, 0 issues, 2 warnings",
+        ),
+    ];
+    for (spec, expected) in cases {
+        let run = engine().spec(&study.path(spec)).run().unwrap();
+        assert_eq!(run.summary().to_string(), expected, "{spec}");
+    }
+    let project = study.path("project.yaml");
+    let runs = engine().project(&project).section("adam").run().unwrap();
+    assert_eq!(
+        runs.summary().to_string(),
+        format!(
+            "yamaa project run of {project}, section adam: succeeded, 2 specifications, 0 issues, 3 warnings\n\
+             \x20 ADEX  succeeded  2 rows x 1 column, 0 issues, 1 warning\n\
+             \x20 ADCK  succeeded  2 rows x 1 column, 0 issues, 2 warnings"
+        )
+    );
+}
+
 /// The project run example of `api.md`, with this study's names and sizes.
 #[test]
 fn a_project_run_lists_its_members_between_the_two_lines() {

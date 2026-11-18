@@ -474,7 +474,9 @@ presence check of [SUB-11](profiles/submission.md#sub-11), a bound codelist
 check or a value-level check of [SUB-13](profiles/submission.md#sub-13), is a
 row like a declared verification, at the path of the declaration that adds it.
 A value-level codelist check runs once per bound codelist; each run is its own
-row, at the path that declares that codelist.
+row, at the path that declares that codelist. The rows of text order between
+date texts ([CHECK-27](#check-27)) follow every other check row, in
+`SPEC_PATH` order.
 
 <a id="check-24"></a>
 
@@ -504,8 +506,10 @@ Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`
 | `KEYS` | `str` | violated check: every offending key or group as canonical JSON; else missing |
 | `DETAILS` | `str` | canonical JSON: the condition context of a violated check, the input's file facts, a `str` column's longest value, else `{}` |
 
-`NAME` of a check is its registered name under [CHECK-1](#check-1), or `unique`
-for an intermediate's check ([LOOKUP-17](lookup.md#lookup-17)), and a
+`NAME` of a check is its registered name under [CHECK-1](#check-1), `unique`
+for an intermediate's check ([LOOKUP-17](lookup.md#lookup-17)), or
+`text_date_order` for text order between date texts
+([CHECK-27](#check-27)), and a
 column check's `TARGET` is the column it infers there; a handler's `TARGET` is
 the output column whose derivation declares it, missing for a named
 intermediate's own derivations and match keys. A check that submission
@@ -552,7 +556,9 @@ A check's `COUNT` and `TOTAL` count the unit the check itself counts:
 - groups for a check that partitions the artifact, where an ungrouped
   `row_count` is the one group [CHECK-13](#check-13) bounds;
 - the artifact as one unit for the check that a value-level entry matches a
-  row ([SUB-13](profiles/submission.md#sub-13)).
+  row ([SUB-13](profiles/submission.md#sub-13));
+- the place that compared as one unit for text order between date texts
+  ([CHECK-27](#check-27)).
 
 A row-wise check's `TOTAL` is every output row it evaluated, a row whose value
 is missing included even where the missing value passes the check under
@@ -599,8 +605,9 @@ Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `schema-lookup-i
 
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per
-offending group, its grouping columns by name; an ungrouped `row_count` and a
-value-level entry that matches no row have the one empty group `[{}]`, and an
+offending group, its grouping columns by name; an ungrouped `row_count`, a
+value-level entry that matches no row and text order between date texts
+([CHECK-27](#check-27)) have the one empty group `[{}]`, and an
 intermediate's `unique` one object per repeated combination, its columns by
 name ([CHECK-24](#check-24)). Empty remaining context is `{}`.
 
@@ -621,7 +628,51 @@ Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs::verificati
 
 The rows correspond one to one with what the executor evaluated: the declared
 inputs, the row templates, the handler paths it registered, the declared output
-columns of a successful run, and the column and dataset checks it evaluated. A
+columns of a successful run, the column and dataset checks it evaluated, and
+each place of a successful run where text order decided between date texts
+([CHECK-27](#check-27)). A
 run fails with a named condition only
 under [CHECK-2](#check-2) and the other rules; a report that fails its own
 verification refuses the build, and no partial report is returned or written.
+
+<a id="check-27"></a>
+
+### CHECK-27. Text order deciding between collected date texts of two precisions is a warning of the run report
+
+An ordering comparison (`<`, `<=`, `>`, `>=` or `BETWEEN`) or a lookup
+selection's `order_by` term that compares two `str` values, both collected
+date text ([TIME-7](temporal.md#time-7)) and one a proper prefix of the other,
+is decided by text order's length rule ([VALUE-20](values.md#value-20)), not
+by the time either names. A successful run reports each expression or
+`order_by` where that happened as one violated `warning` check: it fails
+nothing and changes no value.
+
+Fails: `text_date_order`.
+Evidence: `schema-text-date-order-warning`, `rust/crates/yamaa-core/src/text_date_order.rs::text_order_decides_only_a_proper_prefix_between_collected_date_texts`, `rust/crates/yamaa-core/src/text_date_order.rs::a_site_keeps_its_least_pair_whatever_order_it_meets_them`.
+
+Fixed-width fields order every other pair of collected date texts as their
+dates: `2025-03-10` precedes `2025-03-11T08:00`. A proper prefix sorts first,
+so `2025-03-11` precedes `2025-03-11T07:30` and `2025-03-11T08:00` precedes
+`2025-03-11T08:00:00`, though each pair may name one time. An equality is not
+an order and is not reported, and neither is a comparison whose operand is
+missing.
+
+The check row's `SPEC_PATH` is the path of the expression that compared, such
+as `intermediates.LAST_DOSE.filter`, or of the `order_by` of the selection,
+such as `intermediates.LAST_DOSE.order_by`; its `NAME` and `CONDITION` are
+`text_date_order`. A selection compares each candidate record with the one
+chosen so far, and only those comparisons are read. The check examines its
+place as one unit: `COUNT` and `TOTAL` are `1` and `KEYS` is `[{}]`. `DETAILS`
+holds the least pair text order decided there, by `shorter` then `longer`, so
+the row is the same however the run divides its work or how often it compares
+one pair. The rows follow every declared check, in `SPEC_PATH` order. A place
+where text order decided no such pair has no row, and a failed run reports
+none.
+
+The comparison stays text. Reading the values as `date` or `datetime`, or
+completing collected date text with `impute`
+([TIME-8](temporal.md#time-8)), compares them chronologically under
+[VALUE-21](values.md#value-21) and leaves nothing to report. Window and output
+orders, `MIN`, `MAX` and `STR_JOIN` ([FORMULA-18](formulas.md#formula-18)),
+`greatest`, `least` and a lookup's structured range are not read for this
+check.
