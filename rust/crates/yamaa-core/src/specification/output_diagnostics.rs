@@ -60,6 +60,27 @@ impl OutputFinding {
                     ("profile", V::String("parquet".into())),
                 ],
             ),
+            Self::MissingTextNotApplicable { path } => (
+                C::OutputMissingTextNotApplicable,
+                "output.missing".into(),
+                vec![
+                    ("path", V::String(path.clone())),
+                    ("profile", V::String("parquet".into())),
+                ],
+            ),
+            Self::MissingTextCollision {
+                column,
+                missing,
+                count,
+            } => (
+                C::OutputMissingTextCollision,
+                "output.missing".into(),
+                vec![
+                    ("column", V::String(column.clone())),
+                    ("missing", V::String(missing.clone())),
+                    ("collision_count", V::from(*count)),
+                ],
+            ),
             Self::DuplicateColumn { position, name } => (
                 C::OutputDuplicateColumn,
                 format!("output.columns[{position}]"),

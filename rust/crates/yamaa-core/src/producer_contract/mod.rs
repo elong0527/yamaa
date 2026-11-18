@@ -26,6 +26,12 @@ pub enum Cause {
     Label {
         field: String,
     },
+    /// The producer writes its missing values as `output.missing` text, which
+    /// a linked read would take for a value (CSV-17); `path` is its
+    /// `output.path` as written.
+    MissingText {
+        path: String,
+    },
 }
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -148,6 +154,11 @@ pub fn prepare_document(d: &Document) -> Result<Contract, Error> {
     crate::limits::Limits::columns(selected.len()).map_err(Error::Limit)?;
     let mut fields = Vec::new();
     let mut findings = Vec::new();
+    if d.field(output, "missing").is_some() {
+        findings.push(Cause::MissingText {
+            path: node_text(d, field(d, output, "path")?)?.into(),
+        });
+    }
     if selected.is_empty() {
         findings.push(Cause::Empty);
     }

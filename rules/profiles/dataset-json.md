@@ -119,12 +119,13 @@ published at its `output.path`, read exactly as a consuming specification
 reads a producer's artifact; generation never runs the specification.
 Composition does not re-derive, re-order, filter or round: column order is
 `output.columns`, row order is the artifact's, and a value is the value the
-artifact carries, so a composed specification declares no `output.decimals`.
-An unpublished artifact, one that does not match its producing specification,
-or a composed `output.decimals` fails.
+artifact carries, so a composed specification declares no `output.decimals`
+and no `output.missing` ([CSV-17](../reference/csv.md#csv-17)). An
+unpublished artifact, one that does not match its producing specification, or
+a composed `output.decimals` or `output.missing` fails.
 
-Fails: `producer_contract_mismatch`, `decimals_not_applicable`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::display_decimals_are_not_applicable_under_a_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_with_reordered_columns_fails_its_producer_contract`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_declared_column_fails_its_producer_contract`, `rust/crates/yamaa-application/tests/file_resources.rs::a_published_value_outside_its_codelist_keeps_the_verification_phase_and_row_key`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Fails: `producer_contract_mismatch`, `decimals_not_applicable`, `missing_text_not_applicable`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::display_decimals_are_not_applicable_under_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_missing_text_is_not_applicable_under_a_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_with_reordered_columns_fails_its_producer_contract`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_declared_column_fails_its_producer_contract`, `rust/crates/yamaa-application/tests/file_resources.rs::a_published_value_outside_its_codelist_keeps_the_verification_phase_and_row_key`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 The artifact is read:
 

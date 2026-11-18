@@ -321,6 +321,8 @@ EXPECTED = {
     "new.spec.input.byte_order_mark": [
         Field("dataset_class", "byte_order_mark", "bool")
     ],
+    # #4631: a csv artifact writes a missing value as declared text (CSV-17).
+    "new.spec.output.missing": [Field("output_class", "missing", "str", values=(".",))],
     # D208: `not_missing` selects its rows and allows a share (CHECK-5).
     "new.spec.column_verifications.not_missing.when": [
         Field("column_verifications.not_missing", "when", "predicate")

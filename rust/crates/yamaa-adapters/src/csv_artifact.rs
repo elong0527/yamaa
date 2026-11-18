@@ -69,25 +69,38 @@ pub fn render<T: TableAccess>(
     decimals: Option<&str>,
 ) -> Result<Vec<u8>, Error<T::Error>> {
     let whole = 0..table.row_count();
-    render_partitions(table, projection, decimals, std::slice::from_ref(&whole))
-        .map(|(bytes, _)| bytes)
+    let text = Text {
+        decimals,
+        missing: None,
+    };
+    render_partitions(table, projection, text, std::slice::from_ref(&whole)).map(|(bytes, _)| bytes)
 }
 
 /// An encoded file, and where each of its partitions' bytes end, the last at
 /// its length.
 pub type Partitioned = (Vec<u8>, Vec<usize>);
 
+/// How an artifact spells its values: the display precision `decimals` of
+/// CSV-6, and the `missing` text of CSV-17 that stands for a missing value
+/// in place of an empty bare field.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Text<'a> {
+    pub decimals: Option<&'a str>,
+    pub missing: Option<&'a str>,
+}
+
 /// [`render`] one partition of rows at a time (D264): the header once, then
 /// the records of each of `partitions`, the consecutive ranges that divide
-/// the table's rows in order. Every byte is row-local and CSV-9's display
-/// precision is per value, so the file equals the whole-table render's
+/// the table's rows in order, each value spelled as `text` asks. Every byte
+/// is row-local and CSV-9's display precision is per value, so the file
+/// equals the whole-table render's
 /// whatever the partitions. Each partition is admitted on its own, the file
 /// is checked before it grows, and the end of each partition's bytes is
 /// returned with them, the last at the file's length.
 pub fn render_partitions<T: TableAccess>(
     table: &T,
     projection: &[usize],
-    decimals: Option<&str>,
+    text: Text<'_>,
     partitions: &[std::ops::Range<usize>],
 ) -> Result<Partitioned, Error<T::Error>> {
     if projection.is_empty()
@@ -122,14 +135,14 @@ pub fn render_partitions<T: TableAccess>(
         })?;
         if !rows.is_empty() && precision.is_none() {
             precision = Some(if floats {
-                writer.precision(decimals)?
+                writer.precision(text.decimals)?
             } else {
                 None
             });
         }
         let decimals = precision.flatten();
         for row in rows.clone() {
-            writer.record(table, projection, decimals, row)?;
+            writer.record(table, projection, (decimals, text.missing), row)?;
         }
         ends.push(writer.bytes.len());
     }
@@ -164,12 +177,13 @@ impl Writer {
             .transpose()
     }
 
-    /// Write the projected cells of `row`, then its LF.
+    /// Write the projected cells of `row`, a missing one as the `missing`
+    /// text when one is declared (CSV-17), then its LF.
     fn record<T: TableAccess>(
         &mut self,
         table: &T,
         projection: &[usize],
-        decimals: Option<usize>,
+        (decimals, missing): (Option<usize>, Option<&str>),
         row: usize,
     ) -> Result<(), Error<T::Error>> {
         for (index, &column) in projection.iter().enumerate() {
@@ -190,7 +204,11 @@ impl Writer {
                 }
             }
             match table.cell(row, column).map_err(Error::Cell)? {
-                ValueRef::Missing => {}
+                ValueRef::Missing => {
+                    if let Some(missing) = missing {
+                        self.write(missing)?;
+                    }
+                }
                 ValueRef::Str(text) => self.field(text)?,
                 ValueRef::Int(value) => self.field(&value.to_string())?,
                 ValueRef::Float(value) => {

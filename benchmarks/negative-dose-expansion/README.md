@@ -41,6 +41,41 @@ expected-but-uncollected rows, use the long-form planning input in
 `adam-advs-carryforward` and enrich it from collected
 data.
 
+When the administrations must be built here, pair each collected
+record with the protocol's dosing period, one record per day of it
+numbered from `1`, and have each record read the period's day of its
+last administration, requiring a match, as
+`schema-lookup-inner-join-counted-rows` does. A record that counts
+more administrations than the period has days then rejects the run
+instead of losing them, and so does a record with a zero or missing
+count:
+
+```yaml
+intermediates:
+  - id: LAST
+    dataset: DAYS
+    key: {STUDYID: STUDYID, DOSEDAY: EXDOSCNT}
+    require_match: true
+  - id: EXREC
+    dataset: EX
+    derivations:
+      LASTDAY: {type: int, derivation: LAST.DOSEDAY}
+  - id: ADMIN
+    dataset: EXREC
+    inner_join: DAYS
+    key: [STUDYID]
+    filter: "DAYS.DOSEDAY <= EXREC.LASTDAY"
+    derivations:
+      USUBJID: EXREC.USUBJID
+      EXSEQ: EXREC.EXSEQ
+      ADOSEN: DAYS.DOSEDAY
+```
+
+The requirement is checked only where a record reads `LAST`, so the
+read in `EXREC` is what rejects the run. Checks that each record
+builds as many administrations as it counts, numbered from `1`, then
+also reject a dosing period that leaves out a day a record counts.
+
 If the analysis genuinely needs only the totals, drop the administration level
 and key on the collected record instead:
 

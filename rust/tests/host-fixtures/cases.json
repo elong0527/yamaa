@@ -5914,6 +5914,54 @@
               "operand_route": null
             }
           ]
+        },
+        {
+          "name": "missing_text_on_a_parquet_output",
+          "call": "check",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\noutput: {path: output.parquet, columns: [ID], missing: \".\"}\n",
+          "input_csv": "ID\na\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "missing_text_not_applicable",
+              "rule": "CSV-17",
+              "spec_paths": [
+                "output.missing"
+              ],
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 47,
+              "message": "output.missing of output.parquet applies only to a csv artifact that no other specification or transport file reads",
+              "context": "{\"path\":\"output.parquet\",\"profile\":\"parquet\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_str_value_equal_to_the_missing_text",
+          "call": "run",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: DV, type: str, derivation: SRC.DV}\noutput: {path: output.csv, columns: [ID, DV], missing: \".\"}\n",
+          "input_csv": "ID,DV\na,.\nb,1\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "output",
+              "condition": "missing_text_collision",
+              "rule": "CSV-17",
+              "spec_paths": [
+                "output.missing"
+              ],
+              "file": "spec.yaml",
+              "line": 9,
+              "column": 47,
+              "message": "column DV holds the output.missing text . as a value in 1 of the rows",
+              "context": "{\"collision_count\":1,\"column\":\"DV\",\"missing\":\".\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
         }
       ]
     },
@@ -6953,7 +7001,8 @@
         "invalid_size", "invalid_string_template", "invalid_text", "invalid_yaml",
         "key_dependency", "length_failed", "ln_of_nonpositive", "matches_failed",
         "method_missing", "minimum_length", "missing_derivation", "missing_input",
-        "missing_key", "missing_report", "missing_required_field", "missing_value_required",
+        "missing_key", "missing_report", "missing_required_field", "missing_text_collision",
+        "missing_text_not_applicable", "missing_value_required",
         "mixed_relations", "model_contract_mismatch", "month_not_permitted",
         "month_out_of_range", "month_required", "multiple_matches", "multiple_values_per_key",
         "nested_reduction", "no_applicable_keys", "non_ascii_source", "not_missing_failed",

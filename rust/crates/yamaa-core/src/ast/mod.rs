@@ -175,6 +175,13 @@ pub struct Spec {
     pub codelists: Vec<Codelist>,
 }
 
+/// Whether `reader`, an intermediate that is not a pair relation, names the
+/// other intermediate `name` as its `dataset`, which makes `name` a record
+/// relation when it is not a pair relation either (LOOKUP-3).
+fn reads_records_of(reader: &Intermediate, name: &str) -> bool {
+    !reader.pairs() && reader.dataset.name == name && reader.id.name != name
+}
+
 impl Spec {
     pub fn expr(&self, id: ExprId) -> &Expr {
         &self.exprs[id.index()]
@@ -205,13 +212,37 @@ impl Spec {
                 .is_some_and(|right| right.name == name || item.dataset.name == name)
         })
     }
+    /// Whether the intermediate `name` is a record relation: another named
+    /// intermediate, not a pair relation, names it as its `dataset`, and so
+    /// reads its records as a row template driving on it would (LOOKUP-3,
+    /// ROW-2). A pair relation is read through its id already (LOOKUP-27).
+    pub fn read_as_records(&self, name: &str) -> bool {
+        self.intermediates
+            .iter()
+            .any(|item| item.id.name == name && !item.pairs())
+            && self
+                .intermediates
+                .iter()
+                .any(|reader| reads_records_of(reader, name))
+    }
+    /// The record relation the intermediate `reader` reads: the other named
+    /// intermediate, not a pair relation, that its `dataset` names
+    /// (LOOKUP-3). A pair relation reads its sides instead (LOOKUP-27).
+    pub fn record_relation(&self, reader: &Intermediate) -> Option<&Intermediate> {
+        self.intermediates
+            .iter()
+            .find(|other| !other.pairs() && reads_records_of(reader, &other.id.name))
+    }
     /// Whether the intermediate `item` lacks the `key` it requires: it
-    /// declares none and neither drives a row template nor is a side of a
-    /// pair relation (LOOKUP-3, ROW-2, LOOKUP-27; D23, D63), or it is a pair
-    /// relation, whose `key` pairs its two sides whatever reads it.
+    /// declares none and neither drives a row template, is a side of a pair
+    /// relation, nor is a record relation (LOOKUP-3, ROW-2, LOOKUP-27; D23,
+    /// D63), or it is a pair relation, whose `key` pairs its two sides
+    /// whatever reads it.
     pub fn lacks_key(&self, item: &Intermediate) -> bool {
         let name = &item.id.name;
-        item.key.is_none() && (item.pairs() || !(self.drives_rows(name) || self.pairs_with(name)))
+        item.key.is_none()
+            && (item.pairs()
+                || !(self.drives_rows(name) || self.pairs_with(name) || self.read_as_records(name)))
     }
     /// The pair relation `name` declares, if it is one (LOOKUP-27).
     pub fn pair_relation(&self, name: &str) -> Option<&Intermediate> {
@@ -547,6 +578,8 @@ pub struct Output {
     pub path: Text,
     pub relative_to: PathBase,
     pub decimals: Option<Constant>,
+    /// The text a csv artifact writes for a missing value (CSV-17).
+    pub missing: Option<Text>,
     pub columns: Vec<Named>,
     pub report: Option<Text>,
     pub order_by: Vec<OrderTerm>,

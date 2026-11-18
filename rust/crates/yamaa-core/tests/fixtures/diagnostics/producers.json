@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of an input linked to its producing specification (INPUT-6, INPUT-10, INPUT-11) and of a copy entry (SPEC-9), each reached by the detector that makes it: preparation with the producer a link names, a stored header read against the producer's contract, a layer's own validation, the copy entries of a chain's layers, and a producer read back into a specification being resolved. `consumer`, held at /consumer.yaml, reads the input SRC that its `schema` link /producer.yaml produces. A types entry on a linked input is redundant even when it agrees with the producer, and so is an empty or null types (INPUT-6). Preparation reads no file for link metadata: a linked input without a link, two links for one input, and a link for no linked input are each refused (INPUT-10), as are a link that names the consuming specification, a producer whose selected fields are unlabelled, repeated or undeclared, in selected-field order, and two output contracts under one producer identity. A stored header or a self-describing artifact's typed fields that differ from the producer's output columns mismatch the contract (INPUT-11). producer is the specification the tests linked, which selects ID and VALUE of its three columns. Moved from project_function_invocation.rs at 144fc5559, whose tests compared the fields and context keys each case names, the first finding's by position.",
+  "about": "The refusals of an input linked to its producing specification (INPUT-6, INPUT-10, INPUT-11, CSV-17) and of a copy entry (SPEC-9), each reached by the detector that makes it: preparation with the producer a link names, a stored header read against the producer's contract, a layer's own validation, the copy entries of a chain's layers, and a producer read back into a specification being resolved. `consumer`, held at /consumer.yaml, reads the input SRC that its `schema` link /producer.yaml produces. A types entry on a linked input is redundant even when it agrees with the producer, and so is an empty or null types (INPUT-6). Preparation reads no file for link metadata: a linked input without a link, two links for one input, and a link for no linked input are each refused (INPUT-10), as are a link that names the consuming specification, a producer whose selected fields are unlabelled, repeated or undeclared, in selected-field order, and two output contracts under one producer identity. A stored header or a self-describing artifact's typed fields that differ from the producer's output columns mismatch the contract (INPUT-11). producer is the specification the tests linked, which selects ID and VALUE of its three columns. Moved from project_function_invocation.rs at 144fc5559, whose tests compared the fields and context keys each case names, the first finding's by position.",
   "documents": {
     "consumer": {
       "yamaa": "1.0",
@@ -69,6 +69,31 @@
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "source_span", "operand_route"],
       "issues": [{"phase": "validation", "condition": "invalid_producer_contract", "rule": "INPUT-10", "spec_paths": ["input.SRC.schema.columns.ID.label"]}]
+    },
+    {
+      "case": "a_producer_that_writes_a_missing_text_cannot_be_linked",
+      "operation": "prepare_linked",
+      "input": {
+        "base": "consumer",
+        "identity": "/consumer.yaml",
+        "links": [
+          {
+            "dataset": "SRC",
+            "identity": "/producer.yaml",
+            "document": {
+              "yamaa": "1.0",
+              "type": "spec",
+              "domain": "TEST",
+              "base": "RAW",
+              "input": {"RAW": {"path": "raw.csv"}},
+              "keys": ["ID"],
+              "columns": [{"name": "ID", "type": "int", "label": "Identifier", "derivation": {"value": "RAW.ID"}}],
+              "output": {"path": "produced.csv", "missing": ".", "columns": ["ID"]}
+            }
+          }
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_text_not_applicable", "rule": "CSV-17", "spec_paths": ["input.SRC.schema.output.missing"], "context": {"dataset": "SRC", "path": "produced.csv"}}]
     },
     {
       "case": "a_stored_header_out_of_its_producer_s_output_order_mismatches_the_contract",

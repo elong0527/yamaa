@@ -17,6 +17,7 @@ impl Cause {
     pub fn diagnostic(&self, dataset: &str) -> Diagnostic {
         let prefix = format!("input.{dataset}.schema");
         let mut context = vec![("dataset".into(), text(dataset))];
+        let mut code = C::ProducerInvalidContract;
         let path = match self {
             Self::Empty => {
                 context.push(("reason".into(), text("empty")));
@@ -41,9 +42,14 @@ impl Cause {
                 context.push(("reason".into(), text("label")));
                 format!("{prefix}.columns.{field}.label")
             }
+            Self::MissingText { path } => {
+                code = C::ProducerMissingText;
+                context.push(("path".into(), text(path)));
+                format!("{prefix}.output.missing")
+            }
         };
         Diagnostic {
-            code: C::ProducerInvalidContract,
+            code,
             spec_paths: vec![path],
             context: context.into_iter().collect(),
             source_span: None,

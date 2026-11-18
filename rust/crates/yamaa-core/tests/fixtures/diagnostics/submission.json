@@ -572,6 +572,19 @@
       "issues": [{"phase": "validation", "condition": "decimals_not_applicable", "rule": "JSON-5", "spec_paths": ["sdtm.specs[0].output.decimals"], "context": {"dataset": "D0", "decimals": 2, "specification": "d0.yaml"}}]
     },
     {
+      "case": "a_missing_text_is_not_applicable_under_a_transport",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "dataset_json"},
+          {"set": ["specs", "0", "output", "missing"], "to": "."}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.missing", "context.specification"],
+      "issues": [{"phase": "validation", "condition": "missing_text_not_applicable", "rule": "JSON-5", "spec_paths": ["sdtm.specs[0].output.missing"], "context": {"dataset": "D0", "missing": ".", "specification": "d0.yaml"}}]
+    },
+    {
       "case": "an_sdtm_dataset_refuses_a_datetime_column",
       "operation": "compose",
       "input": {
