@@ -936,9 +936,7 @@ mod execution {
                         ("VISIT", T::Str),
                         ("LBSTRESN", T::Float),
                     ])],
-                    &[
-                        "STUDYID", "USUBJID", "AVISIT", "PARAMCD", "PARAM", "AVAL", "DTYPE",
-                    ],
+                    &["STUDYID", "USUBJID", "AVISIT", "PARAMCD", "PARAM", "AVAL"],
                     &[0, 1, 3, 2],
                     2,
                     1,
@@ -1003,9 +1001,7 @@ mod execution {
                     vec![T::Str, T::Str, T::Str, T::Float, T::Float, T::Float]
                 }
                 "negative-integer-overflow" => vec![T::Str, T::Str, T::Int, T::Int, T::Int],
-                "adam-adlb-ordered-sum" => {
-                    vec![T::Str, T::Str, T::Str, T::Str, T::Str, T::Float, T::Str]
-                }
+                "adam-adlb-ordered-sum" => vec![T::Str, T::Str, T::Str, T::Str, T::Str, T::Float],
                 "schema-window-functions" => vec![
                     T::Str,
                     T::Str,
@@ -1255,9 +1251,9 @@ mod execution {
                 );
                 let projection = match name {
                     "negative-integer-overflow" => vec!["STUDYID", "USUBJID", "CELLTOT"],
-                    "adam-adlb-ordered-sum" => vec![
-                        "STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL", "DTYPE",
-                    ],
+                    "adam-adlb-ordered-sum" => {
+                        vec!["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL"]
+                    }
                     _ => output.to_vec(),
                 };
                 assert_eq!(compiled.projection(), projection, "{name}");

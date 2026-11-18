@@ -10,8 +10,8 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS,
-            EOTDT, EOTSTT, DCTREAS, DCTREASP]
+  columns: [STUDYID, USUBJID, EOSDT, EOSREAS, EOSSTT, DCSREAS, EOTDT, EOTSTT,
+            DCTREAS, DCTREASP]
 
 # The subject's last treatment disposition record: latest DSSTDTC, then
 # higher DSSEQ on the same day. An undated record sorts first, so it is the
@@ -36,7 +36,8 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # All three read the subject's last study disposition record: latest
+  # All three read the subject's last study disposition record (the coded
+  # term is not in the output, as EOSSTT and DCSREAS carry it): latest
   # DSSTDTC, then higher DSSEQ on the same day. An undated record sorts
   # first, so it is the last record only when the subject has no dated one,
   # and then the end-of-study date stays empty. Treatment records
@@ -71,13 +72,16 @@ columns:
         order_by: [DS.DSSTDTC, DS.DSSEQ]
         keep: last
 
-  # Any coded term but COMPLETED is a discontinuation; no coded term, as
+  # A screen failure never entered the study, so it has no status. Any
+  # other coded term but COMPLETED is a discontinuation; no coded term, as
   # with no disposition event, is ONGOING.
   - name: EOSSTT
     type: str
     label: End of Study Status
     derivation:
       case:
+        - when: "EOSDECOD = 'SCREEN FAILURE'"
+          then: null
         - when: "EOSDECOD = 'COMPLETED'"
           then: "'COMPLETED'"
         - when: "EOSDECOD IS NOT NULL"

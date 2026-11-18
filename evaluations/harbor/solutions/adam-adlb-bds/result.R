@@ -25,37 +25,34 @@ lb <- read_csv(
 collected <- lb |>
   filter(LBTESTCD %in% c("ALT", "AST"), !is.na(LBSTRESN))
 
-# ALT and AST hold the collected result and unit; ALTSI holds the ALT
-# result times 0.0167 with unit ukat/L, one record for each ALT record.
+# ALT and AST hold the collected result in U/L; ALTSI holds the ALT
+# result times 0.0167 in ukat/L, one record for each ALT record.
 alt <- collected |>
   filter(LBTESTCD %in% "ALT") |>
   transmute(
     STUDYID, USUBJID,
     PARAMCD = "ALT",
-    PARAM = "Alanine Aminotransferase",
+    PARAM = "Alanine Aminotransferase (U/L)",
     ADT = LBDTC,
-    AVAL = LBSTRESN,
-    AVALU = LBSTRESU
+    AVAL = LBSTRESN
   )
 ast <- collected |>
   filter(LBTESTCD %in% "AST") |>
   transmute(
     STUDYID, USUBJID,
     PARAMCD = "AST",
-    PARAM = "Aspartate Aminotransferase",
+    PARAM = "Aspartate Aminotransferase (U/L)",
     ADT = LBDTC,
-    AVAL = LBSTRESN,
-    AVALU = LBSTRESU
+    AVAL = LBSTRESN
   )
 altsi <- collected |>
   filter(LBTESTCD %in% "ALT") |>
   transmute(
     STUDYID, USUBJID,
     PARAMCD = "ALTSI",
-    PARAM = "Alanine Aminotransferase (SI)",
+    PARAM = "Alanine Aminotransferase (ukat/L)",
     ADT = LBDTC,
-    AVAL = LBSTRESN * 0.0167,
-    AVALU = "ukat/L"
+    AVAL = LBSTRESN * 0.0167
   )
 
 base <- bind_rows(alt, ast, altsi) |>
@@ -75,8 +72,9 @@ with_flag <- base |>
   left_join(baseline_dates, by = c("STUDYID", "USUBJID", "PARAMCD")) |>
   mutate(ABLFL = if_else(!is.na(BASE_DT) & ADT == BASE_DT, "Y", NA_character_))
 
-# BASE repeats the flagged baseline value; CHG and PCHG follow, with PCHG
-# empty when the baseline is zero. Values are not rounded.
+# BASE repeats the flagged baseline value; CHG and PCHG follow only after
+# the treatment start date, with PCHG empty when the baseline is zero.
+# Values are not rounded.
 baselines <- with_flag |>
   filter(ABLFL %in% "Y") |>
   select(STUDYID, USUBJID, PARAMCD, BASE = AVAL)
@@ -85,11 +83,11 @@ adlb_flagged <- with_flag |>
   select(-BASE_DT) |>
   left_join(baselines, by = c("STUDYID", "USUBJID", "PARAMCD")) |>
   mutate(
-    CHG = AVAL - BASE,
+    CHG = if_else(ADT > TRTSDT, AVAL - BASE, NA_real_),
     PCHG = if_else(
-      is.na(BASE) | BASE == 0,
+      is.na(CHG) | BASE == 0,
       NA_real_,
-      100 * (AVAL - BASE) / BASE
+      100 * CHG / BASE
     )
   )
 
@@ -106,7 +104,7 @@ adlb <- adlb_flagged |>
   arrange(PARAM_ORDER, USUBJID, ADT) |>
   select(
     STUDYID, USUBJID, PARAMCD, PARAM, ADT, TRTSDT, TRT01A,
-    AVAL, AVALU, ABLFL, BASE, CHG, PCHG, ASEQ
+    AVAL, ABLFL, BASE, CHG, PCHG, ASEQ
   )
 
 dir.create("/app/output", showWarnings = FALSE)

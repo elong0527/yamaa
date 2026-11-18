@@ -7,7 +7,8 @@ review:
       change before that.
     - Six subjects cover a four-visit chain with a skipped visit number, a
       missing middle result, single and two-visit series, no change between
-      visits, and hemoglobin only.
+      visits, and hemoglobin only. The parameter code is the CDISC lab test
+      code ALB.
     - The previous change is carried from its completed value, so subject 106's
       zero change is a real 0, not blank, and a missing result shortens the
       chain (subject 102 has no previous change).

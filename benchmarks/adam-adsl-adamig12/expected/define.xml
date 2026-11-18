@@ -20,7 +20,8 @@
         <ItemRef ItemOID="IT.ADSL.AGE" OrderNumber="4" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADSL.HEIGHTBL" OrderNumber="5" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADSL.TRTSDT" OrderNumber="6" Mandatory="No" MethodOID="MT.ADSL.TRTSDT"/>
-        <ItemRef ItemOID="IT.ADSL.TRTSDTM" OrderNumber="7" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADSL.TRTSDTM" OrderNumber="7" Mandatory="No" MethodOID="MT.ADSL.TRTSDTM"/>
+        <ItemRef ItemOID="IT.ADSL.TRTSTMF" OrderNumber="8" Mandatory="No" MethodOID="MT.ADSL.TRTSTMF"/>
         <def:Class Name="SUBJECT LEVEL ANALYSIS DATASET"/>
         <def:leaf ID="LF.ADSL" xlink:href="adsl.xpt">
           <def:title>adsl.xpt</def:title>
@@ -86,15 +87,27 @@
         <Description>
           <TranslatedText xml:lang="en">Datetime of First Exposure to Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="Predecessor">
-          <Description>
-            <TranslatedText xml:lang="en">ADSL_RAW.TRTSDTC</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADSL.TRTSTMF" Name="TRTSTMF" DataType="text" Length="1" SASFieldName="TRTSTMF">
+        <Description>
+          <TranslatedText xml:lang="en">Time of First Exposure Imput. Flag</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
       </ItemDef>
       <MethodDef OID="MT.ADSL.TRTSDT" Name="ADSL.TRTSDT" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Date part of TRTSDTM.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.ADSL.TRTSDTM" Name="ADSL.TRTSDTM" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">TRTSDTC, with seconds 00 when the time was collected to the minute.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.ADSL.TRTSTMF" Name="ADSL.TRTSTMF" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">S when the time of first exposure was collected to the minute, so its seconds are imputed as 00.</TranslatedText>
         </Description>
       </MethodDef>
     </MetaDataVersion>

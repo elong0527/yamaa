@@ -1,8 +1,8 @@
 # Carry a Previous Visit's Change
 
-**Goal:** build the albumin change parameter `_ALB`, carrying each
-visit's previous result (`PREV_AVAL`), the change from it (`CHG`),
-and the previous visit's change (`PREV2`).
+**Goal:** build the albumin parameter (`ALB`), carrying each visit's
+previous result (`PREV_AVAL`), the change from it (`CHG`), and the
+previous visit's change (`PREV2`).
 
 **Input:** laboratory (LB) records carrying a test code (`LBTESTCD`),
 a numeric result (`LBSTRESN`), and a visit number (`VISITNUM`). Six

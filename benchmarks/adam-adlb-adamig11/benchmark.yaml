@@ -11,6 +11,8 @@ review:
       SAS transport submission declaring ADaMIG 1.1.
     - Two subjects cover a flagged baseline before the first dose, a
       post-baseline result, and a subject with no baseline.
-    - The baseline record itself gets a change of 0 rather than an empty change,
-      study day -1 is the day before first treatment with no day zero, and
-      subject 02, with no flagged baseline, has no baseline or change.
+    - Change is calculated only after the first treatment date, so the baseline
+      record has an empty change rather than 0; the unit is part of the
+      parameter name, as ADaMIG has no unit variable; study day -1 is the day
+      before first treatment with no day zero; and subject 02, with no flagged
+      baseline, has no baseline or change.

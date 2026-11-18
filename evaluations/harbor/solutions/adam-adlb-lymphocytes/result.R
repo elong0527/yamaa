@@ -13,14 +13,13 @@ raw <- read_csv(
 ) |>
   rename(PARAMCD = LBTESTCD, AVAL = LBSTRESN, PARAM = LBTEST)
 
-# Keep every collected record unchanged, with DTYPE empty.
+# Keep every collected record unchanged.
 collected <- raw |>
-  select(USUBJID, PARAMCD, AVAL, PARAM, VISIT) |>
-  mutate(DTYPE = NA_character_)
+  select(USUBJID, PARAMCD, AVAL, PARAM, VISIT)
 
 # Differential fraction code -> absolute code and parameter name.
 differentials <- list(
-  LYMLE = c("LYMPH", "Lymphocytes Abs (10^9/L)"),
+  LYMLE = c("LYM", "Lymphocytes Abs (10^9/L)"),
   NEUTLE = c("NEUT", "Neutrophils Abs (10^9/L)"),
   MONOLE = c("MONO", "Monocytes Abs (10^9/L)"),
   EOSLE = c("EOS", "Eosinophils Abs (10^9/L)"),
@@ -50,10 +49,9 @@ calc <- bind_rows(lapply(names(differentials), function(frac_code) {
     mutate(
       PARAMCD = abs_code,
       AVAL = WBCVAL * FRACVAL,
-      PARAM = abs_param,
-      DTYPE = "CALCULATION"
+      PARAM = abs_param
     ) |>
-    select(USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE)
+    select(USUBJID, PARAMCD, AVAL, PARAM, VISIT)
 }))
 
 adlb <- bind_rows(collected, calc)

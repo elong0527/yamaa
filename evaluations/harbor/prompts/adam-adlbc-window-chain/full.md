@@ -4,7 +4,7 @@ dataset with one record per subject per visit.
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, PREV_AVAL, CHG, PREV2
 
-PARAMCD is "_ALB" on every record. AVISITN is the lab visit number,
+PARAMCD is "ALB" on every record. AVISITN is the lab visit number,
 and AVAL is the numeric albumin result for the visit. A record appears
 only for an albumin result that has a numeric value; a record for
 another test, or an albumin record with no numeric result, has no

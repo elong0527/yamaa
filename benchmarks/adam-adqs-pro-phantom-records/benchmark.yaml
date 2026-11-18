@@ -12,4 +12,7 @@ review:
     - A missed questionnaire after treatment ended for progression becomes a
       phantom record carrying that reason and is not expected for safety, a
       timepoint on the day of an event is still expected, and a total with one
-      item missing is NOT CALCULABLE.
+      item missing is NOT CALCULABLE. The analysis date shows when each
+      questionnaire was completed, so subject 103's cycle 3 questionnaire
+      (2024-03-04) came after the end of treatment (2024-02-23), so it is kept
+      but not expected for safety.

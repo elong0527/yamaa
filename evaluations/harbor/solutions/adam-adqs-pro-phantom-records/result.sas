@@ -20,14 +20,14 @@ run;
 data qs;
   length STUDYID USUBJID QSCAT QSTESTCD QSTEST QSSTAT QSREASND VISIT $1024;
   infile "/app/input/qs.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. QSSEQ QSCAT : $char1024. QSTESTCD : $char1024. QSTEST : $char1024. QSSTRESN QSSTAT : $char1024. QSREASND : $char1024. VISITNUM VISIT : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. QSSEQ QSCAT : $char1024. QSTESTCD : $char1024. QSTEST : $char1024. QSSTRESN QSSTAT : $char1024. QSREASND : $char1024. VISITNUM VISIT : $char1024. QSDTC : yymmdd10.;
 run;
 
 /* Every randomized subject at every planned timepoint and parameter, with
    the collected item record when there is one. */
 proc sql;
   create table frame as select a.STUDYID,a.USUBJID,a.SAFFL,a.DCTREAS,a.EOTDY,a.DTHDY,b.VISITNUM,b.VISIT,b.VISITDY,b.PARCAT2,b.PARAMCD,b.PARAM from adsl as a inner join schedule as b on a.STUDYID=b.STUDYID;
-  create table joined as select f.*,i.QSSEQ,i.QSSTRESN,i.QSSTAT,i.QSREASND from frame as f left join qs as i on f.STUDYID=i.STUDYID and f.USUBJID=i.USUBJID and f.VISITNUM=i.VISITNUM and f.PARAMCD=i.QSTESTCD;
+  create table joined as select f.*,i.QSSEQ,i.QSSTRESN,i.QSSTAT,i.QSREASND,i.QSDTC from frame as f left join qs as i on f.STUDYID=i.STUDYID and f.USUBJID=i.USUBJID and f.VISITNUM=i.VISITNUM and f.PARAMCD=i.QSTESTCD;
 quit;
 
 /* Per subject and visit: the sum and count of the answered items, how many
@@ -37,13 +37,14 @@ data visitagg;
   length ITEMREAS $1024;
   set items;
   by USUBJID VISITNUM;
-  retain ITEMSUM ITEMANS ITEMCOL ITEMREAS;
-  if first.VISITNUM then do; ITEMSUM=.; ITEMANS=0; ITEMCOL=0; ITEMREAS=''; end;
+  retain ITEMSUM ITEMANS ITEMCOL ITEMREAS ITEMDT;
+  if first.VISITNUM then do; ITEMSUM=.; ITEMANS=0; ITEMCOL=0; ITEMREAS=''; ITEMDT=.; end;
   ITEMCOL=ITEMCOL+1;
+  ITEMDT=max(ITEMDT,QSDTC);
   if not missing(QSSTRESN) then do; ITEMSUM=sum(ITEMSUM,QSSTRESN); ITEMANS=ITEMANS+1; end;
   if not missing(QSREASND) and QSREASND > ITEMREAS then ITEMREAS=QSREASND;
   if last.VISITNUM then output;
-  keep USUBJID VISITNUM ITEMSUM ITEMANS ITEMCOL ITEMREAS;
+  keep USUBJID VISITNUM ITEMSUM ITEMANS ITEMCOL ITEMREAS ITEMDT;
 run;
 
 proc sort data=joined; by USUBJID VISITNUM PARAMCD; run;
@@ -61,6 +62,11 @@ data final;
   else do;
     if ITEMANS=2 then AVAL=ITEMSUM;
     if missing(ITEMCOL) or ITEMCOL=0 then DTYPE='PHANTOM';
+  end;
+  /* The questionnaire date: an item's own, a score's from its items. */
+  ADT=.;
+  if DTYPE ne 'PHANTOM' then do;
+    if PARCAT2='ITEM' then ADT=QSDTC; else ADT=ITEMDT;
   end;
   AREASND='';
   if missing(AVAL) then do;
@@ -83,6 +89,6 @@ data final;
 run;
 
 proc sql;
-  create table out as select STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, VISIT as AVISIT, VISITNUM as AVISITN, AVAL, DTYPE, QSSTAT, QSREASND, AREASND, PROEX1FL, PROEX2FL, PROSCMFL from final order by USUBJID, AVISITN, PARAMCD;
+  create table out as select STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, VISIT as AVISIT, VISITNUM as AVISITN, case when missing(ADT) then '' else put(ADT,yymmdd10.) end as ADT, AVAL, DTYPE, QSSTAT, QSREASND, AREASND, PROEX1FL, PROEX2FL, PROSCMFL from final order by USUBJID, AVISITN, PARAMCD;
 quit;
 proc export data=out outfile="/app/output/adqs.csv" dbms=csv replace; run;

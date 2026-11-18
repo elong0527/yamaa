@@ -1,7 +1,8 @@
-# Calculate each subject's mean result
+# Add each subject's average record
 
-**Goal:** add the subject's mean result (`AVALMEAN`) for each
-laboratory parameter to every collected record.
+**Goal:** add one average record (`DTYPE` `AVERAGE`) per subject and
+laboratory parameter, whose analysis value (`AVAL`) is the mean of the
+subject's collected results, and number every record (`ASEQ`).
 
 **Input:** collected laboratory (LB) records carrying study,
 subject, sequence number, test code, and the collected numeric
@@ -9,13 +10,16 @@ result.
 
 **Variables:**
 
-- `AVAL`: the collected numeric result for the record; empty
-  when no usable result was collected.
-- `AVALMEAN`: the mean of the subject's non-missing `AVAL`
-  values for the parameter, repeated on every record for that
-  subject and parameter, including a record whose own `AVAL`
-  is empty; empty, never zero, when the subject has no
-  non-missing `AVAL` for the parameter.
+- `ASEQ`: the record's number within the subject: the collected
+  records of a parameter in sequence order, then its average record.
+- `LBSEQ`: the collected record's sequence number; empty on an
+  average record.
+- `AVAL`: on a collected record, the collected numeric result,
+  empty when no usable result was collected; on an average record,
+  the mean of the subject's non-missing results for the parameter.
+- `DTYPE`: `AVERAGE` on an average record; empty on a collected
+  record.
 
-**Note:** the mean is taken separately for each test code, so
-each of a subject's records carries the mean for its own test.
+**Note:** the average is taken separately for each test code. A
+subject with no non-missing result for a parameter gets no average
+record, rather than one with an empty or zero value.

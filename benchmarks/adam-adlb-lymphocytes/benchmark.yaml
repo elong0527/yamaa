@@ -11,5 +11,7 @@ review:
       absolute counts, and two visits for one subject.
     - An absolute count is added only when both the white cell count and the
       fraction exist and no absolute record is there yet, so LYM-005's reported
-      lymphocyte count is kept, not recomputed, and LYM-004's eosinophil
-      fraction without a white cell count gains nothing.
+      lymphocyte count (LYM) is kept, not recomputed, and LYM-004's eosinophil
+      fraction without a white cell count gains nothing. Every record of a
+      parameter is either collected or calculated the same way, so no record
+      needs a derivation type.

@@ -22,7 +22,6 @@ adlb = lb.select(
     pl.col("LBTESTCD").replace_strict(param).alias("PARAM"),
     pl.col("LBSTRESN").cast(pl.Float64).alias("AVAL"),
     pl.col("LBSTRESC").alias("AVALC"),
-    pl.col("LBSTRESU").alias("AVALU"),
 )
 
 Path("/app/output").mkdir(exist_ok=True)

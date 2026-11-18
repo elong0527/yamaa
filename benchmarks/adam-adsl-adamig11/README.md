@@ -1,8 +1,8 @@
 # Subject-Level Analysis Data Submitted in SAS Transport with ADaMIG 1.1
 
-**Goal:** carry `TRT01A`, `AGE`, `HEIGHTBL`, `TRTSDT` and `TRTSDTM` into
-ADSL and submit it as the SAS transport file `adsl.xpt`, with the dates as
-SAS numeric dates.
+**Goal:** carry `TRT01A`, `AGE`, `HEIGHTBL`, `TRTSDT` and `TRTSDTM`, with the
+time imputation flag `TRTSTMF`, into ADSL and submit it as the SAS transport
+file `adsl.xpt`, with the dates as SAS numeric dates.
 
 **Input:** one pre-analysis row per subject carrying the actual treatment,
 age, baseline height and the collected date and time of first exposure.
@@ -15,8 +15,12 @@ age, baseline height and the collected date and time of first exposure.
   missing when not measured.
 - `TRTSDT` is the date part of `TRTSDTM`; missing when the subject was never
   treated.
-- `TRTSDTM` is the date and time of first exposure; missing when the subject
-  was never treated.
+- `TRTSDTM` is the date and time of first exposure, with seconds `00` when
+  the time was collected to the minute; missing when the subject was never
+  treated.
+- `TRTSTMF` is `S` when the seconds of `TRTSDTM` were imputed, because
+  seconds are collected for other subjects; empty when the seconds were
+  collected or the subject was never treated.
 
 **Note:** in the transport file `TRTSDT` counts days and `TRTSDTM` seconds
 from 1 January 1960, shown as `DATE9.` and `DATETIME20.`, and the

@@ -8,11 +8,6 @@ codelists:
     items:
     - value: NEGATIVE
     - value: POSITIVE
-  - id: UNIT
-    name: Laboratory Analysis Units
-    items:
-    - value: mg/dL
-    - value: umol/L
 study:
   id: CATH
   name: CATH

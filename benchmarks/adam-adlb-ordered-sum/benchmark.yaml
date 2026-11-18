@@ -9,4 +9,5 @@ review:
       single component, a missing component, and all components missing.
     - The same values total 0.6000000000000001 in one stored order and 0.6 in
       the other (subjects 101 and 102), which a reviewer may question, and a
-      visit with no results gets an empty total rather than zero.
+      visit with no results gets an empty total rather than zero. Every TOTAL
+      record is calculated the same way, so it needs no derivation type.

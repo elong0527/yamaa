@@ -16,15 +16,12 @@ lb <- read_csv(
   )
 )
 
-# Build the change parameters from albumin and bilirubin; any other test
-# produces no rows. A record with no numeric result gets no row.
+# Build the albumin and bilirubin parameters; any other test produces no
+# rows. A record with no numeric result gets no row.
 adbc <- lb |>
   filter(LBTESTCD %in% c("ALB", "BILI"), !is.na(LBSTRESN), !is.na(VISITNUM)) |>
   mutate(
-    PARAMCD = case_when(
-      LBTESTCD == "ALB" ~ "_ALB",
-      LBTESTCD == "BILI" ~ "_BILI"
-    ),
+    PARAMCD = LBTESTCD,
     AVISITN = VISITNUM,
     AVAL = LBSTRESN
   ) |>

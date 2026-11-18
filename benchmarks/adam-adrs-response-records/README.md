@@ -31,20 +31,20 @@ assessor (`INDEPENDENT ASSESSOR`) assessment leave none.
   partial response (`PR`), stable disease (`SD`), neither complete
   response nor progressive disease (`NON-CR/NON-PD`), progressive
   disease (`PD`), or not evaluable (`NE`).
-- `AVAL` ranks the response from best to worst as `1` (`CR`), `2`
-  (`PR`), `3` (`SD`), `4` (`NON-CR/NON-PD`), `5` (`PD`), or `6`
-  (`NE`).
+- `AVAL` codes the response as `1` (`CR`), `2` (`PR`), `3` (`SD`),
+  `4` (`NON-CR/NON-PD`), `5` (`PD`), or `6` (`NE`).
 - `ANL01FL` is `Y` for one record at each assessment date: the worst
-  (largest `AVAL`) response that day, with the lowest `RSSEQ`
-  breaking ties when a day carries the same worst response twice. It
-  is empty otherwise.
+  evaluable response that day (the largest `AVAL` other than `NE`),
+  with the lowest `RSSEQ` breaking ties when a day carries the same
+  worst response twice. `NE` is flagged only on a date with no
+  evaluable response. It is empty otherwise.
 
 **Note:** the study's statistical analysis plan (SAP) sets these rules:
 this parameter holds the investigator's overall response alone (other
 evaluators and tests would be parameters of their own), a partial date
 completes to its first possible day and is flagged, and the worst
-response of a date is the one analysed. A completed date counts exactly
-as a collected one in every comparison that follows, so grouping by
-date and measuring from the treatment start never depend on how much of
-the date was collected. An assessment dated exactly on the treatment
-start lands on study day one.
+evaluable response of a date is the one analysed. A completed date
+counts exactly as a collected one in every comparison that follows, so
+grouping by date and measuring from the treatment start never depend on
+how much of the date was collected. An assessment dated exactly on the
+treatment start lands on study day one.

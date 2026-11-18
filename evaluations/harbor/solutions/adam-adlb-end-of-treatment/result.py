@@ -21,6 +21,10 @@ def read_csv(path):
 def main():
     lb = read_csv(INPUT_DIR + "/lb.csv")
     supplb = read_csv(INPUT_DIR + "/supplb.csv")
+    end_of_treatment = {
+        (row["STUDYID"], row["USUBJID"]): row["TRTEDT"]
+        for row in read_csv(INPUT_DIR + "/adsl.csv")
+    }
 
     # Endpoint-marked keys: (STUDYID, USUBJID, LBSEQ as int). In SUPPLB the
     # sequence number is eight-character, space-padded text.
@@ -44,13 +48,22 @@ def main():
             "ENDPOINT": "Y" if key in endpoint_keys else "",
             "EOTFL": "",
             "_visit": int(row["VISITNUM"]),
+            # ISO dates compare as text; a follow-up record is after TRTEDT.
+            "_on_treatment": bool(
+                row["LBDTC"]
+                and end_of_treatment.get((row["STUDYID"], row["USUBJID"]))
+                and row["LBDTC"]
+                <= end_of_treatment[(row["STUDYID"], row["USUBJID"])]
+            ),
         })
 
-    # One EOTFL "Y" per subject and test: the endpoint-marked record when
-    # there is one, otherwise the record from the latest visit.
+    # One EOTFL "Y" per subject and test among the records on treatment:
+    # the endpoint-marked record when there is one, otherwise the record
+    # from the latest visit.
     groups = {}
     for i, rec in enumerate(records):
-        groups.setdefault((rec["USUBJID"], rec["LBTESTCD"]), []).append(i)
+        if rec["_on_treatment"]:
+            groups.setdefault((rec["USUBJID"], rec["LBTESTCD"]), []).append(i)
     for idxs in groups.values():
         marked = [i for i in idxs if records[i]["ENDPOINT"] == "Y"]
         if marked:

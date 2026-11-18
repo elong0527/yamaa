@@ -8,6 +8,9 @@ review:
     - Eight subjects cover CR, PR, SD, NON-CR/NON-PD, PD and NE as best
       responses, a subject with no response selection, and a response on the
       randomization date.
-    - Only the record ranked first is used, so subject 104's NE comes from a
-      record collected as SD but categorized NE, and subject 105, with no
-      selection, keeps one record with response, rank and date empty.
+    - Only the record ranked first is used. Subject 104's best response is NE
+      because its SD on day 28 came before the minimum duration for stable
+      disease (42 days after randomization), so under RECIST 1.1 the selection
+      categorized it NE, and the subject had no later SD, PR or CR. Subject
+      105, with no selection, keeps one record with response, rank and date
+      empty.

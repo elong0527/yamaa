@@ -7,7 +7,9 @@ from pathlib import Path
 
 INPUT = Path("/app/input/adsl_raw.csv")
 OUTPUT = Path("/app/output/adsl.csv")
-COLUMNS = ["STUDYID", "USUBJID", "TRT01A", "AGE", "HEIGHTBL", "TRTSDT", "TRTSDTM"]
+COLUMNS = [
+    "STUDYID", "USUBJID", "TRT01A", "AGE", "HEIGHTBL", "TRTSDT", "TRTSDTM", "TRTSTMF",
+]
 
 
 def main():
@@ -28,9 +30,12 @@ def main():
                 timestamp = datetime.fromisoformat(treatment_start)
                 record["TRTSDTM"] = timestamp.strftime("%Y-%m-%dT%H:%M:%S")
                 record["TRTSDT"] = timestamp.date().isoformat()
+                # Seconds are collected for other subjects: flag imputed ones.
+                record["TRTSTMF"] = "S" if len(treatment_start) == 16 else ""
             else:
                 record["TRTSDT"] = ""
                 record["TRTSDTM"] = ""
+                record["TRTSTMF"] = ""
             records.append(record)
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

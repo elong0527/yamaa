@@ -16,18 +16,29 @@ lb <- read_csv(
   )
 )
 
-# Mean of the subject's collected values for the parameter, repeated on
-# every record for that subject and parameter.
-means <- lb |>
-  filter(!is.na(LBSTRESN)) |>
-  group_by(STUDYID, USUBJID, LBTESTCD) |>
-  summarise(AVALMEAN = mean(LBSTRESN), .groups = "drop")
+collected <- lb |>
+  transmute(
+    STUDYID, USUBJID, LBSEQ,
+    PARAMCD = LBTESTCD,
+    AVAL = LBSTRESN,
+    DTYPE = NA_character_
+  )
 
-adlb <- lb |>
-  left_join(means, by = c("STUDYID", "USUBJID", "LBTESTCD")) |>
-  mutate(AVAL = LBSTRESN, PARAMCD = LBTESTCD) |>
-  arrange(USUBJID, LBSEQ) |>
-  select(STUDYID, USUBJID, LBSEQ, PARAMCD, AVAL, AVALMEAN)
+# One average record per subject and parameter with a non-missing result.
+averages <- lb |>
+  filter(!is.na(LBSTRESN)) |>
+  group_by(STUDYID, USUBJID, PARAMCD = LBTESTCD) |>
+  summarise(AVAL = mean(LBSTRESN), .groups = "drop") |>
+  mutate(LBSEQ = NA_integer_, DTYPE = "AVERAGE")
+
+# Collected records in sequence order, then the average, within parameter.
+adlb <- bind_rows(collected, averages) |>
+  arrange(STUDYID, USUBJID, PARAMCD, !is.na(DTYPE), LBSEQ) |>
+  group_by(STUDYID, USUBJID) |>
+  mutate(ASEQ = row_number()) |>
+  ungroup() |>
+  arrange(USUBJID, ASEQ) |>
+  select(STUDYID, USUBJID, ASEQ, LBSEQ, PARAMCD, AVAL, DTYPE)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(adlb, "/app/output/adlb.csv", na = "")

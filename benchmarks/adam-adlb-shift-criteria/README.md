@@ -23,10 +23,11 @@ and parameter).
 - `BNRIND` repeats the baseline record's `ANRIND` the same way;
   empty with no flagged baseline, or when the baseline record
   itself could not be marked.
-- `SHIFT1` joins the baseline mark and the record's own mark, baseline
-  first, so a result that stayed normal reads `NORMAL to NORMAL` and
-  one that moved out of range reads `NORMAL to HIGH`; empty when
-  either mark is missing - the record's own or the baseline's.
+- `SHIFT1` joins the baseline mark and the record's own mark on a
+  record after baseline, baseline first, so a result that stayed
+  normal reads `NORMAL to NORMAL` and one that moved out of range
+  reads `NORMAL to HIGH`; empty on the baseline record itself, and
+  when either mark is missing - the record's own or the baseline's.
 - `R2BASE` divides `AVAL` by `BASE`, so the baseline record itself
   reads 1 when the ratio can be computed; empty when `AVAL` is
   missing, when there is no baseline, and when the baseline is zero
@@ -53,6 +54,6 @@ and parameter).
 **Note:** the shift joins the baseline mark with the record's own
 mark and the ratio rests on the flagged baseline value, while the
 mark and the criteria rest on the record's own value and limits;
-each criterion text and its flag always arrive together, as do the mark
-and the shift. A record that breaks these pairings stops the run, and
-no output is written.
+each criterion text and its flag always arrive together, and a record
+after baseline with both marks always has its shift. A record that breaks
+these pairings stops the run, and no output is written.

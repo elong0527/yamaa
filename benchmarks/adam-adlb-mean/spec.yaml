@@ -2,13 +2,14 @@ yamaa: "1.0"
 type: spec
 model: ADaM
 domain: ADLB
-keys: [STUDYID, USUBJID, LBSEQ]
+keys: [STUDYID, USUBJID, PARAMCD, ASEQ]
 input:
-  LB: input/lb.csv
+  LB: {path: input/lb.csv, types: {LBSEQ: int, LBSTRESN: float}}
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, LBSEQ, PARAMCD, AVAL, AVALMEAN]
+  columns: [STUDYID, USUBJID, ASEQ, LBSEQ, PARAMCD, AVAL, DTYPE]
+  order_by: [USUBJID, ASEQ]
 
 columns:
   - name: STUDYID
@@ -21,32 +22,70 @@ columns:
     label: Unique Subject Identifier
     derivation: LB.USUBJID
 
-  - name: LBSEQ
-    type: int
-    label: Sequence Number
-    derivation: LB.LBSEQ
-
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation: LB.LBTESTCD
 
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: LB.LBSTRESN
 
-  # Mean of AVAL over the output rows sharing study, subject and parameter.
-  # Missing AVAL values are skipped; a group with none gives a missing mean.
-  - name: AVALMEAN
-    type: float
-    label: Mean Analysis Value
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+    verifications:
+      - allowed_values:
+          values: [AVERAGE]
+
+  # Each subject's records of a parameter, the collected ones in sequence
+  # order and the average after them: a collected record has no DTYPE, so it
+  # sorts first.
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
     derivation:
-      aggregate:
-        group_by: [STUDYID, USUBJID, PARAMCD]
-        expr: "MEAN(AVAL)"
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [PARAMCD, DTYPE, LBSEQ]
+
+rows:
+  # Every collected record, unchanged.
+  - id: collected
+    dataset: LB
+    derivations:
+      LBSEQ: LB.LBSEQ
+      AVAL: LB.LBSTRESN
+      DTYPE: null
+
+  # One average record per subject and parameter: the mean of the collected
+  # results, skipping missing ones. A subject and parameter with no result
+  # has no mean, so it gets no average record.
+  - id: average
+    dataset: LB
+    group_by: [LB.STUDYID, LB.USUBJID, LB.LBTESTCD]
+    filter: "AVAL IS NOT NULL"
+    derivations:
+      LBSEQ: null
+      AVAL:
+        aggregate: "MEAN(LB.LBSTRESN)"
+      DTYPE: "'AVERAGE'"
 
 verifications:
   - row_count:
-      min: 7
-      max: 7
+      min: 9
+      max: 9
+  - row_count:
+      id: one-average-record-per-subject-and-parameter
+      group_by: [STUDYID, USUBJID, PARAMCD]
+      filter: "DTYPE = 'AVERAGE'"
+      max: 1
+  - assert:
+      id: an-average-record-has-a-value-and-no-source-record
+      when: "DTYPE = 'AVERAGE'"
+      require: "AVAL IS NOT NULL AND LBSEQ IS NULL"

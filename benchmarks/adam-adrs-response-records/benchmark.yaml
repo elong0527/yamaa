@@ -10,7 +10,8 @@ review:
       date, a year-month and a year-only date, an assessment on the treatment
       start, and target-lesion and independent-assessor records.
     - On a date with two results the SAP's worse one is flagged (subject
-      102's PD over SD), a partial date completes to the first of the month or
-      year and is flagged (2025-03 becomes 2025-03-01 with ADTF D), and
-      target-lesion and independent assessments belong to other parameters, so
-      they leave no record here.
+      102's PD over SD), and NE is used only when the date has no evaluable
+      response (subject 108's PD over SD and NE). A partial date completes to
+      the first of the month or year and is flagged (2025-03 becomes 2025-03-01
+      with ADTF D), and target-lesion and independent assessments belong to
+      other parameters, so they leave no record here.

@@ -67,7 +67,7 @@ def main():
             base_val = to_float(base_row["AVAL"])
             bnrind = base_row["_ANRIND"]
 
-        if anrind == "" or bnrind == "":
+        if row["ABLFL"].strip() == "Y" or anrind == "" or bnrind == "":
             shift1 = ""
         else:
             shift1 = bnrind + " to " + anrind

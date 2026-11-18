@@ -3,10 +3,14 @@ standard: ADaM
 domain: ADEG
 review:
   concerns:
-    - Thorough QT studies compare each post-dose ECG with the baseline recorded
-      at the same clock time on the day before dosing.
+    - Thorough QT studies often compare each ECG after a dose with the ECG
+      recorded at the same clock time on day -1, a day without dosing (a
+      time-matched baseline), instead of with one pre-dose value.
     - Four subjects cover one or two periods, two time points, a baseline day
       missing a time point, and a period with no baseline day.
-    - Nothing stands in for a missing time-matched baseline (subject S03's 2 h
-      records have no baseline or change), each period has its own baseline
-      type, and changes are not rounded.
+    - Day -1 is not a dosing day, so its 2 h record is taken at the clock time
+      of the 2 h time point, not after a dose. A period has one baseline record
+      for each time point, and each has its own baseline type, so a baseline
+      type has one baseline record. Nothing stands in for a missing
+      time-matched baseline, so subject S03's 2 h records have no baseline or
+      change, even though S03 has a 0 h baseline.
