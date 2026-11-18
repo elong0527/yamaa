@@ -311,13 +311,10 @@ fn output<E>(
                 None => None,
                 Some(filter) => {
                     let positions: Vec<usize> = (0..range.len()).collect();
-                    let truths = super::predicates::record_truths(
-                        cx.dates,
-                        filter,
-                        donor,
-                        &positions,
-                        |_| Operand::Values(Values::missing(range.len())),
-                    );
+                    let truths =
+                        super::predicates::record_truths_ahead(filter, donor, &positions, |_| {
+                            Operand::Values(Values::missing(range.len()))
+                        });
                     let Some(truths) = truths else {
                         return Ok(None);
                     };

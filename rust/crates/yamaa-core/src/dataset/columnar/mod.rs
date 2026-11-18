@@ -306,7 +306,12 @@ struct Run<'p, 'a, E> {
     pub cancelled: &'a dyn Fn() -> bool,
     /// The least pair each site's text order decided between collected
     /// date texts (CHECK-27), kept outside the run so that every context
-    /// of it records there.
+    /// of it records there. A unit that replays in row mode keeps what its
+    /// batch recorded, which the replay records again: a batch records
+    /// nothing a replay would not, because what is asked ahead of the rows
+    /// that read it records apart from the run (a lookup's filter over
+    /// every donor record, `predicates::record_truths_ahead`, and a
+    /// window's partitions).
     pub dates: &'a TextDates,
     /// Whether the probe has answered true: a run stays cancelled, even when
     /// a probe of a lookup swallowed the poll's failure.

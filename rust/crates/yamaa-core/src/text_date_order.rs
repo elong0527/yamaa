@@ -4,8 +4,10 @@
 //! (TIME-7) recorded to two precisions, such as `2025-03-11` and
 //! `2025-03-11T07:30`, orders by its length rather than by the time it
 //! names. Fixed-width fields order every other pair of collected date texts
-//! as their dates, so a comparison or an order term between two of them
-//! misreads time exactly when one is a proper prefix of the other.
+//! whose fields are all known as their dates, so a comparison or an order
+//! term between two of them misreads time exactly when one is a proper
+//! prefix of the other. An unknown field, written `-`, sorts before every
+//! known one, which is no choice between two precisions and is not reported.
 //!
 //! A run keeps, for each site where text order decided such a pair, the
 //! least pair it decided. The least pair is the same whatever order the run
@@ -89,8 +91,8 @@ pub struct TextDateOrder {
 
 impl TextDateOrder {
     /// The warning as a diagnostic record: the condition, the site's path
-    /// and the pair, as the run report's check row carries them. A run
-    /// raises it as no issue (CHECK-27).
+    /// and the pair, from which [`TextDateOrder::check`] builds the run
+    /// report's check row. A run raises it as no issue (CHECK-27).
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
         use crate::json::Value as Json;
         crate::diagnostic::Diagnostic {
@@ -103,6 +105,29 @@ impl TextDateOrder {
             .into(),
             source_span: None,
             operand_route: None,
+        }
+    }
+
+    /// The warning as the run report's check row: the site, named by its
+    /// condition, examined as one unit and violated there, with the pair as
+    /// the failure's details (CHECK-27).
+    pub fn check(&self) -> crate::run_report::Check {
+        let diagnostic = self.diagnostic();
+        let mapping = diagnostic.code.definition();
+        crate::run_report::Check {
+            path: self.path.clone(),
+            name: mapping.condition.into(),
+            id: None,
+            target: None,
+            rule: mapping.rule.expect("registered normative check").into(),
+            severity: crate::dataset::VerificationSeverity::Warning,
+            evaluated: 1,
+            failure: Some(crate::run_report::Failure {
+                condition: mapping.condition.into(),
+                count: 1,
+                keys: vec![crate::json::Value::Object(Default::default())],
+                details: diagnostic.context.into_iter().collect(),
+            }),
         }
     }
 }
@@ -131,6 +156,16 @@ impl TextDateOrders {
                 self.record(&path, shorter, longer);
             }
         }
+    }
+
+    /// Whether no site has met a decided pair.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Whether the site at `path` has met a decided pair.
+    pub fn met(&self, path: &str) -> bool {
+        self.0.contains_key(path)
     }
 
     /// Each site's least pair, in path order.

@@ -711,6 +711,12 @@ fn a_run_saves_the_warning_report_rows_both_hosts_report() {
         directory.write("spec.yaml", text(case, "specification_yaml"));
         directory.write("input.csv", text(case, "input_csv"));
         let document = document(&directory, &["run", "spec.yaml"], key);
+        // A warning fails nothing: the run succeeds.
+        assert_eq!(
+            raw(&document, "status", key),
+            "\"succeeded\"",
+            "{key}: the run's status"
+        );
         assert_eq!(
             printed_rows(&document, key),
             Vec::<Row>::new(),

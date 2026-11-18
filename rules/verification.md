@@ -648,26 +648,39 @@ by the time either names. A successful run reports each expression or
 nothing and changes no value.
 
 Fails: `text_date_order`.
-Evidence: `schema-text-date-order-warning`, `rust/crates/yamaa-core/src/text_date_order.rs::text_order_decides_only_a_proper_prefix_between_collected_date_texts`, `rust/crates/yamaa-core/src/text_date_order.rs::a_site_keeps_its_least_pair_whatever_order_it_meets_them`.
+Evidence: `schema-text-date-order-warning`, `rust/crates/yamaa-core/src/text_date_order.rs::text_order_decides_only_a_proper_prefix_between_collected_date_texts`, `rust/crates/yamaa-core/src/text_date_order.rs::a_site_keeps_its_least_pair_whatever_order_it_meets_them`, `rust/crates/yamaa/tests/text_date_orders.rs::a_lookup_filter_reports_what_text_order_decided_on_matched_records_alone`, `rust/crates/yamaa/tests/text_date_orders.rs::a_selection_two_columns_share_reports_at_the_order_of_each`, `rust/crates/yamaa/tests/text_date_orders.rs::a_window_and_an_aggregate_report_what_text_order_decided_where_a_row_read`, `rust/crates/yamaa/tests/text_date_orders.rs::a_run_that_fails_after_deriving_reports_no_text_date_order`.
 
-Fixed-width fields order every other pair of collected date texts as their
-dates: `2025-03-10` precedes `2025-03-11T08:00`. A proper prefix sorts first,
-so `2025-03-11` precedes `2025-03-11T07:30` and `2025-03-11T08:00` precedes
-`2025-03-11T08:00:00`, though each pair may name one time. An equality is not
-an order and is not reported, and neither is a comparison whose operand is
-missing.
+Fixed-width fields order every other pair of collected date texts whose
+fields are all known as their dates: `2025-03-10` precedes
+`2025-03-11T08:00`. A proper prefix sorts first, so `2025-03-11` precedes
+`2025-03-11T07:30` and `2025-03-11T08:00` precedes `2025-03-11T08:00:00`,
+though each pair may name one time. An equality is not an order and is not
+reported, and neither is a comparison whose operand is missing. An unknown
+field, written `-`, sorts before every known one; that is no choice between
+two precisions, and the check does not report it.
 
 The check row's `SPEC_PATH` is the path of the expression that compared, such
 as `intermediates.LAST_DOSE.filter`, or of the `order_by` of the selection,
 such as `intermediates.LAST_DOSE.order_by`; its `NAME` and `CONDITION` are
-`text_date_order`. A selection compares each candidate record with the one
-chosen so far, and only those comparisons are read. The check examines its
-place as one unit: `COUNT` and `TOTAL` are `1` and `KEYS` is `[{}]`. `DETAILS`
-holds the least pair text order decided there, by `shorter` then `longer`, so
-the row is the same however the run divides its work or how often it compares
-one pair. The rows follow every declared check, in `SPEC_PATH` order. A place
-where text order decided no such pair has no row, and a failed run reports
-none.
+`text_date_order`. The check examines its place as one unit: `COUNT` and
+`TOTAL` are `1` and `KEYS` is `[{}]`. `DETAILS` holds the least pair text
+order decided there, by `shorter` then `longer`, so the row is the same
+however the run divides its work or how often it compares one pair. The rows
+follow every declared check, in `SPEC_PATH` order. A place where text order
+decided no such pair has no row, and a failed run reports none, whatever it
+derived before it failed.
+
+A place reports what text order decided where a row of the run asked:
+
+- a lookup's `filter` is asked only about matched records
+  ([LOOKUP-8](lookup.md#lookup-8)), so a record no row matches reports
+  nothing;
+- a window's `filter`, and the `filter` of an unqualified aggregate, report
+  for the partition or the group a row reads, and nothing for one no row
+  reads;
+- a selection compares each candidate record with the one chosen so far, and
+  only those comparisons are read; each of several reads that declare one
+  selection reports at its own `order_by`.
 
 The comparison stays text. Reading the values as `date` or `datetime`, or
 completing collected date text with `impute`

@@ -49,6 +49,7 @@ mod save_table;
 mod save_targets;
 mod schema;
 mod streaming;
+mod text_date_orders;
 mod vocabulary;
 
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`

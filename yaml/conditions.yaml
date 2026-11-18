@@ -613,7 +613,7 @@ conditions:
     phases: [validation]
     message: "column {column} has submission metadata but is not an output column"
   text_date_order:
-    phases: [derivation, row_construction]
+    phases: [derivation]
     message: "text order places {shorter} before {longer} at {spec_path}, though both may name the same time; compare them as date or datetime values"
   transport_dataset_empty:
     phases: [output]
