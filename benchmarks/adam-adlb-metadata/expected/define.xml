@@ -23,11 +23,6 @@
           <def:WhereClauseRef WhereClauseOID="WC.ADLB.AVALC.HCG"/>
         </ItemRef>
       </def:ValueListDef>
-      <def:ValueListDef OID="VL.ADLB.AVALU">
-        <ItemRef ItemOID="IT.ADLB.AVALU.NUMERIC" OrderNumber="1" Mandatory="Yes">
-          <def:WhereClauseRef WhereClauseOID="WC.ADLB.AVALU.NUMERIC"/>
-        </ItemRef>
-      </def:ValueListDef>
       <def:WhereClauseDef OID="WC.ADLB.AVAL.GLUC">
         <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.ADLB.PARAMCD">
           <CheckValue>GLUC</CheckValue>
@@ -43,12 +38,6 @@
           <CheckValue>HCG</CheckValue>
         </RangeCheck>
       </def:WhereClauseDef>
-      <def:WhereClauseDef OID="WC.ADLB.AVALU.NUMERIC">
-        <RangeCheck Comparator="IN" SoftHard="Soft" def:ItemOID="IT.ADLB.PARAMCD">
-          <CheckValue>GLUC</CheckValue>
-          <CheckValue>CREAT</CheckValue>
-        </RangeCheck>
-      </def:WhereClauseDef>
       <ItemGroupDef OID="IG.ADLB" Name="ADLB" Purpose="Analysis" SASDatasetName="ADLB" Repeating="Yes" IsReferenceData="No" def:Structure="One record per subject per parameter" def:ArchiveLocationID="LF.ADLB" def:StandardOID="STD.ADaMIG">
         <Description>
           <TranslatedText xml:lang="en">Laboratory Analysis Dataset</TranslatedText>
@@ -59,7 +48,6 @@
         <ItemRef ItemOID="IT.ADLB.PARAM" OrderNumber="4" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADLB.AVAL" OrderNumber="5" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADLB.AVALC" OrderNumber="6" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADLB.AVALU" OrderNumber="7" Mandatory="No"/>
         <def:Class Name="BASIC DATA STRUCTURE"/>
         <def:leaf ID="LF.ADLB" xlink:href="adlb.json">
           <def:title>adlb.json</def:title>
@@ -154,35 +142,9 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADLB.AVALU" Name="AVALU" DataType="text" Length="6" SASFieldName="AVALU">
-        <Description>
-          <TranslatedText xml:lang="en">Analysis Value Unit</TranslatedText>
-        </Description>
-        <def:Origin Type="Predecessor">
-          <Description>
-            <TranslatedText xml:lang="en">LB.LBSTRESU</TranslatedText>
-          </Description>
-        </def:Origin>
-        <def:ValueListRef ValueListOID="VL.ADLB.AVALU"/>
-      </ItemDef>
-      <ItemDef OID="IT.ADLB.AVALU.NUMERIC" Name="AVALU" DataType="text" Length="6" SASFieldName="AVALU">
-        <Description>
-          <TranslatedText xml:lang="en">Analysis Value Unit</TranslatedText>
-        </Description>
-        <CodeListRef CodeListOID="CL.UNIT"/>
-        <def:Origin Type="Predecessor">
-          <Description>
-            <TranslatedText xml:lang="en">LB.LBSTRESU</TranslatedText>
-          </Description>
-        </def:Origin>
-      </ItemDef>
       <CodeList OID="CL.HCGRS" Name="Pregnancy Test Result" DataType="text" def:IsNonStandard="Yes">
         <EnumeratedItem CodedValue="NEGATIVE"/>
         <EnumeratedItem CodedValue="POSITIVE"/>
-      </CodeList>
-      <CodeList OID="CL.UNIT" Name="Laboratory Analysis Units" DataType="text" def:IsNonStandard="Yes">
-        <EnumeratedItem CodedValue="mg/dL"/>
-        <EnumeratedItem CodedValue="umol/L"/>
       </CodeList>
     </MetaDataVersion>
   </Study>

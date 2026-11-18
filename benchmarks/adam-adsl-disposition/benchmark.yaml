@@ -11,7 +11,8 @@ review:
       completed.
     - When events share the latest date the higher sequence wins (subject 102's
       adverse event over withdrawal on 2024-08-30), an undated withdrawal still
-      discontinues the subject with no end date (subject 106), a subject never
-      treated has no treatment status (subject 104), and the two tracks are
-      independent (subject 107 discontinued treatment but completed the
-      study).
+      discontinues the subject with no end date (subject 106), a screen failure
+      has no study or treatment status and no reason (subject 104), and the two
+      tracks are independent (subject 107 discontinued treatment but completed
+      the study). The coded term is not repeated in its own column, as EOSSTT
+      and DCSREAS carry it.

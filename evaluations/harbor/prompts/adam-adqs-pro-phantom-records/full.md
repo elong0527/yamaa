@@ -3,7 +3,7 @@ datasets to create an ADQS dataset with one record per subject per parameter
 per planned visit.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, AVISIT, AVISITN, AVAL, DTYPE,
+STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, AVISIT, AVISITN, ADT, AVAL, DTYPE,
 QSSTAT, QSREASND, AREASND, PROEX1FL, PROEX2FL, PROSCMFL
 
 Every ADSL subject, in the safety population or not, has a record for each
@@ -15,6 +15,9 @@ subject with that VISITNUM and with QSTESTCD equal to the item's PARAMCD,
 answered or not done. A phantom record is an item record not collected, or a
 FATTOT record at a visit where neither item was collected.
 
+- ADT is the collected item's QSDTC; on a FATTOT record that is not phantom
+  it is the QSDTC of the items collected at the visit. ADT has no value on a
+  phantom record.
 - AVAL is the item's QSSTRESN; on FATTOT it is the sum of the FAT01 and FAT02
   responses at the visit, with no value unless both were answered.
 - DTYPE is "PHANTOM" on a phantom record and has no value otherwise.

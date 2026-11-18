@@ -36,12 +36,14 @@ adsl <- dm |>
   left_join(last_study, by = c("STUDYID", "USUBJID")) |>
   left_join(last_trt, by = c("STUDYID", "USUBJID")) |>
   mutate(
+    # A screen failure never entered the study, so it has no status.
     EOSSTT = case_when(
+      EOSDECOD %in% "SCREEN FAILURE" ~ NA_character_,
       EOSDECOD == "COMPLETED" ~ "COMPLETED",
       !is.na(EOSDECOD) ~ "DISCONTINUED",
       .default = "ONGOING"
     ),
-    DCSREAS = if_else(EOSSTT == "DISCONTINUED", EOSDECOD, NA_character_),
+    DCSREAS = if_else(EOSSTT %in% "DISCONTINUED", EOSDECOD, NA_character_),
     # A subject never treated has no treatment status.
     EOTSTT = case_when(
       is.na(RFXSTDTC) ~ NA_character_,
@@ -53,7 +55,7 @@ adsl <- dm |>
     DCTREASP = if_else(DCTREAS %in% "OTHER", EOTREAS, NA_character_)
   ) |>
   select(
-    STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS,
+    STUDYID, USUBJID, EOSDT, EOSREAS, EOSSTT, DCSREAS,
     EOTDT, EOTSTT, DCTREAS, DCTREASP
   )
 

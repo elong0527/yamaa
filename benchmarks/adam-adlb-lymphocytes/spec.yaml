@@ -5,13 +5,13 @@ domain: ADLB
 keys: [USUBJID, VISIT, PARAMCD]
 input:
   # SDTM LB: the laboratory domain as the ADaM programmer receives it.
-  # Absolute differentials (LYMPH, ...) are not LB tests; they appear
-  # here only when the lab reported them, which blocks derivation.
+  # Absolute differentials (LYM, ...) appear here only when the lab
+  # reported them, which blocks derivation.
   LB: {path: input/lb.csv, types: {LBSTRESN: float}}
 
 output:
   path: adlb.csv
-  columns: [USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE]
+  columns: [USUBJID, PARAMCD, AVAL, PARAM, VISIT]
 
 columns:
   - name: USUBJID
@@ -52,10 +52,6 @@ columns:
     type: float
     label: Analysis Value
 
-  - name: DTYPE
-    type: str
-    label: Derivation Type
-
 rows:
   # Every collected record, unchanged.
   - id: collected
@@ -66,7 +62,6 @@ rows:
       FRACVAL: null
       EXISTING_ABS_COUNT: null
       AVAL: LB.LBSTRESN
-      DTYPE: null
 
   # One absolute record per subject, visit, and differential that has a WBC
   # count and a fraction result and no absolute record yet. ONLY() stops the
@@ -81,7 +76,7 @@ rows:
       AND FRACVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      PARAMCD: "'LYMPH'"
+      PARAMCD: "'LYM'"
       PARAM: "'Lymphocytes Abs (10^9/L)'"
       WBCVAL:
         aggregate:
@@ -93,10 +88,9 @@ rows:
           expr: "ONLY(LB.LBSTRESN)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "LB.LBTESTCD = 'LYMPH'"
+          filter: "LB.LBTESTCD = 'LYM'"
           expr: "COUNT(LB.*)"
       AVAL: "WBCVAL * FRACVAL"
-      DTYPE: "'CALCULATION'"
 
   - id: derived_neut
     group_by: [LB.USUBJID, LB.VISIT]
@@ -120,7 +114,6 @@ rows:
           filter: "LB.LBTESTCD = 'NEUT'"
           expr: "COUNT(LB.*)"
       AVAL: "WBCVAL * FRACVAL"
-      DTYPE: "'CALCULATION'"
 
   - id: derived_mono
     group_by: [LB.USUBJID, LB.VISIT]
@@ -144,7 +137,6 @@ rows:
           filter: "LB.LBTESTCD = 'MONO'"
           expr: "COUNT(LB.*)"
       AVAL: "WBCVAL * FRACVAL"
-      DTYPE: "'CALCULATION'"
 
   - id: derived_eos
     group_by: [LB.USUBJID, LB.VISIT]
@@ -168,7 +160,6 @@ rows:
           filter: "LB.LBTESTCD = 'EOS'"
           expr: "COUNT(LB.*)"
       AVAL: "WBCVAL * FRACVAL"
-      DTYPE: "'CALCULATION'"
 
   - id: derived_baso
     group_by: [LB.USUBJID, LB.VISIT]
@@ -192,7 +183,6 @@ rows:
           filter: "LB.LBTESTCD = 'BASO'"
           expr: "COUNT(LB.*)"
       AVAL: "WBCVAL * FRACVAL"
-      DTYPE: "'CALCULATION'"
 
 verifications:
   - row_count:

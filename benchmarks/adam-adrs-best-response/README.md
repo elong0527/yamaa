@@ -8,7 +8,10 @@ response (`AVALC`), its rank (`AVAL`), and its supporting date
 **Input:** subject-level records with randomization date (`RANDDT`),
 plus a prepared response selection in which the record with
 `BORSEQ` equal to `1` holds the subject's winning category
-(`BORCAT`) and date (`ADT`).
+(`BORCAT`) and date (`ADT`). The selection already applies the
+Response Evaluation Criteria in Solid Tumors (RECIST 1.1): a stable
+disease assessment before the minimum duration of 42 days after
+randomization is categorized not evaluable.
 
 **Variables:**
 

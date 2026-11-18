@@ -111,14 +111,18 @@ columns:
       - allowed_values:
           values: [LOW, NORMAL, HIGH]
 
-  # Baseline mark first; empty when either mark is missing.
+  # Baseline mark first, on a record after baseline only; empty when either
+  # mark is missing.
   - name: SHIFT1
     type: str
     label: Shift 1
     derivation:
-      str_template:
-        template: "{BNRIND} to {ANRIND}"
-        missing: null
+      case:
+        - when: "ABLFL IS NULL"
+          then:
+            str_template:
+              template: "{BNRIND} to {ANRIND}"
+              missing: null
 
   # NULLIF leaves the ratio empty when the baseline value is zero.
   - name: R2BASE
@@ -192,9 +196,14 @@ verifications:
   - all_or_none:
       id: criterion-2-text-accompanies-its-flag
       columns: [CRIT2, CRIT2FL]
-  - all_or_none:
+  - assert:
+      id: no-shift-on-the-baseline-record
+      when: "ABLFL = 'Y'"
+      require: "SHIFT1 IS NULL"
+  - assert:
       id: shift-needs-both-of-its-classifications
-      columns: [ANRIND, SHIFT1]
+      when: "ABLFL IS NULL AND ANRIND IS NOT NULL AND BNRIND IS NOT NULL"
+      require: "SHIFT1 IS NOT NULL"
   - assert:
       id: a-baseline-record-is-its-own-reference
       when: "ABLFL = 'Y' AND R2BASE IS NOT NULL"

@@ -24,8 +24,7 @@ adlb <- lb |>
     PARAMCD = LBTESTCD,
     PARAM = unname(param[LBTESTCD]),
     AVAL = as.numeric(LBSTRESN),
-    AVALC = LBSTRESC,
-    AVALU = LBSTRESU
+    AVALC = LBSTRESC
   )
 
 dir.create("/app/output", showWarnings = FALSE)

@@ -16,15 +16,14 @@ lb <- read_csv(
   )
 )
 
-# Keep every collected component record; DTYPE has no value on these.
+# Keep every collected component record.
 components <- lb |>
   transmute(
     STUDYID, USUBJID,
     PARAMCD = LBTESTCD,
     PARAM = LBTEST,
     AVISIT = VISIT,
-    AVAL = LBSTRESN,
-    DTYPE = NA_character_
+    AVAL = LBSTRESN
   )
 
 # One total record per subject and visit: the sum of the collected
@@ -54,10 +53,9 @@ totals <- lb |>
   mutate(
     PARAMCD = "TOTAL",
     PARAM = "Total of Components",
-    AVISIT = VISIT,
-    DTYPE = "CALCULATION"
+    AVISIT = VISIT
   ) |>
-  select(STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, DTYPE)
+  select(STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL)
 
 adlb <- bind_rows(components, totals)
 

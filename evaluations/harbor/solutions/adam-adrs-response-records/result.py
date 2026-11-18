@@ -73,14 +73,21 @@ def main():
         )
 
     # ANL01FL: one record per subject per assessment date (ADT) -- the
-    # record carrying the worst response that day (largest AVAL), with
-    # the lowest RSSEQ breaking ties.
+    # record carrying the worst evaluable response that day (largest AVAL
+    # other than NE, which ranks below every other response), with the
+    # lowest RSSEQ breaking ties.
     groups = {}
     for rec in records:
         key = (rec["USUBJID"], rec["ADT"])
         groups.setdefault(key, []).append(rec)
     for group in groups.values():
-        flagged = min(group, key=lambda r: (-r["AVAL"], int(r["RSSEQ"])))
+        flagged = min(
+            group,
+            key=lambda r: (
+                -(0 if r["AVALC"] == "NE" else r["AVAL"]),
+                int(r["RSSEQ"]),
+            ),
+        )
         flagged["ANL01FL"] = "Y"
 
     fieldnames = [

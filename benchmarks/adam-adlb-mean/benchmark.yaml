@@ -4,9 +4,10 @@ domain: ADLB
 review:
   concerns:
     - Per-subject mean lab values support summaries such as the average
-      neutrophil count during treatment.
+      neutrophil count during treatment, kept as a separate average record
+      (DTYPE AVERAGE) as the BDS structure expects.
     - Three subjects cover several results, a missing result among them, and a
       subject with only a missing result.
-    - The mean ignores missing results (subject 101's mean is 3.1 from three
-      results) but is repeated on the record without a result, and a subject
-      with no results gets an empty mean, never zero.
+    - The average ignores missing results (subject 101's average record has
+      AVAL 3.1 from three results), and a subject with no results (103) gets no
+      average record, rather than one with an empty or zero value.

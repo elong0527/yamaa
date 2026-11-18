@@ -18,17 +18,20 @@ dates and actual treatments.
 - `ADT` is the collection date of the result.
 - `TRTSDT` is the subject's treatment start date.
 - `TRT01A` is the subject's actual treatment.
+- `PARAM` names the parameter with its unit: `U/L` for the
+  collected results, and `ukat/L` on the SI record.
 - `AVAL` is the collected numeric result, or the result times
   0.0167 on the SI record.
-- `AVALU` is the collected unit, or `ukat/L` on the SI record.
 - `ABLFL` is `Y` on the latest record on or before the
   treatment start date for each subject and parameter; blank
   otherwise.
 - `BASE` is the `AVAL` of the flagged baseline record,
   repeated on every record for the same subject and parameter.
-- `CHG` is `AVAL` minus `BASE`.
-- `PCHG` is 100 times `CHG` divided by `BASE`; empty when the
-  baseline value is zero, since the percentage is undefined.
+- `CHG` is `AVAL` minus `BASE` on a record collected after the
+  treatment start date; empty on the baseline record.
+- `PCHG` is 100 times `CHG` divided by `BASE`; empty wherever
+  `CHG` is, and when the baseline value is zero, since the
+  percentage is undefined.
 
 **Note:** a collected result with no numeric value produces no
 record. A subject with no collected results has no records: the

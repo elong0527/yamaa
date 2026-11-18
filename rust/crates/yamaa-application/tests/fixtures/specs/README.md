@@ -16,7 +16,7 @@ The `adam-adlb-ordered-sum` report is independently authored from the committed
 source and expected CSV plus literal specification metadata. Source numeric cells
 and derived float cells use exact IEEE-754 bits; totals preserve stored record
 order and the all-missing group. The report includes all 17 derived rows, the
-successful row-count check, and the exact 1,030-byte CSV artifact. Installed
+successful row-count check, and the exact 952-byte CSV artifact. Installed
 tests compare published bytes to the unchanged benchmark golden and retain
 original publication errors and interruptions. No engine output is promoted into
 expected truth.

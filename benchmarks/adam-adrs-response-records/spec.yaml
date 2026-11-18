@@ -111,14 +111,24 @@ columns:
         reference: TRTSDT
 
   # One record per subject and date carries ANL01FL: the date's worst
-  # response (largest AVAL), and among ties the lowest RSSEQ. Records below
-  # the worst are not numbered.
-  - name: WORSTAVAL
+  # evaluable response (largest AVAL other than NE), NE only when the date
+  # has no other, and among ties the lowest RSSEQ. NE ranks 0 here, below
+  # every evaluable response. Records below the worst are not numbered.
+  - name: SELRANK
     type: int
-    label: Worst Analysis Value
+    label: Selection Rank
+    derivation:
+      case:
+        - when: "AVALC = 'NE'"
+          then: 0
+        - otherwise: AVAL
+
+  - name: WORSTRANK
+    type: int
+    label: Worst Selection Rank
     derivation:
       aggregate:
-        expr: "MAX(AVAL)"
+        expr: "MAX(SELRANK)"
         group_by: [STUDYID, USUBJID, ADT]
 
   - name: WORSTORD
@@ -129,7 +139,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID, ADT]
           order_by: [RSSEQ]
-          filter: "AVAL = WORSTAVAL"
+          filter: "SELRANK = WORSTRANK"
 
   - name: ANL01FL
     type: str
@@ -147,7 +157,7 @@ verifications:
   - assert:
       id: analysis-flag-marks-the-worst-response-of-its-date
       when: "ANL01FL = 'Y'"
-      require: "AVAL = WORSTAVAL"
+      require: "SELRANK = WORSTRANK"
   - assert:
       id: assessment-is-not-before-treatment-start
       when: "ADT IS NOT NULL"

@@ -11,7 +11,7 @@ run;
 data collected;
   length PARAMCD $8;
   set lb; if LBTESTCD in ('ALB') and not missing(LBSTRESN);
-  PARAMCD=cats('_',LBTESTCD); AVISITN=VISITNUM; AVAL=LBSTRESN;
+  PARAMCD=LBTESTCD; AVISITN=VISITNUM; AVAL=LBSTRESN;
 run;
 proc sort data=collected; by STUDYID USUBJID PARAMCD AVISITN; run;
 data result;

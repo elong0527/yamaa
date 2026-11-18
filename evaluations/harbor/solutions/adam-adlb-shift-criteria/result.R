@@ -40,13 +40,13 @@ baselines <- based |>
 with_base <- based |>
   left_join(baselines, by = c("STUDYID", "USUBJID", "PARAMCD"))
 
-# SHIFT1 joins the baseline mark and the record's own mark; R2BASE is the
+# SHIFT1 joins the baseline mark and the record's own mark after baseline; R2BASE is the
 # record as a multiple of the baseline; CRIT1 assesses greater than three
 # times the upper limit; CRIT2 assesses less than the lower limit.
 adlb <- with_base |>
   mutate(
     SHIFT1 = if_else(
-      is.na(BNRIND) | is.na(ANRIND),
+      ABLFL %in% "Y" | is.na(BNRIND) | is.na(ANRIND),
       NA_character_,
       paste(BNRIND, "to", ANRIND)
     ),

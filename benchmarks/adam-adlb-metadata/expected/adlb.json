@@ -16,15 +16,14 @@
     {"itemOID": "IT.ADLB.PARAMCD", "name": "PARAMCD", "label": "Parameter Code", "dataType": "string", "length": 5, "keySequence": 3},
     {"itemOID": "IT.ADLB.PARAM", "name": "PARAM", "label": "Parameter", "dataType": "string", "length": 23},
     {"itemOID": "IT.ADLB.AVAL", "name": "AVAL", "label": "Analysis Value", "dataType": "float", "length": 8},
-    {"itemOID": "IT.ADLB.AVALC", "name": "AVALC", "label": "Analysis Value (C)", "dataType": "string", "length": 8},
-    {"itemOID": "IT.ADLB.AVALU", "name": "AVALU", "label": "Analysis Value Unit", "dataType": "string", "length": 6}
+    {"itemOID": "IT.ADLB.AVALC", "name": "AVALC", "label": "Analysis Value (C)", "dataType": "string", "length": 8}
   ],
   "rows": [
-    ["CATH", "CATH-001", "GLUC", "Glucose (mg/dL)", 95, "95", "mg/dL"],
-    ["CATH", "CATH-001", "CREAT", "Creatinine (umol/L)", 79.6, "79.6", "umol/L"],
-    ["CATH", "CATH-001", "HCG", "Choriogonadotropin Beta", null, "NEGATIVE", null],
-    ["CATH", "CATH-002", "GLUC", "Glucose (mg/dL)", 101, "101", "mg/dL"],
-    ["CATH", "CATH-002", "CREAT", "Creatinine (umol/L)", 88.4, "88.4", "umol/L"],
-    ["CATH", "CATH-002", "HCG", "Choriogonadotropin Beta", null, "POSITIVE", null]
+    ["CATH", "CATH-001", "GLUC", "Glucose (mg/dL)", 95, "95"],
+    ["CATH", "CATH-001", "CREAT", "Creatinine (umol/L)", 79.6, "79.6"],
+    ["CATH", "CATH-001", "HCG", "Choriogonadotropin Beta", null, "NEGATIVE"],
+    ["CATH", "CATH-002", "GLUC", "Glucose (mg/dL)", 101, "101"],
+    ["CATH", "CATH-002", "CREAT", "Creatinine (umol/L)", 88.4, "88.4"],
+    ["CATH", "CATH-002", "HCG", "Choriogonadotropin Beta", null, "POSITIVE"]
   ]
 }

@@ -3,7 +3,7 @@ datasets to create an ADQS dataset with one record per subject per parameter
 per planned visit.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, AVISIT, AVISITN, AVAL, DTYPE,
+STUDYID, USUBJID, PARCAT2, PARAMCD, PARAM, AVISIT, AVISITN, ADT, AVAL, DTYPE,
 QSSTAT, QSREASND, AREASND, PROEX1FL, PROEX2FL, PROSCMFL
 
 The parameters are items FAT01 and FAT02 and total score FATTOT, and PARCAT2

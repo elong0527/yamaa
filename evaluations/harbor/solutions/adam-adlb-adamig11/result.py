@@ -18,7 +18,7 @@ def main():
         validate="many_to_one",
     )
     adlb["PARAMCD"] = "ALT"
-    adlb["PARAM"] = "Alanine Aminotransferase"
+    adlb["PARAM"] = "Alanine Aminotransferase (U/L)"
     collection_date = pd.to_datetime(adlb["LBDTC"].str[:10], errors="coerce")
     treatment_date = pd.to_datetime(adlb["TRTSDT"], errors="coerce")
     adlb["ADT"] = collection_date.dt.strftime("%Y-%m-%d")
@@ -26,7 +26,6 @@ def main():
     # ADaM study day has no day zero.
     adlb["ADY"] = (day_difference + day_difference.ge(0)).astype("Int64")
     adlb["AVAL"] = pd.to_numeric(adlb["LBSTRESN"], errors="coerce")
-    adlb["AVALU"] = adlb["LBSTRESU"]
     adlb["ABLFL"] = adlb["LBBLFL"].where(adlb["LBBLFL"].eq("Y"), "")
 
     keys = ["STUDYID", "USUBJID", "PARAMCD"]
@@ -34,7 +33,9 @@ def main():
         columns={"AVAL": "BASE"}
     )
     adlb = adlb.merge(baseline, on=keys, how="left", validate="many_to_one")
-    adlb["CHG"] = adlb["AVAL"] - adlb["BASE"]
+    # Change only after the first treatment date.
+    after_treatment = pd.to_datetime(adlb["ADT"]) > pd.to_datetime(adlb["TRTSDT"])
+    adlb["CHG"] = (adlb["AVAL"] - adlb["BASE"]).where(after_treatment)
     columns = [
         "STUDYID",
         "USUBJID",
@@ -44,7 +45,6 @@ def main():
         "TRT01A",
         "ADY",
         "AVAL",
-        "AVALU",
         "ABLFL",
         "BASE",
         "CHG",

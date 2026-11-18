@@ -16,7 +16,7 @@ OUTPUT_DIR = "/app/output"
 
 # differential fraction test code -> (absolute parameter code, PARAM name)
 DIFFERENTIALS = [
-    ("LYMLE", "LYMPH", "Lymphocytes Abs (10^9/L)"),
+    ("LYMLE", "LYM", "Lymphocytes Abs (10^9/L)"),
     ("NEUTLE", "NEUT", "Neutrophils Abs (10^9/L)"),
     ("MONOLE", "MONO", "Monocytes Abs (10^9/L)"),
     ("EOSLE", "EOS", "Eosinophils Abs (10^9/L)"),
@@ -56,7 +56,6 @@ def main():
                 "AVAL": value_text,
                 "PARAM": row["LBTEST"],
                 "VISIT": visit,
-                "DTYPE": "",
             }
         )
         existing.add((subject, visit, testcd))
@@ -85,12 +84,11 @@ def main():
                     "AVAL": format_number(wbc[key] * fractions[frac_key]),
                     "PARAM": abs_name,
                     "VISIT": visit,
-                    "DTYPE": "CALCULATION",
                 }
             )
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    fieldnames = ["USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT", "DTYPE"]
+    fieldnames = ["USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT"]
     with open(
         os.path.join(OUTPUT_DIR, "adlb.csv"), "w", newline=""
     ) as handle:

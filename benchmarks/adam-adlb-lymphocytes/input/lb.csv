@@ -8,7 +8,7 @@ LYM-002,LYMLE,1.0,Lymphocytes (fraction of 1),CYCLE 1 DAY 1
 LYM-003,WBC,9,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
 LYM-005,WBC,7,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
 LYM-005,LYMLE,0.25,Lymphocytes (fraction of 1),CYCLE 1 DAY 1
-LYM-005,LYMPH,1.75,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1
+LYM-005,LYM,1.75,Lymphocytes Abs (10^9/L),CYCLE 1 DAY 1
 LYM-001,NEUTLE,0.25,Neutrophils (fraction of 1),CYCLE 1 DAY 1
 LYM-001,MONOLE,0.125,Monocytes (fraction of 1),CYCLE 1 DAY 1
 LYM-002,NEUTLE,0.75,Neutrophils (fraction of 1),CYCLE 1 DAY 1

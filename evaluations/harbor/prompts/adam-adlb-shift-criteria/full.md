@@ -20,7 +20,8 @@ ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL, CRIT2, CRIT2FL
 - SHIFT1 is the baseline mark and the record's own mark joined by " to ",
   baseline first, so a record that stayed normal reads "NORMAL to NORMAL"
   and one that moved out of range reads "NORMAL to HIGH".
-- SHIFT1 has no value when either ANRIND or BNRIND has no value.
+- SHIFT1 has no value on the baseline record itself, and when either ANRIND
+  or BNRIND has no value.
 - R2BASE is AVAL divided by BASE, so the baseline record itself reads 1
   when the ratio can be computed.
 - R2BASE has no value when AVAL has no value, when there is no baseline,

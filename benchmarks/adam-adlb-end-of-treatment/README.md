@@ -5,8 +5,9 @@ test (`EOTFL`), carrying the protocol endpoint qualifier it rests on
 (`ENDPOINT`).
 
 **Input:** laboratory (LB) records carry a numeric sequence number, a test
-code (`LBTESTCD`), a visit number (`VISITNUM`), and a numeric result.
-Supplemental laboratory
+code (`LBTESTCD`), a visit number (`VISITNUM`), a collection date (`LBDTC`),
+and a numeric result. Subject-level records carry the end of treatment date
+(`TRTEDT`). Supplemental laboratory
 qualifier (SUPPLB) records carry the same sequence as eight-character,
 space-padded text, one qualifier name and value per record; only the
 protocol endpoint qualifier is read.
@@ -16,12 +17,16 @@ protocol endpoint qualifier is read.
 - `AVAL` is the numeric laboratory result.
 - `ENDPOINT` is `Y` when a supplemental endpoint qualifier with the same
   study, subject, and sequence number marks the record; empty otherwise.
-- `EOTFL` is `Y` on one record per subject and test: the endpoint-marked
+- `EOTFL` is `Y` on one record per subject and test, among the records
+  collected on or before the end of treatment date: the endpoint-marked
   record when there is one, otherwise the record from the latest visit.
-  Every other record is empty.
+  Every other record is empty, including every follow-up record collected
+  after the end of treatment.
 
-**Note:** the endpoint qualifier decides the choice even when a later visit
-exists, so the flag can sit before the subject's last visit. A record wins
+**Note:** a follow-up record never carries the flag, and a subject and test
+with only follow-up records has no flag. Among the records on treatment, the
+endpoint qualifier decides the choice even when a later visit exists, so the
+flag can sit before the subject's last visit. A record wins
 the flag even when its result is missing, and a group with a single record
 still gets the flag. Other
 qualifiers on the same record, and endpoint qualifiers for records the

@@ -1,8 +1,8 @@
-# Lag a Result Across Visits While Constructing Change Parameters
+# Lag a Result Across Visits for Two Laboratory Parameters
 
-**Goal:** build the change parameters `_ALB` and `_BILI` from albumin
-and bilirubin lab results, carrying each visit's previous result
-(`PREV_AVAL`) and the change from it (`CHG`).
+**Goal:** build the albumin (`ALB`) and bilirubin (`BILI`) parameters
+from lab results, carrying each visit's previous result (`PREV_AVAL`)
+and the change from it (`CHG`).
 
 **Input:** laboratory (LB) records carrying a test code (`LBTESTCD`), a
 numeric result (`LBSTRESN`), and a visit number (`VISITNUM`). Five
@@ -13,12 +13,13 @@ with hemoglobin only, which produces no rows.
 
 **Variables:**
 
+- `PARAMCD`: the lab test code, `ALB` or `BILI`.
 - `AVISITN`: the analysis visit number, taken from the lab visit
   number.
 - `AVAL`: the numeric lab result for the visit.
 - `PREV_AVAL`: the `AVAL` of the visit just before in `AVISITN`
-  order, for the same subject and parameter, so an `_ALB` row never
-  reads a `_BILI` value; blank on the subject's first visit for the
+  order, for the same subject and parameter, so an `ALB` row never
+  reads a `BILI` value; blank on the subject's first visit for the
   parameter.
 - `CHG`: `AVAL - PREV_AVAL`, the change since that visit; blank
   whenever `PREV_AVAL` is.

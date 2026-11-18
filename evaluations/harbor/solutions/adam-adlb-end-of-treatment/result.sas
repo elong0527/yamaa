@@ -5,7 +5,13 @@
 data lb;
   length STUDYID USUBJID LBTESTCD $1024;
   infile "/app/input/lb.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. LBSEQ LBTESTCD : $char1024. VISITNUM LBSTRESN;
+  input STUDYID : $char1024. USUBJID : $char1024. LBSEQ LBTESTCD : $char1024. VISITNUM LBDTC : yymmdd10. LBSTRESN;
+run;
+
+data adsl;
+  length STUDYID USUBJID $1024;
+  infile "/app/input/adsl.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
+  input STUDYID : $char1024. USUBJID : $char1024. TRTEDT : yymmdd10.;
 run;
 
 data supplb;
@@ -16,12 +22,14 @@ run;
 
 data supplb_key; set supplb; PARENTSEQ=input(IDVARVAL,?? best32.); run;
 proc sql;
-  create table joined as select a.*,a.LBSTRESN as AVAL,b.QVAL as ENDPOINT from lb as a left join supplb_key as b
-    on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and b.RDOMAIN='LB' and b.IDVAR='LBSEQ' and a.LBSEQ=b.PARENTSEQ and b.QNAM='ENDPOINT';
+  create table joined as select a.*,a.LBSTRESN as AVAL,b.QVAL as ENDPOINT,c.TRTEDT from lb as a left join supplb_key as b
+    on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and b.RDOMAIN='LB' and b.IDVAR='LBSEQ' and a.LBSEQ=b.PARENTSEQ and b.QNAM='ENDPOINT'
+    left join adsl as c on a.STUDYID=c.STUDYID and a.USUBJID=c.USUBJID;
 quit;
-data ordered; set joined; priority=0; if ENDPOINT='Y' then priority=1; run;
-proc sort data=ordered; by STUDYID USUBJID LBTESTCD descending priority descending VISITNUM LBSEQ; run;
-data result; length EOTFL $1; set ordered; by STUDYID USUBJID LBTESTCD; if first.LBTESTCD then EOTFL='Y'; run;
+/* Records on treatment rank first; a follow-up record never takes the flag. */
+data ordered; set joined; ontrt=0; if not missing(LBDTC) and not missing(TRTEDT) and LBDTC<=TRTEDT then ontrt=1; priority=0; if ENDPOINT='Y' then priority=1; run;
+proc sort data=ordered; by STUDYID USUBJID LBTESTCD descending ontrt descending priority descending VISITNUM LBSEQ; run;
+data result; length EOTFL $1; set ordered; by STUDYID USUBJID LBTESTCD; if first.LBTESTCD and ontrt=1 then EOTFL='Y'; run;
 
 proc sql;
   create table final as select STUDYID, USUBJID, LBSEQ, LBTESTCD, VISITNUM, AVAL, ENDPOINT, EOTFL from result;

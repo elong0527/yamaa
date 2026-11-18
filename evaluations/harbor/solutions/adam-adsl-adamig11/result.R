@@ -11,6 +11,8 @@ trtsdtm <- trimws(raw$TRTSDTC)
 minute_only <- !is.na(trtsdtm) &
   grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$", trtsdtm)
 trtsdtm[minute_only] <- paste0(trtsdtm[minute_only], ":00")
+# Seconds are collected for other subjects, so imputed seconds are flagged.
+trtstmf <- ifelse(minute_only, "S", NA_character_)
 trtsdtm[is.na(trtsdtm) | trtsdtm == ""] <- NA_character_
 trtsdt <- as.Date(substr(trtsdtm, 1L, 10L), format = "%Y-%m-%d")
 
@@ -22,6 +24,7 @@ adsl <- data.frame(
   HEIGHTBL = raw$HEIGHTBL,
   TRTSDT = trtsdt,
   TRTSDTM = trtsdtm,
+  TRTSTMF = trtstmf,
   stringsAsFactors = FALSE
 )
 write.csv(adsl, "/app/output/adsl.csv", row.names = FALSE, na = "")

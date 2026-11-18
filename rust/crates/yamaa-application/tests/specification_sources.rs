@@ -1252,12 +1252,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     "label: Parameter\n",
                     "label: Parameter\n    derivation: LB.LBTEST\n",
                 )
-                .edit("      PARAM: LB.LBTEST\n", "")
-                .edit(
-                    "label: Derivation Type\n",
-                    "label: Derivation Type\n    derivation: null\n",
-                )
-                .edit("      DTYPE: null\n", "");
+                .edit("      PARAM: LB.LBTEST\n", "");
             let bytes = std::fs::read(case.join("input/lb.csv")).unwrap();
             let mut host = Sources::any(&bytes);
             let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
