@@ -132,10 +132,10 @@ pub(super) fn prepare(
 
 /// A field of one side's records: its name, its position in the side's
 /// layout and its type, `None` where the input's schema does not decide it.
-struct Field {
-    name: String,
-    column: usize,
-    kind: Option<ColumnType>,
+pub(super) struct Field {
+    pub name: String,
+    pub column: usize,
+    pub kind: Option<ColumnType>,
 }
 
 /// One side's records and their visible fields.
@@ -200,13 +200,59 @@ fn side(
     let Some(item) = cx.result.get(index).and_then(Option::as_ref) else {
         return Ok(None);
     };
+    match driver_fields(item, &cx.relations, cx.secondary)? {
+        DriverFields::Fields(fields) => Ok(Some(BoundSide {
+            records: PairRecords::Intermediate(index),
+            fields,
+        })),
+        DriverFields::Unbound => Ok(None),
+        DriverFields::Current(prohibited) => {
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                lookup::pair_side(&declared.path, &declared.name, &prohibited),
+            )));
+            Ok(None)
+        }
+        DriverFields::Untyped(untyped) => {
+            let untyped = untyped.iter().map(String::as_str).collect::<Vec<_>>();
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                lookup::pair_field_type(&declared.path, &declared.name, &untyped),
+            )));
+            Ok(None)
+        }
+    }
+}
+
+/// The fields of the records a row template driving on an intermediate
+/// would read (ROW-2), as a pair relation's side or a record relation's
+/// reader reads them (LOOKUP-27, LOOKUP-3), or why there are none.
+pub(super) enum DriverFields {
+    /// Each visible field, stored then derived, in layout order.
+    Fields(Vec<Field>),
+    /// The intermediate did not bind as declared; its own findings explain
+    /// why.
+    Unbound,
+    /// The intermediate's `filter` or `derivations`, as listed, read a
+    /// current row, so its records are not its own.
+    Current(Vec<&'static str>),
+    /// The derived fields that have no one column type (EXPR-14).
+    Untyped(Vec<String>),
+}
+
+/// The fields of the bound intermediate `item`'s records as a row driver
+/// reads them, whose relations and secondary ports are `relations` and
+/// `secondary` ([`DriverFields`]).
+pub(super) fn driver_fields(
+    item: &Intermediate,
+    relations: &binder::Inputs<'_>,
+    secondary: &[SecondarySource],
+) -> Result<DriverFields, BindError> {
     // A rejected augmentation keeps only its declared schema. Its own
     // findings explain the failure; its derived fields have no bound type
-    // for a pair relation to check (LOOKUP-16, LOOKUP-27).
+    // for a reader to check (LOOKUP-16, LOOKUP-27).
     if item.pending_schema.is_some() {
-        return Ok(None);
+        return Ok(DriverFields::Unbound);
     }
-    // Neither the side's filter nor its derivations read a current row: its
+    // Neither the filter nor the derivations read a current row: its
     // records are its own (ROW-2).
     let mut prohibited = Vec::new();
     if item
@@ -224,14 +270,9 @@ fn side(
         prohibited.push("derivations");
     }
     if !prohibited.is_empty() {
-        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
-            lookup::pair_side(&declared.path, &declared.name, &prohibited),
-        )));
-        return Ok(None);
+        return Ok(DriverFields::Current(prohibited));
     }
-    let schema = item
-        .source_schema(cx.secondary)
-        .ok_or(BindError::Internal)?;
+    let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
     let mut fields = Vec::new();
     let mut untyped = Vec::new();
     for (column, field) in schema.columns().iter().enumerate() {
@@ -240,25 +281,19 @@ fn side(
         }
         // A derived field of no one type is untyped; a stored field has the
         // kind its input's schema gives it, decided or not.
-        match item.source_kind(cx.secondary, column) {
+        match item.source_kind(secondary, column) {
             Some(_) => fields.push(Field {
                 name: field.name.clone(),
                 column,
-                kind: cx.relations.source_kind(item, cx.secondary, column),
+                kind: relations.source_kind(item, secondary, column),
             }),
-            None => untyped.push(field.name.as_str()),
+            None => untyped.push(field.name.clone()),
         }
     }
     if !untyped.is_empty() {
-        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
-            lookup::pair_field_type(&declared.path, &declared.name, &untyped),
-        )));
-        return Ok(None);
+        return Ok(DriverFields::Untyped(untyped));
     }
-    Ok(Some(BoundSide {
-        records: PairRecords::Intermediate(index),
-        fields,
-    }))
+    Ok(DriverFields::Fields(fields))
 }
 
 /// A field of the joined record by its qualified name: `L.f` reads the left
@@ -455,6 +490,7 @@ pub(super) fn bind(
             unique,
             derivations: Some(derived),
             pending_schema: None,
+            records: None,
         }),
         Some(fields),
     ))

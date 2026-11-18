@@ -885,8 +885,8 @@ fn bind_template(
     } = cx.donors;
     let filter_path = format!("{}.filter", template.path);
     if named
-        .reference(&format!("{}.driver", template.driver))
-        .is_some_and(|(index, _)| intermediates.get(index).is_some_and(Option::is_none))
+        .driver(&template.driver)
+        .is_some_and(|index| intermediates.get(index).is_some_and(Option::is_none))
         && !findings.is_empty()
     {
         return Ok(None);

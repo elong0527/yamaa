@@ -68,24 +68,48 @@ fn side<'t, E>(
             })
         }
         PairRecords::Intermediate(index) => {
-            let plan = run.plan;
-            let relation = plan
+            let relation = run
+                .plan
                 .named(RegionId::DATASET, index)
                 .ok_or_else(|| Box::new(ExecutionError::SchemaMismatch))?;
-            let item = relations::item(plan, relation);
-            let built = donor::materialize(run, cx, relation, None, None)?;
-            let table = match built {
-                Some(built) => SideTable::Built(built),
-                None => SideTable::Port(relations::source_table(item, cx)),
-            };
-            let mut side = Side {
-                table,
-                rows: Vec::new(),
-            };
-            side.rows = relations::eligibility(side.table(), item)?;
-            Ok(side)
+            driver_records(run, cx, relation)
         }
     }
+}
+
+/// The records a row template driving on the intermediate `relation` reads
+/// (ROW-2): those its filter keeps, its derivations complete, in stored
+/// order.
+fn driver_records<'t, E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'t, E>,
+    relation: RelationId,
+) -> Result<Side<'t, E>, Fail<E>> {
+    let item = relations::item(run.plan, relation);
+    let built = donor::materialize(run, cx, relation, None, None)?;
+    let table = match built {
+        Some(built) => SideTable::Built(built),
+        None => SideTable::Port(relations::source_table(item, cx)),
+    };
+    let mut side = Side {
+        table,
+        rows: Vec::new(),
+    };
+    side.rows = relations::eligibility(side.table(), item)?;
+    Ok(side)
+}
+
+/// The records of the record relation `relation`'s port (LOOKUP-3): the
+/// records a row template driving on it reads, each with the fields the
+/// port exposes, `columns` of its layout, in order.
+pub(super) fn record_port<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    columns: &[usize],
+) -> Result<Frame, Fail<E>> {
+    let side = driver_records(run, cx, relation)?;
+    copy_records(side.table(), &side.rows, columns, columns.len())
 }
 
 /// The pair relation `relation`'s records, built once a run: its joined
@@ -348,9 +372,21 @@ pub(super) fn port_records<E>(
     fields: &TableSchema,
 ) -> Result<Frame, Fail<E>> {
     let table: Table<'_, E> = built.table();
-    let mut frame = Frame::new(fields.columns().len());
-    reserved(frame.try_reserve(table.row_count(), table.row_count()))?;
-    for record in 0..table.row_count() {
+    let records = (0..table.row_count()).collect::<Vec<_>>();
+    copy_records(table, &records, columns, fields.columns().len())
+}
+
+/// A port's records, `width` fields wide: each of `records` of `table`, in
+/// order, with its `columns`, in order.
+fn copy_records<E>(
+    table: Table<'_, E>,
+    records: &[usize],
+    columns: &[usize],
+    width: usize,
+) -> Result<Frame, Fail<E>> {
+    let mut frame = Frame::new(width);
+    reserved(frame.try_reserve(records.len(), records.len()))?;
+    for &record in records {
         let row = frame.push(NO_TEMPLATE, Identity::Candidate(record), &[record]);
         for (offset, &column) in columns.iter().enumerate() {
             let value = table

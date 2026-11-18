@@ -472,6 +472,7 @@ fn lookup() -> Intermediate {
         unique: vec![],
         derivations: None,
         pending_schema: None,
+        records: None,
     }
 }
 fn upper(column: usize, path: &str, operand: Expression) -> Expression {
@@ -1347,6 +1348,7 @@ fn keyed_plan(templates: Vec<RowTemplate>, columns: Vec<Assignment>) -> DatasetP
             unique: vec![],
             derivations: None,
             pending_schema: None,
+            records: None,
         }],
         schema(&[
             ("S", text),

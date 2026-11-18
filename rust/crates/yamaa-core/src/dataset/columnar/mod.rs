@@ -770,42 +770,67 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         })
     }
 
-    /// The records of each pair relation's port, in port order: each pair
+    /// The records of each relation port, in port order: each pair
     /// relation materialized once over the complete inputs `inputs`, its
-    /// exposed fields copied (LOOKUP-27).
+    /// exposed fields copied (LOOKUP-27), and each record relation's records
+    /// as a row template driving on it reads them (LOOKUP-3). Each port is
+    /// filled with the ports before it readable, as its readers read them.
     fn pair_ports(
         &mut self,
         frame: &Frame,
         inputs: &[Table<'a, E>],
     ) -> Result<Vec<(Frame, TableSchema)>, Fail<E>> {
         let plan = self.plan;
-        let mut ports = Vec::new();
+        let mut relations = Vec::new();
         for relation in plan.region_relations(RegionId::DATASET) {
             let Some(item) = plan.relation(relation).named.as_deref() else {
                 continue;
             };
-            let Some(join) = item.source.pairs() else {
-                continue;
-            };
-            let cx = self.probe_cx(frame, RegionId::DATASET, inputs);
-            let built = pairs::materialize(self, &cx, relation)?;
-            let columns = item.columns.as_deref().unwrap_or_default();
-            let records = pairs::port_records(&built, columns, &join.fields)?;
-            ports.push((join.port, records, join.fields.clone()));
+            if let Some(join) = item.source.pairs() {
+                relations.push((join.port, relation));
+            } else if let Some(records) = &item.records {
+                relations.push((records.port, relation));
+            }
         }
-        ports.sort_by_key(|(port, ..)| *port);
+        relations.sort_by_key(|(port, _)| *port);
         // The ports follow the inputs' in declaration order.
-        if ports
+        if relations
             .iter()
             .enumerate()
-            .any(|(offset, (port, ..))| *port != inputs.len() + offset)
+            .any(|(offset, (port, _))| *port != inputs.len() + offset)
         {
             return Err(Box::new(ExecutionError::SchemaMismatch));
         }
-        Ok(ports
-            .into_iter()
-            .map(|(_, records, schema)| (records, schema))
-            .collect())
+        let mut ports: Vec<(Frame, TableSchema)> = Vec::new();
+        for (_, relation) in relations {
+            let item = relations::item(plan, relation);
+            let secondary = inputs
+                .iter()
+                .copied()
+                .chain(ports.iter().map(|(records, schema)| Table::Rows {
+                    frame: records,
+                    schema,
+                    start: 0,
+                    rows: records.rows(),
+                }))
+                .collect::<Vec<_>>();
+            let cx = self.probe_cx(frame, RegionId::DATASET, &secondary);
+            let port = match (item.source.pairs(), &item.records) {
+                (Some(join), _) => {
+                    let built = pairs::materialize(self, &cx, relation)?;
+                    let columns = item.columns.as_deref().unwrap_or_default();
+                    let records = pairs::port_records(&built, columns, &join.fields)?;
+                    (records, join.fields.clone())
+                }
+                (None, Some(records)) => (
+                    pairs::record_port(self, &cx, relation, &records.columns)?,
+                    records.fields.clone(),
+                ),
+                (None, None) => return Err(Box::new(ExecutionError::SchemaMismatch)),
+            };
+            ports.push(port);
+        }
+        Ok(ports)
     }
 
     /// Reject cardinality overflow and excessive output slots before deriving

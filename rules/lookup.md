@@ -8,7 +8,9 @@ narrows them by a filter, selects one record or reduces them, and answers
 absence. The kinds of lookup differ only in the steps they declare. A named
 intermediate that writes `inner_join` is a fourth kind, the pair relation: it
 matches and narrows the records of one relation for every record of another
-and keeps every pair ([LOOKUP-27](#lookup-27)).
+and keeps every pair ([LOOKUP-27](#lookup-27)). A named intermediate that
+another one names as its `dataset` is a record relation: its derived records
+are read as an input's ([LOOKUP-3](#lookup-3)).
 
 ## The lookup model
 
@@ -929,14 +931,14 @@ derivation's read does ([COLUMN-4](columns.md#column-4)), at `between.value`.
 
 An entry of `intermediates` declares `id`, `dataset`, the relation it reads,
 and `key`, its match ([LOOKUP-5](#lookup-5)), unless it drives a row
-template or is a side of a pair relation, which declare none
-([ROW-2](rows.md#row-2), [LOOKUP-27](#lookup-27)). Its `id` shares one naming
+template, is a side of a pair relation or is a record relation, which
+declare none ([ROW-2](rows.md#row-2), [LOOKUP-27](#lookup-27)). Its `id` shares one naming
 list with dataset identifiers, other lookup ids and the output `domain`, and a
 collision fails. An intermediate read as a lookup without `key` fails as
 `missing_required_field`.
 
-Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_is_refused_at_its_key_and_keeps_no_input_live`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_or_filter_is_refused_at_its_key_and_keeps_no_input_live`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
+Fails: `duplicate_identifier`, `missing_required_field`, `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `schema-lookup-intermediate-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_record_relation_is_an_intermediate_a_row_template_could_drive_on`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_record_relation_reads_an_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::an_intermediate_is_no_record_relation_of_itself`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_record_relation_reads_no_current_row`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_record_relation_exposes_fields_of_one_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_read_through_a_record_relation_s_implicit_join_has_no_applicable_keys`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_is_refused_at_its_key_and_keeps_no_input_live`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/layer_composition.json::an_unread_lookup_without_key_or_filter_is_refused_at_its_key_and_keeps_no_input_live`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -951,10 +953,61 @@ relation's own `key` pairs its two sides, not a current row, and an
 intermediate that is a side of one declares no `key`, as a row driver does
 ([ROW-2](rows.md#row-2)).
 
+A `dataset` that names another named intermediate, one that is not a pair
+relation, reads that intermediate's records as a row template driving on it
+reads them ([ROW-2](rows.md#row-2)): those its filter keeps, in stored
+order, each with its derivations complete and with every field its `columns`
+leaves visible, stored and derived. The intermediate named is a record
+relation. Its records are built once, before any row is built, and every
+intermediate that names it reads them as it reads an input's, through the
+relation's id and with a `key` of its own, so several lookups read one
+declaration of derived fields instead of repeating it. A record relation
+declares no `key`, as a row driver does, and may drive row templates itself.
+It reads an input and declares none of `key`, `between`, `order_by`, `keep`,
+`nearest`, `pivot`, `absent`, `require_match` and `inner_join`, or the
+intermediate that reads it fails as `invalid_intermediate_driver` at its
+`dataset` before any input is read, naming the relation as `intermediate`
+and each such field, `dataset` among them when it reads no input; so a
+record relation reads no other intermediate. A record relation whose filter
+or derivations read a current row fails the same way at each reader's
+`dataset`, naming `filter` or `derivations`, and one that exposes a field
+without one column type ([EXPR-14](expressions.md#expr-14)) fails as
+`unknown_intermediate_driver_type` there, naming the fields as `columns`. A
+`dataset` that names its own intermediate names no relation and fails as
+`unknown_field` ([NAME-1](names.md#name-1)). Outside the row templates
+that drive on it, a name a record relation qualifies reads its records as
+an input's, never the relation as a lookup: through an intermediate whose
+`dataset` names it, or a qualified aggregate with a `key` of its own
+([LOOKUP-18](#lookup-18)). It declares no input `key`, so a read through its
+implicit join, and a qualified aggregate over it without `key`, fail as
+`no_applicable_keys` ([LOOKUP-5](#lookup-5)), whose hint names those routes.
+
+```yaml
+intermediates:
+  - id: EXREC
+    dataset: EX
+    derivations:
+      STDTM: {type: datetime, derivation: {impute: {type: datetime, source: EXSTDTC, time: first}}}
+  - id: FIRSTREC
+    dataset: EXREC
+    key: {USUBJID: USUBJID}
+    order_by: [EXREC.STDTM]
+    keep: first
+  - id: PRIOR
+    dataset: EXREC
+    key: {USUBJID: USUBJID}
+    between: {value: ADTM, lower: STDTM, closed: neither}
+    order_by: [EXREC.STDTM]
+    keep: last
+```
+
+`STDTM` is derived once, and both `FIRSTREC` and `PRIOR` match, order and
+select on it as on a stored field.
+
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
 rule cited. An intermediate that drives no row template, is no side of a pair
-relation and declares no `key`, or a pair relation without one, fails as
+relation, is no record relation and declares no `key`, or a pair relation without one, fails as
 `missing_required_field` at its `key` before any input is read, even when
 nothing reads it, its context naming the field and its class as the schema's
 does; a row template's driver read as a lookup by the rows another template

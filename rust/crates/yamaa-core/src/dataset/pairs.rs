@@ -79,3 +79,20 @@ impl PairJoin {
         self.left.columns.len()
     }
 }
+
+/// The port of a record relation (LOOKUP-3): a named intermediate another
+/// intermediate's `dataset` names. The run fills it once, before any row is
+/// built, with the records a row template driving on the intermediate would
+/// read, its filter applied and its derivations complete (ROW-2); every
+/// reader reads it as it reads an input's.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecordPort {
+    /// The secondary port the run fills, after the inputs', in the order
+    /// the intermediates are derived, as a pair relation's is.
+    pub port: usize,
+    /// The intermediate's layout columns the port exposes, in order: its
+    /// visible stored fields, then its visible derived fields.
+    pub columns: Vec<usize>,
+    /// The exposed fields, each of one column type.
+    pub fields: TableSchema,
+}

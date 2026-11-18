@@ -866,6 +866,7 @@ fn unused_slot_placeholder(
         unique: Vec::new(),
         derivations: None,
         pending_schema: None,
+        records: None,
     }
 }
 

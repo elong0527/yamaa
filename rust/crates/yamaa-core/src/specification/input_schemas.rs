@@ -64,7 +64,7 @@ impl InputSchema {
         }
     }
     /// The slots `fields` names, each `(name, kind, stated)`, in order.
-    fn new(
+    pub(super) fn new(
         fields: Vec<(String, Option<ColumnType>, bool)>,
         closed: bool,
     ) -> Result<Self, BindError> {

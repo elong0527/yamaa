@@ -57,6 +57,11 @@ column type; a `source` reading another intermediate's column under
 field without one fails row-driver validation as
 `unknown_intermediate_driver_type`.
 
+A record relation, an intermediate another intermediate names as its
+`dataset`, exposes the records a row template driving on it reads, so it
+obeys this rule ([LOOKUP-3](lookup.md#lookup-3)), and may drive row templates
+as well.
+
 A row template driving on a pair relation reads its records as it reads an
 input's: each record, a matching pair, builds one candidate row, its fields
 are the relation's exposed derivations, read through the relation's id, and

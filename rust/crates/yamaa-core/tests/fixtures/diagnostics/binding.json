@@ -140,6 +140,62 @@
       "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"fields": ["filter"], "intermediate": "LM"}}]
     },
     {
+      "case": "a_record_relation_reads_no_current_row",
+      "operation": ["check", "bind"],
+      "prefix": true,
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.K = R.K"},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "SEL.ID"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.SEL.dataset"], "context": {"fields": ["filter"], "intermediate": "LM"}}]
+    },
+    {
+      "case": "a_record_relation_exposes_fields_of_one_type",
+      "operation": ["check", "bind"],
+      "prefix": true,
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "derivations": {"FLAG": true}},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "SEL.ID"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_intermediate_driver_type", "rule": "LOOKUP-3", "spec_paths": ["intermediates.SEL.dataset"], "context": {"columns": ["FLAG"], "intermediate": "LM"}}]
+    },
+    {
+      "case": "a_read_through_a_record_relation_s_implicit_join_has_no_applicable_keys",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "derivations": {"TWICE": {"type": "int", "derivation": "ID * 2"}}},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first"}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "LM.TWICE"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.RID.derivation.source"], "context": {"dataset": "LM", "hint": "read it through a named intermediate or an aggregate with a `key` of its own"}}]
+    },
+    {
       "case": "a_pair_relation_exposes_fields_of_one_type",
       "operation": ["check", "bind"],
       "input": {

@@ -152,6 +152,25 @@ pub(in crate::specification) fn pair_input<'a>(
         .then_some(side.dataset.name.as_str())
 }
 
+/// What keeps the intermediate `other` from being read as a row driver
+/// reads one, by a pair relation's side or a record relation's reader: each
+/// field a row driver may not declare, `inner_join` for a pair relation,
+/// and `dataset` when it reads no input (ROW-2, LOOKUP-27, LOOKUP-3).
+fn side_prohibited(spec: &Spec, other: &ast::Intermediate) -> Vec<&'static str> {
+    let mut prohibited = driver_prohibited(spec, other);
+    if other.pairs() {
+        prohibited.push("inner_join");
+    }
+    if !spec
+        .inputs
+        .iter()
+        .any(|input| input.name.name == other.dataset.name)
+    {
+        prohibited.push("dataset");
+    }
+    prohibited
+}
+
 /// What a pair relation's declaration refuses before any input is read
 /// (LOOKUP-27): each field it admits none of beside `inner_join` and a side
 /// that names `SELF`, in one finding, then each side that names an
@@ -196,7 +215,6 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
             paths, name, construct,
         )));
     }
-    let inputs = |name: &str| spec.inputs.iter().any(|input| input.name.name == name);
     for (field, side) in [("dataset", &item.dataset), ("inner_join", right)] {
         let Some(other) = spec
             .intermediates
@@ -205,16 +223,7 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
         else {
             continue;
         };
-        // A side is read as a row driver reads an intermediate: it reads an
-        // input and declares none of the fields a row driver may not, and a
-        // pair relation is no side (ROW-2).
-        let mut prohibited = driver_prohibited(spec, other);
-        if other.pairs() {
-            prohibited.push("inner_join");
-        }
-        if !inputs(&other.dataset.name) {
-            prohibited.push("dataset");
-        }
+        let prohibited = side_prohibited(spec, other);
         if !prohibited.is_empty() {
             findings.push(PreflightFinding::Scalar(lookup::pair_side(
                 &format!("{path}.{field}"),
@@ -274,6 +283,17 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 if !declared(side) {
                     findings.push(unknown(field, side));
                 }
+            }
+        } else if let Some(relation) = spec.record_relation(item) {
+            // A record relation is read as a row template driving on it
+            // would read it (LOOKUP-3, ROW-2).
+            let prohibited = side_prohibited(spec, relation);
+            if !prohibited.is_empty() {
+                findings.push(PreflightFinding::Scalar(lookup::records_side(
+                    &render(spec, item.dataset.meta),
+                    dataset,
+                    &prohibited,
+                )));
             }
         } else if !(inputs(dataset)
             || spec.pair_relation(dataset).is_some()
