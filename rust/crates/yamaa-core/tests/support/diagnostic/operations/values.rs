@@ -101,7 +101,8 @@ fn selected<T>(
 /// `identifier` and `count`, `unmatched_key` with `dataset` and
 /// `intermediate`, `multiple_matches` with those and `count` and, for a
 /// pivot's field relation, `field`, `unlisted_pivot_name` with `dataset`,
-/// `intermediate`, `name`, `value` and `fields`, `baseline_ambiguity` with
+/// `intermediate`, `name`, `value` and `fields`, `invalid_repeat_count` with
+/// `dataset`, `intermediate`, `record` and `count`, `baseline_ambiguity` with
 /// `column`, `date` and `count`, and `reduction_input_type` with
 /// `expression`, `reducer`, `source` and `actual`.
 fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
@@ -168,6 +169,26 @@ fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
                 name: text(input, "name"),
                 value: &held,
                 fields: &listed,
+            }
+        }
+        "invalid_repeat_count" => {
+            input.closed(&[
+                "finding",
+                "path",
+                "dataset",
+                "intermediate",
+                "record",
+                "count",
+            ]);
+            DatasetFinding::RepeatCount {
+                path,
+                dataset: text(input, "dataset"),
+                intermediate: text(input, "intermediate"),
+                record: input.field("record").integer(),
+                count: match input.field("count") {
+                    Json::Null => None,
+                    read => Some(read.integer()),
+                },
             }
         }
         "baseline_ambiguity" => {

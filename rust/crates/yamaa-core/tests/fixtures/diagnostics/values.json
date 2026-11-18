@@ -1,5 +1,5 @@
 {
-  "about": "Value-level refusals: mapping and cut (EXPR-11 to EXPR-13, COLUMN-10), the findings a run reports for a key, lookup, baseline or reduction (COLUMN-2, LOOKUP-10, LOOKUP-24, WINDOW-9, FORMULA-23), and predicate evaluation over bound values (FORMULA-5 to FORMULA-9), whose operand route names the failing operand.",
+  "about": "Value-level refusals: mapping and cut (EXPR-11 to EXPR-13, COLUMN-10), the findings a run reports for a key, lookup, pivot, count, baseline or reduction (COLUMN-2, LOOKUP-10, LOOKUP-24, LOOKUP-28, LOOKUP-29, WINDOW-9, FORMULA-23), and predicate evaluation over bound values (FORMULA-5 to FORMULA-9), whose operand route names the failing operand.",
   "cases": [
     {
       "case": "a_mapping_refuses_a_source_that_is_not_text",
@@ -114,6 +114,18 @@
       "operation": "dataset_finding",
       "input": {"finding": "unlisted_pivot_name", "path": "intermediates.QUAL", "dataset": "SUPPAE", "intermediate": "QUAL", "name": "QNAM", "value": null, "fields": ["AEXSITE"]},
       "issues": [{"phase": "join", "condition": "unlisted_pivot_name", "rule": "LOOKUP-28", "spec_paths": ["intermediates.QUAL"], "context": {"dataset": "SUPPAE", "intermediate": "QUAL", "name": "QNAM", "value": null, "fields": ["AEXSITE"]}}]
+    },
+    {
+      "case": "a_missing_count_of_a_counted_relation_is_reported_with_its_record",
+      "operation": "dataset_finding",
+      "input": {"finding": "invalid_repeat_count", "path": "intermediates.ADMIN.repeat.count", "dataset": "EX", "intermediate": "ADMIN", "record": 2, "count": null},
+      "issues": [{"phase": "join", "condition": "invalid_repeat_count", "rule": "LOOKUP-29", "spec_paths": ["intermediates.ADMIN.repeat.count"], "context": {"intermediate": "ADMIN", "dataset": "EX", "record": 2, "count": null}}]
+    },
+    {
+      "case": "a_negative_count_of_a_counted_relation_is_reported_with_its_record",
+      "operation": "dataset_finding",
+      "input": {"finding": "invalid_repeat_count", "path": "intermediates.ADMIN.repeat.count", "dataset": "EXREC", "intermediate": "ADMIN", "record": 7, "count": -3},
+      "issues": [{"phase": "join", "condition": "invalid_repeat_count", "rule": "LOOKUP-29", "spec_paths": ["intermediates.ADMIN.repeat.count"], "context": {"intermediate": "ADMIN", "dataset": "EXREC", "record": 7, "count": -3}}]
     }
   ]
 }

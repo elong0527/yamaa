@@ -1,0 +1,507 @@
+{
+  "about": "A named intermediate that writes repeat is a counted relation (LOOKUP-29, #4628): for each record of its dataset, in stored order, one record for each whole number from 1 to the record's count, in ascending order, the number read by the name its index gives. It is a pair relation with a generated right side (LOOKUP-27): built once before any row, filtered before any derivation, exposing its derivations, driven on by a row template, looked up by a named intermediate with a key of its own and reduced by a qualified aggregate with a key of its own. The count is an int read of each record the dataset gives: a field qualified by the dataset, or an expression over its fields evaluated before any record is built. Zero gives no record; a missing or negative count fails the run as invalid_repeat_count, naming the relation, its dataset, the record's one-based position among the records the dataset gives and the count read; a record the dataset's own filter drops is never counted. The table limits bound the relation (LIMIT-2): each count is added to the rows before its records are built, so a count past 10,000,000 rows is refused as engine_rejected without building them (LIMIT-1). Every value is authored from those rules. B's count of 3 gives the numbers 1 to 3 before A's records, since B is stored first, A's count of 0 gives none and its count of 1 gives one, and the template driving on the relation reads its four records and emits four rows (CHECK-24). LAST - FIRST + 1 is 3, 0 and 1, and three days from the first to the third of January, both counted, and one for a single day (TIME-5). With the filter N > 1 AND EX.SEQ = 1 the numbers 2 and 3 of A's record remain and 6 / (N - 1) is 6 and 3: N - 1 is zero for the first number, so the derivation would divide by zero had the filter not removed that record first; B's first record has no number above 1, and the SEQ of its second is not 1. The last of A's records by SEQ and then DOSE is the third number of its second record, B's is its one record, and C has none, so its lookup answers missing and its count is missing (LOOKUP-24, FORMULA-24); A's two records count 2 and 3, five records in all. In kept the dataset gives the records whose subject is not A, so the fourth stored record is the second it gives, and A's missing and negative counts are never read. One record counting 10,000,001 takes the rows to 10,000,001, and a count of 1,000,000,000,000 after a count of 2 takes them to 1,000,000,000,002, more records than a run could build. With counts of 2 and 3, the combinations A,1 and B,1 each repeat, two repeated combinations (LOOKUP-17). A count declared float fails validation with no input file staged, and a count read from a Parquet input checked without its file has no type a schema decides, so it is checked when the input is read (P9).",
+  "documents": {
+    "counted": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ, SEQ, DOSE]\ninput:\n  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\noutput: {path: out.csv, columns: [SUBJ, SEQ, DOSE]}\nintermediates:\n  - id: ADMIN\n    dataset: EX\n    repeat: {count: EX.CNT, index: N}\n    derivations:\n      SUBJ: {type: str, derivation: EX.SUBJ}\n      SEQ: {type: int, derivation: EX.SEQ}\n      DOSE: N\ncolumns:\n  - {name: SUBJ, type: str}\n  - {name: SEQ, type: int}\n  - {name: DOSE, type: int}\nrows:\n  - id: each\n    dataset: ADMIN\n    derivations: {SUBJ: ADMIN.SUBJ, SEQ: ADMIN.SEQ, DOSE: ADMIN.DOSE}\n",
+    "kept": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ, SEQ, DOSE]\ninput:\n  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\noutput: {path: out.csv, columns: [SUBJ, SEQ, DOSE]}\nintermediates:\n  - id: KEPT\n    dataset: EX\n    filter: \"EX.SUBJ <> 'A'\"\n  - id: ADMIN\n    dataset: KEPT\n    repeat: {count: KEPT.CNT, index: N}\n    derivations:\n      SUBJ: {type: str, derivation: KEPT.SUBJ}\n      SEQ: {type: int, derivation: KEPT.SEQ}\n      DOSE: N\ncolumns:\n  - {name: SUBJ, type: str}\n  - {name: SEQ, type: int}\n  - {name: DOSE, type: int}\nrows:\n  - id: each\n    dataset: ADMIN\n    derivations: {SUBJ: ADMIN.SUBJ, SEQ: ADMIN.SEQ, DOSE: ADMIN.DOSE}\n",
+    "lookup": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  DM: dm.csv\n  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\nbase: DM\noutput: {path: out.csv, columns: [SUBJ, VALUE]}\nintermediates:\n  - id: ADMIN\n    dataset: EX\n    repeat: {count: EX.CNT, index: N}\n    derivations:\n      SUBJ: {type: str, derivation: EX.SUBJ}\n      SEQ: {type: int, derivation: EX.SEQ}\n      DOSE: N\n  - id: FINAL\n    dataset: ADMIN\n    key: {SUBJ: DM.SUBJ}\n    order_by: [ADMIN.SEQ, ADMIN.DOSE]\n    keep: last\ncolumns:\n  - {name: SUBJ, type: str, derivation: DM.SUBJ}\n  - {name: VALUE, type: int, derivation: FINAL.DOSE}\n",
+    "aggregate": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJ]\ninput:\n  DM: dm.csv\n  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\nbase: DM\noutput: {path: out.csv, columns: [SUBJ, VALUE]}\nintermediates:\n  - id: ADMIN\n    dataset: EX\n    repeat: {count: EX.CNT, index: N}\n    derivations:\n      SUBJ: {type: str, derivation: EX.SUBJ}\n      SEQ: {type: int, derivation: EX.SEQ}\n      DOSE: N\ncolumns:\n  - {name: SUBJ, type: str, derivation: DM.SUBJ}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate: {expr: \"COUNT(ADMIN.*)\", key: {SUBJ: DM.SUBJ}}\n"
+  },
+  "cases": [
+    {
+      "case": "each_record_gives_one_record_for_each_whole_number_from_1_to_its_count_in_stored_order",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted"
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nB,1,3\nA,1,0\nA,2,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "report": {
+        "rows": [
+          [
+            "ARTIFACT",
+            "SPEC_PATH",
+            "NAME",
+            "ID",
+            "TARGET",
+            "RULE",
+            "SEVERITY",
+            "OUTCOME",
+            "CONDITION",
+            "COUNT",
+            "TOTAL",
+            "KEYS",
+            "DETAILS"
+          ],
+          [
+            "out.csv",
+            "rows.each",
+            "ADMIN",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            4,
+            4,
+            null,
+            "{}"
+          ]
+        ]
+      },
+      "saved": {
+        "out.csv": "SUBJ,SEQ,DOSE\nB,1,1\nB,1,2\nB,1,3\nA,2,1\n"
+      }
+    },
+    {
+      "case": "a_count_written_as_a_formula_is_evaluated_over_each_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted",
+            "edits": [
+              {
+                "from": "  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\n",
+                "to": "  EX: {path: ex.csv, types: {SEQ: int, FIRST: int, LAST: int}}\n"
+              },
+              {
+                "from": "    repeat: {count: EX.CNT, index: N}\n",
+                "to": "    repeat: {count: \"EX.LAST - EX.FIRST + 1\", index: N}\n"
+              }
+            ]
+          },
+          "ex.csv": "SUBJ,SEQ,FIRST,LAST\nA,1,3,5\nA,2,4,3\nB,1,7,7\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,SEQ,DOSE\nA,1,1\nA,1,2\nA,1,3\nB,1,1\n"
+      }
+    },
+    {
+      "case": "a_count_written_as_an_operation_is_evaluated_over_each_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted",
+            "edits": [
+              {
+                "from": "  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\n",
+                "to": "  EX: {path: ex.csv, types: {SEQ: int, START: date, END: date}}\n"
+              },
+              {
+                "from": "    repeat: {count: EX.CNT, index: N}\n",
+                "to": "    repeat:\n      count: {diff: {type: date, start: EX.START, end: EX.END, unit: day, closed: both}}\n      index: N\n"
+              }
+            ]
+          },
+          "ex.csv": "SUBJ,SEQ,START,END\nA,1,2025-01-01,2025-01-03\nB,1,2025-01-05,2025-01-05\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,SEQ,DOSE\nA,1,1\nA,1,2\nA,1,3\nB,1,1\n"
+      }
+    },
+    {
+      "case": "the_filter_is_asked_of_each_record_by_its_number_before_any_derivation",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted",
+            "edits": [
+              {
+                "from": "    repeat: {count: EX.CNT, index: N}\n",
+                "to": "    repeat: {count: EX.CNT, index: N}\n    filter: \"N > 1 AND EX.SEQ = 1\"\n"
+              },
+              {
+                "from": "      DOSE: N\n",
+                "to": "      DOSE: {type: int, derivation: \"6 / (N - 1)\"}\n"
+              }
+            ]
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,3\nB,1,1\nB,2,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,SEQ,DOSE\nA,1,6\nA,1,3\n"
+      }
+    },
+    {
+      "case": "a_named_intermediate_looks_a_counted_relation_up_with_a_key_of_its_own",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "lookup"
+          },
+          "dm.csv": "SUBJ\nA\nB\nC\n",
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\nA,2,3\nB,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,VALUE\nA,3\nB,1\nC,\n"
+      }
+    },
+    {
+      "case": "a_qualified_aggregate_with_a_key_of_its_own_reduces_a_counted_relation",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "aggregate"
+          },
+          "dm.csv": "SUBJ\nA\nB\nC\n",
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\nA,2,3\nB,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,VALUE\nA,5\nB,1\nC,\n"
+      }
+    },
+    {
+      "case": "a_missing_count_fails_the_run_naming_its_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted"
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\nA,2,\nB,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "invalid_repeat_count",
+          "rule": "LOOKUP-29",
+          "spec_paths": [
+            "intermediates.ADMIN.repeat.count"
+          ],
+          "context": {
+            "intermediate": "ADMIN",
+            "dataset": "EX",
+            "record": 2,
+            "count": null
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_negative_count_fails_the_run_naming_its_record_among_those_the_dataset_gives",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kept"
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,5\nA,2,5\nB,1,2\nC,1,-3\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "join",
+          "condition": "invalid_repeat_count",
+          "rule": "LOOKUP-29",
+          "spec_paths": [
+            "intermediates.ADMIN.repeat.count"
+          ],
+          "context": {
+            "intermediate": "ADMIN",
+            "dataset": "KEPT",
+            "record": 2,
+            "count": -3
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_record_its_datasets_filter_drops_is_never_counted",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kept"
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,\nA,2,-4\nB,1,2\nC,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "out.csv": "SUBJ,SEQ,DOSE\nB,1,1\nB,1,2\nC,1,1\n"
+      }
+    },
+    {
+      "case": "a_count_past_the_row_limit_refuses_the_run",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted"
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,10000001\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "engine",
+          "condition": "engine_rejected",
+          "rule": null,
+          "spec_paths": [
+            "intermediates.ADMIN"
+          ],
+          "context": {
+            "step": "execute",
+            "code": "execution_limit",
+            "resource": "rows",
+            "limit": 10000000,
+            "actual": 10000001
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_count_takes_the_rows_past_the_limit_before_any_of_its_records_is_built",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted"
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\nB,1,1000000000000\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "engine",
+          "condition": "engine_rejected",
+          "rule": null,
+          "spec_paths": [
+            "intermediates.ADMIN"
+          ],
+          "context": {
+            "step": "execute",
+            "code": "execution_limit",
+            "resource": "rows",
+            "limit": 10000000,
+            "actual": 1000000000002
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_unique_check_runs_over_the_records_of_a_counted_relation",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted",
+            "edits": [
+              {
+                "from": "    repeat: {count: EX.CNT, index: N}\n",
+                "to": "    repeat: {count: EX.CNT, index: N}\n    verifications:\n      - unique: [SUBJ, SEQ]\n"
+              }
+            ]
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\nB,1,3\nC,1,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "verification",
+          "condition": "duplicate_intermediate_records",
+          "rule": "LOOKUP-17",
+          "spec_paths": [
+            "intermediates.ADMIN.verifications[0].unique"
+          ],
+          "context": {
+            "intermediate": "ADMIN",
+            "dataset": "ADMIN",
+            "columns": [
+              "SUBJ",
+              "SEQ"
+            ],
+            "duplicate_count": 2
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_count_that_is_no_whole_number_is_refused_before_any_input_is_read",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted",
+            "edits": [
+              {
+                "from": "  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\n",
+                "to": "  EX: {path: ex.csv, types: {SEQ: int, CNT: float}}\n"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "LOOKUP-29",
+          "spec_paths": [
+            "intermediates.ADMIN.repeat.count"
+          ],
+          "context": {
+            "intermediate": "ADMIN",
+            "expected": "int",
+            "actual": "float"
+          }
+        }
+      ]
+    },
+    {
+      "case": "a_count_of_an_undecided_type_is_checked_when_the_input_is_read",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted",
+            "edits": [
+              {
+                "from": "  EX: {path: ex.csv, types: {SEQ: int, CNT: int}}\n",
+                "to": "  EX: ex.parquet\n"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": []
+    }
+  ]
+}

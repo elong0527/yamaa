@@ -558,6 +558,11 @@ impl<'d> Lower<'d> {
             });
             // The right side of a pair relation (LOOKUP-27).
             let inner_join = self.named(meta, item, "inner_join");
+            // The count and index of a counted relation (LOOKUP-29).
+            let repeat = self.field(item, "repeat").map(|node| {
+                let meta = self.field_meta(meta, "repeat", node);
+                self.repeat(node, meta)
+            });
             // An intermediate states its own key (D23), and one that does not
             // keeps none here: the front end refuses it unless it drives rows
             // (LOOKUP-3, ROW-2).
@@ -624,6 +629,7 @@ impl<'d> Lower<'d> {
                 id: declared,
                 dataset,
                 inner_join,
+                repeat,
                 key,
                 between,
                 filter,
@@ -640,6 +646,7 @@ impl<'d> Lower<'d> {
                     item,
                     &[
                         "inner_join",
+                        "repeat",
                         "key",
                         "between",
                         "filter",

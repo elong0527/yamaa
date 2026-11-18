@@ -87,39 +87,33 @@ mod service {
             document_tree(inputs, value).document()
         }
 
-        /// Two intermediate sides of one physical input still form a
-        /// global pair relation (LOOKUP-27).
-        fn paired() -> Document {
+        /// A specification whose one row template drives on the relation
+        /// P: `sides` are intermediates over the one physical input, the
+        /// first P's `dataset`, `declares` makes P a relation of them, and
+        /// P derives ID from its dataset and VALUE from `value`.
+        fn related(sides: &[&str], declares: Vec<(&str, Tree)>, value: &str) -> Document {
             let mut tree = document_tree(&["SRC"], row_wise());
             tree.remove(&["columns", "0", "derivation"]);
             tree.remove(&["columns", "1", "derivation"]);
-            let side = |name| {
+            let side = |name: &&str| {
                 Tree::map(vec![
                     ("id", Tree::text(name)),
                     ("dataset", Tree::text("SRC")),
                     ("filter", Tree::text("SRC.ID > 0")),
                 ])
             };
-            tree.set(
-                &["intermediates"],
-                Tree::list(vec![
-                    side("L"),
-                    side("R"),
-                    Tree::map(vec![
-                        ("id", Tree::text("P")),
-                        ("dataset", Tree::text("L")),
-                        ("inner_join", Tree::text("R")),
-                        ("key", Tree::list(vec![Tree::text("ID")])),
-                        (
-                            "derivations",
-                            Tree::map(vec![
-                                ("ID", Tree::text("L.ID")),
-                                ("VALUE", Tree::text("R.ID")),
-                            ]),
-                        ),
-                    ]),
+            let mut relation = vec![("id", Tree::text("P")), ("dataset", Tree::text(sides[0]))];
+            relation.extend(declares);
+            relation.push((
+                "derivations",
+                Tree::map(vec![
+                    ("ID", Tree::text(format!("{}.ID", sides[0]))),
+                    ("VALUE", Tree::text(value)),
                 ]),
-            );
+            ));
+            let mut intermediates = sides.iter().map(side).collect::<Vec<_>>();
+            intermediates.push(Tree::map(relation));
+            tree.set(&["intermediates"], Tree::list(intermediates));
             tree.set(
                 &["rows"],
                 Tree::list(vec![Tree::map(vec![
@@ -135,6 +129,36 @@ mod service {
                 ])]),
             );
             tree.document()
+        }
+
+        /// Two intermediate sides of one physical input still form a
+        /// global pair relation (LOOKUP-27).
+        fn paired() -> Document {
+            related(
+                &["L", "R"],
+                vec![
+                    ("inner_join", Tree::text("R")),
+                    ("key", Tree::list(vec![Tree::text("ID")])),
+                ],
+                "R.ID",
+            )
+        }
+
+        /// A counted relation is a pair relation whose right side is
+        /// generated, each record of L once for each number up to its ID,
+        /// and is global as one is (LOOKUP-29).
+        fn counted() -> Document {
+            related(
+                &["L"],
+                vec![(
+                    "repeat",
+                    Tree::map(vec![
+                        ("count", Tree::text("L.ID")),
+                        ("index", Tree::text("N")),
+                    ]),
+                )],
+                "N",
+            )
         }
 
         /// A derivation every partition can run alone.
@@ -595,27 +619,29 @@ mod service {
         #[test]
         fn a_pair_relation_refuses_strict_partitions_and_admits_its_input_whole() {
             // The service's read/admission seam uses geometry, not cells:
-            // a fixture cannot hold an input beyond the row limit.
-            let document = paired();
-            for leading in [None, Some(1)] {
-                assert_eq!(
-                    attempt(&document, 1, partitions(1, leading, false)),
-                    (
-                        End::Global {
-                            path: "intermediates.P".into()
-                        },
-                        vec!["header", "whole"]
-                    ),
-                    "a global pair under {leading:?} partition keys"
-                );
-            }
-            let records = Limits::TABLE_ROWS + 1;
-            for fallback in [false, true] {
-                assert_eq!(
-                    attempt(&document, records, partitions(1, None, fallback)),
-                    (refused(records), vec!["header", "whole"]),
-                    "the whole input limit with fallback {fallback}"
-                );
+            // a fixture cannot hold an input beyond the row limit. A counted
+            // relation is a pair relation whose right side is generated.
+            for (document, relation) in [(paired(), "pair"), (counted(), "counted")] {
+                for leading in [None, Some(1)] {
+                    assert_eq!(
+                        attempt(&document, 1, partitions(1, leading, false)),
+                        (
+                            End::Global {
+                                path: "intermediates.P".into()
+                            },
+                            vec!["header", "whole"]
+                        ),
+                        "a global {relation} relation under {leading:?} partition keys"
+                    );
+                }
+                let records = Limits::TABLE_ROWS + 1;
+                for fallback in [false, true] {
+                    assert_eq!(
+                        attempt(&document, records, partitions(1, None, fallback)),
+                        (refused(records), vec!["header", "whole"]),
+                        "the whole input limit of a {relation} relation with fallback {fallback}"
+                    );
+                }
             }
         }
     }

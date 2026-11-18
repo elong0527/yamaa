@@ -13,8 +13,9 @@ use crate::json::Value as JsonValue;
 pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     for item in &spec.intermediates {
-        // A pair relation refuses either SELF side under LOOKUP-27,
-        // whether or not the specification declares row templates.
+        // A pair relation refuses either SELF side under LOOKUP-27, and a
+        // counted relation a SELF dataset under LOOKUP-29, whether or not
+        // the specification declares row templates.
         if item.dataset.name != "SELF" || item.pairs() {
             continue;
         }
@@ -110,14 +111,23 @@ fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
 
 /// The fields a pair relation writes beside `inner_join` that it admits none
 /// of (LOOKUP-27), in its listed order: each counts once written,
-/// whatever its value, and an absence answer even when written null.
+/// whatever its value, and an absence answer even when written null. A
+/// counted relation, which pairs and matches nothing, admits neither
+/// `inner_join` nor `key` beside `repeat` either (LOOKUP-29).
 fn pair_prohibited(spec: &Spec, item: &ast::Intermediate) -> Vec<&'static str> {
     let answer = item
         .absent
         .as_ref()
         .map(|answer| spec.paths.segment(answer.meta.path));
-    let mut fields = ["between", "order_by", "keep", "nearest", "pivot"]
-        .into_iter()
+    let counted: &[&'static str] = if item.counted() {
+        &["inner_join", "key"]
+    } else {
+        &[]
+    };
+    let mut fields = counted
+        .iter()
+        .copied()
+        .chain(["between", "order_by", "keep", "nearest", "pivot"])
         .filter(|&field| item.written.contains(field))
         .collect::<Vec<_>>();
     if let Some(ast::Segment::Field(answer)) = answer {
@@ -155,21 +165,30 @@ pub(in crate::specification) fn pair_input<'a>(
 /// What a pair relation's declaration refuses before any input is read
 /// (LOOKUP-27): each field it admits none of beside `inner_join` and a side
 /// that names `SELF`, in one finding, then each side that names an
-/// intermediate a row template could not drive on (ROW-2).
+/// intermediate a row template could not drive on (ROW-2). A counted
+/// relation's is the same over its one side, its `dataset`, each field named
+/// before `repeat` (LOOKUP-29), and an `index` that names one of its own
+/// derivations.
 fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
-    let Some(right) = &item.inner_join else {
-        return findings;
-    };
     let name = item.id.name.as_str();
+    // The field that declares the relation, and the right side it names
+    // when a relation gives its records.
+    let (declaring, right) = match (&item.repeat, &item.inner_join) {
+        (Some(repeat), _) => (render(spec, repeat.meta), None),
+        (None, Some(right)) => (render(spec, right.meta), Some(right)),
+        (None, None) => return findings,
+    };
     // Each side is read through its own name, so the two sides are two
     // relations (LOOKUP-27).
-    if right.name == item.dataset.name && right.name != "SELF" {
-        findings.push(PreflightFinding::Scalar(lookup::pair_side_repeated(
-            render(spec, right.meta),
-            render(spec, item.dataset.meta),
-            &right.name,
-        )));
+    if let Some(right) = right.filter(|right| right.name == item.dataset.name) {
+        if right.name != "SELF" {
+            findings.push(PreflightFinding::Scalar(lookup::pair_side_repeated(
+                declaring.clone(),
+                render(spec, item.dataset.meta),
+                &right.name,
+            )));
+        }
     }
     let mut refused = Vec::new();
     refused.extend(
@@ -180,24 +199,41 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
     if item.dataset.name == "SELF" {
         refused.push(("SELF", render(spec, item.dataset.meta)));
     }
-    let inner_join = render(spec, right.meta);
-    if right.name == "SELF" {
-        refused.push(("SELF", inner_join.clone()));
+    if right.is_some_and(|right| right.name == "SELF") {
+        refused.push(("SELF", declaring.clone()));
     }
     if let Some(&(construct, _)) = refused.first() {
         let mut paths = refused
             .iter()
             .map(|(_, path)| path.clone())
             .collect::<Vec<_>>();
-        if paths.last() != Some(&inner_join) {
-            paths.push(inner_join);
+        if paths.last() != Some(&declaring) {
+            paths.push(declaring);
         }
-        findings.push(PreflightFinding::Scalar(lookup::pair_construct(
-            paths, name, construct,
-        )));
+        findings.push(PreflightFinding::Scalar(if item.counted() {
+            lookup::repeat_construct(paths, name, construct)
+        } else {
+            lookup::pair_construct(paths, name, construct)
+        }));
+    }
+    // The index is read by its bare name, as a derivation declared earlier
+    // is, so it names none of the relation's derivations (LOOKUP-29).
+    if let Some(repeat) = &item.repeat {
+        let index = &repeat.index;
+        if item
+            .bindings
+            .iter()
+            .any(|binding| binding.name.name == index.name)
+        {
+            findings.push(PreflightFinding::Scalar(lookup::repeat_index(
+                &render(spec, index.meta),
+                name,
+                &index.name,
+            )));
+        }
     }
     let inputs = |name: &str| spec.inputs.iter().any(|input| input.name.name == name);
-    for (field, side) in [("dataset", &item.dataset), ("inner_join", right)] {
+    for (field, side) in ["dataset", "inner_join"].into_iter().zip(item.sides()) {
         let Some(other) = spec
             .intermediates
             .iter()
@@ -206,11 +242,14 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
             continue;
         };
         // A side is read as a row driver reads an intermediate: it reads an
-        // input and declares none of the fields a row driver may not, and a
-        // pair relation is no side (ROW-2).
+        // input and declares none of the fields a row driver may not, and
+        // neither a pair relation nor a counted relation is a side (ROW-2).
         let mut prohibited = driver_prohibited(spec, other);
-        if other.pairs() {
+        if other.inner_join.is_some() {
             prohibited.push("inner_join");
+        }
+        if other.counted() {
+            prohibited.push("repeat");
         }
         if !inputs(&other.dataset.name) {
             prohibited.push("dataset");
@@ -229,8 +268,8 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
 /// Declaration failures that precede source access and key-type binding:
 /// identifier collisions, the dataset read, empty and repeated keys, a
 /// rename-only lookup, two absence policies, an order or a position beside
-/// a nearest selection, an unpaired selection, and a pair relation's
-/// constructs and sides.
+/// a nearest selection, an unpaired selection, and a pair or counted
+/// relation's constructs and sides.
 pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     let mut identifiers = BTreeMap::<&str, String>::new();
@@ -262,17 +301,18 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
             PreflightFinding::Scalar(finding.diagnostic())
         };
         // A pair relation reads its two sides, each an input or an
-        // intermediate (LOOKUP-27); any other intermediate reads an input, a
-        // pair relation, or SELF (LOOKUP-3, LOOKUP-7).
-        if let Some(right) = &item.inner_join {
+        // intermediate (LOOKUP-27), and a counted relation its one
+        // (LOOKUP-29); any other intermediate reads an input, a pair
+        // relation, or SELF (LOOKUP-3, LOOKUP-7).
+        if item.pairs() {
             let declared = |side: &str| {
                 side == "SELF"
                     || inputs(side)
                     || spec.intermediates.iter().any(|other| other.id.name == side)
             };
-            for (field, side) in [("dataset", dataset), ("inner_join", right.name.as_str())] {
-                if !declared(side) {
-                    findings.push(unknown(field, side));
+            for (field, side) in ["dataset", "inner_join"].into_iter().zip(item.sides()) {
+                if !declared(&side.name) {
+                    findings.push(unknown(field, &side.name));
                 }
             }
         } else if !(inputs(dataset)
@@ -293,7 +333,10 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 lookup::key_required(&key)
             }));
         }
-        let empty = match &item.key {
+        // A counted relation admits no `key`, whatever it holds, which its
+        // one finding names (LOOKUP-29).
+        let key = item.key.as_ref().filter(|_| !item.counted());
+        let empty = match key {
             Some(JoinKey::Pairs { pairs, .. }) => pairs.is_empty(),
             Some(JoinKey::Columns { columns, .. }) => columns.is_empty(),
             // A pair relation's key pairs its two sides, so `key: none`, which
@@ -310,7 +353,7 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
             )));
         }
         // A list pairs each column with its same-named value once (LOOKUP-5).
-        if let Some(JoinKey::Columns { columns, .. }) = &item.key {
+        if let Some(JoinKey::Columns { columns, .. }) = key {
             for (position, column) in columns.iter().enumerate() {
                 if columns[..position]
                     .iter()
@@ -330,7 +373,8 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
         }
         // A pair relation selects nothing, ranges over nothing and answers no
         // absence, and its sides are the records a row template could drive
-        // on (LOOKUP-27); nothing else of a lookup's admission applies.
+        // on (LOOKUP-27), as a counted relation's dataset is (LOOKUP-29);
+        // nothing else of a lookup's admission applies.
         if item.pairs() {
             findings.extend(pair_findings(spec, item, &path));
             continue;

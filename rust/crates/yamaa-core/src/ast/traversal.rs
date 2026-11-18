@@ -100,6 +100,11 @@ pub enum Owner {
     Nearest {
         intermediate: usize,
     },
+    /// The count a counted relation reads of each record of its dataset
+    /// (LOOKUP-29).
+    Repeat {
+        intermediate: usize,
+    },
     Order(Ordered),
     /// An intermediate's derivation.
     Binding {
@@ -238,7 +243,7 @@ impl Spec {
     /// Every expression root in declaration order: column defaults, the
     /// column checks' predicates, the root filter, each row template's
     /// groups, filter and overrides, each intermediate's key values, range,
-    /// filter, order, nearest reference and bindings, the dataset checks'
+    /// filter, order, nearest reference, count and bindings, the dataset checks'
     /// predicates and the output order. Every expression of the arena is
     /// reachable from exactly one root.
     pub fn sites(&self) -> Vec<Site> {
@@ -320,6 +325,15 @@ impl Spec {
                         intermediate: index,
                     },
                     Scope::Row,
+                );
+            }
+            if let Some(repeat) = &item.repeat {
+                push(
+                    repeat.count,
+                    Owner::Repeat {
+                        intermediate: index,
+                    },
+                    donor,
                 );
             }
             for (binding, declared) in item.bindings.iter().enumerate() {

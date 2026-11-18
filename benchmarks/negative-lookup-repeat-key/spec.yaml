@@ -17,8 +17,8 @@ intermediates:
   # counted relation has no use for.
   - id: ADMIN
     dataset: EX
-    key: [STUDYID, USUBJID]
     repeat: {count: EX.EXDOSCNT, index: N}
+    key: [STUDYID, USUBJID]
     derivations:
       STUDYID: EX.STUDYID
       USUBJID: EX.USUBJID

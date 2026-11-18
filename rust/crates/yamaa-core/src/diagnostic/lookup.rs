@@ -440,6 +440,73 @@ pub(crate) fn pair_reference(path: &str, intermediate: &str, identifier: &str) -
     )
 }
 
+/// What a counted relation's `repeat` admits none of beside it (LOOKUP-29):
+/// each field written that pairs, matches, ranges, selects or answers
+/// absence, and a `dataset` that names `SELF`, then `repeat`, in LOOKUP-29's
+/// listed order. `construct` is the first of them, a field's name or `SELF`.
+pub(crate) fn repeat_construct(
+    paths: Vec<String>,
+    intermediate: &str,
+    construct: &str,
+) -> Diagnostic {
+    finding(
+        C::LookupRepeatConstruct,
+        paths,
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("construct".into(), text(construct)),
+        ]
+        .into(),
+    )
+}
+
+/// A counted relation's `index` that names one of the relation's own
+/// derivations, which its bare name already reads (LOOKUP-29).
+pub(crate) fn repeat_index(path: &str, intermediate: &str, identifier: &str) -> Diagnostic {
+    finding(
+        C::LookupRepeatIndex,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("identifier".into(), text(identifier)),
+        ]
+        .into(),
+    )
+}
+
+/// A counted relation's `count` that names no field of its dataset: a bare
+/// name, or a name another relation qualifies, written alone (LOOKUP-29).
+pub(crate) fn repeat_count_reference(
+    path: &str,
+    intermediate: &str,
+    identifier: &str,
+) -> Diagnostic {
+    finding(
+        C::LookupRepeatCountReference,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("identifier".into(), text(identifier)),
+        ]
+        .into(),
+    )
+}
+
+/// A counted relation's `count` whose result type is not `int` alone
+/// (LOOKUP-29): another type, or a type decided per value.
+pub(crate) fn repeat_count_type(path: &str, intermediate: &str, actual: ResultType) -> Diagnostic {
+    finding(
+        C::LookupRepeatCountType,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("expected".into(), text(&ResultType::INT.name())),
+            ("actual".into(), text(&actual.name())),
+        ]
+        .into(),
+    )
+}
+
 /// `require_match: true` beside a declared absence value (LOOKUP-24), naming
 /// the dataset the lookup reads.
 pub(crate) fn absence_conflict(

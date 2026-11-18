@@ -403,13 +403,18 @@ impl<'a> Live<'a> {
     fn matching(&self, index: usize, out: &mut Vec<Reading>) -> Result<(), Error> {
         let item = &self.spec.intermediates[index];
         // A pair relation matches its left record, not a current row: its key
-        // values and its filter read its sides' records (LOOKUP-27).
+        // values and its filter read its sides' records (LOOKUP-27), as a
+        // counted relation's count and filter read its dataset's
+        // (LOOKUP-29).
         if item.pairs() {
             let donor = Scope::Donor(index);
             if let Some(JoinKey::Pairs { pairs, .. }) = &item.key {
                 for &(_, value) in pairs {
                     self.read(value, donor, out)?;
                 }
+            }
+            if let Some(repeat) = &item.repeat {
+                self.read(repeat.count, donor, out)?;
             }
             if let Some(filter) = item.filter {
                 self.read(filter, donor, out)?;
@@ -667,15 +672,16 @@ impl<'a> Live<'a> {
     }
 
     /// What the intermediate numbered `index` reads once live: its input,
-    /// the intermediates whose records it reads, a pair relation its sides
-    /// and an intermediate over a pair relation that relation (LOOKUP-27),
-    /// and what its matching, its bindings and its verified columns name.
+    /// the intermediates whose records it reads, a pair relation its sides,
+    /// a counted relation its dataset and an intermediate over a pair
+    /// relation that relation (LOOKUP-27, LOOKUP-29), and what its matching,
+    /// its bindings and its verified columns name.
     fn intermediate_reads(&self, index: usize, out: &mut Vec<Declaration>) -> Result<(), Error> {
         let item = &self.spec.intermediates[index];
         if !item.dataset.name.is_empty() {
             out.push(Declaration::Input(item.dataset.name.clone()));
         }
-        for relation in std::iter::once(&item.dataset).chain(&item.inner_join) {
+        for relation in item.sides() {
             if self.intermediate(&relation.name).is_some() {
                 out.push(Declaration::Intermediate(relation.name.clone()));
             } else if !relation.name.is_empty() {

@@ -367,6 +367,14 @@ EXPECTED = {
     "new.spec.intermediate.inner_join": [
         Field("intermediate_class", "inner_join", "identifier")
     ],
+    # D-next on #4628: a named intermediate's repeat gives each record of its
+    # dataset once for each whole number up to the record's count
+    # (LOOKUP-29).
+    "new.spec.intermediate.repeat": [
+        Field("intermediate_class", "repeat", "repeat_class"),
+        Field("repeat_class", "count", "match_value", True, kind="expression"),
+        Field("repeat_class", "index", "identifier", True, kind="identifier"),
+    ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
     # The owner decision of 2026-10-28 on #4101: a project file composes on

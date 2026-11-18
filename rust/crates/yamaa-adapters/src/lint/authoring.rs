@@ -651,7 +651,7 @@ fn declares_any(entry: &Data, fields: &[&str]) -> bool {
 
 /// The fields with which a named intermediate narrows, derives or reshapes
 /// its dataset (LOOKUP-4).
-const NARROWING: [&str; 9] = [
+const NARROWING: [&str; 10] = [
     "filter",
     "between",
     "order_by",
@@ -661,6 +661,8 @@ const NARROWING: [&str; 9] = [
     "columns",
     // A pair relation pairs its dataset with another relation (LOOKUP-27).
     "inner_join",
+    // A counted relation repeats each record of its dataset (LOOKUP-29).
+    "repeat",
     // A pivot reshapes the records it selects among (LOOKUP-28).
     "pivot",
 ];

@@ -1925,8 +1925,8 @@ number. `index` names the number, an `int` its `filter` and `derivations`
 read. It requires `derivations` and is read as a pair relation is
 ([LOOKUP-27](#lookup-27)).
 
-Fails: FAILS-TO-FILL
-Evidence: EVIDENCE-TO-FILL
+Fails: `invalid_repeat_count`, `prohibited_construct`, `incompatible_input_type`, `unknown_field`, `duplicate_derivation`.
+Evidence: `schema-lookup-repeat-rows`, `schema-lookup-repeat-zero-count`, `schema-lookup-repeat-expression-count`, `negative-lookup-repeat-missing-count`, `negative-lookup-repeat-negative-count`, `negative-lookup-repeat-count-type`, `negative-lookup-repeat-key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/counted_relations.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_every_field_written_beside_repeat_in_the_listed_order_naming_the_first`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_self_as_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_index_names_none_of_its_derivations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_dataset_is_an_intermediate_a_row_template_could_drive_on`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_dataset_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_side_of_a_pair_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_dataset_of_a_counted_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_states_no_key_and_its_dataset_declares_none`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_reads_its_dataset_by_its_name_its_number_by_its_index_and_the_derivations_before_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_written_as_a_bare_name_reads_no_field_of_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_is_read_before_any_number_exists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_of_type_float_is_no_whole_number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_whose_type_is_decided_per_value_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_exposes_only_its_derivations_and_not_its_index`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_counted_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_missing_count_of_a_counted_relation_is_reported_with_its_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_negative_count_of_a_counted_relation_is_reported_with_its_record`.
 
 ```yaml
 intermediates:
@@ -1969,23 +1969,27 @@ neither a pair relation nor another counted relation, and it is no side of a
 pair relation.
 
 `count` is read as the value of a pair relation's key mapping is
-([LOOKUP-6](#lookup-6)): the dataset's field, qualified by the dataset's
-name, or an expression over the dataset's fields, which each record
-evaluates before any record of the relation is built. Its static result type
-is `int`. Any other type, and a type decided per value, fails as
-`incompatible_input_type` at `repeat.count` before any input is read, and a
-name written alone that reads no field of the dataset fails as
-`unknown_field` there. A count of zero builds no record. A missing or
-negative count is no count: the run fails as `invalid_repeat_count` at
+([LOOKUP-6](#lookup-6)): the dataset's field, qualified by the dataset's name,
+or an expression over the dataset's fields, which each record evaluates before
+any record of the relation is built, so it reads no number. Its static result
+type is `int`. Any other type, and a type decided per value, fails as
+`incompatible_input_type` at `repeat.count`, before any input is read wherever
+the declarations decide the type and otherwise once the input's schema is
+read. A name it reads that is no field of the dataset fails as
+`unknown_field`, at `repeat.count` for a name written alone or a formula and
+at the operand for an operation. A count of zero builds no record. A missing
+or negative count is no count: the run fails as `invalid_repeat_count` at
 `repeat.count`, reporting the relation as `intermediate`, its `dataset`, the
-`record`, the one-based position of the record among those the dataset
-gives, and the `count` read. A record the relation is not to count is left
-out by the filter of the intermediate its `dataset` names, which is asked
-before the count is read.
+`record`, the one-based position of the record among those the dataset gives,
+and the `count` read. A record the relation is not to count is left out by the
+filter of the intermediate its `dataset` names, which is asked before the
+count is read.
 
 `index` names the number of each record, an `int` from 1 to the record's
-count. The relation's `filter` and `derivations` read it by that name alone;
-it is no field of the relation until a derivation copies it. INDEX-NAME-TO-FILL
+count. The relation's `filter` and `derivations` read it by that name alone,
+as a derivation reads one declared before it, so an `index` that names one of
+the relation's derivations fails as `duplicate_derivation` at `repeat.index`.
+It is no field of the relation until a derivation copies it.
 
 `filter`, `derivations`, `columns` and `unique` checks are a pair relation's
 ([LOOKUP-27](#lookup-27)), the number standing where the right side's fields

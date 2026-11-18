@@ -43,6 +43,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("check_variable_forms.json"),
     fixture!("column_driver_bindings.json"),
     fixture!("completed_intermediates.json"),
+    fixture!("counted_relations.json"),
     fixture!("csv_precision.json"),
     fixture!("current_row_columns.json"),
     fixture!("dataset_json_sources.json"),

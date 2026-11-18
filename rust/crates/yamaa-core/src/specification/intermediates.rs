@@ -49,7 +49,8 @@ pub(super) struct Declaration {
     pub(super) unique: UniqueDeclarations,
     pub(super) derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
-    /// The sides and key of a pair relation (LOOKUP-27).
+    /// The sides and key of a pair relation (LOOKUP-27), or the dataset
+    /// and count of a counted relation (LOOKUP-29).
     pub(super) pair: Option<pairs::PairDeclaration>,
     /// The `key` path of a row driver, which declares no key, so a read of it
     /// as a lookup is refused there (LOOKUP-3, ROW-2).
@@ -1651,12 +1652,15 @@ fn derivation_order(spec: &ast::Spec, calls: bool) -> Result<Vec<usize>, Prepare
             }
         }
         // A pair relation reads the records of the intermediates its sides
-        // name, and an intermediate over a pair relation reads the
-        // relation's records (LOOKUP-27).
-        let relations = match &item.inner_join {
-            Some(right) => vec![&item.dataset, right],
-            None if spec.pair_relation(&item.dataset.name).is_some() => vec![&item.dataset],
-            None => Vec::new(),
+        // name, a counted relation those of its dataset, and an intermediate
+        // over a pair relation reads the relation's records (LOOKUP-27,
+        // LOOKUP-29).
+        let relations: Vec<&ast::Named> = if item.pairs() {
+            item.sides().collect()
+        } else if spec.pair_relation(&item.dataset.name).is_some() {
+            vec![&item.dataset]
+        } else {
+            Vec::new()
         };
         for relation in relations {
             if let Some(&dependency) = indices.get(relation.name.as_str()) {

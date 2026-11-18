@@ -40,6 +40,16 @@ pub enum DatasetFinding<'a> {
         value: &'a Value,
         fields: &'a [String],
     },
+    /// A record of a counted relation's dataset whose count is no count
+    /// (LOOKUP-29): missing, written `None`, or negative. `record` is the
+    /// record's one-based position among those the dataset gives.
+    RepeatCount {
+        path: &'a str,
+        dataset: &'a str,
+        intermediate: &'a str,
+        record: usize,
+        count: Option<i64>,
+    },
     BaselineAmbiguity {
         path: &'a str,
         column: &'a str,
@@ -90,6 +100,17 @@ impl DatasetFinding<'_> {
                     return Err(ProjectionError::InvalidContext);
                 }
                 (path, C::DatasetMultipleMatches)
+            }
+            Self::RepeatCount {
+                path,
+                record,
+                count: read,
+                ..
+            } => {
+                if record == 0 || read.is_some_and(|read| read >= 0) {
+                    return Err(ProjectionError::InvalidContext);
+                }
+                (path, C::LookupRepeatCount)
             }
             Self::BaselineAmbiguity {
                 path, date, count, ..
@@ -158,6 +179,22 @@ impl DatasetFinding<'_> {
                 (
                     "fields".into(),
                     JsonValue::Array(fields.iter().map(|field| text(field)).collect()),
+                ),
+            ]
+            .into(),
+            Self::RepeatCount {
+                dataset,
+                intermediate,
+                record,
+                count: read,
+                ..
+            } => [
+                ("intermediate".into(), text(intermediate)),
+                ("dataset".into(), text(dataset)),
+                ("record".into(), count(record)),
+                (
+                    "count".into(),
+                    read.map_or(JsonValue::Null, JsonValue::from),
                 ),
             ]
             .into(),

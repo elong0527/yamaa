@@ -271,6 +271,9 @@ conditions:
   invalid_regex:
     phases: [validation]
     message: "the pattern '{pattern}' is not a valid regular expression"
+  invalid_repeat_count:
+    phases: [join]
+    message: "relation {intermediate} reads the count {count} for record {record} of {dataset}, and a count is zero or more"
   invalid_size:
     phases: [validation]
     message: "the value does not have the size {size}"

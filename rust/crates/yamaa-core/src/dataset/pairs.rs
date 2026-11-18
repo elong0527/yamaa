@@ -5,6 +5,11 @@
 //! records, the key pairs that match them, the joined record a pair's filter
 //! and derivations read, and the filter. The relation's derivations and
 //! `unique` checks are its intermediate's own.
+//!
+//! A counted relation (LOOKUP-29), a named intermediate that writes
+//! `repeat`, is the same join with a generated right side: each left record
+//! pairs with each whole number from 1 to the count it gives, and the
+//! joined record is the left side's fields, then the number.
 use super::*;
 
 /// The records of one side of a pair relation.
@@ -16,6 +21,19 @@ pub enum PairRecords {
     /// The records a row template driving on this intermediate reads: its
     /// filtered records, its derivations complete (ROW-2).
     Intermediate(usize),
+    /// The right side of a counted relation, which no relation stores: for
+    /// each left record, one record for each whole number from 1 to the
+    /// count the left record gives, holding that number (LOOKUP-29).
+    Counted(PairCount),
+}
+
+/// The count of a counted relation (LOOKUP-29): the value each left record
+/// gives, an `int`, and the path a count that is no count is reported at,
+/// `intermediates.<id>.repeat.count`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PairCount {
+    pub value: PairValue,
+    pub path: String,
 }
 
 /// One side of a pair relation.
@@ -25,11 +43,12 @@ pub struct PairSide {
     pub name: String,
     pub records: PairRecords,
     /// The side's visible fields, in its own layout, in the order they fill
-    /// the joined record.
+    /// the joined record. A generated side's one field is its number.
     pub columns: Vec<usize>,
 }
 
-/// The left value of one key pair.
+/// A value each left record gives: the left value of one key pair, or a
+/// counted relation's count.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PairValue {
     /// A field of the joined record from the left side.
@@ -59,9 +78,9 @@ pub struct PairJoin {
     /// The joined record: the left side's visible fields, then the right
     /// side's.
     pub schema: TableSchema,
-    /// The values a key's expressions give each left record, evaluated
-    /// before the pairing (LOOKUP-6): a donor plan whose stored fields are
-    /// the left side's visible fields.
+    /// The values a key's expressions, or a count's, give each left record,
+    /// evaluated before the pairing (LOOKUP-6, LOOKUP-29): a donor plan
+    /// whose stored fields are the left side's visible fields.
     pub values: Option<IntermediateDerivations>,
     /// The pair filter over the joined record, asked of every matching pair
     /// before any derivation is evaluated.

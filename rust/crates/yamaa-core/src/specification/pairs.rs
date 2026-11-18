@@ -10,10 +10,18 @@
 //! through its port, as it reads an input's. A side is an input or an
 //! intermediate a row template could drive on (ROW-2); preflight refuses
 //! every other.
+//!
+//! A counted relation (LOOKUP-29), a named intermediate that writes
+//! `repeat`, is a pair relation whose right side is generated: each left
+//! record pairs with each whole number from 1 to the count it gives. It
+//! declares no key; its count is read of the left record as a key mapping's
+//! value is, and its right side's one field, the number, is read by the
+//! bare name its `index` gives.
 use super::*;
 use crate::dataset::{
-    Intermediate, IntermediateDerivations, IntermediateSource, IntermediateUnique, PairJoin,
-    PairKey, PairRecords, PairSide, PairValue, RelationPredicate, SecondarySource, SourceSchemas,
+    Intermediate, IntermediateDerivations, IntermediateSource, IntermediateUnique, PairCount,
+    PairJoin, PairKey, PairRecords, PairSide, PairValue, RelationPredicate, SecondarySource,
+    SourceSchemas,
 };
 use crate::diagnostic::lookup;
 use crate::result_type::ResultType;
@@ -49,21 +57,69 @@ pub(super) struct KeyDeclaration {
     pub path: String,
 }
 
+/// A counted relation's `repeat` as written (LOOKUP-29).
+#[derive(Debug)]
+pub(super) struct CountDeclaration {
+    /// The count each left record gives, read as a key mapping's value is.
+    pub count: LeftValue,
+    /// `intermediates.<id>.repeat.count`, at which the count's refusals are
+    /// reported.
+    pub path: String,
+    /// The name the number of each record is read by.
+    pub index: String,
+}
+
+/// The right side as written: the relation `inner_join` names, or the whole
+/// numbers `repeat` generates for each left record.
+#[derive(Debug)]
+pub(super) enum RightDeclaration {
+    Relation(SideDeclaration),
+    Counted(CountDeclaration),
+}
+
 /// A pair relation's sides and key as written, and its position among the
 /// pair relations the specification declares, which places its records
-/// after the inputs (LOOKUP-27).
+/// after the inputs (LOOKUP-27). A counted relation declares no key
+/// (LOOKUP-29).
 #[derive(Debug)]
 pub(super) struct PairDeclaration {
     pub left: SideDeclaration,
-    pub right: SideDeclaration,
+    pub right: RightDeclaration,
     pub keys: Vec<KeyDeclaration>,
     pub slot: usize,
+}
+
+/// The left value written at `value` in the field at `field` (LOOKUP-6): a
+/// name written alone names a field of the left side `left` through its
+/// qualifier, or nothing; any other value is an expression over the left
+/// record, admitted as a lookup key's match value is, and what binding does
+/// not support of it is collected in `extra`.
+fn left_value(
+    spec: &ast::Spec,
+    field: ast::Meta,
+    value: ExprId,
+    left: &str,
+    project: Option<&functions::Prepared>,
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<LeftValue, PrepareError> {
+    let alone = spec.expr(value).meta.path == field.path;
+    Ok(match &spec.expr(value).kind {
+        ExprKind::Ref(name) if alone => match name.as_str().split_once('.') {
+            Some((owner, field)) if owner == left => LeftValue::Field(field.into()),
+            _ => LeftValue::Name(name.as_str().into()),
+        },
+        _ => {
+            match_values::admit_value(spec, field, value, project, extra)?;
+            LeftValue::Expression(value)
+        }
+    })
 }
 
 /// The sides and key of the pair relation `item`, the `slot`-th the
 /// specification declares, as written. A mapping's expression value is
 /// admitted as a lookup key's match value is (LOOKUP-6); what binding does
-/// not support of it is collected in `extra`.
+/// not support of it is collected in `extra`. A counted relation's count is
+/// read as such a value is (LOOKUP-29).
 pub(super) fn prepare(
     spec: &ast::Spec,
     item: &ast::Intermediate,
@@ -71,12 +127,32 @@ pub(super) fn prepare(
     project: Option<&functions::Prepared>,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<PairDeclaration, PrepareError> {
-    let right = item.inner_join.as_ref().ok_or(PrepareError::Internal)?;
     let path = checks::render(spec, item.meta);
     let left = SideDeclaration {
         name: item.dataset.name.clone(),
         path: checks::render(spec, item.dataset.meta),
     };
+    if let Some(repeat) = &item.repeat {
+        let count = left_value(
+            spec,
+            repeat.count_field,
+            repeat.count,
+            &left.name,
+            project,
+            extra,
+        )?;
+        return Ok(PairDeclaration {
+            left,
+            right: RightDeclaration::Counted(CountDeclaration {
+                count,
+                path: checks::render(spec, repeat.count_field),
+                index: repeat.index.name.clone(),
+            }),
+            keys: Vec::new(),
+            slot,
+        });
+    }
+    let right = item.inner_join.as_ref().ok_or(PrepareError::Internal)?;
     let right = SideDeclaration {
         name: right.name.clone(),
         path: checks::render(spec, right.meta),
@@ -94,24 +170,12 @@ pub(super) fn prepare(
         Some(ast::JoinKey::Pairs { pairs, .. }) => pairs
             .iter()
             .map(|(column, value)| {
+                let left = left_value(spec, column.meta, *value, &left.name, project, extra)?;
                 // A name written alone is refused at `key`, any other value
                 // at its own entry (LOOKUP-5).
-                let alone = spec.expr(*value).meta.path == column.meta.path;
-                let (left, path) = match &spec.expr(*value).kind {
-                    ExprKind::Ref(name) if alone => (
-                        match name.as_str().split_once('.') {
-                            Some((owner, field)) if owner == left.name => {
-                                LeftValue::Field(field.into())
-                            }
-                            _ => LeftValue::Name(name.as_str().into()),
-                        },
-                        key.clone(),
-                    ),
-                    _ => {
-                        let path = checks::render(spec, column.meta);
-                        match_values::admit_value(spec, column.meta, *value, project, extra)?;
-                        (LeftValue::Expression(*value), path)
-                    }
+                let path = match left {
+                    LeftValue::Expression(_) => checks::render(spec, column.meta),
+                    LeftValue::Field(_) | LeftValue::Name(_) => key.clone(),
                 };
                 Ok(KeyDeclaration {
                     right: column.name.clone(),
@@ -124,7 +188,7 @@ pub(super) fn prepare(
     };
     Ok(PairDeclaration {
         left,
-        right,
+        right: RightDeclaration::Relation(right),
         keys,
         slot,
     })
@@ -138,9 +202,10 @@ struct Field {
     kind: Option<ColumnType>,
 }
 
-/// One side's records and their visible fields.
+/// One side's records and their visible fields. A counted relation's
+/// generated side has no records until its count binds (LOOKUP-29).
 struct BoundSide {
-    records: PairRecords,
+    records: Option<PairRecords>,
     fields: Vec<Field>,
 }
 
@@ -189,7 +254,7 @@ fn side(
             std::cmp::Ordering::Greater => index,
         };
         return Ok(Some(BoundSide {
-            records: PairRecords::Source(port),
+            records: Some(PairRecords::Source(port)),
             fields,
         }));
     }
@@ -256,35 +321,59 @@ fn side(
         return Ok(None);
     }
     Ok(Some(BoundSide {
-        records: PairRecords::Intermediate(index),
+        records: Some(PairRecords::Intermediate(index)),
         fields,
     }))
 }
 
-/// A field of the joined record by its qualified name: `L.f` reads the left
-/// side's field and `R.g` the right side's, at their positions in the
-/// record.
+/// A field of the joined record by the name that reads it: `L.f` reads the
+/// left side's field and `R.g` the right side's, at their positions in the
+/// record. A counted relation's right side is generated and has no
+/// qualifier: its one field, the number, is read by its bare name
+/// (LOOKUP-29).
 struct Joined<'a> {
     left: &'a str,
-    right: &'a str,
+    right: Option<&'a str>,
     left_fields: &'a [Field],
     right_fields: &'a [Field],
 }
 
 impl Joined<'_> {
     fn field(&self, name: &str) -> Option<(usize, Option<ColumnType>)> {
-        let (owner, field) = name.split_once('.')?;
-        let (fields, offset) = if owner == self.left {
-            (self.left_fields, 0)
-        } else if owner == self.right {
-            (self.right_fields, self.left_fields.len())
-        } else {
-            return None;
+        let (fields, offset, field) = match name.split_once('.') {
+            Some((owner, field)) if owner == self.left => (self.left_fields, 0, field),
+            Some((owner, field)) if Some(owner) == self.right => {
+                (self.right_fields, self.left_fields.len(), field)
+            }
+            None if self.right.is_none() => (self.right_fields, self.left_fields.len(), name),
+            _ => return None,
         };
         fields
             .iter()
             .position(|candidate| candidate.name == field)
             .map(|position| (offset + position, fields[position].kind))
+    }
+    /// The joined record's stored fields: the left side's, then the right
+    /// side's. The generated side's field keeps the name that reads it, so
+    /// a derivation reads it as it reads a derivation declared before it.
+    fn schema(&self) -> Result<TableSchema, BindError> {
+        let mut columns = Vec::new();
+        for (offset, field) in self.left_fields.iter().enumerate() {
+            columns.push(Column {
+                name: format!("\0left{offset}"),
+                kind: field.kind.unwrap_or(ColumnType::Str),
+            });
+        }
+        for (offset, field) in self.right_fields.iter().enumerate() {
+            columns.push(Column {
+                name: match self.right {
+                    Some(_) => format!("\0right{offset}"),
+                    None => field.name.clone(),
+                },
+                kind: field.kind.unwrap_or(ColumnType::Str),
+            });
+        }
+        TableSchema::new(columns).map_err(|_| BindError::Internal)
     }
 }
 
@@ -292,7 +381,8 @@ impl Joined<'_> {
 /// pairs, its filter and its derivations over the joined record, its
 /// exposed fields and its `unique` checks. Gives the relation's
 /// intermediate, which materializes it, and the fields its port exposes,
-/// each none when a finding refuses it.
+/// each none when a finding refuses it. A counted relation binds its count
+/// where a pair relation binds its key (LOOKUP-29).
 pub(super) fn bind(
     declaration: &intermediates::Declaration,
     pair: &PairDeclaration,
@@ -301,32 +391,53 @@ pub(super) fn bind(
 ) -> Result<(Option<Intermediate>, Option<TableSchema>), BindError> {
     let name = declaration.name.as_str();
     let left = side(&pair.left, cx, findings)?;
-    let right = side(&pair.right, cx, findings)?;
-    let (Some(left), Some(right)) = (left, right) else {
+    let right = match &pair.right {
+        RightDeclaration::Relation(declared) => side(declared, cx, findings)?,
+        // The generated side holds one field, each record's number.
+        RightDeclaration::Counted(count) => Some(BoundSide {
+            records: None,
+            fields: vec![Field {
+                name: count.index.clone(),
+                column: 0,
+                kind: Some(ColumnType::Int),
+            }],
+        }),
+    };
+    let (Some(left), Some(mut right)) = (left, right) else {
         return Ok((None, Some(declared_fields(declaration)?)));
     };
     let before = findings.len();
-    let mut columns = Vec::new();
-    for (offset, field) in left.fields.iter().enumerate() {
-        columns.push(Column {
-            name: format!("\0left{offset}"),
-            kind: field.kind.unwrap_or(ColumnType::Str),
-        });
-    }
-    for (offset, field) in right.fields.iter().enumerate() {
-        columns.push(Column {
-            name: format!("\0right{offset}"),
-            kind: field.kind.unwrap_or(ColumnType::Str),
-        });
-    }
-    let joined_schema = TableSchema::new(columns).map_err(|_| BindError::Internal)?;
+    let (right_name, keys, values) = match &pair.right {
+        RightDeclaration::Relation(declared) => {
+            let sides = (
+                (pair.left.name.as_str(), &left),
+                (declared.name.as_str(), &right),
+            );
+            let (keys, values) = bind_keys(&pair.keys, name, sides, cx, findings)?;
+            (declared.name.as_str(), keys, values)
+        }
+        RightDeclaration::Counted(count) => {
+            let (value, values) =
+                bind_count(count, name, &pair.left.name, &left.fields, cx, findings)?;
+            right.records = value.map(|value| {
+                PairRecords::Counted(PairCount {
+                    value,
+                    path: count.path.clone(),
+                })
+            });
+            (count.index.as_str(), Vec::new(), values)
+        }
+    };
     let joined = Joined {
         left: &pair.left.name,
-        right: &pair.right.name,
+        right: match &pair.right {
+            RightDeclaration::Relation(declared) => Some(&declared.name),
+            RightDeclaration::Counted(_) => None,
+        },
         left_fields: &left.fields,
         right_fields: &right.fields,
     };
-    let (keys, values) = bind_keys(pair, name, &left, &right, cx, findings)?;
+    let joined_schema = joined.schema()?;
     let filter = match &declaration.filter {
         Some(Ok(plan)) => bind_filter(plan, name, &joined, cx, findings)?,
         Some(Err(CompileError::Invalid {
@@ -423,14 +534,18 @@ pub(super) fn bind(
         return Ok((None, Some(declared_fields(declaration)?)));
     }
     let fields = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
-    let side = |bound: BoundSide, name: &str| PairSide {
-        name: name.into(),
-        records: bound.records,
-        columns: bound.fields.iter().map(|field| field.column).collect(),
+    // A side without records is the generated side of a count a finding
+    // refused, which returned above.
+    let side = |bound: BoundSide, name: &str| {
+        Ok::<_, BindError>(PairSide {
+            name: name.into(),
+            records: bound.records.ok_or(BindError::Internal)?,
+            columns: bound.fields.iter().map(|field| field.column).collect(),
+        })
     };
     let join = PairJoin {
-        left: side(left, &pair.left.name),
-        right: side(right, &pair.right.name),
+        left: side(left, &pair.left.name)?,
+        right: side(right, right_name)?,
         keys,
         schema: joined_schema,
         values,
@@ -465,22 +580,22 @@ pub(super) fn bind(
 /// record's key values when an expression gives one (LOOKUP-6). A right
 /// side's field the right side does not have, a left field the left side
 /// does not have, a name that reads no left field and a pair whose types
-/// cannot compare fail at the pair's path (LOOKUP-27, LOOKUP-9).
+/// cannot compare fail at the pair's path (LOOKUP-27, LOOKUP-9). Each of
+/// `sides` is a side's name and its records' fields, the left side first.
 fn bind_keys(
-    pair: &PairDeclaration,
+    declared: &[KeyDeclaration],
     name: &str,
-    left: &BoundSide,
-    right: &BoundSide,
+    sides: ((&str, &BoundSide), (&str, &BoundSide)),
     cx: &Context<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(Vec<PairKey>, Option<IntermediateDerivations>), BindError> {
+    let ((left_name, left), (right_name, right)) = sides;
     let push = |findings: &mut Vec<BindFinding>, diagnostic| {
         findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
             diagnostic,
         )))
     };
-    let expressions = pair
-        .keys
+    let expressions = declared
         .iter()
         .filter_map(|key| match key.left {
             LeftValue::Expression(expr) => Some((expr, key.path.as_str())),
@@ -491,9 +606,12 @@ fn bind_keys(
         None
     } else {
         bind_values(
-            name,
-            &pair.left.name,
-            &left.fields,
+            LeftRecord {
+                name,
+                left: left_name,
+                fields: &left.fields,
+                reference: lookup::pair_reference,
+            },
             &expressions,
             cx,
             findings,
@@ -501,7 +619,7 @@ fn bind_keys(
     };
     let mut keys = Vec::new();
     let mut expression = 0;
-    for key in &pair.keys {
+    for key in declared {
         let right_field = right
             .fields
             .iter()
@@ -509,11 +627,7 @@ fn bind_keys(
         if right_field.is_none() {
             push(
                 findings,
-                lookup::pair_key_reference(
-                    &key.path,
-                    name,
-                    &format!("{}.{}", pair.right.name, key.right),
-                ),
+                lookup::pair_key_reference(&key.path, name, &format!("{right_name}.{}", key.right)),
             );
         }
         let left_value = match &key.left {
@@ -528,7 +642,7 @@ fn bind_keys(
                         lookup::pair_key_reference(
                             &key.path,
                             name,
-                            &format!("{}.{field}", pair.left.name),
+                            &format!("{left_name}.{field}"),
                         ),
                     );
                 }
@@ -564,7 +678,7 @@ fn bind_keys(
                 lookup::pair_key_type(
                     &key.path,
                     name,
-                    &format!("{}.{}", pair.right.name, key.right),
+                    &format!("{right_name}.{}", key.right),
                     expected,
                     actual,
                 ),
@@ -575,10 +689,91 @@ fn bind_keys(
             left: left_value,
             right: left.fields.len() + right_field,
             path: key.path.clone(),
-            source: format!("{}.{}", pair.right.name, key.right),
+            source: format!("{right_name}.{}", key.right),
         });
     }
     Ok((keys, values.map(|(plan, _)| plan)))
+}
+
+/// The count each left record gives a counted relation (LOOKUP-29): a field
+/// of the left side, or the value of the plan that evaluates an expression
+/// over each left record before any record is built, as it evaluates a
+/// key's (LOOKUP-6). A name written alone that reads no field of the left
+/// side, and a count whose result type is not `int` alone, fail at
+/// `repeat.count`. A count that reads a field whose type no source decides
+/// yet is compared with nothing: `run()`, whose captured schemas decide
+/// every stored type, refuses it.
+fn bind_count(
+    count: &CountDeclaration,
+    name: &str,
+    left: &str,
+    fields: &[Field],
+    cx: &Context<'_>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<(Option<PairValue>, Option<IntermediateDerivations>), BindError> {
+    let refuse = |findings: &mut Vec<BindFinding>, diagnostic| {
+        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+            diagnostic,
+        )));
+        Ok((None, None))
+    };
+    let undecided = |field: &str| {
+        fields
+            .iter()
+            .any(|candidate| candidate.name == field && candidate.kind.is_none())
+    };
+    let (value, kind, plan, decided) = match &count.count {
+        LeftValue::Field(field) => {
+            let Some(position) = fields.iter().position(|candidate| candidate.name == *field)
+            else {
+                return refuse(
+                    findings,
+                    lookup::repeat_count_reference(&count.path, name, &format!("{left}.{field}")),
+                );
+            };
+            (
+                PairValue::Field(position),
+                ResultType::declared(fields[position].kind),
+                None,
+                !undecided(field),
+            )
+        }
+        LeftValue::Name(written) => {
+            return refuse(
+                findings,
+                lookup::repeat_count_reference(&count.path, name, written),
+            );
+        }
+        LeftValue::Expression(expr) => {
+            let record = LeftRecord {
+                name,
+                left,
+                fields,
+                reference: lookup::repeat_count_reference,
+            };
+            let Some((plan, types)) =
+                bind_values(record, &[(*expr, count.path.as_str())], cx, findings)?
+            else {
+                return Ok((None, None));
+            };
+            let decided = !cx
+                .tree
+                .spec()
+                .reads(*expr, cx.tree.donor(name)?)
+                .iter()
+                .any(|read| read.name.owner() == Some(left) && undecided(read.name.field()));
+            (
+                PairValue::Value(fields.len()),
+                types[0],
+                Some(plan),
+                decided,
+            )
+        }
+    };
+    if decided && kind != ResultType::INT {
+        return refuse(findings, lookup::repeat_count_type(&count.path, name, kind));
+    }
+    Ok((Some(value), plan))
 }
 
 /// Each side's fields as a joined record's catalog reads them: `(field,
@@ -613,14 +808,20 @@ fn joined_catalog(
         .with_record_types(record_types.to_vec()))
 }
 
+/// The finding of a name that binds nothing, from its path, the relation
+/// and the name: a pair relation's, or a counted relation's count's.
+type Reference = fn(&str, &str, &str) -> crate::diagnostic::Diagnostic;
+
 /// What the entries of one donor plan over a joined record bind in: the
-/// plan's catalog and fields, the side whose records drive it, and the pair
-/// relation whose findings they are.
+/// plan's catalog and fields, the side whose records drive it, the pair
+/// relation whose findings they are, and the finding of a name that binds
+/// nothing.
 struct Entries<'e> {
     catalog: &'e Catalog,
     output: &'e TableSchema,
     driver: &'e str,
     name: &'e str,
+    reference: Reference,
 }
 
 impl Entries<'_> {
@@ -661,7 +862,7 @@ impl Entries<'_> {
             reported: false,
         }
         .bind(expr, column)?;
-        reference_findings(&mut findings[start..], self.name);
+        reference_findings(&mut findings[start..], self.name, self.reference);
         Ok(expression)
     }
 }
@@ -711,18 +912,34 @@ fn donor_plan(
     }
 }
 
+/// The left records a plan of values is evaluated over: the relation whose
+/// values they are, the left side's name and visible fields, and the
+/// finding of a name a value reads that binds nothing.
+#[derive(Clone, Copy)]
+struct LeftRecord<'a> {
+    name: &'a str,
+    left: &'a str,
+    fields: &'a [Field],
+    reference: Reference,
+}
+
 /// The plan of each left record's key values (LOOKUP-6): a donor plan over
 /// the left side's visible fields, one untyped value for each expression of
 /// the key's mapping, each reading the left side's fields by its qualifier,
 /// and each value's result type (EXPR-14). None when a finding refuses one.
+/// A counted relation's count is one such value (LOOKUP-29).
 fn bind_values(
-    name: &str,
-    left: &str,
-    fields: &[Field],
+    record: LeftRecord<'_>,
     expressions: &[(ExprId, &str)],
     cx: &Context<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Plan>, BindError> {
+    let LeftRecord {
+        name,
+        left,
+        fields,
+        reference,
+    } = record;
     let before = findings.len();
     let scope = cx.tree.donor(name)?;
     let width = fields.len();
@@ -763,6 +980,7 @@ fn bind_values(
         output: &output,
         driver: left,
         name,
+        reference,
     };
     let available: Vec<usize> = (0..width).collect();
     let mut assignments = Vec::new();
@@ -793,7 +1011,8 @@ fn bind_values(
 }
 
 /// The pair filter over the joined record: each name it reads is a field of
-/// a side, qualified by the side (LOOKUP-27), typed by the side.
+/// a side, qualified by the side (LOOKUP-27), typed by the side; a counted
+/// relation's reads the number by its bare name (LOOKUP-29).
 fn bind_filter(
     plan: &CompiledExpression,
     name: &str,
@@ -852,7 +1071,8 @@ fn bind_filter(
 /// The derivations over the joined record, as a donor plan whose stored
 /// fields are the joined record's: each reads a side's field by its
 /// qualified name, or a derivation declared before it by its bare name, and
-/// a typed entry converts its result (LOOKUP-15). Gives the plan and each
+/// a typed entry converts its result (LOOKUP-15). A counted relation's read
+/// the number by its bare name too (LOOKUP-29). Gives the plan and each
 /// derivation's field type, none when a finding refuses one.
 fn bind_derivations(
     declaration: &intermediates::Declaration,
@@ -871,10 +1091,11 @@ fn bind_derivations(
     let mut fields = stored.columns().to_vec();
     for derivation in &declaration.derivations {
         let types = |read: &str| -> ResultType {
+            if let Some((_, kind)) = joined.field(read) {
+                return ResultType::declared(kind);
+            }
             if read.contains('.') {
-                return joined
-                    .field(read)
-                    .map_or(ResultType::UNKNOWN, |(_, kind)| ResultType::declared(kind));
+                return ResultType::UNKNOWN;
             }
             fields[width..]
                 .iter()
@@ -900,16 +1121,17 @@ fn bind_derivations(
         .collect();
     let left = catalog_fields(joined.left_fields, 0);
     let right = catalog_fields(joined.right_fields, joined.left_fields.len());
-    let catalog = joined_catalog(
-        &output,
-        &record_types,
-        &[(joined.left, &left), (joined.right, &right)],
-    )?;
+    // The generated side has no qualifier: the record's own field, named as
+    // the index names it, reads the number.
+    let mut sides = vec![(joined.left, left.as_slice())];
+    sides.extend(joined.right.map(|name| (name, right.as_slice())));
+    let catalog = joined_catalog(&output, &record_types, &sides)?;
     let entries = Entries {
         catalog: &catalog,
         output: &output,
         driver: joined.left,
         name,
+        reference: lookup::pair_reference,
     };
     let mut assignments = Vec::new();
     let mut available: Vec<usize> = (0..width).collect();
@@ -971,8 +1193,8 @@ fn bind_derivations(
 /// A name a pair relation's key value or derivation reads that binds
 /// nothing: no field of a side by its qualifier and no derivation declared
 /// before it (LOOKUP-27). The shared binders report it at the operand's
-/// path.
-fn reference_findings(findings: &mut [BindFinding], intermediate: &str) {
+/// path; `reference` gives the finding of the relation that reads it.
+fn reference_findings(findings: &mut [BindFinding], intermediate: &str, reference: Reference) {
     for finding in findings {
         // The pair relation's own cause does not keep a withheld wording.
         if matches!(finding, BindFinding::Withheld(inner) if matches!(
@@ -983,7 +1205,7 @@ fn reference_findings(findings: &mut [BindFinding], intermediate: &str) {
         )) {
             finding.release();
         }
-        let reference = match finding {
+        let read = match finding {
             BindFinding::UnknownReference { path, name }
             | BindFinding::OutputReference { path, name, .. }
             | BindFinding::QualifiedReference { path, name, .. } => {
@@ -991,8 +1213,8 @@ fn reference_findings(findings: &mut [BindFinding], intermediate: &str) {
             }
             _ => None,
         };
-        if let Some((path, name)) = reference {
-            *finding = BindFinding::Lookup(LookupFinding::from_diagnostic(lookup::pair_reference(
+        if let Some((path, name)) = read {
+            *finding = BindFinding::Lookup(LookupFinding::from_diagnostic(reference(
                 &path,
                 intermediate,
                 &name,
