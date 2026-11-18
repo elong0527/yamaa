@@ -5,6 +5,24 @@ pub mod scratch;
 
 pub use scratch::Scratch;
 
+/// Exact-once edits on any text: `body.edit(from, to)` fails the test when
+/// `from` occurs other than once, so a variant can never silently miss.
+pub trait Edit {
+    fn edit(&self, from: &str, to: &str) -> String;
+}
+
+impl Edit for str {
+    #[track_caller]
+    fn edit(&self, from: &str, to: &str) -> String {
+        assert_eq!(
+            self.matches(from).count(),
+            1,
+            "expected exactly one {from:?}"
+        );
+        self.replacen(from, to, 1)
+    }
+}
+
 /// Every issue whole: its severity, phase, condition, rule, spec paths,
 /// context, source span and operand route; its message is not frozen.
 pub fn issues(diagnostics: &[yamaa::Diagnostic]) -> String {

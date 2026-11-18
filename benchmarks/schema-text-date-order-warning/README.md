@@ -23,22 +23,20 @@ one with no time.
   sorts after it, and subject S2's sample at `2025-03-11T07:30` takes the
   dose of that day, which has no time.
 
-**Lookups:** `LAST_DOSE` names each sample's latest dose at or before it,
-matched on the subject, narrowed by its filter and chosen by its order.
-
 The run report (`adpc-checks.csv`) has one row per item the run handled, each
 naming the dataset (`ARTIFACT`), the kind of item (`KIND`), where the spec
 states it (`SPEC_PATH`) and the item's name (`NAME`): the run and its outcome
 (`OUTCOME`), the input datasets read, the samples built, the two counts of
 the dose read, each naming the column it feeds (`TARGET`), and one row per
-output column. Two warnings follow, one where the lookup's filter compares
-the dose and sample texts and one where its order compares two doses. Each
-has no label (`ID`) or column (`TARGET`), names the rule (`RULE`), its
-`SEVERITY` and the condition (`CONDITION`), and counts its place as one unit
-(`COUNT`, `TOTAL`, `KEYS`); its `DETAILS` name the least pair of texts that
-text order decided there, the shorter first.
+output column. Two warnings follow: one where a dose's start text was
+compared with a sample's to keep the doses no later than it, and one where
+two doses' start texts were compared to choose the latest. Neither has a
+label (`ID`) or a column (`TARGET`); each names the rule it reports
+(`RULE`), its `SEVERITY` and what it found (`CONDITION`), and counts its
+place as one unit (`COUNT`, `TOTAL`, `KEYS`). Its `DETAILS` name the least
+pair of texts whose order the text, not the time, decided there, the shorter
+first.
 
 **Note:** the warnings change no value and fail nothing. Reading the sample
-time as a `datetime` and completing each dose start with `impute`, choosing a
-time for a dose recorded without one, compares times instead and gives no
-warning.
+time as a date and time, and completing each dose start recorded without a
+time to a chosen time of day, compares times instead and gives no warning.

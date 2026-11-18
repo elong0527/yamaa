@@ -325,11 +325,7 @@ fn collected(text: &str) -> Result<Option<Collected>, NotCollected> {
             NotCollected::Invalid
         });
     };
-    let prefix = fields
-        .iter()
-        .take_while(|field| field.is_some())
-        .map(|field| field.expect("known prefix field"))
-        .collect::<Vec<_>>();
+    let prefix = crate::iso8601::known_prefix(&fields);
     let field = |index: usize| prefix.get(index).map(|&value| value as u8);
     let Some(&year) = prefix.first() else {
         return Ok(None);

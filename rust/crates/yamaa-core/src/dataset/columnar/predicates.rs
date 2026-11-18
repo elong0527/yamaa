@@ -940,7 +940,7 @@ impl<'r, E> ColumnResolver for RowColumns<'r, '_, E> {
 /// none, and each record evaluates through [`row_truth`], which reports the
 /// failure. Nothing is counted either way.
 pub(super) fn record_truths<'r, E>(
-    dates: &'r super::TextDates,
+    dates: &super::TextDates,
     predicate: &'r BoundPredicate,
     table: Table<'r, E>,
     records: &'r [usize],
@@ -964,17 +964,36 @@ pub(super) fn record_truths<'r, E>(
         .ok()
 }
 
+/// [`record_truths`] for a program that asks about more records than its
+/// rows may come to ask about one at a time: every position of a window's
+/// scope or of an output aggregate's range, where a row asks only about its
+/// own partition or group. What text order decides between date texts on a
+/// record no row comes to is not the run's to report (CHECK-27), so the
+/// program records apart from the run, and one that met such a pair answers
+/// none: each record is then asked, and its pair recorded, as a row reaches
+/// it.
+pub(super) fn record_truths_ahead<'r, E>(
+    predicate: &'r BoundPredicate,
+    table: Table<'r, E>,
+    records: &'r [usize],
+    columns: impl FnMut(usize) -> Operand<'r>,
+) -> Option<Vec<Truth>> {
+    let dates = super::TextDates::default();
+    let truths = record_truths(&dates, predicate, table, records, columns);
+    truths.filter(|_| dates.borrow().is_empty())
+}
+
 /// A predicate's operands over records of a table, read as `RowResolver`
 /// reads them.
-struct RecordColumns<'r, E, F> {
-    dates: &'r super::TextDates,
+struct RecordColumns<'d, 'r, E, F> {
+    dates: &'d super::TextDates,
     table: Table<'r, E>,
     records: &'r [usize],
     columns: F,
     bindings: &'r [Binding],
 }
 
-impl<'r, E, F: FnMut(usize) -> Operand<'r>> ColumnResolver for RecordColumns<'r, E, F> {
+impl<'r, E, F: FnMut(usize) -> Operand<'r>> ColumnResolver for RecordColumns<'_, 'r, E, F> {
     type Error = CellError<E>;
     type Column = Operand<'r>;
     fn column(&mut self, identifier: &str) -> Result<Option<Operand<'r>>, Self::Error> {

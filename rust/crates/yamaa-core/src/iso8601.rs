@@ -290,6 +290,12 @@ pub(crate) fn collected_bytes(bytes: &[u8]) -> Option<Vec<Field>> {
     (cursor.done() && fields.iter().any(Option::is_some)).then_some(fields)
 }
 
+/// The known prefix of collected date text's components: those before its
+/// first unknown one, which is the precision TIME-7 reads it to.
+pub(crate) fn known_prefix(fields: &[Field]) -> Vec<u16> {
+    fields.iter().map_while(|field| *field).collect()
+}
+
 /// The ISO 8601 form of a date or time submission data type (SUB-26).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Form {

@@ -1162,7 +1162,7 @@ fn observations<'a, C, E>(
         return dataset_failure(run, attempt, supplied, id);
     };
     let mut report = envelope(run, attempt, id)?;
-    let (mut checks, unexpected) = check_observations(
+    let (checks, unexpected) = check_observations(
         run,
         &success.verifications,
         yamaa_core::verification_diagnostics::Phase::Verification,
@@ -1171,16 +1171,6 @@ fn observations<'a, C, E>(
     if !unexpected.is_empty() {
         return Err(Error::InvalidObservation.into());
     }
-    // Text order deciding between collected date texts follows the
-    // declared checks, one warning per site (CHECK-27).
-    checks.extend(
-        yamaa_core::verification_diagnostics::text_date_observations(
-            &success.text_date_orders,
-            id.specification,
-        )
-        .into_iter()
-        .map(crate::project_diagnostic_projection::fact),
-    );
     set_handler_counts(&mut report, &execution.handler_counts);
     report["verifications"] = json!(checks);
     Ok(report)
