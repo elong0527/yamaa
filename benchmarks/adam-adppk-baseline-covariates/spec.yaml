@@ -212,7 +212,10 @@ verifications:
         (BMIBL IS NULL AND BSABL IS NULL AND (WTBL IS NULL OR HTBL IS NULL))
         OR (BMIBL > 0 AND BSABL > 0)
   - assert:
-      id: renal-function-needs-creatinine
+      id: clearance-needs-both-weight-and-creatinine
       require: >-
-        (CREATBL IS NULL AND CRCLBL IS NULL AND EGFRBL IS NULL)
-        OR (CRCLBL > 0 AND EGFRBL > 0)
+        (CRCLBL IS NULL AND (WTBL IS NULL OR CREATBL IS NULL))
+        OR CRCLBL > 0
+  - assert:
+      id: filtration-rate-needs-creatinine
+      require: "(EGFRBL IS NULL AND CREATBL IS NULL) OR EGFRBL > 0"
