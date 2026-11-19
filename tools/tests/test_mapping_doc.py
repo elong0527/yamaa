@@ -550,6 +550,48 @@ class LookupResolutionTests(unittest.TestCase):
         self.assertNotIn("ELEM", rule)
         self.assertIn("VSDTM falls within SESTDTC to SEENDTC", rule)
 
+    def test_range_match_states_the_declared_endpoint_closure(self):
+        # LOOKUP-9 includes each endpoint only when closed names that side.
+        for closed, lower, upper, expected in [
+            ("both", "LOW", "HIGH", "where X falls within LOW to HIGH"),
+            ("left", "LOW", "HIGH", "where X is LOW or more and X is less than HIGH"),
+            ("right", "LOW", "HIGH", "where X is more than LOW and X is HIGH or less"),
+            (
+                "neither",
+                "LOW",
+                "HIGH",
+                "where X is more than LOW and X is less than HIGH",
+            ),
+            ("both", 0, None, "where X is 0 or more"),
+            ("left", 0, None, "where X is 0 or more"),
+            ("right", 0, None, "where X is more than 0"),
+            ("neither", 0, None, "where X is more than 0"),
+            ("both", None, 0, "where X is 0 or less"),
+            ("left", None, 0, "where X is less than 0"),
+            ("right", None, 0, "where X is 0 or less"),
+            ("neither", None, 0, "where X is less than 0"),
+        ]:
+            with self.subTest(closed=closed, lower=lower, upper=upper):
+                node = {"value": "X", "closed": closed}
+                node.update(
+                    {
+                        k: v
+                        for k, v in (("lower", lower), ("upper", upper))
+                        if v is not None
+                    }
+                )
+                self.assertEqual(mapping_doc.between_clause(node), expected)
+
+    def test_previous_dose_sheet_excludes_a_dose_at_the_samples_time(self):
+        sheets = mapping_doc.mapping_sheets(load_spec("adam-adppk-relative-times"))
+        [(headers, rows)] = [
+            (h, r) for tab, _, h, r in sheets if tab == "row-construction"
+        ]
+        [sample] = [row for row in rows if row[0] == "concentration"]
+        dose = sample[headers.index("DOSEA")]
+        self.assertIn("where ADTM is more than ADTM", dose)
+        self.assertNotIn("ADTM is ADTM or more", dose)
+
     def test_lookup_reference_inside_a_predicate_is_resolved(self):
         rule = method_column("adam-adlb-end-of-treatment")["EOTFL"]
         self.assertNotIn("EOT_RANK", rule)

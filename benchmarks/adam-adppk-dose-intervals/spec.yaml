@@ -1,0 +1,133 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPPK
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float}
+base: EX
+filter: "EX.EXDOSE > 0"
+
+output:
+  path: adppk.csv
+  columns: [STUDYID, USUBJID, EXSEQ, ADTM, ATMF, EVID, AMT, II, ADDL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation: EX.EXSEQ
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+    derivation:
+      impute:
+        type: datetime
+        source: EX.EXSTDTC
+        time: first
+
+  # Minutes are the finest unit the study collects, so a time collected to
+  # the minute is not an imputed one.
+  - name: ATMF
+    type: str
+    label: Analysis Time Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ADTM
+        part: time
+        seconds_collected: false
+    verifications:
+      - allowed_values:
+          values: [H]
+
+  - name: EVID
+    type: int
+    label: Event ID
+    derivation: 1
+
+  - name: AMT
+    type: float
+    label: Actual Amount of Dose Received
+    derivation: EX.EXDOSE
+
+  # The last moment dosing covers: the end as collected, the end of its day
+  # when no time was collected, and the first administration itself when
+  # the record has no end.
+  - name: ENDCOL
+    type: datetime
+    label: End of Dosing as Collected
+    derivation:
+      impute:
+        type: datetime
+        source: EX.EXENDTC
+        time: last
+
+  - name: AENDTM
+    type: datetime
+    label: Analysis End Date/Time
+    derivation:
+      first_available:
+        sources: [ENDCOL, ADTM]
+
+  - name: FREQH
+    type: int
+    label: Hours Between Administrations of the Frequency
+    derivation:
+      mapping:
+        source: EX.EXDOSFRQ
+        dict: {QD: 24, BID: 12, ONCE: 0}
+
+  - name: SPANH
+    type: float
+    label: Hours from First Administration to End of Dosing
+    derivation:
+      diff:
+        type: datetime
+        start: ADTM
+        end: AENDTM
+        unit: hour
+
+  - name: ADDL
+    type: int
+    label: Number of Additional Doses
+    derivation:
+      case:
+        - when: "FREQH = 0"
+          then: 0
+        - otherwise: "FLOOR(SPANH / FREQH)"
+
+  - name: II
+    type: int
+    label: Dosing Interval (h)
+    derivation:
+      case:
+        - when: "ADDL = 0"
+          then: 0
+        - otherwise: FREQH
+
+verifications:
+  - row_count:
+      min: 7
+      max: 7
+  - assert:
+      id: dosing-does-not-end-before-it-starts
+      require: "SPANH >= 0"
+  - assert:
+      id: an-interval-goes-with-additional-doses
+      require: "(ADDL = 0 AND II = 0) OR (ADDL > 0 AND II > 0)"
+  - assert:
+      id: the-last-additional-dose-is-not-after-the-end
+      require: "ADDL * FREQH <= SPANH"
