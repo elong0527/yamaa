@@ -31,6 +31,15 @@ intermediates:
   - id: ADMIN
     dataset: EX
     repeat: {count: EX.EXDOSCNT, index: N}
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      EXSEQ: EX.EXSEQ
+      EXTRT: EX.EXTRT
+      EXDOSE: EX.EXDOSE
+      EXDOSU: EX.EXDOSU
+      ADOSEN: N
+      NDOSE: EX.EXDOSCNT
 ```
 
 To read the administrations by subject from another place, declare the

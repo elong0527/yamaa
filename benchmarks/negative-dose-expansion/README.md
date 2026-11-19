@@ -52,8 +52,13 @@ intermediates:
       STUDYID: COUNTED.STUDYID
       USUBJID: COUNTED.USUBJID
       EXSEQ: COUNTED.EXSEQ
-      NDOSE: COUNTED.EXDOSCNT
+      EXTRT: COUNTED.EXTRT
+      EXDOSE: COUNTED.EXDOSE
+      EXDOSU: COUNTED.EXDOSU
+      ASTDT: COUNTED.EXSTDTC
+      AENDT: COUNTED.EXENDTC
       ADOSEN: N
+      NDOSE: COUNTED.EXDOSCNT
 ```
 
 A row template that reads `ADMIN` then builds one row for each of

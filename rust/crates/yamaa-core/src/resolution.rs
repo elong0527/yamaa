@@ -356,7 +356,23 @@ impl<'a> Live<'a> {
         }
         let mut joined = BTreeSet::new();
         for read in spec.reads(root, scope) {
+            // A counted relation's generated number is local to its donor
+            // record (LOOKUP-29), so it neither keeps an output column alive
+            // nor orders that column before a read of the relation. Qualified
+            // dataset fields and current-row reads keep their own identities.
+            let generated_index = match read.scope {
+                Scope::Donor(index) => {
+                    spec.intermediates[index]
+                        .repeat
+                        .as_ref()
+                        .is_some_and(|repeat| {
+                            read.name.owner().is_none() && repeat.index.name == read.name.as_str()
+                        })
+                }
+                _ => false,
+            };
             if matches!(read.scope, Scope::Local(_))
+                || generated_index
                 || bounds.contains(&read.at)
                 || (reducers.contains(&read.at) && read.name.owner().is_none())
             {

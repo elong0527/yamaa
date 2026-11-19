@@ -34,6 +34,15 @@ intermediates:
   - id: ADMIN
     dataset: COUNTED
     repeat: {count: COUNTED.EXDOSCNT, index: N}
+    derivations:
+      STUDYID: COUNTED.STUDYID
+      USUBJID: COUNTED.USUBJID
+      EXSEQ: COUNTED.EXSEQ
+      EXTRT: COUNTED.EXTRT
+      EXDOSE: COUNTED.EXDOSE
+      EXDOSU: COUNTED.EXDOSU
+      ADOSEN: N
+      NDOSE: COUNTED.EXDOSCNT
 ```
 
 When it stands for a single administration, give it that count with
