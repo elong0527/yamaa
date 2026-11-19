@@ -240,6 +240,8 @@ pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("incompatible_input_type", "convert_to", "{spec_path} reads a value of type {actual}, which it does not accept (derive {source} with type: {convert_to} first, and read the derived value here)"),
     ("invalid_field_type", "hint", "{spec_path} has a value of the wrong type or form (expected {expected}; {hint})"),
     ("invalid_operation_count", "hint", "the {registry} entry declares {count} operations instead of exactly one ({hint})"),
+    ("key_dependency", "dependency", "key column {column} reads column {dependency}, which is not a key; without row templates a key reads only its base record's fields and the keys declared before it"),
+    ("missing_derivation", "rows", "no derivation gives column {column} its value in the row templates {rows}; derive it in each, as null where it takes no value, or on the column"),
     ("missing_input", "template_filter", "the string template reads {variable}, which is missing, and {template_filter} runs only after the row's derivations, so it cannot discard the row first"),
     ("multiple_matches", "field", "lookup {intermediate} finds {match_count} matching records named {field} in {dataset} and has no rule to choose one"),
     ("prohibited_function", "hint", "function {function} is not allowed here ({hint})"),

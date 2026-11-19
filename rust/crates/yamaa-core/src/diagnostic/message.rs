@@ -257,8 +257,10 @@ mod tests {
     /// `incompatible_input_type` on `hint` and then `left_type` (FORMULA-5)
     /// and on `convert_to` (TEXT-1), `invalid_operation_count` on `hint`
     /// (SCHEMA-7), `prohibited_function` on `hint` (FORMULA-13),
-    /// `invalid_field_type` on `hint` (SCHEMA-12) and `unknown_field` on
-    /// `hint` (LOOKUP-7); `qualified_identifier` (FORMULA-9) has no variant.
+    /// `invalid_field_type` on `hint` (SCHEMA-12), `unknown_field` on
+    /// `hint` (LOOKUP-7), `missing_derivation` on `rows` (SPEC-5) and
+    /// `key_dependency` on `dependency` (COLUMN-7); `qualified_identifier`
+    /// (FORMULA-9) has no variant.
     #[test]
     fn a_variant_replaces_the_default_message_when_its_key_is_present() {
         let template = ["rows.matched_only.derivations.TAGGED.str_template"];
@@ -284,6 +286,8 @@ mod tests {
         ];
         let filter = ["intermediates.FIRST.filter"];
         let arithmetic = ["columns.P.derivation"];
+        let amount = ["columns.AMT.derivation"];
+        let key = ["columns.ID.derivation"];
         for (code, path, context, expected) in [
             (
                 ConditionCode::ApplicationRejected,
@@ -444,6 +448,33 @@ mod tests {
                     ),
                 ],
                 "QUAL.Q is not a known field or reference at intermediates.FIRST.filter (a filter does not read intermediate QUAL; read QUAL.Q in the derivations of FIRST, and filter on that derivation qualified by Y)",
+            ),
+            (
+                ConditionCode::PreflightMissingDerivation,
+                &amount,
+                vec![("column", text("AMT"))],
+                "no derivation gives column AMT its value",
+            ),
+            (
+                ConditionCode::PreflightMissingRowDerivation,
+                &amount,
+                vec![
+                    ("column", text("AMT")),
+                    ("rows", Value::Array(vec![text("sample"), text("trough")])),
+                ],
+                "no derivation gives column AMT its value in the row templates sample, trough; derive it in each, as null where it takes no value, or on the column",
+            ),
+            (
+                ConditionCode::ColumnMissingKeyDerivation,
+                &key,
+                vec![("column", text("ID"))],
+                "key column ID is not computed from one base record and earlier keys",
+            ),
+            (
+                ConditionCode::ColumnKeyDependency,
+                &key,
+                vec![("column", text("ID")), ("dependency", text("USUBJID"))],
+                "key column ID reads column USUBJID, which is not a key; without row templates a key reads only its base record's fields and the keys declared before it",
             ),
             (
                 ConditionCode::QualifiedNumericReference,

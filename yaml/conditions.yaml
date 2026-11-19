@@ -289,6 +289,9 @@ conditions:
   key_dependency:
     phases: [validation]
     message: "key column {column} is not computed from one base record and earlier keys"
+    message_variants:
+      - when: dependency
+        message: "key column {column} reads column {dependency}, which is not a key; without row templates a key reads only its base record's fields and the keys declared before it"
   length_failed:
     phases: [verification]
     message: "column {column} holds a value longer than {max} characters in {failure_count} of the rows"
@@ -307,6 +310,9 @@ conditions:
   missing_derivation:
     phases: [validation]
     message: "no derivation gives column {column} its value"
+    message_variants:
+      - when: rows
+        message: "no derivation gives column {column} its value in the row templates {rows}; derive it in each, as null where it takes no value, or on the column"
   missing_input:
     phases: [mapping]
     message: "the string template reads {variable}, which is missing"

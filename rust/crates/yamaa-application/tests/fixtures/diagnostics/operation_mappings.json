@@ -1,0 +1,62 @@
+{
+  "about": "An operation whose payload is a mapping (SCHEMA-7), written with a value where it takes that mapping, fails validation at the operation as invalid_field_type, expecting the operation's class (SCHEMA-12). The finding names the form that works. When the class requires one field and that field admits the written value, the hint writes the mapping with the value as that field, spelled as written, with any string inside a list quoted. When the field does not admit the value, the hint names the required field instead, so it never offers a form that also fails. When the class requires several fields, the hint names them in the class's order. An operation whose mapping requires no field, such as row_number, has no hint. Each form the hints offer is admitted. #4629 item 1's reproduction. No engine output supplied these values: each row is the operation, path and kind the spec writes, the required fields come from yaml/schema_expression_date.yaml and yaml/schema_expression_core.yaml (to_date requires source, first_available requires sources, a list of variables, diff requires type, start, end and unit in that order), and row_number's window is optional in yaml/schema_expression_window.yaml.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: ADPPK\nbase: PC\nkeys: [USUBJID]\ninput:\n  PC: {path: pc.csv}\noutput: {path: out.csv, columns: [USUBJID, V]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: PC.USUBJID}\n  - {name: V, type: str, derivation: DERIVATION}\n"
+  },
+  "cases": [
+    {
+      "case": "a_variable_written_as_to_date_is_refused_with_the_mapping_that_reads_it",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "type: str, derivation: DERIVATION", "to": "type: date, derivation: {to_date: PC.PCDTC}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.to_date"], "context": {"expected": "to_date", "actual": "str", "hint": "to_date takes a mapping; write {source: PC.PCDTC}", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_list_written_as_first_available_is_refused_with_the_mapping_that_reads_it",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "DERIVATION", "to": "{first_available: [PC.PCDTC, PC.USUBJID]}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available"], "context": {"expected": "first_available", "actual": "sequence", "hint": "first_available takes a mapping; write {sources: [\"PC.PCDTC\", \"PC.USUBJID\"]}", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_variable_written_as_first_available_names_the_required_list_field",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "DERIVATION", "to": "{first_available: PC.PCDTC}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.first_available"], "context": {"expected": "first_available", "actual": "str", "hint": "first_available takes a mapping whose required field is sources", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_list_written_as_to_date_names_the_required_field_it_does_not_fit",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "type: str, derivation: DERIVATION", "to": "type: date, derivation: {to_date: [PC.PCDTC]}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.to_date"], "context": {"expected": "to_date", "actual": "sequence", "hint": "to_date takes a mapping whose required field is source", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_variable_written_as_diff_names_its_required_fields_in_order",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "type: str, derivation: DERIVATION", "to": "type: int, derivation: {diff: PC.PCDTC}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.diff"], "context": {"expected": "diff", "actual": "str", "hint": "diff takes a mapping whose required fields are type, start, end, unit", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "an_operation_whose_mapping_requires_no_field_has_no_hint",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "type: str, derivation: DERIVATION", "to": "type: int, derivation: {row_number: PC.USUBJID}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.V.derivation.row_number"], "context": {"expected": "row_number", "actual": "str", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "the_to_date_mapping_the_hint_names_is_admitted",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "type: str, derivation: DERIVATION", "to": "type: date, derivation: {to_date: {source: PC.PCDTC}}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "the_first_available_mapping_the_hint_names_is_admitted",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [\"PC.PCDTC\", \"PC.USUBJID\"]}}"}]}, "pc.csv": "USUBJID,PCDTC\nA,2024-01-01T08:00\n"}, "specification": "spec.yaml"},
+      "issues": []
+    }
+  ]
+}

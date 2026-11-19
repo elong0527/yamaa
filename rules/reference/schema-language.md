@@ -397,13 +397,21 @@ schema, not only in prose. A value that fails its type or a constraint fails
 validation, retaining the rejected value's declaring path and complete reason.
 
 Fails: `invalid_field_type`, `value_not_permitted`, `pattern_mismatch`, `minimum_length`, `invalid_size`.
-Evidence: `negative-str-case-unknown`, `negative-str-pad-width`, `rust/crates/yamaa-application/tests/declaration_schema_capture.rs::captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority`.
+Evidence: `negative-str-case-unknown`, `negative-str-pad-width`, `rust/crates/yamaa-application/tests/declaration_schema_capture.rs::captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/operation_mappings.json`.
 
 A value of the wrong type fails with `invalid_field_type`, a value outside
 `values` with `value_not_permitted`, a string that does not satisfy `pattern`
 with `pattern_mismatch`, a string shorter than `min_length` with
 `minimum_length`, and a list or mapping of the wrong `size` with
 `invalid_size`.
+
+A value written where an operation takes its mapping, such as
+`to_date: PC.PCDTC`, fails with `invalid_field_type` at the operation and
+carries a `hint` naming the form that works. When the operation's class
+requires one field and that field admits the value, the hint writes the
+mapping with the value as that field, `{source: PC.PCDTC}`; otherwise it
+names the class's required fields. A class that requires no field gives no
+hint.
 
 <a id="schema-13"></a>
 

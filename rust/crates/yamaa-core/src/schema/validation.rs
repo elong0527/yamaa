@@ -653,6 +653,68 @@ impl Run<'_> {
         }
         Ok(())
     }
+    /// The hint for a value that is no mapping, written where an operation
+    /// takes its mapping, such as `to_date: PC.PCDTC` (SCHEMA-12): with one
+    /// required field, the mapping that writes the value as that field,
+    /// spelled as written, where that field admits the value, and otherwise
+    /// that field's name; with several, the required fields. An operation
+    /// whose mapping requires no field has no hint.
+    fn mapping_hint(
+        &mut self,
+        operation: &str,
+        fields: &[SchemaField],
+        payload: Site<'_>,
+        diagnostics: &mut [SchemaDiagnostic],
+    ) -> Result<(), ValidationError> {
+        if matches!(self.input.nodes()[payload.value], N::Mapping(_)) {
+            return Ok(());
+        }
+        let required: Vec<&SchemaField> = fields
+            .iter()
+            .filter(|field| {
+                self.schema.descriptors()[field.descriptor]
+                    .descriptor
+                    .required()
+            })
+            .collect();
+        let hint = match required.as_slice() {
+            [] => return Ok(()),
+            [field] => {
+                // The value is offered as the field only where the field
+                // admits it; what that check reads is set aside.
+                let mark = self.mark();
+                let fits = self.descriptor(field.descriptor, payload)?.is_empty();
+                self.since(mark);
+                if fits {
+                    format!(
+                        "{operation} takes a mapping; write {{{}: {}}}",
+                        field.name,
+                        flow_text(self.input, payload.value, 0)?
+                    )
+                } else {
+                    format!(
+                        "{operation} takes a mapping whose required field is {}",
+                        field.name
+                    )
+                }
+            }
+            many => format!(
+                "{operation} takes a mapping whose required fields are {}",
+                many.iter()
+                    .map(|field| field.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+        for finding in diagnostics
+            .iter_mut()
+            .filter(|finding| finding.code == ConditionCode::SchemaInvalidFieldType)
+            .filter(|finding| finding.path == payload.path)
+        {
+            finding.context.push(("hint", Self::text(hint.as_str())));
+        }
+        Ok(())
+    }
     fn key(&mut self, node: usize) -> Result<(String, bool), ValidationError> {
         Ok((
             super::path_render::label(self.input, node)?,
@@ -1256,7 +1318,11 @@ impl Run<'_> {
                     };
                     let payload = site.child(payload, &path);
                     let mut diagnostics = match &entry.shape {
-                        SchemaShape::Class(fields) => self.class(fields, &entry.name, payload)?,
+                        SchemaShape::Class(fields) => {
+                            let mut diagnostics = self.class(fields, &entry.name, payload)?;
+                            self.mapping_hint(&entry.name, fields, payload, &mut diagnostics)?;
+                            diagnostics
+                        }
                         SchemaShape::Descriptor(descriptor) => {
                             self.descriptor(*descriptor, payload)?
                         }
