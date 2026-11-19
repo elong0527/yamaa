@@ -1,0 +1,51 @@
+{
+  "about": "An operation whose class requires one field takes a mapping, so the field's value written bare in place of that mapping fails validation at the operation as invalid_field_type, expecting the operation (SCHEMA-12). When the class requires exactly one field and that field admits the value written, the finding carries a hint naming the mapping that writes the value there, spelt as YAML flow text: a nested identifier or qualified variable stays as written, and any other nested text is double-quoted so the mapping reads back as the same value. A value the field does not admit either, and an operation that requires several fields, gets no hint. The mapping the hint names builds. #4629's first item. No engine output supplied these values: each path and expected class is the spec's own, each kind the written value's as schema_diagnostic_kind_label spells it (str, int, sequence), each hint is the operation's name and its one required field in yaml/schema_expression_date.yaml and yaml/schema_expression_core.yaml around the value as written, and the saved rows follow TIME-2 and EXPR-9 from dm.csv.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nbase: DM\nkeys: [USUBJID]\ninput:\n  DM: {path: dm.csv}\noutput: {path: out.csv, columns: [USUBJID, BRTHDT, NAME]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: BRTHDT, type: date, derivation: {to_date: {source: DM.BRTHDTC}}}\n  - {name: NAME, type: str, derivation: {first_available: {sources: [DM.NICK, DM.USUBJID]}}}\n",
+    "dm": "USUBJID,BRTHDTC,NICK\nA,1980-05-02T10:00,Al\nB,1975-11-30,\n"
+  },
+  "cases": [
+    {
+      "case": "a_bare_variable_is_refused_with_the_mapping_of_the_one_required_field",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{to_date: {source: DM.BRTHDTC}}", "to": "{to_date: DM.BRTHDTC}"}]}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.BRTHDT.derivation.to_date"], "context": {"expected": "to_date", "actual": "str", "hint": "to_date takes a mapping, so write {source: DM.BRTHDTC}", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_bare_list_is_refused_with_the_mapping_that_holds_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{first_available: {sources: [DM.NICK, DM.USUBJID]}}", "to": "{first_available: [DM.NICK, DM.USUBJID]}"}]}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.NAME.derivation.first_available"], "context": {"expected": "first_available", "actual": "sequence", "hint": "first_available takes a mapping, so write {sources: [DM.NICK, DM.USUBJID]}", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_nested_text_that_is_no_identifier_is_quoted_in_the_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{first_available: {sources: [DM.NICK, DM.USUBJID]}}", "to": "{first_available: [{variable: DM.NICK, absent: 'not, given'}, DM.USUBJID]}"}]}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.NAME.derivation.first_available"], "context": {"expected": "first_available", "actual": "sequence", "hint": "first_available takes a mapping, so write {sources: [{variable: DM.NICK, absent: \"not, given\"}, DM.USUBJID]}", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_bare_value_the_field_does_not_admit_is_refused_without_a_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{to_date: {source: DM.BRTHDTC}}", "to": "{to_date: 5}"}]}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.BRTHDT.derivation.to_date"], "context": {"expected": "to_date", "actual": "int", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "an_operation_of_several_required_fields_is_refused_without_a_hint",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "{to_date: {source: DM.BRTHDTC}}", "to": "{study_day: DM.BRTHDTC}"}]}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.BRTHDT.derivation.study_day"], "context": {"expected": "study_day", "actual": "str", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "the_mappings_the_hints_name_build",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,BRTHDT,NAME\nA,1980-05-02,Al\nB,1975-11-30,B\n"}
+    }
+  ]
+}

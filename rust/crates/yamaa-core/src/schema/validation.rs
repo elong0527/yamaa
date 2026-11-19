@@ -27,14 +27,7 @@ pub(super) fn shorthand_field<'s>(
     if schema.class_named(shorthand).is_some() {
         return None;
     }
-    let mut required = class
-        .fields
-        .iter()
-        .filter(|f| schema.descriptors()[f.descriptor].descriptor.required());
-    let field = required.next()?;
-    if required.next().is_some() {
-        return None;
-    }
+    let field = only_required_field(schema, &class.fields)?;
     let types = schema.descriptors()[field.descriptor].descriptor.members();
     match types {
         [only] if only.node_text(only.root()) == Some(shorthand) => Some(field),
@@ -42,12 +35,43 @@ pub(super) fn shorthand_field<'s>(
     }
 }
 
+/// The one field of `fields` that its class declares required, when exactly
+/// one is (SCHEMA-13).
+fn only_required_field<'s>(
+    schema: &SchemaStructure,
+    fields: &'s [SchemaField],
+) -> Option<&'s SchemaField> {
+    let mut required = fields
+        .iter()
+        .filter(|f| schema.descriptors()[f.descriptor].descriptor.required());
+    let field = required.next()?;
+    required.next().is_none().then_some(field)
+}
+
+/// Whether a nested text reads back as the same text when written unquoted
+/// in YAML flow form: an identifier, or identifiers joined by `.` as a
+/// qualified variable is, that is no YAML keyword such as `null` or `yes`.
+fn plain_text(text: &str) -> bool {
+    const KEYWORDS: [&str; 10] = [
+        "true", "false", "null", "yes", "no", "on", "off", "y", "n", "~",
+    ];
+    !KEYWORDS.contains(&text.to_ascii_lowercase().as_str())
+        && text.split('.').all(|part| {
+            let mut chars = part.chars();
+            chars
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+}
+
 /// Render a shorthand to write as compact YAML flow text; nested strings are
-/// double-quoted so the result reads back as the same value.
+/// double-quoted, unless they are plain identifiers, so the result reads back
+/// as the same value.
 fn flow_text(input: &Document, node: usize, level: usize) -> Result<String, ValidationError> {
     depth(level)?;
     Ok(match &input.nodes()[node] {
-        N::Text(text) if level == 0 => text.clone(),
+        N::Text(text) if level == 0 || plain_text(text) => text.clone(),
         N::Text(text) => {
             let mut quoted = String::from("\"");
             for c in text.chars() {
@@ -648,6 +672,46 @@ impl Run<'_> {
             .iter_mut()
             .filter(|finding| finding.code == ConditionCode::SchemaInvalidFieldType)
             .filter(|finding| finding.path == at)
+        {
+            finding.context.push(("hint", Self::text(hint.as_str())));
+        }
+        Ok(())
+    }
+    /// The hint for an operation whose class requires one field, written with
+    /// a bare value instead of its mapping, such as `to_date: PC.PCDTC`
+    /// (SCHEMA-12): when the value is one that field admits, the mapping
+    /// that writes it there, `{source: PC.PCDTC}`. A value the field does
+    /// not admit either, and an operation that requires several fields or
+    /// none, has no hint.
+    fn lone_field_hint(
+        &mut self,
+        fields: &[SchemaField],
+        operation: &str,
+        payload: Site<'_>,
+        diagnostics: &mut [SchemaDiagnostic],
+    ) -> Result<(), ValidationError> {
+        if matches!(self.input.nodes()[payload.value], N::Mapping(_)) {
+            return Ok(());
+        }
+        let Some(field) = only_required_field(self.schema, fields) else {
+            return Ok(());
+        };
+        // Trying the value as the field records nothing the document wrote.
+        let mark = self.mark();
+        let admitted = self.descriptor(field.descriptor, payload)?.is_empty();
+        self.since(mark);
+        if !admitted {
+            return Ok(());
+        }
+        let hint = format!(
+            "{operation} takes a mapping, so write {{{}: {}}}",
+            field.name,
+            flow_text(self.input, payload.value, 1)?
+        );
+        for finding in diagnostics
+            .iter_mut()
+            .filter(|finding| finding.code == ConditionCode::SchemaInvalidFieldType)
+            .filter(|finding| finding.path == payload.path)
         {
             finding.context.push(("hint", Self::text(hint.as_str())));
         }
@@ -1256,7 +1320,11 @@ impl Run<'_> {
                     };
                     let payload = site.child(payload, &path);
                     let mut diagnostics = match &entry.shape {
-                        SchemaShape::Class(fields) => self.class(fields, &entry.name, payload)?,
+                        SchemaShape::Class(fields) => {
+                            let mut diagnostics = self.class(fields, &entry.name, payload)?;
+                            self.lone_field_hint(fields, &entry.name, payload, &mut diagnostics)?;
+                            diagnostics
+                        }
                         SchemaShape::Descriptor(descriptor) => {
                             self.descriptor(*descriptor, payload)?
                         }
