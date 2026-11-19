@@ -207,15 +207,36 @@ def split_reference(text):
 
 
 def between_clause(between):
-    """An inclusive range match, worded for dates and numbers alike."""
+    """A range match with its declared open or closed endpoints (LOOKUP-9)."""
     value = str(between.get("value", ""))
     lower = between.get("lower")
     upper = between.get("upper")
-    if lower and upper:
-        return "where " + value + " falls within " + str(lower) + " to " + str(upper)
-    if lower:
-        return "where " + value + " is " + str(lower) + " or more"
-    return "where " + value + " is " + str(upper) + " or less"
+    closed = between.get("closed", "both")
+    lower_clause = (
+        value
+        + " is "
+        + (
+            str(lower) + " or more"
+            if closed in ("both", "left")
+            else "more than " + str(lower)
+        )
+    )
+    upper_clause = (
+        value
+        + " is "
+        + (
+            str(upper) + " or less"
+            if closed in ("both", "right")
+            else "less than " + str(upper)
+        )
+    )
+    if lower is not None and upper is not None:
+        if closed == "both":
+            return (
+                "where " + value + " falls within " + str(lower) + " to " + str(upper)
+            )
+        return "where " + lower_clause + " and " + upper_clause
+    return "where " + (lower_clause if lower is not None else upper_clause)
 
 
 def match_clauses(node, ctx=None, depth=0):
@@ -1757,6 +1778,11 @@ REVISION_HISTORY_HEADERS = [
 # entry whenever a change alters the text of a rendered cell. Reviewer and
 # Sign-off stay empty -- those are the reviewer's to fill, not the build's.
 RENDERER_REVISIONS = [
+    (
+        "1.8",
+        "2026-11-19",
+        "State open and closed range endpoints, including bounds of zero",
+    ),
     (
         "1.7",
         "2026-10-20",

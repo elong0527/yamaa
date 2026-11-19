@@ -20,13 +20,13 @@ gives one dose record, identified by its sequence number (`EXSEQ`).
   otherwise.
 - `EVID`: 1, a dose record.
 - `AMT`: the dose given at each administration.
+- `II`: the hours between administrations; 0 when `ADDL` is 0, since a
+  record of one dose has no interval.
 - `ADDL`: the number of administrations after the first, one every
   interval of the frequency (24 hours for `QD`, 12 for `BID`) for as long
   as the next one is not after the end of dosing. An end with no time of
   day covers its whole day. 0 for a single dose and for a record with no
   end.
-- `II`: the hours between administrations; 0 when `ADDL` is 0, since a
-  record of one dose has no interval.
 
 **Note:** the end of dosing only bounds the administrations and is not one
 itself, so a record ending before the day's dose time has its last
