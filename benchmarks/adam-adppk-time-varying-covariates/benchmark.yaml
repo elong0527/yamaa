@@ -1,0 +1,18 @@
+lifecycle: draft
+standard: ADaM
+domain: ADPPK
+review:
+  concerns:
+    - A population PK model that tests body weight or renal function as a
+      covariate reads its value at the time of each dose and concentration,
+      so every record carries the value that applied then, not only the
+      baseline.
+    - Two subjects, a man and a woman, cover a weight and a creatinine that
+      change on different dates, a result dated the same day as a record, a
+      weight that was not measured at a visit, records before the first
+      creatinine, and results of other tests in the same files.
+    - A result counts from its date onward whatever the time of day (subject
+      001's 07:30 sample on 17 March takes the weight measured that day),
+      and a record before the first result has no value rather than the
+      first later one (subject 002 has no creatinine or clearance on
+      10 March, the day before her first result).

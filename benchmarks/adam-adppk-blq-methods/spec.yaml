@@ -1,0 +1,166 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPPK
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDTC: datetime}
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCSTRESN: float, PCLLOQ: float, PCDTC: datetime}
+
+output:
+  path: adppk.csv
+  columns: [STUDYID, USUBJID, ASEQ, ADTM, EVID, AMT, ALLOQ, CENS, DV, MDV,
+            DVM6, MDVM6]
+  order_by: [STUDYID, USUBJID, ASEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+
+  - name: EVID
+    type: int
+    label: Event ID
+    verifications:
+      - allowed_values:
+          values: [0, 1]
+
+  - name: AMT
+    type: float
+    label: Actual Amount of Dose Received
+
+  - name: ALLOQ
+    type: float
+    label: Analysis Lower Limit of Quantitation
+
+  - name: CENS
+    type: int
+    label: Censoring Indicator
+    verifications:
+      - allowed_values:
+          values: [0, 1]
+
+  - name: DV
+    type: float
+    label: Dependent Variable Result
+
+  - name: MDV
+    type: int
+    label: Missing Dependent Variable Result
+    derivation:
+      case:
+        - when: "DV IS NULL"
+          then: 1
+        - otherwise: 0
+
+  # Whether the subject's concentration record before this one was below
+  # the limit. Dose records are not counted, and the first concentration
+  # record of a subject has no value.
+  - name: PREVCENS
+    type: int
+    label: Censoring Indicator of the Previous Concentration
+    derivation:
+      row_value:
+        source: CENS
+        offset: -1
+        window:
+          group_by: [STUDYID, USUBJID]
+          filter: "EVID = 0"
+          order_by: [ADTM]
+
+  # M6: the first result below the limit after a quantified one is half
+  # the limit, and any other result below the limit is left out.
+  - name: DVM6
+    type: float
+    label: Dependent Variable Result, M6 Method
+    derivation:
+      case:
+        - when: "EVID = 0 AND CENS = 0"
+          then: DV
+        - when: "EVID = 0 AND CENS = 1 AND PREVCENS = 0"
+          then: "ALLOQ / 2"
+
+  - name: MDVM6
+    type: int
+    label: Missing Dependent Variable Result, M6 Method
+    derivation:
+      case:
+        - when: "DVM6 IS NULL"
+          then: 1
+        - otherwise: 0
+
+  # At one date/time a sample comes before the dose: it was drawn before
+  # the dose was given.
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADTM, EVID]
+
+rows:
+  - id: dose
+    dataset: EX
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      ADTM: EX.EXSTDTC
+      EVID: 1
+      AMT: EX.EXDOSE
+      ALLOQ: null
+      CENS: 0
+      DV: null
+
+  # One concentration record per sample that was done. M3: a result below
+  # the limit is censored and carries the limit as its value.
+  - id: concentration
+    dataset: PC
+    filter: "PC.PCSTAT IS NULL"
+    derivations:
+      STUDYID: PC.STUDYID
+      USUBJID: PC.USUBJID
+      ADTM: PC.PCDTC
+      EVID: 0
+      AMT: null
+      ALLOQ: PC.PCLLOQ
+      CENS:
+        case:
+          - when: "PC.PCSTRESC LIKE '<%'"
+            then: 1
+          - otherwise: 0
+      DV:
+        case:
+          - when: "CENS = 1"
+            then: ALLOQ
+          - otherwise: PC.PCSTRESN
+
+verifications:
+  - row_count:
+      min: 16
+      max: 16
+  - assert:
+      id: a-censored-result-sits-at-the-limit
+      when: "CENS = 1"
+      require: "DV = ALLOQ AND MDV = 0"
+  - assert:
+      id: an-m6-value-is-the-result-or-half-the-limit
+      when: "MDVM6 = 0"
+      require: "(CENS = 0 AND DVM6 = DV) OR (CENS = 1 AND DVM6 = ALLOQ / 2)"
+  - assert:
+      id: a-dose-record-carries-no-concentration
+      when: "EVID = 1"
+      require: "DV IS NULL AND DVM6 IS NULL AND CENS = 0"
