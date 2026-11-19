@@ -78,6 +78,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("invalid_probability", &["derivation"], None),
     ("invalid_producer_contract", &["validation"], None),
     ("invalid_regex", &["validation"], None),
+    ("invalid_repeat_count", &["join"], None),
     ("invalid_size", &["validation"], None),
     ("invalid_string_template", &["validation"], None),
     ("invalid_text", &["ingest", "validation"], None),

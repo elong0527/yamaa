@@ -285,7 +285,8 @@ and each kind of read treats them in its own way:
 - **A named intermediate** chooses one record per row and always declares its
   own `key`, here the same columns, with `order_by` and `keep` choosing the
   first exposure. The exceptions are an intermediate that drives a row
-  template and one that is a side of a pair relation, which declare no key.
+  template, one that is a side of a pair relation or the `dataset` of a
+  counted relation, and a counted relation itself, which declare no key.
   Its `id` shares one list of names with the inputs, the other intermediates
   and the `domain`, so it cannot repeat the name of the input it reads: an
   intermediate `EX` over the input `EX` fails with `duplicate_identifier`
@@ -311,14 +312,17 @@ and each kind of read treats them in its own way:
   `key`, so a row template driving on it builds one row for each pair, such as
   each adverse event with each medication given for it
   ([LOOKUP-27](../../rules/lookup.md#lookup-27)). A lookup never builds more
-  rows: choosing one of several records with `keep` drops the others. A record
-  that stands for several rows, such as an exposure record for each day it
-  covers, pairs the same way with a table of consecutive day numbers. A table
-  that is too short, or that leaves a day out, drops rows without an issue, so
-  the specification states the cover itself: the record requires a match for
-  its last day in the table, and checks on the built rows require as many rows
-  as the days it covers, numbered from the first
-  ([ROW-7](../../rules/rows.md#row-7)).
+  rows: choosing one of several records with `keep` drops the others.
+- **A counted relation**, a named intermediate that writes `repeat`, keeps
+  each record of its `dataset` once for each whole number from 1 to the
+  record's `count`, and names that number as its `index`, so a row template
+  driving on it builds one row for each day an exposure record covers. A
+  count of zero builds nothing, and a missing or negative count fails the run
+  ([LOOKUP-29](../../rules/lookup.md#lookup-29)). Pair the records with a
+  table of day numbers instead only when the table carries more than the
+  number, such as each day's label. A table that is too short, or that leaves
+  a day out, drops rows without an issue, so the specification then states the
+  cover itself ([ROW-7](../../rules/rows.md#row-7)).
 
 A qualified read of an input that declares no `key` fails validation with
 `no_applicable_keys` at the read. An empty or repeated `key`, or a named

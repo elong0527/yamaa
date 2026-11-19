@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - intermediates.ADMIN.repeat.count
+rule: LOOKUP-29
+context:
+  intermediate: ADMIN
+  expected: int
+  actual: float

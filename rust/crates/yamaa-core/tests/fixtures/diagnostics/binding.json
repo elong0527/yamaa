@@ -1,5 +1,5 @@
 {
-  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection, and an order term whose field holds types that do not compare (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2, VALUE-22); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL. In `pairs` the pair relation P pairs the records of L and R on K and exposes ID and RID, which a row template driving on it reads (LOOKUP-27).",
+  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection, and an order term whose field holds types that do not compare (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2, VALUE-22); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL. In `pairs` the pair relation P pairs the records of L and R on K and exposes ID and RID, which a row template driving on it reads (LOOKUP-27). In `counted` the counted relation P gives each record of L once for each whole number from 1 to its C, the number read as I, and exposes ID and N, which a row template driving on it reads (LOOKUP-29).",
   "documents": {
     "value": {
       "yamaa": "1.0",
@@ -38,6 +38,17 @@
       "intermediates": [{"id": "P", "dataset": "L", "inner_join": "R", "key": ["K"], "derivations": {"ID": "L.ID", "RID": "R.ID"}}],
       "rows": [{"id": "pairs", "dataset": "P", "derivations": {"ID": "P.ID", "RID": "P.RID"}}],
       "output": {"path": "result.csv", "columns": ["ID", "RID"]}
+    },
+    "counted": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"L": {"path": "l.csv", "types": {"ID": "int", "C": "int"}}},
+      "keys": ["ID", "N"],
+      "columns": [{"name": "ID", "type": "int"}, {"name": "N", "type": "int"}],
+      "intermediates": [{"id": "P", "dataset": "L", "repeat": {"count": "L.C", "index": "I"}, "derivations": {"ID": "L.ID", "N": "I"}}],
+      "rows": [{"id": "records", "dataset": "P", "derivations": {"ID": "P.ID", "N": "P.N"}}],
+      "output": {"path": "result.csv", "columns": ["ID", "N"]}
     },
     "window_drivers": {
       "yamaa": "1.0",
@@ -370,6 +381,108 @@
         ],
         "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
       },
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"dataset": "P", "hint": "read it through a named intermediate or an aggregate with a `key` of its own"}}]
+    },
+    {
+      "case": "a_counted_relation_reads_its_dataset_by_its_name_its_number_by_its_index_and_the_derivations_before_it",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "filter"], "to": "L.ID > 0 AND I > 1"}, {"set": ["intermediates", "0", "derivations"], "to": {"ID": "L.ID", "STEP": "I - 1", "N": "STEP + 1"}}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": []
+    },
+    {
+      "case": "a_counted_relation_count_is_an_expression_over_its_datasets_fields",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "repeat", "count"], "to": "L.C * 2 + L.ID"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": []
+    },
+    {
+      "case": "a_counted_relation_count_written_as_a_bare_name_reads_no_field_of_its_dataset",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "repeat", "count"], "to": "C"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "identifier": "C"}}]
+    },
+    {
+      "case": "a_counted_relation_count_qualified_by_another_relation_reads_no_field_of_its_dataset",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "repeat", "count"], "to": "OTHER.C"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "identifier": "OTHER.C"}}]
+    },
+    {
+      "case": "a_counted_relation_count_names_a_field_its_dataset_stores",
+      "operation": "bind",
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "repeat", "count"], "to": "L.X"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "identifier": "L.X"}}]
+    },
+    {
+      "case": "a_counted_relation_count_expression_reads_its_datasets_fields_alone",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "repeat", "count"], "to": "L.C + Z"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "identifier": "Z"}}]
+    },
+    {
+      "case": "a_counted_relation_count_is_read_before_any_number_exists",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "repeat", "count"], "to": "L.C + I"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "identifier": "I"}}]
+    },
+    {
+      "case": "a_counted_relation_count_of_type_float_is_no_whole_number",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["input", "L", "types", "C"], "to": "float"}], "sources": {"L": [["ID", "int"], ["C", "float"]]}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "expected": "int", "actual": "float"}}]
+    },
+    {
+      "case": "a_counted_relation_count_of_type_str_is_no_whole_number",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["input", "L", "types", "C"], "to": "str"}], "sources": {"L": [["ID", "int"], ["C", "str"]]}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "expected": "int", "actual": "str"}}]
+    },
+    {
+      "case": "a_counted_relation_count_of_type_date_is_no_whole_number",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["input", "L", "types", "C"], "to": "date"}], "sources": {"L": [["ID", "int"], ["C", "date"]]}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "expected": "int", "actual": "date"}}]
+    },
+    {
+      "case": "a_counted_relation_count_whose_type_is_decided_per_value_is_refused",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["input", "L", "types", "F"], "to": "float"}, {"set": ["intermediates", "0", "repeat", "count"], "to": {"greatest": {"sources": ["L.C", "L.F"]}}}], "sources": {"L": [["ID", "int"], ["C", "int"], ["F", "float"]]}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "expected": "int", "actual": "int or float"}}]
+    },
+    {
+      "case": "a_counted_relation_count_written_as_missing_is_no_count",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "repeat", "count"], "to": null}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.count"], "context": {"intermediate": "P", "expected": "int", "actual": "missing"}}]
+    },
+    {
+      "case": "a_counted_relation_filter_reads_no_other_relation",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "filter"], "to": "I > 1 AND OTHER.ID = 1"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.filter"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}]
+    },
+    {
+      "case": "a_counted_relation_derivation_reads_no_other_relation_and_no_later_derivation",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"ID": "OTHER.ID", "N": "LATER", "LATER": "I"}}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.ID.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.N.source"], "context": {"intermediate": "P", "identifier": "LATER"}}]
+    },
+    {
+      "case": "a_counted_relation_exposes_only_its_derivations_and_not_its_index",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["rows", "0", "derivations", "N"], "to": "P.I"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.records.derivations.N.source"], "context": {"identifier": "P.I"}}]
+    },
+    {
+      "case": "a_read_through_a_counted_relation_s_implicit_join_has_no_applicable_keys",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"remove": ["rows"]}, {"set": ["base"], "to": "L"}, {"set": ["keys"], "to": ["ID"]}, {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "N", "type": "int", "derivation": "P.N"}]}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.source"], "context": {"dataset": "P", "hint": "read it through a named intermediate or an aggregate with a `key` of its own"}}]
+    },
+    {
+      "case": "a_keyless_aggregate_over_a_counted_relation_has_no_applicable_keys",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"remove": ["rows"]}, {"set": ["base"], "to": "L"}, {"set": ["keys"], "to": ["ID"]}, {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "N", "type": "int", "derivation": {"aggregate": "COUNT(P.*)"}}]}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
       "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"dataset": "P", "hint": "read it through a named intermediate or an aggregate with a `key` of its own"}}]
     },
     {

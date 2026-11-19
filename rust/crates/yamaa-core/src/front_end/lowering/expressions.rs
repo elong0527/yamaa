@@ -14,8 +14,8 @@ use super::{column_type, keyword, Lower};
 use crate::ast::{
     Aggregate, Arm, Between, Binding, Constant, Derivation, Dictionary, Direction, ExprId,
     ExprKind, Formula, Handlers, JoinKey, Keep, Literal, Meta, Name, Named, Nearest, Nulls,
-    OdmRead, Operand, OrderTerm, Pivot, Role, ScalarOp, Segment, Slot, SourceRead, Text, TimeUnit,
-    Window, WindowFunction,
+    OdmRead, Operand, OrderTerm, Pivot, Repeat, Role, ScalarOp, Segment, Slot, SourceRead, Text,
+    TimeUnit, Window, WindowFunction,
 };
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
 use crate::expression_table::{Closed, Form, OperandForm, Verb, Written};
@@ -329,6 +329,33 @@ impl<'d> Lower<'d> {
             to,
             to_field,
             unit: self.text_of(node, "unit").and_then(TimeUnit::from_name),
+            meta,
+        }
+    }
+
+    /// A counted relation's `repeat`: `{count, index}` (LOOKUP-29). `count`
+    /// is read as a key match value is: a name written alone is read at the
+    /// field itself, and an operation at its keyword. A null is the missing
+    /// value written there (D18), which is no count.
+    pub(super) fn repeat(&mut self, node: usize, meta: Meta) -> Repeat {
+        let (count, count_field) = match self.d.field(node, "count") {
+            Some(value) => {
+                let at = self.field_meta(meta, "count", value);
+                (self.placed(value, at, Placement::Value), at)
+            }
+            None => (
+                self.push(ExprKind::Unsupported("repeat".into()), meta),
+                meta,
+            ),
+        };
+        let index = self.named(meta, node, "index").unwrap_or(Named {
+            name: String::new(),
+            meta,
+        });
+        Repeat {
+            count,
+            count_field,
+            index,
             meta,
         }
     }

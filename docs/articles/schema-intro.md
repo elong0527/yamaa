@@ -271,10 +271,11 @@ in its short form is listed under the field it fills.
 | `output` | | `order_by` | `columns` | `relative_to`, `decimals` | `path`, `report` | |
 | An order term written in full | | `variable` | | `direction`, `nulls` | | |
 | A window: `windows.<name>`, or a verb's `window` written in full | `filter` | `group_by`, `order_by` | | | | |
-| A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `inner_join`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `pivot`, `verifications` |
+| A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `inner_join`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `pivot`, `repeat`, `verifications` |
 | `between`, in a named intermediate, `source` or `aggregate` | | `value` | `lower`, `upper` | | | |
 | `nearest`, in a named intermediate | `to` | | `source` | `unit` | | |
 | `pivot`, in a named intermediate | | | `name`, `value`, `fields` | | | |
+| `repeat`, in a named intermediate | `count` | | `index` | | | |
 | A named intermediate's derivation written in full | `derivation` | | | `type`, `unconvertible` | | |
 | A column | `derivation` | | `name` | `type`, `label`, `metadata` | | `verifications`, `submission` |
 | A derivation written in full, in a column, a row template or an `aggregate` derivation | `value` | | | `unconvertible` | | |

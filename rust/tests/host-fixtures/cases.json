@@ -6997,7 +6997,7 @@
         "invalid_field_type", "invalid_function_argument", "invalid_function_result",
         "invalid_intermediate_driver", "invalid_odm_context", "invalid_operation_count",
         "invalid_parent_path", "invalid_power", "invalid_probability",
-        "invalid_producer_contract", "invalid_regex",
+        "invalid_producer_contract", "invalid_regex", "invalid_repeat_count",
         "invalid_size", "invalid_string_template", "invalid_text", "invalid_yaml",
         "key_dependency", "length_failed", "ln_of_nonpositive", "matches_failed",
         "method_missing", "minimum_length", "missing_derivation", "missing_input",

@@ -75,6 +75,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("invalid_probability", "{expr} applies {function} to {value}, which is not a probability strictly between 0 and 1"),
     ("invalid_producer_contract", "the schema link of input {dataset} is not a valid producer contract"),
     ("invalid_regex", "the pattern '{pattern}' is not a valid regular expression"),
+    ("invalid_repeat_count", "relation {intermediate} reads the count {count} for record {record} of {dataset}, and a count is zero or more"),
     ("invalid_size", "the value does not have the size {size}"),
     ("invalid_string_template", "the string template is invalid ({reason})"),
     ("invalid_text", "{path} holds text that is not valid Unicode"),

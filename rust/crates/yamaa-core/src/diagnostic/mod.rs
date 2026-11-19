@@ -643,6 +643,14 @@ conditions! {
     LookupPairKeyType => ("validation", "incompatible_input_type", Some("LOOKUP-27")),
     LookupPairReference => ("validation", "unknown_field", Some("LOOKUP-27")),
     LookupPairFieldType => ("validation", "unknown_intermediate_driver_type", Some("LOOKUP-27")),
+    // The counted relation of a named intermediate that writes `repeat`
+    // (LOOKUP-29). What its binding shares with a pair relation's keeps the
+    // pair relation's causes.
+    LookupRepeatConstruct => ("validation", "prohibited_construct", Some("LOOKUP-29")),
+    LookupRepeatIndex => ("validation", "duplicate_derivation", Some("LOOKUP-29")),
+    LookupRepeatCountReference => ("validation", "unknown_field", Some("LOOKUP-29")),
+    LookupRepeatCountType => ("validation", "incompatible_input_type", Some("LOOKUP-29")),
+    LookupRepeatCount => ("join", "invalid_repeat_count", Some("LOOKUP-29")),
     // A lookup's `dataset` that names an intermediate whose records no row
     // template could drive on (LOOKUP-3, ROW-2).
     LookupRecordsSide => ("validation", "invalid_intermediate_driver", Some("LOOKUP-3")),

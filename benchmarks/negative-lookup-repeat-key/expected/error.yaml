@@ -1,0 +1,9 @@
+phase: validation
+condition: prohibited_construct
+spec_paths:
+  - intermediates.ADMIN.key
+  - intermediates.ADMIN.repeat
+rule: LOOKUP-29
+context:
+  intermediate: ADMIN
+  construct: key

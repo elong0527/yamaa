@@ -203,14 +203,13 @@ impl Spec {
                 .is_some_and(|driver| driver.name == name)
         })
     }
-    /// Whether the intermediate `name` is a side of a pair relation, whose
-    /// records it reads as a row template reads a driver's (LOOKUP-27).
+    /// Whether the intermediate `name` is a side of a pair relation or the
+    /// `dataset` of a counted relation, whose records the relation reads as
+    /// a row template reads a driver's (LOOKUP-27, LOOKUP-29).
     pub fn pairs_with(&self, name: &str) -> bool {
-        self.intermediates.iter().any(|item| {
-            item.inner_join
-                .as_ref()
-                .is_some_and(|right| right.name == name || item.dataset.name == name)
-        })
+        self.intermediates
+            .iter()
+            .any(|item| item.pairs() && item.sides().any(|side| side.name == name))
     }
     /// Whether the intermediate `name` is a record relation: another named
     /// intermediate, not a pair relation, names it as its `dataset`, and so
@@ -237,14 +236,17 @@ impl Spec {
     /// declares none and neither drives a row template, is a side of a pair
     /// relation, nor is a record relation (LOOKUP-3, ROW-2, LOOKUP-27; D23,
     /// D63), or it is a pair relation, whose `key` pairs its two sides
-    /// whatever reads it.
+    /// whatever reads it. A counted relation pairs nothing and declares none
+    /// (LOOKUP-29).
     pub fn lacks_key(&self, item: &Intermediate) -> bool {
         let name = &item.id.name;
         item.key.is_none()
+            && !item.counted()
             && (item.pairs()
                 || !(self.drives_rows(name) || self.pairs_with(name) || self.read_as_records(name)))
     }
-    /// The pair relation `name` declares, if it is one (LOOKUP-27).
+    /// The pair relation `name` declares, if it is one, a counted relation
+    /// among them (LOOKUP-27, LOOKUP-29).
     pub fn pair_relation(&self, name: &str) -> Option<&Intermediate> {
         self.intermediates
             .iter()
@@ -364,6 +366,10 @@ pub struct Intermediate {
     /// The right side of a pair relation, whose `dataset` is the left side
     /// (LOOKUP-27).
     pub inner_join: Option<Named>,
+    /// The count and index of a counted relation, whose `dataset` gives
+    /// each of its records once for each whole number up to the record's
+    /// count (LOOKUP-29).
+    pub repeat: Option<Repeat>,
     pub key: Option<JoinKey>,
     pub between: Option<Between>,
     pub filter: Option<ExprId>,
@@ -382,22 +388,39 @@ pub struct Intermediate {
     pub require_match: bool,
     pub bindings: Vec<Binding>,
     pub checks: Vec<UniqueCheck>,
-    /// Of `inner_join`, `key`, `between`, `filter`, `order_by`, `keep`,
-    /// `nearest`, `pivot`, `columns`, `derivations`, `verifications`, the
-    /// absence answer and `require_match`.
+    /// Of `inner_join`, `repeat`, `key`, `between`, `filter`, `order_by`,
+    /// `keep`, `nearest`, `pivot`, `columns`, `derivations`,
+    /// `verifications`, the absence answer and `require_match`.
     pub written: Written,
     pub meta: Meta,
 }
 
 impl Intermediate {
     /// Whether the intermediate is a pair relation: it writes `inner_join`,
-    /// so its records are the matching pairs of its two sides (LOOKUP-27).
+    /// so its records are the matching pairs of its two sides (LOOKUP-27),
+    /// or it writes `repeat`, so its right side is generated: each record
+    /// of its `dataset` pairs with each whole number up to its count
+    /// (LOOKUP-29).
     pub fn pairs(&self) -> bool {
-        self.inner_join.is_some()
+        self.inner_join.is_some() || self.counted()
+    }
+    /// Whether the intermediate is a counted relation: it writes `repeat`,
+    /// whatever it writes beside it (LOOKUP-29).
+    pub fn counted(&self) -> bool {
+        self.repeat.is_some()
+    }
+    /// The relations a pair relation reads its records from: its `dataset`,
+    /// then its `inner_join`; a counted relation reads its `dataset` alone,
+    /// and an `inner_join` it writes beside `repeat` is refused, not read
+    /// (LOOKUP-27, LOOKUP-29).
+    pub fn sides(&self) -> impl Iterator<Item = &Named> {
+        std::iter::once(&self.dataset).chain(self.inner_join.iter().filter(|_| !self.counted()))
     }
     /// The current-row values the lookup reads before any record: each key
     /// pair's match value, then the `to` of its nearest selection, which is
-    /// read as a key match value is (LOOKUP-5, LOOKUP-26).
+    /// read as a key match value is (LOOKUP-5, LOOKUP-26), then the count of
+    /// a counted relation, which each record of its dataset gives as it
+    /// gives a pair relation's key value (LOOKUP-29).
     pub fn match_values(&self) -> impl Iterator<Item = ExprId> + '_ {
         let pairs = match &self.key {
             Some(JoinKey::Pairs { pairs, .. }) => pairs.as_slice(),
@@ -407,7 +430,24 @@ impl Intermediate {
             .iter()
             .map(|&(_, value)| value)
             .chain(self.nearest.as_ref().map(|nearest| nearest.to))
+            .chain(self.repeat.as_ref().map(|repeat| repeat.count))
     }
+}
+
+/// `repeat: {count, index}` (LOOKUP-29): each record of the relation's
+/// `dataset` once for each whole number from 1 to its `count`, the number
+/// read by the name `index`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Repeat {
+    /// Each record's count, read as a pair relation's key value is
+    /// (LOOKUP-6).
+    pub count: ExprId,
+    /// The `count` field itself, where a name written alone is read, as a
+    /// key pair's meta is for its value.
+    pub count_field: Meta,
+    /// The name each built record's number is read by.
+    pub index: Named,
+    pub meta: Meta,
 }
 
 /// `nearest: {source, to, unit}` (LOOKUP-26): of the candidates, the one

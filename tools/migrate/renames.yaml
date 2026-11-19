@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 675
-  changes: 106
+  entries: 676
+  changes: 107
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 60
+    new, decided: 61
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7496,6 +7496,22 @@ entries:
     between, order_by, keep, nearest, absent or require_match, or with SELF as a side, it fails as
     prohibited_construct (LOOKUP-27). No 0.5 file declares it, so the converter wrote none.'
   field_kind: identifier
+  convert: {action: none}
+- id: new.spec.intermediate.repeat
+  file_type: spec
+  path: intermediates[].repeat
+  today: null
+  kind: new
+  proposed: 'repeat: {count: VALUE, index: NAME}'
+  decision: decided (D316)
+  reason: 'An addition to the approved table under D27 (#4628). Optional, with no default (I5): a named
+    intermediate writing it is the counted relation, one record of its `dataset` for each whole number
+    from 1 to that record''s `count`, an int read as a pair relation''s key value is, each number read by
+    the name `index`, in stored order and then by number; a count of zero gives no record, and a missing
+    or negative count fails the run as invalid_repeat_count; beside inner_join, key, between, order_by,
+    keep, nearest, pivot, absent or require_match, or with SELF as its dataset, it fails as
+    prohibited_construct (LOOKUP-29). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: structure
   convert: {action: none}
 - id: new.spec.include
   file_type: spec

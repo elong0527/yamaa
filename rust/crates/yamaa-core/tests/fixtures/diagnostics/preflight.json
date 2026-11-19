@@ -670,6 +670,120 @@
       "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.pivot", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "pivot"}}]
     },
     {
+      "case": "a_counted_relation_refuses_an_inner_join_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "inner_join": "SECOND", "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.inner_join", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "inner_join"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_a_key_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "key": ["ID"], "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.key", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "key"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_a_range_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "between": {"value": "ID", "lower": "LOW"}, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.between", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "between"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_an_order_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "order_by": ["SRC.ID"], "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.order_by", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "order_by"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_a_position_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "keep": "first", "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.keep", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "keep"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_a_nearest_selection_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.nearest", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "nearest"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_a_pivot_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "pivot": {"name": "A", "value": "B", "fields": ["C"]}, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.pivot", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "pivot"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_an_absence_answer_even_when_null_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "absent": null, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.absent", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "absent"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_require_match_even_when_false_written_beside_repeat",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "require_match": false, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.require_match", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "require_match"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_every_field_written_beside_repeat_in_the_listed_order_naming_the_first",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "require_match": true, "absent": "NONE", "pivot": {"name": "A", "value": "B", "fields": ["C"]}, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "keep": "first", "order_by": ["SRC.ID"], "between": {"value": "ID", "lower": "LOW"}, "key": "none", "inner_join": "SECOND", "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.inner_join", "intermediates.P.key", "intermediates.P.between", "intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.nearest", "intermediates.P.pivot", "intermediates.P.absent", "intermediates.P.require_match", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "inner_join"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_self_as_its_dataset",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "repeat": {"count": "SRC.ID", "index": "N"}, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.dataset", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "SELF"}}]
+    },
+    {
+      "case": "a_counted_relation_refuses_a_self_dataset_after_the_listed_fields",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "repeat": {"count": "SRC.ID", "index": "N"}, "key": ["ID"], "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.key", "intermediates.P.dataset", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "key"}}]
+    },
+    {
+      "case": "a_counted_relation_index_names_none_of_its_derivations",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "derivations": {"V": "SRC.ID", "N": "SRC.ID"}}]}]},
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.repeat.index"], "context": {"intermediate": "P", "identifier": "N"}}]
+    },
+    {
+      "case": "a_counted_relation_dataset_names_a_declared_relation",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "ABSENT", "repeat": {"count": "SRC.ID", "index": "N"}, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-1", "spec_paths": ["intermediates.P.dataset"], "context": {"identifier": "ABSENT", "intermediate": "P"}}]
+    },
+    {
+      "case": "a_counted_relation_dataset_is_an_intermediate_a_row_template_could_drive_on",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "L", "dataset": "SRC", "key": ["ID"]}, {"id": "P", "dataset": "L", "repeat": {"count": "L.ID", "index": "N"}, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"intermediate": "L", "fields": ["key"]}}]
+    },
+    {
+      "case": "a_counted_relation_is_no_dataset_of_another",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "derivations": {"ID": "SRC.ID"}}, {"id": "Q", "dataset": "P", "repeat": {"count": "P.ID", "index": "M"}, "derivations": {"V": "M"}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.Q.dataset"], "context": {"intermediate": "P", "fields": ["repeat"]}}]
+    },
+    {
+      "case": "a_counted_relation_is_no_dataset_of_another_through_an_intermediate_over_it",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "derivations": {"ID": "SRC.ID"}}, {"id": "OVER", "dataset": "P", "filter": "P.ID > 0"}, {"id": "Q", "dataset": "OVER", "repeat": {"count": "OVER.ID", "index": "M"}, "derivations": {"V": "M"}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.Q.dataset"], "context": {"intermediate": "OVER", "fields": ["dataset"]}}]
+    },
+    {
+      "case": "a_counted_relation_is_no_side_of_a_pair_relation",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "derivations": {"ID": "SRC.ID"}}, {"id": "LEFT", "dataset": "P", "inner_join": "SECOND", "key": ["ID"], "derivations": {"V": "P.ID"}}, {"id": "RIGHT", "dataset": "SECOND", "inner_join": "P", "key": ["ID"], "derivations": {"V": "P.ID"}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.LEFT.dataset"], "context": {"intermediate": "P", "fields": ["repeat"]}}, {"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.RIGHT.inner_join"], "context": {"intermediate": "P", "fields": ["repeat"]}}]
+    },
+    {
+      "case": "a_pair_relation_is_no_dataset_of_a_counted_relation",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "PAIRS", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "derivations": {"ID": "SRC.ID"}}, {"id": "P", "dataset": "PAIRS", "repeat": {"count": "PAIRS.ID", "index": "N"}, "derivations": {"V": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"intermediate": "PAIRS", "fields": ["key", "inner_join"]}}]
+    },
+    {
       "case": "a_pivot_beside_nearest_still_refuses_require_match",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "require_match": true, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "pivot": {"name": "N", "value": "V", "fields": ["A"]}}]}]},

@@ -1,5 +1,5 @@
 {
-  "about": "The 1.0 front end's own checks on a lowered specification, the rules of the surface its schema cannot state (FUNC-6, WINDOW-5, TIME-10, TIME-22, LOOKUP-3, LOOKUP-17, LOOKUP-27, CSV-10, SUB-3, SUB-14), and CT-13's refusal of each binding that a specification prepared without its project names. Each case takes `specification` and replaces its second column, adding the root fields it needs; the CSV-10 cases edit its input `SRC` instead, and the CT-13 case replaces all its columns.",
+  "about": "The 1.0 front end's own checks on a lowered specification, the rules of the surface its schema cannot state (FUNC-6, WINDOW-5, TIME-10, TIME-22, LOOKUP-3, LOOKUP-17, LOOKUP-27, LOOKUP-29, CSV-10, SUB-3, SUB-14), and CT-13's refusal of each binding that a specification prepared without its project names. Each case takes `specification` and replaces its second column, adding the root fields it needs; the CSV-10 cases edit its input `SRC` instead, and the CT-13 case replaces all its columns.",
   "documents": {
     "specification": {
       "yamaa": "1.0",
@@ -125,6 +125,24 @@
         ]
       },
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-27", "spec_paths": ["intermediates.PAIRS.derivations"], "context": {"expected": "at least one derivation", "intermediate": "PAIRS"}}]
+    },
+    {
+      "case": "a_counted_relation_states_no_key_and_its_dataset_declares_none",
+      "operation": "front_end_checks",
+      "input": {"base": "specification", "edits": [{"set": ["intermediates"], "to": [{"id": "KEPT", "dataset": "SRC", "filter": "SRC.ID > 0"}, {"id": "DAYS", "dataset": "KEPT", "repeat": {"count": "KEPT.ID", "index": "N"}, "derivations": {"ID": "KEPT.ID", "DAY": "N"}}]}]},
+      "issues": []
+    },
+    {
+      "case": "a_counted_relation_without_derivations_is_refused",
+      "operation": "front_end_checks",
+      "input": {"base": "specification", "edits": [{"set": ["intermediates"], "to": [{"id": "KEPT", "dataset": "SRC", "filter": "SRC.ID > 0"}, {"id": "DAYS", "dataset": "KEPT", "repeat": {"count": "KEPT.ID", "index": "N"}}]}]},
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.DAYS.derivations"], "context": {"class": "intermediate_class", "field": "derivations"}}]
+    },
+    {
+      "case": "a_counted_relation_with_no_derivation_is_refused",
+      "operation": "front_end_checks",
+      "input": {"base": "specification", "edits": [{"set": ["intermediates"], "to": [{"id": "KEPT", "dataset": "SRC", "filter": "SRC.ID > 0"}, {"id": "DAYS", "dataset": "KEPT", "repeat": {"count": "KEPT.ID", "index": "N"}, "derivations": {}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-27", "spec_paths": ["intermediates.DAYS.derivations"], "context": {"expected": "at least one derivation", "intermediate": "DAYS"}}]
     },
     {
       "case": "a_warning_unique_without_a_selection_is_not_permitted",

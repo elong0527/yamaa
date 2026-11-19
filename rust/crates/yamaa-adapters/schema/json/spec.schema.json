@@ -1645,7 +1645,7 @@
         },
         "dataset": {
           "$ref": "#/$defs/identifier",
-          "description": "Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).",
+          "description": "Declared input dataset, pair relation or counted relation, SELF for completed derived rows (LOOKUP-7), the left side of a pair relation (LOOKUP-27), or the relation whose records a counted relation repeats (LOOKUP-29).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
@@ -1655,9 +1655,15 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
+        "repeat": {
+          "$ref": "#/$defs/fragment.repeat_class",
+          "description": "Makes the intermediate a counted relation, one record of `dataset` for each whole number from 1 to that record's count; it cannot be declared with inner_join, key, between, order_by, keep, nearest, pivot, absent, require_match or SELF (LOOKUP-29).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "repeat_class"
+        },
         "key": {
           "$ref": "#/$defs/fragment.intermediate_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); none matches every record of the dataset (LOOKUP-5); a pair relation's key pairs its two sides (LOOKUP-27).",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); none matches every record of the dataset (LOOKUP-5); a pair relation's key pairs its two sides (LOOKUP-27), and a counted relation declares none (LOOKUP-29).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "intermediate_key"
         },
@@ -1725,7 +1731,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/fragment.intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record, the current row's columns qualified by the output domain, and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
+          "description": "Per-record derivations over donor fields, the current input record, the current row's columns qualified by the output domain, and records other named intermediates select for it (LOOKUP-15); a pair relation and a counted relation require them, as the fields they expose (LOOKUP-27, LOOKUP-29).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },
@@ -3133,6 +3139,24 @@
       },
       "additionalProperties": false
     },
+    "fragment.repeat_class": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "$ref": "#/$defs/fragment.match_value",
+          "description": "How many records each record of the dataset gives, an int that is zero or more, read as a pair relation's key value is, a field qualified by the dataset or an expression over its fields; a missing or negative count fails the run (LOOKUP-29).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "match_value"
+        },
+        "index": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name the filter and derivations read each built record's number by, an int counting from 1 within its record of the dataset (LOOKUP-29).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        }
+      },
+      "additionalProperties": false
+    },
     "fragment.row_class": {
       "type": "object",
       "properties": {
@@ -3838,7 +3862,7 @@
         },
         "dataset": {
           "$ref": "#/$defs/identifier",
-          "description": "Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).",
+          "description": "Declared input dataset, pair relation or counted relation, SELF for completed derived rows (LOOKUP-7), the left side of a pair relation (LOOKUP-27), or the relation whose records a counted relation repeats (LOOKUP-29).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
@@ -3848,9 +3872,15 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
+        "repeat": {
+          "$ref": "#/$defs/repeat_class",
+          "description": "Makes the intermediate a counted relation, one record of `dataset` for each whole number from 1 to that record's count; it cannot be declared with inner_join, key, between, order_by, keep, nearest, pivot, absent, require_match or SELF (LOOKUP-29).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "repeat_class"
+        },
         "key": {
           "$ref": "#/$defs/intermediate_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); none matches every record of the dataset (LOOKUP-5); a pair relation's key pairs its two sides (LOOKUP-27).",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); none matches every record of the dataset (LOOKUP-5); a pair relation's key pairs its two sides (LOOKUP-27), and a counted relation declares none (LOOKUP-29).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "intermediate_key"
         },
@@ -3918,7 +3948,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record, the current row's columns qualified by the output domain, and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
+          "description": "Per-record derivations over donor fields, the current input record, the current row's columns qualified by the output domain, and records other named intermediates select for it (LOOKUP-15); a pair relation and a counted relation require them, as the fields they expose (LOOKUP-27, LOOKUP-29).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },
@@ -5785,6 +5815,28 @@
       "type": "string",
       "pattern": "^(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)(?:/(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)?)*$",
       "description": "Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated."
+    },
+    "repeat_class": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "$ref": "#/$defs/match_value",
+          "description": "How many records each record of the dataset gives, an int that is zero or more, read as a pair relation's key value is, a field qualified by the dataset or an expression over its fields; a missing or negative count fails the run (LOOKUP-29).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "match_value"
+        },
+        "index": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name the filter and derivations read each built record's number by, an int counting from 1 within its record of the dataset (LOOKUP-29).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        }
+      },
+      "required": [
+        "count",
+        "index"
+      ],
+      "additionalProperties": false
     },
     "root_class": {
       "type": "object",

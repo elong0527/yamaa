@@ -110,8 +110,10 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
     }
     // An intermediate states its own `key`, unless it drives a row template,
     // which declares none (LOOKUP-3, ROW-2; D23, D63); a pair relation always
-    // states it, and its `derivations`, the fields it exposes (LOOKUP-27).
-    // The record is the schema's own for a missing required field.
+    // states it, and its `derivations`, the fields it exposes (LOOKUP-27). A
+    // counted relation states its `derivations` as a pair relation does, and
+    // no key (LOOKUP-29). The record is the schema's own for a missing
+    // required field.
     for item in &spec.intermediates {
         let required = |field: &str, code| SchemaDiagnostic {
             path: format!("{}.{field}", spec.cite(item.meta)),

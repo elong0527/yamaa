@@ -34,47 +34,38 @@ differs between them.
 
 ## How to fix
 
-The per-administration rows belong in the input data. Expand the
-aggregate record into one collected record for each administration
-upstream, and read those records here one to one. For
-expected-but-uncollected rows, use the long-form planning input in
-`adam-advs-carryforward` and enrich it from collected
-data.
-
-When the administrations must be built here, pair each collected
-record with the protocol's dosing period, one record per day of it
-numbered from `1`, and have each record read the period's day of its
-last administration, requiring a match, as
-`schema-lookup-inner-join-counted-rows` does. A record that counts
-more administrations than the period has days then rejects the run
-instead of losing them, and so does a record with a zero or missing
-count:
+Count the administrations from the collected record itself. A relation
+that writes `repeat` builds one record for each administration a
+collected record counts, whatever the count, so no administration is
+written out in advance, as `schema-lookup-repeat-rows` shows for a
+count taken from a record's dates:
 
 ```yaml
 intermediates:
-  - id: LAST
-    dataset: DAYS
-    key: {STUDYID: STUDYID, DOSEDAY: EXDOSCNT}
-    require_match: true
-  - id: EXREC
+  - id: COUNTED
     dataset: EX
-    derivations:
-      LASTDAY: {type: int, derivation: LAST.DOSEDAY}
+    filter: "EX.EXDOSCNT IS NOT NULL"
   - id: ADMIN
-    dataset: EXREC
-    inner_join: DAYS
-    key: [STUDYID]
-    filter: "DAYS.DOSEDAY <= EXREC.LASTDAY"
+    dataset: COUNTED
+    repeat: {count: COUNTED.EXDOSCNT, index: N}
     derivations:
-      USUBJID: EXREC.USUBJID
-      EXSEQ: EXREC.EXSEQ
-      ADOSEN: DAYS.DOSEDAY
+      STUDYID: COUNTED.STUDYID
+      USUBJID: COUNTED.USUBJID
+      EXSEQ: COUNTED.EXSEQ
+      EXTRT: COUNTED.EXTRT
+      EXDOSE: COUNTED.EXDOSE
+      EXDOSU: COUNTED.EXDOSU
+      ASTDT: COUNTED.EXSTDTC
+      AENDT: COUNTED.EXENDTC
+      ADOSEN: N
+      NDOSE: COUNTED.EXDOSCNT
 ```
 
-The requirement is checked only where a record reads `LAST`, so the
-read in `EXREC` is what rejects the run. Checks that each record
-builds as many administrations as it counts, numbered from `1`, then
-also reject a dosing period that leaves out a day a record counts.
+A row template that reads `ADMIN` then builds one row for each of
+them. A record with a zero count builds none. A record with no count
+rejects the run unless it is left out first, as the filter here does:
+decide that such a record stands for no administration before
+writing that filter.
 
 If the analysis genuinely needs only the totals, drop the administration level
 and key on the collected record instead:

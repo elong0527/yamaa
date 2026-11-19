@@ -1,0 +1,105 @@
+yamaa: "1.0"
+type: spec
+domain: ADEX
+keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDTC: date, EXENDTC: date}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, ADOSEN, ASTDT,
+            ATPTN]
+
+intermediates:
+  # Each collected record with the number of days it covers, its first and
+  # last day both counted.
+  - id: EXREC
+    dataset: EX
+    derivations:
+      NDAYS:
+        type: int
+        derivation:
+          diff:
+            type: date
+            start: EX.EXSTDTC
+            end: EX.EXENDTC
+            unit: day
+            closed: both
+
+  # Each collected record once for each of its administrations, two for
+  # each day it covers: the count is an expression over the record. The
+  # administrations numbered 1 and 2 fall on the start date, 3 and 4 on the
+  # next day, and so on.
+  - id: ADMIN
+    dataset: EXREC
+    repeat: {count: "EXREC.NDAYS * 2", index: N}
+    derivations:
+      STUDYID: EXREC.STUDYID
+      USUBJID: EXREC.USUBJID
+      EXSEQ: EXREC.EXSEQ
+      EXTRT: EXREC.EXTRT
+      EXDOSE: EXREC.EXDOSE
+      EXDOSU: EXREC.EXDOSU
+      ADOSEN: N
+      DAYOFF:
+        type: int
+        derivation: "FLOOR((N - 1) / 2)"
+      ASTDT:
+        shift: {type: date, source: EXREC.EXSTDTC, days: DAYOFF}
+      ATPTN:
+        type: int
+        derivation: "N - 2 * DAYOFF"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+
+  - name: EXDOSU
+    type: str
+    label: Dose Units
+
+  - name: ADOSEN
+    type: int
+    label: Administration Sequence Number
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+
+  - name: ATPTN
+    type: int
+    label: Analysis Timepoint (N)
+
+rows:
+  # One record per administration.
+  - id: administration
+    dataset: ADMIN
+    derivations:
+      STUDYID: ADMIN.STUDYID
+      USUBJID: ADMIN.USUBJID
+      EXSEQ: ADMIN.EXSEQ
+      EXTRT: ADMIN.EXTRT
+      EXDOSE: ADMIN.EXDOSE
+      EXDOSU: ADMIN.EXDOSU
+      ADOSEN: ADMIN.ADOSEN
+      ASTDT: ADMIN.ASTDT
+      ATPTN: ADMIN.ATPTN

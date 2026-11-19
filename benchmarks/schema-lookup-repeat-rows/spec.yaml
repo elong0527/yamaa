@@ -1,0 +1,99 @@
+yamaa: "1.0"
+type: spec
+domain: ADEX
+keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDTC: date, EXENDTC: date}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, ADOSEN, ASTDT]
+
+intermediates:
+  # Each collected record with the number of days it covers, its first and
+  # last day both counted. A record with no end date covers its start date
+  # alone.
+  - id: EXREC
+    dataset: EX
+    derivations:
+      ENDDT:
+        type: date
+        derivation:
+          first_available:
+            sources: [EX.EXENDTC, EX.EXSTDTC]
+      NDAYS:
+        type: int
+        derivation:
+          diff:
+            type: date
+            start: EX.EXSTDTC
+            end: ENDDT
+            unit: day
+            closed: both
+
+  # Each collected record once for each day it covers, the day's number
+  # read as N. The first administration is on the start date, so an
+  # administration lies its number less one day after it.
+  - id: ADMIN
+    dataset: EXREC
+    repeat: {count: EXREC.NDAYS, index: N}
+    derivations:
+      STUDYID: EXREC.STUDYID
+      USUBJID: EXREC.USUBJID
+      EXSEQ: EXREC.EXSEQ
+      EXTRT: EXREC.EXTRT
+      EXDOSE: EXREC.EXDOSE
+      EXDOSU: EXREC.EXDOSU
+      ADOSEN: N
+      OFFSET: "N - 1"
+      ASTDT:
+        shift: {type: date, source: EXREC.EXSTDTC, days: OFFSET}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+
+  - name: EXDOSU
+    type: str
+    label: Dose Units
+
+  - name: ADOSEN
+    type: int
+    label: Administration Sequence Number
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+
+rows:
+  # One record per administration.
+  - id: administration
+    dataset: ADMIN
+    derivations:
+      STUDYID: ADMIN.STUDYID
+      USUBJID: ADMIN.USUBJID
+      EXSEQ: ADMIN.EXSEQ
+      EXTRT: ADMIN.EXTRT
+      EXDOSE: ADMIN.EXDOSE
+      EXDOSU: ADMIN.EXDOSU
+      ADOSEN: ADMIN.ADOSEN
+      ASTDT: ADMIN.ASTDT
