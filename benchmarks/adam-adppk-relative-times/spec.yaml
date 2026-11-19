@@ -1,0 +1,145 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPPK
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDTC: datetime}
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCDTC: datetime}
+
+output:
+  path: adppk.csv
+  columns: [STUDYID, USUBJID, ASEQ, ADTM, EVID, AMT, FANLDTM, AFRLT, APRLT,
+            DOSEA]
+  order_by: [STUDYID, USUBJID, ASEQ]
+
+intermediates:
+  - id: FIRSTDOSE
+    dataset: EX
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+    filter: "EX.EXDOSE > 0"
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: first
+
+  # The latest dose record before the sample, among the dose records built
+  # first. A sample at a dose's own time was taken before that dose, so the
+  # dose at its time is left out.
+  - id: PREVDOSE
+    dataset: SELF
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+    between: {value: ADTM, lower: ADTM, closed: neither}
+    filter: "SELF.EVID = 1"
+    order_by: [SELF.ADTM]
+    keep: last
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+
+  - name: EVID
+    type: int
+    label: Event ID
+    verifications:
+      - allowed_values:
+          values: [0, 1]
+
+  - name: AMT
+    type: float
+    label: Actual Amount of Dose Received
+
+  - name: FANLDTM
+    type: datetime
+    label: First Dose Date/Time
+    derivation: FIRSTDOSE.EXSTDTC
+
+  - name: AFRLT
+    type: float
+    label: Actual Relative Time from First Dose (h)
+    derivation:
+      diff:
+        type: datetime
+        start: FANLDTM
+        end: ADTM
+        unit: hour
+
+  - name: APRLT
+    type: float
+    label: Actual Relative Time from Previous Dose (h)
+
+  - name: DOSEA
+    type: float
+    label: Actual Treatment Dose
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADTM, EVID]
+
+rows:
+  - id: dose
+    dataset: EX
+    filter: "EX.EXDOSE > 0"
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      ADTM: EX.EXSTDTC
+      EVID: 1
+      AMT: EX.EXDOSE
+      APRLT: 0
+      DOSEA: EX.EXDOSE
+
+  - id: concentration
+    dataset: PC
+    derivations:
+      STUDYID: PC.STUDYID
+      USUBJID: PC.USUBJID
+      ADTM: PC.PCDTC
+      EVID: 0
+      AMT: null
+      APRLT:
+        case:
+          - when: "PREVDOSE.ADTM IS NULL"
+            then: AFRLT
+          - otherwise:
+              diff:
+                type: datetime
+                start: PREVDOSE.ADTM
+                end: ADTM
+                unit: hour
+      DOSEA:
+        first_available:
+          sources: [PREVDOSE.AMT, FIRSTDOSE.EXDOSE]
+
+verifications:
+  - row_count:
+      min: 10
+      max: 10
+  - assert:
+      id: a-dose-record-starts-its-own-interval
+      when: "EVID = 1"
+      require: "APRLT = 0 AND DOSEA = AMT"
+  - assert:
+      id: time-since-previous-dose-never-exceeds-time-since-first-dose
+      when: "AFRLT IS NOT NULL"
+      require: "APRLT <= AFRLT"
+  - assert:
+      id: negative-time-only-before-the-first-dose
+      when: "APRLT < 0"
+      require: "APRLT = AFRLT"

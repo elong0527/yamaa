@@ -1,0 +1,17 @@
+lifecycle: draft
+standard: ADaM
+domain: ADPPK
+review:
+  concerns:
+    - A population PK model can read a run of equal doses as one dose record
+      with the number of further doses and the interval between them, so an
+      exposure record covering several days need not become one record per
+      administration.
+    - Four subjects cover once-daily and twice-daily records, an end before
+      the last day's dose time, an end and a start collected without a time,
+      a single dose, a record with no end and a dose of zero.
+    - The further doses are those that fit between the first administration
+      and the end as collected (subject 002's record ending at 07:00 on day 5
+      has its last dose on day 4), an end with no time covers the whole day,
+      a start with no time is taken at midnight and flagged, and a record
+      with no end is one dose rather than an ongoing one.

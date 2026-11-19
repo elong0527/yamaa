@@ -1,0 +1,16 @@
+lifecycle: draft
+standard: ADaM
+domain: ADPPK
+review:
+  concerns:
+    - A population PK model takes time since the first dose as its time axis,
+      and time since the previous dose and that dose's amount to describe
+      each concentration, so every dose and concentration record needs them.
+    - Two subjects cover a sample before the first dose, a sample at a dose's
+      own time, a change of dose, a dose of zero between two samples and a
+      subject with one dose.
+    - A sample taken at the time of a dose belongs to the dose before
+      (subject 001's sample at 08:00 on day 2 is 24 hours after the 100 mg
+      dose, not 0 hours after the 50 mg dose), a dose of zero is not a
+      previous dose (the 08:30 sample on day 3 still refers to the 50 mg
+      dose), and before the first dose both times are negative.
