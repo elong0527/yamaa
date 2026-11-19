@@ -1,0 +1,141 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPPK
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDTC: datetime}
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCDTC: datetime}
+  VS:
+    path: input/vs.csv
+    types: {VSSEQ: int, VSSTRESN: float, VSDTC: date}
+  LB:
+    path: input/lb.csv
+    types: {LBSEQ: int, LBSTRESN: float, LBDTC: date}
+  ADSL:
+    path: input/adsl.csv
+    types: {AGE: int}
+    key: [STUDYID, USUBJID]
+
+output:
+  path: adppk.csv
+  columns: [STUDYID, USUBJID, ASEQ, ADTM, EVID, WT, CREAT, CRCL]
+  order_by: [STUDYID, USUBJID, ASEQ]
+
+# The latest result dated on or before the record's date. A record of the
+# test with no result is passed over.
+intermediates:
+  - id: WEIGHT
+    dataset: VS
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+    between: {value: ADT, lower: VSDTC}
+    filter: "VS.VSTESTCD = 'WEIGHT' AND VS.VSSTRESN IS NOT NULL"
+    order_by: [VS.VSDTC, VS.VSSEQ]
+    keep: last
+
+  - id: CREATININE
+    dataset: LB
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+    between: {value: ADT, lower: LBDTC}
+    filter: "LB.LBTESTCD = 'CREAT' AND LB.LBSTRESN IS NOT NULL"
+    order_by: [LB.LBDTC, LB.LBSEQ]
+    keep: last
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+
+  - name: EVID
+    type: int
+    label: Event ID
+    verifications:
+      - allowed_values:
+          values: [0, 1]
+
+  # The record's date, which the results are dated against.
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      to_date:
+        source: ADTM
+
+  - name: WT
+    type: float
+    label: Body Weight (kg)
+    derivation: WEIGHT.VSSTRESN
+
+  - name: CREAT
+    type: float
+    label: Serum Creatinine (umol/L)
+    derivation: CREATININE.LBSTRESN
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL.AGE
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: ADSL.SEX
+
+  # Cockcroft-Gault with creatinine in umol/L.
+  - name: CRCL
+    type: float
+    label: Creatinine Clearance (mL/min)
+    derivation:
+      case:
+        - when: "SEX = 'M'"
+          then: "(140 - AGE) * WT * 1.23 / CREAT"
+        - when: "SEX = 'F'"
+          then: "(140 - AGE) * WT * 1.04 / CREAT"
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADTM, EVID]
+
+rows:
+  - id: dose
+    dataset: EX
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      ADTM: EX.EXSTDTC
+      EVID: 1
+
+  - id: concentration
+    dataset: PC
+    derivations:
+      STUDYID: PC.STUDYID
+      USUBJID: PC.USUBJID
+      ADTM: PC.PCDTC
+      EVID: 0
+
+verifications:
+  - row_count:
+      min: 10
+      max: 10
+  - assert:
+      id: clearance-needs-both-weight-and-creatinine
+      require: >-
+        (CRCL IS NULL AND (WT IS NULL OR CREAT IS NULL))
+        OR (CRCL > 0 AND WT > 0 AND CREAT > 0)

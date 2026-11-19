@@ -1,0 +1,221 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPPK
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDTC: datetime}
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCDTC: datetime}
+  VS:
+    path: input/vs.csv
+    types: {VSSEQ: int, VSSTRESN: float}
+  LB:
+    path: input/lb.csv
+    types: {LBSEQ: int, LBSTRESN: float}
+  ADSL:
+    path: input/adsl.csv
+    types: {AGE: int}
+    key: [STUDYID, USUBJID]
+
+output:
+  path: adppk.csv
+  columns: [STUDYID, USUBJID, ASEQ, ADTM, EVID, AGE, SEX, SEXN, RACE, RACEN,
+            WTBL, HTBL, BMIBL, BSABL, CREATBL, ALTBL, TBILBL, CRCLBL, EGFRBL]
+  order_by: [STUDYID, USUBJID, ASEQ]
+
+# A subject's baseline records of the named tests, one field per test. A
+# test with no baseline record leaves its field missing.
+intermediates:
+  - id: VSBL
+    dataset: VS
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+    filter: "VS.VSBLFL = 'Y' AND VS.VSTESTCD IN ('WEIGHT', 'HEIGHT')"
+    pivot: {name: VSTESTCD, value: VSSTRESN, fields: [WEIGHT, HEIGHT]}
+
+  - id: LBBL
+    dataset: LB
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+    filter: "LB.LBBLFL = 'Y' AND LB.LBTESTCD IN ('CREAT', 'ALT', 'BILI')"
+    pivot: {name: LBTESTCD, value: LBSTRESN, fields: [CREAT, ALT, BILI]}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+
+  - name: EVID
+    type: int
+    label: Event ID
+    verifications:
+      - allowed_values:
+          values: [0, 1]
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL.AGE
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: ADSL.SEX
+
+  - name: SEXN
+    type: int
+    label: Sex (N)
+    derivation:
+      mapping:
+        source: SEX
+        dict: {M: 1, F: 2}
+
+  - name: RACE
+    type: str
+    label: Race
+    derivation: ADSL.RACE
+
+  - name: RACEN
+    type: int
+    label: Race (N)
+    derivation:
+      case:
+        - when: "RACE = 'AMERICAN INDIAN OR ALASKA NATIVE'"
+          then: 1
+        - when: "RACE = 'ASIAN'"
+          then: 2
+        - when: "RACE = 'BLACK OR AFRICAN AMERICAN'"
+          then: 3
+        - when: "RACE = 'NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER'"
+          then: 4
+        - when: "RACE = 'WHITE'"
+          then: 5
+        - otherwise: 6
+
+  - name: WTBL
+    type: float
+    label: Baseline Weight (kg)
+    derivation: VSBL.WEIGHT
+
+  - name: HTBL
+    type: float
+    label: Baseline Height (cm)
+    derivation: VSBL.HEIGHT
+
+  - name: BMIBL
+    type: float
+    label: Baseline Body Mass Index (kg/m2)
+    derivation: "WTBL / POWER(HTBL / 100, 2)"
+
+  # Mosteller.
+  - name: BSABL
+    type: float
+    label: Baseline Body Surface Area (m2)
+    derivation: "SQRT(HTBL * WTBL / 3600)"
+
+  - name: CREATBL
+    type: float
+    label: Baseline Creatinine (umol/L)
+    derivation: LBBL.CREAT
+
+  - name: ALTBL
+    type: float
+    label: Baseline Alanine Aminotransferase (U/L)
+    derivation: LBBL.ALT
+
+  - name: TBILBL
+    type: float
+    label: Baseline Bilirubin (umol/L)
+    derivation: LBBL.BILI
+
+  # Cockcroft-Gault with creatinine in umol/L.
+  - name: CRCLBL
+    type: float
+    label: Baseline Creatinine Clearance (mL/min)
+    derivation:
+      case:
+        - when: "SEX = 'M'"
+          then: "(140 - AGE) * WTBL * 1.23 / CREATBL"
+        - when: "SEX = 'F'"
+          then: "(140 - AGE) * WTBL * 1.04 / CREATBL"
+
+  # Creatinine in mg/dL (umol/L over 88.42) over the sex's threshold, 0.9
+  # for a male and 0.7 for a female subject.
+  - name: CREATR
+    type: float
+    label: Baseline Creatinine Relative to the Threshold
+    derivation:
+      case:
+        - when: "SEX = 'M'"
+          then: "CREATBL / 88.42 / 0.9"
+        - when: "SEX = 'F'"
+          then: "CREATBL / 88.42 / 0.7"
+
+  # CKD-EPI 2021 creatinine equation.
+  - name: EGFRBL
+    type: float
+    label: Baseline Estimated GFR (mL/min/1.73 m2)
+    derivation:
+      case:
+        - when: "SEX = 'M' AND CREATR > 1"
+          then: "142 * POWER(CREATR, -1.2) * POWER(0.9938, AGE)"
+        - when: "SEX = 'M'"
+          then: "142 * POWER(CREATR, -0.302) * POWER(0.9938, AGE)"
+        - when: "SEX = 'F' AND CREATR > 1"
+          then: "142 * POWER(CREATR, -1.2) * POWER(0.9938, AGE) * 1.012"
+        - when: "SEX = 'F'"
+          then: "142 * POWER(CREATR, -0.241) * POWER(0.9938, AGE) * 1.012"
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADTM, EVID]
+
+rows:
+  - id: dose
+    dataset: EX
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      ADTM: EX.EXSTDTC
+      EVID: 1
+
+  - id: concentration
+    dataset: PC
+    derivations:
+      STUDYID: PC.STUDYID
+      USUBJID: PC.USUBJID
+      ADTM: PC.PCDTC
+      EVID: 0
+
+verifications:
+  - row_count:
+      min: 10
+      max: 10
+  - assert:
+      id: body-size-indices-need-weight-and-height
+      require: >-
+        (BMIBL IS NULL AND BSABL IS NULL AND (WTBL IS NULL OR HTBL IS NULL))
+        OR (BMIBL > 0 AND BSABL > 0)
+  - assert:
+      id: clearance-needs-both-weight-and-creatinine
+      require: >-
+        (CRCLBL IS NULL AND (WTBL IS NULL OR CREATBL IS NULL))
+        OR CRCLBL > 0
+  - assert:
+      id: filtration-rate-needs-creatinine
+      require: "(EGFRBL IS NULL AND CREATBL IS NULL) OR EGFRBL > 0"

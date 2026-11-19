@@ -1,0 +1,17 @@
+lifecycle: draft
+standard: ADaM
+domain: ADPPK
+review:
+  concerns:
+    - A population PK model must decide what to do with a concentration below
+      the limit of quantification, and the two usual choices need different
+      values on the same record, so the dataset carries both sets.
+    - Three subjects cover a result below the limit before any quantified
+      result, two in a row after quantified results, one at a dose's own
+      time, one that follows a sample not done, limits of 1 and 0.5 ng/mL,
+      and a subject with no quantified result at all.
+    - Under the second method only the first result below the limit after a
+      quantified one gets a value, half the limit (subject 001's 12 h sample
+      is 0.5); the next one is left out (the 24 h sample), and so is one
+      with no sample before it (the pre-dose sample), rather than every
+      such result getting half the limit.

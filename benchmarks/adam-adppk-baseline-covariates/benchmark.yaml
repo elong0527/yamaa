@@ -1,0 +1,19 @@
+lifecycle: draft
+standard: ADaM
+domain: ADPPK
+review:
+  concerns:
+    - A population PK model tests subject characteristics as covariates, and
+      its software reads numbers only, so every record carries the baseline
+      body size, laboratory values and renal function, with a numeric code
+      for sex and race.
+    - Five subjects cover both sexes on both sides of the filtration rate
+      equation's creatinine threshold, a race outside the coded list, a
+      subject with no height, one with no baseline bilirubin, one whose only
+      creatinine is after baseline, and a second weight, a later weight and
+      a glucose result that are not used.
+    - A baseline value that is absent stays empty with everything computed
+      from it (subject 003 has no height, so no body mass index or body
+      surface area; subject 004 has no baseline creatinine, so no clearance
+      or filtration rate), rather than being filled from a later visit or
+      a typical value.
