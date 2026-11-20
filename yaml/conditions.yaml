@@ -246,7 +246,7 @@ conditions:
     message: "project function {function} returned a result its declaration does not admit"
   invalid_intermediate_driver:
     phases: [validation]
-    message: "intermediate {intermediate} drives rows, so it cannot declare {fields}"
+    message: "the records of intermediate {intermediate} are read as a row driver's, so it cannot declare {fields}"
   invalid_odm_context:
     phases: [validation]
     message: "an odm read of {dataset} is not valid in this {location}"
@@ -289,6 +289,9 @@ conditions:
   key_dependency:
     phases: [validation]
     message: "key column {column} is not computed from one base record and earlier keys"
+    message_variants:
+      - when: dependency
+        message: "key column {column} reads {dependency}, which is not a key declared before it; without row templates a key reads only its base record and the keys before it"
   length_failed:
     phases: [verification]
     message: "column {column} holds a value longer than {max} characters in {failure_count} of the rows"
@@ -307,6 +310,9 @@ conditions:
   missing_derivation:
     phases: [validation]
     message: "no derivation gives column {column} its value"
+    message_variants:
+      - when: rows
+        message: "no derivation gives column {column} its value in row templates {rows}; a column a template does not use is derived null there or on the column"
   missing_input:
     phases: [mapping]
     message: "the string template reads {variable}, which is missing"
