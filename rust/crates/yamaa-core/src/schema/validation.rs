@@ -681,8 +681,8 @@ impl Run<'_> {
     /// a bare value instead of its mapping, such as `to_date: PC.PCDTC`
     /// (SCHEMA-12): when the value is one that field admits, the mapping
     /// that writes it there, `{source: PC.PCDTC}`. A value the field does
-    /// not admit either, and an operation that requires several fields or
-    /// none, has no hint.
+    /// not admit either, a bare null where null clears a field, and an
+    /// operation that requires several fields or none, has no hint.
     fn lone_field_hint(
         &mut self,
         fields: &[SchemaField],
@@ -691,6 +691,11 @@ impl Run<'_> {
         diagnostics: &mut [SchemaDiagnostic],
     ) -> Result<(), ValidationError> {
         if matches!(self.input.nodes()[payload.value], N::Mapping(_)) {
+            return Ok(());
+        }
+        // Where null clears a field, `{field: null}` would clear a required
+        // field rather than write it, so a bare null names no mapping.
+        if self.nulls.clears() && matches!(self.input.nodes()[payload.value], N::Null) {
             return Ok(());
         }
         let Some(field) = only_required_field(self.schema, fields) else {
