@@ -784,17 +784,55 @@ def render_review_table(counted, skipped, categories):
     )
 
 
-def render_review_page(entries, saved):
-    """The page that says what the review is for, and how far it has come."""
-    names = review_queue(entries)
-    reviews = saved["reviews"] if saved else []
-    logins = sorted(
-        {item["reviewer"] for item in reviews if item["benchmark"] in names}
+def render_reviewers(names, saved):
+    """Each reviewer of the benchmarks in `names`, with what they contributed in
+    every round: the benchmarks they reviewed, and their reviews by decision. A
+    review again after rework is one more review, not one more benchmark. The
+    reviewer with the most benchmarks comes first."""
+    if saved is None:
+        return "Reviewers are not available in this build."
+    made = {}
+    for review in saved["reviews"]:
+        if review["benchmark"] in names:
+            made.setdefault(review["reviewer"], []).append(review)
+    if not made:
+        return "None yet."
+    rows = sorted(
+        (
+            (
+                login,
+                len({review["benchmark"] for review in reviews}),
+                len(reviews),
+                *(
+                    sum(review["overall"] == decision for review in reviews)
+                    for decision in review_status.DECISIONS
+                ),
+            )
+            for login, reviews in made.items()
+        ),
+        key=lambda row: (-row[1], row[0]),
     )
+    headings = ("Reviewer", "Benchmarks reviewed", "Reviews", *review_status.DECISIONS)
+    return "\n".join(
+        (
+            "| " + " | ".join(headings) + " |",
+            "|---" * len(headings) + "|",
+            *(
+                f"| `{escape(login)}` | " + " | ".join(map(str, counts)) + " |"
+                for login, *counts in rows
+            ),
+        )
+    )
+
+
+def render_review_page(entries, saved):
+    """The page that says what the review is for, who reviews, and how far it
+    has come."""
+    names = review_queue(entries)
     template = Template(REVIEW_PAGE.read_text(encoding="utf-8"))
     result = template.substitute(
         total=plural(len(names), "benchmark"),
-        reviewers=", ".join(f"`{escape(login)}`" for login in logins) or "None yet",
+        reviewers=render_reviewers(names, saved),
         status=render_review_status(entries, saved),
     )
     return result.encode("ascii", "xmlcharrefreplace")

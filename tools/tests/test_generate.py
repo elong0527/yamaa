@@ -1512,12 +1512,64 @@ class DashboardTests(unittest.TestCase):
                 )
                 + script,
             )
-        page = generate.render_review_page(entries, saved).decode("ascii")
-        self.assertIn("| Reviewers | `a` |\n", page)
         page = generate.render_review_page(entries, None).decode("ascii")
-        self.assertIn("| Reviewers | None yet |\n", page)
         self.assertIn("It covers\n2 benchmarks.", page)
         self.assertIn("## Status\n\nStatus is not available in this build.\n", page)
+
+    def test_review_page_counts_what_each_reviewer_contributed(self):
+        # Every review counts, a new one after rework included, but only for a
+        # benchmark under review. The most benchmarks come first, then the login.
+        entries = [
+            ("adam-adsl-age", "Age", "ADSL"),
+            ("sdtm-dm-basic", "Basic", "DM"),
+            ("negative-refused", "Refused", "ADSL"),
+        ]
+        discussions = "https://github.com/elong0527/yamaa/discussions/"
+        reviews = [
+            {
+                "benchmark": benchmark,
+                "reviewer": reviewer,
+                "posted": posted,
+                "overall": overall,
+                "url": discussions + number,
+            }
+            for number, benchmark, reviewer, posted, overall in (
+                ("1", "sdtm-dm-basic", "c", "2026-11-02T09:00:00Z", "Not approve"),
+                ("2", "adam-adsl-age", "a", "2026-11-02T10:00:00Z", "Not approve"),
+                ("3", "negative-refused", "a", "2026-11-02T11:00:00Z", "Approve"),
+                ("4", "sdtm-dm-basic", "b", "2026-11-03T09:00:00Z", "Approve"),
+                ("5", "adam-adsl-age", "b", "2026-11-03T10:00:00Z", "Approve"),
+                ("6", "adam-adsl-age", "c", "2026-11-03T11:00:00Z", "Approve"),
+                # The new review of c after the rework of sdtm-dm-basic.
+                ("7", "sdtm-dm-basic", "c", "2026-11-06T09:00:00Z", "Approve"),
+                ("8", "negative-refused", "d", "2026-11-06T10:00:00Z", "Approve"),
+            )
+        ]
+        cases = (
+            (
+                "reviews",
+                {"updated": "2026-11-06 12:00 UTC", "reviews": reviews},
+                "| Reviewer | Benchmarks reviewed | Reviews | Approve | Not approve |\n"
+                "|---|---|---|---|---|\n"
+                "| `b` | 2 | 2 | 2 | 0 |\n"
+                "| `c` | 2 | 3 | 2 | 1 |\n"
+                "| `a` | 1 | 1 | 0 | 1 |",
+            ),
+            (
+                "none under review",
+                {"updated": "2026-11-06 12:00 UTC", "reviews": reviews[-1:]},
+                "None yet.",
+            ),
+            ("no saved reviews", None, "Reviewers are not available in this build."),
+        )
+        for label, saved, expected in cases:
+            with self.subTest(case=label):
+                page = generate.render_review_page(entries, saved).decode("ascii")
+                self.assertIn(
+                    f"Thank you for every review!\n\n{expected}\n\n## How to review\n",
+                    page,
+                    label,
+                )
 
     def test_every_source_shown_has_an_edit_link_to_a_file_that_exists(self):
         """The review ask points at the Edit buttons, so no source may lack one."""
