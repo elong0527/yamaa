@@ -1302,6 +1302,7 @@ dependencies = [
  "arrow-schema",
  "base64",
  "brotli",
+ "brotli-decompressor",
  "bytes",
  "cc",
  "flatbuffers",

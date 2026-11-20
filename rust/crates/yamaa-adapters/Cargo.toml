@@ -14,7 +14,7 @@ default = ["yaml", "parquet", "readstat", "odm", "arrow"]
 yaml = ["dep:yamaa-saphyr-parser", "dep:num-bigint"]
 # Source and artifact codecs share one edge, including native Zstd compression.
 # The reader reads the Arrow schema a file embeds, so it needs Arrow too.
-parquet = ["arrow", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap", "dep:ahash"]
+parquet = ["arrow", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli-decompressor", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap", "dep:ahash"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["dep:cc"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
@@ -60,7 +60,9 @@ flatbuffers = { version = "=25.12.19", default-features = false, optional = true
 # Select only that backend; rust_backend would also compile unused miniz_oxide.
 bytes = { version = "1.12.1", optional = true }
 base64 = { version = "0.22.1", optional = true }
-brotli = { version = "8.0.4", default-features = false, features = ["std"], optional = true }
+# Brotli pages are only decoded, so the decoder alone is a dependency; the
+# brotli crate, whose encoder only the tests use, stays out of the packages.
+brotli-decompressor = { version = "5.0.3", default-features = false, features = ["std"], optional = true }
 flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs"], optional = true }
 lz4_flex = { version = "0.11.6", optional = true }
 zstd = { version = "0.14.3", default-features = false, optional = true }
@@ -86,6 +88,8 @@ windows-sys = { version = "0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_F
 # test inputs that pyarrow once wrote: only test builds compile it, and no
 # package builds or vendors it (#3878).
 parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"] }
+# The encoder of the unit tests' Brotli pages; the oracle already builds it.
+brotli = { version = "8.0.4", default-features = false, features = ["std"] }
 
 [build-dependencies]
 # Builds the reviewed read-only SAS input backend when readstat is enabled.
