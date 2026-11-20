@@ -85,8 +85,13 @@ start together would all read it, and each site rebuild would send them to the
 next one together. The mark records that the reviewer left the page, not that
 GitHub published the review.
 
-`review/` is the page to circulate: its purpose, people and how-to are authored
-in `docs/articles/benchmark-review.md`, and the generator adds the status.
+`review/` is the page to circulate: its purpose, people, how-to and the way
+feedback is handled, from the ask for reviews to the new review after rework,
+are authored in `docs/articles/benchmark-review.md`, and the generator adds the
+reviewers and the status. The reviewers table counts, for each reviewer of a
+benchmark under review, the benchmarks they reviewed and their reviews in every
+round by decision, so a new review after rework adds a review but not a
+benchmark; the most benchmarks come first.
 Its table of benchmarks shows each reviewer's decision in the current round,
 in the order they reviewed, as soon as it is published, so a disagreement
 can be discussed before the benchmark settles. Each decision links to the
