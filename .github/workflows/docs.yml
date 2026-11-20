@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.redeployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,8 +49,29 @@ jobs:
       - name: Build the strict site from current sources
         run: make docs
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      # One artifact name per attempt: a re-run attempt otherwise also sees
+      # the earlier attempt's github-pages artifact, and deploy-pages refuses
+      # a name that more than one artifact of the run holds.
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ./site
+          name: github-pages-${{ github.run_attempt }}
+      # The artifact API can list no artifact just after the upload, or the
+      # deployment can time out; the site was built and uploaded, so deploy
+      # it once more after a pause before failing the run. Each attempt waits
+      # at most five minutes, so both fit in the job's 15.
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         id: deployment
+        continue-on-error: true
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+          timeout: 300000
+      - name: Wait before deploying again
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: redeployment
+        if: steps.deployment.outcome == 'failure'
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+          timeout: 300000
