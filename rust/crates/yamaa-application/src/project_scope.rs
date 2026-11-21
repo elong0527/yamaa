@@ -17,19 +17,37 @@ use yamaa_core::project_function::Language;
 use yamaa_core::project_scope as scope;
 use yamaa_core::schema::{Document, DocumentNode as N};
 
-/// A file location together with the path its specification wrote.
+/// A file location together with the path its specification wrote and the
+/// layer that wrote it.
 #[derive(Clone, Debug)]
 struct Located {
     location: String,
     written: String,
+    source: String,
 }
 
 #[derive(Clone, Debug)]
 struct Input {
     dataset: String,
     path: Option<Located>,
-    /// The identity of the producer a `schema` link names.
-    schema: Option<String>,
+    schema: Option<Schema>,
+}
+
+/// An input's `schema` link: the identity of the producer it names and of the
+/// layer that wrote it.
+#[derive(Clone, Debug)]
+struct Schema {
+    producer: String,
+    source: String,
+}
+
+/// An in-scope producer link: the consuming input, the producer listing and
+/// the layer that wrote the input's `schema`.
+#[derive(Clone, Debug)]
+struct Link {
+    dataset: String,
+    producer: usize,
+    source: String,
 }
 
 /// One specification a section lists, with the metadata project operations
@@ -141,6 +159,16 @@ fn identified(diagnostic: Diagnostic, entry: &str) -> Diagnostic {
     identify(&mut issues, entry);
     let [issue] = issues;
     issue
+}
+
+/// Name `entry` as the listed specification a finding belongs to, and
+/// `source`, the layer that wrote the field it is about, as the document it
+/// comes from, which may be a layer above the entry (P-ISSUE-1).
+fn identified_in(mut diagnostic: Diagnostic, entry: &str, source: &str) -> Diagnostic {
+    diagnostic
+        .context
+        .insert("source".into(), Value::String(source.into()));
+    identified(diagnostic, entry)
 }
 
 fn text(document: &Document, node: usize) -> Option<&str> {
@@ -337,13 +365,14 @@ impl Project {
                     .artifact_location()
                     .is_some_and(|location| same_location(location, &path.location))
             }) {
-                issues.push(identified(
+                issues.push(identified_in(
                     scope::unlinked_producer(
                         &input.dataset,
                         &path.written,
                         self.listed[producer].identity(),
                     ),
                     listed.identity(),
+                    &path.source,
                 ));
             }
         }
@@ -410,8 +439,12 @@ impl Project {
                     .inputs
                     .iter()
                     .filter_map(|input| {
-                        let producer = position(input.schema.as_deref()?)?;
-                        Some((input.dataset.clone(), producer))
+                        let schema = input.schema.as_ref()?;
+                        Some(Link {
+                            dataset: input.dataset.clone(),
+                            producer: position(&schema.producer)?,
+                            source: schema.source.clone(),
+                        })
                     })
                     .collect::<Vec<_>>()
             })
@@ -420,9 +453,9 @@ impl Project {
             .iter()
             .map(|links| {
                 let mut producers = Vec::new();
-                for &(_, producer) in links {
-                    if !producers.contains(&producer) {
-                        producers.push(producer);
+                for link in links {
+                    if !producers.contains(&link.producer) {
+                        producers.push(link.producer);
                     }
                 }
                 producers
@@ -449,8 +482,8 @@ impl Project {
                 let next = cycle_members[(offset + 1) % cycle_members.len()];
                 let dataset = links[member]
                     .iter()
-                    .find(|(_, producer)| *producer == next)
-                    .map_or("", |(dataset, _)| dataset.as_str());
+                    .find(|link| link.producer == next)
+                    .map_or("", |link| link.dataset.as_str());
                 refused[member].push(identified(
                     scope::workflow_cycle(dataset, &identities),
                     self.listed[members[member]].identity(),
@@ -465,7 +498,10 @@ impl Project {
                 listed: members[position],
                 producers: links[position]
                     .iter()
-                    .map(|(dataset, producer)| (dataset.clone(), members[*producer]))
+                    .map(|link| Link {
+                        producer: members[link.producer],
+                        ..link.clone()
+                    })
                     .collect(),
                 refused: refused[position].take().unwrap_or_default(),
             })
@@ -642,6 +678,7 @@ fn read_listing(
             .map(|location| Located {
                 location,
                 written: origin.written.to_owned(),
+                source: origin.declaring_source.to_owned(),
             })
     };
     let model = document.document();
@@ -665,6 +702,10 @@ fn read_listing(
                         .resolve_from(origin.base_source, origin.written)
                         .or_else(|_| resources.location_from(origin.base_source, origin.written))
                         .ok()
+                        .map(|producer| Schema {
+                            producer,
+                            source: origin.declaring_source.to_owned(),
+                        })
                 });
             listed.inputs.push(Input {
                 dataset: dataset.to_owned(),
@@ -700,8 +741,8 @@ fn domain(model: &Document) -> Option<String> {
 #[derive(Clone, Debug)]
 pub struct Step {
     listed: usize,
-    /// In-scope producer links: the consuming input and the producer listing.
-    producers: Vec<(String, usize)>,
+    /// In-scope producer links, each naming its producer by listing.
+    producers: Vec<Link>,
     refused: Vec<Diagnostic>,
 }
 impl Step {
@@ -715,19 +756,25 @@ impl Step {
     }
     /// The run-scope producers this specification reads, by listing.
     pub fn producers(&self) -> impl Iterator<Item = usize> + '_ {
-        self.producers.iter().map(|(_, producer)| *producer)
+        self.producers.iter().map(|link| link.producer)
     }
     /// Each in-scope producer link: the producer's listing and the
     /// `producer_not_completed` finding the specification reports when that
-    /// producer did not complete, naming the consumer as its entry.
+    /// producer did not complete, naming the consumer as its entry and the
+    /// layer that wrote the link as its source.
     pub fn links(&self, project: &Project) -> Vec<(usize, Diagnostic)> {
         let consumer = project.listed[self.listed].identity();
         self.producers
             .iter()
-            .map(|(dataset, producer)| {
-                let finding =
-                    scope::producer_not_completed(dataset, project.listed[*producer].identity());
-                (*producer, identified(finding, consumer))
+            .map(|link| {
+                let finding = scope::producer_not_completed(
+                    &link.dataset,
+                    project.listed[link.producer].identity(),
+                );
+                (
+                    link.producer,
+                    identified_in(finding, consumer, &link.source),
+                )
             })
             .collect()
     }
