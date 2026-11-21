@@ -56,6 +56,35 @@ pub fn admit_fields<'a>(
     Ok(())
 }
 
+/// The names of the key columns, in declaration order.
+fn key_columns(dataset: &Dataset) -> JsonValue {
+    JsonValue::Array(
+        dataset
+            .columns
+            .iter()
+            .filter(|column| column.key_sequence.is_some())
+            .map(|column| JsonValue::String(column.declaration.name.value.clone()))
+            .collect(),
+    )
+}
+
+/// The row's values of the key columns, in declaration order.
+fn key_values<T: TableAccess>(
+    dataset: &Dataset,
+    table: &T,
+    row: usize,
+) -> Result<JsonValue, Finding> {
+    let mut values = Vec::new();
+    for (key, column) in dataset.columns.iter().enumerate() {
+        if column.key_sequence.is_some() {
+            values.push(JsonValue::from(owned(table.cell(row, key).map_err(
+                |_| artifact_mismatch(dataset, "held artifact key access"),
+            )?)));
+        }
+    }
+    Ok(JsonValue::Array(values))
+}
+
 /// The key columns and the row's key values, reported with a row finding.
 fn keys<T: TableAccess>(
     dataset: &Dataset,
@@ -63,26 +92,29 @@ fn keys<T: TableAccess>(
     row: usize,
     finding: &mut Finding,
 ) -> Result<(), Finding> {
-    let mut names = Vec::new();
-    let mut values = Vec::new();
-    for (key, column) in dataset.columns.iter().enumerate() {
-        if column.key_sequence.is_some() {
-            names.push(JsonValue::String(column.declaration.name.value.clone()));
-            values.push(JsonValue::from(owned(table.cell(row, key).map_err(
-                |_| artifact_mismatch(dataset, "held artifact key access"),
-            )?)));
-        }
-    }
     finding
         .context
-        .insert("key_columns".into(), JsonValue::Array(names));
+        .insert("key_columns".into(), key_columns(dataset));
     finding
         .context
-        .insert("key_values".into(), JsonValue::Array(values));
+        .insert("key_values".into(), key_values(dataset, table, row)?);
     Ok(())
 }
 
-/// A value the transport cannot carry: the dataset, column, row and value.
+/// What a refusal cause of XPT-7 or XPT-8 says of its value.
+fn cause_detail(cause: &str) -> &'static str {
+    match cause {
+        "empty_string" => "a present empty string reads back as missing",
+        "ascii" => "text is not printable ASCII",
+        "length" => "text is longer than 200 bytes",
+        "trailing_blank" => "a trailing blank reads back as padding",
+        "integer" => "an int beyond 2^53 has no exact IBM double",
+        "magnitude" => "the magnitude is outside the IBM double range",
+        _ => "a SAS date counts from 1582-01-01",
+    }
+}
+
+/// A value an XPT file cannot carry (XPT-8): the dataset, column, row and value.
 fn value_finding<T: TableAccess>(
     code: ConditionCode,
     dataset: &Dataset,
@@ -92,19 +124,10 @@ fn value_finding<T: TableAccess>(
     cause: &str,
 ) -> Result<Finding, Finding> {
     let name = &dataset.columns[column].declaration.name.value;
-    let detail = match cause {
-        "empty_string" => "a present empty string reads back as missing",
-        "ascii" => "text is not printable ASCII",
-        "length" => "text is longer than 200 bytes",
-        "trailing_blank" => "a trailing blank reads back as padding",
-        "integer" => "an int beyond 2^53 has no exact IBM double",
-        "magnitude" => "the magnitude is outside the IBM double range",
-        _ => "a SAS date counts from 1582-01-01",
-    };
     let mut finding = Finding::cause(
         code,
         &format!("datasets.{}.columns.{name}", dataset.id),
-        detail,
+        cause_detail(cause),
     );
     for (key, text) in [
         ("dataset", dataset.id.as_str()),
@@ -121,6 +144,57 @@ fn value_finding<T: TableAccess>(
         .context
         .insert("value".into(), JsonValue::from(owned(value)));
     keys(dataset, table, row, &mut finding)?;
+    Ok(finding)
+}
+
+/// XPT-7's one finding for a dataset: every column holding text the
+/// transport cannot carry, in declaration order, each with its first such row
+/// as `(row, column, cause)`. The finding is at the first column; `values`
+/// gives each column's row, key values, value and cause.
+fn text_finding<T: TableAccess>(
+    dataset: &Dataset,
+    table: &T,
+    refused: &[(usize, usize, &str)],
+) -> Result<Finding, Finding> {
+    let name = |column: usize| dataset.columns[column].declaration.name.value.as_str();
+    let mut values = Vec::new();
+    let mut details = Vec::new();
+    for &(row, column, cause) in refused {
+        let value = table
+            .cell(row, column)
+            .map_err(|_| artifact_mismatch(dataset, "held artifact access"))?;
+        let mut entry = crate::json::Map::new();
+        entry.insert("column".into(), JsonValue::String(name(column).into()));
+        entry.insert("row".into(), JsonValue::from(row));
+        entry.insert("key_values".into(), key_values(dataset, table, row)?);
+        entry.insert("value".into(), JsonValue::from(owned(value)));
+        entry.insert("cause".into(), JsonValue::String(cause.into()));
+        values.push(JsonValue::Object(entry));
+        details.push(format!(
+            "in {} at row {row}, {}",
+            name(column),
+            cause_detail(cause)
+        ));
+    }
+    let mut finding = Finding::cause(
+        ConditionCode::TransportTextInvalid,
+        &format!("datasets.{}.columns.{}", dataset.id, name(refused[0].1)),
+        &details.join("; "),
+    );
+    for (key, text) in [
+        ("dataset", dataset.id.as_str()),
+        ("artifact", dataset.artifact.as_str()),
+    ] {
+        finding
+            .context
+            .insert(key.into(), JsonValue::String(text.into()));
+    }
+    finding
+        .context
+        .insert("key_columns".into(), key_columns(dataset));
+    finding
+        .context
+        .insert("values".into(), JsonValue::Array(values));
     Ok(finding)
 }
 
@@ -216,8 +290,22 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
         }
         return Err(finding);
     }
+    refused_values(study, dataset, table)
+}
+
+/// The values the transport cannot carry, column by column in declaration
+/// order, each column judged by its first refused row. A column whose first
+/// refusal is XPT-8's, before any text refusal, fails alone; otherwise every
+/// column holding refused text fails together in XPT-7's one finding.
+fn refused_values<T: TableAccess>(
+    study: &Study,
+    dataset: &Dataset,
+    table: &T,
+) -> Result<(), Finding> {
+    let xpt = study.transport() == Some(Transport::Xpt);
     let text_limits = xpt || study.section.context == DefineContext::Submission;
     let adam = study.section.family == Submission::Adam;
+    let mut refused_text = Vec::new();
     for (index, column) in dataset.columns.iter().enumerate() {
         let column_type = column.declaration.column_type.value;
         let numeric_date = column_type.numeric_date_format(adam).is_some();
@@ -239,7 +327,12 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
                 }
                 _ => None,
             };
-            if let Some((code, cause)) = refusal {
+            let Some((code, cause)) = refusal else {
+                continue;
+            };
+            if code == ConditionCode::TransportTextInvalid {
+                refused_text.push((row, index, cause));
+            } else if refused_text.is_empty() {
                 return Err(value_finding(
                     code,
                     dataset,
@@ -249,9 +342,14 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
                     cause,
                 )?);
             }
+            break;
         }
     }
-    Ok(())
+    if refused_text.is_empty() {
+        Ok(())
+    } else {
+        Err(text_finding(dataset, table, &refused_text)?)
+    }
 }
 
 /// Whether a column is a character variable in a transport file: every `str`

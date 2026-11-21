@@ -5,7 +5,10 @@ spec_paths:
 rule: XPT-7
 context:
   dataset: DM
-  column: SITEID
-  row: 1
-  value: 'UCSD '
-  cause: trailing_blank
+  key_columns: [STUDYID, USUBJID]
+  values:
+    - column: SITEID
+      row: 1
+      key_values: [CATH, CATH-UCSD-0002]
+      value: 'UCSD '
+      cause: trailing_blank
