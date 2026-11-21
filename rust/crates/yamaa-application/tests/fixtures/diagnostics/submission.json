@@ -1113,6 +1113,39 @@
       "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.HEIGHTU.submission"], "context": {"column": "HEIGHTU", "origin_type": "Derived", "admitted": ["Assigned", "Collected", "Not Available", "Other", "Protocol"]}}]
     },
     {
+      "case": "a_row_derived_column_mixing_a_bare_read_and_a_literal_admits_a_derived_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADXX\nkeys: [USUBJID, XXSEQ]\ninput: {IN1: {path: in1.csv, types: {XXSEQ: int}}}\noutput: {path: adxx.csv, columns: [USUBJID, XXSEQ]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier}\n  - name: XXSEQ\n    type: int\n    label: Sequence Number\n    submission: {origins: [{type: Derived}], method: The input sequence number on the first row and zero on the second.}\nrows:\n  - {id: a, derivations: {USUBJID: IN1.USUBJID, XXSEQ: IN1.XXSEQ}}\n  - {id: b, derivations: {USUBJID: IN1.USUBJID, XXSEQ: 0}}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_row_derived_column_mixing_a_bare_read_and_a_literal_refutes_a_predecessor_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADXX\nkeys: [USUBJID, XXSEQ]\ninput: {IN1: {path: in1.csv, types: {XXSEQ: int}}}\noutput: {path: adxx.csv, columns: [USUBJID, XXSEQ]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier}\n  - name: XXSEQ\n    type: int\n    label: Sequence Number\n    submission: {origins: [{type: Predecessor, description: IN1.XXSEQ}]}\nrows:\n  - {id: a, derivations: {USUBJID: IN1.USUBJID, XXSEQ: IN1.XXSEQ}}\n  - {id: b, derivations: {USUBJID: IN1.USUBJID, XXSEQ: 0}}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.XXSEQ.submission"], "context": {"column": "XXSEQ", "origin_type": "Predecessor", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other", "Protocol"]}}]
+    },
+    {
+      "case": "a_row_derived_column_of_literals_alone_refutes_a_derived_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADXX\nkeys: [USUBJID, XXSEQ]\ninput: {IN1: {path: in1.csv, types: {XXSEQ: int}}}\noutput: {path: adxx.csv, columns: [USUBJID, XXSEQ]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier}\n  - name: XXSEQ\n    type: int\n    label: Sequence Number\n    submission: {origins: [{type: Derived}], method: One on the first row and zero on the second.}\nrows:\n  - {id: a, derivations: {USUBJID: IN1.USUBJID, XXSEQ: 1}}\n  - {id: b, derivations: {USUBJID: IN1.USUBJID, XXSEQ: 0}}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.XXSEQ.submission"], "context": {"column": "XXSEQ", "origin_type": "Derived", "admitted": ["Assigned", "Collected", "Not Available", "Other", "Protocol"]}}]
+    },
+    {
       "case": "an_only_pivot_and_a_plain_lookup_are_bare_reads_that_admit_collected",
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "reads"}}, "specification": "spec.yaml"},

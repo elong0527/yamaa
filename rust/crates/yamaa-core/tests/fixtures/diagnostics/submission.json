@@ -867,6 +867,33 @@
       "issues": []
     },
     {
+      "case": "a_column_whose_rows_mix_a_bare_read_and_a_literal_admits_a_derived_origin",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "input"], "to": {"IN1": "in1.csv"}},
+          {"set": ["specs", "0", "rows"], "to": [{"id": "read", "dataset": "IN1", "derivations": {"VALUE": "IN1.VALUE"}}, {"id": "literal", "dataset": "IN1", "derivations": {"VALUE": "'X'"}}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "type"], "to": "Derived"},
+          {"set": ["specs", "0", "columns", "0", "submission", "method"], "to": "The input value, or X on the literal row"}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_entry_whose_rows_mix_a_bare_read_and_a_literal_admits_a_derived_origin",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [
+          {"set": ["specs", "0", "input"], "to": {"IN1": "in1.csv"}},
+          {"set": ["specs", "0", "rows"], "to": [{"id": "read", "dataset": "IN1", "derivations": {"D0TESTCD": "'A'", "VALUE": "IN1.VALUE"}}, {"id": "literal", "dataset": "IN1", "derivations": {"D0TESTCD": "'B'", "VALUE": "'X'"}}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "BOTH", "where": {"D0TESTCD": ["A", "B"]}, "origins": [{"type": "Derived", "source": "Sponsor"}], "method": "The input value, or X on the literal row"}]}
+        ]
+      },
+      "issues": []
+    },
+    {
       "case": "an_empty_ordered_range_does_not_overlap_a_nonempty_entry",
       "operation": "compose",
       "input": {

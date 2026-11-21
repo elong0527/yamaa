@@ -556,18 +556,6 @@ fn comment_references(
 fn tree_column<'t>(tree: &'t ast::Spec, name: &str) -> Option<&'t ast::Column> {
     tree.columns.iter().find(|column| column.name.name == name)
 }
-/// The first derivation that refutes the origin type under SUB-19, if any.
-fn refuting(
-    tree: &ast::Spec,
-    derivations: &[ast::ExprId],
-    kind: OriginType,
-    reads: &Reads,
-) -> Option<origin::DerivationKind> {
-    derivations
-        .iter()
-        .map(|&expr| origin::classify_expr(tree, expr, reads))
-        .find(|derivation| !derivation.admits(kind))
-}
 /// SUB-20: the first derivation that is not the copy a Predecessor claims.
 fn copy_failure(
     tree: &ast::Spec,
@@ -1066,7 +1054,8 @@ impl ColumnAdmission<'_> {
         // SUB-19 and SUB-20: the derivations refute the declared type, or are
         // not the copy a Predecessor claims. A Predecessor that is not the
         // named copy is refuted by a bare `source`, which SUB-19 alone admits.
-        let refuted = refuting(tree, derivations, kind, reads)
+        let refuted = origin::Constructions::of(tree, derivations, reads)
+            .refuting(kind)
             .map(|derivation| (derivation, None))
             .or_else(|| {
                 predecessor
