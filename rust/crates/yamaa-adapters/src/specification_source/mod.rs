@@ -535,6 +535,11 @@ impl PreparedDocument {
         let resolved = self.document();
         let inputs = resolved.field(resolved.root(), "input")?;
         let declaration = resolved.field(inputs, dataset)?;
+        // A `schema` link a later layer clears is not declared, though the
+        // layer that wrote it still holds it as written (LAYER-9).
+        if field == "schema" {
+            resolved.field(declaration, field)?;
+        }
         let base_source = if entry_relative(resolved, declaration) {
             self.source.identity.as_str()
         } else {
@@ -572,6 +577,9 @@ impl PreparedDocument {
         let (identity, raw) = self.authored_document(&format!("output.{field}"))?;
         let resolved = self.document();
         let output = resolved.field(resolved.root(), "output")?;
+        // A field a later layer clears is not declared, though the layer that
+        // wrote it still holds it as written (LAYER-9).
+        resolved.field(output, field)?;
         let base_source = if entry_relative(resolved, output) {
             self.source.identity.as_str()
         } else {

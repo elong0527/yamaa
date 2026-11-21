@@ -7753,6 +7753,70 @@
           ]
         },
         {
+          "name": "an_input_whose_schema_link_a_layer_clears_reads_a_listed_artifact_without_a_link",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\n\nsdtm:\n  specs:\n  - dm.yaml\n\nadam:\n  specs:\n  - adsl.yaml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n",
+            "adsl-base.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: dm.csv, schema: dm.yaml}}\noutput: {path: adsl.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n",
+            "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adsl-base.yaml\nclear: [input.DM.schema]\ninput: {DM: {path: dm.csv}}\n",
+            "raw.csv": "USUBJID\n01\n"
+          },
+          "call": {
+            "operation": "project_check",
+            "path": "project.yaml"
+          },
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "unlinked_producer",
+              "rule": "PROJECT-10",
+              "spec_paths": [
+                "input.DM.path"
+              ],
+              "file": "adsl.yaml",
+              "line": 5,
+              "column": 14,
+              "message": "input DM reads dm.csv, the artifact of another specification, without a schema link",
+              "context": "{\"dataset\":\"DM\",\"entry\":\"{root}/adsl.yaml\",\"path\":\"dm.csv\",\"producer\":\"{root}/dm.yaml\",\"source\":\"{root}/adsl.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "an_input_a_parent_layer_writes_without_a_link_is_reported_in_that_layer",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\n\nsdtm:\n  specs:\n  - dm.yaml\n\nadam:\n  specs:\n  - adsl.yaml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n",
+            "adsl-base.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: dm.csv}\noutput: {path: adsl.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n",
+            "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adsl-base.yaml\n",
+            "raw.csv": "USUBJID\n01\n"
+          },
+          "call": {
+            "operation": "project_check",
+            "path": "project.yaml"
+          },
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "unlinked_producer",
+              "rule": "PROJECT-10",
+              "spec_paths": [
+                "input.DM.path"
+              ],
+              "file": "adsl-base.yaml",
+              "line": 6,
+              "column": 9,
+              "message": "input DM reads dm.csv, the artifact of another specification, without a schema link",
+              "context": "{\"dataset\":\"DM\",\"entry\":\"{root}/adsl.yaml\",\"path\":\"dm.csv\",\"producer\":\"{root}/dm.yaml\",\"source\":\"{root}/adsl-base.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
           "name": "a_consumer_of_a_producer_that_failed_does_not_run",
           "files": {
             "project.yaml": "yamaa: \"1.0\"\ntype: project\n\nsdtm:\n  specs:\n  - dm.yaml\n\nadam:\n  specs:\n  - adsl.yaml\n",
@@ -7773,6 +7837,39 @@
               "column": 28,
               "message": "this specification did not run because the producer of its input DM did not complete",
               "context": "{\"dataset\":\"DM\",\"entry\":\"{root}/adsl.yaml\",\"producer\":\"{root}/dm.yaml\",\"source\":\"{root}/adsl.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_failed_producer_that_a_parent_layer_links_is_reported_in_that_layer",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\n\nsdtm:\n  specs:\n  - dm.yaml\n\nadam:\n  specs:\n  - adsl.yaml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID, AGE]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n",
+            "adsl-base.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: dm.csv, schema: dm.yaml}}\noutput: {path: adsl.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n",
+            "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adsl-base.yaml\n",
+            "raw.csv": "USUBJID\n01\n"
+          },
+          "call": {
+            "operation": "project_run",
+            "path": "project.yaml",
+            "member": "ADSL"
+          },
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "producer_not_completed",
+              "rule": "PROJECT-11",
+              "spec_paths": [
+                "input.DM.schema"
+              ],
+              "file": "adsl-base.yaml",
+              "line": 6,
+              "column": 28,
+              "message": "this specification did not run because the producer of its input DM did not complete",
+              "context": "{\"dataset\":\"DM\",\"entry\":\"{root}/adsl.yaml\",\"producer\":\"{root}/dm.yaml\",\"source\":\"{root}/adsl-base.yaml\"}",
               "source_span": null,
               "operand_route": null
             }
@@ -7803,6 +7900,22 @@
               "operand_route": null
             }
           ]
+        },
+        {
+          "name": "a_report_a_layer_clears_is_not_read_by_a_submission",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  context: Other\n",
+            "dm-base.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, report: dm-report.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: dm-base.yaml\nclear: [output.report]\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "dm.csv": "DOMAIN,STUDYID,USUBJID\nDM,PAR01,PAR01-941\nDM,PAR01,PAR01-942\n"
+          },
+          "call": {
+            "operation": "submission",
+            "path": "project.yaml",
+            "section": "sdtm",
+            "created": "2026-09-11T00:00:00"
+          },
+          "issues": []
         },
         {
           "name": "a_function_the_running_host_does_not_implement",
