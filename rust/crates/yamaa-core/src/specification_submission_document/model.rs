@@ -28,7 +28,7 @@ vocabulary!(FieldName {
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
     Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence",
-    NonStandard => "non_standard"
+    NonStandard => "non_standard", Oid => "oid"
 });
 vocabulary!(SubmissionMode { Validated => "validated", Historical => "historical" });
 /// Governed fields share one vocabulary in declaration and execution admission.
@@ -478,6 +478,17 @@ pub struct MethodClass {
     pub description: Field<String>,
     pub expression: Option<FormalExpression>,
     pub documents: Field<Vec<DocumentReference>>,
+    /// The received MethodOID only historical metadata declares (DEFINE-30).
+    pub oid: Option<Field<String>>,
+}
+impl Method {
+    /// The OID the declaration names, when it names one (DEFINE-9).
+    pub fn oid(&self) -> Option<&str> {
+        match self {
+            Self::Class(class) => class.oid.as_ref().map(|oid| oid.value.as_str()),
+            Self::Plain(_) => None,
+        }
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FormalExpression {
@@ -489,7 +500,7 @@ pub struct FormalExpression {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Comment {
     Plain(Field<String>),
-    Class(CommentClass),
+    Class(Box<CommentClass>),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommentClass {
@@ -497,6 +508,17 @@ pub struct CommentClass {
     pub fields: Vec<Origin>,
     pub text: Field<String>,
     pub documents: Field<Vec<DocumentReference>>,
+    /// The received CommentOID only historical metadata declares (DEFINE-30).
+    pub oid: Option<Field<String>>,
+}
+impl Comment {
+    /// The OID the declaration names, when it names one (DEFINE-9).
+    pub fn oid(&self) -> Option<&str> {
+        match self {
+            Self::Class(class) => class.oid.as_ref().map(|oid| oid.value.as_str()),
+            Self::Plain(_) => None,
+        }
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DocumentReference {

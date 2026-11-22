@@ -24,6 +24,20 @@ pub(super) fn dataset(
             crate::json::Value::String(dataset.mode.value.name().into()),
         ));
     }
+    // A dataset's received CommentOID is a historical record (DEFINE-30).
+    if !historical
+        && dataset
+            .comment
+            .as_ref()
+            .and_then(spec::Comment::oid)
+            .is_some()
+    {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{path}.submission"),
+            "historical comment oid requires mode historical",
+            crate::json::Value::String(dataset.mode.value.name().into()),
+        ));
+    }
 }
 
 pub(super) fn column(

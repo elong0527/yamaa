@@ -1004,7 +1004,8 @@ a name, a kind, machine-readable code and supporting documents, and
 `description` is required. `type` defaults to `Computation`; a method that
 replaces a missing value with a substitute declares `Imputation`. `expression`
 carries code as text under a named `context`, which this language neither
-parses nor evaluates.
+parses nor evaluates. `oid`, the received `MethodOID`, is declared only by
+historical metadata ([DEFINE-30](define-xml.md#define-30)).
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/schema_submission.rs::all_core_origin_source_and_method_choices_are_retained`.
 

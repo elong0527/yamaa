@@ -415,6 +415,11 @@
       ],
       "description": "A column verification written as its bare keyword, which declares no field (CHECK-5)."
     },
+    "comment_oid": {
+      "type": "string",
+      "pattern": "^COM\\.[!-~]+$",
+      "description": "def:CommentDef OID written as received, the COM. prefix and printable non-space ASCII (DEFINE-9)."
+    },
     "copy_class": {
       "type": "object",
       "properties": {
@@ -3407,6 +3412,12 @@
           "description": "Supporting documents the comment refers to.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/comment_oid",
+          "description": "Received CommentOID a historical comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "comment_oid"
         }
       },
       "additionalProperties": false
@@ -3553,6 +3564,12 @@
           "description": "Supporting documents carrying the full algorithm.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/method_oid",
+          "description": "Received MethodOID a historical method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "method_oid"
         }
       },
       "additionalProperties": false
@@ -4289,6 +4306,11 @@
     "match_value": {
       "$ref": "#/$defs/expression",
       "description": "See LOOKUP-6."
+    },
+    "method_oid": {
+      "type": "string",
+      "pattern": "^MT\\.[!-~]+$",
+      "description": "MethodDef OID written as received, the MT. prefix and printable non-space ASCII (DEFINE-9)."
     },
     "method_type": {
       "type": "string",
@@ -6314,6 +6336,12 @@
           "description": "Supporting documents the comment refers to.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/comment_oid",
+          "description": "Received CommentOID a historical comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "comment_oid"
         }
       },
       "required": [
@@ -6469,6 +6497,12 @@
           "description": "Supporting documents carrying the full algorithm.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/method_oid",
+          "description": "Received MethodOID a historical method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "method_oid"
         }
       },
       "required": [

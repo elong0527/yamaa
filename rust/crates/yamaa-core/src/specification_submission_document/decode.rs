@@ -74,8 +74,9 @@ const METHOD: &[F] = &[
     F::Description,
     F::Expression,
     F::Documents,
+    F::Oid,
 ];
-const COMMENT: &[F] = &[F::Text, F::Documents];
+const COMMENT: &[F] = &[F::Text, F::Documents, F::Oid];
 const EXPRESSION: &[F] = &[F::Context, F::Code];
 const REFERENCE: &[F] = &[F::Document, F::Pages];
 const PAGES: &[F] = &[F::Type, F::Refs, F::Title];
@@ -784,6 +785,8 @@ impl<'a> Parser<'a> {
         let expression =
             self.expression(self.get(node, F::Expression), path.field(F::Expression))?;
         let documents = self.documents(self.get(node, F::Documents), path.field(F::Documents))?;
+        // The schema's `method_oid` pattern judges the spelling (SCHEMA-12).
+        let oid = self.text_field(node, F::Oid, path, TextRule::NonEmpty, false)?;
         // Boxes are admitted by the selected-node bound and allocated only in
         // the successful owned pass, never during either finding pass.
         Ok({
@@ -796,6 +799,7 @@ impl<'a> Parser<'a> {
                     description,
                     expression,
                     documents,
+                    oid,
                 }))
             })
         })
@@ -835,13 +839,16 @@ impl<'a> Parser<'a> {
         }
         let text = self.text_field(node, F::Text, path, TextRule::NonEmpty, true)?;
         let documents = self.documents(self.get(node, F::Documents), path.field(F::Documents))?;
+        // The schema's `comment_oid` pattern judges the spelling (SCHEMA-12).
+        let oid = self.text_field(node, F::Oid, path, TextRule::NonEmpty, false)?;
         Ok(text.map(|text| {
-            Comment::Class(CommentClass {
+            Comment::Class(Box::new(CommentClass {
                 origin,
                 fields: self.fields(node, COMMENT),
                 text,
                 documents,
-            })
+                oid,
+            }))
         }))
     }
     fn documents(

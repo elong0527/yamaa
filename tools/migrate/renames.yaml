@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 677
-  changes: 108
+  entries: 679
+  changes: 110
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 62
+    new, decided: 64
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7813,6 +7813,30 @@ entries:
     CL.ADSL.ARMCD that submitted Define-XML documents commonly carry (CT-1, DEFINE-9). The three fields
     that name a codelist take the type; every other identifier is unchanged. A dotless id is still one,
     so the converter wrote none.'
+  field_kind: identifier
+  convert: {action: none}
+- id: new.spec.submission.method.oid
+  file_type: spec
+  path: columns[].submission.method.oid
+  today: null
+  kind: new
+  proposed: oid
+  decision: decided (D-next, owner decision on issue 4747)
+  ref: DEFINE-30
+  reason: A historical method keeps the MethodOID its received document carries, and elements declaring one oid with
+    an identical definition share one MethodDef; validated metadata keeps the generated MT.<dataset>.<column>.
+  field_kind: identifier
+  convert: {action: none}
+- id: new.spec.submission.comment.oid
+  file_type: spec
+  path: columns[].submission.comment.oid
+  today: null
+  kind: new
+  proposed: oid
+  decision: decided (D-next, owner decision on issue 4747)
+  ref: DEFINE-30
+  reason: A historical comment keeps the CommentOID its received document carries, and elements declaring one oid with
+    an identical definition share one def:CommentDef; validated metadata keeps the generated COM. identifier.
   field_kind: identifier
   convert: {action: none}
 conditions:

@@ -163,6 +163,13 @@ EXPECTED = {
     "new.spec.submission.has_no_data": [
         Field("submission_metadata_fields", "has_no_data", "bool")
     ],
+    # #4747: a historical method or comment keeps its received OID.
+    "new.spec.submission.method.oid": [
+        Field("submission_method_class", "oid", "method_oid", kind="identifier")
+    ],
+    "new.spec.submission.comment.oid": [
+        Field("submission_comment_class", "oid", "comment_oid", kind="identifier")
+    ],
     # D4: the header replaces schema_version in every file type.
     "spec.root_class.schema_version": [Absent("root_class", "schema_version")],
     "project.project_class.schema_version": [Absent("project_class", "schema_version")],
