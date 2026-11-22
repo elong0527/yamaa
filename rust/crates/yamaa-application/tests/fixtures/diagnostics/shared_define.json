@@ -1311,6 +1311,94 @@
       "saved": {}
     },
     {
+      "case": "define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\n    codelists:\n      - id: EPOCH\n        name: Epoch\n        extensible: true\n        alias: C99079\n        items:\n          - {value: SCREENING, alias: C48262}\n          - {value: EXTENSION, extended: true}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'EXTENSION'\"\n    submission: {core: Exp, length: 9, codelist: EPOCH, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/@def:StandardName": [
+              "SDTM-IG"
+            ],
+            "/ODM/Study/MetaDataVersion/@def:StandardVersion": [
+              "3.4"
+            ],
+            "/ODM/Study/MetaDataVersion/def:Standards": [],
+            "/ODM/Study/MetaDataVersion/CodeList": [
+              "<CodeList OID=\"CL.EPOCH\" Name=\"Epoch\" DataType=\"text\">\n        <EnumeratedItem CodedValue=\"SCREENING\">\n          <Alias Context=\"nci:ExtCodeID\" Name=\"C48262\"/>\n        </EnumeratedItem>\n        <EnumeratedItem CodedValue=\"EXTENSION\" def:ExtendedValue=\"Yes\"/>\n        <Alias Context=\"nci:ExtCodeID\" Name=\"C99079\"/>\n      </CodeList>"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "a_historical_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\n    codelists:\n      - id: EPOCH\n        name: Epoch\n        extensible: true\n        alias: C99079\n        items:\n          - {value: SCREENING, alias: C48262}\n          - {value: EXTENSION, extended: true}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'EXTENSION'\"\n    submission: {data_type: text, length: 9, mandatory: false, codelist: EPOCH, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/@def:StandardName": [
+              "SDTM-IG"
+            ],
+            "/ODM/Study/MetaDataVersion/@def:StandardVersion": [
+              "3.4"
+            ],
+            "/ODM/Study/MetaDataVersion/def:Standards": [],
+            "/ODM/Study/MetaDataVersion/CodeList": [
+              "<CodeList OID=\"CL.EPOCH\" Name=\"Epoch\" DataType=\"text\">\n        <EnumeratedItem CodedValue=\"SCREENING\">\n          <Alias Context=\"nci:ExtCodeID\" Name=\"C48262\"/>\n        </EnumeratedItem>\n        <EnumeratedItem CodedValue=\"EXTENSION\" def:ExtendedValue=\"Yes\"/>\n        <Alias Context=\"nci:ExtCodeID\" Name=\"C99079\"/>\n      </CodeList>"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "define_2_0_refuses_a_second_implementation_guide",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}, {name: SDTMIG-MD, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "standards"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "2.0 requires exactly one implementation guide"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "historical_metadata_never_changes_executable_values",
       "operation": "build",
       "input": {

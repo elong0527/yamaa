@@ -879,14 +879,17 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
 }
 
 /// Refuse facts the older document cannot carry instead of silently
-/// discarding them while changing a namespace (DEFINE-29).
+/// discarding them while changing a namespace (DEFINE-29). The one exception
+/// is a terminology standard a codelist source names: it resolves that
+/// source's codelists (CT-6) and 2.0 omits it, so only the section's
+/// implementation guides are judged here, never the study's standards.
 fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
     let invalid =
         |path: &str, detail: &str| xml_invalid(path, "Define-XML 2.0 representation", text(detail));
-    if study.section().standards.len() != 1 || study.standards().len() != 1 {
+    if study.section().standards.len() != 1 {
         return Err(invalid(
             "standards",
-            "2.0 requires one implementation guide and cannot record terminology releases",
+            "2.0 requires exactly one implementation guide",
         ));
     }
     if study.section().standards[0].status.name() != "Final" {

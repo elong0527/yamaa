@@ -167,12 +167,14 @@ false and may be true only on an `extensible` codelist whose source declares
 codelist, or one that declares `alias`, fails validation.
 
 Fails: `codelist_extension_not_admitted`, `codelist_extended_alias`.
-Evidence: `sdtm-ta-sponsor-epoch`, `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require_both_a_published_source_and_an_extensible_list`, `rust/crates/yamaa-core/tests/project_execution.rs::extended_items_carry_no_published_alias`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::an_extended_item_of_a_published_extensible_codelist_declares_no_alias`.
+Evidence: `sdtm-ta-sponsor-epoch`, `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require_both_a_published_source_and_an_extensible_list`, `rust/crates/yamaa-core/tests/project_execution.rs::extended_items_carry_no_published_alias`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::an_extended_item_of_a_published_extensible_codelist_declares_no_alias`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`.
 
 Adding a value to a list that admits no additions is a contradiction rather
 than an extension. A sponsor addition is an item like any other, so
 [CT-7](#ct-7) enforces it with the published items, and
-[DEFINE-20](define-xml.md#define-20) marks it `def:ExtendedValue="Yes"`.
+[DEFINE-20](define-xml.md#define-20) marks it `def:ExtendedValue="Yes"` in
+either Define-XML version. A 2.0 document admits the source's terminology
+standard without recording it ([DEFINE-29](define-xml.md#define-29)).
 
 An item's `alias` carries the published identifier of the value
 ([CT-2](#ct-2)), which [DEFINE-20](define-xml.md#define-20) writes as its NCI

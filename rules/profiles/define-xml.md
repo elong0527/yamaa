@@ -893,14 +893,13 @@ from `2.1.0` through `2.1.11`; omission retains 2.1.11 and its existing bytes.
 The document preserves the selected release in `def:DefineVersion`. All 2.1
 releases use the v2.1 namespace and the maintained 2.1 enumeration schema,
 as [CDISC recommends](https://www.cdisc.org/standards/data-exchange/define-xml/define-xml-v2-1)
-when it updates that schema's controlled terminology. Unpublished versions
-and incomplete version strings are refused by the project schema. A 2.0
-document uses only facts that version can represent and requires one Final
-implementation guide.
-Declarations requiring 2.1 constructs fail before publication, under
-[DEFINE-25](#define-25).
+when it updates that schema's controlled terminology. The project schema
+refuses unpublished and incomplete versions. A 2.0 document requires one Final
+implementation guide and refuses facts it cannot represent, but omits a
+codelist source's terminology standard. Declarations requiring 2.1 constructs
+fail before publication, under [DEFINE-25](#define-25).
 
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_second_implementation_guide`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
 above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
@@ -914,13 +913,22 @@ names, and Other and Not Available are refused. Under SEND the admitted
 types are Collected, Derived, Other and Not Available, written as COLLECTED,
 DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused.
 
-Multiple guides, terminology releases, a subclass, a dataset's HasNoData, a
-column's or value-level entry's declared `has_no_data` and a non-standard
-dataset have no faithful representation and are refused. An
-explicit origin source is representable only when it is the older type's
-implicit source: Investigator for Collected, Sponsor for Derived, Assigned,
-Protocol or Other. This version choice does not change derivations, ordinary
+Multiple guides, a subclass, a dataset's HasNoData, a column's or
+value-level entry's declared `has_no_data` and a non-standard dataset have no
+faithful representation and are refused. An explicit origin source is
+representable only when it is the older type's implicit source: Investigator
+for Collected, Sponsor for Derived, Assigned, Protocol or Other. This version choice does not change derivations, ordinary
 metadata validation or the transport encoders.
+
+A terminology standard that a codelist source names is the one fact a 2.0
+document omits rather than refuses. Only implementation guides are counted
+against the one guide 2.0 records. The standard still resolves its source's
+codelists, so an extended item of an extensible published codelist
+([CT-6](terminology.md#ct-6)) is admitted and writes
+`def:ExtendedValue="Yes"` ([DEFINE-20](#define-20)), while the document
+carries neither a terminology `def:Standard` nor a `def:StandardOID`.
+Historical metadata ([DEFINE-30](#define-30)) composes through the same 2.0
+profile and admits it alike.
 
 Each refusal is a schema violation of the selected release and reports
 [DEFINE-25](#define-25), as that rule states. A `define_version` outside the
