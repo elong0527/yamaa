@@ -147,9 +147,8 @@ fn resolve_field_kinds(
     cx: intermediates::Context<'_>,
     lookup: Lookup<'_>,
     pending_schema: &mut Option<TableSchema>,
-    before: usize,
     findings: &mut Vec<BindFinding>,
-) -> Result<Option<FieldKinds>, BindError> {
+) -> Result<FieldKinds, BindError> {
     let intermediates::Context {
         named,
         inputs,
@@ -211,7 +210,10 @@ fn resolve_field_kinds(
         };
         let operation_type = tree.result_type(declaration.expr, scope, &input);
         let field_type = declaration.field_type(operation_type);
-        if fields.iter().any(|field| field.name == declaration.name) {
+        if let Some(namesake) = fields
+            .iter()
+            .position(|field| field.name == declaration.name)
+        {
             let mut finding = LookupFinding::new(
                 &declaration.path,
                 crate::diagnostic::ConditionCode::IntermediateDerivationDuplicate,
@@ -229,7 +231,11 @@ fn resolve_field_kinds(
                     BindFinding::Withheld(std::boxed::Box::new(finding))
                 },
             );
-            continue;
+            // The map's name names its derivation (LOOKUP-15): the stored
+            // namesake takes a name no identifier spells, so a read before
+            // the derivation is unknown, as it is where nothing stores the
+            // name, and the map still binds for its other findings.
+            fields[namesake].name.insert(0, '\0');
         }
         fields.push(Column {
             name: declaration.name.clone(),
@@ -240,10 +246,7 @@ fn resolve_field_kinds(
     }
     let output = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
     *pending_schema = Some(output.clone());
-    if findings.len() != before {
-        return Ok(None);
-    }
-    Ok(Some((output, field_types, operation_types)))
+    Ok((output, field_types, operation_types))
 }
 
 fn collect_current_fields(cx: intermediates::Context<'_>, lookup: Lookup<'_>) -> Vec<CurrentField> {
@@ -585,11 +588,8 @@ pub(super) fn bind(
         return Ok(None);
     }
     let before = findings.len();
-    let Some((output, field_types, operation_types)) =
-        resolve_field_kinds(cx, lookup, pending_schema, before, findings)?
-    else {
-        return Ok(None);
-    };
+    let (output, field_types, operation_types) =
+        resolve_field_kinds(cx, lookup, pending_schema, findings)?;
     // Each field's result type: each stored field's kind, then each
     // derived field's type.
     let record_types = lookup
