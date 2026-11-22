@@ -26,7 +26,7 @@ expressions:
             required: true
             description: Variable holding the coded value, or a filtered source carrying it (EXPR-15).
         - codelist:
-            type: identifier
+            type: codelist_identifier
             required: true
             description: Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).
         - missing:

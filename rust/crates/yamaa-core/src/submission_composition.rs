@@ -752,20 +752,7 @@ impl ColumnAdmission<'_> {
             );
             return None;
         };
-        // The ItemRef facts only historical metadata declares (DEFINE-30);
-        // validated metadata measures `has_no_data` instead (SUB-28).
-        for (field, declared) in [
-            ("key_sequence", metadata.key_sequence.is_some()),
-            ("has_no_data", metadata.has_no_data.is_some()),
-        ] {
-            if declared {
-                findings.push(crate::define_diagnostics::xml_invalid(
-                    column_path,
-                    &format!("historical {field} requires mode historical"),
-                    crate::json::Value::String(name.clone()),
-                ));
-            }
-        }
+        historical_only_fields(metadata, column_path, name, findings);
         if metadata.origins.is_empty() {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionOriginMissing, column_path, name)
@@ -2589,6 +2576,34 @@ pub fn compose(
         codelists,
         inventory,
     })
+}
+
+/// Refuse on validated metadata what only historical metadata declares
+/// (DEFINE-30): the ItemRef facts, which validated metadata measures instead
+/// (SUB-28), and a received method or comment OID, which validated metadata
+/// generates (DEFINE-9).
+fn historical_only_fields(
+    metadata: &spec::ColumnSubmission,
+    column_path: &str,
+    name: &str,
+    findings: &mut Vec<Finding>,
+) {
+    let method_oid = metadata.method.as_ref().and_then(spec::Method::oid);
+    let comment_oid = metadata.comment.as_ref().and_then(spec::Comment::oid);
+    for (field, declared) in [
+        ("key_sequence", metadata.key_sequence.is_some()),
+        ("has_no_data", metadata.has_no_data.is_some()),
+        ("method oid", method_oid.is_some()),
+        ("comment oid", comment_oid.is_some()),
+    ] {
+        if declared {
+            findings.push(crate::define_diagnostics::xml_invalid(
+                column_path,
+                &format!("historical {field} requires mode historical"),
+                crate::json::Value::String(name.to_owned()),
+            ));
+        }
+    }
 }
 
 #[cfg(test)]

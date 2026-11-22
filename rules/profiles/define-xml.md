@@ -261,7 +261,7 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-codelist-dotted-id`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
 
 | Object | Identifier |
 |---|---|
@@ -291,6 +291,15 @@ standard the `standard` of a codelist source whose codelists the document binds
 `def:Standard`; two terminology standards with one `publishing_set` fail under
 [DEFINE-10](#define-10).
 
+A codelist `id` may itself join segments with periods
+([CT-1](terminology.md#ct-1)), so a codelist `ADSL.ARMCD` is `CL.ADSL.ARMCD`.
+
+A historical method or comment that declares `oid` carries that identifier in
+place of its `MT.` or `COM.` row, and every reference to it cites the declared
+one ([DEFINE-30](#define-30)). The declaration is still one a reviewer can
+read, and the schema keeps its prefix: a method `oid` begins `MT.` and a comment
+`oid` begins `COM.`, followed by printable ASCII without spaces.
+
 A per-value entry id is the `id` of the column's value-level entry
 ([SUB-12](submission.md#sub-12)), an identifier unique within the column. It
 identifies the definition independently of entry order; `ItemRef.OrderNumber`
@@ -314,7 +323,14 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_received_method_oid_equal_to_a_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
+
+A declared method or comment `oid` ([DEFINE-30](#define-30)) shares its
+prefix's space with the generated identifiers. Elements that declare one `oid`
+and write the same definition share one `MethodDef` or `def:CommentDef`; any
+other repeat, a different definition under one declared `oid` or a declared
+`oid` equal to a generated one, fails with `duplicate_define_identifier`,
+reporting the identifier.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
 `id`, codelist `id` or document `id`, or a document `id` equal to a dataset
@@ -651,7 +667,10 @@ A codelist declaring `alias` carries an `Alias` child with
 Each declared method produces one `MethodDef` carrying `OID`, `Name` from
 `method.name` or, when omitted, `<dataset.id>.<column>`, and `Type` from
 `method.type`, in that order. Each declared comment produces one
-`def:CommentDef` carrying its generated identifier. Every `Description` and
+`def:CommentDef` carrying its identifier. A historical method or comment that
+declares `oid` produces one definition however many elements declare it with
+the same definition ([DEFINE-10](#define-10)), written where the first of them
+would write its own. Every `Description` and
 `Decode` holds exactly one `TranslatedText` whose `xml:lang` is the document's
 `language`, and one document carries one language.
 
@@ -791,11 +810,13 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
   reference carries `PageRefs`, `Type` and an optional `Title` only
 - Several `FormalExpression` elements on one `MethodDef`: a method declares
   at most one `expression` ([SUB-21](submission.md#sub-21))
-- A pooled method or comment, one definition several elements reference: a
-  method or comment is declared on the element it describes, and no other
-  element can cite it. Each column or value-level entry with a method has its
-  own `MethodDef`, and each output dataset, column or entry with a comment
-  its own `def:CommentDef`, even when their declarations are identical
+- A pooled method or comment in validated metadata, one definition several
+  elements reference: a method or comment is declared on the element it
+  describes, and no other element can cite it. Each validated column or
+  value-level entry with a method has its own `MethodDef`, and each output
+  dataset, column or entry with a comment its own `def:CommentDef`, even when
+  their declarations are identical. Historical metadata shares a definition
+  only through a declared `oid` ([DEFINE-30](#define-30))
 - `RoleCodeListOID` on an `ItemRef`: a codelist of roles. An `ItemRef`
   carries a `Role` from the closed role list ([SUB-9](submission.md#sub-9))
   and no codelist for it
@@ -948,7 +969,7 @@ admits closed metadata, resolves every codelist and document reference, and
 requires a schema-valid document. It makes no data-conformance assertion.
 
 Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_method_or_comment_keeps_its_received_oid_and_identical_definitions_share_one`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_method_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_comment_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_dataset_comment_declares_no_received_oid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`.
 
 The historical export requires explicit column `data_type`, `mandatory` and
 labels. Lengths, formats, origins, methods and codelists remain as declared.
@@ -957,9 +978,12 @@ executable `keys`, and a column's or value-level entry's `has_no_data` its
 ItemRef's `def:HasNoData`, which validated metadata measures instead
 ([SUB-28](submission.md#sub-28)). `artifact` declares a literal relative
 package link; its filename supplies the leaf title. Omission writes no
-historical artifact leaf. These three fields are refused on validated
-metadata, each with `value_not_permitted` at the `submission` that declares
-it. A historical value-level entry records one received per-value definition,
+historical artifact leaf. A method's or comment's `oid` declares the
+`MethodOID` or `CommentOID` the received document carries
+([DEFINE-9](#define-9)), and elements that declare one `oid` with the same
+definition share it ([DEFINE-10](#define-10)). These fields are refused on
+validated metadata, each with `value_not_permitted` at the `submission` that
+declares it. A historical value-level entry records one received per-value definition,
 so it takes from its column only what that definition cannot omit: the
 `ItemDef` `Name`, which is the column's name, and, when the entry declares
 none, the column's `data_type` for `DataType` and `mandatory` for the

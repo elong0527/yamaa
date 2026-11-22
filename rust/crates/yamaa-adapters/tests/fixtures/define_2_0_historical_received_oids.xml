@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.0" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="S01.sdtm.Define-XML_2.0" CreationDateTime="2026-09-30T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0">
+  <Study OID="STDY.S01">
+    <GlobalVariables>
+      <StudyName>Independent study</StudyName>
+      <StudyDescription>Received identifier witness</StudyDescription>
+      <ProtocolName>P01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.S01.sdtm" Name="Independent study sdtm metadata" def:DefineVersion="2.0.0" def:StandardName="SDTM-IG" def:StandardVersion="3.4">
+      <ItemGroupDef OID="IG.D0" Name="D0" Domain="D0" Purpose="Tabulation" SASDatasetName="D0" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:Class="SPECIAL PURPOSE" def:CommentOID="COM.DATASET">
+        <Description>
+          <TranslatedText xml:lang="en">Independent dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.D0.A" OrderNumber="1" Mandatory="No" MethodOID="MT.SHARED"/>
+        <ItemRef ItemOID="IT.D0.B" OrderNumber="2" Mandatory="No" MethodOID="MT.SHARED"/>
+        <ItemRef ItemOID="IT.D0.C" OrderNumber="3" Mandatory="No" MethodOID="MT.D0.C"/>
+      </ItemGroupDef>
+      <ItemDef OID="IT.D0.A" Name="A" DataType="text" Length="1" SASFieldName="A" def:CommentOID="COM.NOTE">
+        <Description>
+          <TranslatedText xml:lang="en">Column A</TranslatedText>
+        </Description>
+      </ItemDef>
+      <ItemDef OID="IT.D0.B" Name="B" DataType="text" Length="1" SASFieldName="B" def:CommentOID="COM.NOTE">
+        <Description>
+          <TranslatedText xml:lang="en">Column B</TranslatedText>
+        </Description>
+      </ItemDef>
+      <ItemDef OID="IT.D0.C" Name="C" DataType="text" Length="1" SASFieldName="C" def:CommentOID="COM.C,OWN">
+        <Description>
+          <TranslatedText xml:lang="en">Column C</TranslatedText>
+        </Description>
+      </ItemDef>
+      <MethodDef OID="MT.SHARED" Name="Shared rule" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Set to the source value by the shared rule.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <MethodDef OID="MT.D0.C" Name="D0.C" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Own rule of column C.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <def:CommentDef OID="COM.DATASET">
+        <Description>
+          <TranslatedText xml:lang="en">Received dataset comment</TranslatedText>
+        </Description>
+      </def:CommentDef>
+      <def:CommentDef OID="COM.NOTE">
+        <Description>
+          <TranslatedText xml:lang="en">Shared note on the column.</TranslatedText>
+        </Description>
+      </def:CommentDef>
+      <def:CommentDef OID="COM.C,OWN">
+        <Description>
+          <TranslatedText xml:lang="en">Own note on column C.</TranslatedText>
+        </Description>
+      </def:CommentDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

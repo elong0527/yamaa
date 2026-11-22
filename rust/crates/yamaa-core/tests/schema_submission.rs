@@ -692,11 +692,9 @@ mod schema {
             let method = a.texts(&[("type", "invalid"), ("description", "Derive")]);
             let core = a.text("invalid");
             let data = a.text("invalid");
-            let list = a.text("bad-list");
             let sub = a.map(vec![
                 ("core", core),
                 ("data_type", data),
-                ("codelist", list),
                 ("origin", origin),
                 ("method", method),
             ]);
@@ -712,7 +710,6 @@ mod schema {
                     Some("SPEC-2"),
                     Some("SUB-10"),
                     Some("SUB-6"),
-                    Some("SPEC-2"),
                     Some("SUB-14"),
                     Some("SUB-14"),
                     Some("SUB-21")
@@ -822,7 +819,9 @@ mod schema {
             );
             let mut a = Arena::default();
             let core = a.text("wrong");
-            let list = a.text("wrong-list");
+            // The schema judges a codelist's spelling (SCHEMA-12); the
+            // decoder refuses only an empty one.
+            let list = a.text("");
             let sub = a.map(vec![("core", core), ("codelist", list)]);
             let column = a.column("A", "str", Some(sub));
             let root = a.root(None, vec![column]);
@@ -837,7 +836,7 @@ mod schema {
                     .iter()
                     .map(|v| (v.node, v.kind))
                     .collect::<Vec<_>>(),
-                [(core, Kind::InvalidChoice), (list, Kind::InvalidIdentifier)]
+                [(core, Kind::InvalidChoice), (list, Kind::EmptyText)]
             );
         }
 

@@ -138,6 +138,11 @@
     "case_result": {
       "$ref": "#/$defs/expression"
     },
+    "codelist_identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+      "description": "Identifier of a codelist the project file declares, one or more single-token segments joined by single periods (CT-1)."
+    },
     "column_class": {
       "type": "object",
       "properties": {
@@ -409,6 +414,11 @@
         "not_missing"
       ],
       "description": "A column verification written as its bare keyword, which declares no field (CHECK-5)."
+    },
+    "comment_oid": {
+      "type": "string",
+      "pattern": "^COM\\.[!-~]+$",
+      "description": "def:CommentDef OID written as received, the COM. prefix and printable non-space ASCII (DEFINE-9)."
     },
     "copy_class": {
       "type": "object",
@@ -2040,10 +2050,10 @@
               "x-yamaa-type": "filtered_source"
             },
             "codelist": {
-              "$ref": "#/$defs/identifier",
+              "$ref": "#/$defs/codelist_identifier",
               "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
               "x-yamaa-kind": "identifier",
-              "x-yamaa-type": "identifier"
+              "x-yamaa-type": "codelist_identifier"
             },
             "missing": {
               "$ref": "#/$defs/substitute_value",
@@ -3329,10 +3339,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",
@@ -3402,6 +3412,12 @@
           "description": "Supporting documents the comment refers to.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/comment_oid",
+          "description": "Received CommentOID a historical comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "comment_oid"
         }
       },
       "additionalProperties": false
@@ -3548,6 +3564,12 @@
           "description": "Supporting documents carrying the full algorithm.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/method_oid",
+          "description": "Received MethodOID a historical method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "method_oid"
         }
       },
       "additionalProperties": false
@@ -3670,10 +3692,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",
@@ -4285,6 +4307,11 @@
       "$ref": "#/$defs/expression",
       "description": "See LOOKUP-6."
     },
+    "method_oid": {
+      "type": "string",
+      "pattern": "^MT\\.[!-~]+$",
+      "description": "MethodDef OID written as received, the MT. prefix and printable non-space ASCII (DEFINE-9)."
+    },
     "method_type": {
       "type": "string",
       "enum": [
@@ -4532,10 +4559,10 @@
               "x-yamaa-type": "filtered_source"
             },
             "codelist": {
-              "$ref": "#/$defs/identifier",
+              "$ref": "#/$defs/codelist_identifier",
               "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
               "x-yamaa-kind": "identifier",
-              "x-yamaa-type": "identifier"
+              "x-yamaa-type": "codelist_identifier"
             },
             "missing": {
               "$ref": "#/$defs/substitute_value",
@@ -6236,10 +6263,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",
@@ -6309,6 +6336,12 @@
           "description": "Supporting documents the comment refers to.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/comment_oid",
+          "description": "Received CommentOID a historical comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "comment_oid"
         }
       },
       "required": [
@@ -6464,6 +6497,12 @@
           "description": "Supporting documents carrying the full algorithm.",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "list[document_reference]"
+        },
+        "oid": {
+          "$ref": "#/$defs/method_oid",
+          "description": "Received MethodOID a historical method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "method_oid"
         }
       },
       "required": [
@@ -6592,10 +6631,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",

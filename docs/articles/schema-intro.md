@@ -352,9 +352,9 @@ and `row_count`, and a named intermediate's `unique`.
 | A `value_level` entry | `id`, `codelist` | `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
 | A `where` condition written in full | | `comparator`, `values` | | |
 | An `origins` entry | `documents` | `type`, `source`, `description` | | |
-| A `method` written in full | `documents` | `name`, `type`, `description` | | `expression` |
+| A `method` written in full | `documents`, `oid` | `name`, `type`, `description` | | `expression` |
 | `method.expression` | | `context`, `code` | | |
-| A `comment` written in full | `documents` | `text` | | |
+| A `comment` written in full | `documents`, `oid` | `text` | | |
 | A document reference written in full | `document` | | | `pages` |
 | `pages` | | `type`, `refs`, `title` | | |
 

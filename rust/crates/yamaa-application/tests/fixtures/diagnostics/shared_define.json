@@ -1824,6 +1824,81 @@
       }
     },
     {
+      "case": "a_historical_method_or_comment_keeps_its_received_oid_and_identical_definitions_share_one",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B, C]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, comment: {oid: COM.DATASET, text: Received dataset comment}}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: C\n    type: str\n    label: Column C\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {description: Own rule of column C.}\n      comment: {oid: 'COM.C,OWN', text: Own note on column C.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical_received_oids.xml"
+        }
+      }
+    },
+    {
+      "case": "one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B, C]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, comment: {oid: COM.DATASET, text: Received dataset comment}}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Another rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: C\n    type: str\n    label: Column C\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {description: Own rule of column C.}\n      comment: {oid: 'COM.C,OWN', text: Own note on column C.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "datasets.D0.B.submission.method"
+          ],
+          "context": {
+            "detail": "MT.SHARED",
+            "identifier": "MT.SHARED"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_received_method_oid_equal_to_a_generated_one_is_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B, C]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, comment: {oid: COM.DATASET, text: Received dataset comment}}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.D0.C, name: D0.C, description: Own rule of column C.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: C\n    type: str\n    label: Column C\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {description: Own rule of column C.}\n      comment: {oid: 'COM.C,OWN', text: Own note on column C.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "datasets.D0.C.submission.method"
+          ],
+          "context": {
+            "detail": "MT.D0.C",
+            "identifier": "MT.D0.C"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "a_historical_where_clause_may_select_on_its_own_column",
       "operation": "define",
       "input": {

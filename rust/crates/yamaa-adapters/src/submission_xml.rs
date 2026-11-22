@@ -26,6 +26,26 @@ struct Element {
     path: String,
 }
 impl Element {
+    /// The element's own `OID` attribute.
+    fn oid(&self) -> Option<&str> {
+        self.attributes
+            .iter()
+            .find(|(name, _)| *name == "OID")
+            .map(|(_, value)| value.as_str())
+    }
+    /// Whether two elements write the same bytes: their names, attributes,
+    /// text and children, never the declaration paths they report at.
+    fn same_content(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.attributes == other.attributes
+            && self.text == other.text
+            && self.children.len() == other.children.len()
+            && self
+                .children
+                .iter()
+                .zip(&other.children)
+                .all(|(a, b)| a.same_content(b))
+    }
     fn new(name: &'static str, path: &str) -> Self {
         Self {
             name,
@@ -244,6 +264,50 @@ fn comment(node: &mut Element, comment: &s::Comment, language: &str) {
         }
     }
 }
+/// A method's OID: the one a historical declaration names, otherwise the
+/// generated `MT.<identity>` (DEFINE-9).
+fn method_oid(method: &s::Method, identity: &str) -> String {
+    method
+        .oid()
+        .map_or_else(|| format!("MT.{identity}"), str::to_owned)
+}
+/// A comment's OID: the one a historical declaration names, otherwise the
+/// generated `COM.<identity>` (DEFINE-9).
+fn comment_oid(comment: &s::Comment, identity: &str) -> String {
+    comment
+        .oid()
+        .map_or_else(|| format!("COM.{identity}"), str::to_owned)
+}
+/// Append a method or comment definition unless an earlier one declared the
+/// same OID and writes the same element, which it then shares (DEFINE-30).
+/// Any other repeated OID stays, and the document's identifier check refuses
+/// it as `duplicate_define_identifier` (DEFINE-10).
+fn push_shared(
+    metadata: &mut Element,
+    written: &mut Vec<(String, bool)>,
+    node: Element,
+    declared: bool,
+) {
+    let oid = node
+        .attributes
+        .iter()
+        .find(|(name, _)| *name == "OID")
+        .map(|(_, value)| value.clone())
+        .expect("definition OID");
+    let shared = declared
+        && written.iter().any(|(earlier, was_declared)| {
+            *was_declared
+                && *earlier == oid
+                && metadata
+                    .children
+                    .iter()
+                    .any(|child| child.oid() == Some(oid.as_str()) && child.same_content(&node))
+        });
+    if !shared {
+        written.push((oid, declared));
+        metadata.push(node);
+    }
+}
 fn item_definition(
     column: &model::Column,
     identity: &str,
@@ -273,7 +337,7 @@ fn item_definition(
         .optional("def:DisplayFormat", column.display_format())
         .optional(
             "def:CommentOID",
-            meta.comment.as_ref().map(|_| format!("COM.{identity}")),
+            meta.comment.as_ref().map(|c| comment_oid(c, identity)),
         );
     // Every validated definition has a description; a historical per-value
     // definition has one only when its entry declares a `label` (DEFINE-30).
@@ -362,7 +426,7 @@ fn push_value_lists(metadata: &mut Element, study: &Study) {
                     .optional("Role", meta.role.as_ref().map(|v| &v.value))
                     .optional(
                         "MethodOID",
-                        meta.method.as_ref().map(|_| format!("MT.{identity}")),
+                        meta.method.as_ref().map(|m| method_oid(m, &identity)),
                     )
                     // No row the entry selects holds a value (SUB-28).
                     .optional(
@@ -481,7 +545,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
             )
             .optional(
                 "def:CommentOID",
-                sub.comment.as_ref().map(|_| format!("COM.{id}")),
+                sub.comment.as_ref().map(|c| comment_oid(c, id)),
             )
             .optional("def:HasNoData", sub.has_no_data.value.then_some("Yes"));
         group.translated("Description", &sub.label.value, language);
@@ -501,7 +565,9 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                     .optional("Role", meta.role.as_ref().map(|v| &v.value))
                     .optional(
                         "MethodOID",
-                        meta.method.as_ref().map(|_| format!("MT.{id}.{name}")),
+                        meta.method
+                            .as_ref()
+                            .map(|m| method_oid(m, &format!("{id}.{name}"))),
                     )
                     // No published row holds a value in the column (SUB-28).
                     .optional(
@@ -703,6 +769,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         }
     }
     push_codelists(&mut metadata, study, language);
+    let mut written = Vec::new();
     for dataset in study.datasets() {
         for (column, name) in variants(dataset) {
             let meta = column
@@ -712,7 +779,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 .expect("composed column");
             let Some(method) = &meta.method else { continue };
             let mut node = Element::new("MethodDef", &format!("datasets.{name}.submission.method"))
-                .attr("OID", format!("MT.{name}"));
+                .attr("OID", method_oid(method, &name));
             match method {
                 s::Method::Plain(description) => {
                     node = node.attr("Name", &name).attr("Type", "Computation");
@@ -732,9 +799,10 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                     node.refs(&class.documents.value);
                 }
             }
-            metadata.push(node);
+            push_shared(&mut metadata, &mut written, node, method.oid().is_some());
         }
     }
+    let mut written = Vec::new();
     for dataset in study.datasets() {
         let mut comments: Vec<(String, &s::Comment)> = Vec::new();
         if let Some(c) = &dataset.metadata().comment {
@@ -753,9 +821,9 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         }
         for (name, c) in comments {
             let mut node = Element::new("def:CommentDef", &format!("datasets.{name}.comment"))
-                .attr("OID", format!("COM.{name}"));
+                .attr("OID", comment_oid(c, &name));
             comment(&mut node, c, language);
-            metadata.push(node);
+            push_shared(&mut metadata, &mut written, node, c.oid().is_some());
         }
     }
     for (index, document) in section.documents.iter().enumerate() {
