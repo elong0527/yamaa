@@ -16,6 +16,50 @@ use yamaa_core::{
     submission_composition::{self as model, Finding, Study},
     value::Value,
 };
+mod analysis;
+
+/// One document reference as `def:DocumentRef` writes it (DEFINE-19): the
+/// document's identifier and, when it says where it points, the page
+/// reference's `PageRefs`, `Type` and `Title`. A specification's metadata and
+/// an analysis results source declare one form, which one writer reads.
+struct Reference<'a> {
+    document: &'a str,
+    pages: Option<(&'a str, &'a str, Option<&'a str>)>,
+}
+impl<'a> From<&'a s::DocumentReference> for Reference<'a> {
+    fn from(reference: &'a s::DocumentReference) -> Self {
+        match reference {
+            s::DocumentReference::Plain(field) => Self {
+                document: &field.value,
+                pages: None,
+            },
+            s::DocumentReference::Class(class) => Self {
+                document: &class.document.value,
+                pages: class.pages.as_ref().map(|pages| {
+                    (
+                        pages.refs.value.as_str(),
+                        pages.kind.value.name(),
+                        pages.title.as_ref().map(|title| title.value.as_str()),
+                    )
+                }),
+            },
+        }
+    }
+}
+impl<'a> From<&'a ast::DocumentRef> for Reference<'a> {
+    fn from(reference: &'a ast::DocumentRef) -> Self {
+        Self {
+            document: &reference.document.name,
+            pages: reference.pages.as_ref().map(|pages| {
+                (
+                    pages.refs.text.as_str(),
+                    pages.kind.text.as_str(),
+                    pages.title.as_ref().map(|title| title.text.as_str()),
+                )
+            }),
+        }
+    }
+}
 
 struct Element {
     name: &'static str,
@@ -86,20 +130,17 @@ impl Element {
         wrapper.push(translated);
         self.push(wrapper);
     }
-    fn refs(&mut self, refs: &[s::DocumentReference]) {
+    fn refs<'a, R: Into<Reference<'a>>>(&mut self, refs: impl IntoIterator<Item = R>) {
         for reference in refs {
-            let (id, pages) = match reference {
-                s::DocumentReference::Plain(field) => (&field.value, None),
-                s::DocumentReference::Class(class) => (&class.document.value, class.pages.as_ref()),
-            };
+            let Reference { document, pages } = reference.into();
             let mut node =
-                Self::new("def:DocumentRef", &self.path).attr("leafID", format!("LF.{id}"));
-            if let Some(pages) = pages {
+                Self::new("def:DocumentRef", &self.path).attr("leafID", format!("LF.{document}"));
+            if let Some((refs, kind, title)) = pages {
                 node.push(
                     Self::new("def:PDFPageRef", &self.path)
-                        .attr("PageRefs", &pages.refs.value)
-                        .attr("Type", pages.kind.value.name())
-                        .optional("Title", pages.title.as_ref().map(|t| &t.value)),
+                        .attr("PageRefs", refs)
+                        .attr("Type", kind)
+                        .optional("Title", title),
                 );
             }
             self.push(node);
@@ -183,9 +224,8 @@ impl Element {
                 "leafID" => references.push(value.clone()),
                 "def:ArchiveLocationID" => references.push(value.clone()),
                 "ItemOID" | "def:ItemOID" | "CodeListOID" | "MethodOID" | "def:StandardOID"
-                | "def:CommentOID" | "ValueListOID" | "WhereClauseOID" => {
-                    oid_references.push(value.clone())
-                }
+                | "def:CommentOID" | "ValueListOID" | "WhereClauseOID" | "ItemGroupOID"
+                | "ParameterOID" => oid_references.push(value.clone()),
                 "xml:lang" if !language(value) => return Err(invalid("xml:lang language", value)),
                 _ => {}
             }
@@ -257,12 +297,26 @@ fn yes(value: bool) -> &'static str {
 }
 fn comment(node: &mut Element, comment: &s::Comment, language: &str) {
     match comment {
-        s::Comment::Plain(text) => node.translated("Description", &text.value, language),
+        s::Comment::Plain(text) => {
+            described(node, &text.value, None::<&s::DocumentReference>, language);
+        }
         s::Comment::Class(class) => {
-            node.translated("Description", &class.text.value, language);
-            node.refs(&class.documents.value);
+            described(node, &class.text.value, &class.documents.value, language);
         }
     }
+}
+/// Write a comment's content into `node` (DEFINE-21): its text as the one
+/// `Description`, then one `def:DocumentRef` per document it refers to. A
+/// `def:CommentDef` of a specification, an analysis join comment and an
+/// `arm:Documentation` hold the one content.
+fn described<'a, R: Into<Reference<'a>>>(
+    node: &mut Element,
+    text: &str,
+    documents: impl IntoIterator<Item = R>,
+    language: &str,
+) {
+    node.translated("Description", text, language);
+    node.refs(documents);
 }
 /// A method's OID: the one a historical declaration names, otherwise the
 /// generated `MT.<identity>` (DEFINE-9).
@@ -458,40 +512,50 @@ fn push_where_clauses(metadata: &mut Element, study: &Study) {
                 );
                 let mut clause = Element::new("def:WhereClauseDef", value.path())
                     .attr("OID", format!("WC.{identity}"));
-                // One range check per where column, in written order: one
-                // value is an equality and several a membership, an
-                // exclusion is NE for one value and NOTIN for several, and
-                // an ordered term writes its own comparator (DEFINE-27).
                 for term in value.clause() {
-                    let where_column = &dataset.columns()[term.column];
-                    let target = &where_column.declaration().name.value;
-                    let mut check = Element::new("RangeCheck", value.path())
-                        .attr("Comparator", term.comparator())
-                        .attr("SoftHard", "Soft")
-                        .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id()));
-                    // An ordered term's value is written as the where
-                    // column's ItemDef types it: an ADaM date, datetime or
-                    // time as its SAS number (SUB-25), any other as written.
-                    let submitted = term
-                        .bound
-                        .as_ref()
-                        .filter(|_| where_column.data_type() == DataType::Integer)
-                        .and_then(|bound| crate::epoch::sas_number((&bound.value).into()));
-                    let values = match submitted {
-                        Some(number) => vec![number.to_string()],
-                        None => term.values.clone(),
-                    };
-                    for checked in values {
-                        let mut code = Element::new("CheckValue", value.path());
-                        code.text = Some(checked);
-                        check.push(code);
-                    }
-                    clause.push(check);
+                    // An ordered term's one value is the value composition
+                    // converted.
+                    let typed = term.bound.as_ref().map(|bound| &bound.value);
+                    clause.push(range_check(value.path(), dataset, term, typed));
                 }
                 metadata.push(clause);
             }
         }
     }
+    analysis::push_where_clauses(metadata, study);
+}
+
+/// One `RangeCheck` of a where clause, a value-level entry's or an analysis
+/// dataset's (DEFINE-27): one value is an equality and several a membership,
+/// an exclusion is NE for one value and NOTIN for several, and an ordered
+/// term writes its own comparator. `typed` gives the term's values as the
+/// where column's type holds them, where composition converted them.
+fn range_check<'v>(
+    path: &str,
+    dataset: &model::Dataset,
+    term: &yamaa_core::dataset::WhereTerm,
+    typed: impl IntoIterator<Item = &'v Value>,
+) -> Element {
+    let where_column = &dataset.columns()[term.column];
+    let target = &where_column.declaration().name.value;
+    let mut check = Element::new("RangeCheck", path)
+        .attr("Comparator", term.comparator())
+        .attr("SoftHard", "Soft")
+        .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id()));
+    // A converted value is written as the where column's ItemDef types it:
+    // an ADaM date, datetime or time as its SAS number (SUB-25), any other
+    // as written.
+    let mut typed = typed.into_iter();
+    for written in &term.values {
+        let submitted = typed
+            .next()
+            .filter(|_| where_column.data_type() == DataType::Integer)
+            .and_then(|value| crate::epoch::sas_number(value.into()));
+        let mut code = Element::new("CheckValue", path);
+        code.text = Some(submitted.map_or_else(|| written.clone(), |number| number.to_string()));
+        check.push(code);
+    }
+    check
 }
 
 /// Append one item-group definition per dataset, in dataset order.
@@ -671,6 +735,12 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .attr("xmlns", "http://www.cdisc.org/ns/odm/v1.3")
         .attr("xmlns:def", section.define_version.namespace())
         .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
+        // The one extension namespace, declared only by a document that
+        // carries analysis results metadata (DEFINE-11).
+        .optional(
+            "xmlns:arm",
+            (!study.analysis_displays().is_empty()).then_some(analysis::NAMESPACE),
+        )
         .attr("ODMVersion", "1.3.2")
         .attr("FileType", "Snapshot")
         .attr("FileOID", study.file_oid())
@@ -826,6 +896,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             push_shared(&mut metadata, &mut written, node, c.oid().is_some());
         }
     }
+    analysis::push_join_comments(&mut metadata, study, language);
     for (index, document) in section.documents.iter().enumerate() {
         metadata.leaf(
             &document.id.name,
@@ -837,6 +908,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             )),
         );
     }
+    analysis::push_displays(&mut metadata, study, language);
     root.push(metadata);
     odm.push(root);
     let mut identities = BTreeSet::new();

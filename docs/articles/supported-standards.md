@@ -40,6 +40,11 @@ adam:
   transport: xpt
 ```
 
+An `adam` section may also declare analysis results metadata, which its
+Define-XML document carries as Analysis Results Metadata 1.0 for Define-XML
+under either Define-XML release
+([Analysis results](schema-intro.md#analysis-results)).
+
 Define-XML and controlled-terminology releases are separate choices. An
 older implementation guide can use Define-XML 2.1; selecting SDTMIG 3.3 or
 ADaMIG 1.1 does not require Define-XML 2.0 or a terminology release from the

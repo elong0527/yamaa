@@ -28,10 +28,12 @@ pub use expr::{
 };
 pub use path::{PathId, Paths, Segment};
 pub use project::{
-    Codelist, CodelistDeclaration, CodelistItem, CodelistSource, CodelistType, Codelists,
-    DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionTest, HostEnvironment,
-    Implementation, ImplementationGuide, MetadataVersion, Parameter, Project, Section, Study,
-    SubmissionDeclarations, SubmissionRefused, SupportingDocument, TerminologyStandard, Transport,
+    AnalysisDataset, AnalysisResult, AnalysisResults, AnalysisResultsDeclaration,
+    AnalysisResultsSource, Codelist, CodelistDeclaration, CodelistItem, CodelistSource,
+    CodelistType, Codelists, DocumentKind, ExternalDictionary, Function, FunctionDeclaration,
+    FunctionTest, HostEnvironment, Implementation, ImplementationGuide, MetadataVersion, Parameter,
+    ProgrammingCode, Project, ResultDisplay, Section, Study, SubmissionDeclarations,
+    SubmissionRefused, SupportingDocument, TerminologyStandard, Transport,
 };
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};

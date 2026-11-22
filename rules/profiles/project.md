@@ -33,7 +33,11 @@ a `parent` is the entry of a chain of project files, which compose into the
 project before any file it names is read ([PROJECT-16](#project-16)); the
 caller still passes only the entry. A codelist source is written inline or as the path
 of a codelist file, which declares `type: codelists`
-([CT-1](terminology.md#ct-1)). A project file whose content does not validate
+([CT-1](terminology.md#ct-1)). The `adam` section alone also takes
+`analysis_results`, whose sources are each written inline or as the path of
+an analysis results file, which declares `type: analysis_results`
+([DEFINE-32](define-xml.md#define-32)); a file source is read with the
+codelist files whenever the project is prepared. A project file whose content does not validate
 against the project schema fails, before any activation or study read, with
 the conditions of [SCHEMA-12](../reference/schema-language.md#schema-12) and
 [SCHEMA-13](../reference/schema-language.md#schema-13) at its own paths; the
@@ -137,20 +141,23 @@ files of [Dataset-JSON](dataset-json.md#json-1) or
 ([PROJECT-13](#project-13)). A section's `standards` is a list, its first
 entry the guide a specification binds by default; a specification selects
 another by name in `submission.standard`
-([DEFINE-8](define-xml.md#define-8)).
+([DEFINE-8](define-xml.md#define-8)). The `adam` section's
+`analysis_results` declares the analysis results metadata its document
+carries ([DEFINE-32](define-xml.md#define-32)): a run reads the files it
+lists, as it reads codelist files, and resolves nothing they name.
 
 <a id="project-4"></a>
 
 ### PROJECT-4. A project file's relative paths resolve from the project file that writes them
 
 Every relative path a project file writes, namely its `parent`, each function
-file, lock, codelist source, section specification and Define-XML target,
-resolves from the directory of the project file that writes it, the entry or
-a parent ([PROJECT-16](#project-16)). Absolute local paths and parent
+file, lock, codelist source, section specification, analysis results file and
+Define-XML target, resolves from the directory of the project file that
+writes it, the entry or a parent ([PROJECT-16](#project-16)). Absolute local paths and parent
 segments have their [File resolution](../reference/files.md) meaning.
 
 Fails: `resource_path_missing`.
-Evidence: `schema-project-parent`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::a_project_reads_a_codelist_file_it_lists_relative_to_itself`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
+Evidence: `schema-project-parent`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-application/tests/declaration_project_files.rs::a_project_reads_a_codelist_file_it_lists_relative_to_itself`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline`.
 
 A path a parent writes keeps its location when it composes into the entry,
 as a specification layer's does ([LAYER-10](../inheritance.md#layer-10)):

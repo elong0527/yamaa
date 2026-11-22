@@ -12,6 +12,14 @@ the maintained schema when controlled terminology is updated. The version
 selector preserves the requested published release in `def:DefineVersion`;
 the default remains 2.1.11.
 
+No schema of Analysis Results Metadata 1.0 is retained here. CDISC publishes
+its three files only inside its download packages, which carry no open
+license. A Define-XML schema alone has no place for
+`arm:AnalysisResultDisplays`, so the Define tests validate a document that
+carries it after setting that one element aside, and compare the element's
+bytes with an authored expected document
+([DEFINE-25](../../../rules/profiles/define-xml.md#define-25)).
+
 The Dataset-JSON schema is copied unchanged from
 [CDISC's DataExchange-DatasetJson](https://github.com/cdisc-org/DataExchange-DatasetJson/blob/a379f49a3f43c2aaed63bdeca761bdb7140df2c3/schema/dataset.schema.json).
 Its license is included as `DATASET-JSON-LICENSE`.

@@ -72,17 +72,25 @@ pub enum FileType {
     Spec,
     Project,
     Codelists,
+    AnalysisResults,
     Function,
 }
 
 impl FileType {
-    pub const ALL: [Self; 4] = [Self::Spec, Self::Project, Self::Codelists, Self::Function];
+    pub const ALL: [Self; 5] = [
+        Self::Spec,
+        Self::Project,
+        Self::Codelists,
+        Self::AnalysisResults,
+        Self::Function,
+    ];
     /// The spelling a document writes in `type`.
     pub fn name(self) -> &'static str {
         match self {
             Self::Spec => "spec",
             Self::Project => "project",
             Self::Codelists => "codelists",
+            Self::AnalysisResults => "analysis_results",
             Self::Function => "function",
         }
     }
@@ -95,6 +103,7 @@ impl FileType {
             Self::Spec => "root_class",
             Self::Project => "project_class",
             Self::Codelists => "codelist_file_class",
+            Self::AnalysisResults => "analysis_results_file_class",
             Self::Function => "function_definition_class",
         }
     }
@@ -316,7 +325,7 @@ pub fn legacy_refusal(reads: LanguageVersion) -> Diagnostic {
 }
 
 /// The type a document's root declares in `type`, when that is text naming
-/// one of the four file types.
+/// one of the file types.
 pub fn declared_type(document: &Document) -> Option<FileType> {
     match &document.nodes()[document.field(document.root(), "type")?] {
         N::Text(text) => FileType::parse(text),
@@ -329,7 +338,7 @@ pub fn declared_type(document: &Document) -> Option<FileType> {
 pub enum TypeFault {
     /// The header is refused as [`read_header`] refuses it.
     Header(HeaderFault),
-    /// `type` is text naming none of the four file types.
+    /// `type` is text naming none of the file types.
     Unknown {
         /// The `type` value occurrence in the document.
         node: usize,
@@ -365,10 +374,10 @@ impl TypeFault {
 /// A root that declares `schema_version`, with `yamaa` or without, is a 0.5
 /// document and declares no type: it fails as `unsupported_language_version`
 /// at `schema_version`, naming version 0.5 ([`HeaderFault::Legacy`]). A root
-/// that declares one of the four types is read as [`read_header`] reads that
+/// that declares one of the file types is read as [`read_header`] reads that
 /// type, so it fails as a call that reads that type fails. Any other root is
 /// read in the same order, `yamaa` first, then `type`, with findings that name
-/// no class, since no closure is chosen; a `type` naming none of the four
+/// no class, since no closure is chosen; a `type` naming none of the file
 /// types fails as `unexpected_file_type`, expecting any of them (SCHEMA-2).
 pub fn read_declared_header(
     document: &Document,
@@ -392,7 +401,7 @@ pub fn read_declared_header(
 }
 
 /// The finding for a file type a call takes as its argument, `written`, that
-/// names none of the four types, as the type whose JSON Schema `schema` gives
+/// names none of the file types, as the type whose JSON Schema `schema` gives
 /// (#3030 D149): `unexpected_file_type`, expecting any of them, as a `type`
 /// header naming none of them does (SCHEMA-2). The call reads no file, so the
 /// finding has no spec path.
@@ -443,8 +452,8 @@ pub enum PathBase {
 
 /// A field of a 1.x document that names another yamaa file, and the type that
 /// file must declare (SCHEMA-2): an input's `schema`, and a project's
-/// `functions`, `codelists` and section `specs`. A layer's `parent` is read
-/// by the inheritance traversal (LAYER-4).
+/// `functions`, `codelists`, section `specs` and `adam.analysis_results`. A
+/// layer's `parent` is read by the inheritance traversal (LAYER-4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reference {
     /// The field's spec path in the referencing document.
@@ -541,7 +550,8 @@ fn listed(
 
 /// The referencing fields a 1.x document of `file_type` writes, in the order
 /// they are written, which decides the refused file a check reports first.
-/// Only written paths are references: an inline codelist source is not.
+/// Only written paths are references: an inline codelist or analysis results
+/// source is not.
 pub fn references(document: &Document, file_type: FileType) -> Vec<Reference> {
     let mut references = Vec::new();
     for &(key, value) in entries(document, document.root()) {
@@ -556,12 +566,25 @@ pub fn references(document: &Document, file_type: FileType) -> Vec<Reference> {
             (FileType::Project, "codelists") => {
                 listed(document, Some(value), field, FileType::Codelists)
             }
-            (FileType::Project, section @ ("sdtm" | "adam" | "send")) => listed(
-                document,
-                document.field(value, "specs"),
-                &format!("{section}.specs"),
-                FileType::Spec,
-            ),
+            (FileType::Project, section @ ("sdtm" | "adam" | "send")) => {
+                let mut named = listed(
+                    document,
+                    document.field(value, "specs"),
+                    &format!("{section}.specs"),
+                    FileType::Spec,
+                );
+                // Only an `adam` section lists analysis results files
+                // (DEFINE-32).
+                if section == "adam" {
+                    named.extend(listed(
+                        document,
+                        document.field(value, "analysis_results"),
+                        "adam.analysis_results",
+                        FileType::AnalysisResults,
+                    ));
+                }
+                named
+            }
             _ => Vec::new(),
         });
     }
@@ -677,6 +700,11 @@ mod tests {
             (FileType::Spec, "spec", "root_class"),
             (FileType::Project, "project", "project_class"),
             (FileType::Codelists, "codelists", "codelist_file_class"),
+            (
+                FileType::AnalysisResults,
+                "analysis_results",
+                "analysis_results_file_class",
+            ),
             (FileType::Function, "function", "function_definition_class"),
         ] {
             assert_eq!((kind.name(), kind.root_class()), (name, class));
@@ -1027,6 +1055,7 @@ mod tests {
                         "spec".into(),
                         "project".into(),
                         "codelists".into(),
+                        "analysis_results".into(),
                         "function".into(),
                     ])
                 ),
@@ -1160,11 +1189,24 @@ mod tests {
             ),
             (
                 "adam",
-                T::map(vec![("specs", T::list(vec![T::text("adsl.yaml")]))]),
+                T::map(vec![
+                    ("specs", T::list(vec![T::text("adsl.yaml")])),
+                    (
+                        "analysis_results",
+                        T::list(vec![
+                            T::map(vec![("displays", T::list(vec![]))]),
+                            T::text("arm.yaml"),
+                        ]),
+                    ),
+                ]),
             ),
             (
                 "sdtm",
-                T::map(vec![("specs", T::list(vec![T::text("dm.yaml")]))]),
+                T::map(vec![
+                    ("specs", T::list(vec![T::text("dm.yaml")])),
+                    // Only an `adam` section lists analysis results files.
+                    ("analysis_results", T::list(vec![T::text("no.yaml")])),
+                ]),
             ),
         ]));
         let found = references(&project, FileType::Project)
@@ -1182,6 +1224,11 @@ mod tests {
                 ("functions[1]".into(), "g.yaml".into(), FileType::Function),
                 ("codelists[1]".into(), "ct.yaml".into(), FileType::Codelists),
                 ("adam.specs[0]".into(), "adsl.yaml".into(), FileType::Spec),
+                (
+                    "adam.analysis_results[1]".into(),
+                    "arm.yaml".into(),
+                    FileType::AnalysisResults,
+                ),
                 ("sdtm.specs[0]".into(), "dm.yaml".into(), FileType::Spec),
             ]
         );

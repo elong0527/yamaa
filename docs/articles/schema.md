@@ -20,6 +20,7 @@ is checked against and includes the modules that class needs:
 | `spec` | [`schema_spec.yaml`](../../yaml/schema_spec.yaml) | `root_class` | [`spec.schema.json`](../../yaml/json/spec.schema.json) |
 | `project` | [`schema_project.yaml`](../../yaml/schema_project.yaml) | `project_class` | [`project.schema.json`](../../yaml/json/project.schema.json) |
 | `codelists` | [`schema_codelists.yaml`](../../yaml/schema_codelists.yaml) | `codelist_file_class` | [`codelists.schema.json`](../../yaml/json/codelists.schema.json) |
+| `analysis_results` | [`schema_analysis_results.yaml`](../../yaml/schema_analysis_results.yaml) | `analysis_results_file_class` | [`analysis_results.schema.json`](../../yaml/json/analysis_results.schema.json) |
 | `function` | [`schema_function.yaml`](../../yaml/schema_function.yaml) | `function_definition_class` | [`function.schema.json`](../../yaml/json/function.schema.json) |
 
 The modules they include, directly or through another module:
@@ -29,8 +30,9 @@ The modules they include, directly or through another module:
 | [`schema_shared.yaml`](../../yaml/schema_shared.yaml) | The language version, column types, constants, paths and identifiers | every entry module |
 | [`schema_derivation.yaml`](../../yaml/schema_derivation.yaml) | The `expression` and `derivation` types, a derivation written in full with `unconvertible`, and a named intermediate's derivations | `schema_spec.yaml` |
 | [`schema_verification.yaml`](../../yaml/schema_verification.yaml) | Column, dataset and named-intermediate verifications | `schema_spec.yaml` |
-| [`schema_metadata.yaml`](../../yaml/schema_metadata.yaml) | Dataset and column submission metadata | `schema_spec.yaml` |
+| [`schema_metadata.yaml`](../../yaml/schema_metadata.yaml) | Dataset and column submission metadata, with the where clause and document reference forms an analysis result shares | `schema_spec.yaml`, `schema_analysis_results.yaml` |
 | [`schema_terminology.yaml`](../../yaml/schema_terminology.yaml) | Codelist sources, codelists and their items | `schema_project.yaml`, `schema_codelists.yaml` |
+| [`schema_analysis_results.yaml`](../../yaml/schema_analysis_results.yaml) | Analysis results sources, result displays and analysis results; also the entry module of its own file type | `schema_project.yaml` |
 
 `schema_derivation.yaml` includes the expression modules, each registering
 expressions in the `expressions` registry. The table below is generated from
@@ -160,6 +162,6 @@ every specification under `sdtm/` and `adam/` as you type:
 }
 ```
 
-The project file, function files and codelists files take their own schemas
-the same way. Offline, give the path of a schema saved with `yamaa schema` in
+The project file, function files, codelists files and analysis results files
+take their own schemas the same way. Offline, give the path of a schema saved with `yamaa schema` in
 place of the address.

@@ -34,6 +34,9 @@ pub(super) struct EnvironmentView<'a> {
     pub project: &'a ast::Project,
     pub catalogue: &'a Catalogue,
     pub source: &'a str,
+    /// The analysis results sources the `adam` section declares, inline and
+    /// from the files it lists, in written order (DEFINE-32).
+    pub analysis: &'a [ast::AnalysisResults],
 }
 pub(super) struct SpecificationView<'a> {
     pub document: &'a Document,
@@ -341,8 +344,16 @@ impl Application {
         // A run needs only a section's specifications. Submission composition
         // additionally requires the study and the section's guide and target,
         // and reports every one that is missing together.
+        // Only the `adam` section declares analysis results, which the
+        // project's preparation read with its codelist files (DEFINE-32).
+        let analysis = if family == Submission::Adam {
+            environment.analysis
+        } else {
+            &[]
+        };
         let required = composition::Required::admit(declarations.study.as_ref(), declared)
-            .map_err(Failure::Metadata)?;
+            .map_err(Failure::Metadata)?
+            .with_analysis(analysis);
         let section = required.section;
         // A `Submission` section without a transport is refused before any
         // target is located (DEFINE-4).

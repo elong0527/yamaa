@@ -973,7 +973,7 @@ fn lint(call: &Call) -> Result<Printed, Execution> {
 /// `yamaa schema TYPE`: `schema(file_type)`, the JSON Schema of a file type
 /// as the canonical JSON text the facade gives, printed as it is in both
 /// formats (D149). TYPE goes to the facade as given: one that names none of
-/// the four file types is the facade's refusal, `unexpected_file_type`
+/// the file types is the facade's refusal, `unexpected_file_type`
 /// (SCHEMA-2). Its JSON holds the command, the status and the issue, and
 /// echoes TYPE as given as `type`, as a refused `resolve` echoes its `path`
 /// and `spec` (D169).

@@ -52,6 +52,12 @@ codelist_identifier:
     kind: identifier
     description: Identifier of a codelist the project file declares, one or more single-token segments joined by single periods (CT-1).
 
+define_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_.-]*$'
+    kind: identifier
+    description: Identifier a generated OID is built from.
+
 relative_href:
     type: str
     pattern: '^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$'

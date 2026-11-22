@@ -39,9 +39,9 @@ declare `since` on a class field ([SCHEMA-11](#schema-11)).
 
 ### SCHEMA-2. A yamaa file declares its type and the oldest language version it needs, and an older engine refuses it
 
-A specification, project file, codelist file or function file declares
-`yamaa`, the oldest language version it needs, quoted as `"1.N"`, and
-`type`: `spec`, `project`, `codelists` or `function`. An engine of language
+A yamaa file declares `yamaa`, the oldest language version it needs, quoted
+as `"1.N"`, and `type`: `spec`, `project`, `codelists`, `analysis_results` or
+`function`. An engine of language
 version 1.M reads a file declaring 1.M or an older 1.x version, and admits a
 feature only in a file declaring the version that introduced it or a later
 one. A file declaring a version the engine does not read fails as
@@ -49,7 +49,7 @@ one. A file declaring a version the engine does not read fails as
 field does not expect fails as `unexpected_file_type`.
 
 Fails: `unsupported_language_version`, `unexpected_file_type`, `unknown_field`, `value_not_permitted`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_files.json::a_listed_file_of_an_unread_version_and_one_of_another_type_fail_at_their_listings`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_files.json::a_codelist_file_where_a_function_file_belongs_fails_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_files.json::a_listed_file_written_in_language_0_5_fails_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_schema_link_refuses_a_producer_of_a_newer_version_at_the_link`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_schema_link_refuses_a_producer_of_another_type_at_the_link`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_schema_link_refuses_a_producer_that_declares_schema_version_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_listing_of_a_newer_version_is_refused_at_the_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_listing_of_another_type_is_refused_at_the_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_submission_refuses_a_listed_specification_of_a_newer_version`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_reads_a_1_0_specification`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_refuses_a_newer_language_version_whatever_the_file_holds`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_refuses_a_specification_that_declares_schema_version`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_refuses_schema_version_with_yamaa_beside_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::schema_version_beside_a_1_0_header_is_refused_in_the_file_a_call_reads`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::schema_version_beside_a_1_0_header_is_refused_at_the_parent_that_names_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::schema_version_beside_a_1_0_header_is_refused_at_the_schema_link_that_names_it`, `rust/tests/host-fixtures/cases.json::check_refuses_a_specification_in_language_0_5`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_project_file_that_declares_schema_version_is_refused_as_language_0_5`, `rust/crates/yamaa-adapters/src/lint/tests.rs::a_named_file_that_declares_schema_version_refuses_the_call`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/file_origins.json::entry_version_finding_precedes_parent_and_study_authority`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_files.json::a_listed_file_of_an_unread_version_and_one_of_another_type_fail_at_their_listings`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_files.json::a_codelist_file_where_a_function_file_belongs_fails_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_files.json::a_listed_file_written_in_language_0_5_fails_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_schema_link_refuses_a_producer_of_a_newer_version_at_the_link`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_schema_link_refuses_a_producer_of_another_type_at_the_link`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_schema_link_refuses_a_producer_that_declares_schema_version_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_listing_of_a_newer_version_is_refused_at_the_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_listing_of_another_type_is_refused_at_the_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_submission_refuses_a_listed_specification_of_a_newer_version`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_reads_a_1_0_specification`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_refuses_a_newer_language_version_whatever_the_file_holds`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_refuses_a_specification_that_declares_schema_version`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_public_check_refuses_schema_version_with_yamaa_beside_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::schema_version_beside_a_1_0_header_is_refused_in_the_file_a_call_reads`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::schema_version_beside_a_1_0_header_is_refused_at_the_parent_that_names_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::schema_version_beside_a_1_0_header_is_refused_at_the_schema_link_that_names_it`, `rust/tests/host-fixtures/cases.json::check_refuses_a_specification_in_language_0_5`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/language_header.json::a_project_file_that_declares_schema_version_is_refused_as_language_0_5`, `rust/crates/yamaa-adapters/src/lint/tests.rs::a_named_file_that_declares_schema_version_refuses_the_call`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/file_origins.json::entry_version_finding_precedes_parent_and_study_authority`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing`.
 
 The header is read before the file is checked against any schema: `yamaa`
 first, then `type`. A version is written `1.N`, with `N` a decimal number
@@ -64,9 +64,10 @@ each layer of a specification is admitted at its own version
 
 A file a call reads reports these at its own `yamaa` or `type`. Each
 referencing field checks the header of the file it names: a project's
-`functions`, `codelists` and section `specs`, a specification's `parent` and
-`include` entries ([LAYER-4](../inheritance.md#layer-4)), and an input's
-`schema`. A version the engine does not read, or a type the field does not
+`functions`, `codelists`, section `specs` and `adam.analysis_results`
+([DEFINE-32](../profiles/define-xml.md#define-32)), a specification's
+`parent` and `include` entries ([LAYER-4](../inheritance.md#layer-4)), and an
+input's `schema`. A version the engine does not read, or a type the field does not
 expect, is reported at that field; a malformed header is reported in the
 named file. A dictionary file that `mapping.dict` names carries no header,
 like a data file.
@@ -76,21 +77,21 @@ which no engine of language version 1.M reads. It fails as
 `unsupported_language_version`, naming version `0.5`, wherever it is read,
 with or without `yamaa` beside it: at its own `schema_version` when a call or
 the lint names it, and at the field that names it when a `parent`, an
-`include` entry, a project's `functions`, `codelists` or section `specs`, or
-an input's `schema` reads it. A project file that declares it is refused
+`include` entry, a project's `functions`, `codelists`, section `specs` or
+`adam.analysis_results`, or an input's `schema` reads it. A project file that declares it is refused
 before any file it names is read.
 
 A call that reads only the type a file declares, as the command line does
 before it chooses what to run, reads the 1.x header alone. There a file that
 declares `schema_version` declares no type and fails as
 `unsupported_language_version` at `schema_version`, naming version `0.5`. A
-file that declares one of the four types is refused as a call reading that
+file that declares one of the file types is refused as a call reading that
 type refuses it; any other file's header is read in the same order, and a
-`type` naming none of the four types fails as `unexpected_file_type`.
+`type` naming none of them fails as `unexpected_file_type`.
 
 A call that takes a file type as its argument, as the call that gives a
 type's JSON Schema does, takes it as a file writes it in `type`. Text naming
-none of the four types fails as `unexpected_file_type`, expecting any of
+none of the file types fails as `unexpected_file_type`, expecting any of
 them; the call reads no file, so the finding names no spec path.
 
 <a id="schema-3"></a>

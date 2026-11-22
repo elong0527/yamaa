@@ -372,7 +372,7 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
 #[test]
 fn schema_prints_the_json_schema_of_each_file_type() {
     let study = Study::empty();
-    for file_type in ["spec", "project", "codelists", "function"] {
+    for file_type in yamaa::FILE_TYPES {
         let schema = yamaa::schema(file_type).unwrap();
         assert!(!schema.contains('\n'), "{file_type}");
         for arguments in [
@@ -390,8 +390,8 @@ fn schema_prints_the_json_schema_of_each_file_type() {
     assert!(study.files(".").is_empty());
 }
 
-/// TYPE goes to the facade as given, which compares it exactly with the four
-/// file types, so any other text is its refusal, `unexpected_file_type`
+/// TYPE goes to the facade as given, which compares it exactly with the file
+/// types, so any other text is its refusal, `unexpected_file_type`
 /// (SCHEMA-2): D39's error text and exit status 1, as the hosts raise it and
 /// as an unknown section is refused (D98, D149). Its JSON holds the command,
 /// the status `failed` and the issue, and echoes TYPE as given as `type`, as
@@ -936,7 +936,7 @@ fn a_file_written_in_language_version_0_5_is_refused_with_exit_status_1() {
     assert!(study.files("out").is_empty());
 }
 
-/// A `type` naming none of the four file types is refused as
+/// A `type` naming none of the file types is refused as
 /// `unexpected_file_type` at `type`, and exits 1 (D125).
 #[test]
 fn a_type_naming_no_file_type_is_refused_with_exit_status_1() {

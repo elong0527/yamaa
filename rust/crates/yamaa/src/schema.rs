@@ -2,8 +2,8 @@
 //! machine-readable contract that editors validate and complete a yamaa file
 //! against as it is typed.
 //!
-//! [`schema`] gives the JSON Schema of `spec`, `project`, `codelists` or
-//! `function` as canonical JSON text. It is the document that
+//! [`schema`] gives the JSON Schema of `spec`, `project`, `codelists`,
+//! `analysis_results` or `function` as canonical JSON text. It is the document that
 //! `tools/packaging/generate_json_schema.py` generates from the type's schema
 //! files and commits in `yaml/json/`, indented there for review. The
 //! engine embeds the committed file when it is built, so nothing is read at
@@ -15,8 +15,8 @@ use crate::file_type::FileType;
 use crate::text::Action;
 
 /// The JSON Schema of the file type `file_type`, which is compared exactly
-/// with the types a file writes in `type`: `spec`, `project`, `codelists` or
-/// `function`, the [`crate::FILE_TYPES`].
+/// with the types a file writes in `type`: `spec`, `project`, `codelists`,
+/// `analysis_results` or `function`, the [`crate::FILE_TYPES`].
 ///
 /// The text is canonical JSON (RFC 8785), as every JSON text the engine
 /// writes: one line without a final line feed, members in key order, numbers
@@ -25,7 +25,7 @@ use crate::text::Action;
 /// its `$defs/root_class` checks a complete specification.
 ///
 /// Any other text is refused as `unexpected_file_type` (SCHEMA-2), with the
-/// text as given as `type` and the four types as `expected`, at no spec path,
+/// text as given as `type` and the file types as `expected`, at no spec path,
 /// since no file is read. The refusal names the call as `cannot give the
 /// schema of <type>` (D39).
 ///
@@ -40,7 +40,8 @@ use crate::text::Action;
 /// assert_eq!(
 ///     refused.message,
 ///     "cannot give the schema of specs: a specs file is given where a spec, \
-///      project, codelists, function file is expected [unexpected_file_type, SCHEMA-2]"
+///      project, codelists, analysis_results, function file is expected \
+///      [unexpected_file_type, SCHEMA-2]"
 /// );
 /// ```
 pub fn schema(file_type: &str) -> Result<String, Failure> {

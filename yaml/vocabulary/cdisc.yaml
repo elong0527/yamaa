@@ -3,8 +3,8 @@
 # names (DEFINE-6, CT-2) and statuses (DEFINE-13), publishing sets (CT-2),
 # origin types and sources (SUB-14), column roles (SUB-9), core designations
 # (SUB-10), submission data types (SUB-6), method types (SUB-21), page
-# reference types (SUB-22), document contexts (DEFINE-4) and where
-# comparators (SUB-12).
+# reference types (SUB-22), document contexts (DEFINE-4), where
+# comparators (SUB-12) and analysis reasons and purposes (DEFINE-31).
 #
 # `version` is the newest language version whose values this file lists, and
 # each value's `since` is the version that admitted it. A vocabulary grows
@@ -197,3 +197,22 @@ vocabularies:
       - {value: LE, since: "1.0"}
       - {value: GT, since: "1.0"}
       - {value: GE, since: "1.0"}
+  # Why an analysis was performed (DEFINE-31): the values Analysis Results
+  # Metadata 1.0 publishes for AnalysisReason, in its order. The published
+  # codelist is extensible; this profile admits no sponsor value (DEFINE-26).
+  analysis_reason:
+    type: analysis_reason
+    values:
+      - {value: SPECIFIED IN PROTOCOL, since: "1.0"}
+      - {value: SPECIFIED IN SAP, since: "1.0"}
+      - {value: DATA DRIVEN, since: "1.0"}
+      - {value: REQUESTED BY REGULATORY AGENCY, since: "1.0"}
+  # What an analysis is for (DEFINE-31): the values Analysis Results Metadata
+  # 1.0 publishes for AnalysisPurpose, in its order, closed as the reasons
+  # are (DEFINE-26).
+  analysis_purpose:
+    type: analysis_purpose
+    values:
+      - {value: PRIMARY OUTCOME MEASURE, since: "1.0"}
+      - {value: SECONDARY OUTCOME MEASURE, since: "1.0"}
+      - {value: EXPLORATORY OUTCOME MEASURE, since: "1.0"}

@@ -458,6 +458,7 @@ impl Locator {
             let path = match &capture.origin {
                 Origin::FunctionFile(index) => format!("functions[{index}]"),
                 Origin::Codelist(index) => format!("codelists[{index}]"),
+                Origin::AnalysisResults(index) => format!("adam.analysis_results[{index}]"),
                 Origin::Lock => continue,
             };
             if let Some(from) = project {

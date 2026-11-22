@@ -46,6 +46,10 @@ conditions:
   ambiguous_dictionary:
     phases: [validation]
     message: "the case-insensitive mapping keys {entries} all fold to {folded_key}"
+  # DEFINE-32
+  analysis_dataset_invalid:
+    phases: [validation]
+    message: "the analysis dataset {dataset} of result {result} of display {display} is invalid ({reason})"
   artifact_outside_document:
     phases: [validation]
     message: "the artifact {artifact} of {dataset} is outside the directory of {define}"
@@ -661,6 +665,10 @@ conditions:
   unknown_codelist:
     phases: [validation]
     message: "{spec_path} names codelist {codelist}, which is not declared"
+  # DEFINE-32
+  unknown_dataset:
+    phases: [validation]
+    message: "{spec_path} names the dataset {dataset}, which section {section} does not compose"
   # LOOKUP-22
   unknown_derive_variable:
     phases: [validation]

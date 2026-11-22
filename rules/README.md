@@ -134,7 +134,7 @@ profiles in `rules/profiles/`.
 | [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, canonical shorthand expansion, and the canonical spelling of a written value. |
 | [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
 | [Controlled terminology](profiles/terminology.md) | CT | Declare codelists, compose them by `id` across their sources, and enforce the items each binding lists. |
-| [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
+| [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata, and an `adam` section's analysis results metadata, into deterministic Define-XML 2.1 documents. |
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 | [SAS Transport](profiles/xpt.md) | XPT | Write a dataset as one deterministic SAS Transport version 5 file in the public record layout. |
 | [Project functions](profiles/functions.md) | FUNC | Define each project function once in a function file, resolve immutable runtimes, and validate function inputs, results, and activation conformance. |
@@ -159,8 +159,9 @@ tables of [SUB-3](profiles/submission.md#sub-3),
 [SUB-6](profiles/submission.md#sub-6),
 [SUB-10](profiles/submission.md#sub-10),
 [SUB-14](profiles/submission.md#sub-14),
-[CT-2](profiles/terminology.md#ct-2) and
-[DEFINE-6](profiles/define-xml.md#define-6), list values of the closed CDISC
+[CT-2](profiles/terminology.md#ct-2),
+[DEFINE-6](profiles/define-xml.md#define-6) and
+[DEFINE-31](profiles/define-xml.md#define-31), list values of the closed CDISC
 vocabularies, which `yaml/vocabulary/cdisc.yaml` holds, and repository
 checks keep them to that file.
 

@@ -5,8 +5,8 @@ class declares. A file is written in the order of its file type's 1.0 schema
 in `yaml/`.
 
 A specification orders its root, each input dataset, the output, each named
-intermediate, each column and each row template. A project, codelists or
-function file orders its root and every mapping beneath it that a class of its
+intermediate, each column and each row template. A project, codelists,
+analysis results or function file orders its root and every mapping beneath it that a class of its
 schema describes: a field typed by a class, a list of a class or a mapping of
 a class, or by a union whose one class member describes a mapping written
 there.
@@ -56,6 +56,13 @@ TREES = (
         "codelist_file_class",
         False,
         "A 1.x file that declares `type: codelists`.",
+    ),
+    (
+        "ANALYSIS_RESULTS",
+        "yaml/schema_analysis_results.yaml",
+        "analysis_results_file_class",
+        False,
+        "A 1.x file that declares `type: analysis_results`.",
     ),
     (
         "FUNCTION",

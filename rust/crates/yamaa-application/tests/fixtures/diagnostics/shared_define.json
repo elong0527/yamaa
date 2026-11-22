@@ -1,5 +1,5 @@
 {
-  "about": "One submission section composed and saved (DEFINE, SUB, JSON, PROJECT, CT, INPUT): what refuses a composition before any specification is read, what its metadata refutes, how it rechecks a published dataset, and where its save publishes each file. Moved from file_resources.rs's shared_define module. A case stages a benchmark's files and takes a published dataset from the benchmark's expected/ files, as the tests copied them; the two refusals that come before any specification is read stage the project file and the published dataset alone, since their tests deleted the specification. Each case compares what its test compared: rows found by their cause are among the issues, and a refused composition's saved is {}, the absent define.xml and transport file its test asserted. A document no authored file holds, such as the Define-XML of an edited or a metadata-only composition, is stated by the parts its test compared, each selected whole (select): an element from its start tag through its end tag, an attribute's value or a JSON value, and the complete list a path selects stands for a test's count or absence. The nine migrated document selections stage only the specification and project files their original tests copied, plus the published dataset where required. Raw input files remain unavailable, retaining the metadata-only tests' proof that composing metadata needs no raw study inputs. The unused-terminology API sidecar also proves that input and acrf.pdf remain absent, including empty directories. The tests that stay in file_resources.rs compare what a composition holds and reads between its preparation and its save, or stay by design. The three compositions that relocate the DM benchmark's dataset publish the benchmark's own documents: nothing either document writes depends on the specification's path, and each names the other relative to itself, the transport file beside the document (JSON-1). The staleness cases, moved from submission_staleness.rs, compose a study whose project lists one DM specification over one raw input (PROJECT-15): a case whose test built and saved it before composing names it under built, which builds and saves it alone, with no project, as the test's run did; a case whose test then deleted or replaced a file stages the files the study held when it composed, the artifact its build wrote (the test's DM text) and no report, the replaced report or the changed artifact and input. The inherited output's build is also a build case, whose run report row names the entry-relative artifact its test read in the saved report's first row, its ARTIFACT and run KIND (CHECK-23, CHECK-24). Their stale findings compare the condition, the path and the whole context their tests compared; a composition their tests checked without reading its document states the leaf DEFINE-16 gives the artifact, relative to the document. The transport cases, moved from submission_transport.rs, stage sdtm-dm-xpt or adam-adsl-xpt as their tests staged it, with the published dataset from the benchmark's expected/ files and the converted ADSL project the test copied: the input moved to dm.xpt and the dataset without rows are the first issues their tests read (prefix); a dataset declared without data adds no length to DM (SUB-24), so DM's transport file is the benchmark's own, and its group carries neither archive location nor leaf (JSON-3, DEFINE-16); the ADaM Dataset-JSON columns and first row are the lines the test found, at the positions of the output columns, and its document is the benchmark's with adsl.json for adsl.xpt, as the test compared it.",
+  "about": "One submission section composed and saved (DEFINE, SUB, JSON, PROJECT, CT, INPUT), an `adam` section's analysis results metadata included (DEFINE-31, DEFINE-32): what refuses a composition before any specification is read, what its metadata refutes, how it rechecks a published dataset, and where its save publishes each file. Moved from file_resources.rs's shared_define module. A case stages a benchmark's files and takes a published dataset from the benchmark's expected/ files, as the tests copied them; the two refusals that come before any specification is read stage the project file and the published dataset alone, since their tests deleted the specification. Each case compares what its test compared: rows found by their cause are among the issues, and a refused composition's saved is {}, the absent define.xml and transport file its test asserted. A document no authored file holds, such as the Define-XML of an edited or a metadata-only composition, is stated by the parts its test compared, each selected whole (select): an element from its start tag through its end tag, an attribute's value or a JSON value, and the complete list a path selects stands for a test's count or absence. The nine migrated document selections stage only the specification and project files their original tests copied, plus the published dataset where required. Raw input files remain unavailable, retaining the metadata-only tests' proof that composing metadata needs no raw study inputs. The unused-terminology API sidecar also proves that input and acrf.pdf remain absent, including empty directories. The tests that stay in file_resources.rs compare what a composition holds and reads between its preparation and its save, or stay by design. The three compositions that relocate the DM benchmark's dataset publish the benchmark's own documents: nothing either document writes depends on the specification's path, and each names the other relative to itself, the transport file beside the document (JSON-1). The staleness cases, moved from submission_staleness.rs, compose a study whose project lists one DM specification over one raw input (PROJECT-15): a case whose test built and saved it before composing names it under built, which builds and saves it alone, with no project, as the test's run did; a case whose test then deleted or replaced a file stages the files the study held when it composed, the artifact its build wrote (the test's DM text) and no report, the replaced report or the changed artifact and input. The inherited output's build is also a build case, whose run report row names the entry-relative artifact its test read in the saved report's first row, its ARTIFACT and run KIND (CHECK-23, CHECK-24). Their stale findings compare the condition, the path and the whole context their tests compared; a composition their tests checked without reading its document states the leaf DEFINE-16 gives the artifact, relative to the document. The transport cases, moved from submission_transport.rs, stage sdtm-dm-xpt or adam-adsl-xpt as their tests staged it, with the published dataset from the benchmark's expected/ files and the converted ADSL project the test copied: the input moved to dm.xpt and the dataset without rows are the first issues their tests read (prefix); a dataset declared without data adds no length to DM (SUB-24), so DM's transport file is the benchmark's own, and its group carries neither archive location nor leaf (JSON-3, DEFINE-16); the ADaM Dataset-JSON columns and first row are the lines the test found, at the positions of the output columns, and its document is the benchmark's with adsl.json for adsl.xpt, as the test compared it.",
   "documents": {
     "study_lb": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origins: [{type: Assigned, source: Sponsor}]}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origins: [{type: Assigned, source: Sponsor}]}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n",
     "study_adlb": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origins: [{type: Predecessor, description: LB.USUBJID}]}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Predecessor, description: LB.LBTESTCD}]}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: \"'LB'\"\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origins: [{type: Assigned}]}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n",
@@ -2180,6 +2180,164 @@
         "spec_paths",
         "context"
       ]
+    },
+    {
+      "case": "analysis_results_compose_under_define_2_0",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Analysis results witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table 1\n      description: Independent display\n      documents: [{document: SAP, pages: {type: PhysicalRef, refs: '12'}}]\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {where: {PARAMCD: [X], VISITN: {comparator: GE, values: ['2']}}, variables: [AVAL]}\n        documentation: Independent documentation\n        programming_code: {context: R 4.5.1, code: \"mean(d0$AVAL)\"}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_analysis_results.xml"
+        }
+      }
+    },
+    {
+      "case": "analysis_results_under_sdtm_is_an_unknown_field",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Analysis results witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  context: Other\n  source_system_version: '1.0'\n  analysis_results:\n  - displays: []\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "rule": "SCHEMA-13",
+          "spec_paths": [
+            "sdtm.analysis_results"
+          ]
+        }
+      ],
+      "saved": {},
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths"
+      ]
+    },
+    {
+      "case": "an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Analysis results witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n  analysis_results:\n  - ct.yaml\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n",
+          "ct.yaml": "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unexpected_file_type",
+          "rule": "SCHEMA-2",
+          "spec_paths": [
+            "adam.analysis_results[0]"
+          ],
+          "context": {
+            "source": "{study}/ct.yaml",
+            "type": "codelists",
+            "expected": "analysis_results"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "an_analysis_reason_outside_the_published_values_is_not_permitted",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Analysis results witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table 1\n      description: Independent display\n      documents: [{document: SAP, pages: {type: PhysicalRef, refs: '12'}}]\n      results:\n      - id: R1\n        description: Independent result\n        reason: PER PROTOCOL\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {where: {PARAMCD: [X], VISITN: {comparator: GE, values: ['2']}}, variables: [AVAL]}\n        documentation: Independent documentation\n        programming_code: {context: R 4.5.1, code: \"mean(d0$AVAL)\"}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "SCHEMA-12",
+          "spec_paths": [
+            "adam.analysis_results[0].displays['Table 1'].results.R1.reason"
+          ]
+        }
+      ],
+      "saved": {},
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths"
+      ]
+    },
+    {
+      "case": "a_tab_in_programming_code_is_untransportable",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Analysis results witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table 1\n      description: Independent display\n      documents: [{document: SAP, pages: {type: PhysicalRef, refs: '12'}}]\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {where: {PARAMCD: [X], VISITN: {comparator: GE, values: ['2']}}, variables: [AVAL]}\n        documentation: Independent documentation\n        programming_code: {context: R 4.5.1, code: \"mean(\\td0$AVAL)\"}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "untransportable_text",
+          "rule": "DEFINE-24",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[0].results[0].programming_code.code"
+          ],
+          "context": {
+            "detail": "forbidden XML whitespace",
+            "whitespace": "tab"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: shared/project.yaml\nadam:\n  specs: [d0.yaml]\n  define: define.xml\n",
+          "shared/project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Analysis results witness, protocol_name: P01}\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n  analysis_results:\n  - arm.yaml\n",
+          "shared/arm.yaml": "yamaa: \"1.0\"\ntype: analysis_results\ndisplays:\n- id: T1\n  name: Table 1\n  description: Independent display\n  documents: [{document: SAP, pages: {type: PhysicalRef, refs: '12'}}]\n  results:\n  - id: R1\n    description: Independent result\n    reason: SPECIFIED IN SAP\n    purpose: PRIMARY OUTCOME MEASURE\n    datasets:\n      D0: {where: {PARAMCD: [X], VISITN: {comparator: GE, values: ['2']}}, variables: [AVAL]}\n    documentation: Independent documentation\n    programming_code: {context: R 4.5.1, code: \"mean(d0$AVAL)\"}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_analysis_results.xml"
+        }
+      }
     }
   ]
 }

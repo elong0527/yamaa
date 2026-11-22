@@ -38,6 +38,11 @@ impl<'a> Metas<'a> {
         node.and_then(|node| self.positions?.nodes.get(node).copied().flatten())
             .unwrap_or(inherited)
     }
+    /// Where the document's nodes were written, for a source that lowers
+    /// into an arena of its own.
+    pub(super) fn positions(&self) -> Option<&'a Positions> {
+        self.positions
+    }
     /// The arena's root, the document's root node.
     pub(in crate::front_end) fn root(&self, node: usize) -> Meta {
         Meta {

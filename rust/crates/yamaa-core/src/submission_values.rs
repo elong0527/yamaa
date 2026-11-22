@@ -2,7 +2,8 @@
 //! entries a column declares, the static checks that need no data, and what
 //! each row construction proves about the rows an entry selects. Shared by the
 //! domain build, which reads the typed tree, and by composition, which still
-//! reads each specification's document; no study, host or data access.
+//! reads each specification's document; no study, host or data access. The
+//! same checks read the where clause of an analysis dataset (DEFINE-32).
 use crate::ast::{self, CodelistType, Comparator, ExprId, ExprKind, Literal, Order};
 use crate::dataset::{WhereBound, WhereTerm};
 use crate::project_terminology::Catalogue;
@@ -225,23 +226,47 @@ pub(crate) fn admitted<'c, 'n>(
     Some(values)
 }
 
+/// What a where clause is checked as (SUB-12): a value-level entry's in
+/// validated or in historical metadata, or an analysis dataset's
+/// (DEFINE-32), which describes no column of its own and selects no rows in
+/// a build.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Scope {
+    Validated,
+    Historical,
+    Analysis,
+}
+impl From<SubmissionMode> for Scope {
+    fn from(mode: SubmissionMode) -> Self {
+        match mode {
+            SubmissionMode::Validated => Self::Validated,
+            SubmissionMode::Historical => Self::Historical,
+        }
+    }
+}
+
 /// The static checks of SUB-12 over one column's entries: identifiers unique
 /// within the column, where clauses over declared output columns other than
 /// the column itself in validated mode, listing nonempty distinct values
 /// their codelists admit for a `str` column or ordering a column of another
 /// type against one value that converts to it, and no two entries whose where clauses can select one
 /// row. Historical composition keeps structural/name checks and the type of
-/// an ordered term, without asserting current rows.
+/// an ordered term, without asserting current rows. An analysis clause is
+/// checked as a validated one is, except that it has no column to name as
+/// its own, overlaps nothing, and may list values for a column that is not
+/// `str`, each converting to the column's type and checked against no
+/// codelist (DEFINE-32).
 pub(crate) fn admit<'a, 'b, 'c>(
     entries: impl IntoIterator<Item = (&'a str, &'b Clause<'a>)>,
     column: &str,
-    mode: SubmissionMode,
+    scope: impl Into<Scope>,
     declared: impl Fn(&str) -> Option<Declared<'c>>,
 ) -> Vec<Finding<'a>>
 where
     'a: 'b,
 {
-    let validated = mode == SubmissionMode::Validated;
+    let scope = scope.into();
+    let validated = scope == Scope::Validated;
     let mut findings = Vec::new();
     let mut ids = BTreeSet::new();
     let mut valid = Vec::<(&'a str, &'b Clause<'a>, Vec<Option<Value>>)>::new();
@@ -267,6 +292,8 @@ where
             let ordered = comparator.order().is_some();
             let mut codelist = None;
             let mut kind = None;
+            // The type each value an analysis clause lists converts to.
+            let mut listed = None;
             // A historical value list may be keyed by its own column, as a
             // received document records it (DEFINE-30).
             let fault = if *name == column && validated {
@@ -279,10 +306,15 @@ where
                     // too: without its type, it has nothing to compare by.
                     Some(declared) => match (ordered, declared.kind == ColumnType::Str) {
                         (false, false) if validated => Some(WhereFault::NotText),
-                        (false, false) => None,
+                        (false, false) => {
+                            if scope == Scope::Analysis {
+                                listed = Some(declared.kind);
+                            }
+                            None
+                        }
                         (true, true) => Some(WhereFault::OrderedText),
                         (false, true) => {
-                            if validated {
+                            if scope != Scope::Historical {
                                 codelist = declared.codelist;
                             }
                             None
@@ -318,6 +350,13 @@ where
                 converted(values.first()?, kind?)
                     .is_none()
                     .then_some(WhereFault::ValueType)
+            })
+            .or_else(|| {
+                let kind = listed?;
+                values
+                    .iter()
+                    .any(|value| converted(value, kind).is_none())
+                    .then_some(WhereFault::ValueType)
             });
             // The ordered term's converted value, for the overlap check.
             bounds.push(
@@ -348,9 +387,10 @@ where
     findings
 }
 
-/// An ordered term's value as the where column's type `kind` holds it, when
-/// it converts under VALUE-3 to a present value.
-fn converted(value: &str, kind: ColumnType) -> Option<Value> {
+/// A where value as the where column's type `kind` holds it, when it
+/// converts under VALUE-3 to a present value: an ordered term's one value,
+/// or a value an analysis clause lists for a column that is not `str`.
+pub(crate) fn converted(value: &str, kind: ColumnType) -> Option<Value> {
     crate::conversion::convert(&Value::Str(value.to_owned()), kind)
         .ok()
         .filter(|value| *value != Value::Missing)
@@ -584,8 +624,13 @@ pub(crate) enum Reach {
 
 /// One entry's where clause as written in the typed tree.
 pub(crate) fn clause(entry: &ast::ValueLevel) -> Clause<'_> {
-    entry
-        .conditions
+    clause_of(&entry.conditions)
+}
+
+/// A where clause as the typed tree holds it, a value-level entry's or an
+/// analysis dataset's, each column in written order.
+pub(crate) fn clause_of(conditions: &[ast::WhereClause]) -> Clause<'_> {
+    conditions
         .iter()
         .map(|condition| Term {
             column: condition.column.name.as_str(),
@@ -1223,6 +1268,68 @@ mod tests {
                 fault("FRACTION", "AVISITN", WhereFault::ValueType),
             ]
         );
+    }
+
+    #[test]
+    fn an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own() {
+        // An internal seam: the one checker read as each scope reads it, over
+        // the same clauses, which no composition shows side by side (SUB-12,
+        // DEFINE-32).
+        let declared = |name: &str| {
+            Some(Declared {
+                output: true,
+                kind: match name {
+                    "AVISITN" => ColumnType::Int,
+                    _ => ColumnType::Str,
+                },
+                codelist: (name == "PARAMCD").then(|| ["GLUC"].into()),
+            })
+        };
+        let entries = [
+            ("OWN", clause(&[("AVAL", &["1"])])),
+            ("LISTED", clause(&[("AVISITN", &["24"])])),
+            ("WORDS", clause(&[("AVISITN", &["Week 24"])])),
+            ("CODED", clause(&[("PARAMCD", &["HGB"])])),
+            ("FIRST", clause(&[("PARAMCD", &["GLUC"])])),
+            ("AGAIN", clause(&[("PARAMCD", &["GLUC"])])),
+        ];
+        let fault = |id, column, fault| Finding::Where {
+            id,
+            column: Some(column),
+            fault,
+        };
+        let uncoded = || fault("CODED", "PARAMCD", WhereFault::NotInCodelist(vec!["HGB"]));
+        for (scope, expected) in [
+            (
+                Scope::Validated,
+                vec![
+                    fault("OWN", "AVAL", WhereFault::Itself),
+                    fault("LISTED", "AVISITN", WhereFault::NotText),
+                    fault("WORDS", "AVISITN", WhereFault::NotText),
+                    uncoded(),
+                    Finding::Overlap {
+                        id: "AGAIN",
+                        other: "FIRST",
+                    },
+                ],
+            ),
+            (
+                Scope::Analysis,
+                vec![fault("WORDS", "AVISITN", WhereFault::ValueType), uncoded()],
+            ),
+            (Scope::Historical, Vec::new()),
+        ] {
+            assert_eq!(
+                admit(
+                    entries.iter().map(|(id, clause)| (*id, clause)),
+                    "AVAL",
+                    scope,
+                    declared
+                ),
+                expected,
+                "{scope:?}"
+            );
+        }
     }
 
     #[test]

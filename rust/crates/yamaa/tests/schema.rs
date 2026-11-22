@@ -19,7 +19,16 @@ fn committed(file_type: &str) -> String {
 
 #[test]
 fn each_file_type_gives_its_committed_json_schema_as_canonical_text() {
-    assert_eq!(FILE_TYPES, ["spec", "project", "codelists", "function"]);
+    assert_eq!(
+        FILE_TYPES,
+        [
+            "spec",
+            "project",
+            "codelists",
+            "analysis_results",
+            "function"
+        ]
+    );
     for file_type in FILE_TYPES {
         let text = yamaa::schema(file_type).unwrap();
         assert_eq!(text, committed(file_type), "{file_type}");
@@ -28,7 +37,7 @@ fn each_file_type_gives_its_committed_json_schema_as_canonical_text() {
     }
 }
 
-/// Text that is not one of the four types, exactly, is refused with one issue
+/// Text that is not one of the file types, exactly, is refused with one issue
 /// that names no spec path or location, and the refusal wrote nothing.
 #[test]
 fn any_other_text_is_refused_as_an_unexpected_file_type() {
@@ -71,8 +80,8 @@ fn any_other_text_is_refused_as_an_unexpected_file_type() {
         assert_eq!(
             issue.message,
             format!(
-                "a {text} file is given where a spec, project, codelists, function file is \
-                 expected"
+                "a {text} file is given where a spec, project, codelists, analysis_results, \
+                 function file is expected"
             )
         );
         assert_eq!(failure.issues.rows(), 1);
@@ -81,12 +90,14 @@ fn any_other_text_is_refused_as_an_unexpected_file_type() {
     assert_eq!(
         yamaa::schema("specs").unwrap_err().message,
         "cannot give the schema of specs: a specs file is given where a spec, project, \
-         codelists, function file is expected [unexpected_file_type, SCHEMA-2]"
+         codelists, analysis_results, function file is expected \
+         [unexpected_file_type, SCHEMA-2]"
     );
     // The error text is printable ASCII, whatever the text given.
     assert_eq!(
         yamaa::schema("spec\n").unwrap_err().message,
         "cannot give the schema of spec\\n: a spec\\n file is given where a spec, project, \
-         codelists, function file is expected [unexpected_file_type, SCHEMA-2]"
+         codelists, analysis_results, function file is expected \
+         [unexpected_file_type, SCHEMA-2]"
     );
 }

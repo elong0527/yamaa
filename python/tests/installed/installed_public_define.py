@@ -35,6 +35,30 @@ DEFINE_SCHEMAS = {
     "http://www.cdisc.org/ns/def/v2.0": "define/2.0/define2-0-0.xsd",
     "http://www.cdisc.org/ns/def/v2.1": "define/2.1/define2-1-0.xsd",
 }
+ARM = "http://www.cdisc.org/ns/arm/v1.0"
+
+
+def without_displays(root):
+    """A copy of the document `root` without its analysis results metadata.
+
+    A Define-XML schema has no place for `arm:AnalysisResultDisplays`, and
+    the ARM v1.0 schema that extends it is not among the bundled schemas
+    (DEFINE-25). A document carries at most one such element, the last child
+    of `MetaDataVersion`, and declares the `arm` namespace exactly when it
+    carries one (DEFINE-11); the rest validates against the Define-XML
+    schema, and the element's bytes are compared with the authored expected
+    document.
+    """
+    root = etree.fromstring(etree.tostring(root))
+    displays = root.findall(f".//{{{ARM}}}AnalysisResultDisplays")
+    if (root.nsmap.get("arm") == ARM) != bool(displays) or len(displays) > 1:
+        raise AssertionError("the arm namespace and one display element go together")
+    for element in displays:
+        parent = element.getparent()
+        if not parent.tag.endswith("}MetaDataVersion") or parent[-1] is not element:
+            raise AssertionError("the displays are the last child of MetaDataVersion")
+        parent.remove(element)
+    return root
 
 
 class PublicDefine(unittest.TestCase):
@@ -125,7 +149,7 @@ class PublicDefine(unittest.TestCase):
         schema = etree.XMLSchema(
             etree.parse(str(SCHEMAS / DEFINE_SCHEMAS[root.nsmap["def"]]), parser)
         )
-        schema.assertValid(root)
+        schema.assertValid(without_displays(root))
         return root
 
     def validate_json(self, content):

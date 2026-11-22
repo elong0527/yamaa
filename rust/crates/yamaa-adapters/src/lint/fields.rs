@@ -61,7 +61,7 @@ static PROJECT_CLASS: Class = Class {
         ("codelists", Holds::Items, &CODELIST_SOURCE_CLASS),
         ("study", Holds::Value, &STUDY_CLASS),
         ("sdtm", Holds::Value, &SUBMISSION_SECTION_CLASS),
-        ("adam", Holds::Value, &SUBMISSION_SECTION_CLASS),
+        ("adam", Holds::Value, &ADAM_SECTION_CLASS),
         ("send", Holds::Value, &SUBMISSION_SECTION_CLASS),
     ],
 };
@@ -151,6 +151,89 @@ static METADATA_VERSION_CLASS: Class = Class {
     members: &[],
 };
 
+#[rustfmt::skip]
+static ADAM_SECTION_CLASS: Class = Class {
+    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "metadata_version", "originator", "stylesheet", "source_system_version", "analysis_results"],
+    members: &[
+        ("standards", Holds::Items, &IMPLEMENTATION_GUIDE_CLASS),
+        ("documents", Holds::Items, &DOCUMENT_CLASS),
+        ("metadata_version", Holds::Value, &METADATA_VERSION_CLASS),
+        ("analysis_results", Holds::Items, &ANALYSIS_RESULTS_SOURCE_CLASS),
+    ],
+};
+
+#[rustfmt::skip]
+static ANALYSIS_RESULTS_SOURCE_CLASS: Class = Class {
+    fields: &["displays"],
+    members: &[
+        ("displays", Holds::Items, &RESULT_DISPLAY_CLASS),
+    ],
+};
+
+#[rustfmt::skip]
+static RESULT_DISPLAY_CLASS: Class = Class {
+    fields: &["id", "name", "description", "documents", "results"],
+    members: &[
+        ("documents", Holds::Items, &DOCUMENT_REFERENCE_CLASS),
+        ("results", Holds::Items, &ANALYSIS_RESULT_CLASS),
+    ],
+};
+
+#[rustfmt::skip]
+static DOCUMENT_REFERENCE_CLASS: Class = Class {
+    fields: &["document", "pages"],
+    members: &[
+        ("pages", Holds::Value, &PAGE_REFERENCE_CLASS),
+    ],
+};
+
+#[rustfmt::skip]
+static PAGE_REFERENCE_CLASS: Class = Class {
+    fields: &["type", "refs", "title"],
+    members: &[],
+};
+
+#[rustfmt::skip]
+static ANALYSIS_RESULT_CLASS: Class = Class {
+    fields: &["id", "description", "reason", "purpose", "datasets", "join", "documentation", "programming_code"],
+    members: &[
+        ("datasets", Holds::Values, &ANALYSIS_DATASET_CLASS),
+        ("join", Holds::Value, &ANALYSIS_COMMENT_CLASS),
+        ("documentation", Holds::Value, &ANALYSIS_COMMENT_CLASS),
+        ("programming_code", Holds::Value, &PROGRAMMING_CODE_CLASS),
+    ],
+};
+
+#[rustfmt::skip]
+static ANALYSIS_DATASET_CLASS: Class = Class {
+    fields: &["where", "variables"],
+    members: &[
+        ("where", Holds::Values, &WHERE_COMPARISON_CLASS),
+    ],
+};
+
+#[rustfmt::skip]
+static WHERE_COMPARISON_CLASS: Class = Class {
+    fields: &["comparator", "values"],
+    members: &[],
+};
+
+#[rustfmt::skip]
+static ANALYSIS_COMMENT_CLASS: Class = Class {
+    fields: &["text", "documents"],
+    members: &[
+        ("documents", Holds::Items, &DOCUMENT_REFERENCE_CLASS),
+    ],
+};
+
+#[rustfmt::skip]
+static PROGRAMMING_CODE_CLASS: Class = Class {
+    fields: &["context", "code", "documents"],
+    members: &[
+        ("documents", Holds::Items, &DOCUMENT_REFERENCE_CLASS),
+    ],
+};
+
 /// A 1.x file that declares `type: codelists`.
 pub(super) static CODELISTS: &Class = &CODELIST_FILE_CLASS;
 
@@ -160,6 +243,17 @@ static CODELIST_FILE_CLASS: Class = Class {
     members: &[
         ("standard", Holds::Value, &TERMINOLOGY_STANDARD_CLASS),
         ("codelists", Holds::Items, &CODELIST_CLASS),
+    ],
+};
+
+/// A 1.x file that declares `type: analysis_results`.
+pub(super) static ANALYSIS_RESULTS: &Class = &ANALYSIS_RESULTS_FILE_CLASS;
+
+#[rustfmt::skip]
+static ANALYSIS_RESULTS_FILE_CLASS: Class = Class {
+    fields: &["yamaa", "type", "displays"],
+    members: &[
+        ("displays", Holds::Items, &RESULT_DISPLAY_CLASS),
     ],
 };
 

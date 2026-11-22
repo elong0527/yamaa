@@ -5,6 +5,7 @@ version: "1.0"
 includes:
     - schema_shared.yaml
     - schema_terminology.yaml
+    - schema_analysis_results.yaml
 
 project_class:
     - yamaa:
@@ -45,7 +46,7 @@ project_class:
         required: false
         description: Tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
     - adam:
-        type: submission_section_class
+        type: adam_section_class
         required: false
         description: Analysis specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
     - send:
@@ -106,12 +107,6 @@ metadata_version_class:
         min_length: 1
         description: Description of what this metadata version covers.
 
-define_id:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_.-]*$'
-    kind: identifier
-    description: Identifier a generated OID is built from.
-
 language_tag:
     type: str
     pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$'
@@ -171,6 +166,13 @@ submission_section_class:
         type: str
         min_length: 1
         description: Optional nonempty XML and JSON source-system version; omission selects the installed package version (DEFINE-12).
+
+adam_section_class:
+    - fields_from: submission_section_class
+    - analysis_results:
+        type: "list[analysis_results_source]"
+        required: false
+        description: Analysis results sources, in order, each inline or the path of an analysis results file relative to the project file, generating the document's analysis results metadata (DEFINE-31, DEFINE-32).
 
 implementation_guide_class:
     - name: {type: standard_name, required: true}

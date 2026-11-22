@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use yamaa_core::{
-    ast::{self, CodelistSource},
+    ast::{self, AnalysisResultsSource, CodelistSource},
     diagnostic::Diagnostic,
     project_function::Language,
     resource::ResourceFailure,
@@ -168,6 +168,20 @@ pub(crate) fn environment(
                 return None;
             };
             Some(failure.field_diagnostic(&format!("codelists[{index}]"), &written.text))
+        }
+        Origin::AnalysisResults(index) => {
+            let declared = project
+                .submission
+                .iter()
+                .flat_map(|declarations| &declarations.sections)
+                .flat_map(|section| &section.analysis_results)
+                .nth(*index)?;
+            let AnalysisResultsSource::File(written) = &declared.source else {
+                return None;
+            };
+            Some(
+                failure.field_diagnostic(&format!("adam.analysis_results[{index}]"), &written.text),
+            )
         }
         Origin::Lock => None,
     }
