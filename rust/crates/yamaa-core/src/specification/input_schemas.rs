@@ -267,6 +267,42 @@ fn reaches<'s>(spec: &'s ast::Spec, relation: &'s str) -> Option<(&'s str, Vec<&
     None
 }
 
+/// Whether a read of `relation.field`, a field some lookup over the input
+/// `relation` derives, at a site owned by `owner` in `scope`, may name that
+/// derivation rather than a stored field. A row template's or column's
+/// read of the input reads its records, which no lookup augments. A
+/// lookup's own derivation, reading its dataset, names its derivation when
+/// it derives the field anywhere in its map (LOOKUP-15), and a stored field
+/// otherwise. Any other lookup site, such as a nested key's value, may read
+/// the donor record of a lookup that derives the field (LOOKUP-16).
+fn names_derivation(
+    spec: &ast::Spec,
+    owner: ast::Owner,
+    scope: Scope,
+    relation: &str,
+    field: &str,
+) -> bool {
+    use ast::{Filtered, Ordered, Owner};
+    match owner {
+        Owner::Default { .. }
+        | Owner::Override { .. }
+        | Owner::Group { .. }
+        | Owner::ColumnCheck { .. }
+        | Owner::Filter(Filtered::Base | Filtered::Template(_))
+        | Owner::Order(Ordered::Output) => false,
+        Owner::Binding { intermediate, .. } if scope == Scope::Donor(intermediate) => spec
+            .intermediates
+            .get(intermediate)
+            .filter(|item| !item.pairs() && item.dataset.name == relation)
+            .is_none_or(|item| {
+                item.bindings
+                    .iter()
+                    .any(|binding| binding.name.name == field)
+            }),
+        _ => true,
+    }
+}
+
 /// The donor fields a key names, as written.
 fn key_fields(key: Option<&JoinKey>) -> Vec<&str> {
     match key {
@@ -289,8 +325,10 @@ fn key_fields(key: Option<&JoinKey>) -> Vec<&str> {
 ///   input itself or a lookup over it, directly or over another lookup
 ///   ([`reaches`]), that no lookup on the way derives: a qualified name,
 ///   wherever it is read, but not one a lookup's own sites qualify by the
-///   lookup, nor a field a lookup over the input derives, which a read
-///   qualified by the input names in a nested key; a bare name a lookup
+///   lookup, nor, at a lookup's site, a field a lookup over the input
+///   derives, which a read qualified by the input names in a nested key or
+///   in the deriving lookup's own derivations ([`names_derivation`]); a
+///   bare name a lookup
 ///   reads of its donor record in its derivations or range bounds (its
 ///   filter and order read a bare name of SELF alone); a bare name an
 ///   aggregate or structured source reads of its relation; a lookup's key,
@@ -384,7 +422,9 @@ fn read_fields(spec: &ast::Spec, input: &str, odm_items: &BTreeSet<ExprId>) -> V
                         }
                     }
                     let own = lookup.is_some_and(|item| owner == item.id.name);
-                    let nested = owner == input && derived.contains(field);
+                    let nested = owner == input
+                        && derived.contains(field)
+                        && names_derivation(spec, site.owner, read.scope, owner, field);
                     if !own && !nested && stored(owner, field) {
                         add(field);
                     }
