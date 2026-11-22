@@ -112,11 +112,14 @@ impl<'a> Reads<'a> {
 }
 
 /// Preserve the existing column policy except for admitted feedback components
-/// and forward references that read a strictly earlier position. `None`
-/// programs are incomplete or mixed-scope declarations, never feedback state.
+/// and forward references that read a strictly earlier position. A column's
+/// programs are its bindings, one per row-template driver, which together
+/// cover every output row; their reads are judged together (#4744). `None`
+/// programs are incomplete declarations or bindings that leave some rows
+/// uncovered, never feedback state.
 pub(crate) fn analyze(
     dependencies: &[Option<Vec<usize>>],
-    programs: &[Option<&Assignment>],
+    programs: &[Option<Vec<&Assignment>>],
     keys: &[usize],
     has_rows: bool,
 ) -> Result<(column_dependencies::Analysis, Vec<Recurrence>), column_dependencies::Error> {
@@ -127,10 +130,13 @@ pub(crate) fn analyze(
         .iter()
         .map(|program| {
             let mut reads = Reads::default();
-            if let Some(program) = program {
-                reads.assignment(program);
-            } else {
-                reads.unsafe_read = true;
+            match program.as_deref() {
+                Some(bindings) if !bindings.is_empty() => {
+                    for binding in bindings {
+                        reads.assignment(binding);
+                    }
+                }
+                _ => reads.unsafe_read = true,
             }
             reads
         })
