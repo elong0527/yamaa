@@ -46,6 +46,12 @@ identifier:
     kind: identifier
     description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a document or a function (SPEC-2).
 
+codelist_identifier:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*$'
+    kind: identifier
+    description: Identifier of a codelist the project file declares, one or more single-token segments joined by single periods (CT-1).
+
 relative_href:
     type: str
     pattern: '^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$'

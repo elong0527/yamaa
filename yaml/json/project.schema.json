@@ -8,10 +8,10 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Name column bindings refer to this codelist by (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "name": {
           "type": "string",
@@ -74,6 +74,11 @@
         "name"
       ],
       "additionalProperties": false
+    },
+    "codelist_identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*$",
+      "description": "Identifier of a codelist the project file declares, one or more single-token segments joined by single periods (CT-1)."
     },
     "codelist_item_class": {
       "type": "object",

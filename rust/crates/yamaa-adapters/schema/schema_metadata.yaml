@@ -145,7 +145,7 @@ submission_metadata_fields:
         min_length: 1
         description: Presentation format carried for a reader; it never changes a computed value.
     - codelist:
-        type: identifier
+        type: codelist_identifier
         required: false
         description: Codelist whose values this column carries (CT-1).
     - inventory_vocabulary:

@@ -26,10 +26,13 @@ declares fails validation, as does any binding checked or run without a
 project file ([CT-13](#ct-13)).
 
 Fails: `duplicate_define_identifier`, `unknown_codelist`, `project_binding_missing`.
-Evidence: `sdtm-dm-metadata`, `schema-codelist-replacement`, `negative-codelist-name-reused`, `rust/crates/yamaa-core/tests/project_execution.rs::a_later_source_replaces_an_earlier_codelist_of_its_id_whole`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`.
+Evidence: `sdtm-dm-metadata`, `schema-codelist-replacement`, `schema-codelist-dotted-id`, `negative-codelist-name-reused`, `rust/crates/yamaa-core/tests/project_execution.rs::a_later_source_replaces_an_earlier_codelist_of_its_id_whole`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
-is what a reader sees. Columns that name one `id` share one codelist
+is what a reader sees. An `id` is one or more identifier segments joined by
+single periods, such as `ADSL.ARMCD`, the dataset-qualified spelling submitted
+documents commonly give a codelist; the same spelling is what a binding and a
+`decode` write. Columns that name one `id` share one codelist
 statement. [Submission metadata](submission.md)'s `codelist` names a codelist
 the project file declares; this profile owns that object, the values a
 binding enforces, and the redundancy of an `allowed_values` verification

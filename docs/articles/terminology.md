@@ -101,6 +101,9 @@ description. An `id` is declared once in a file, and a later file may
 replace a list by its `id` ([below](#replace-a-shared-list)); a `name` is
 unique among the lists the project keeps. A repeated `id` in one file, or a
 repeated `name`, fails validation with `duplicate_define_identifier`.
+An `id` may join identifier segments with periods, such as `ADSL.ARMCD`;
+the Define-XML `CodeList` it produces is then `CL.ADSL.ARMCD`, the
+dataset-qualified spelling submitted documents commonly use.
 `alias` records the published concept identifier of a list or of one item,
 independent of the binding `id`. A Define-XML document under
 `context: Submission` requires an `alias` on every `CDISC/NCI` list that

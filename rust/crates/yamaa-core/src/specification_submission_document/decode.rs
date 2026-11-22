@@ -659,7 +659,9 @@ impl<'a> Parser<'a> {
             self.text_field(node, F::SignificantDigits, path, TextRule::Integer, false)?;
         let display_format =
             self.text_field(node, F::DisplayFormat, path, TextRule::NonEmpty, false)?;
-        let codelist = self.text_field(node, F::Codelist, path, TextRule::Identifier, false)?;
+        // The schema's `codelist_identifier` pattern is the one judgement of
+        // a codelist's spelling, periods included (SCHEMA-12, CT-1).
+        let codelist = self.text_field(node, F::Codelist, path, TextRule::NonEmpty, false)?;
         let inventory_vocabulary = self.boolean(
             self.get(node, F::InventoryVocabulary),
             path.field(F::InventoryVocabulary),

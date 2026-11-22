@@ -38,7 +38,7 @@ terminology_standard_class:
 
 codelist_class:
     - id:
-        type: identifier
+        type: codelist_identifier
         required: true
         description: Name column bindings refer to this codelist by (CT-1).
     - name:

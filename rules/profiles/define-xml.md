@@ -261,7 +261,7 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-codelist-dotted-id`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
 
 | Object | Identifier |
 |---|---|
@@ -290,6 +290,9 @@ standard the `standard` of a codelist source whose codelists the document binds
 `publishing_set` and `version` cite one terminology standard and share its
 `def:Standard`; two terminology standards with one `publishing_set` fail under
 [DEFINE-10](#define-10).
+
+A codelist `id` may itself join segments with periods
+([CT-1](terminology.md#ct-1)), so a codelist `ADSL.ARMCD` is `CL.ADSL.ARMCD`.
 
 A per-value entry id is the `id` of the column's value-level entry
 ([SUB-12](submission.md#sub-12)), an identifier unique within the column. It

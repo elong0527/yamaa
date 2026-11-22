@@ -138,6 +138,11 @@
     "case_result": {
       "$ref": "#/$defs/expression"
     },
+    "codelist_identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*$",
+      "description": "Identifier of a codelist the project file declares, one or more single-token segments joined by single periods (CT-1)."
+    },
     "column_class": {
       "type": "object",
       "properties": {
@@ -2040,10 +2045,10 @@
               "x-yamaa-type": "filtered_source"
             },
             "codelist": {
-              "$ref": "#/$defs/identifier",
+              "$ref": "#/$defs/codelist_identifier",
               "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
               "x-yamaa-kind": "identifier",
-              "x-yamaa-type": "identifier"
+              "x-yamaa-type": "codelist_identifier"
             },
             "missing": {
               "$ref": "#/$defs/substitute_value",
@@ -3329,10 +3334,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",
@@ -3670,10 +3675,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",
@@ -4532,10 +4537,10 @@
               "x-yamaa-type": "filtered_source"
             },
             "codelist": {
-              "$ref": "#/$defs/identifier",
+              "$ref": "#/$defs/codelist_identifier",
               "description": "Codelist the project file declares, whose item decodes replace the coded values (EXPR-15, CT-1).",
               "x-yamaa-kind": "identifier",
-              "x-yamaa-type": "identifier"
+              "x-yamaa-type": "codelist_identifier"
             },
             "missing": {
               "$ref": "#/$defs/substitute_value",
@@ -6236,10 +6241,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",
@@ -6592,10 +6597,10 @@
           "x-yamaa-type": "str"
         },
         "codelist": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/codelist_identifier",
           "description": "Codelist whose values this column carries (CT-1).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "codelist_identifier"
         },
         "inventory_vocabulary": {
           "type": "boolean",

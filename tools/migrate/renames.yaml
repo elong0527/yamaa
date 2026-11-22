@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 676
-  changes: 107
+  entries: 677
+  changes: 108
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 61
+    new, decided: 62
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7799,6 +7799,21 @@ entries:
     verb writing the calendar duration from its `start` date to its `end` date as ISO 8601 duration text,
     the whole months `diff` counts as years and months, then the days after that monthly anniversary
     (TIME-24). No 0.5 file declares it, so the converter wrote none.'
+  convert: {action: none}
+- id: new.codelists.codelist_identifier
+  file_type: codelists
+  path: codelists[].codelists[].id
+  today: null
+  kind: new
+  proposed: 'codelist_identifier: identifier segments joined by single periods, the type of a codelist
+    id, of submission.codelist and of decode''s codelist'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4746): a codelist id may join identifier segments
+    with single periods, such as ADSL.ARMCD, so a generated CodeList carries the dataset-qualified OID
+    CL.ADSL.ARMCD that submitted Define-XML documents commonly carry (CT-1, DEFINE-9). The three fields
+    that name a codelist take the type; every other identifier is unchanged. A dotless id is still one,
+    so the converter wrote none.'
+  field_kind: identifier
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch
