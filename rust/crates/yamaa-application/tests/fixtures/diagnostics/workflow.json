@@ -29,7 +29,34 @@
       "case": "a_yaml_entry_byte_outside_ascii_names_the_entry_and_its_position",
       "operation": "check",
       "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "\u00e9\n"}, "specification": "root.yaml", "project": "project.yaml"},
-      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 1, "column": 1, "path": "{study}/root.yaml"}}]
+      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 1, "column": 1, "path": "{study}/root.yaml", "hint": "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header"}}]
+    },
+    {
+      "case": "an_entry_that_declares_utf8_writes_literal_text_and_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": {"base": "leaf", "edits": [{"from": "type: spec\n", "to": "type: spec\nencoding: utf-8\n"}, {"from": "label: Reported value", "to": "label: Reported \u201cvalue\u201d"}]}
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_entry_that_declares_utf8_leaves_its_parent_ascii",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "parent.yaml": {"base": "leaf", "edits": [{"from": "label: Reported value", "to": "label: Reported \u201cvalue\u201d"}]},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\nencoding: utf-8\nparent: parent.yaml\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 11, "column": 21, "path": "{study}/parent.yaml", "hint": "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header"}}]
     },
     {
       "case": "an_entry_that_is_not_yaml_fails_at_its_root",

@@ -147,12 +147,15 @@ mod declaration {
                 for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
                     finding["phase"] = json!("validation");
                     finding["rule"] = json!(match finding["condition"].as_str().unwrap() {
-                        "non_ascii_source" => "SPEC-8",
+                        "non_ascii_source" | "invalid_source_encoding" => "SPEC-8",
                         "invalid_text" => "VALUE-11",
                         "invalid_yaml" => "SCHEMA-3",
                         condition => panic!("unexpected original source condition: {condition}"),
                     });
-                    if finding["condition"] == "non_ascii_source" {
+                    if matches!(
+                        finding["condition"].as_str(),
+                        Some("non_ascii_source" | "invalid_source_encoding")
+                    ) {
                         finding["context"]["path"] = json!("source.yaml");
                     }
                 }
@@ -181,7 +184,7 @@ mod declaration {
                 );
                 count += 1;
             }
-            assert_eq!(count, 8);
+            assert_eq!(count, 13);
         }
         /// Seam: the typed `BundleError`, the `Rejection` its capture failure
         /// projects and the `NormalizationError` of an invalid default.
@@ -439,12 +442,15 @@ mod declaration {
                 for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
                     finding["phase"] = json!("validation");
                     finding["rule"] = json!(match finding["condition"].as_str().unwrap() {
-                        "non_ascii_source" => "SPEC-8",
+                        "non_ascii_source" | "invalid_source_encoding" => "SPEC-8",
                         "invalid_text" => "VALUE-11",
                         "invalid_yaml" => "SCHEMA-3",
                         condition => panic!("unexpected original source condition: {condition}"),
                     });
-                    if finding["condition"] == "non_ascii_source" {
+                    if matches!(
+                        finding["condition"].as_str(),
+                        Some("non_ascii_source" | "invalid_source_encoding")
+                    ) {
                         finding["context"]["path"] = json!("source.yaml");
                     }
                 }
@@ -474,7 +480,7 @@ mod declaration {
                 );
                 count += 1;
             }
-            assert_eq!(count, 8);
+            assert_eq!(count, 13);
         }
     }
     mod string_template_syntax_fixture {

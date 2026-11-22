@@ -895,6 +895,14 @@
       ],
       "description": "One expression, either text in the closed grammar, where a bare name is a reference and quoted text a literal, or a YAML number, Boolean or null, which is a literal, or a mapping holding one registered operation (EXPR-5)."
     },
+    "file_encoding": {
+      "type": "string",
+      "enum": [
+        "ascii",
+        "utf-8"
+      ],
+      "description": "Text encoding of a file's own bytes, which `encoding` declares (SPEC-8)."
+    },
     "filtered_source": {
       "anyOf": [
         {
@@ -4077,6 +4085,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
+        },
         "model": {
           "type": "string",
           "enum": [
@@ -5855,6 +5869,12 @@
           "description": "File type of a specification, which every layer of a chain declares (SCHEMA-2).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
         },
         "model": {
           "type": "string",

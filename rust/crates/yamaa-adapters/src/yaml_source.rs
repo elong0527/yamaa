@@ -37,12 +37,28 @@ pub enum SourceEvent {
     MappingEnd,
 }
 
-pub use crate::yaml_decode::SourcePosition;
+pub use crate::yaml_decode::{Encoding, SourcePosition};
 
-impl From<Marker> for SourcePosition {
-    fn from(mark: Marker) -> Self {
-        Self {
-            offset: mark.index(),
+/// Where the scanner's positions fall in the source's bytes. The scanner
+/// counts characters; an ASCII source holds one byte per character, and a
+/// UTF-8 source keeps the byte at which each character starts, with its
+/// length last.
+enum Offsets {
+    Ascii,
+    Utf8(Vec<usize>),
+}
+
+impl Offsets {
+    fn byte(&self, character: usize) -> usize {
+        match self {
+            Self::Ascii => character,
+            Self::Utf8(starts) => starts[character.min(starts.len() - 1)],
+        }
+    }
+
+    fn position(&self, mark: Marker) -> SourcePosition {
+        SourcePosition {
+            offset: self.byte(mark.index()),
             line: mark.line(),
             // The pinned scanner stores zero-based columns despite its docs.
             column: mark.col() + 1,
@@ -61,7 +77,8 @@ pub struct LocatedEvent {
 /// Resource refusal is distinct from language errors and invalid Unicode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScanFailure {
-    NonAscii(SourcePosition),
+    NonAscii(SourcePosition, Encoding),
+    InvalidUtf8(SourcePosition),
     Syntax {
         position: SourcePosition,
         reason: String,
@@ -101,7 +118,11 @@ enum PassFailure {
     Resource(ScanFailure),
 }
 
-fn parse_pass(source: &str, strict: bool) -> Result<Vec<(Event<'static>, Span)>, PassFailure> {
+fn parse_pass(
+    source: &str,
+    strict: bool,
+    offsets: &Offsets,
+) -> Result<Vec<(Event<'static>, Span)>, PassFailure> {
     let mut events = Vec::new();
     let mut depth = 0_usize;
     let mut documents = 0;
@@ -131,9 +152,9 @@ fn parse_pass(source: &str, strict: bool) -> Result<Vec<(Event<'static>, Span)>,
                     &event,
                     Event::Scalar(..) | Event::SequenceStart(..) | Event::MappingStart(..)
                 ) {
-                    metadata_start(source, boundary, span.start)
+                    metadata_start(source, offsets, boundary, span.start)
                 } else {
-                    span.start.into()
+                    offsets.position(span.start)
                 };
                 return Err(PassFailure::Resource(ScanFailure::Syntax {
                     position,
@@ -177,14 +198,19 @@ fn parse_pass(source: &str, strict: bool) -> Result<Vec<(Event<'static>, Span)>,
 /// the preceding node boundary and this event, only punctuation, whitespace,
 /// comments and metadata can occur. Skip comments and retain the first prefix
 /// marker (also when a tag precedes an anchor). Never search inside scalar text.
-fn metadata_start(source: &str, boundary: usize, fallback: Marker) -> SourcePosition {
+fn metadata_start(
+    source: &str,
+    offsets: &Offsets,
+    boundary: usize,
+    fallback: Marker,
+) -> SourcePosition {
     let bytes = source.as_bytes();
     let mut comment = false;
     for (offset, &byte) in bytes
         .iter()
         .enumerate()
-        .take(fallback.index().saturating_add(1))
-        .skip(boundary)
+        .take(offsets.byte(fallback.index()).saturating_add(1))
+        .skip(offsets.byte(boundary))
     {
         if byte == b'\n' || byte == b'\r' {
             comment = false;
@@ -208,6 +234,8 @@ fn metadata_start(source: &str, boundary: usize, fallback: Marker) -> SourcePosi
                         line += 1;
                         column = 1;
                     }
+                    // A UTF-8 continuation byte continues its character.
+                    _ if byte & 0xc0 == 0x80 => {}
                     _ => column += 1,
                 }
                 previous_cr = byte == b'\r';
@@ -219,7 +247,7 @@ fn metadata_start(source: &str, boundary: usize, fallback: Marker) -> SourcePosi
             };
         }
     }
-    fallback.into()
+    offsets.position(fallback)
 }
 
 #[derive(Clone, Copy)]
@@ -331,8 +359,9 @@ fn convert(event: Event<'static>, text: Option<SourceText>) -> Result<SourceEven
     })
 }
 
-/// Scan one retained ASCII snapshot. No host decoder, numeric conversion,
-/// mapping collapse, or lossy Unicode replacement participates in this step.
+/// Scan one retained ASCII or declared UTF-8 snapshot. No host decoder,
+/// numeric conversion, mapping collapse, or lossy Unicode replacement
+/// participates in this step.
 /// Multiple documents and forbidden constructs are retained for admission.
 #[cfg(test)]
 pub fn scan(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
@@ -345,35 +374,152 @@ pub fn scan_strict(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
     scan_impl(source, true)
 }
 
+/// The position of the byte at `offset`, whose prefix is UTF-8: lines end
+/// at a line feed, and a column counts characters.
+fn byte_position(source: &[u8], offset: usize) -> SourcePosition {
+    let prefix = &source[..offset];
+    let start = prefix
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |newline| newline + 1);
+    SourcePosition {
+        offset,
+        line: prefix.iter().filter(|byte| **byte == b'\n').count() + 1,
+        column: prefix[start..]
+            .iter()
+            .filter(|byte| **byte & 0xc0 != 0x80)
+            .count()
+            + 1,
+    }
+}
+
+/// Whether the root mapping of the first document declares `encoding:
+/// utf-8` (SPEC-8). A source the scanner cannot read as far as that entry
+/// declares nothing, so it stays ASCII. A leading byte-order mark does not
+/// hide the declaration, so the refusal of the mark names the right remedy.
+fn declares_utf8(text: &str) -> bool {
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
+    let mut depth = 0_usize;
+    // Whether the next node at depth one is a key, and whether the value
+    // being read belongs to the key `encoding`.
+    let mut key = true;
+    let mut encoding = false;
+    for item in Parser::new_from_str(text) {
+        let Ok((event, _)) = item else {
+            return false;
+        };
+        match event {
+            Event::MappingStart(..) if depth == 0 => depth = 1,
+            Event::Scalar(..) | Event::SequenceStart(..) | Event::Alias(_) if depth == 0 => {
+                return false
+            }
+            Event::Scalar(value, ..) if depth == 1 => {
+                if key {
+                    encoding = value == "encoding";
+                } else if encoding {
+                    return value == "utf-8";
+                }
+                key = !key;
+            }
+            Event::Alias(_) if depth == 1 => {
+                if !key && encoding {
+                    return false;
+                }
+                encoding = false;
+                key = !key;
+            }
+            Event::MappingStart(..) | Event::SequenceStart(..) => {
+                if depth == 1 {
+                    if !key && encoding {
+                        return false;
+                    }
+                    encoding = false;
+                }
+                depth += 1;
+            }
+            Event::MappingEnd | Event::SequenceEnd => {
+                depth -= 1;
+                match depth {
+                    0 => return false,
+                    1 => key = !key,
+                    _ => {}
+                }
+            }
+            Event::DocumentEnd | Event::StreamEnd => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// A character a source writes only as an escape, even when it declares
+/// UTF-8: a byte-order mark, and the Unicode `Bidi_Control` characters,
+/// which can show a reader text in another order than the scanner reads it.
+fn escaped_only(character: char) -> bool {
+    matches!(
+        character,
+        '\u{FEFF}' | '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}'
+            | '\u{2066}'..='\u{2069}'
+    )
+}
+
+/// Admit the source's bytes under the encoding its header declares
+/// (SPEC-8): ASCII, or UTF-8 after `encoding: utf-8`.
+fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
+    let Some(first) = source.iter().position(|byte| !byte.is_ascii()) else {
+        return Ok(Offsets::Ascii);
+    };
+    let ascii = ScanFailure::NonAscii(byte_position(source, first), Encoding::Ascii);
+    let text = match std::str::from_utf8(source) {
+        Ok(text) => text,
+        Err(error) if declares_utf8(&String::from_utf8_lossy(source)) => {
+            return Err(ScanFailure::InvalidUtf8(byte_position(
+                source,
+                error.valid_up_to(),
+            )))
+        }
+        Err(_) => return Err(ascii),
+    };
+    if !declares_utf8(text) {
+        return Err(ascii);
+    }
+    if let Some((offset, _)) = text.char_indices().find(|&(_, c)| escaped_only(c)) {
+        return Err(ScanFailure::NonAscii(
+            byte_position(source, offset),
+            Encoding::Utf8,
+        ));
+    }
+    Ok(Offsets::Utf8(
+        text.char_indices()
+            .map(|(offset, _)| offset)
+            .chain([text.len()])
+            .collect(),
+    ))
+}
+
 fn scan_impl(source: &[u8], strict: bool) -> Result<Vec<LocatedEvent>, ScanFailure> {
     Limits::spec_bytes(source.len()).map_err(ScanFailure::Limit)?;
-    if let Some(offset) = source.iter().position(|byte| !byte.is_ascii()) {
-        let prefix = &source[..offset];
-        return Err(ScanFailure::NonAscii(SourcePosition {
-            offset,
-            line: prefix.iter().filter(|byte| **byte == b'\n').count() + 1,
-            column: prefix
-                .iter()
-                .rposition(|byte| *byte == b'\n')
-                .map_or(offset + 1, |newline| offset - newline),
-        }));
-    }
+    let offsets = admit(source)?;
     let mut repaired = source.to_vec();
     let mut repairs = Vec::new();
     let first = loop {
         let text = std::str::from_utf8(&repaired).map_err(|_| ScanFailure::Reconstruction)?;
-        match parse_pass(text, strict) {
+        match parse_pass(text, strict, &offsets) {
             Ok(events) => break events,
             Err(PassFailure::Resource(error)) => return Err(error),
             Err(PassFailure::Syntax(error)) => {
                 if error.info()
                     == "while parsing a quoted scalar, found invalid Unicode character escape code"
-                    && repair_quoted(&mut repaired, error.marker().index(), &mut repairs)
+                    && repair_quoted(
+                        &mut repaired,
+                        offsets.byte(error.marker().index()),
+                        &mut repairs,
+                    )
                 {
                     continue;
                 }
                 return Err(ScanFailure::Syntax {
-                    position: (*error.marker()).into(),
+                    position: offsets.position(*error.marker()),
                     reason: error.info().to_owned(),
                 });
             }
@@ -386,7 +532,7 @@ fn scan_impl(source: &[u8], strict: bool) -> Result<Vec<LocatedEvent>, ScanFailu
             replace_escape(&mut repaired, *repair, 0xe800);
         }
         let text = std::str::from_utf8(&repaired).map_err(|_| ScanFailure::Reconstruction)?;
-        let events = parse_pass(text, strict).map_err(|error| match error {
+        let events = parse_pass(text, strict, &offsets).map_err(|error| match error {
             PassFailure::Resource(error) => error,
             PassFailure::Syntax(_) => ScanFailure::Reconstruction,
         })?;
@@ -418,8 +564,8 @@ fn scan_impl(source: &[u8], strict: bool) -> Result<Vec<LocatedEvent>, ScanFailu
         };
         result.push(LocatedEvent {
             event: convert(event, text)?,
-            start: span.start.into(),
-            end: span.end.into(),
+            start: offsets.position(span.start),
+            end: offsets.position(span.end),
         });
     }
     if recovered != repairs.len() {

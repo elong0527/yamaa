@@ -185,11 +185,117 @@ fn non_surrogate_bad_escapes_remain_syntax_errors() {
 fn ascii_rejection_precedes_yaml_and_has_original_coordinates() {
     assert_eq!(
         scan(b"x: [\n y: \xff"),
-        Err(ScanFailure::NonAscii(SourcePosition {
-            offset: 9,
-            line: 2,
-            column: 5
-        },))
+        Err(ScanFailure::NonAscii(
+            SourcePosition {
+                offset: 9,
+                line: 2,
+                column: 5
+            },
+            Encoding::Ascii
+        ))
+    );
+}
+
+/// Seam: the encoding gate over raw bytes, which a JSON fixture cannot
+/// hold when they are not UTF-8 (SPEC-8). A position's offset is a byte
+/// and its column a character.
+#[test]
+fn the_header_decides_which_bytes_a_source_may_hold() {
+    let at = |offset, line, column| SourcePosition {
+        offset,
+        line,
+        column,
+    };
+    let ascii = |offset, line, column| {
+        Some(ScanFailure::NonAscii(
+            at(offset, line, column),
+            Encoding::Ascii,
+        ))
+    };
+    let utf8 = |offset, line, column| {
+        Some(ScanFailure::NonAscii(
+            at(offset, line, column),
+            Encoding::Utf8,
+        ))
+    };
+    let cases: [(&[u8], Option<ScanFailure>, &str); 12] = [
+        (b"x: \xc3\xa9\n", ascii(3, 1, 4), "undeclared"),
+        (b"x: \xff\n", ascii(3, 1, 4), "undeclared, not UTF-8"),
+        (b"encoding: utf-8\nx: \xc3\xa9\n", None, "declared"),
+        (
+            b"x: \xc3\xa9\nencoding: utf-8\n",
+            None,
+            "declared after the text",
+        ),
+        (
+            b"encoding: utf-8\n# caf\xc3\xa9\n",
+            None,
+            "declared, in a comment",
+        ),
+        (
+            b"x: {encoding: utf-8}\ny: \xc3\xa9\n",
+            ascii(24, 2, 4),
+            "nested key",
+        ),
+        (
+            b"encoding: UTF-8\nx: \xc3\xa9\n",
+            ascii(19, 2, 4),
+            "another spelling",
+        ),
+        (
+            b"encoding: ascii\nx: \xc3\xa9\n",
+            ascii(19, 2, 4),
+            "declared ASCII",
+        ),
+        (
+            b"encoding: utf-8\nx: \xc3\xa9 \xff\n",
+            Some(ScanFailure::InvalidUtf8(at(22, 2, 6))),
+            "declared, not UTF-8",
+        ),
+        (
+            b"\xef\xbb\xbfencoding: utf-8\n",
+            utf8(0, 1, 1),
+            "declared, a byte-order mark",
+        ),
+        (
+            b"encoding: utf-8\nx: a\xe2\x80\xaeb\n",
+            utf8(20, 2, 5),
+            "declared, a bidirectional override",
+        ),
+        (
+            b"encoding: utf-8\nx: \xc3\xa9\xe2\x80\x8f\n",
+            utf8(21, 2, 5),
+            "declared, a right-to-left mark",
+        ),
+    ];
+    for (source, expected, label) in cases {
+        assert_eq!(scan(source).err(), expected, "{label}");
+    }
+}
+
+/// Seam: the scanner counts characters, and a located event keeps the byte
+/// at which its node starts, which a lint rewrite slices at (SPEC-8).
+#[test]
+fn a_utf8_source_locates_a_node_by_its_byte_and_its_character_column() {
+    let events = scan("encoding: utf-8\nk: [\u{201c}q\u{201d}, v]\n".as_bytes()).unwrap();
+    let located = events
+        .iter()
+        .find(|event| matches!(&event.event, SourceEvent::Scalar(value, ..) if *value == unicode("v")))
+        .unwrap();
+    assert_eq!(
+        (located.start, located.end),
+        (
+            SourcePosition {
+                offset: 29,
+                line: 2,
+                column: 10
+            },
+            SourcePosition {
+                offset: 30,
+                line: 2,
+                column: 11
+            }
+        )
     );
 }
 

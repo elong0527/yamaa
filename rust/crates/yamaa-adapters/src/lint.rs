@@ -188,15 +188,9 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
         operand_route: None,
     };
     match failure {
-        DecodeFailure::NonAscii(position) => vec![finding(
-            ConditionCode::SourceNonAscii,
-            "$".into(),
-            vec![
-                ("line", Value::from(position.line)),
-                ("column", Value::from(position.column)),
-                ("path", Value::String(file.into())),
-            ],
-        )],
+        DecodeFailure::NonAscii(..) | DecodeFailure::InvalidUtf8(_) => {
+            crate::yaml_diagnostics::capture_diagnostics(failure, file).unwrap_or_default()
+        }
         DecodeFailure::InvalidYaml { position, reason } => vec![finding(
             ConditionCode::SourceInvalidYaml,
             "$".into(),

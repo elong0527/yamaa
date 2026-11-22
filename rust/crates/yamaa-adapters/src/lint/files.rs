@@ -36,7 +36,7 @@ pub(super) fn findings(
         .into_iter()
         .map(|item| Finding {
             line: item.line + 1,
-            column: item.column + 1,
+            column: document.character_column(item.line, item.column) + 1,
             finding: item.name,
             spec_path: item.spec_path,
             message: item.message,

@@ -503,8 +503,8 @@ notation.
 through `Z`, `a` through `z` and `U+005F`; neither widens to a Unicode
 category. `\s` is exactly the ECMA-262 `WhiteSpace` plus `LineTerminator` set,
 without `U+0085`. Every `\u{...}` escape expands to the scalar it names before
-the pattern compiles. A pattern is ASCII language source, so it matches a
-non-ASCII scalar by spelling it with that escape.
+the pattern compiles. A pattern is language source, so in an ASCII file it
+matches a non-ASCII scalar by spelling it with that escape.
 
 Evidence: `yaml/conformance/regex.yaml`, `rust/crates/yamaa-application/tests/fixtures/regex_contract.tsv`.
 
@@ -514,10 +514,10 @@ The `\s` set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`,
 validator lowers each class to its explicit set before compiling, so no class
 widens to a Unicode category.
 
-A pattern is text under [VALUE-11](values.md#value-11) and obeys the ASCII
+A pattern is text under [VALUE-11](values.md#value-11) and obeys the
 source boundary of [SPEC-8](specification.md#spec-8), so
 `\u{00E9}` matches `U+00E9` and `\u{1D400}` matches that one supplementary-plane
-scalar. `\p{...}` is not part of the grammar ([TEXT-6](#text-6)).
+scalar, in a file of either encoding. `\p{...}` is not part of the grammar ([TEXT-6](#text-6)).
 
 <a id="text-9"></a>
 

@@ -443,6 +443,16 @@ impl Document {
         self.included || declares("parent") || declares("include")
     }
 
+    /// The zero-based column a reader sees at the zero-based byte `column`
+    /// of `line`: the characters before it, which in an ASCII line are its
+    /// bytes (SPEC-8).
+    pub(super) fn character_column(&self, line: usize, column: usize) -> usize {
+        self.lines
+            .get(line)
+            .and_then(|text| text.get(..column))
+            .map_or(column, |prefix| prefix.chars().count())
+    }
+
     /// The text of a scalar node.
     pub(super) fn scalar(&self, id: usize) -> Option<&str> {
         match &self.nodes[id].value {
