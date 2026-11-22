@@ -757,7 +757,8 @@ A declaration the selected release cannot represent fails under this rule
 too, before any document is generated: a Define-XML 2.0 document refuses the
 facts [DEFINE-29](#define-29) lists with `value_not_permitted`, its `detail`
 `schema_violation: Define-XML 2.0 representation` and its `value` naming the
-fact, at the path of the declaration that states it.
+fact, at the path of the declaration that states it. An origin is refused at
+its own `type` or `source`, and `value` is that type or source as declared.
 
 ## Scope
 
@@ -900,7 +901,7 @@ implementation guide and refuses facts it cannot represent, but omits a
 codelist source's terminology standard. Declarations requiring 2.1 constructs
 fail before publication, under [DEFINE-25](#define-25).
 
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_second_implementation_guide`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_second_implementation_guide`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_other_origins_for_adam`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_an_origin_source_other_than_its_implicit_one`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
 above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
@@ -913,6 +914,9 @@ Collected is written as CRF; Derived, Assigned, Protocol and Predecessor retain 
 names, and Other and Not Available are refused. Under SEND the admitted
 types are Collected, Derived, Other and Not Available, written as COLLECTED,
 DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused.
+Under SDTM and ADaM an Other origin therefore has no 2.0 representation: a
+validated section records it with a 2.1 release, which omission selects, and
+historical metadata declares the type the received 2.0 document recorded.
 
 Multiple guides, a subclass, a dataset's HasNoData, a column's or
 value-level entry's declared `has_no_data` and a non-standard dataset have no
