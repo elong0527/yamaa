@@ -148,7 +148,7 @@ EXPECTED = {
             "submission_dataset_class",
             "mode",
             "str",
-            values=("validated", "historical"),
+            values=("validated", "reproduced"),
         )
     ],
     "new.spec.submission.artifact": [
@@ -163,7 +163,7 @@ EXPECTED = {
     "new.spec.submission.has_no_data": [
         Field("submission_metadata_fields", "has_no_data", "bool")
     ],
-    # #4747: a historical method or comment keeps its received OID.
+    # #4747: a reproduced method or comment keeps its received OID.
     "new.spec.submission.method.oid": [
         Field("submission_method_class", "oid", "method_oid", kind="identifier")
     ],

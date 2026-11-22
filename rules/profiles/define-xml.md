@@ -294,7 +294,7 @@ standard the `standard` of a codelist source whose codelists the document binds
 A codelist `id` may itself join segments with periods
 ([CT-1](terminology.md#ct-1)), so a codelist `ADSL.ARMCD` is `CL.ADSL.ARMCD`.
 
-A historical method or comment that declares `oid` carries that identifier in
+A reproduced method or comment that declares `oid` carries that identifier in
 place of its `MT.` or `COM.` row, and every reference to it cites the declared
 one ([DEFINE-30](#define-30)). The declaration is still one a reviewer can
 read, and the schema keeps its prefix: a method `oid` begins `MT.` and a comment
@@ -518,7 +518,7 @@ traversal. A dataset with no data and no transport file has no leaf.
 Fails: `artifact_outside_document`.
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_artifact_outside_the_documents_directory_is_refused_without_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_artifact_outside_the_define_directory_is_refused`.
 
-Historical export instead uses only its literal `submission.artifact` link,
+Reproduced export instead uses only its literal `submission.artifact` link,
 or no leaf when omitted ([DEFINE-30](#define-30)); its executable output does
 not determine the link.
 
@@ -607,7 +607,7 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `schema-column-origins`, `rust
 | `SASFieldName` | the column name, when [DEFINE-22](#define-22) admits it |
 | `def:DisplayFormat` | `submission.display_format`, or the format [SUB-25](submission.md#sub-25) fixes |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
-| `Description` | the column's `label`, or a per-value definition's entry `label` when declared; a historical per-value definition's entry `label` only ([DEFINE-30](#define-30)) |
+| `Description` | the column's `label`, or a per-value definition's entry `label` when declared; a reproduced per-value definition's entry `label` only ([DEFINE-30](#define-30)) |
 | `CodeListRef` | the bound codelist's generated identifier, when declared |
 | `def:Origin` | one per declared origin, per the origin mapping below |
 
@@ -667,7 +667,7 @@ A codelist declaring `alias` carries an `Alias` child with
 Each declared method produces one `MethodDef` carrying `OID`, `Name` from
 `method.name` or, when omitted, `<dataset.id>.<column>`, and `Type` from
 `method.type`, in that order. Each declared comment produces one
-`def:CommentDef` carrying its identifier. A historical method or comment that
+`def:CommentDef` carrying its identifier. A reproduced method or comment that
 declares `oid` produces one definition however many elements declare it with
 the same definition ([DEFINE-10](#define-10)), written where the first of them
 would write its own. Every `Description` and
@@ -815,7 +815,7 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
   describes, and no other element can cite it. Each validated column or
   value-level entry with a method has its own `MethodDef`, and each output
   dataset, column or entry with a comment its own `def:CommentDef`, even when
-  their declarations are identical. Historical metadata shares a definition
+  their declarations are identical. Reproduced metadata shares a definition
   only through a declared `oid` ([DEFINE-30](#define-30))
 - `RoleCodeListOID` on an `ItemRef`: a codelist of roles. An `ItemRef`
   carries a `Role` from the closed role list ([SUB-9](submission.md#sub-9))
@@ -835,11 +835,11 @@ For each column declaring `value_level` entries
 `def:ValueListDef` with one `ItemRef` per entry, in entry order, each carrying
 a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
 `RangeCheck` per where column; and one per-value `ItemDef` per entry carrying
-the column's metadata merged with the entry's, or in historical mode the
+the column's metadata merged with the entry's, or in reproduced mode the
 entry's own ([DEFINE-30](#define-30)). The column's own `ItemDef` carries the
 `def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 The mapping to Define-XML is fixed:
 
@@ -921,7 +921,7 @@ implementation guide and refuses facts it cannot represent, but omits a
 codelist source's terminology standard. Declarations requiring 2.1 constructs
 fail before publication, under [DEFINE-25](#define-25).
 
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_second_implementation_guide`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_second_implementation_guide`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
 above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
@@ -949,7 +949,7 @@ codelists, so an extended item of an extensible published codelist
 ([CT-6](terminology.md#ct-6)) is admitted and writes
 `def:ExtendedValue="Yes"` ([DEFINE-20](#define-20)), while the document
 carries neither a terminology `def:Standard` nor a `def:StandardOID`.
-Historical metadata ([DEFINE-30](#define-30)) composes through the same 2.0
+Reproduced metadata ([DEFINE-30](#define-30)) composes through the same 2.0
 profile and admits it alike.
 
 Each refusal is a schema violation of the selected release and reports
@@ -959,31 +959,47 @@ admitted releases fails as a value the project schema does not permit
 
 <a id="define-30"></a>
 
-### DEFINE-30. Historical metadata is a literal record and makes no assertion about current derivations or data
+### DEFINE-30. Reproduced metadata is a literal record and makes no assertion about current derivations or data
 
-A dataset's explicit `submission.mode: historical` reproduces received
+A dataset's explicit `submission.mode: reproduced` reproduces received
 metadata in Define-XML 2.0 under `context: Other` without transport; omission
-retains validated mode. Historical declarations add no execution constraints;
+retains validated mode. Reproduced declarations add no execution constraints;
 executable types, keys and explicit verifications remain active. Composition
 admits closed metadata, resolves every codelist and document reference, and
 requires a schema-valid document. It makes no data-conformance assertion.
 
 Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_method_or_comment_keeps_its_received_oid_and_identical_definitions_share_one`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_method_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_comment_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_dataset_comment_declares_no_received_oid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_method_or_comment_keeps_its_received_oid_and_identical_definitions_share_one`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_method_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_comment_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_dataset_comment_declares_no_received_oid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_define_2_1`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_submission_context`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_transport`.
 
-The historical export requires explicit column `data_type`, `mandatory` and
+The mode records what a received document declares, whatever its age.
+Define-XML 2.0, `context: Other` and the absence of a transport are the bounds
+of this profile, not properties of the received document: a reproduced
+dataset in a section that selects a 2.1 release, the `Submission` context or
+a transport fails with `value_not_permitted` at its `submission`.
+
+Validated metadata, the default, is checked against what yamaa can see: a
+declared origin against the derivation
+([SUB-19](submission.md#sub-19)), a length and a mandatory flag against the
+values a run completes ([SUB-8](submission.md#sub-8),
+[SUB-11](submission.md#sub-11)), and the published data when the section
+declares a transport or the specification a run report
+([SUB-24](submission.md#sub-24), [SUB-28](submission.md#sub-28),
+[PROJECT-15](project.md#project-15)). Neither mode asserts that the document
+passes a regulator's or a validator's conformance checks.
+
+The reproduced export requires explicit column `data_type`, `mandatory` and
 labels. Lengths, formats, origins, methods and codelists remain as declared.
-`key_sequence` declares a historical ItemRef key position independently of
+`key_sequence` declares a reproduced ItemRef key position independently of
 executable `keys`, and a column's or value-level entry's `has_no_data` its
 ItemRef's `def:HasNoData`, which validated metadata measures instead
 ([SUB-28](submission.md#sub-28)). `artifact` declares a literal relative
 package link; its filename supplies the leaf title. Omission writes no
-historical artifact leaf. A method's or comment's `oid` declares the
+reproduced artifact leaf. A method's or comment's `oid` declares the
 `MethodOID` or `CommentOID` the received document carries
 ([DEFINE-9](#define-9)), and elements that declare one `oid` with the same
 definition share it ([DEFINE-10](#define-10)). These fields are refused on
 validated metadata, each with `value_not_permitted` at the `submission` that
-declares it. A historical value-level entry records one received per-value definition,
+declares it. A reproduced value-level entry records one received per-value definition,
 so it takes from its column only what that definition cannot omit: the
 `ItemDef` `Name`, which is the column's name, and, when the entry declares
 none, the column's `data_type` for `DataType` and `mandatory` for the
@@ -997,21 +1013,21 @@ inherit. A Define-XML
 refused there ([DEFINE-29](#define-29)), as a dataset's is.
 
 The current executable output need not share the document's directory, and
-historical composition does not read its run report, artifact or inputs.
+reproduced composition does not read its run report, artifact or inputs.
 Publication still protects declared inputs and outputs from being overwritten.
-Historical declarations do not request unrelated section specifications for
-inventory or predecessor assertions. Distinct historical datasets may share
+Reproduced declarations do not request unrelated section specifications for
+inventory or predecessor assertions. Distinct reproduced datasets may share
 an executable output path; each keeps its own literal metadata and artifact link.
 Value-level where clauses retain structural and output-column name checks,
 but executable types, terminology membership and overlapping row selections
-do not constrain a historical declaration, and a where clause may name the
+do not constrain a reproduced declaration, and a where clause may name the
 column its entry describes, as a received value list keyed by its own column
 does ([SUB-12](submission.md#sub-12)). An ordered where column is the
 exception: it still must not be `str`, and its value must convert to its
 type, since the comparison has nothing else to order by
 ([SUB-12](submission.md#sub-12)).
 
-Historical codelists, mandatory flags, lengths, origins and value-level
+Reproduced codelists, mandatory flags, lengths, origins and value-level
 metadata do not bind execution. They describe received declarations, not the
 current derived artifacts. Column types, executable keys, explicit
 verifications and all other ordinary checks still apply. Output and

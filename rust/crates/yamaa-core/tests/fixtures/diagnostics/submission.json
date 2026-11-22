@@ -413,7 +413,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
-          "context": {"detail": "schema_violation: historical has_no_data requires mode historical", "value": "VALUE"}
+          "context": {"detail": "schema_violation: reproduced has_no_data requires mode reproduced", "value": "VALUE"}
         }
       ]
     },
@@ -430,7 +430,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
-          "context": {"detail": "schema_violation: historical method oid requires mode historical", "value": "VALUE"}
+          "context": {"detail": "schema_violation: reproduced method oid requires mode reproduced", "value": "VALUE"}
         }
       ]
     },
@@ -447,7 +447,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
-          "context": {"detail": "schema_violation: historical comment oid requires mode historical", "value": "VALUE"}
+          "context": {"detail": "schema_violation: reproduced comment oid requires mode reproduced", "value": "VALUE"}
         }
       ]
     },
@@ -464,7 +464,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": ["sdtm.specs[0].submission"],
-          "context": {"detail": "schema_violation: historical comment oid requires mode historical", "value": "validated"}
+          "context": {"detail": "schema_violation: reproduced comment oid requires mode reproduced", "value": "validated"}
         }
       ]
     },

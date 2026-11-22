@@ -899,12 +899,14 @@ impl<'d> Lower<'d> {
     }
 
     fn dataset_submission(&mut self, node: usize, parent: Meta) -> DatasetSubmission {
+        use crate::specification_submission_document::SubmissionMode;
         let meta = self.field_meta(parent, "submission", node);
         DatasetSubmission {
-            mode: if self.text_of(node, "mode") == Some("historical") {
-                crate::specification_submission_document::SubmissionMode::Historical
+            // The vocabulary owns the spelling (DEFINE-30).
+            mode: if self.text_of(node, "mode") == Some(SubmissionMode::Reproduced.name()) {
+                SubmissionMode::Reproduced
             } else {
-                crate::specification_submission_document::SubmissionMode::Validated
+                SubmissionMode::Validated
             },
             artifact: self.text_field(meta, node, "artifact"),
             label: self.required_text(meta, node, "label"),
