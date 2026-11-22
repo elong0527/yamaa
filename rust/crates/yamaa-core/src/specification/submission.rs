@@ -587,11 +587,10 @@ fn admit_entries(
             } else {
                 values::entry_expressions(spec, column, entry)
             };
+            let constructions = origin::Constructions::of(spec, &derivations, reads);
             for declaration in &declared {
-                let refuting = derivations
-                    .iter()
-                    .map(|&expr| origin::classify_expr(spec, expr, reads))
-                    .find(|kind| !kind.admitted().contains(&declaration.kind));
+                let refuting = OriginType::from_name(declaration.kind)
+                    .and_then(|kind| constructions.refuting(kind));
                 let copy = if refuting.is_some() {
                     None
                 } else {
@@ -845,22 +844,9 @@ pub(super) fn admit(
         if declared.is_empty() || derivations.is_empty() {
             continue;
         }
-        let mut admitted = origin::classify_expr(spec, derivations[0], &reads).admitted();
-        for &expr in &derivations[1..] {
-            let kinds = origin::classify_expr(spec, expr, &reads).admitted();
-            admitted.retain(|kind| kinds.contains(kind));
-        }
-        if admitted.is_empty() {
-            result.push(finding(
-                C::SubmissionOriginRefuted,
-                &path,
-                &[
-                    ("column", s(name)),
-                    ("reason", s("row_derivations_disagree")),
-                ],
-            ));
-            continue;
-        }
+        // Never empty: every derivation admits `Assigned`, `Other` and
+        // `Not Available`.
+        let admitted = origin::Constructions::of(spec, &derivations, &reads).admitted();
         for origin in &declared {
             if !admitted.contains(&origin.kind) {
                 result.push(finding(

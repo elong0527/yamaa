@@ -38,7 +38,7 @@ impl DerivationKind {
         }
     }
     /// Whether this derivation leaves the origin type unrefuted.
-    pub(crate) fn admits(self, kind: OriginType) -> bool {
+    fn admits(self, kind: OriginType) -> bool {
         use OriginType as T;
         match self {
             Self::Source => true,
@@ -47,10 +47,43 @@ impl DerivationKind {
             Self::Computed => !matches!(kind, T::Collected | T::Protocol | T::Predecessor),
         }
     }
+}
+
+/// The derivations of the constructions that produce one column's rows: one
+/// per row template, or the column's own derivation, each classified by
+/// SUB-19's table. Both the domain build and composition read a column's or a
+/// value-level entry's origins through it.
+#[derive(Clone, Debug)]
+pub(crate) struct Constructions(Vec<DerivationKind>);
+
+impl Constructions {
+    /// Classify each derivation of `exprs` against the specification's reads.
+    pub(crate) fn of(spec: &ast::Spec, exprs: &[ExprId], reads: &Reads) -> Self {
+        Self(
+            exprs
+                .iter()
+                .map(|&expr| classify_expr(spec, expr, reads))
+                .collect(),
+        )
+    }
+    /// The derivation that refutes `kind`, or `None` when the constructions
+    /// admit it: each admits what every construction's derivation admits,
+    /// and `Derived` as well when the derivations are of different kinds,
+    /// since choosing per row between them derives the value (SUB-19).
+    pub(crate) fn refuting(&self, kind: OriginType) -> Option<DerivationKind> {
+        let mixed = self.0.windows(2).any(|pair| pair[0] != pair[1]);
+        if mixed && kind == OriginType::Derived {
+            return None;
+        }
+        self.0
+            .iter()
+            .copied()
+            .find(|derivation| !derivation.admits(kind))
+    }
     /// The admitted origin type names, in the vocabulary's published order.
-    pub(crate) fn admitted(self) -> Vec<&'static str> {
+    pub(crate) fn admitted(&self) -> Vec<&'static str> {
         OriginType::all()
-            .filter(|&kind| self.admits(kind))
+            .filter(|&kind| self.refuting(kind).is_none())
             .map(OriginType::name)
             .collect()
     }
@@ -488,7 +521,7 @@ mod tests {
             ["Collected", "Predecessor", "Protocol"]
         );
         assert_eq!(
-            K::Recode.admitted(),
+            Constructions(vec![K::Recode]).admitted(),
             ["Assigned", "Collected", "Derived", "Not Available", "Other"]
         );
     }

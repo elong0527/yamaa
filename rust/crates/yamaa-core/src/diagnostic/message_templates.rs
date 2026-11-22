@@ -189,7 +189,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("transport_dataset_empty", "dataset {dataset} has no rows and does not declare has_no_data"),
     ("transport_label_invalid", "label '{label}' of {dataset} cannot be transported: {detail}"),
     ("transport_path_collision", "{spec_path} names {path}, which another writer of the submission also writes"),
-    ("transport_text_invalid", "column {column} of {dataset} holds a value the transport cannot carry: {detail}"),
+    ("transport_text_invalid", "{dataset} holds text the transport cannot carry: {detail}"),
     ("undeclared_column", "{column} is not a declared column"),
     ("unexpected_file_type", "a {type} file is given where a {expected} file is expected"),
     ("ungrouped_driver_field", "{identifier} reads a driver field that is neither a group key nor inside an aggregate"),
