@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.0" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="S01.sdtm.Define-XML_2.0" CreationDateTime="2026-09-30T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0">
+  <Study OID="STDY.S01">
+    <GlobalVariables>
+      <StudyName>Independent study</StudyName>
+      <StudyDescription>Submission detector witness</StudyDescription>
+      <ProtocolName>P01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.S01.sdtm" Name="Independent study sdtm metadata" def:DefineVersion="2.0.0" def:StandardName="SDTM-IG" def:StandardVersion="3.4">
+      <def:ValueListDef OID="VL.D0.PARAMCD">
+        <ItemRef ItemOID="IT.D0.PARAMCD.TEMP" OrderNumber="1" Mandatory="Yes">
+          <def:WhereClauseRef WhereClauseOID="WC.D0.PARAMCD.TEMP"/>
+        </ItemRef>
+      </def:ValueListDef>
+      <def:WhereClauseDef OID="WC.D0.PARAMCD.TEMP">
+        <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.D0.PARAMCD">
+          <CheckValue>TEMP</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <ItemGroupDef OID="IG.D0" Name="D0" Domain="D0" Purpose="Tabulation" SASDatasetName="D0" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:Class="SPECIAL PURPOSE">
+        <Description>
+          <TranslatedText xml:lang="en">Independent dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.D0.PARAMCD" OrderNumber="1" Mandatory="Yes"/>
+      </ItemGroupDef>
+      <ItemDef OID="IT.D0.PARAMCD" Name="PARAMCD" DataType="text" Length="8" SASFieldName="PARAMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Parameter code</TranslatedText>
+        </Description>
+        <def:ValueListRef ValueListOID="VL.D0.PARAMCD"/>
+      </ItemDef>
+      <ItemDef OID="IT.D0.PARAMCD.TEMP" Name="PARAMCD" DataType="text" Length="4" SASFieldName="PARAMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Temperature code</TranslatedText>
+        </Description>
+      </ItemDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

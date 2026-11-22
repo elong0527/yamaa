@@ -227,9 +227,9 @@ pub(crate) fn admitted<'c, 'n>(
 
 /// The static checks of SUB-12 over one column's entries: identifiers unique
 /// within the column, where clauses over declared output columns other than
-/// the column itself, listing nonempty distinct values their codelists admit
-/// for a `str` column or ordering a column of another type against one value
-/// that converts to it, and no two entries whose where clauses can select one
+/// the column itself in validated mode, listing nonempty distinct values
+/// their codelists admit for a `str` column or ordering a column of another
+/// type against one value that converts to it, and no two entries whose where clauses can select one
 /// row. Historical composition keeps structural/name checks and the type of
 /// an ordered term, without asserting current rows.
 pub(crate) fn admit<'a, 'b, 'c>(
@@ -267,7 +267,9 @@ where
             let ordered = comparator.order().is_some();
             let mut codelist = None;
             let mut kind = None;
-            let fault = if *name == column {
+            // A historical value list may be keyed by its own column, as a
+            // received document records it (DEFINE-30).
+            let fault = if *name == column && validated {
                 Some(WhereFault::Itself)
             } else {
                 match declared(name) {

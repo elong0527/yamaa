@@ -275,17 +275,11 @@ fn item_definition(
             "def:CommentOID",
             meta.comment.as_ref().map(|_| format!("COM.{identity}")),
         );
-    item.translated_at(
-        "Description",
-        &column
-            .declaration()
-            .label
-            .as_ref()
-            .expect("composed label")
-            .value,
-        language,
-        Some(label_path),
-    );
+    // Every validated definition has a description; a historical per-value
+    // definition has one only when its entry declares a `label` (DEFINE-30).
+    if let Some(label) = &column.declaration().label {
+        item.translated_at("Description", &label.value, language, Some(label_path));
+    }
     if let Some(list) = &meta.codelist {
         item.push(
             Element::new("CodeListRef", &item.path)

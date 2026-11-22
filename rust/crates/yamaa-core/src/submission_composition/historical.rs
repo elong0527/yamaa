@@ -30,6 +30,7 @@ pub(super) fn column(
     admission: &ColumnAdmission<'_>,
     column: &spec::Column,
     path: &str,
+    level: Level,
     findings: &mut Vec<Finding>,
     bound: &mut BTreeSet<String>,
 ) -> Option<Column> {
@@ -40,11 +41,13 @@ pub(super) fn column(
         findings.push(missing("submission"));
         return None;
     };
+    // A per-value definition's description is its entry's own `label`,
+    // written only when declared (DEFINE-30).
     let mut complete = true;
     for (field, absent) in [
         ("data_type", metadata.data_type.is_none()),
         ("mandatory", metadata.mandatory.is_none()),
-        ("label", column.label.is_none()),
+        ("label", level == Level::Column && column.label.is_none()),
     ] {
         if absent {
             findings.push(missing(field));
