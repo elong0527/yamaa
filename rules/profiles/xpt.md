@@ -165,15 +165,24 @@ A character value is written left aligned and padded with blanks to its
 variable's width, and a missing value is all blanks. A present value must be
 printable ASCII of at most 200 bytes, must not end in a blank and must not be
 the empty string: in a transport file a trailing blank is padding and an empty
-string is missing. A value that breaks one of these fails, reporting the
-dataset, column, row, value and cause.
+string is missing. Every column of a dataset holding a value that breaks one
+of these fails in one finding.
 
 Fails: `transport_text_invalid`.
-Evidence: `negative-transport-non-ascii`, `negative-transport-empty-string`, `negative-transport-trailing-blank`, `rust/crates/yamaa-core/src/submission_transport.rs::text_causes_follow_one_order_and_only_xpt_refuses_padding_lookalikes`.
+Evidence: `negative-transport-non-ascii`, `negative-transport-empty-string`, `negative-transport-trailing-blank`, `rust/crates/yamaa-core/src/submission_transport.rs::text_causes_follow_one_order_and_only_xpt_refuses_padding_lookalikes`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::one_text_finding_lists_every_refused_column_at_its_first_refused_row`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_column_xpt_8_refuses_before_every_refused_text_column_fails_alone`.
 
-The failure reports `transport_text_invalid` at
-`datasets.<dataset>.columns.<column>` with the row's zero-based position in the
-artifact, its key values and one cause, checked in this order:
+The failure reports `transport_text_invalid` once per dataset, at
+`datasets.<dataset>.columns.<column>` of the first failing column in
+declaration order. Its context holds the `dataset`, its `artifact`, the
+`key_columns` and `values`: one entry per failing column, in declaration
+order, holding the `column`, the zero-based position in the artifact of the
+column's first failing row as `row`, that row's `key_values`, the `value` and
+one `cause`. A column's later failing rows are not reported. The list holds at
+most one entry per column, so it is bounded by the 1,024 columns of a table
+([LIMIT-2](../limits.md#limit-2)). A column whose first refused value fails
+[XPT-8](#xpt-8) before every failing text column fails alone with
+`xpt_value_out_of_range`; one after a failing text column is left to a later
+run. A cause is checked in this order:
 
 | Cause | Value |
 |---|---|

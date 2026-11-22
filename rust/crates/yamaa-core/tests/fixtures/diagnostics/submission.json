@@ -1116,8 +1116,55 @@
         "dataset": "D0",
         "table": {"columns": [["VALUE", "str"]], "rows": [["caf\u00e9"]]}
       },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.values"],
+      "issues": [{"phase": "output", "condition": "transport_text_invalid", "rule": "XPT-7", "spec_paths": ["datasets.D0.columns.VALUE"], "context": {"values": [{"cause": "ascii", "column": "VALUE", "key_values": ["caf\u00e9"], "row": 0, "value": "caf\u00e9"}]}}]
+    },
+    {
+      "case": "one_text_finding_lists_every_refused_column_at_its_first_refused_row",
+      "operation": "transport",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "xpt"},
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "NAME", "type": "str", "label": "Name column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "N", "type": "int", "label": "Number column", "derivation": 1, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "SITE", "type": "str", "label": "Site column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+          ]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "NAME", "N", "SITE"]}
+        ],
+        "dataset": "D0",
+        "table": {
+          "columns": [["VALUE", "str"], ["NAME", "str"], ["N", "int"], ["SITE", "str"]],
+          "rows": [["A", "Smith", 9007199254740993, "UCSD"], ["B", "P\u00e9rez", 1, "UCSD"], ["C", "Lee ", 2, ""]]
+        }
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.artifact", "context.dataset", "context.key_columns", "context.values"],
+      "issues": [{"phase": "output", "condition": "transport_text_invalid", "rule": "XPT-7", "spec_paths": ["datasets.D0.columns.NAME"], "context": {"artifact": "d0.csv", "dataset": "D0", "key_columns": ["VALUE"], "values": [{"cause": "ascii", "column": "NAME", "key_values": ["B"], "row": 1, "value": "P\u00e9rez"}, {"cause": "empty_string", "column": "SITE", "key_values": ["C"], "row": 2, "value": ""}]}}]
+    },
+    {
+      "case": "a_column_xpt_8_refuses_before_every_refused_text_column_fails_alone",
+      "operation": "transport",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "xpt"},
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "N", "type": "int", "label": "Number column", "derivation": 1, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "NAME", "type": "str", "label": "Name column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+          ]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "N", "NAME"]}
+        ],
+        "dataset": "D0",
+        "table": {
+          "columns": [["VALUE", "str"], ["N", "int"], ["NAME", "str"]],
+          "rows": [["A", 1, "P\u00e9rez"], ["B", 9007199254740993, "Smith"]]
+        }
+      },
       "compares": ["phase", "condition", "rule", "spec_paths", "context.cause", "context.row"],
-      "issues": [{"phase": "output", "condition": "transport_text_invalid", "rule": "XPT-7", "spec_paths": ["datasets.D0.columns.VALUE"], "context": {"cause": "ascii", "row": 0}}]
+      "issues": [{"phase": "output", "condition": "xpt_value_out_of_range", "rule": "XPT-8", "spec_paths": ["datasets.D0.columns.N"], "context": {"cause": "integer", "row": 1}}]
     },
     {
       "case": "a_published_dataset_without_rows_must_declare_it",

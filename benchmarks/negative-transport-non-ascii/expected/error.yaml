@@ -5,7 +5,10 @@ spec_paths:
 rule: XPT-7
 context:
   dataset: DM
-  column: INVNAM
-  row: 1
-  value: "P\u00e9rez, Jos\u00e9"
-  cause: ascii
+  key_columns: [STUDYID, USUBJID]
+  values:
+    - cause: ascii
+      column: INVNAM
+      key_values: [CATH, CATH-MCGILL-0002]
+      row: 1
+      value: "P\u00e9rez, Jos\u00e9"
