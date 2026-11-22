@@ -7,8 +7,8 @@ context:
   dataset: DM
   key_columns: [STUDYID, USUBJID]
   values:
-    - column: SITEID
-      row: 1
+    - cause: trailing_blank
+      column: SITEID
       key_values: [CATH, CATH-UCSD-0002]
+      row: 1
       value: 'UCSD '
-      cause: trailing_blank
