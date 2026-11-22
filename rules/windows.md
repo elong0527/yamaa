@@ -237,10 +237,11 @@ spelling of it.
 A column-level `row_value` with a negative `offset` may name a calculated
 column, including itself or one declared later. A feedback group is admitted
 when removing its backward source dependencies leaves an acyclic current-row
-graph, every member has one typed column binding for all output rows, and all
-its window reads are backward `row_value` operations over the same partition
-keys and order terms, without a window filter. Its partition and order columns
-are completed outside the group. An unsupported cycle still fails.
+graph, its typed column bindings complete every member for all output rows,
+and all its window reads are backward `row_value` operations over the same
+partition keys and order terms, without a window filter. Its partition and
+order columns are completed outside the group. An unsupported cycle still
+fails.
 
 Fails: `dependency_cycle`, `forward_reference`.
 Evidence: `adam-advs-dosing-weight`, `negative-row-value-self`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json`.
@@ -248,6 +249,9 @@ Evidence: `adam-advs-dosing-weight`, `negative-row-value-self`, `rust/crates/yam
 Keys, row derivations, intermediate donor derivations, context windows,
 lookups, aggregates and project functions cannot participate in a feedback
 group.
+
+A member's column bindings are one for each input the row templates read,
+and one history runs through each partition whichever input built its rows.
 
 The group completes after all its external dependencies. Partitions run in
 first-occurrence order and their rows in the declared stable window order;

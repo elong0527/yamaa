@@ -327,7 +327,7 @@ impl Implicit {
             }
         }
         let programs = (0..dependencies.len())
-            .map(|column| assignments.get(&column))
+            .map(|column| assignments.get(&column).map(|assignment| vec![assignment]))
             .collect::<Vec<_>>();
         let (analysis, recurrences) =
             crate::dataset::recurrence::analyze(&dependencies, &programs, keys, false)
@@ -1737,14 +1737,22 @@ impl Templates {
             }
             dependencies[declaration.column] = Some(edges);
         }
+        // A column takes one binding per distinct row-template driver; a
+        // feedback member needs its bindings to cover every template's rows
+        // between them, and each is judged as its own program (#4744).
         let programs = (0..dependencies.len())
             .map(|column| {
-                let mut bindings = columns
+                let bindings = columns
                     .iter()
-                    .filter(|binding| binding.assignment.column == column);
-                let binding = bindings.next()?;
-                (bindings.next().is_none() && binding.templates.len() == templates.len())
-                    .then_some(&binding.assignment)
+                    .filter(|binding| binding.assignment.column == column)
+                    .collect::<Vec<_>>();
+                let covered: usize = bindings.iter().map(|binding| binding.templates.len()).sum();
+                (!bindings.is_empty() && covered == templates.len()).then(|| {
+                    bindings
+                        .iter()
+                        .map(|binding| &binding.assignment)
+                        .collect::<Vec<_>>()
+                })
             })
             .collect::<Vec<_>>();
         let (analyzed, recurrences) =

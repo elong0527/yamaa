@@ -1,5 +1,5 @@
 {
-  "about": "Causal backward row_value dependencies (WINDOW-12, COLUMN-5/6/8). Authored examples prove lag-n, independent partitions, causal ordering, missing stored results, nested self reads and converted handler substitutions. Unsupported future, filtered, state-ordered and mixed-window cycles retain dependency_cycle. Expected values and failures are independently specified.",
+  "about": "Causal backward row_value dependencies (WINDOW-12, COLUMN-5/6/8). Authored examples prove lag-n, independent partitions, causal ordering, missing stored results, nested self reads, converted handler substitutions and one history over rows that row templates build from different inputs. Unsupported future, filtered, state-ordered and mixed-window cycles retain dependency_cycle. Expected values and failures are independently specified.",
   "documents": {
     "independent_history": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC:\n    path: input.csv\n    types: {ID: int, X: int}\noutput:\n  path: out.csv\n  columns: [ID, P, STATE]\nwindows:\n  VISITS:\n    order_by: [ID]\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: INDEPENDENT\n  type: int\n  derivation: SRC.X\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: INDEPENDENT\n    - otherwise: P + INDEPENDENT\n"
   },
@@ -62,6 +62,22 @@
       "issues": [],
       "saved": {
         "out.csv": "ID,P,STATE\n1,,2\n2,2,5\n"
+      }
+    },
+    {
+      "case": "feedback_carries_history_across_rows_built_from_different_inputs",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\n  ALT:\n    path: alt.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\noutput:\n  path: out.csv\n  order_by:\n  - ID\n  columns:\n  - ID\n  - P\n  - STATE\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n- name: G\n  type: str\n- name: SEQ\n  type: int\n- name: X\n  type: int\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: X\n    - otherwise: P + X\nrows:\n- id: from_src\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    G: SRC.G\n    SEQ: SRC.SEQ\n    X: SRC.X\n- id: from_alt\n  dataset: ALT\n  derivations:\n    ID: ALT.ID\n    G: ALT.G\n    SEQ: ALT.SEQ\n    X: ALT.X\n",
+          "src.csv": "ID,G,SEQ,X\n1,A,1,2\n3,A,3,4\n5,B,1,7\n",
+          "alt.csv": "ID,G,SEQ,X\n2,A,2,3\n4,B,2,1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE\n1,,2\n2,2,5\n3,5,9\n4,7,8\n5,,7\n"
       }
     },
     {
