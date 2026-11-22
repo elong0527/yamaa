@@ -39,16 +39,8 @@
         </Description>
         <def:ValueListRef ValueListOID="VL.D0.VALUE"/>
       </ItemDef>
-      <ItemDef OID="IT.D0.VALUE.X" Name="VALUE" DataType="integer" Length="8" SASFieldName="VALUE">
-        <Description>
-          <TranslatedText xml:lang="en">Independent column</TranslatedText>
-        </Description>
-      </ItemDef>
-      <ItemDef OID="IT.D0.VALUE.Y" Name="VALUE" DataType="integer" Length="8" SASFieldName="VALUE">
-        <Description>
-          <TranslatedText xml:lang="en">Independent column</TranslatedText>
-        </Description>
-      </ItemDef>
+      <ItemDef OID="IT.D0.VALUE.X" Name="VALUE" DataType="integer" SASFieldName="VALUE"/>
+      <ItemDef OID="IT.D0.VALUE.Y" Name="VALUE" DataType="integer" SASFieldName="VALUE"/>
       <ItemDef OID="IT.D0.CODE" Name="CODE" DataType="text" Length="8" SASFieldName="CODE">
         <Description>
           <TranslatedText xml:lang="en">Condition code</TranslatedText>

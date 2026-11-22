@@ -591,7 +591,7 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `schema-column-origins`, `rust
 | `SASFieldName` | the column name, when [DEFINE-22](#define-22) admits it |
 | `def:DisplayFormat` | `submission.display_format`, or the format [SUB-25](submission.md#sub-25) fixes |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
-| `Description` | the column's `label`, or a per-value definition's entry `label` when declared |
+| `Description` | the column's `label`, or a per-value definition's entry `label` when declared; a historical per-value definition's entry `label` only ([DEFINE-30](#define-30)) |
 | `CodeListRef` | the bound codelist's generated identifier, when declared |
 | `def:Origin` | one per declared origin, per the origin mapping below |
 
@@ -601,8 +601,8 @@ model. Each `def:Origin`'s `Description` child carries that origin's
 document reference of that origin in declaration order, including the
 page-less annotated case report form reference
 [SUB-17](submission.md#sub-17) derives under `context: Other` when a
-collected origin declares none. A value-level entry without origins of its
-own takes the column's ([DEFINE-27](#define-27)).
+collected origin declares none. A validated value-level entry without
+origins of its own takes the column's ([DEFINE-27](#define-27)).
 Rows with different provenance use the separate per-value definitions of
 [DEFINE-27](#define-27).
 
@@ -814,10 +814,11 @@ For each column declaring `value_level` entries
 `def:ValueListDef` with one `ItemRef` per entry, in entry order, each carrying
 a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
 `RangeCheck` per where column; and one per-value `ItemDef` per entry carrying
-the column's metadata merged with the entry's. The column's own `ItemDef`
-carries the `def:ValueListRef`.
+the column's metadata merged with the entry's, or in historical mode the
+entry's own ([DEFINE-30](#define-30)). The column's own `ItemDef` carries the
+`def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 The mapping to Define-XML is fixed:
 
@@ -842,9 +843,9 @@ The mapping to Define-XML is fixed:
   [DEFINE-19](#define-19) does, with the entry's `label` as its
   `Description` when declared and its `Length` from
   [SUB-24](submission.md#sub-24) or [SUB-7](submission.md#sub-7). An entry
-  that declares origins writes its own, and one that declares none takes
-  the column's whole list. Associated methods, comments and document
-  references remain resolvable.
+  that declares origins writes its own, and a validated one that declares
+  none takes the column's whole list. Associated methods, comments and
+  document references remain resolvable.
 
 A transport file carries columns, not value-level definitions
 ([JSON-9](dataset-json.md#json-9), [XPT-4](xpt.md#xpt-4)); a value-level
@@ -947,7 +948,7 @@ admits closed metadata, resolves every codelist and document reference, and
 requires a schema-valid document. It makes no data-conformance assertion.
 
 Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`.
 
 The historical export requires explicit column `data_type`, `mandatory` and
 labels. Lengths, formats, origins, methods and codelists remain as declared.
@@ -958,8 +959,16 @@ ItemRef's `def:HasNoData`, which validated metadata measures instead
 package link; its filename supplies the leaf title. Omission writes no
 historical artifact leaf. These three fields are refused on validated
 metadata, each with `value_not_permitted` at the `submission` that declares
-it. Historical value-level entries inherit the column metadata as ordinary
-entries do, except key positions and `has_no_data` never inherit. A Define-XML
+it. A historical value-level entry records one received per-value definition,
+so it takes from its column only what that definition cannot omit: the
+`ItemDef` `Name`, which is the column's name, and, when the entry declares
+none, the column's `data_type` for `DataType` and `mandatory` for the
+value-list `ItemRef`'s required `Mandatory`. `OID` is generated
+([DEFINE-9](#define-9)) and `SASFieldName` follows the name
+([DEFINE-22](#define-22)). Every other field, the `label` that writes
+`Description` included, appears on the per-value `ItemDef` or `ItemRef` only
+when the entry declares it, and key positions and `has_no_data` never
+inherit. A Define-XML
 2.0 document has no `def:HasNoData`, so a declared `has_no_data: true` is
 refused there ([DEFINE-29](#define-29)), as a dataset's is.
 
@@ -971,7 +980,9 @@ inventory or predecessor assertions. Distinct historical datasets may share
 an executable output path; each keeps its own literal metadata and artifact link.
 Value-level where clauses retain structural and output-column name checks,
 but executable types, terminology membership and overlapping row selections
-do not constrain a historical declaration. An ordered where column is the
+do not constrain a historical declaration, and a where clause may name the
+column its entry describes, as a received value list keyed by its own column
+does ([SUB-12](submission.md#sub-12)). An ordered where column is the
 exception: it still must not be `str`, and its value must convert to its
 type, since the comparison has nothing else to order by
 ([SUB-12](submission.md#sub-12)).

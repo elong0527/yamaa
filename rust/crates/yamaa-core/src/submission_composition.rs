@@ -149,7 +149,8 @@ impl OriginDefinition {
     }
 }
 /// One value-level entry's definition: the rows its where clause selects take
-/// the column's metadata merged with the entry's (SUB-12, DEFINE-27).
+/// the column's metadata merged with the entry's (SUB-12, DEFINE-27), or a
+/// historical entry's own (DEFINE-30).
 #[derive(Clone, Debug)]
 pub struct ValueDefinition {
     pub(crate) id: String,
@@ -735,7 +736,7 @@ impl ColumnAdmission<'_> {
         bound: &mut BTreeSet<String>,
     ) -> Option<Column> {
         if self.historical {
-            return historical::column(self, column, column_path, findings, bound);
+            return historical::column(self, column, column_path, level, findings, bound);
         }
         let Self {
             section,
@@ -1367,7 +1368,7 @@ fn key_column_mandatory(
 
 /// Compose every column's value-level entries (SUB-12, SUB-13): the static
 /// checks of each column's entries, then one definition per entry carrying
-/// the column's metadata merged with the entry's.
+/// what the entry takes from the column (`ValueEntry::describe`).
 fn compose_values(
     admission: &ColumnAdmission<'_>,
     declarations: &spec::Declarations,
@@ -1509,11 +1510,7 @@ fn compose_values(
                         })
                 })
                 .collect::<Option<Vec<_>>>();
-            let mut effective = base.clone();
-            effective.submission = Some(entry.metadata.inherit(metadata));
-            if let Some(label) = &entry.label {
-                effective.label = Some(label.clone());
-            }
+            let effective = entry.describe(base, mode);
             let first_finding = findings.len();
             if !admission.historical
                 && admission.keys.contains(name)

@@ -386,6 +386,30 @@ pub struct WhereTerm {
     pub comparator: crate::ast::Comparator,
     pub values: Vec<Field<String>>,
 }
+impl ValueEntry {
+    /// The column this entry describes on the rows its where clause selects,
+    /// the one judgement of what an entry takes from its column. Validated
+    /// metadata merges the entry over the complete column declaration, its
+    /// `label` included (DEFINE-27). A historical entry is a literal record of
+    /// one received per-value definition: it takes only what the per-value
+    /// `ItemDef` and its `ItemRef` cannot omit, the column's name and its
+    /// `data_type` and `mandatory` when the entry declares none, and writes
+    /// nothing else it does not declare (DEFINE-30).
+    pub fn describe(&self, column: &Column, mode: SubmissionMode) -> Column {
+        let base = column.submission.as_ref();
+        let mut described = column.clone();
+        described.submission = Some(match (mode, base) {
+            (SubmissionMode::Validated, Some(base)) => self.metadata.inherit(base),
+            (SubmissionMode::Historical, Some(base)) => self.metadata.inherit_required(base),
+            (_, None) => self.metadata.clone(),
+        });
+        described.label = match mode {
+            SubmissionMode::Validated => self.label.clone().or_else(|| column.label.clone()),
+            SubmissionMode::Historical => self.label.clone(),
+        };
+        described
+    }
+}
 impl ColumnSubmission {
     /// Missing entry fields inherit the complete column declaration. Nested
     /// class values replace their counterpart, and an entry without origins of
@@ -393,8 +417,8 @@ impl ColumnSubmission {
     /// attached. A historical ItemRef's `key_sequence` and `has_no_data` are
     /// its own and never inherit (DEFINE-30). The merged metadata describes
     /// one entry, so it carries no entries.
-    pub fn inherit(&self, base: &Self) -> Self {
-        let mut merged = self.clone();
+    fn inherit(&self, base: &Self) -> Self {
+        let mut merged = self.inherit_required(base);
         macro_rules! inherit {
             ($($field:ident),+ $(,)?) => { $(
                 if merged.$field.is_none() { merged.$field = base.$field.clone(); }
@@ -402,9 +426,7 @@ impl ColumnSubmission {
         }
         inherit!(
             core,
-            mandatory,
             role,
-            data_type,
             length,
             significant_digits,
             display_format,
@@ -415,6 +437,19 @@ impl ColumnSubmission {
         );
         if merged.origins.is_empty() {
             merged.origins = base.origins.clone();
+        }
+        merged
+    }
+    /// The entry's own declaration with the fields a per-value `ItemDef` and
+    /// its `ItemRef` require: `DataType` and `Mandatory` (DEFINE-30). It
+    /// describes one entry, so it carries no entries.
+    fn inherit_required(&self, base: &Self) -> Self {
+        let mut merged = self.clone();
+        if merged.data_type.is_none() {
+            merged.data_type = base.data_type.clone();
+        }
+        if merged.mandatory.is_none() {
+            merged.mandatory = base.mandatory.clone();
         }
         merged.value_level = Vec::new();
         merged
