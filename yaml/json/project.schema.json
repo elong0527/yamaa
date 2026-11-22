@@ -77,7 +77,7 @@
     },
     "codelist_identifier": {
       "type": "string",
-      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*$",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
       "description": "Identifier of a codelist the project file declares, one or more single-token segments joined by single periods (CT-1)."
     },
     "codelist_item_class": {

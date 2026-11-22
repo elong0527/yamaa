@@ -1021,18 +1021,22 @@ language; the field is declared or absent.
 
 `comment` carries a sponsor note about a dataset or a column. Written as a
 string, it is the note's text; written as a mapping, it adds the documents the
-note refers to. Comments are declared where they are used, and one comment is
-not shared between two datasets or two columns. A document reference names a
-document the study document declares, and optionally the place within it: as a
-string the reference is the identifier, and as a mapping it adds `pages`.
+note refers to. Comments are declared where they are used, and one comment
+without a historical `oid` is not shared between two datasets or two columns. A
+document reference names a document the study document declares, and optionally
+the place within it: as a string the reference is the identifier, and as a
+mapping it adds `pages`.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_origin_citing_an_undeclared_document_is_refused`.
 
-[Define-XML](define-xml.md) mints each comment an identifier from the place it
-is declared, so a shared comment would need an identifier space the profile
-does not open. A `pages` reference states whether the `refs` are physical page
-numbers or named destinations and carries the `refs` as a space-separated
-list.
+[Define-XML](define-xml.md) mints each comment without a declared `oid` an
+identifier from the place it is declared, so sharing such a comment would need
+an identifier space the profile does not open; a historical `oid` is that
+identifier, recorded as received ([DEFINE-9](define-xml.md#define-9)), and
+historical comments declaring one `oid` with the same definition share it
+([DEFINE-30](define-xml.md#define-30)). A `pages` reference states whether the
+`refs` are physical page numbers or named destinations and carries the `refs`
+as a space-separated list.
 
 The mapping forms are written only for what they add: a comment mapping
 holding only `text`, a method mapping holding only `description` and a

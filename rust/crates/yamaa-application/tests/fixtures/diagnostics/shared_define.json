@@ -1854,17 +1854,14 @@
         "section": "sdtm",
         "created": "2026-09-30T00:00:00"
       },
-      "compares": [
-        "phase",
-        "condition",
-        "rule",
-        "context"
-      ],
       "issues": [
         {
           "phase": "validation",
           "condition": "duplicate_define_identifier",
           "rule": "DEFINE-10",
+          "spec_paths": [
+            "datasets.D0.B.submission.method"
+          ],
           "context": {
             "detail": "MT.SHARED",
             "identifier": "MT.SHARED"
@@ -1885,17 +1882,14 @@
         "section": "sdtm",
         "created": "2026-09-30T00:00:00"
       },
-      "compares": [
-        "phase",
-        "condition",
-        "rule",
-        "context"
-      ],
       "issues": [
         {
           "phase": "validation",
           "condition": "duplicate_define_identifier",
           "rule": "DEFINE-10",
+          "spec_paths": [
+            "datasets.D0.C.submission.method"
+          ],
           "context": {
             "detail": "MT.D0.C",
             "identifier": "MT.D0.C"

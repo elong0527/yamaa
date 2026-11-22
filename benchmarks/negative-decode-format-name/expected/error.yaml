@@ -5,4 +5,4 @@ spec_paths:
 rule: SCHEMA-12
 context:
   value: $PARAMCD
-  pattern: '^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*$'
+  pattern: '^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$'
