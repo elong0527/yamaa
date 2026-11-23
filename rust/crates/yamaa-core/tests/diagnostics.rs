@@ -136,6 +136,7 @@ mod diagnostics {
                     .collect::<Vec<_>>(),
                 [
                     "activation_boundary",
+                    "allocation",
                     "artifact_representation",
                     "cleanup_incomplete",
                     "compiler_limit",

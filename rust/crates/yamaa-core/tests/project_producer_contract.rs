@@ -2,7 +2,7 @@
 //!
 //! The seam is the `Contract` that `prepare_document` returns: its
 //! fields, `matches_header`, `matches_typed_fields` and typed `Error`, which
-//! no run reports, and its 1,024-column width boundary.
+//! no run reports, and a width past the former 1,024-column limit.
 mod project {
     mod producer_contract {
         use yamaa_core::{

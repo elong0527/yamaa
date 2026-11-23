@@ -257,9 +257,8 @@ const BUILD: reader::Position = (18, 0, 0);
 /// `threads` are decoded at once; with one thread, the calling thread
 /// decodes each in turn (#4220). Every finding [`parse`] reports is
 /// reported in the same order, a value's row being its row in the whole
-/// file, except that each partition, not the whole file, is admitted within
-/// the row and cell limits: the whole read checks each stage over every
-/// partition before the next, so the first finding is the one whose stage
+/// file: the whole read checks each stage over every partition before the
+/// next, so the first finding is the one whose stage
 /// and column come first, then whose partition does. The thread count
 /// changes neither the finding nor what `visit` is given.
 #[cfg(feature = "parquet")]

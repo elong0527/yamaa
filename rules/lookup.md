@@ -1988,7 +1988,7 @@ number. `index` names the number, an `int` its `filter` and `derivations`
 read. It requires `derivations` and is read as a pair relation is
 ([LOOKUP-27](#lookup-27)).
 
-Fails: `invalid_repeat_count`, `invalid_intermediate_driver`, `prohibited_construct`, `incompatible_input_type`, `unknown_field`, `duplicate_derivation`.
+Fails: `invalid_repeat_count`, `invalid_intermediate_driver`, `prohibited_construct`, `incompatible_input_type`, `unknown_field`, `duplicate_derivation`, `engine_rejected`.
 Evidence: `schema-lookup-repeat-rows`, `schema-lookup-repeat-zero-count`, `schema-lookup-repeat-expression-count`, `negative-lookup-repeat-missing-count`, `negative-lookup-repeat-negative-count`, `negative-lookup-repeat-count-type`, `negative-lookup-repeat-key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/counted_relations.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_every_field_written_beside_repeat_in_the_listed_order_naming_the_first`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_self_as_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_index_names_none_of_its_derivations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_dataset_is_an_intermediate_a_row_template_could_drive_on`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_dataset_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_side_of_a_pair_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_dataset_of_a_counted_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_states_no_key_and_its_dataset_declares_none`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_reads_its_dataset_by_its_name_its_number_by_its_index_and_the_derivations_before_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_written_as_a_bare_name_reads_no_field_of_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_is_read_before_any_number_exists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_of_type_float_is_no_whole_number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_whose_type_is_decided_per_value_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_exposes_only_its_derivations_and_not_its_index`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_counted_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_missing_count_of_a_counted_relation_is_reported_with_its_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_negative_count_of_a_counted_relation_is_reported_with_its_record`.
 
 ```yaml
@@ -2065,7 +2065,10 @@ of these gives, a field without one column type, and a missing or empty
 `derivations` fail as they do for a pair relation.
 
 No fixed limit bounds the relation's rows, as none bounds any built table's
-([LIMIT-2](limits.md#limit-2)), so no count is too large. A bound a study
+([LIMIT-2](limits.md#limit-2)). Each count is reserved before any record it
+counts is built, so a count no memory holds refuses the run as
+`engine_rejected` at `repeat.count`, with `step` `execute` and `code`
+`allocation`, and builds none of its records. A bound a study
 knows, such as the longest exposure record its protocol allows, is a `range`
 or an `assert` on the column a row template copies the number into
 ([CHECK-7](verification.md#check-7), [CHECK-12](verification.md#check-12)).

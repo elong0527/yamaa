@@ -82,9 +82,7 @@ pub enum Division {
 /// between runs of fields are cut as the scan reads the records (#3830).
 ///
 /// A run that divides every step encodes its output a partition at a time
-/// too (D264), unless `whole_output` encodes it whole. A run whose driver
-/// input is SAS or ODM, which is decoded whole, sets it
-/// (`specification_run`).
+/// too (D264), with the bytes of the output encoded whole.
 ///
 /// Up to `threads` partitions derive at once (#4193), each on a thread of
 /// its own, while the calling thread decodes the next partitions, polls the
@@ -96,7 +94,6 @@ pub struct Partitioning {
     pub rows: std::num::NonZeroUsize,
     pub leading_keys: Option<std::num::NonZeroUsize>,
     pub whole_table_fallback: bool,
-    pub whole_output: bool,
     pub threads: std::num::NonZeroUsize,
 }
 
@@ -552,7 +549,11 @@ pub enum ExecutionError<E> {
     },
     SchemaMismatch,
     Capacity,
-    Allocation,
+    /// Memory refused a reservation, owned by `spec_paths` when a path owns
+    /// it, such as a counted relation's count.
+    Allocation {
+        spec_paths: Vec<String>,
+    },
     Grouping(GroupingError<E>),
     Cell {
         path: String,

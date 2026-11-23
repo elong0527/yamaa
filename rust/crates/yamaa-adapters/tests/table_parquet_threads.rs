@@ -72,8 +72,7 @@ fn value(kind: ColumnType, row: usize) -> ValueRef<'static> {
 }
 
 /// A table of `rows` rows of [`COLUMNS`] whose cells are computed from their
-/// rows, so that it can pass several row groups, or the row limit, without
-/// holding them. Each cell `refused` names is refused with its coordinates,
+/// rows, so that it can pass several row groups without holding them. Each cell `refused` names is refused with its coordinates,
 /// as an error that cannot leave the thread that raised it (`Rc` is not
 /// `Send`). It lends itself to threads.
 struct Computed {

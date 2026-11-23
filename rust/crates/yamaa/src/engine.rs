@@ -263,7 +263,6 @@ impl Partitions {
             leading_keys: self.leading_keys,
             whole_table_fallback: self.whole_table_fallback,
             // The run sets it for a SAS or ODM driver input (D264).
-            whole_output: false,
             threads: self.threads,
         }
     }

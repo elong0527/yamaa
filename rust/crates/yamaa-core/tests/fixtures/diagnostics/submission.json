@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of submission composition (SUB, DEFINE, OUTPUT-1, OUTPUT-2), of admitting held rows as a composed dataset's published rows (XPT-7, XPT-8, JSON-3, JSON-4, CT-11), of the findings the Define-XML and XPT encoders make (DEFINE-3, DEFINE-16, DEFINE-24, DEFINE-25, JSON-2, XPT-10), and of preparing a specification that restates a mandatory column (CHECK-5, SUB-11). A study is the `study` document, a 1.0 project whose `sdtm` section lists one specification of the SDTM model (D4, D16, D25), or `value_level`, the same with a second column its value-level entries select on, or `cited_terminology`, the same with two columns bound to the codelists FIRST and SECOND of three codelist sources, the first and third citing one release of the CDISC/NCI SDTM terminology and the second a later one, or `analysis`, a 1.0 project whose `adam` section lists two specifications of the ADaM model, declares one supporting document and writes one analysis results source inline, whose one result reads both datasets (DEFINE-31, DEFINE-32), after the case's edits. The cases whose table compared only part of each issue compare those fields, or those keys of its context; the cases whose table found its issues by cause among several, or left a defect of their input without a row, say `among`.",
+  "about": "The refusals of submission composition (SUB, DEFINE, OUTPUT-1, OUTPUT-2), of admitting held rows as a composed dataset's published rows (XPT-4, XPT-7, XPT-8, JSON-3, JSON-4, CT-11), of the findings the Define-XML and XPT encoders make (DEFINE-3, DEFINE-16, DEFINE-24, DEFINE-25, JSON-2, XPT-10), and of preparing a specification that restates a mandatory column (CHECK-5, SUB-11). A study is the `study` document, a 1.0 project whose `sdtm` section lists one specification of the SDTM model (D4, D16, D25), or `value_level`, the same with a second column its value-level entries select on, or `cited_terminology`, the same with two columns bound to the codelists FIRST and SECOND of three codelist sources, the first and third citing one release of the CDISC/NCI SDTM terminology and the second a later one, or `analysis`, a 1.0 project whose `adam` section lists two specifications of the ADaM model, declares one supporting document and writes one analysis results source inline, whose one result reads both datasets (DEFINE-31, DEFINE-32), after the case's edits. The cases whose table compared only part of each issue compare those fields, or those keys of its context; the cases whose table found its issues by cause among several, or left a defect of their input without a row, say `among`.",
   "documents": {
     "study": {
       "project": {
@@ -1366,6 +1366,18 @@
         "row": 1
       },
       "issues": [{"phase": "output", "condition": "xpt_last_row_blank", "rule": "XPT-10", "spec_paths": ["datasets.D0.artifact"], "context": {"artifact": "d0.csv", "dataset": "D0", "detail": "the last row encodes to blanks only", "row": 1}}]
+    },
+    {
+      "case": "xpt_admits_the_9999_variables_the_namestr_header_counts",
+      "operation": "xpt_variables",
+      "input": {"path": "datasets.D0.transport", "variables": 9999},
+      "issues": []
+    },
+    {
+      "case": "xpt_refuses_more_variables_than_the_namestr_header_counts",
+      "operation": "xpt_variables",
+      "input": {"path": "datasets.D0.transport", "variables": 10000},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["datasets.D0.transport"], "context": {"code": "output_projection", "detail": "NAMESTR header count out of range", "step": "define"}}]
     },
     {
       "case": "xpt_refuses_a_file_above_five_billion_bytes",

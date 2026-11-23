@@ -224,8 +224,7 @@ pub(super) fn whole(bytes: &[u8], odm: bool, decoders: Decoders) -> Result<Decod
 
 /// The table schema the held file decodes to with `decoders`, from its
 /// footer alone (#3792): the fields [`read`], or with `odm` [`read_odm`],
-/// gives the table when it finds nothing. No page is decoded, and each row
-/// group, not the whole file, is admitted within the row and cell limits.
+/// gives the table when it finds nothing. No page is decoded.
 pub(super) fn table_schema(
     bytes: &[u8],
     odm: bool,
@@ -482,10 +481,8 @@ impl Runs {
     /// the whole read checks before any page is checked here; each
     /// partition's pages are checked by [`Self::admit`], and what the whole
     /// read checks after the pages is held for [`Self::layout`], since a
-    /// page's finding comes first. Each partition, not the whole file, is
-    /// admitted within the row and cell limits. The checks the whole read
-    /// makes after every partition's columns are decoded wait for
-    /// [`Self::deferred`].
+    /// page's finding comes first. The checks the whole read makes after
+    /// every partition's columns are decoded wait for [`Self::deferred`].
     pub(super) fn open(
         bytes: &[u8],
         odm: bool,
@@ -564,8 +561,8 @@ impl Runs {
     }
 
     /// What the whole read checks once every page is admitted: the Arrow
-    /// schema, the row and cell limits, and the pages no presented header
-    /// shares, or the first of their findings.
+    /// schema and the pages no presented header shares, or the first of
+    /// their findings.
     pub(super) fn layout(&self) -> Result<(), Error> {
         self.layout.as_ref().map(|_| ()).map_err(Error::clone)
     }

@@ -100,7 +100,12 @@ fn before_filter<E>(plan: &ResolvedPlan, binding: BindingId, mut error: Fail<E>)
 /// A refused reservation fails the run as `ExecutionError::Allocation`, as
 /// today's executor's reservations do, instead of aborting the process.
 fn reserved<T, E>(reservation: Result<T, std::collections::TryReserveError>) -> Result<T, Fail<E>> {
-    reservation.map_err(|_| Box::new(ExecutionError::Allocation))
+    reservation.map_err(|_| allocation(Vec::new()))
+}
+
+/// The run's failure when memory refuses a reservation owned by `spec_paths`.
+fn allocation<E>(spec_paths: Vec<String>) -> Fail<E> {
+    Box::new(ExecutionError::Allocation { spec_paths })
 }
 
 /// `len` copies of `value`, reserved before they are written.

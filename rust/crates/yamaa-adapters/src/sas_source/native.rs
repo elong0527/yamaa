@@ -709,7 +709,7 @@ mod tests {
         // The independent fractional fixture declares one variable in its
         // NAMESTR header (bytes 613..618). A zero count used to reach an empty
         // allocation and fail as an internal error (found by fuzzing, #2928),
-        // and a negative count read as a column limit.
+        // and a negative count was refused as too many columns.
         let fixture = include_bytes!("../../tests/fixtures/sas/fractional.xpt");
         let source = source();
         assert!(parse(fixture, &source).is_ok());

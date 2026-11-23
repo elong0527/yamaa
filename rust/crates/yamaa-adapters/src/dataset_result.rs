@@ -10,6 +10,7 @@ use yamaa_core::reduction::ReductionError;
 use yamaa_core::value::Value;
 use yamaa_core::{
     dataset::{self, CheckRecord, ExecutionError, RowIdentity},
+    table_grouping::GroupingError,
     table_reduction::TableReductionError,
 };
 /// Typed result and boundary failures are not language diagnostics.
@@ -181,10 +182,14 @@ fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
             required: None,
             spec_paths: Vec::new(),
         }),
-        ExecutionError::Reduction {
-            error: TableReductionError::Limit(error),
-            ..
-        } => limit(error.resource, error.limit, error.actual, Vec::new()),
+        ExecutionError::Allocation { spec_paths } => condition(
+            yamaa_core::application_issue::allocation(spec_paths.clone()),
+            None,
+        ),
+        ExecutionError::Grouping(GroupingError::Allocation)
+        | ExecutionError::OutputGrouping(GroupingError::Allocation) => {
+            condition(yamaa_core::application_issue::allocation(Vec::new()), None)
+        }
         ExecutionError::KeyFailures(_) | ExecutionError::VerificationFailures(_) => {
             Outcome::Failure
         }

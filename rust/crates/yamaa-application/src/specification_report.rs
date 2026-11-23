@@ -1065,7 +1065,7 @@ pub(crate) fn output_diagnostics(
 /// Encode the projected output under the specification's output `profile`,
 /// with its CSV display `decimals` and `missing` text, one partition of the output at a time
 /// (D264): its bytes, and where each partition's bytes end, the last at
-/// their length. An output admitted whole is one partition. Each codec
+/// their length. The output of a run not divided is one partition. Each codec
 /// bounds its allocation as it encodes; the caller bounds the bytes it
 /// returns. Parquet encodes up to `threads` row groups at once (#4220); the
 /// CSV writer writes on the calling thread.

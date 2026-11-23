@@ -20,7 +20,7 @@ use super::donor::{self, Built};
 use super::frame::{Frame, Identity, NO_TEMPLATE};
 use super::index::{self, Index};
 use super::relations;
-use super::{reserved, Cx, Fail, Run, Table};
+use super::{allocation, reserved, Cx, Fail, Run, Table};
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{RegionId, RelationId};
 use crate::dataset::{PairCount, PairJoin, PairRecords, PairSide, PairValue};
@@ -309,9 +309,12 @@ fn counted_records<E>(pairing: &Pairing<'_, E>, count: &PairCount) -> Result<Fra
             ValueRef::Missing => return Err(refused(None)),
             _ => return Err(Box::new(ExecutionError::SchemaMismatch)),
         };
-        // A count no row total holds is refused as memory refuses it.
+        // A count no row total holds is refused as memory refuses it, at
+        // the count that asked for it.
         let added = usize::try_from(records).unwrap_or(usize::MAX);
-        reserved(joined.try_reserve(added, added))?;
+        joined
+            .try_reserve(added, added)
+            .map_err(|_| allocation(vec![count.path.clone()]))?;
         for number in 1..=records {
             let record = pairing.push(&mut joined, left_row)?;
             joined.complete(record, left_width, ValueRef::Int(number));

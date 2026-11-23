@@ -19,6 +19,24 @@ use std::collections::BTreeMap;
 pub const TEXT_BYTES: usize = 200;
 /// `2^53`: the largest integer magnitude that converts exactly (XPT-8).
 pub const EXACT_INTEGER: i64 = 1 << 53;
+/// The most variables a transport file's NAMESTR header counts, in four
+/// digits (XPT-4).
+pub const XPT_VARIABLES: usize = 9_999;
+
+/// Refuse a transport file at `path` of `variables` variables, more than
+/// the NAMESTR header counts (XPT-4). Admission asks before any cell is
+/// read, and the writer before any byte is written.
+pub fn xpt_variables(path: &str, variables: usize) -> Result<(), Finding> {
+    if variables > XPT_VARIABLES {
+        return Err(Finding::fault(
+            path,
+            crate::application_issue::Step::Define,
+            crate::application_issue::Fault::OutputProjection,
+        )
+        .with_detail("NAMESTR header count out of range"));
+    }
+    Ok(())
+}
 
 fn artifact_mismatch(dataset: &Dataset, detail: &str) -> Finding {
     let mut finding = Finding::cause(
@@ -241,11 +259,17 @@ fn before_sas_dates(value: ValueRef<'_>) -> bool {
 }
 
 /// Every read-side admission before any transport length is measured: the
-/// producer contract, bound codelists, the zero-row rule and the
-/// values the requested transport cannot carry.
+/// variables an XPT file counts, the producer contract, bound codelists,
+/// the zero-row rule and the values the requested transport cannot carry.
 pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Result<(), Finding> {
     let transport = study.transport();
     let xpt = transport == Some(Transport::Xpt);
+    if xpt {
+        xpt_variables(
+            &format!("datasets.{}.transport", dataset.id),
+            dataset.columns.len(),
+        )?;
+    }
     validate_artifact(study, dataset, table)?;
     for row in 0..table.row_count() {
         for column in 0..dataset.columns.len() {

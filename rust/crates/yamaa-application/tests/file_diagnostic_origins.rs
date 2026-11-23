@@ -612,8 +612,9 @@ mod file {
             }
         }
 
-        /// Seam: specifications generated at the key and column limits, and the
-        /// project service's build through a host-port double.
+        /// Seam: specifications generated at the key limit and past 1,024 row
+        /// derivations, and the project service's build through a host-port
+        /// double.
         #[test]
         fn row_shape_boundaries_are_per_template_and_preserve_authored_preflight_precedence() {
             use yamaa_adapters::json;

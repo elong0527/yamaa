@@ -169,9 +169,8 @@ fn an_output_beyond_the_row_limit_saves_a_partition_at_a_time() {
 
 /// Two row templates over a SAS driver input of 5,000,001 records make an
 /// output of 10,000,002 rows, past the former 10,000,000-row limit (#4773).
-/// A SAS or ODM input is read whole, and its output encoded whole (D264), so
-/// the partitioned run builds the whole-table run's output: 10,000,002 rows
-/// and no issue. The input is a SAS Transport file the engine's transport
+/// A SAS or ODM input is read whole, so the partitioned run builds the
+/// whole-table run's output: 10,000,002 rows and no issue. The input is a SAS Transport file the engine's transport
 /// writer writes. The input and the two runs take most of a minute
 /// unoptimized, so the test runs in the optimized `release-test` profile, as
 /// the native lane runs every test, and no other test beyond the former row

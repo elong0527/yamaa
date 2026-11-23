@@ -301,7 +301,9 @@ pub(super) fn str_template<E>(
                 crate::text_template::MaterializeError::Limit(limit) => {
                     ExecutionError::text(limit, operation.path())
                 }
-                crate::text_template::MaterializeError::Allocation => ExecutionError::Allocation,
+                crate::text_template::MaterializeError::Allocation => ExecutionError::Allocation {
+                    spec_paths: vec![operation.path().into()],
+                },
             })
         })?;
         rendered.push(ValueRef::Str(&value));
@@ -374,7 +376,9 @@ pub(super) fn str_replace<E>(
                 let text = operation.render(subject, &spans).map_err(|error| {
                     Box::new(match error {
                         RenderError::Limit(limit) => ExecutionError::text(limit, operation.path()),
-                        RenderError::Allocation => ExecutionError::Allocation,
+                        RenderError::Allocation => ExecutionError::Allocation {
+                            spec_paths: vec![operation.path().into()],
+                        },
                     })
                 })?;
                 values.push(ValueRef::Str(&text));
