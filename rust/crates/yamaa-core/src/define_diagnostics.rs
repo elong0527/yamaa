@@ -10,9 +10,12 @@ use crate::{
 };
 
 /// Clock acquisition stays native. The held explicit text has the same portable
-/// whole-second civil grammar as a generated Define creation attribute.
+/// whole-second civil grammar as a generated Define creation attribute, which
+/// a trailing `Z`, the ISO 8601 UTC designator, may mark as UTC; the text is
+/// held as written, designator included (DEFINE-3).
 pub fn created_text(written: &str) -> Result<&str, Finding> {
-    if written.len() == 19 && written.parse::<crate::temporal::DateTime>().is_ok() {
+    let civil = written.strip_suffix('Z').unwrap_or(written);
+    if civil.len() == 19 && civil.parse::<crate::temporal::DateTime>().is_ok() {
         Ok(written)
     } else {
         Err(creation_refusal(

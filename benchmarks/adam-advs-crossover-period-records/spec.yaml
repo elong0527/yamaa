@@ -7,8 +7,9 @@ input:
   VS: {path: input/vs.csv, types: {VSSEQ: int, VSSTRESN: float}}
   ADSL:
     path: input/adsl.csv
-    types: {AP01SDT: date, AP01SDTM: datetime, AP02SDT: date,
-            AP02SDTM: datetime}
+    types: {AP01SDT: date, AP01SDTM: datetime, AP01EDT: date,
+            AP01EDTM: datetime, AP02SDT: date, AP02SDTM: datetime,
+            AP02EDT: date, AP02EDTM: datetime}
     key: [STUDYID, USUBJID]
 base: VS
 
@@ -60,26 +61,38 @@ columns:
         - when: "str_contains(VS.VSDTC, 'T')"
           then: VS.VSDTC
 
-  # Each period runs from its start up to, but not including, the next
-  # period's start; the last period a subject started has no end. Testing
-  # the later period first makes every start inclusive and every next start
-  # exclusive. A record with a time is compared with the start datetimes,
-  # a date-only record with the start dates. A comparison with a missing
-  # start is unknown, so a subject who never started period 2 stays in
-  # period 1, and a record with no date, or before the first start, gets no
-  # period.
+  # A record is in a period when it lies within the period's start and
+  # end, both included. Each limit is compared by time when both the
+  # record and that limit have one, and by date otherwise. Records between
+  # periods, before the first and after the last are in no period. A
+  # comparison with a missing date is unknown, so a record with no date,
+  # or a period with no start or end, gives no period. Testing the later
+  # period first places a date-only record on a day that ends one period
+  # and starts the next in the later one.
   - name: APERIOD
     type: int
     label: Period
     derivation:
       case:
         - when: >-
-            ADTM >= ADSL.AP02SDTM
-            OR (ADTM IS NULL AND ADT >= ADSL.AP02SDT)
+            ((ADTM IS NOT NULL AND ADSL.AP02SDTM IS NOT NULL
+              AND ADTM >= ADSL.AP02SDTM)
+             OR ((ADTM IS NULL OR ADSL.AP02SDTM IS NULL)
+              AND ADT >= ADSL.AP02SDT))
+            AND ((ADTM IS NOT NULL AND ADSL.AP02EDTM IS NOT NULL
+              AND ADTM <= ADSL.AP02EDTM)
+             OR ((ADTM IS NULL OR ADSL.AP02EDTM IS NULL)
+              AND ADT <= ADSL.AP02EDT))
           then: 2
         - when: >-
-            ADTM >= ADSL.AP01SDTM
-            OR (ADTM IS NULL AND ADT >= ADSL.AP01SDT)
+            ((ADTM IS NOT NULL AND ADSL.AP01SDTM IS NOT NULL
+              AND ADTM >= ADSL.AP01SDTM)
+             OR ((ADTM IS NULL OR ADSL.AP01SDTM IS NULL)
+              AND ADT >= ADSL.AP01SDT))
+            AND ((ADTM IS NOT NULL AND ADSL.AP01EDTM IS NOT NULL
+              AND ADTM <= ADSL.AP01EDTM)
+             OR ((ADTM IS NULL OR ADSL.AP01EDTM IS NULL)
+              AND ADT <= ADSL.AP01EDT))
           then: 1
     verifications:
       - allowed_values:
@@ -101,8 +114,8 @@ columns:
 
 verifications:
   - row_count:
-      min: 8
-      max: 8
+      min: 12
+      max: 12
   - all_or_none:
       id: period-and-treatment-together
       columns: [APERIOD, TRTA]

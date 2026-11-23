@@ -72,8 +72,8 @@ mod diagnostics {
             let finding = yamaa_core::application_issue::resource_rejected(
                 Step::Execute,
                 Fault::ExecutionLimit,
-                "table_cells",
-                640_000_000,
+                "text_bytes",
+                1_048_576,
                 None,
                 vec!["columns".into()],
             );
@@ -82,8 +82,8 @@ mod diagnostics {
                 [
                     ("step".into(), JsonValue::String("execute".into())),
                     ("code".into(), JsonValue::String("execution_limit".into())),
-                    ("resource".into(), JsonValue::String("table_cells".into())),
-                    ("limit".into(), JsonValue::from(640_000_000)),
+                    ("resource".into(), JsonValue::String("text_bytes".into())),
+                    ("limit".into(), JsonValue::from(1_048_576)),
                 ]
                 .into()
             );
@@ -205,7 +205,6 @@ mod diagnostics {
                     "source_limit",
                     "source_ordinal_boundary",
                     "staging_collision",
-                    "table_limit",
                     "target_changed",
                     "transport",
                     "validation_policy",

@@ -178,6 +178,10 @@ EXPECTED = {
     "new.spec.submission.comment.oid": [
         Field("submission_comment_class", "oid", "comment_oid", kind="identifier")
     ],
+    # #4768: a section may name the source system its documents carry.
+    "new.project.source_system": [
+        Field("submission_section_class", "source_system", "str", kind="value")
+    ],
     # D4: the header replaces schema_version in every file type.
     "spec.root_class.schema_version": [Absent("root_class", "schema_version")],
     "project.project_class.schema_version": [Absent("project_class", "schema_version")],
@@ -294,6 +298,9 @@ EXPECTED = {
     "new.project.transport=dataset_ndjson": [
         Values("submission_section_class", "transport", ("dataset_ndjson",))
     ],
+    # #4769 (D-next on #4064): a section may declare the document's Study
+    # OID (DEFINE-9).
+    "new.project.study_oid": [Field("submission_section_class", "study_oid", "str")],
     # P-VOC-1: roles and a terminology standard's name close to the lists the
     # CDISC vocabulary file holds.
     "new.spec.submission.role=closed": [

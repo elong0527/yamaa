@@ -94,20 +94,10 @@ pub(super) fn bind(
 pub(super) fn prepare_columns(
     item: &ast::Intermediate,
 ) -> Result<Option<Vec<String>>, PrepareError> {
-    item.columns
+    Ok(item
+        .columns
         .as_ref()
-        .map(|columns| {
-            if columns.len() > crate::limits::Limits::COLUMNS {
-                return Err(PrepareError::limit(
-                    "intermediate_columns",
-                    crate::limits::Limits::COLUMNS,
-                    Some(columns.len()),
-                    None,
-                ));
-            }
-            Ok(columns.iter().map(|column| column.name.clone()).collect())
-        })
-        .transpose()
+        .map(|columns| columns.iter().map(|column| column.name.clone()).collect()))
 }
 pub(super) fn bind_columns(
     names: &Option<Vec<String>>,

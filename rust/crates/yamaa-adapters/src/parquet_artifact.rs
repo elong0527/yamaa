@@ -1,10 +1,7 @@
 //! Closed Parquet output profile over an admitted, immutable typed table.
 //! The file writer keeps values, not bytes (D305), and the table geometry.
 //! No filesystem authority, Arrow metadata or numeric rounding.
-use yamaa_core::{
-    limits::Limits,
-    table::{CellError, TableAccess, ValueRef},
-};
+use yamaa_core::table::{CellError, TableAccess, ValueRef};
 #[cfg(feature = "parquet")]
 mod encode;
 
@@ -46,9 +43,8 @@ pub type Partitioned = (Vec<u8>, Vec<usize>);
 /// consecutive ranges that divide the table's rows in order. The writer
 /// holds rows until its row group is full and writes the last group when
 /// the file ends, so the file reads back as the whole-table render does
-/// whatever the partitions (D264, D305). Each partition is
-/// admitted on its own; the end of each partition's bytes is returned with
-/// them, the last at the file's length.
+/// whatever the partitions (D264, D305). The end of each partition's bytes
+/// is returned with them, the last at the file's length.
 ///
 /// Up to the run's `threads` row groups are encoded at once (#4220) when the
 /// table lends itself to threads ([`TableAccess::shared`]); otherwise, and
@@ -102,13 +98,10 @@ impl RecordText {
 }
 
 /// Portable report records use the reference JSON spelling, independently of
-/// Parquet's binary encoding. Dates name complete stored calendar fields. The
-/// table is admitted whole, or each of its partitions of at most `partition`
-/// rows for an output held in partitions (D264).
+/// Parquet's binary encoding. Dates name complete stored calendar fields.
 pub fn records<T: TableAccess>(
     table: &T,
     projection: &[usize],
-    partition: Option<std::num::NonZeroUsize>,
 ) -> Result<Vec<String>, Error<T::Error>> {
     if projection.is_empty()
         || projection
@@ -117,13 +110,6 @@ pub fn records<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
-    Limits::partitioned(table.row_count(), partition, projection.len()).map_err(|error| {
-        Error::Limit {
-            resource: error.resource,
-            limit: error.limit,
-            actual: error.actual,
-        }
-    })?;
     let mut text = RecordText {
         current: String::new(),
     };

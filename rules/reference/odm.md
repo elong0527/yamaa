@@ -117,8 +117,7 @@ ASCII case-insensitively.
 
 **Read limits.** A text node, attribute value, comment or processing
 instruction holds less than 10,000,000 bytes, a name at most 50,000 bytes,
-namespace declarations in scope at most 4,096, and the table at most the
-engine's table rows. An input is read with `read_odm`'s defaults: XML at most
+and namespace declarations in scope at most 4,096. An input is read with `read_odm`'s defaults: XML at most
 268,435,456 bytes and nested at most 64 elements deep.
 
 **`read_odm`.** The source is a caller's own path, captured once through the

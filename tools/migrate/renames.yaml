@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 684
-  changes: 115
+  entries: 686
+  changes: 117
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 69
+    new, decided: 71
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7264,6 +7264,20 @@ entries:
     representation could be named beside it. No 0.5 file declares it, so the converter wrote none.'
   field_kind: value
   convert: {action: none}
+- id: new.project.study_oid
+  file_type: project
+  path: <section>.study_oid
+  today: null
+  kind: new
+  proposed: study_oid
+  decision: decided (D-next, #4769)
+  ref: DEFINE-9
+  reason: 'An addition to the approved table under D27 (#4769). Optional, with no default (I5): omitted, the
+    document''s Study OID is STDY.<study.id> as in 0.5.0; declared, its non-empty text is the Study OID of
+    Define-XML and the studyOID of Dataset-JSON as written, mirroring file_oid, so a received document whose
+    Study OID repeats its FileOID can be written. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.submission.role=closed
   file_type: spec
   path: columns[].submission.role
@@ -7795,6 +7809,20 @@ entries:
   reason: 'An addition to the approved table under D27, with new.project.parent: the inherited values a
     project file removes before its own fields compose, each named by its path as a specification layer
     names one (LAYER-9, PROJECT-16). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.project.source_system
+  file_type: project
+  path: <section>.source_system
+  today: null
+  kind: new
+  proposed: source_system
+  decision: decided (D-next)
+  ref: DEFINE-12
+  reason: 'An addition to the approved table under D27 (#4768): a section may name the source system
+    its Define-XML ODM header and Dataset-JSON metadata carry, beside source_system_version, so a
+    document naming another generator can be reproduced. Omitted, the name is yamaa as before. No 0.5
+    file declares it, so the converter wrote none.'
   field_kind: value
   convert: {action: none}
 - id: new.spec.intermediate_class.key=none

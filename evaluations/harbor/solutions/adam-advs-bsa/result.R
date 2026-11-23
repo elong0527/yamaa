@@ -14,27 +14,25 @@ raw <- read_csv(
 
 # Every collected record stays in place.
 collected <- raw |>
-  transmute(STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE = NA_character_)
+  transmute(STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT)
 
-# The visit's height and weight results; a zero result still counts.
+# Height is collected once per subject, so each subject has one height
+# result, whatever visit collected it; a zero result still counts.
 heights <- raw |>
   filter(PARAMCD %in% "HEIGHT", !is.na(AVAL)) |>
-  group_by(STUDYID, USUBJID, VISIT) |>
-  summarise(HEIGHT_VAL = first(AVAL), .groups = "drop")
+  select(STUDYID, USUBJID, HEIGHT_VAL = AVAL)
+stopifnot(!anyDuplicated(heights[c("STUDYID", "USUBJID")]))
 
-weights <- raw |>
+# One body surface area record for each weight result, at the weight's
+# visit, when the subject has a height result.
+bsa <- raw |>
   filter(PARAMCD %in% "WEIGHT", !is.na(AVAL)) |>
-  group_by(STUDYID, USUBJID, VISIT) |>
-  summarise(WEIGHT_VAL = first(AVAL), .groups = "drop")
-
-# One body surface area record for each visit with both results.
-bsa <- heights |>
-  inner_join(weights, by = c("STUDYID", "USUBJID", "VISIT")) |>
+  inner_join(heights, by = c("STUDYID", "USUBJID")) |>
   transmute(
     STUDYID, USUBJID,
     PARAMCD = "BSA", PARAM = "Body Surface Area (m^2)",
-    AVAL = sqrt(HEIGHT_VAL * WEIGHT_VAL / 3600),
-    VISIT, DTYPE = "CALCULATION"
+    AVAL = sqrt(AVAL * HEIGHT_VAL / 3600),
+    VISIT
   )
 
 advs <- bind_rows(collected, bsa) |>

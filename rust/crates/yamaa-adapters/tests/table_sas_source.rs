@@ -913,17 +913,15 @@ mod table {
             assert_eq!(table.row_count(), 5);
         }
         #[test]
-        fn version_8_count_is_admitted_before_records_are_read() {
+        fn a_version_8_count_past_the_former_row_limit_must_be_met() {
+            // No fixed limit refuses the count (#4773); the file must hold
+            // the records it counts.
             use crate::support::xport::transport;
             let count = format!("{:15}", 10_000_001);
             let bytes = transport(8, &TEXT_FIELDS, &count, &trailing_blanks());
             assert!(matches!(
                 sas_source::parse(&bytes, &declaration("built.xpt")),
-                Err(Error::Limit {
-                    resource: "table_rows",
-                    actual: Some(10_000_001),
-                    ..
-                })
+                Err(Error::Invalid("malformed"))
             ));
         }
         #[test]
@@ -1239,12 +1237,11 @@ mod table {
             refused(file(2, 1, 2, 5, &[false, false, true]));
         }
         #[test]
-        fn the_row_limit_admits_live_records_not_stored_ones() {
+        fn stored_counts_past_the_former_row_limit_reach_their_deletions() {
             // The row-size subheader counts stored records, deleted ones
-            // included, but only the live ones become rows, so SAS-6 admits
-            // those. The files hold no records: a count that passes admission
-            // goes on to fail its unmet deletions, and one that does not is a
-            // table-rows limit that names the live count.
+            // included, and no fixed limit refuses either count (#4773). The
+            // files hold no records, so each count goes on to fail its unmet
+            // deletions.
             use crate::support::sas7bdat::{Dataset, Kind, Layout, Page, META};
             let file = |total: u64, deleted: u64| {
                 let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
@@ -1252,21 +1249,15 @@ mod table {
                 dataset.deleted = deleted;
                 dataset.file(&[Page::new(META, dataset.metadata(), vec![])])
             };
-            // 10,000,100 stored records leave 9,999,900 live ones, under the
-            // limit of 10,000,000 rows.
-            assert!(matches!(
-                read_built(&file(10_000_100, 200)),
-                Err(Error::Invalid("deleted_records"))
-            ));
-            // 10,000,050 live records are over it.
-            assert!(matches!(
-                read_built(&file(10_000_100, 50)),
-                Err(Error::Limit {
-                    resource: "table_rows",
-                    actual: Some(10_000_050),
-                    ..
-                })
-            ));
+            for deleted in [200, 50] {
+                assert!(
+                    matches!(
+                        read_built(&file(10_000_100, deleted)),
+                        Err(Error::Invalid("deleted_records"))
+                    ),
+                    "{deleted} deleted of 10,000,100 stored"
+                );
+            }
         }
         #[test]
         fn stored_record_counts_beyond_32_bits_are_refused() {

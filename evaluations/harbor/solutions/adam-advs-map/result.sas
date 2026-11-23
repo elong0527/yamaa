@@ -9,13 +9,12 @@ data advs;
 run;
 
 proc sql;
-  create table computed as select a.STUDYID,a.USUBJID,'MAP' as PARAMCD,'Mean Arterial Pressure (mmHg)' as PARAM,(a.AVAL+2*b.AVAL)/3 as AVAL,a.VISIT,'CALCULATION' as DTYPE from advs as a inner join advs as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.VISIT=b.VISIT
+  create table computed as select a.STUDYID,a.USUBJID,'MAP' as PARAMCD,'Mean Arterial Pressure (mmHg)' as PARAM,(a.AVAL+2*b.AVAL)/3 as AVAL,a.VISIT from advs as a inner join advs as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.VISIT=b.VISIT
   where a.PARAMCD='SYSBP' and b.PARAMCD='DIABP' and not missing(a.AVAL) and not missing(b.AVAL);
 quit;
-data collected; length DTYPE $11; set advs; run;
-data result; set collected computed; run;
+data result; set advs computed; run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE from result;
+  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT from result;
 quit;
 proc export data=final outfile="/app/output/advs.csv" dbms=csv replace; run;

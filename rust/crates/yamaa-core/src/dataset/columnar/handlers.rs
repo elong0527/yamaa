@@ -150,8 +150,8 @@ impl Handlers {
 impl HandlerMark {
     /// Add the firings `other` counts, one partition's run's to another's
     /// (#3830): each table site's count, then each site the table lacks, in
-    /// the order the runs first fired it. Counts of firings stay far below
-    /// the integer's range, which no input of the row limit reaches.
+    /// the order the runs first fired it. A count saturates at the
+    /// integer's range, which no input that memory holds reaches.
     pub(super) fn add(&mut self, other: &HandlerMark) {
         for (count, added) in self.counts.iter_mut().zip(&other.counts) {
             *count = count.saturating_add(*added);

@@ -217,159 +217,6 @@ mod service {
         }
 
         #[test]
-        fn held_bytes_and_captured_sources_refuse_the_same_non_odm_table_geometry() {
-            struct Geometry {
-                schema: TableSchema,
-                rows: usize,
-            }
-            impl TableAccess for Geometry {
-                type Error = Payload;
-                fn schema(&self) -> &TableSchema {
-                    &self.schema
-                }
-                fn row_count(&self) -> usize {
-                    self.rows
-                }
-                fn cell(
-                    &self,
-                    _row: usize,
-                    _column: usize,
-                ) -> Result<ValueRef<'_>, CellError<Payload>> {
-                    panic!("table admission must precede all cell reads")
-                }
-            }
-            struct GeometryDecoder {
-                rows: usize,
-                columns: usize,
-            }
-            impl decoder::Decoder for GeometryDecoder {
-                crate::support::ports::no_documents!();
-                type Error = Payload;
-                type Table = Geometry;
-                fn continue_after(&self, _error: &Payload) -> bool {
-                    false
-                }
-                fn table(
-                    &mut self,
-                    _source: &SourceDeclaration,
-                    _bytes: &[u8],
-                    interpretation: yamaa_core::specification::SourceInterpretation,
-                    _contract: Option<&yamaa_core::producer_contract::Contract>,
-                ) -> Result<Geometry, Payload> {
-                    assert_ne!(
-                        interpretation,
-                        yamaa_core::specification::SourceInterpretation::Odm
-                    );
-                    Ok(Geometry {
-                        schema: TableSchema::new(
-                            (0..self.columns)
-                                .map(|index| Column {
-                                    name: format!("C{index}"),
-                                    kind: ColumnType::Int,
-                                })
-                                .collect(),
-                        )
-                        .unwrap(),
-                        rows: self.rows,
-                    })
-                }
-            }
-            use yamaa_core::limits::Limits;
-            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
-            for (rows, columns, resource) in [
-                (Limits::TABLE_ROWS + 1, 1, "table_rows"),
-                (3_575_419, 179, "table_cells"),
-                (0, Limits::COLUMNS + 1, "columns"),
-            ] {
-                let expected = Limits::table(rows, columns).unwrap_err();
-                assert_eq!(expected.resource, resource);
-                let mut decoder = GeometryDecoder { rows, columns };
-                let decoded = run::execute_bytes(&prepared, b"held snapshot", &mut decoder);
-                assert!(decoded.table.is_some());
-                assert!(matches!(
-                    decoded.result,
-                    Err(RunError::Boundary { source: 0, error }) if error == expected
-                ));
-
-                let (mut port, _) = fixtures();
-                let mut attempt = CapturedAttempt::new(prepared.source());
-                run::execute_into(
-                    &prepared,
-                    &mut port,
-                    &mut decoder,
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    &mut attempt,
-                    yamaa_core::application_observer::Scope::new(
-                        &yamaa_core::application_observer::Noop,
-                    ),
-                );
-                assert!(attempt.sources[0].read.captured);
-                assert!(attempt.sources[0].table.is_some());
-                assert_eq!(
-                    attempt.sources[0].snapshot.as_deref(),
-                    Some(b"held snapshot".as_slice())
-                );
-                assert!(matches!(
-                    attempt.result,
-                    Err(PortError::Run(RunError::Boundary { source: 0, error }))
-                        if error == expected
-                ));
-            }
-        }
-
-        #[test]
-        fn held_non_odm_bytes_refuse_oversized_tables_before_any_cell_access() {
-            struct Oversized(TableSchema);
-            impl TableAccess for Oversized {
-                type Error = Payload;
-                fn schema(&self) -> &TableSchema {
-                    &self.0
-                }
-                fn row_count(&self) -> usize {
-                    yamaa_core::limits::Limits::TABLE_ROWS + 1
-                }
-                fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Payload>> {
-                    panic!("table geometry must be admitted before reading cells");
-                }
-            }
-            struct OversizedDecoder;
-            impl decoder::Decoder for OversizedDecoder {
-                crate::support::ports::no_documents!();
-                type Error = Payload;
-                type Table = Oversized;
-                fn continue_after(&self, _: &Payload) -> bool {
-                    false
-                }
-                fn table(
-                    &mut self,
-                    _: &SourceDeclaration,
-                    _: &[u8],
-                    _: yamaa_core::specification::SourceInterpretation,
-                    _: Option<&yamaa_core::producer_contract::Contract>,
-                ) -> Result<Oversized, Payload> {
-                    Ok(Oversized(source()))
-                }
-            }
-            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
-            let attempt = run::execute_bytes(&prepared, b"held snapshot", &mut OversizedDecoder);
-            assert!(
-                attempt.table.is_some(),
-                "retain the decoded observation on refusal"
-            );
-            assert!(matches!(
-                attempt.result,
-                Err(RunError::Boundary {
-                    source: 0,
-                    error: yamaa_core::limits::LimitExceeded {
-                        resource: "table_rows",
-                        limit: 10_000_000,
-                        actual: Some(10_000_001),
-                    }
-                })
-            ));
-        }
-
-        #[test]
         fn reuse_repeats_effects_and_reports_actual_cached_captures() {
             let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             let (mut port, mut decoder) = fixtures();
@@ -470,10 +317,7 @@ mod service {
                 Err(PortError::Run(RunError::Bind(_)))
             ));
             assert!(attempt.sources[0].table.is_some());
-            assert_eq!(
-                *decoder.trace.borrow(),
-                ["capture", "decode", "schema", "schema"]
-            );
+            assert_eq!(*decoder.trace.borrow(), ["capture", "decode", "schema"]);
         }
         #[test]
         fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
@@ -732,8 +576,8 @@ mod service {
                     assert_eq!(
                         &port.capture.trace.borrow()[..12],
                         [
-                            "inspect", "inspect", "inspect", "capture", "decode", "schema",
-                            "capture", "decode", "schema", "capture", "decode", "schema"
+                            "inspect", "inspect", "inspect", "capture", "decode", "capture",
+                            "decode", "capture", "decode", "schema", "schema", "schema"
                         ]
                     );
                     assert!(attempt
@@ -893,8 +737,8 @@ mod service {
                     assert_eq!(
                         &port.trace.borrow()[..9],
                         [
-                            "capture", "decode", "schema", "capture", "decode", "schema",
-                            "capture", "decode", "schema"
+                            "capture", "decode", "capture", "decode", "capture", "decode",
+                            "schema", "schema", "schema"
                         ]
                     );
                 }

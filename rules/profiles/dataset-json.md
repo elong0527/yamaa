@@ -190,7 +190,7 @@ source is absent is omitted and is never written as `null`: within this file
 `null` is the missing value of a row. A file always has rows
 ([JSON-3](#json-3)), and `dbLastModifiedDateTime` is never written.
 
-Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_source_system_names_the_generator_in_both_documents`.
 
 | Member | Source |
 |---|---|
@@ -198,8 +198,8 @@ Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `python/tests/i
 | `datasetJSONVersion` | fixed `1.1.0` |
 | `fileOID` | the selected FileOID, a period, and the specification domain |
 | `originator` | `originator`, when declared |
-| `sourceSystem` | `yamaa` and the selected source-system version |
-| `studyOID` | the study's generated identifier |
+| `sourceSystem` | the selected source-system name and version |
+| `studyOID` | the document's `Study` OID, per [DEFINE-9](define-xml.md#define-9) |
 | `metaDataVersionOID` | the metadata version's generated identifier |
 | `metaDataRef` | the generated document, per [JSON-8](#json-8) |
 | `itemGroupOID` | the dataset's generated identifier |
@@ -210,10 +210,11 @@ Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `python/tests/i
 | `rows` | the artifact's rows, in artifact order |
 
 `sourceSystem` is one object carrying `name` and `version`, in that order. Its
-name is `yamaa`; its version is the selected section's explicit
+name is the selected section's explicit `source_system`, or `yamaa` when
+omitted; its version is the selected section's explicit
 `source_system_version`, or the actual installed yamaa version when omitted,
-under [DEFINE-12](define-xml.md#define-12). The same selected version is used
-in Define-XML and Dataset-JSON.
+under [DEFINE-12](define-xml.md#define-12). The same selected name and version
+are used in Define-XML and Dataset-JSON.
 
 A column's `targetDataType` is written only as [JSON-10](#json-10) states;
 every value is written in the spelling its own type fixes.

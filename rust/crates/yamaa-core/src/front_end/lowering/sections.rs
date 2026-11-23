@@ -44,9 +44,11 @@ pub enum FieldName {
     Context,
     XmlLang,
     FileOid,
+    StudyOid,
     MetadataVersion,
     Originator,
     Stylesheet,
+    SourceSystem,
     SourceSystemVersion,
     Kind,
     Link,
@@ -74,9 +76,11 @@ impl FieldName {
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
             Self::FileOid => "file_oid",
+            Self::StudyOid => "study_oid",
             Self::MetadataVersion => "metadata_version",
             Self::Originator => "originator",
             Self::Stylesheet => "stylesheet",
+            Self::SourceSystem => "source_system",
             Self::SourceSystemVersion => "source_system_version",
             Self::Kind => "kind",
             Self::Link => "link",
@@ -214,9 +218,11 @@ const SECTION: &[FieldName] = &[
     FieldName::Context,
     FieldName::XmlLang,
     FieldName::FileOid,
+    FieldName::StudyOid,
     FieldName::MetadataVersion,
     FieldName::Originator,
     FieldName::Stylesheet,
+    FieldName::SourceSystem,
     FieldName::SourceSystemVersion,
 ];
 fn family(field: &str) -> Option<(Submission, FieldName)> {
@@ -691,6 +697,7 @@ impl<'d> Parser<'d, '_, '_> {
             meta,
         );
         let file_oid = self.optional_text(at, FieldName::FileOid, path, TextRule::NonEmpty);
+        let study_oid = self.optional_text(at, FieldName::StudyOid, path, TextRule::NonEmpty);
         let metadata_origin = self.get(node, FieldName::MetadataVersion);
         let metadata_version = if metadata_origin.node.is_some() {
             self.metadata(
@@ -703,6 +710,8 @@ impl<'d> Parser<'d, '_, '_> {
         };
         let originator = self.optional_text(at, FieldName::Originator, path, TextRule::NonEmpty);
         let stylesheet = self.optional_text(at, FieldName::Stylesheet, path, TextRule::Href);
+        let source_system =
+            self.optional_text(at, FieldName::SourceSystem, path, TextRule::NonEmpty);
         let source_system_version =
             self.optional_text(at, FieldName::SourceSystemVersion, path, TextRule::NonEmpty);
         Some(Section {
@@ -716,9 +725,11 @@ impl<'d> Parser<'d, '_, '_> {
             context: context?,
             xml_lang: xml_lang?,
             file_oid,
+            study_oid,
             metadata_version,
             originator,
             stylesheet,
+            source_system,
             source_system_version,
             meta,
         })

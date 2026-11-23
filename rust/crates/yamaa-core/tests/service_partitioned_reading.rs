@@ -1,16 +1,14 @@
 //! Service contracts: how a partitioned run reads its driver input (#3792).
-//! A specification whose plan needs no whole table reads it by partition and
-//! admits each partition on its own, after reading and admitting every other
-//! input whole (#4191); any other run reads every input whole and admits it
-//! whole, exactly as an unpartitioned run does.
+//! A specification whose plan needs no whole table reads it by partition,
+//! after reading every other input whole (#4191); any other run reads every
+//! input whole, exactly as an unpartitioned run does.
 //!
-//! The seam is the run's choice of read and its admission of inputs beyond
-//! the row limit, which no fixture can hold. The inputs are geometry alone:
-//! a table reports its schema and record count and panics on any cell read,
-//! so admission is observed before data. Only the partitions a scan visits
-//! answer a cell, each record's key, which a key-bounded cut reads (#3830).
-//! A run that passes admission is cancelled at its key grain's first key, so
-//! the attempt ends as cancelled rather than with a limit.
+//! The seam is the run's choice of read over inputs of millions of records,
+//! which no fixture can hold. The inputs are geometry alone: a table reports
+//! its schema and record count and panics on any cell read, so the reads are
+//! observed before data. Only the partitions a scan visits answer a cell,
+//! each record's key, which a key-bounded cut reads (#3830). A run that
+//! passes admission is cancelled at its key grain's first key.
 mod service {
     mod partitioned_reading {
         use std::cell::{Cell, RefCell};
@@ -21,7 +19,6 @@ mod service {
             application_observer::{Noop, Scope},
             dataset::{ExecutionError, Partitioning},
             decoder,
-            limits::{LimitExceeded, Limits},
             resolver::{Captured, Failure, Located, Name, Resolver},
             schema::Document,
             specification::{SourceDeclaration, SourceInterpretation},
@@ -349,15 +346,11 @@ mod service {
             }
         }
 
-        /// How an attempt ended: cancelled after admission, or refused at
-        /// an input's limit.
+        /// How an attempt ended: cancelled after admission, refused as
+        /// needing the whole table, or refused by its inputs' decoding.
         #[derive(Debug, PartialEq)]
         enum End {
             Cancelled,
-            Refused {
-                source: usize,
-                error: LimitExceeded,
-            },
             Global {
                 path: String,
             },
@@ -421,9 +414,6 @@ mod service {
                     Err(ExecutionError::PartitionGlobal { path }) => End::Global { path },
                     other => panic!("an attempt that passed admission ended {other:?}"),
                 },
-                Err(PortError::Run(RunError::Boundary { source, error })) => {
-                    End::Refused { source, error }
-                }
                 Err(PortError::Run(RunError::Sources(failures))) => End::Undecoded {
                     sources: failures.into_iter().map(|(source, _)| source).collect(),
                     requested: attempt.sources.len(),
@@ -448,20 +438,12 @@ mod service {
             })
         }
 
-        /// The whole table of `records` records, refused.
-        fn refused(records: usize) -> End {
-            End::Refused {
-                source: 0,
-                error: Limits::table(records, 1).unwrap_err(),
-            }
-        }
-
         /// Each case runs a specification over inputs of 11,000,000 records,
-        /// 1,000,000 beyond the row limit, or 12,000,000 for one whose
-        /// first partition is itself beyond it.
+        /// past the former 10,000,000-row limit (#4773), or 12,000,000 for
+        /// one whose first partition is itself past it.
         #[test]
         fn a_run_reads_by_partition_only_a_driver_input_its_plan_divides() {
-            const RECORDS: usize = Limits::TABLE_ROWS + 1_000_000;
+            const RECORDS: usize = 11_000_000;
             for (inputs, value, records, partitioning, expected, requests, case) in [
                 (
                     &["SRC"][..],
@@ -470,46 +452,45 @@ mod service {
                     partitions(6_000_000, None, false),
                     End::Cancelled,
                     vec!["header", "partitioned", "partition"],
-                    "partitions of 6,000,000 and 5,000,000 records, each admitted, the first decoded",
+                    "partitions of 6,000,000 and 5,000,000 records, the first decoded",
                 ),
                 (
                     &["SRC"],
                     row_wise(),
                     RECORDS,
                     None,
-                    refused(RECORDS),
+                    End::Cancelled,
                     vec!["whole"],
-                    "an unpartitioned run admits the whole input",
+                    "an unpartitioned run reads the whole input",
                 ),
                 (
                     &["SRC"],
                     row_wise(),
                     RECORDS + 1_000_000,
                     partitions(RECORDS, None, false),
-                    End::Refused {
-                        source: 0,
-                        error: Limits::table(RECORDS, 1).unwrap_err(),
-                    },
-                    vec!["header", "partitioned"],
-                    "a partition beyond the limit names its own records",
+                    End::Cancelled,
+                    vec!["header", "partitioned", "partition"],
+                    "a first partition past the former limit is decoded",
                 ),
                 (
                     &["SRC"],
                     windowed(&[]),
                     RECORDS,
                     partitions(6_000_000, None, true),
-                    refused(RECORDS),
+                    End::Cancelled,
                     vec!["header", "whole"],
-                    "the whole-table fallback reads and admits the whole input",
+                    "the whole-table fallback reads the whole input",
                 ),
                 (
                     &["SRC"],
                     windowed(&[]),
                     RECORDS,
                     partitions(6_000_000, None, false),
-                    refused(RECORDS),
+                    End::Global {
+                        path: "columns.VALUE.derivation.row_number".into(),
+                    },
                     vec!["header", "whole"],
-                    "a plan that needs the whole table admits the whole input first",
+                    "a plan that needs the whole table reads the whole input, then is refused",
                 ),
                 (
                     &["SRC"],
@@ -540,7 +521,7 @@ mod service {
         /// requested.
         #[test]
         fn a_driver_input_beside_another_input_reads_by_partition_after_it() {
-            const RECORDS: usize = Limits::TABLE_ROWS + 1_000_000;
+            const RECORDS: usize = 11_000_000;
             let six = partitions(6_000_000, None, false);
             let src = &["SRC", "LOOKUP"][..];
             for (inputs, value, geometry, partitioning, expected, requests, case) in [
@@ -567,19 +548,16 @@ mod service {
                     row_wise(),
                     (RECORDS, RECORDS, None),
                     six,
-                    End::Refused {
-                        source: 1,
-                        error: Limits::table(RECORDS, 1).unwrap_err(),
-                    },
-                    vec!["header", "whole", "header", "partitioned"],
-                    "the other input is admitted whole and refused, the driver by partition",
+                    End::Cancelled,
+                    vec!["header", "whole", "header", "partitioned", "partition"],
+                    "the other input past the former limit whole, the driver by partition",
                 ),
                 (
                     src,
                     windowed(&[]),
                     (RECORDS, 1, None),
                     partitions(6_000_000, None, true),
-                    refused(RECORDS),
+                    End::Cancelled,
                     vec!["header", "whole", "header", "whole"],
                     "a plan that needs the whole table reads its driver whole, after the other",
                 ),
@@ -617,10 +595,10 @@ mod service {
         }
 
         #[test]
-        fn a_pair_relation_refuses_strict_partitions_and_admits_its_input_whole() {
-            // The service's read/admission seam uses geometry, not cells:
-            // a fixture cannot hold an input beyond the row limit. A counted
-            // relation is a pair relation whose right side is generated.
+        fn a_pair_relation_refuses_strict_partitions() {
+            // The service's read/admission seam uses geometry, not cells. A
+            // counted relation is a pair relation whose right side is
+            // generated.
             for (document, relation) in [(paired(), "pair"), (counted(), "counted")] {
                 for leading in [None, Some(1)] {
                     assert_eq!(
@@ -632,14 +610,6 @@ mod service {
                             vec!["header", "whole"]
                         ),
                         "a global {relation} relation under {leading:?} partition keys"
-                    );
-                }
-                let records = Limits::TABLE_ROWS + 1;
-                for fallback in [false, true] {
-                    assert_eq!(
-                        attempt(&document, records, partitions(1, None, fallback)),
-                        (refused(records), vec!["header", "whole"]),
-                        "the whole input limit of a {relation} relation with fallback {fallback}"
                     );
                 }
             }

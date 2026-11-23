@@ -429,7 +429,6 @@ pub fn row_count(facts: &Facts) -> usize {
 /// Admit the complete fact set before allocating any row, then prepare every
 /// row in report order: run, inputs, row templates, handlers, columns, checks.
 pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
-    Limits::table(row_count(facts), COLUMNS.len())?;
     admit(facts)?;
     let artifact = facts.artifact.as_str();
     let mut rows = Vec::new();

@@ -4,11 +4,9 @@
 //! encodes a byte.
 use crate::json::Value as JsonValue;
 use crate::{
-    application_issue::{Fault, Step},
     ast::Transport,
     cdisc_vocabulary::{DataType, DefineContext},
     diagnostic::ConditionCode,
-    limits::Limits,
     project_environment::Submission,
     specification_submission_document as spec,
     submission_composition::{printable_ascii, Dataset, Finding, Study},
@@ -242,17 +240,12 @@ fn before_sas_dates(value: ValueRef<'_>) -> bool {
     }
 }
 
-/// Every read-side admission before any transport length is measured: table
-/// geometry, the producer contract, bound codelists, the zero-row rule and the
+/// Every read-side admission before any transport length is measured: the
+/// producer contract, bound codelists, the zero-row rule and the
 /// values the requested transport cannot carry.
 pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Result<(), Finding> {
-    let path = format!("datasets.{}.transport", dataset.id);
     let transport = study.transport();
     let xpt = transport == Some(Transport::Xpt);
-    Limits::table(table.row_count(), dataset.columns.len()).map_err(|bound| {
-        Finding::limit(&path, Step::Define, Fault::ResourceLimit, bound)
-            .with_detail(bound.to_string())
-    })?;
     validate_artifact(study, dataset, table)?;
     for row in 0..table.row_count() {
         for column in 0..dataset.columns.len() {

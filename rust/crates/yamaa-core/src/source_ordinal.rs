@@ -11,14 +11,6 @@ pub enum Error {
     Collision,
     #[error("source ordinal invalid name")]
     InvalidName,
-    #[error(
-        "source ordinal resource limit: resource={resource:?}, limit={limit:?}, actual={actual:?}"
-    )]
-    ResourceLimit {
-        resource: &'static str,
-        limit: usize,
-        actual: Option<usize>,
-    },
 }
 impl Error {
     pub fn finding<'a>(self, dataset: &'a str, field: &'a str) -> Option<SourceFinding<'a>> {
@@ -40,20 +32,6 @@ impl Ordinal {
         if schema.columns().iter().any(|field| field.name == name) {
             return Err(Error::Collision);
         }
-        let columns = schema
-            .columns()
-            .len()
-            .checked_add(1)
-            .ok_or(Error::ResourceLimit {
-                resource: "columns",
-                limit: crate::limits::Limits::COLUMNS,
-                actual: None,
-            })?;
-        crate::limits::Limits::table(rows, columns).map_err(|error| Error::ResourceLimit {
-            resource: error.resource,
-            limit: error.limit,
-            actual: error.actual,
-        })?;
         let mut columns = schema.columns().to_vec();
         columns.push(Column {
             name: String::from(name),

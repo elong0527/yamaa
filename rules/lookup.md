@@ -2064,13 +2064,10 @@ declared before it, and each exposed field has one column type. A name none
 of these gives, a field without one column type, and a missing or empty
 `derivations` fail as they do for a pair relation.
 
-The table limits bound the relation as they bound every built table
-([LIMIT-2](limits.md#limit-2)). Each record's count is added to the rows
-before that record's records are built, so a count past the limits refuses
-the run as `engine_rejected` ([LIMIT-1](limits.md#limit-1)) without building
-them. No count is otherwise too large: a bound a study knows, such as the
-longest exposure record its protocol allows, is a `range` or an `assert` on
-the column a row template copies the number into
+No fixed limit bounds the relation's rows, as none bounds any built table's
+([LIMIT-2](limits.md#limit-2)), so no count is too large. A bound a study
+knows, such as the longest exposure record its protocol allows, is a `range`
+or an `assert` on the column a row template copies the number into
 ([CHECK-7](verification.md#check-7), [CHECK-12](verification.md#check-12)).
 
 A counted relation matches nothing, selects nothing, ranges over nothing and

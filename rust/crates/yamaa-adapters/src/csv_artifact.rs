@@ -127,12 +127,6 @@ pub fn render_partitions<T: TableAccess>(
     let mut precision = None;
     let mut ends = Vec::with_capacity(partitions.len());
     for rows in partitions {
-        Limits::table(rows.len(), projection.len()).map_err(|error| Error::Limit {
-            resource: error.resource,
-            limit: error.limit,
-            actual: error.actual,
-            decimal_formatting: false,
-        })?;
         if !rows.is_empty() && precision.is_none() {
             precision = Some(if floats {
                 writer.precision(text.decimals)?

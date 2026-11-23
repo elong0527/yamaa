@@ -37,6 +37,9 @@ use super::payload;
 use super::reader::Error;
 use super::{delta, rle, shape};
 
+/// The most records a column reserves room for before it reads them.
+const RESERVED_RECORDS: usize = 1 << 20;
+
 /// The records one read of the column reader asks for.
 const BATCH: usize = 256;
 /// The repetition levels its decoder reads at a time.
@@ -317,9 +320,10 @@ pub(super) fn read(
     let mut result: Vec<_> = leaves.iter().map(|_| Column::Discard).collect();
     let first = groups.start;
     let row_groups = footer.row_groups.get(groups).ok_or(Error::Malformed)?;
-    // Room for the records the window keeps, or the row groups declare,
-    // within the table's bound; a count that does not read is refused
-    // where it is read.
+    // Room for the records the window keeps, or the row groups declare, up
+    // to [`RESERVED_RECORDS`]: a column of more grows as it reads them, so
+    // a declared count no file holds reserves nothing past it. A count that
+    // does not read is refused where it is read.
     let records = match &window {
         Some(window) => window.len(),
         None => row_groups
@@ -327,7 +331,7 @@ pub(super) fn read(
             .filter_map(|group| usize::try_from(group.num_rows).ok())
             .fold(0usize, usize::saturating_add),
     }
-    .min(yamaa_core::limits::Limits::TABLE_ROWS);
+    .min(RESERVED_RECORDS);
     // The first record of the row group being read, among the groups'.
     let mut before = 0usize;
     for (offset, group) in row_groups.iter().enumerate() {

@@ -8,14 +8,15 @@ data advs;
   input STUDYID : $char1024. USUBJID : $char1024. PARAMCD : $char1024. PARAM : $char1024. AVAL VISIT : $char1024.;
 run;
 
+/* Height is collected once per subject, so every weight result joins the
+   subject's one height result, whatever visit collected it. */
 proc sql;
-  create table computed as select a.STUDYID,a.USUBJID,'BSA' as PARAMCD,'Body Surface Area (m^2)' as PARAM,sqrt(a.AVAL*b.AVAL/3600) as AVAL,a.VISIT,'CALCULATION' as DTYPE from advs as a inner join advs as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.VISIT=b.VISIT
+  create table computed as select b.STUDYID,b.USUBJID,'BSA' as PARAMCD,'Body Surface Area (m^2)' as PARAM,sqrt(b.AVAL*a.AVAL/3600) as AVAL,b.VISIT from advs as a inner join advs as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID
   where a.PARAMCD='HEIGHT' and b.PARAMCD='WEIGHT' and not missing(a.AVAL) and not missing(b.AVAL);
 quit;
-data collected; length DTYPE $11; set advs; run;
-data result; set collected computed; run;
+data result; set advs computed; run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE from result;
+  create table final as select STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT from result;
 quit;
 proc export data=final outfile="/app/output/advs.csv" dbms=csv replace; run;

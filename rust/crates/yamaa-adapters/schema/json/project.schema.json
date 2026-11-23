@@ -506,6 +506,13 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "study_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "metadata_version": {
           "$ref": "#/$defs/fragment.metadata_version_class",
           "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
@@ -524,6 +531,13 @@
           "description": "Optional relative stylesheet link (DEFINE-23).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
+        },
+        "source_system": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty XML and JSON source-system name; omission names yamaa (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         },
         "source_system_version": {
           "type": "string",
@@ -1017,6 +1031,13 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "study_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "metadata_version": {
           "$ref": "#/$defs/metadata_version_class",
           "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
@@ -1035,6 +1056,13 @@
           "description": "Optional relative stylesheet link (DEFINE-23).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
+        },
+        "source_system": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty XML and JSON source-system name; omission names yamaa (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         },
         "source_system_version": {
           "type": "string",

@@ -195,6 +195,7 @@ pub struct Study {
     pub(crate) study: ast::Study,
     pub(crate) section: ast::Section,
     pub(crate) file_oid: String,
+    pub(crate) study_oid: String,
     pub(crate) metadata_id: String,
     pub(crate) metadata_name: String,
     pub(crate) metadata_description: Option<String>,
@@ -221,6 +222,11 @@ impl Study {
     pub fn file_oid(&self) -> &str {
         &self.file_oid
     }
+    /// The `Study` OID Define-XML and Dataset-JSON carry: the section's, or
+    /// `STDY.<study.id>` (DEFINE-9).
+    pub fn study_oid(&self) -> &str {
+        &self.study_oid
+    }
     pub fn metadata_id(&self) -> &str {
         &self.metadata_id
     }
@@ -229,6 +235,14 @@ impl Study {
     }
     pub fn metadata_description(&self) -> Option<&str> {
         self.metadata_description.as_deref()
+    }
+    /// The source-system name the documents carry: declared, or `yamaa`
+    /// (DEFINE-12).
+    pub fn source_system(&self) -> &str {
+        self.section
+            .source_system
+            .as_ref()
+            .map_or("yamaa", |name| name.text.as_str())
     }
     /// The source-system version the documents name: declared, or the
     /// installed version (DEFINE-12).
@@ -2577,6 +2591,10 @@ pub fn compose(
             },
             |f| f.text.clone(),
         ),
+        study_oid: section
+            .study_oid
+            .as_ref()
+            .map_or_else(|| format!("STDY.{}", study.id.name), |oid| oid.text.clone()),
         metadata_id,
         metadata_name,
         metadata_description: section
@@ -2649,9 +2667,11 @@ mod tests {
             context: DefineContext::Submission,
             xml_lang: text("en"),
             file_oid: None,
+            study_oid: None,
             metadata_version: None,
             originator: None,
             stylesheet: None,
+            source_system: None,
             source_system_version: None,
             meta: text("").meta,
         };
@@ -2686,7 +2706,11 @@ mod tests {
             ]
             .into()
         );
-        let rows = Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err();
+        let rows = LimitExceeded {
+            resource: "source_bytes",
+            limit: Limits::SOURCE_BYTES,
+            actual: Some(Limits::SOURCE_BYTES + 1),
+        };
         let unsized_output = LimitExceeded {
             resource: "output_bytes",
             limit: Limits::OUTPUT_BYTES,
@@ -2696,7 +2720,7 @@ mod tests {
             (
                 rows,
                 issue::Fault::ResourceLimit,
-                Some(Limits::TABLE_ROWS + 1),
+                Some(Limits::SOURCE_BYTES + 1),
             ),
             (unsized_output, issue::Fault::OutputLimit, None),
         ] {

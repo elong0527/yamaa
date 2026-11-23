@@ -449,14 +449,6 @@ impl Declaration {
 /// Reject intermediate and key counts before compiling their authored
 /// expressions.
 pub(super) fn declaration_admission(spec: &ast::Spec) -> Result<(), PrepareError> {
-    if spec.intermediates.len() > crate::limits::Limits::COLUMNS {
-        return Err(PrepareError::limit(
-            "intermediates",
-            crate::limits::Limits::COLUMNS,
-            Some(spec.intermediates.len()),
-            None,
-        ));
-    }
     for item in &spec.intermediates {
         if let Some(ast::JoinKey::Pairs { pairs, meta }) = &item.key {
             if pairs.len() > crate::limits::Limits::KEYS {

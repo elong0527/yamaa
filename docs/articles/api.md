@@ -409,7 +409,8 @@ same with or without them. The command line prints both under `--verbose`
 
 `check()` reports problems in a specification without reading study data or
 running project code. It does not open the input datasets, so some problems,
-such as a column name that no input has, appear only when you call `run()`.
+such as a column name that no input has, or a key value that is missing or
+repeated ([OUTPUT-3](../../rules/output.md#output-3)), appear only when you call `run()`.
 The pattern of a `str_extract` or `str_replace` is one of them when only the
 data gives its source's type, such as a field of a Parquet, SAS or ODM input
 that `types` does not declare: `run()` then reports either the source's type
@@ -1164,11 +1165,12 @@ newline-delimited form) or ODM XML files (`.xml`). A SAS input declares its
 Dataset-JSON input takes each field's type from its column's `dataType`, so
 `types` only narrows one, as in `{path: input/vs.ndjson, types: {VISITNUM: int}}`. Outputs are
 CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
-`submission()`. Every run divides its input into partitions of whole subjects,
-so a CSV or Parquet input that is a specification's only input may hold more
-than 10,000,000 records when the windows and aggregates group by the first two
-keys, such as `STUDYID` and `USUBJID`
-([LIMIT-3](../../rules/limits.md#limit-3)).
+`submission()`. No input or output has a fixed maximum of rows, columns or
+cells ([LIMIT-2](../../rules/limits.md#limit-2)). Every run divides its input
+into partitions of whole subjects, so a run over a CSV or Parquet input that
+is a specification's only input holds one partition of it at a time when the
+windows and aggregates group by the first two keys, such as `STUDYID` and
+`USUBJID` ([LIMIT-3](../../rules/limits.md#limit-3)).
 
 A run derives up to four of its partitions at once, each on a thread of its
 own, or fewer when the process may use fewer cores. `check()`, `run()` and

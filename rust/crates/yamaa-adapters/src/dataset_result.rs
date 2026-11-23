@@ -10,7 +10,6 @@ use yamaa_core::reduction::ReductionError;
 use yamaa_core::value::Value;
 use yamaa_core::{
     dataset::{self, CheckRecord, ExecutionError, RowIdentity},
-    table_grouping::GroupingError,
     table_reduction::TableReductionError,
 };
 /// Typed result and boundary failures are not language diagnostics.
@@ -90,7 +89,6 @@ pub struct Limit {
     pub limit: Option<usize>,
     pub required: Option<usize>,
     pub spec_paths: Vec<String>,
-    pub source_index: Option<usize>,
 }
 
 fn condition(diagnostic: Diagnostic, identity: Option<&RowIdentity>) -> Outcome {
@@ -107,14 +105,12 @@ fn limit(
     limit: usize,
     required: Option<usize>,
     spec_paths: Vec<String>,
-    source_index: Option<usize>,
 ) -> Outcome {
     Outcome::Limit(Limit {
         resource,
         limit: Some(limit),
         required,
         spec_paths,
-        source_index,
     })
 }
 
@@ -168,29 +164,6 @@ fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
         ExecutionError::MultipleValues { identity, .. } => {
             condition(diagnostics::failure(error)?, identity.as_ref())
         }
-        ExecutionError::Limit {
-            resource,
-            limit: bound,
-            required,
-        } => limit(
-            crate::resource_diagnostics::resource_name(*resource),
-            *bound,
-            *required,
-            Vec::new(),
-            None,
-        ),
-        ExecutionError::SourceLimit {
-            resource,
-            limit: bound,
-            required,
-            source_index,
-        } => limit(
-            crate::resource_diagnostics::resource_name(*resource),
-            *bound,
-            *required,
-            Vec::new(),
-            Some(*source_index),
-        ),
         ExecutionError::ScopedLimit {
             resource,
             limit: bound,
@@ -201,21 +174,17 @@ fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
             *bound,
             *required,
             spec_paths.clone(),
-            None,
         ),
         ExecutionError::Capacity => Outcome::Limit(Limit {
             resource: "shape",
             limit: None,
             required: None,
             spec_paths: Vec::new(),
-            source_index: None,
         }),
-        ExecutionError::Grouping(GroupingError::Limit(error))
-        | ExecutionError::OutputGrouping(GroupingError::Limit(error))
-        | ExecutionError::Reduction {
+        ExecutionError::Reduction {
             error: TableReductionError::Limit(error),
             ..
-        } => limit(error.resource, error.limit, error.actual, Vec::new(), None),
+        } => limit(error.resource, error.limit, error.actual, Vec::new()),
         ExecutionError::KeyFailures(_) | ExecutionError::VerificationFailures(_) => {
             Outcome::Failure
         }

@@ -190,6 +190,38 @@
       "saved": {}
     },
     {
+      "case": "a_creation_time_marked_utc_is_written_through_to_the_document_and_dataset_json",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00Z"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/@CreationDateTime": ["2026-09-11T00:00:00Z"]}},
+        "dm.json": {"select": {"/datasetJSONCreationDateTime": ["\"2026-09-11T00:00:00Z\""]}}
+      }
+    },
+    {
+      "case": "a_creation_time_marked_utc_writes_the_transport_header_without_its_designator",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-xpt",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00Z"
+      },
+      "issues": [],
+      "saved": {
+        "dm.xpt": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.xpt"},
+        "define.xml": {"select": {"/ODM/@CreationDateTime": ["2026-09-11T00:00:00Z"]}}
+      }
+    },
+    {
       "case": "inherited_original_output_supplies_both_json_capture_and_publication_target",
       "operation": "define",
       "input": {
@@ -393,6 +425,23 @@
       }
     },
     {
+      "case": "a_declared_source_system_names_the_generator_in_both_documents",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {"project.yaml": [{"from": "  source_system_version: '1.0'\n", "to": "  source_system: Sponsor Metadata System\n  source_system_version: '4.2.0'\n"}]},
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/@SourceSystem": ["Sponsor Metadata System"], "/ODM/@SourceSystemVersion": ["4.2.0"]}},
+        "dm.json": {"select": {"/sourceSystem": ["{\"name\": \"Sponsor Metadata System\", \"version\": \"4.2.0\"}"]}}
+      }
+    },
+    {
       "case": "a_text_column_without_a_length_publishes_its_longest_value",
       "operation": "define",
       "input": {
@@ -409,6 +458,25 @@
       "saved": {
         "define.xml": {"select": {"/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.SITEID']/@Length": ["6"]}},
         "dm.json": {"select": {"/columns/4/length": ["6"]}}
+      }
+    },
+    {
+      "case": "a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport",
+      "operation": "define",
+      "input": {
+        "files": {
+          "spec.yaml": {"file": "benchmarks/sdtm-dm-metadata/spec.yaml"},
+          "project.yaml": {"file": "benchmarks/sdtm-dm-metadata/project.yaml", "edits": [{"from": "  file_oid: www.example.org/STUDY01/1/Define-XML_2.1\n", "to": "  file_oid: www.example.org/STUDY01/1/Define-XML_2.1\n  study_oid: STUDY01.SDTM-IG.3.4\n"}]},
+          "dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/Study/@OID": ["STUDY01.SDTM-IG.3.4"]}},
+        "dm.json": {"select": {"/studyOID": ["\"STUDY01.SDTM-IG.3.4\""]}}
       }
     },
     {

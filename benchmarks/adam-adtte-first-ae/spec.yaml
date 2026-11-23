@@ -10,6 +10,9 @@ input:
     types:
       AESEQ: int
 base: ADSL
+# Time to first adverse event is measured for treated subjects only: a
+# subject who never started treatment has no record.
+filter: "ADSL.TRTSDT IS NOT NULL"
 
 output:
   path: adtte.csv
@@ -56,7 +59,8 @@ columns:
     label: Adverse Event Date
     derivation: AE_REC.ASTDT
 
-  # The first AE's onset, or the end of study when no AE has an onset date.
+  # The first AE's onset; with no dated AE, the end of study, or the last
+  # date known alive for a subject who has not ended the study.
   - name: RAWDT
     type: date
     label: Selected Date Before Clamping
@@ -64,10 +68,11 @@ columns:
       case:
         - when: "AEDT IS NOT NULL"
           then: AEDT
-        - otherwise: ADSL.EOSDT
+        - when: "ADSL.EOSDT IS NOT NULL"
+          then: ADSL.EOSDT
+        - otherwise: ADSL.LSTALVDT
 
-  # A date before treatment start is moved up to it; with no treatment start
-  # the date is kept as it is.
+  # A date before treatment start is moved up to it.
   - name: ADT
     type: date
     label: Analysis Date
@@ -104,7 +109,9 @@ columns:
       case:
         - when: "AEDT IS NOT NULL"
           then: "'AE'"
-        - otherwise: "'END OF STUDY'"
+        - when: "ADSL.EOSDT IS NOT NULL"
+          then: "'END OF STUDY'"
+        - otherwise: "'LAST KNOWN ALIVE'"
 
   - name: SRCDOM
     type: str
@@ -122,7 +129,9 @@ columns:
       case:
         - when: "AEDT IS NOT NULL"
           then: "'ASTDT'"
-        - otherwise: "'EOSDT'"
+        - when: "ADSL.EOSDT IS NOT NULL"
+          then: "'EOSDT'"
+        - otherwise: "'LSTALVDT'"
 
   - name: SRCSEQ
     type: int
@@ -131,3 +140,10 @@ columns:
       case:
         - when: "AEDT IS NOT NULL"
           then: AE_REC.AESEQ
+
+verifications:
+  # Every treated subject has a time: a censored subject with neither an end
+  # of study nor a last date known alive stops the run.
+  - assert:
+      id: every-record-has-a-time
+      require: "AVAL IS NOT NULL"

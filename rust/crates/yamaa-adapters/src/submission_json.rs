@@ -127,9 +127,9 @@ pub fn document(study: &Study, dataset: &Dataset, define_name: &str) -> DatasetJ
             .originator
             .as_ref()
             .map(|originator| originator.text.clone()),
-        source_name: "yamaa".into(),
+        source_name: study.source_system().into(),
         source_version: study.source_version().into(),
-        study_oid: format!("STDY.{}", study.study().id.name),
+        study_oid: study.study_oid().into(),
         metadata_version_oid: format!("MDV.{}", study.metadata_id()),
         metadata_ref: define_name.into(),
         item_group_oid: format!("IG.{}", dataset.id()),

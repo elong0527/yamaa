@@ -46,7 +46,7 @@ pub fn issues(diagnostics: &[yamaa::Diagnostic]) -> String {
         .join("; ")
 }
 
-/// Held by each test that runs beyond the row limit, so no two of them run
+/// Held by each test that runs beyond the former row limit, so no two of them run
 /// at once: each takes several gigabytes, and libtest runs the tests of this
 /// one binary side by side, which a 7 GB runner cannot hold for two (#3869).
 /// A test that panicked while holding it leaves it poisoned, and the next

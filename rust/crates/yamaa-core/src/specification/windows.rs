@@ -568,43 +568,20 @@ pub(super) fn column_driver_findings(
     Ok(())
 }
 
-/// Admit the window at `e`: its tie-break terms, partitions and order
-/// within their limits, and its filter within the expression compiler's.
+/// Admit the window at `e`: its partitions within the key limit, and its
+/// filter within the expression compiler's.
 pub(super) fn admit(spec: &ast::Spec, e: ExprId) -> Result<(), PrepareError> {
     use crate::limits::Limits;
     let ExprKind::Window(window) = &spec.expr(e).kind else {
         return Err(PrepareError::Internal);
     };
     let path = checks::path(spec, e);
-    let (tie_break, order) = match &window.function {
-        ast::WindowFunction::BaselineFlag { .. } => (
-            window.order_by.len().saturating_sub(1),
-            window.window_order_by.len(),
-        ),
-        _ => (0, window.order_by.len()),
-    };
-    if tie_break > Limits::COLUMNS {
-        return Err(PrepareError::limit(
-            "window_order",
-            Limits::COLUMNS,
-            Some(tie_break),
-            Some(&format!("{path}.tie_break")),
-        ));
-    }
     if window.group_by.len() > Limits::KEYS {
         return Err(PrepareError::limit(
             "window_groups",
             Limits::KEYS,
             Some(window.group_by.len()),
             Some(&format!("{path}.window.group_by")),
-        ));
-    }
-    if order > Limits::COLUMNS {
-        return Err(PrepareError::limit(
-            "window_order",
-            Limits::COLUMNS,
-            Some(order),
-            Some(&format!("{path}.window.order_by")),
         ));
     }
     derivations::predicate_limits(spec, window.filter)

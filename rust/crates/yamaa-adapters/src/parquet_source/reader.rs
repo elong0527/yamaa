@@ -404,9 +404,8 @@ fn odm_schema() -> Result<TableSchema, Error> {
 
 /// What the whole read checks of the held file once every page is
 /// admitted, in its order: the declared records, the Arrow schema, each
-/// partition's records within the row and cell limits (the whole file's,
-/// without `rows`), the columns the table keeps, and the pages no presented
-/// header shares. The profile's findings are held in the layout's shape,
+/// partition's records, the columns the table keeps, and the pages no
+/// presented header shares. The profile's findings are held in the layout's shape,
 /// as they wait until every physical chunk is decoded.
 fn layout(
     bytes: &[u8],
@@ -414,15 +413,13 @@ fn layout(
     footer: &Footer,
     hint: Option<&metadata::Hint>,
     odm_stored: Option<[usize; 11]>,
-    rows: Option<std::num::NonZeroUsize>,
     decoders: Decoders,
 ) -> Result<Layout, Error> {
     let leaves = &footer.schema.leaves;
     let annotated = |column: usize| frame.annotated.contains(&column);
     let row_count = usize::try_from(footer.num_rows).map_err(|_| Error::Malformed)?;
     let arrow = (decoders.arrow)(frame, footer, hint)?;
-    // A whole read admits the rows the file declares; a read by partition
-    // admits each partition's rows, which its row groups hold.
+    // The records of each partition, which its row groups hold.
     let records = frame
         .partitions
         .iter()
@@ -437,14 +434,6 @@ fn layout(
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
-    match rows {
-        None => yamaa_core::limits::Limits::table(row_count, leaves.len())?,
-        Some(_) => {
-            for &records in &records {
-                yamaa_core::limits::Limits::table(records, leaves.len())?;
-            }
-        }
-    }
     let arrow_schema = schema::normalize(&arrow, hint.map(|hint| &hint.schema));
     // Determine retention only. Profile errors remain deferred until every
     // physical chunk has been decoded, including fields outside the profile.
@@ -515,15 +504,7 @@ impl Runs {
             None
         };
         admit_page_counts(&frame, &footer)?;
-        let layout = layout(
-            bytes,
-            &frame,
-            &footer,
-            hint.as_ref(),
-            odm_stored,
-            rows,
-            decoders,
-        );
+        let layout = layout(bytes, &frame, &footer, hint.as_ref(), odm_stored, decoders);
         // The pages of every row group are checked, the last partition's
         // reaching the footer's last row group.
         let mut groups = frame.partitions.clone();

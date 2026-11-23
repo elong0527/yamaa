@@ -10,12 +10,9 @@ use crate::{
     public_table::{PublicColumn, PublicTable},
 };
 use std::{collections::HashMap, io::Read};
-use yamaa_core::{
-    limits::Limits,
-    odm_items::{
-        self, Definition, Document, Error as Refusal, Layout, Limit, ValueRefusal, COLUMNS,
-        SOURCE_ORDINAL,
-    },
+use yamaa_core::odm_items::{
+    self, Definition, Document, Error as Refusal, Layout, Limit, ValueRefusal, COLUMNS,
+    SOURCE_ORDINAL,
 };
 
 const ODM_13: &str = "http://www.cdisc.org/ns/odm/v1.3";
@@ -714,9 +711,6 @@ struct Sink {
 
 impl Sink {
     fn push(&mut self, values: [Option<&str>; SOURCE_ORDINAL], ordinal: i64) -> Result<(), Error> {
-        if self.rows >= Limits::TABLE_ROWS {
-            return Err(Refusal::Limit(Limit::Rows(Limits::TABLE_ROWS)).into());
-        }
         for (column, value) in values.iter().enumerate() {
             let length = value.map_or(0, str::len);
             if length > OFFSET_LIMIT {

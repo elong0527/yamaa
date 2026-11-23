@@ -11,7 +11,7 @@
 #include "../readstat_iconv.h"
 #include "../readstat_convert.h"
 #include "../readstat_malloc.h"
-extern int yamaa_readstat_admit(size_t, size_t);
+extern int yamaa_readstat_admit(uint64_t);
 extern int yamaa_readstat_admit_bytes(uint64_t);
 extern readstat_error_t yamaa_readstat_deleted_records(void);
 extern readstat_error_t yamaa_readstat_refuse_value(int, int, readstat_error_t);
@@ -202,7 +202,7 @@ static readstat_error_t sas7bdat_parse_column_text_subheader(const char *subhead
 }
 
 static readstat_error_t sas7bdat_realloc_col_info(sas7bdat_ctx_t *ctx, size_t count) {
-    if (!yamaa_readstat_admit(0, count))
+    if (!yamaa_readstat_admit((uint64_t)count))
         return READSTAT_ERROR_MALLOC;
     if (ctx->col_info_count < count) {
         size_t old_count = ctx->col_info_count;
@@ -236,7 +236,7 @@ static readstat_error_t sas7bdat_parse_column_size_subheader(const char *subhead
         col_count = sas_read4(&subheader[4], ctx->bswap);
     }
 
-    if (!yamaa_readstat_admit(0, col_count))
+    if (!yamaa_readstat_admit(col_count))
         return READSTAT_ERROR_MALLOC;
     ctx->column_count = col_count;
 
@@ -301,12 +301,10 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
         return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
     /* SAS keeps records deleted in place, counted here among the stored
      * records, until the dataset is rewritten. The reader skips them, so only
-     * the live records become table rows and are admitted as such. */
+     * the live records become table rows. */
     if (deleted_row_count > total_row_count)
         return yamaa_readstat_deleted_records();
     uint64_t live_row_count = total_row_count - deleted_row_count;
-    if (!yamaa_readstat_admit(live_row_count, ctx->column_count))
-        return READSTAT_ERROR_MALLOC;
     /* The reader counts stored and deleted records in 32 bits, and the
      * deleted count is at most the stored one. */
     if (total_row_count > UINT32_MAX)
@@ -842,12 +840,10 @@ cleanup:
 
 static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compressed) {
     readstat_error_t retval = READSTAT_OK;
-    /* Row-size metadata can precede physical column metadata. Check the full
-     * admitted shape and known SAS scalar widths/offsets before allocating a
-     * potentially large compressed observation buffer. Physical gaps remain
-     * source-authoritative; do not infer a packed row size from field widths. */
-    if (!yamaa_readstat_admit(ctx->row_limit, ctx->column_count))
-        return READSTAT_ERROR_MALLOC;
+    /* Row-size metadata can precede physical column metadata. Check known
+     * SAS scalar widths/offsets before allocating a potentially large
+     * compressed observation buffer. Physical gaps remain source-authoritative;
+     * do not infer a packed row size from field widths. */
     /* A column without attributes is a zero-filled slot, which reads as a
      * zero-width character column. Every declared column needs attributes
      * and a name before any is submitted. */

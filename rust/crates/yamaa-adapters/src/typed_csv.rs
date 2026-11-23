@@ -22,15 +22,6 @@ pub(crate) fn convert(
     parsed: csv_source::CsvSource,
     types: PreparedTypes,
 ) -> Result<ColumnTable, Error> {
-    let row_count = parsed.records.len();
-    let column_count = parsed.names.len();
-    yamaa_core::limits::Limits::table(row_count, column_count).map_err(|error| {
-        Error::Table(TableError::Limit {
-            resource: error.resource,
-            limit: error.limit,
-            required: error.actual,
-        })
-    })?;
     let rows = types.convert(parsed).map_err(Error::Typing)?;
     ColumnTable::from_access(&rows).map_err(Error::Table)
 }

@@ -161,6 +161,10 @@ submission_section_class:
         type: str
         min_length: 1
         description: Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).
+    - study_oid:
+        type: str
+        min_length: 1
+        description: Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).
     - metadata_version:
         type: metadata_version_class
         description: Optional metadata-version ID, name and description overrides (DEFINE-3).
@@ -171,6 +175,10 @@ submission_section_class:
     - stylesheet:
         type: relative_href
         description: Optional relative stylesheet link (DEFINE-23).
+    - source_system:
+        type: str
+        min_length: 1
+        description: Optional nonempty XML and JSON source-system name; omission names yamaa (DEFINE-12).
     - source_system_version:
         type: str
         min_length: 1
