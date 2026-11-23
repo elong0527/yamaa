@@ -190,6 +190,38 @@
       "saved": {}
     },
     {
+      "case": "a_creation_time_marked_utc_is_written_through_to_the_document_and_dataset_json",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00Z"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/@CreationDateTime": ["2026-09-11T00:00:00Z"]}},
+        "dm.json": {"select": {"/datasetJSONCreationDateTime": ["\"2026-09-11T00:00:00Z\""]}}
+      }
+    },
+    {
+      "case": "a_creation_time_marked_utc_writes_the_transport_header_without_its_designator",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-xpt",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00Z"
+      },
+      "issues": [],
+      "saved": {
+        "dm.xpt": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.xpt"},
+        "define.xml": {"select": {"/ODM/@CreationDateTime": ["2026-09-11T00:00:00Z"]}}
+      }
+    },
+    {
       "case": "inherited_original_output_supplies_both_json_capture_and_publication_target",
       "operation": "define",
       "input": {

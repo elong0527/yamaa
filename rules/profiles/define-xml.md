@@ -55,18 +55,21 @@ included, and the directory is free.
 ### DEFINE-3. Two generations with the same captured inputs and creation time produce the same bytes
 
 Two generations with the same captured inputs and `created` produce the same
-bytes. An explicit `created` is a whole-second civil datetime; omission selects
-the current UTC time during preparation, and Save retains that time. An omitted
+bytes. An explicit `created` is a whole-second civil datetime, which a trailing
+`Z` may mark as UTC; omission selects the current UTC time during preparation,
+and Save retains that time. An omitted
 `file_oid` is `study.id`, the selected lower-case section key and
 `Define-XML_2.1` (or `Define-XML_2.0` for 2.0.0), joined by dots. An omitted metadata-version ID is
 `study.id.section`, and an omitted name is `study.name section metadata`.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_creation_time_with_a_utc_offset_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_creation_time_marked_utc_is_written_through_to_the_document_and_dataset_json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_creation_time_marked_utc_writes_the_transport_header_without_its_designator`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 
 Explicit overrides retain their admitted text, independently of these
-defaults. An explicit `created` that is not a whole-second civil datetime fails
-with `value_not_permitted`.
+defaults. An explicit `created` that is not a whole-second civil datetime,
+alone or followed by `Z`, fails with `value_not_permitted`, a numeric offset
+included. The document and each Dataset-JSON file write `created` as given, `Z`
+included, and an XPT header, which has no designator, writes its civil time.
 
 <a id="define-4"></a>
 
