@@ -409,7 +409,8 @@ same with or without them. The command line prints both under `--verbose`
 
 `check()` reports problems in a specification without reading study data or
 running project code. It does not open the input datasets, so some problems,
-such as a column name that no input has, appear only when you call `run()`.
+such as a column name that no input has, or a key value that is missing or
+repeated ([OUTPUT-3](../../rules/output.md#output-3)), appear only when you call `run()`.
 The pattern of a `str_extract` or `str_replace` is one of them when only the
 data gives its source's type, such as a field of a Parquet, SAS or ODM input
 that `types` does not declare: `run()` then reports either the source's type
