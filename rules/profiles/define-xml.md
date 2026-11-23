@@ -222,6 +222,15 @@ without `column.submission` fails at that column's `submission`,
 `label` in `detail`; a column that lacks both fails once, for its
 `submission`.
 
+Validated metadata describes every output column, since the run publishes
+each one. That includes a column derived only to identify rows, such as a
+sequence number declared in `keys`: a key is an output column
+([OUTPUT-2](../output.md#output-2)), so the published dataset carries it and
+the document describes it as a submitted variable, with its own `label` and
+`column.submission`. Only reproduced metadata leaves an output column out of
+the document, to record a received document that omits it
+([DEFINE-30](#define-30)).
+
 The specification's `output.columns` and `keys` are validated under
 [OUTPUT-1](../output.md#output-1) and [OUTPUT-2](../output.md#output-2).
 A composed submission reports those findings at the corresponding entry under
@@ -1099,8 +1108,10 @@ or `mandatory`. `omitted: false` declares an ordinary column. A value-level
 entry has no such field
 ([SCHEMA-13](../reference/schema-language.md#schema-13)), and validated
 metadata refuses it written at all, with `value_not_permitted` at the
-column's `submission`. A where clause that names an omitted column fails with
-`value_level_where_invalid`, reason `omitted`
+column's `submission`: a validated document describes the dataset it
+publishes, which carries every output column, a row identity derived for
+`keys` included ([DEFINE-7](#define-7)). A where clause that names an
+omitted column fails with `value_level_where_invalid`, reason `omitted`
 ([SUB-12](submission.md#sub-12)): its `RangeCheck` would name an `ItemDef`
 the document does not hold. A dataset whose every output column is omitted
 fails with `value_not_permitted` at the `omitted` of its first output column,
