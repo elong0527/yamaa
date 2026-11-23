@@ -1,4 +1,4 @@
-//! Literal historical declarations share the XML writer, without making
+//! Literal reproduced declarations share the XML writer, without making
 //! assertions about current derivations or data. This mode cannot publish a
 //! transport or claim Submission context (DEFINE-30).
 use super::*;
@@ -9,8 +9,8 @@ pub(super) fn dataset(
     path: &str,
     findings: &mut Vec<Finding>,
 ) {
-    let historical = dataset.mode.value == spec::SubmissionMode::Historical;
-    let refused = if historical {
+    let reproduced = dataset.mode.value == spec::SubmissionMode::Reproduced;
+    let refused = if reproduced {
         section.context != DefineContext::Other
             || section.transport.is_some()
             || section.define_version != ast::project::DefineVersion::V2_0
@@ -20,7 +20,21 @@ pub(super) fn dataset(
     if refused {
         findings.push(crate::define_diagnostics::xml_invalid(
             &format!("{path}.submission"),
-            "historical metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires historical mode",
+            "reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
+            crate::json::Value::String(dataset.mode.value.name().into()),
+        ));
+    }
+    // A dataset's received CommentOID is a reproduced record (DEFINE-30).
+    if !reproduced
+        && dataset
+            .comment
+            .as_ref()
+            .and_then(spec::Comment::oid)
+            .is_some()
+    {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{path}.submission"),
+            "reproduced comment oid requires mode reproduced",
             crate::json::Value::String(dataset.mode.value.name().into()),
         ));
     }

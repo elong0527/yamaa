@@ -1159,12 +1159,12 @@
       }
     },
     {
-      "case": "a_historical_define_2_0_keeps_declarations_independent_of_execution",
+      "case": "a_reproduced_define_2_0_keeps_declarations_independent_of_execution",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1173,17 +1173,17 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced.xml"
         }
       }
     },
     {
-      "case": "historical_metadata_refuses_submission_context",
+      "case": "reproduced_metadata_refuses_submission_context",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Submission\n  transport: dataset_json\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1205,20 +1205,20 @@
             "sdtm.specs[0].submission"
           ],
           "context": {
-            "detail": "schema_violation: historical metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires historical mode",
-            "value": "historical"
+            "detail": "schema_violation: reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
+            "value": "reproduced"
           }
         }
       ],
       "saved": {}
     },
     {
-      "case": "historical_metadata_refuses_transport",
+      "case": "reproduced_metadata_refuses_transport",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  transport: xpt\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1240,20 +1240,20 @@
             "sdtm.specs[0].submission"
           ],
           "context": {
-            "detail": "schema_violation: historical metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires historical mode",
-            "value": "historical"
+            "detail": "schema_violation: reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
+            "value": "reproduced"
           }
         }
       ],
       "saved": {}
     },
     {
-      "case": "historical_metadata_refuses_define_2_1",
+      "case": "reproduced_metadata_refuses_define_2_1",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.1.11'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1275,8 +1275,8 @@
             "sdtm.specs[0].submission"
           ],
           "context": {
-            "detail": "schema_violation: historical metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires historical mode",
-            "value": "historical"
+            "detail": "schema_violation: reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
+            "value": "reproduced"
           }
         }
       ],
@@ -1341,12 +1341,12 @@
       }
     },
     {
-      "case": "a_historical_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard",
+      "case": "a_reproduced_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\n    codelists:\n      - id: EPOCH\n        name: Epoch\n        extensible: true\n        alias: C99079\n        items:\n          - {value: SCREENING, alias: C48262}\n          - {value: EXTENSION, extended: true}\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'EXTENSION'\"\n    submission: {data_type: text, length: 9, mandatory: false, codelist: EPOCH, origins: [{type: Assigned, source: Sponsor}]}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'EXTENSION'\"\n    submission: {data_type: text, length: 9, mandatory: false, codelist: EPOCH, origins: [{type: Assigned, source: Sponsor}]}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1399,12 +1399,12 @@
       "saved": {}
     },
     {
-      "case": "historical_metadata_never_changes_executable_values",
+      "case": "reproduced_metadata_never_changes_executable_values",
       "operation": "build",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
           "raw.csv": "VALUE\n1.5\n"
         },
         "specification": "d0.yaml",
@@ -1421,12 +1421,12 @@
       ]
     },
     {
-      "case": "historical_metadata_keeps_explicit_verifications",
+      "case": "reproduced_metadata_keeps_explicit_verifications",
       "operation": "build",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    verifications: [{range: {max: 1}}]\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    verifications: [{range: {max: 1}}]\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
           "raw.csv": "VALUE\n1.5\n"
         },
         "specification": "d0.yaml",
@@ -1531,7 +1531,7 @@
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      has_no_data: true\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      has_no_data: true\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1641,7 +1641,7 @@
       "input": {
         "files": {
           "project.yaml": "codelists:\n- codelists:\n  - data_type: integer\n    id: Legacy\n    items:\n    - decode: One\n      value: 1\n    name: Legacy Values\nsdtm:\n  context: Other\n  define: define.xml\n  define_version: 2.0.0\n  source_system_version: '1.0'\n  specs:\n  - d0.yaml\n  standards:\n  - name: SDTMIG\n    status: Final\n    version: '3.4'\nstudy:\n  description: Submission detector witness\n  id: S01\n  name: Independent study\n  protocol_name: P01\ntype: project\nyamaa: '1.0'\n",
-          "d0.yaml": "base: RAW\ncolumns:\n- derivation: 1.5\n  label: Independent column\n  name: VALUE\n  submission:\n    codelist: Legacy\n    data_type: integer\n    key_sequence: 2\n    length: 8\n    mandatory: false\n    method:\n      description: Original documented transformation\n      name: Historical.VALUE\n    origins:\n    - description: Original known source\n      type: Other\n  type: float\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- VALUE\nmodel: SDTM\noutput:\n  columns:\n  - VALUE\n  path: d0.csv\nsubmission:\n  artifact: legacy.xpt\n  class: SPECIAL PURPOSE\n  label: Independent dataset\n  mode: historical\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
+          "d0.yaml": "base: RAW\ncolumns:\n- derivation: 1.5\n  label: Independent column\n  name: VALUE\n  submission:\n    codelist: Legacy\n    data_type: integer\n    key_sequence: 2\n    length: 8\n    mandatory: false\n    method:\n      description: Original documented transformation\n      name: Historical.VALUE\n    origins:\n    - description: Original known source\n      type: Other\n  type: float\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- VALUE\nmodel: SDTM\noutput:\n  columns:\n  - VALUE\n  path: d0.csv\nsubmission:\n  artifact: legacy.xpt\n  class: SPECIAL PURPOSE\n  label: Independent dataset\n  mode: reproduced\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1669,7 +1669,7 @@
       "input": {
         "files": {
           "project.yaml": "adam:\n  context: Other\n  define: define.xml\n  define_version: 2.0.0\n  source_system_version: '1.0'\n  specs:\n  - d0.yaml\n  standards:\n  - name: ADaMIG\n    status: Final\n    version: '1.1'\ncodelists:\n- codelists:\n  - data_type: integer\n    id: Legacy\n    items:\n    - decode: One\n      value: 1\n    name: Legacy Values\nstudy:\n  description: Submission detector witness\n  id: S01\n  name: Independent study\n  protocol_name: P01\ntype: project\nyamaa: '1.0'\n",
-          "d0.yaml": "base: RAW\ncolumns:\n- derivation: 1.5\n  label: Independent column\n  name: VALUE\n  submission:\n    codelist: Legacy\n    data_type: integer\n    key_sequence: 2\n    length: 8\n    mandatory: false\n    method:\n      description: Original documented transformation\n      name: Historical.VALUE\n    origins:\n    - description: Original known source\n      type: Other\n  type: float\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- VALUE\nmodel: ADaM\noutput:\n  columns:\n  - VALUE\n  path: d0.csv\nsubmission:\n  artifact: legacy.xpt\n  class: SUBJECT LEVEL ANALYSIS DATASET\n  label: Independent dataset\n  mode: historical\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
+          "d0.yaml": "base: RAW\ncolumns:\n- derivation: 1.5\n  label: Independent column\n  name: VALUE\n  submission:\n    codelist: Legacy\n    data_type: integer\n    key_sequence: 2\n    length: 8\n    mandatory: false\n    method:\n      description: Original documented transformation\n      name: Historical.VALUE\n    origins:\n    - description: Original known source\n      type: Other\n  type: float\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- VALUE\nmodel: ADaM\noutput:\n  columns:\n  - VALUE\n  path: d0.csv\nsubmission:\n  artifact: legacy.xpt\n  class: SUBJECT LEVEL ANALYSIS DATASET\n  label: Independent dataset\n  mode: reproduced\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
         },
         "project": "project.yaml",
         "section": "adam",
@@ -1697,7 +1697,7 @@
       "input": {
         "files": {
           "project.yaml": "send:\n  context: Other\n  define: define.xml\n  define_version: 2.0.0\n  source_system_version: '1.0'\n  specs:\n  - d0.yaml\n  standards:\n  - name: SENDIG\n    status: Final\n    version: '3.1'\nstudy:\n  description: Submission detector witness\n  id: S01\n  name: Independent study\n  protocol_name: P01\ntype: project\nyamaa: '1.0'\n",
-          "d0.yaml": "base: RAW\ncolumns:\n- derivation: '''X'''\n  label: COLL\n  name: COLL\n  submission:\n    data_type: text\n    key_sequence: 1\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Collected\n      type: Collected\n  type: str\n- derivation: '''X'''\n  label: DER\n  name: DER\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Derived\n      type: Derived\n  type: str\n- derivation: '''X'''\n  label: OTHER\n  name: OTHER\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Other\n      type: Other\n  type: str\n- derivation: '''X'''\n  label: NA\n  name: NA\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Not Available\n      type: Not Available\n  type: str\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- COLL\nmodel: SEND\noutput:\n  columns:\n  - COLL\n  - DER\n  - OTHER\n  - NA\n  path: d0.csv\nsubmission:\n  artifact: d0.csv\n  class: SPECIAL PURPOSE\n  label: Independent dataset\n  mode: historical\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
+          "d0.yaml": "base: RAW\ncolumns:\n- derivation: '''X'''\n  label: COLL\n  name: COLL\n  submission:\n    data_type: text\n    key_sequence: 1\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Collected\n      type: Collected\n  type: str\n- derivation: '''X'''\n  label: DER\n  name: DER\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Derived\n      type: Derived\n  type: str\n- derivation: '''X'''\n  label: OTHER\n  name: OTHER\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Other\n      type: Other\n  type: str\n- derivation: '''X'''\n  label: NA\n  name: NA\n  submission:\n    data_type: text\n    length: 8\n    mandatory: false\n    origins:\n    - description: Original Not Available\n      type: Not Available\n  type: str\ndomain: D0\ninput:\n  RAW: raw.csv\nkeys:\n- COLL\nmodel: SEND\noutput:\n  columns:\n  - COLL\n  - DER\n  - OTHER\n  - NA\n  path: d0.csv\nsubmission:\n  artifact: d0.csv\n  class: SPECIAL PURPOSE\n  label: Independent dataset\n  mode: reproduced\n  repeating: false\n  structure: One record per subject\ntype: spec\nyamaa: '1.0'\n"
         },
         "project": "project.yaml",
         "section": "send",
@@ -1711,13 +1711,13 @@
       }
     },
     {
-      "case": "historical_links_ignore_current_output_location_and_run_report",
+      "case": "reproduced_links_ignore_current_output_location_and_run_report",
       "operation": "define",
       "input": {
         "directories": ["package"],
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: package/define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, report: unavailable-report.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, report: unavailable-report.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1726,18 +1726,18 @@
       "issues": [],
       "saved": {
         "package/define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced.xml"
         }
       }
     },
     {
-      "case": "historical_metadata_without_an_artifact_ignores_current_output_location",
+      "case": "reproduced_metadata_without_an_artifact_ignores_current_output_location",
       "operation": "define",
       "input": {
         "directories": ["package"],
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: package/define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, report: unavailable-report.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, report: unavailable-report.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1746,17 +1746,17 @@
       "issues": [],
       "saved": {
         "package/define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical_no_artifact.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_no_artifact.xml"
         }
       }
     },
     {
-      "case": "historical_metadata_still_protects_the_declared_output_from_overwrite",
+      "case": "reproduced_metadata_still_protects_the_declared_output_from_overwrite",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: define.xml, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: define.xml, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1786,12 +1786,12 @@
       ]
     },
     {
-      "case": "historical_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap",
+      "case": "reproduced_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: AllowedChar\n        name: Recorded Codes\n        data_type: text\n        items: [{value: A}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1']}}\n        - {id: Y, where: {CODE: ['1', '2']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1']}}\n        - {id: Y, where: {CODE: ['1', '2']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1800,17 +1800,17 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical_values.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_values.xml"
         }
       }
     },
     {
-      "case": "a_historical_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory",
+      "case": "a_reproduced_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      significant_digits: 0\n      display_format: '8.'\n      mandatory: true\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n      comment: Received column comment\n      value_level:\n        - {id: X, where: {CODE: ['1']}, length: 1}\n        - {id: Y, where: {CODE: ['2']}, label: Declared entry, mandatory: false, codelist: Legacy}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 8, mandatory: false}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      significant_digits: 0\n      display_format: '8.'\n      mandatory: true\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n      comment: Received column comment\n      value_level:\n        - {id: X, where: {CODE: ['1']}, length: 1}\n        - {id: Y, where: {CODE: ['2']}, label: Declared entry, mandatory: false, codelist: Legacy}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 8, mandatory: false}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1819,17 +1819,92 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical_value_declarations.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_value_declarations.xml"
         }
       }
     },
     {
-      "case": "a_historical_where_clause_may_select_on_its_own_column",
+      "case": "a_reproduced_method_or_comment_keeps_its_received_oid_and_identical_definitions_share_one",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B, C]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, comment: {oid: COM.DATASET, text: Received dataset comment}}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: C\n    type: str\n    label: Column C\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {description: Own rule of column C.}\n      comment: {oid: 'COM.C,OWN', text: Own note on column C.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_received_oids.xml"
+        }
+      }
+    },
+    {
+      "case": "one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B, C]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, comment: {oid: COM.DATASET, text: Received dataset comment}}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Another rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: C\n    type: str\n    label: Column C\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {description: Own rule of column C.}\n      comment: {oid: 'COM.C,OWN', text: Own note on column C.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "datasets.D0.B.submission.method"
+          ],
+          "context": {
+            "detail": "MT.SHARED",
+            "identifier": "MT.SHARED"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_received_method_oid_equal_to_a_generated_one_is_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B, C]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, comment: {oid: COM.DATASET, text: Received dataset comment}}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: Shared rule, description: Set to the source value by the shared rule.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.D0.C, name: D0.C, description: Own rule of column C.}\n      comment: {oid: COM.NOTE, text: Shared note on the column.}\n  - name: C\n    type: str\n    label: Column C\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {description: Own rule of column C.}\n      comment: {oid: 'COM.C,OWN', text: Own note on column C.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "datasets.D0.C.submission.method"
+          ],
+          "context": {
+            "detail": "MT.D0.C",
+            "identifier": "MT.D0.C"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_reproduced_where_clause_may_select_on_its_own_column",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'TEMP'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: true\n      value_level:\n        - {id: TEMP, where: {PARAMCD: [TEMP]}, label: Temperature code, length: 4}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'TEMP'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: true\n      value_level:\n        - {id: TEMP, where: {PARAMCD: [TEMP]}, label: Temperature code, length: 4}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1838,17 +1913,17 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical_self_where.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_self_where.xml"
         }
       }
     },
     {
-      "case": "historical_where_clauses_ignore_executable_float_types",
+      "case": "reproduced_where_clauses_ignore_executable_float_types",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: AllowedChar\n        name: Recorded Codes\n        data_type: text\n        items: [{value: A}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1']}}\n        - {id: Y, where: {CODE: ['1', '2']}}\n  - name: CODE\n    type: float\n    label: Condition code\n    derivation: 1.5\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1']}}\n        - {id: Y, where: {CODE: ['1', '2']}}\n  - name: CODE\n    type: float\n    label: Condition code\n    derivation: 1.5\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1857,17 +1932,17 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical_values.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_values.xml"
         }
       }
     },
     {
-      "case": "historical_where_clauses_still_refuse_unknown_columns",
+      "case": "reproduced_where_clauses_still_refuse_unknown_columns",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: AllowedChar\n        name: Recorded Codes\n        data_type: text\n        items: [{value: A}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {BOGUS: ['1']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {BOGUS: ['1']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1900,12 +1975,12 @@
       ]
     },
     {
-      "case": "historical_where_clauses_still_refuse_columns_not_in_output",
+      "case": "reproduced_where_clauses_still_refuse_columns_not_in_output",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: AllowedChar\n        name: Recorded Codes\n        data_type: text\n        items: [{value: A}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1938,12 +2013,12 @@
       ]
     },
     {
-      "case": "historical_where_clauses_still_refuse_empty_value_lists",
+      "case": "reproduced_where_clauses_still_refuse_empty_value_lists",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: AllowedChar\n        name: Recorded Codes\n        data_type: text\n        items: [{value: A}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: []}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: []}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -1976,12 +2051,12 @@
       ]
     },
     {
-      "case": "historical_where_clauses_still_refuse_duplicate_where_values",
+      "case": "reproduced_where_clauses_still_refuse_duplicate_where_values",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: AllowedChar\n        name: Recorded Codes\n        data_type: text\n        items: [{value: A}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1', '1']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where: {CODE: ['1', '1']}}\n  - name: CODE\n    type: int\n    label: Condition code\n    derivation: 1\n    submission: {data_type: text, length: 8, mandatory: false, codelist: AllowedChar}\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -2014,12 +2089,12 @@
       ]
     },
     {
-      "case": "historical_predecessors_do_not_read_other_sections",
+      "case": "reproduced_predecessors_do_not_read_other_sections",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\nadam: {specs: [unavailable.yaml]}\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -2028,17 +2103,17 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced.xml"
         }
       }
     },
     {
-      "case": "historical_predecessors_and_inventory_do_not_read_other_sections",
+      "case": "reproduced_predecessors_and_inventory_do_not_read_other_sections",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\nadam: {specs: [unavailable.yaml]}\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      inventory_vocabulary: true\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      inventory_vocabulary: true\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -2047,18 +2122,18 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced.xml"
         }
       }
     },
     {
-      "case": "historical_datasets_with_distinct_links_can_share_the_current_output",
+      "case": "reproduced_datasets_with_distinct_links_can_share_the_current_output",
       "operation": "define",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml, d1.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Legacy\n        name: Legacy Values\n        data_type: integer\n        items: [{value: 1, decode: One}]\n",
-          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy0.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
-          "d1.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D1\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: historical, artifact: legacy1.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy0.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n",
+          "d1.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D1\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: legacy1.xpt}\ncolumns:\n  - name: VALUE\n    type: float\n    label: Independent column\n    derivation: 1.5\n    submission:\n      data_type: integer\n      length: 8\n      mandatory: false\n      key_sequence: 2\n      origins: [{type: Predecessor, description: RAW.LEGACY}]\n      codelist: Legacy\n      method: {name: Historical.VALUE, description: Original documented transformation}\n\n"
         },
         "project": "project.yaml",
         "section": "sdtm",
@@ -2067,7 +2142,7 @@
       "issues": [],
       "saved": {
         "define.xml": {
-          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_historical_shared_output.xml"
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_shared_output.xml"
         }
       }
     },

@@ -413,7 +413,58 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
-          "context": {"detail": "schema_violation: historical has_no_data requires mode historical", "value": "VALUE"}
+          "context": {"detail": "schema_violation: reproduced has_no_data requires mode reproduced", "value": "VALUE"}
+        }
+      ]
+    },
+    {
+      "case": "a_validated_method_declares_no_received_oid",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "method"], "to": {"oid": "MT.RECEIVED", "description": "Received rule"}}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "context": {"detail": "schema_violation: reproduced method oid requires mode reproduced", "value": "VALUE"}
+        }
+      ]
+    },
+    {
+      "case": "a_validated_comment_declares_no_received_oid",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "comment"], "to": {"oid": "COM.RECEIVED", "text": "Received note"}}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "context": {"detail": "schema_violation: reproduced comment oid requires mode reproduced", "value": "VALUE"}
+        }
+      ]
+    },
+    {
+      "case": "a_validated_dataset_comment_declares_no_received_oid",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "submission", "comment"], "to": {"oid": "COM.RECEIVED", "text": "Received note"}}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].submission"],
+          "context": {"detail": "schema_violation: reproduced comment oid requires mode reproduced", "value": "validated"}
         }
       ]
     },

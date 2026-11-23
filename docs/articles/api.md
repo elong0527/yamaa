@@ -930,13 +930,23 @@ documents carry: the `created` you gave, or else the time the submission read
 once and gave every section.
 
 To write a define.xml for metadata you received, without run data, declare
-each dataset `submission.mode: historical` in a `define_version: '2.0.0'`
-section with `context: Other` and no `transport`. Historical composition
+each dataset `submission.mode: reproduced` in a `define_version: '2.0.0'`
+section with `context: Other` and no `transport`. Reproduced composition
 records the declarations literally and reads no run report, artifact or input
-([DEFINE-30](../../rules/profiles/define-xml.md#define-30)). Validated
+([DEFINE-30](../../rules/profiles/define-xml.md#define-30)). A method or
+comment written in full may keep the identifier the received document gave it,
+such as `method: {oid: MT.SAFFL, name: Population flag, description: ...}`;
+elements that declare one `oid` with the same definition share one `MethodDef`
+or `def:CommentDef`. Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first
 ([PROJECT-15](../../rules/profiles/project.md#project-15)).
+
+`validated`, the default, means yamaa checks each declaration against what it
+can see: the derivation, the values a run completes, and the published data
+when the section declares a transport or the specification a run report. It
+does not mean the document passes a regulator's or a validator's conformance
+checks.
 
 === "R"
 

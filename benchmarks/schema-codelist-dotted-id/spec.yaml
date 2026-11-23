@@ -1,0 +1,74 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW: input/adsl_raw.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, ARMCD, ARM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 9
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.USUBJID
+
+  # The arm code, bound to the codelist named for ADSL.ARMCD.
+  - name: ARMCD
+    type: str
+    label: Planned Arm Code
+    derivation: ADSL_RAW.ARMCD
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      codelist: ADSL.ARMCD
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.ARMCD
+
+  # The arm description is the decode the arm code's codelist gives it, and
+  # carries the values of the codelist named for ADSL.ARM.
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+    derivation:
+      decode:
+        source: ARMCD
+        codelist: ADSL.ARMCD
+    submission:
+      core: Req
+      mandatory: true
+      length: 10
+      codelist: ADSL.ARM
+      origins:
+        - type: Derived
+      method: Decode of ARMCD in the planned arm code codelist.
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

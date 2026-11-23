@@ -1,6 +1,6 @@
 # Submission metadata
 
-This contract describes validated metadata. The explicit historical export
+This contract describes validated metadata. The explicit reproduced export
 mode is governed by [DEFINE-30](define-xml.md#define-30); its received
 declarations do not constrain data execution.
 
@@ -537,7 +537,7 @@ value by `LT`, `LE`, `GT` or `GE`, missing excluded. Two entries whose where
 clauses can select one row fail validation.
 
 Fails: `value_level_where_invalid`, `duplicate_identifier`, `value_level_overlap`.
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `negative-value-level-ordered-text`, `negative-value-level-ordered-value`, `negative-value-level-ordered-overlap`, `negative-value-level-overlap`, `negative-value-level-excluded-overlap`, `negative-value-level-comparator-count`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-core/src/submission_values.rs::an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value`, `rust/crates/yamaa-core/src/submission_values.rs::ne_takes_one_value_and_notin_two_or_more`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_comparator_takes_one_value_of_a_where_column_that_is_not_text`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_terms_overlap_where_their_ranges_meet`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_beyond_type_endpoints_select_no_common_value`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_between_consecutive_binary64_values_do_not_overlap`, `rust/crates/yamaa-core/src/submission_values.rs::an_empty_unshared_ordered_term_prevents_overlap_in_both_clause_orders`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_ordered_range_does_not_overlap_a_nonempty_entry`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::exclusive_consecutive_float_bounds_do_not_overlap`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_extra_where_column_prevents_overlap_with_a_broader_clause`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_term_selects_present_values_on_its_side_of_the_bound`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_whose_clause_holds_another_s_rows_overlaps_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_where_column_listing_no_values_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_text_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_its_own_column_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_historical_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::value_level_clauses_over_columns_neither_of_which_holds_the_other_compose`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_neither_codelist_admits_are_refused_in_the_order_the_clause_lists_them`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_outside_the_where_columns_codelist_fails_before_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_sponsor_addition_to_the_where_columns_extensible_list_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_of_a_list_an_entry_of_the_where_column_binds_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_external_dictionary_on_an_entry_of_the_where_column_admits_every_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_column_without_a_codelist_admits_every_value`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `negative-value-level-ordered-text`, `negative-value-level-ordered-value`, `negative-value-level-ordered-overlap`, `negative-value-level-overlap`, `negative-value-level-excluded-overlap`, `negative-value-level-comparator-count`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-core/src/submission_values.rs::an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value`, `rust/crates/yamaa-core/src/submission_values.rs::ne_takes_one_value_and_notin_two_or_more`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_comparator_takes_one_value_of_a_where_column_that_is_not_text`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_terms_overlap_where_their_ranges_meet`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_beyond_type_endpoints_select_no_common_value`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_between_consecutive_binary64_values_do_not_overlap`, `rust/crates/yamaa-core/src/submission_values.rs::an_empty_unshared_ordered_term_prevents_overlap_in_both_clause_orders`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_ordered_range_does_not_overlap_a_nonempty_entry`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::exclusive_consecutive_float_bounds_do_not_overlap`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_extra_where_column_prevents_overlap_with_a_broader_clause`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_term_selects_present_values_on_its_side_of_the_bound`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_whose_clause_holds_another_s_rows_overlaps_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_where_column_listing_no_values_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_text_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_its_own_column_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::value_level_clauses_over_columns_neither_of_which_holds_the_other_compose`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_neither_codelist_admits_are_refused_in_the_order_the_clause_lists_them`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_outside_the_where_columns_codelist_fails_before_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_sponsor_addition_to_the_where_columns_extensible_list_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_of_a_list_an_entry_of_the_where_column_binds_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_external_dictionary_on_an_entry_of_the_where_column_admits_every_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_column_without_a_codelist_admits_every_value`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`.
 
 The column-level `submission` stays the shared declaration for the column,
 and each entry supplies the metadata of the rows its where clause selects. An
@@ -554,7 +554,7 @@ An entry declares any column metadata field except `value_level`: `core`,
 `label`. The entry's metadata merges field by field over the column's: a
 field the entry declares replaces the column's whole, nested classes and the
 `origins` list included, and every rule of this profile applies to the merged
-metadata. A historical entry takes only the column's name, `data_type` and
+metadata. A reproduced entry takes only the column's name, `data_type` and
 `mandatory`, and no `label` ([DEFINE-30](define-xml.md#define-30)). An entry
 is reported at
 `columns.<column>.submission.value_level.<id>`.
@@ -1004,7 +1004,8 @@ a name, a kind, machine-readable code and supporting documents, and
 `description` is required. `type` defaults to `Computation`; a method that
 replaces a missing value with a substitute declares `Imputation`. `expression`
 carries code as text under a named `context`, which this language neither
-parses nor evaluates.
+parses nor evaluates. `oid`, the received `MethodOID`, is declared only by
+reproduced metadata ([DEFINE-30](define-xml.md#define-30)).
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/schema_submission.rs::all_core_origin_source_and_method_choices_are_retained`.
 
@@ -1020,18 +1021,22 @@ language; the field is declared or absent.
 
 `comment` carries a sponsor note about a dataset or a column. Written as a
 string, it is the note's text; written as a mapping, it adds the documents the
-note refers to. Comments are declared where they are used, and one comment is
-not shared between two datasets or two columns. A document reference names a
-document the study document declares, and optionally the place within it: as a
-string the reference is the identifier, and as a mapping it adds `pages`.
+note refers to. Comments are declared where they are used, and one comment
+without a reproduced `oid` is not shared between two datasets or two columns. A
+document reference names a document the study document declares, and optionally
+the place within it: as a string the reference is the identifier, and as a
+mapping it adds `pages`.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_origin_citing_an_undeclared_document_is_refused`.
 
-[Define-XML](define-xml.md) mints each comment an identifier from the place it
-is declared, so a shared comment would need an identifier space the profile
-does not open. A `pages` reference states whether the `refs` are physical page
-numbers or named destinations and carries the `refs` as a space-separated
-list.
+[Define-XML](define-xml.md) mints each comment without a declared `oid` an
+identifier from the place it is declared, so sharing such a comment would need
+an identifier space the profile does not open; a reproduced `oid` is that
+identifier, recorded as received ([DEFINE-9](define-xml.md#define-9)), and
+reproduced comments declaring one `oid` with the same definition share it
+([DEFINE-30](define-xml.md#define-30)). A `pages` reference states whether the
+`refs` are physical page numbers or named destinations and carries the `refs`
+as a space-separated list.
 
 The mapping forms are written only for what they add: a comment mapping
 holding only `text`, a method mapping holding only `description` and a
@@ -1165,7 +1170,7 @@ declared, so unlike a dataset declared to have no data
 ([DEFINE-17](define-xml.md#define-17)) it needs no comment.
 
 A validated column or entry declaring `has_no_data` fails with
-`value_not_permitted` at its `submission`; historical metadata declares it
+`value_not_permitted` at its `submission`; reproduced metadata declares it
 instead ([DEFINE-30](define-xml.md#define-30)). A Define-XML 2.0 document
 has no `def:HasNoData`: it omits the measured flag and refuses a declared one
 ([DEFINE-29](define-xml.md#define-29)).

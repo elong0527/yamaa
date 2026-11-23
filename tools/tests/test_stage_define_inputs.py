@@ -33,12 +33,12 @@ class DefineStage(unittest.TestCase):
             # fixture reader's exact-byte expectations for the native writer.
             for name in (
                 "define_2_0.xml",
-                "define_2_0_historical.xml",
-                "define_2_0_historical_no_artifact.xml",
-                "define_2_0_historical_values.xml",
-                "define_2_0_historical_value_declarations.xml",
-                "define_2_0_historical_self_where.xml",
-                "define_2_0_historical_shared_output.xml",
+                "define_2_0_reproduced.xml",
+                "define_2_0_reproduced_no_artifact.xml",
+                "define_2_0_reproduced_values.xml",
+                "define_2_0_reproduced_value_declarations.xml",
+                "define_2_0_reproduced_self_where.xml",
+                "define_2_0_reproduced_shared_output.xml",
                 "define_2_0_send.xml",
             ):
                 legacy_schema.assertValid(

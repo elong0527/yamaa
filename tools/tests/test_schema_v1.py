@@ -148,7 +148,7 @@ EXPECTED = {
             "submission_dataset_class",
             "mode",
             "str",
-            values=("validated", "historical"),
+            values=("validated", "reproduced"),
         )
     ],
     "new.spec.submission.artifact": [
@@ -162,6 +162,13 @@ EXPECTED = {
     ],
     "new.spec.submission.has_no_data": [
         Field("submission_metadata_fields", "has_no_data", "bool")
+    ],
+    # #4747: a reproduced method or comment keeps its received OID.
+    "new.spec.submission.method.oid": [
+        Field("submission_method_class", "oid", "method_oid", kind="identifier")
+    ],
+    "new.spec.submission.comment.oid": [
+        Field("submission_comment_class", "oid", "comment_oid", kind="identifier")
     ],
     # D4: the header replaces schema_version in every file type.
     "spec.root_class.schema_version": [Absent("root_class", "schema_version")],
@@ -507,9 +514,32 @@ EXPECTED = {
     "new.spec.expressions.decode": [
         Keyword("expressions", "decode", "[]"),
         Field("expressions.decode", "source", "filtered_source", True, kind="name"),
-        Field("expressions.decode", "codelist", "identifier", True, kind="identifier"),
+        Field(
+            "expressions.decode",
+            "codelist",
+            "codelist_identifier",
+            True,
+            kind="identifier",
+        ),
         Field("expressions.decode", "missing", "substitute_value", kind="value"),
         Field("expressions.decode", "unmapped", "substitute_value", kind="value"),
+    ],
+    # #4746: a codelist id may join identifier segments with periods, and
+    # the fields that name a codelist take its type (CT-1, DEFINE-9).
+    "new.codelists.codelist_identifier": [
+        Field("codelist_class", "id", "codelist_identifier", True, kind="identifier"),
+        Field(
+            "submission_column_class",
+            "codelist",
+            "codelist_identifier",
+            kind="identifier",
+        ),
+        Field(
+            "submission_value_class",
+            "codelist",
+            "codelist_identifier",
+            kind="identifier",
+        ),
     ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
@@ -522,6 +552,18 @@ RETYPED = {
     "spec.submission_value_class.where": (
         "dict[identifier, where_condition]",
         "new.spec.value_level.comparator",
+    ),
+    "spec.submission_column_class.codelist": (
+        "codelist_identifier",
+        "new.codelists.codelist_identifier",
+    ),
+    "spec.submission_value_class.codelist": (
+        "codelist_identifier",
+        "new.codelists.codelist_identifier",
+    ),
+    "codelists.codelist_class.id": (
+        "codelist_identifier",
+        "new.codelists.codelist_identifier",
     ),
 }
 # Reshaped entries whose table kind is the 0.5 field's: the field holds

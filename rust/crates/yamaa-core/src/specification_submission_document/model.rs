@@ -28,9 +28,9 @@ vocabulary!(FieldName {
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
     Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence",
-    NonStandard => "non_standard"
+    NonStandard => "non_standard", Oid => "oid"
 });
-vocabulary!(SubmissionMode { Validated => "validated", Historical => "historical" });
+vocabulary!(SubmissionMode { Validated => "validated", Reproduced => "reproduced" });
 /// Governed fields share one vocabulary in declaration and execution admission.
 /// These are the dataset fields a specification declares, `standard` among
 /// them (P-STD-1), which its root `metadata` map must not carry (SUB-2).
@@ -339,7 +339,7 @@ pub struct Column {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnSubmission {
     pub key_sequence: Option<Field<String>>,
-    /// A historical ItemRef's declared `def:HasNoData`; validated metadata
+    /// A reproduced ItemRef's declared `def:HasNoData`; validated metadata
     /// measures it from the published rows instead (SUB-28, DEFINE-30).
     pub has_no_data: Option<Field<bool>>,
     pub origin: Origin,
@@ -390,7 +390,7 @@ impl ValueEntry {
     /// The column this entry describes on the rows its where clause selects,
     /// the one judgement of what an entry takes from its column. Validated
     /// metadata merges the entry over the complete column declaration, its
-    /// `label` included (DEFINE-27). A historical entry is a literal record of
+    /// `label` included (DEFINE-27). A reproduced entry is a literal record of
     /// one received per-value definition: it takes only what the per-value
     /// `ItemDef` and its `ItemRef` cannot omit, the column's name and its
     /// `data_type` and `mandatory` when the entry declares none, and writes
@@ -400,12 +400,12 @@ impl ValueEntry {
         let mut described = column.clone();
         described.submission = Some(match (mode, base) {
             (SubmissionMode::Validated, Some(base)) => self.metadata.inherit(base),
-            (SubmissionMode::Historical, Some(base)) => self.metadata.inherit_required(base),
+            (SubmissionMode::Reproduced, Some(base)) => self.metadata.inherit_required(base),
             (_, None) => self.metadata.clone(),
         });
         described.label = match mode {
             SubmissionMode::Validated => self.label.clone().or_else(|| column.label.clone()),
-            SubmissionMode::Historical => self.label.clone(),
+            SubmissionMode::Reproduced => self.label.clone(),
         };
         described
     }
@@ -414,7 +414,7 @@ impl ColumnSubmission {
     /// Missing entry fields inherit the complete column declaration. Nested
     /// class values replace their counterpart, and an entry without origins of
     /// its own takes the column's whole list (DEFINE-27); occurrence facts stay
-    /// attached. A historical ItemRef's `key_sequence` and `has_no_data` are
+    /// attached. A reproduced ItemRef's `key_sequence` and `has_no_data` are
     /// its own and never inherit (DEFINE-30). The merged metadata describes
     /// one entry, so it carries no entries.
     fn inherit(&self, base: &Self) -> Self {
@@ -478,6 +478,17 @@ pub struct MethodClass {
     pub description: Field<String>,
     pub expression: Option<FormalExpression>,
     pub documents: Field<Vec<DocumentReference>>,
+    /// The received MethodOID only reproduced metadata declares (DEFINE-30).
+    pub oid: Option<Field<String>>,
+}
+impl Method {
+    /// The OID the declaration names, when it names one (DEFINE-9).
+    pub fn oid(&self) -> Option<&str> {
+        match self {
+            Self::Class(class) => class.oid.as_ref().map(|oid| oid.value.as_str()),
+            Self::Plain(_) => None,
+        }
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FormalExpression {
@@ -489,7 +500,7 @@ pub struct FormalExpression {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Comment {
     Plain(Field<String>),
-    Class(CommentClass),
+    Class(Box<CommentClass>),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommentClass {
@@ -497,6 +508,17 @@ pub struct CommentClass {
     pub fields: Vec<Origin>,
     pub text: Field<String>,
     pub documents: Field<Vec<DocumentReference>>,
+    /// The received CommentOID only reproduced metadata declares (DEFINE-30).
+    pub oid: Option<Field<String>>,
+}
+impl Comment {
+    /// The OID the declaration names, when it names one (DEFINE-9).
+    pub fn oid(&self) -> Option<&str> {
+        match self {
+            Self::Class(class) => class.oid.as_ref().map(|oid| oid.value.as_str()),
+            Self::Plain(_) => None,
+        }
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DocumentReference {
