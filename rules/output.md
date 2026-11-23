@@ -116,7 +116,9 @@ variables that tell its records apart. A key is an output column
 ([SUB-10](profiles/submission.md#sub-10)), so neither a nullable variable nor
 an internal row number can stand in for it. For example, when two records of a
 subject share `PARAMCD` and `ADT` and differ only in a `PCRDT` that one of them
-leaves missing, these fields accompany the declared columns:
+leaves missing, these fields accompany the declared columns, with `ASEQ`
+declared after the columns its window reads
+([COLUMN-5](columns.md#column-5)):
 
 ```yaml
 keys: [STUDYID, USUBJID, ASEQ]
