@@ -47,6 +47,22 @@ def frame(case, kind):
     return ArrowProvider(table) if kind == "protocol" else table
 
 
+def temporal_columns(rows):
+    """The temporal-unit rows as the Python values a caller would hold."""
+    identifiers, datetimes, times = zip(*rows)
+    return {
+        "ID": list(identifiers),
+        "WHEN": [
+            None if value is None else datetime.datetime.fromisoformat(value)
+            for value in datetimes
+        ],
+        "AT": [
+            None if value is None else datetime.time.fromisoformat(value)
+            for value in times
+        ],
+    }
+
+
 class MemoryInputs(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="yamaa-memory-inputs-")
@@ -163,7 +179,12 @@ class MemoryInputs(unittest.TestCase):
                 self.assert_issue(run.issues.to_pylist(), expected)
 
     def test_unsupported_physical_types_have_an_authored_input_diagnostic(self):
-        for values in (pa.array([True]), pa.array([42], type=pa.int32())):
+        for values in (
+            pa.array([True]),
+            pa.array([42], type=pa.int32()),
+            # A zone is refused in every unit; a zone-free timestamp is read.
+            pa.array([0], type=pa.timestamp("us", tz="UTC")),
+        ):
             with self.subTest(type=str(values.type)):
                 value = pa.table(
                     {"ID": pa.array([1], type=pa.int64()), "VALUE": values}
@@ -242,6 +263,56 @@ class MemoryInputs(unittest.TestCase):
         self.assertEqual(
             (self.root / "typed.csv").read_text(encoding="utf-8"), case["csv"]
         )
+
+    def test_a_datetime_and_a_time_in_any_unit_share_the_authored_csv(self):
+        truth = TRUTH["temporal_units"]
+        path = self.root / "units.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        columns = temporal_columns(truth["rows"])
+        frames = {
+            f"{unit['datetime']}, {unit['time']}": pa.table(
+                {
+                    "ID": pa.array(columns["ID"], type=pa.int64()),
+                    "WHEN": pa.array(
+                        columns["WHEN"], type=pa.type_for_alias(unit["datetime"])
+                    ),
+                    "AT": pa.array(columns["AT"], type=pa.type_for_alias(unit["time"])),
+                }
+            )
+            for unit in truth["units"]
+        }
+        # The units each library gives these values when the caller names none.
+        frames["pandas"] = pd.DataFrame(columns)
+        frames["pandas ArrowDtype"] = pa.table(columns).to_pandas(
+            types_mapper=pd.ArrowDtype
+        )
+        frames["polars"] = pl.DataFrame(columns)
+        for label, original in frames.items():
+            with self.subTest(frame=label):
+                run = yamaa.spec(path).run(inputs={"SRC": original})
+                self.assertEqual(
+                    (run.status, run.issues.to_pylist()), ("succeeded", [])
+                )
+                run.save()
+                saved = self.root / "units.csv"
+                self.assertEqual(saved.read_text(encoding="utf-8"), truth["csv"])
+                saved.unlink()
+
+    def test_a_fraction_of_a_second_has_an_authored_input_diagnostic(self):
+        truth = TRUTH["temporal_units"]
+        path = self.root / "units.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        parsers = {"WHEN": datetime.datetime, "AT": datetime.time}
+        for case in truth["fractions"]:
+            with self.subTest(case=case["name"]):
+                columns = temporal_columns(truth["rows"])
+                columns[case["column"]][0] = parsers[case["column"]].fromisoformat(
+                    case["value"]
+                )
+                with self.assertRaises(yamaa.Error) as caught:
+                    yamaa.spec(path).run(inputs={"SRC": pa.table(columns)})
+                self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
+                self.assertEqual(caught.exception.paths, [])
 
     def test_empty_frames_keep_their_declared_schema(self):
         empty = pa.table(

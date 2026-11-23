@@ -254,9 +254,14 @@ metadata and save targets keep reading and writing their files. Declared input
 `types` still apply, and the report identifies these inputs as `memory:<alias>`
 with no byte count. An unknown alias fails the run before study data is read.
 
-Frames admit UTF-8 strings, 64-bit integers and floats, date32, zone-free
-second timestamps and second time32 values. Convert other physical types preserving their values before
-exporting; an unsupported type raises `yamaa.Error` with an input diagnostic.
+Frames admit UTF-8 strings, 64-bit integers and floats, date32, and zone-free
+timestamps and times of day in seconds, milliseconds, microseconds or
+nanoseconds, so a pandas, Polars or PyArrow frame keeps the unit its library
+gives it. Each timestamp or time must fall on a whole second, as one read from
+a Parquet file must; a value with a fraction of a second raises `yamaa.Error`.
+Convert other physical types, a timestamp with a time zone among them,
+preserving their values before exporting; an unsupported type raises
+`yamaa.Error` with an input diagnostic.
 R takes the same alias overrides as a named list of data frames:
 
 ```r
