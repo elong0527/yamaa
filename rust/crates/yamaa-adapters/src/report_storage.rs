@@ -85,38 +85,11 @@ impl Serialize for WireCell<'_> {
         map.end()
     }
 }
-/// Every record of `table`, in order, as report rows. Its records divide into
-/// `partitions` of these sizes, each admitted within the fixed limits on its
-/// own: the whole table for a table held whole, and the partitions of an
-/// input read by partition (#3792).
-pub fn encode_partitions<T: TableAccess>(
-    table: &T,
-    partitions: &[usize],
-) -> Result<Arc<RawValue>, Error> {
-    for &rows in partitions {
-        admit(rows, table.schema().columns().len())?;
-    }
+/// Every record of `table`, in order, as report rows.
+pub fn encode_table<T: TableAccess>(table: &T) -> Result<Arc<RawValue>, Error> {
     let mut writer = RowWriter::default();
     writer.table(table)?;
     writer.finish()
-}
-
-/// Admit each of `partitions`, records of `columns` fields, within the
-/// fixed limits on its own.
-pub fn admit_partitions(columns: usize, partitions: &[usize]) -> Result<(), Error> {
-    partitions.iter().try_for_each(|&rows| admit(rows, columns))
-}
-
-/// Admit `rows` records of `columns` fields within the fixed limits.
-fn admit(rows: usize, columns: usize) -> Result<(), Error> {
-    yamaa_core::limits::Limits::table(rows, columns).map_err(|error| {
-        Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-            error.resource,
-            error.limit,
-            error.actual,
-            Vec::new(),
-        ))
-    })
 }
 
 /// Report rows written a table after another, in order: the rows of an
@@ -710,7 +683,7 @@ mod tests {
             visited: Default::default(),
         };
         assert!(matches!(
-            encode_partitions(&table, &[table.row_count()]),
+            encode_table(&table),
             Err(Error::InvalidObservation)
         ));
         assert_eq!(*table.visited.borrow(), vec![(0, 0), (0, 1), (1, 0)]);

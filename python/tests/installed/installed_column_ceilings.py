@@ -1,10 +1,13 @@
-"""Installed width boundaries for compiler, file and linked-artifact admission
-(#2185, #2288 item 2, #2299).
+"""Installed width routes for compiler, file and linked-artifact admission
+(#2185, #2288 item 2, #2299, #4773).
 
-The shared compiler admits 1,024 declared columns, output columns and typed
-source fields, and refuses 1,025. The boundaries, the refusals' issue rows and
-the wide inherited cases are the `column-ceilings` family of the shared host
-truth, which the R `column_ceilings` suite reads too.
+A table has no fixed column limit (LIMIT-2): declared columns, output columns,
+typed source fields, CSV and Parquet source fields, a linked producer's
+columns and a linked stored artifact's columns each build at 1,025, past the
+former 1,024-column limit. The routes and their output widths, the
+parent-occurrence issue row and the wide inherited cases are the
+`column-ceilings` family of the shared host truth, which the R
+`column_ceilings` suite reads too.
 """
 
 import json
@@ -20,8 +23,7 @@ from host_fixtures import load as load_truth
 import yamaa
 
 TRUTH = load_truth(__file__, "column-ceilings")
-ADMITTED = TRUTH["admitted"]
-REFUSED = TRUTH["refused"]
+WIDTH = TRUTH["width"]
 ISSUE_FIELDS = ("phase", "condition", "rule", "spec_paths", "context")
 
 
@@ -152,7 +154,7 @@ class ColumnCeilings(unittest.TestCase):
         self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
         built = yamaa.spec(spec).run()
         self.assertEqual(built.issues.num_rows, 0)
-        # A row up to 1,024 cells wide is compared as a summary of its first
+        # A row up to 1,025 cells wide is compared as a summary of its first
         # difference (#3882).
         self.assertIsNone(
             first_difference(
@@ -161,20 +163,12 @@ class ColumnCeilings(unittest.TestCase):
         )
         self.assertEqual(built.output.to_polars().shape, (1, width))
 
-    def assert_refusal(self, result, compiler=False):
+    def assert_refusal(self, result):
         rows = result.issues.to_pylist()
         self.assertTrue(rows)
         self.assertTrue(
             any(row["condition"] == "engine_rejected" for row in rows), rows
         )
-        if compiler:
-            self.assertTrue(
-                any(
-                    json.loads(row["context"])["code"] == "compiler_limit"
-                    for row in rows
-                ),
-                rows,
-            )
         if hasattr(result, "save"):
             self.assertIsNone(result.output)
             with self.assertRaises(yamaa.Error):
@@ -190,150 +184,51 @@ class ColumnCeilings(unittest.TestCase):
         consumer.write_text(json.dumps(document), encoding="ascii")
         return consumer
 
-    def boundary(self, kind, width):
-        """The specification of one boundary at one width, and the width it builds."""
-        name = f"{kind}-{width}"
+    def boundary(self, kind):
+        """The specification of one width route at the family's width."""
+        name = f"{kind}-{WIDTH}"
         if kind == "declared_columns":
-            # The declared-column ceiling counts live columns after pruning: a
-            # narrow output with one live column builds, so the ceiling is
-            # exercised with a live 1,025-column output.
-            selected = ["ID"] if width == ADMITTED else None
-            return self.write_case(name, columns=width, selected=selected), 1
+            # 1,025 declarations behind a one-column output, which prunes all
+            # but ID; the output_columns route keeps all 1,025 live.
+            return self.write_case(name, columns=WIDTH, selected=["ID"])
         if kind == "output_columns":
-            if width == ADMITTED:
-                return self.write_case(name, columns=width), width
-            names = ["ID", *[f"C{index:04d}" for index in range(1, ADMITTED)]]
-            # Keep declared columns in range: the extra projection must reach
-            # its own count refusal before duplicate-output validation, not
-            # the column cap.
-            spec = self.write_case(name, columns=ADMITTED, selected=[*names, "ID"])
-            return spec, None
+            return self.write_case(name, columns=WIDTH)
         if kind == "typed_fields":
-            return self.write_case(name, fields=width, typed=True), 1
+            return self.write_case(name, fields=WIDTH, typed=True)
         if kind in ("csv_fields", "parquet_fields"):
             source_format = kind.removesuffix("_fields")
-            return self.write_case(name, fields=width, source_format=source_format), 1
+            return self.write_case(name, fields=WIDTH, source_format=source_format)
         if kind == "producer_columns":
-            producer = self.write_case(name, columns=width)
+            producer = self.write_case(name, columns=WIDTH)
             consumer = self.linked_consumer(producer)
-            if width == ADMITTED:
-                # A link types the consumer before the producer's artifact
-                # exists; callers build and save the producer before its
-                # consumer reads that artifact.
-                self.assertEqual(yamaa.spec(consumer).check().issues.num_rows, 0)
-                yamaa.spec(producer).run().save()
-            return consumer, 1
+            # A link types the consumer before the producer's artifact exists;
+            # callers build and save the producer before its consumer reads
+            # that artifact.
+            self.assertEqual(yamaa.spec(consumer).check().issues.num_rows, 0)
+            yamaa.spec(producer).run().save()
+            return consumer
         if kind == "stored_columns":
-            # The link's metadata stays admissible; only the stored artifact's
-            # width changes. The direct Rust decoder control separately pins
-            # the contract.
-            producer = self.write_case(name, columns=ADMITTED)
+            # The stored artifact is written by hand rather than saved by its
+            # producer, so the consumer decodes a file no build wrote.
+            producer = self.write_case(name, columns=WIDTH)
             consumer = self.linked_consumer(producer)
-            header = ["ID", *[f"C{index:04d}" for index in range(1, width)]]
+            header = ["ID", *[f"C{index:04d}" for index in range(1, WIDTH)]]
             producer.with_name("out.csv").write_text(
                 ",".join(header)
                 + "\n"
-                + ",".join(["S-001"] + ["x"] * (width - 1))
+                + ",".join(["S-001"] + ["x"] * (WIDTH - 1))
                 + "\n",
                 encoding="ascii",
             )
             self.assertEqual(yamaa.spec(consumer).check().issues.num_rows, 0)
-            return consumer, 1
+            return consumer
         raise AssertionError(f"unknown boundary kind: {kind}")
 
-    def test_each_width_ceiling_admits_1024_and_refuses_1025(self):
+    def test_each_width_route_builds_past_the_former_column_limit(self):
         for case in TRUTH["boundaries"]:
-            with self.subTest(case=f"{ADMITTED} {case['name']}"):
-                spec, width = self.boundary(case["kind"], ADMITTED)
-                self.assert_build(spec, width=width)
-            with self.subTest(case=f"{REFUSED} {case['name']}"):
-                spec, _ = self.boundary(case["kind"], REFUSED)
-                checked, built = self.routes(spec)
-                results = {"check": checked, "run": built}
-                for operation in case["operations"]:
-                    self.assert_refusal(
-                        results[operation], compiler=case["compiler_limit"]
-                    )
-
-    def test_compiler_refusal_details_on_check_and_run(self):
-        for case in TRUTH["compiler_limits"]:
-            resource, actual = case["resource"], case["actual"]
-            for project in (False, True):
-                route = "project" if project else "specification"
-                with self.subTest(case=f"{resource} on the {route} route"):
-                    spec = self.write_case(
-                        f"details-{resource}-{route}",
-                        columns=actual if resource == "columns" else 1,
-                        fields=actual if resource == "source_fields" else 1,
-                        typed=resource == "source_fields",
-                    )
-                    document = json.loads(spec.read_text(encoding="ascii"))
-                    if resource == "projected_columns":
-                        document["output"]["columns"] = ["ID"] * actual
-                    spec.write_text(json.dumps(document), encoding="ascii")
-                    routed = self.project_file(spec) if project else None
-                    for result in self.routes(spec, routed):
-                        self.assertEqual(
-                            issue_rows(result.issues.to_pylist()),
-                            issue_rows([case["issue"]]),
-                        )
-
-    def test_fixed_refusal_and_retry_expose_the_remaining_error(self):
-        truth = TRUTH["incomplete_checks"]
-        # Every specification is pruned after composition: keep all 1,025
-        # columns live so the columns capacity is still exercised instead of
-        # being pruned away.
-        spec = self.write_case("incomplete-checks", columns=truth["columns"])
-        document = json.loads(spec.read_text())
-        document["columns"][1].update(type="int", derivation=1)
-        document["columns"][2]["derivation"] = {
-            "str_case": {"source": "C0001", "to": "upper"}
-        }
-        # The same refusal through a project that lists the specification.
-        project = self.project_file(spec)
-        for route in (None, project):
-            spec.write_text(json.dumps(document))
-            for refused in self.routes(spec, route):
-                self.assert_refusal(refused, compiler=True)
-                rows = refused.issues.to_pylist()
-                self.assertEqual(len(rows), 1)
-                context = json.loads(rows[0]["context"])
-                self.assertNotIn("incomplete_checks_from", context)
-                self.assertEqual(
-                    {
-                        "rule": rows[0]["rule"],
-                        "actual": context["actual"],
-                        "limit": context["limit"],
-                    },
-                    truth["refusal"],
-                )
-            repaired = dict(document)
-            repaired["columns"] = document["columns"][:-1]
-            # Dropping the C1024 declaration must also drop it from the live
-            # output list, otherwise the repaired specification would fail on
-            # the dangling output reference instead of the remaining type error.
-            repaired["output"] = {
-                **document["output"],
-                "columns": [
-                    name
-                    for name in document["output"]["columns"]
-                    if name != document["columns"][-1]["name"]
-                ],
-            }
-            spec.write_text(json.dumps(repaired))
-            for result in self.routes(spec, route):
-                rows = result.issues.to_pylist()
-                self.assertEqual(
-                    [
-                        {"condition": row["condition"], "rule": row["rule"]}
-                        for row in rows
-                    ],
-                    [truth["remaining"]],
-                )
-                self.assertNotIn(
-                    "incomplete_checks_from", json.loads(rows[0]["context"])
-                )
-            self.assertFalse(spec.with_name("out.csv").exists())
+            with self.subTest(case=f"{WIDTH} {case['name']}"):
+                spec = self.boundary(case["kind"])
+                self.assert_build(spec, width=case["output_width"])
 
     def test_empty_inheritance_preserves_wide_case_columns_and_saved_bytes(self):
         truth = TRUTH["layered"]

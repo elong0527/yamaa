@@ -181,17 +181,12 @@ share, fails as `field_name`. The first row is record 1 in both
 representations, although in the newline-delimited form it is the file's
 second line.
 
-The columns are admitted under the column limit before any is kept, and
-`records` is admitted under the row and cell limits before any row is read; a
-file over a limit is refused as that limit, which is separate from the causes
-of [DSJSON-5](#dsjson-5). A row beyond the ones `records` counts is refused
-before it is read, and fewer rows than it counts are refused once the last row
-is read.
+A row beyond the ones `records` counts is refused before it is read, and
+fewer rows than it counts are refused once the last row is read.
 
 The input is read whole, as a SAS or ODM input is: a run that reads its driver
-input by partition reads a Dataset-JSON input whole, and the row and cell
-limits bound such an input, and the output of a run it drives, as whole
-tables.
+input by partition reads a Dataset-JSON input whole, and holds such an input,
+and the output of a run it drives, as whole tables.
 
 <a id="dsjson-5"></a>
 

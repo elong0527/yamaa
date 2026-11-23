@@ -27,8 +27,8 @@ Local changes are limited to removal of writer helpers, the integration bridge
 and iconv shim, checked
 allocation initialization, byte-preserving conversion rejecting embedded NUL
 (a refused value recorded by its record and field for the bridge),
-source-authority encoding metadata treatment, early fixed table-shape
-admission, SAS physical extent validation, shared ownership of column-text
+source-authority encoding metadata treatment, early admission of a declared
+column count against the file's bytes, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
 version 8 observation count admission, overlapping RDC back-reference
@@ -64,8 +64,7 @@ goes through the bridge's `yamaa_readstat_deleted_records` hook, so it reports
 cause `deleted_records`. The bitmap extent is checked term by term against the
 rest of the page, so no 64-bit sum can wrap. The bridge never sets a row limit
 or offset, so the accounting covers every stored record. Only the live records
-become table rows, so the row limit admits them, not the stored records, and a
-stored count above 32 bits is malformed.
+become table rows, and a stored count above 32 bits is malformed.
 
 A reference to a moved record (code `0x03`) reads the moved record's page
 header, its subheader pointer and its stored bytes, not its whole page, so the
@@ -77,9 +76,11 @@ is malformed. Each reference has a pointer of its own, so the headers and
 pointers read stay within a multiple of the file size. A reference whose page
 or subheader index is zero is malformed, not skipped.
 
-Rust checks the fixed source-byte and table-shape boundaries from the shared
-`Limits` policy. The C readers admit declared row/column/cell geometry before
-table-sized metadata allocation. Allocation arithmetic and source page/header
+Rust checks the fixed source-byte boundary from the shared `Limits` policy;
+a table's rows, columns and cells have no fixed maximum (#4773). The C readers
+admit a declared column count against the file's own bytes, eight per column,
+before table-sized metadata allocation, and a count past them is a malformed
+header. Allocation arithmetic and source page/header
 extents are checked. A SAS page count with its high bit set is malformed:
 upstream reads it into a signed field, where it passes the upper bound and
 overflows the check that the pages fill the file. Only live records are
@@ -123,7 +124,7 @@ reviews the commits after the baseline and moves it.
 | `365c743e`, `78bb8a94` | A 64-bit subheader's eight-byte signature is compared in full, so a row stored uncompressed in a compressed dataset is not read as metadata when its first four bytes match a signature. Big-endian files keep their four-byte layout. | Ported |
 | `d19f262e`, `634f40a8`, `5850fb57` (bitmap) | Records deleted in place are skipped: bitmap bits on flagged data and mix pages, and compression code `0x05`. The live count excludes them, including when a row offset applies, and the bitmap offset and the rows it covers are bounded. | Ported, with the deleted-record accounting above |
 | `0a1771f7` | A compressed record SAS moved to another page is read at its reference (code `0x03`), from its moved slot (code `0x02` or `0x06`); a moved record no reference reaches (code `0x09` or `0x0d`) is skipped. | Ported; locally, a record no reference reaches counts as deleted, so the row-size subheader must count it, and a reference reads only the record it reaches, within the file's page bytes |
-| `39027f57`, `b05b6456` | A version 8 transport file reads exactly the observations its `OBSV8` header counts, so trailing all-blank records are data. A zero count stays unknown. | Ported; locally the count is decimal digits that blanks may surround, and anything else is malformed. It is admitted before any record is read, must be met, and may be followed only by blank padding |
+| `39027f57`, `b05b6456` | A version 8 transport file reads exactly the observations its `OBSV8` header counts, so trailing all-blank records are data. A zero count stays unknown. | Ported; locally the count is decimal digits that blanks may surround, and anything else is malformed. It must be met, and may be followed only by blank padding |
 | `0dc2aeee` | Without a count, a trailing all-blank record at least 80 bytes wide is data, since padding is always shorter than one 80-byte record. This applies to version 5 files too. | Declined for version 5, and for a version 8 count of zero: it contradicts SAS-7, under which a trailing all-blank record may be padding when no count is recorded, and XPT-10, which refuses to write a trailing all-blank observation because a reader drops it. With a count, `39027f57` keeps such records. |
 | `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported. Every column has attributes when columns are submitted. An attributes subheader too short for its fixed part is refused before its entry count is derived, in both layouts, so the count of attribute slots never moves back and later subheaders describe further slots only. A submitted width cannot change, and the guard is defensive. |
 | `5850fb57` (release field) | The header's release field is copied into a terminated buffer before `sscanf` reads it. | Ported |

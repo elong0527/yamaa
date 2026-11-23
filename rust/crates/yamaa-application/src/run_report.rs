@@ -514,7 +514,7 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
     } else {
         (
             "",
-            crate::parquet_artifact::records(report, &projection, None).map_err(parquet_error)?,
+            crate::parquet_artifact::records(report, &projection).map_err(parquet_error)?,
         )
     };
     let observation = json!({"name":name,"profile":profile,"columns":report.schema().columns().iter().map(|c|&c.name).collect::<Vec<_>>(),"types":report.schema().columns().iter().map(|c|crate::specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"row_count":report.row_count(),"records":rows,"byte_length":bytes.len(),"content":content});

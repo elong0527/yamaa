@@ -116,9 +116,10 @@ fn grouping_distinguishes_adjacent_large_integers_and_empty_snapshots() {
     assert!(empty.reads.borrow().is_empty());
 }
 
-/// Impossible table geometry is rejected before a port can be read.
+/// A row count no memory holds is refused as an allocation before a port
+/// can be read.
 #[test]
-fn grouping_refuses_impossible_row_geometry_before_reads() {
+fn grouping_refuses_an_unallocatable_row_count_before_reads() {
     struct Huge(TableSchema);
     impl TableAccess for Huge {
         type Error = ();
@@ -126,7 +127,7 @@ fn grouping_refuses_impossible_row_geometry_before_reads() {
         fn schema(&self) -> &TableSchema {
             &self.0
         }
-        /// Exercise usize multiplication overflow at preflight.
+        /// Exercise a reservation no memory holds.
         fn row_count(&self) -> usize {
             usize::MAX
         }
@@ -136,12 +137,5 @@ fn grouping_refuses_impossible_row_geometry_before_reads() {
         }
     }
     let source = Huge(schema(&[("a", ColumnType::Int), ("b", ColumnType::Int)]));
-    assert_eq!(
-        partition(&source, &[0, 1]),
-        Err(GroupingError::Limit(yamaa_core::limits::LimitExceeded {
-            resource: "table_rows",
-            limit: 10_000_000,
-            actual: Some(usize::MAX)
-        }))
-    );
+    assert_eq!(partition(&source, &[0, 1]), Err(GroupingError::Allocation));
 }

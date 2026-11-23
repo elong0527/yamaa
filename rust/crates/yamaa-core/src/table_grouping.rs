@@ -1,6 +1,5 @@
 //! Stable, exact partitioning of an immutable normalized table snapshot.
 
-use crate::limits::{LimitExceeded, Limits};
 use crate::{
     table::{CellError, ColumnRef, TableAccess, ValueRef},
     temporal::{Date, DateTime, Time},
@@ -131,8 +130,6 @@ pub enum GroupingError<E> {
     InvalidColumn { position: usize, column: usize },
     #[error("table grouping duplicate column: position={position:?}, column={column:?}")]
     DuplicateColumn { position: usize, column: usize },
-    #[error("table grouping boundary: {0}")]
-    Limit(LimitExceeded),
     #[error("table grouping allocation")]
     Allocation,
     #[error("table grouping cell: row={row:?}, column={column:?}, error={error:?}")]
@@ -186,7 +183,6 @@ fn partition_by<'t, T: TableAccess + ?Sized>(
         }
     }
     let rows = table.row_count();
-    Limits::table(rows, table.schema().columns().len()).map_err(GroupingError::Limit)?;
     // Each cell is read once, in row order, into one flat list of keys, so
     // the first unreadable cell fails the partition before any grouping.
     let width = columns.len();

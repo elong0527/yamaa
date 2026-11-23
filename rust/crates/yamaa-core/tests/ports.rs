@@ -323,7 +323,7 @@ mod boundary {
                 },
             ];
             if invalid_binding {
-                expected.extend([Event::Rows, Event::Schema, Event::Schema]);
+                expected.push(Event::Schema);
             }
             assert_eq!(&*log.events(), expected);
             assert!(port.captures.is_empty() && decoder.steps.is_empty());

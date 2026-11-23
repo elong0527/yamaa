@@ -76,16 +76,15 @@ pub enum Division {
 ///
 /// A run whose plan is safe under its partitions and whose one input is CSV
 /// or Parquet reads that input by partition (#3792), each partition decoded
-/// and admitted on its own: a CSV input scanned in partitions of `rows`
+/// on its own: a CSV input scanned in partitions of `rows`
 /// records, a Parquet input in runs of whole row groups of at most `rows`
 /// records, a larger row group being a partition of its own. Partitions cut
 /// between runs of fields are cut as the scan reads the records (#3830).
 ///
-/// A run that divides every step admits its output a partition at a time
-/// too (D264), unless `whole_output` admits it whole, so that the row and
-/// cell limits refuse it as they refuse the whole-table run's output. A run
-/// whose driver input is SAS or ODM sets it, since those limits bound such
-/// an input whole (`specification_run`).
+/// A run that divides every step encodes its output a partition at a time
+/// too (D264), unless `whole_output` encodes it whole. A run whose driver
+/// input is SAS or ODM, which is decoded whole, sets it
+/// (`specification_run`).
 ///
 /// Up to `threads` partitions derive at once (#4193), each on a thread of
 /// its own, while the calling thread decodes the next partitions, polls the
@@ -104,12 +103,6 @@ pub struct Partitioning {
 /// Fixed boundary failures remain distinct from normative language conditions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
-    SourceRows,
-    SourceCells,
-    SourceColumns,
-    OutputRows,
-    OutputCells,
-    OutputColumns,
     /// One text value a verb builds (`Limits::TEXT_BYTES`).
     TextBytes,
 }
@@ -409,10 +402,10 @@ pub struct Execution {
     /// (CHECK-27).
     pub text_date_orders: Vec<crate::text_date_order::TextDateOrder>,
     /// The most rows one partition of the output holds (D264). A
-    /// partitioned run that divided every step admitted its output in
+    /// partitioned run that divided every step holds its output in
     /// consecutive partitions of at most as many rows as its largest driver
-    /// partition holds, and the output is encoded, admitted and published one
-    /// such partition at a time; none when the run admitted its output whole.
+    /// partition holds, and the output is encoded and published one such
+    /// partition at a time; none when the run encodes its output whole.
     pub partition_rows: Option<std::num::NonZeroUsize>,
 }
 
@@ -420,7 +413,7 @@ impl Execution {
     /// The output's partitions, in order (D264): consecutive ranges of at
     /// most [`Self::partition_rows`] rows, the last holding the rest, or one
     /// range of the whole output. An empty output is one empty partition, so
-    /// its columns are still admitted.
+    /// its columns are still encoded.
     pub fn output_partitions(&self) -> Vec<std::ops::Range<usize>> {
         let rows = self.dataset.row_count();
         let size = self
@@ -549,18 +542,6 @@ pub enum ExecutionError<E> {
     Predicate {
         source_row: usize,
         error: crate::expression::EvaluationError<CellError<E>>,
-    },
-    Limit {
-        resource: Resource,
-        limit: usize,
-        required: Option<usize>,
-    },
-    /// Zero names the primary table; positive indices name the secondary ports.
-    SourceLimit {
-        resource: Resource,
-        limit: usize,
-        required: Option<usize>,
-        source_index: usize,
     },
     /// Resource facts with an authored owner, such as a verification pattern.
     ScopedLimit {

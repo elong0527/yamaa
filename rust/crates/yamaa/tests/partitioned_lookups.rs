@@ -1,8 +1,8 @@
 #![cfg(feature = "yaml")]
 //! Partitioned lookups (#4191): a specification whose other inputs are read
 //! only through lookups reads them whole, before any partition, and reads
-//! its driver input by partition, so the row limit bounds each partition of
-//! the driver input and each other input whole (LIMIT-3). A lookup into
+//! its driver input by partition, so a run holds one partition of the
+//! driver input and each other input whole (LIMIT-3). A lookup into
 //! another input is partition-safe: no partition of the driver input
 //! produces or changes a record of it. A lookup into the driver input, and
 //! an intermediate that derives values from its records, still needs the
@@ -10,7 +10,7 @@
 //!
 //! Each case states the whole-table output by hand. The seam is the
 //! facade's partitioned engine mode, which neither the benchmark reader nor
-//! the host fixtures run, and an input beyond the row limit, which no
+//! the host fixtures run, and an input beyond the former row limit, which no
 //! fixture can hold; `partitioned_corpus.rs` runs every benchmark that reads
 //! another input the same way.
 use std::num::NonZeroUsize;
@@ -182,7 +182,7 @@ fn a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_n
     }
 }
 
-/// A driver input of 10,000,002 records, beyond the row limit, beside an
+/// A driver input of 10,000,002 records, beyond the former row limit, beside an
 /// input of two subjects it reads by key, runs in partitions of 1,000,000
 /// records (LIMIT-3): ADSL is admitted whole, each partition of SRC on its
 /// own, and every record its own row, the odd IDs subject a's, arm P, the
@@ -199,7 +199,7 @@ fn a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_n
 fn a_driver_input_beyond_the_row_limit_beside_a_lookup_input_runs_by_partition() {
     use std::io::Write as _;
     let _alone = crate::support::beyond_the_row_limit();
-    let records = yamaa_core::limits::Limits::TABLE_ROWS + 2;
+    let records = 10_000_002;
     let scratch = Scratch::new("partitioned-lookups-limit");
     scratch.write("spec.yaml", spec(INPUTS, "", "ADSL.ARM"));
     scratch.write("adsl.csv", ADSL);

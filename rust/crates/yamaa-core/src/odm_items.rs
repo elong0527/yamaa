@@ -312,8 +312,6 @@ pub enum Limit {
     Token { token: &'static str, limit: usize },
     #[error("XML namespace declarations in scope exceed {0}")]
     Namespaces(usize),
-    #[error("ODM items exceed {0} table rows")]
-    Rows(usize),
     #[error("ODM column {column} exceeds {limit} bytes in one table batch")]
     TextColumn { column: &'static str, limit: usize },
 }

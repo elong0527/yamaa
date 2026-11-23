@@ -2,7 +2,7 @@
 
 One fixed policy bounds what each operation admits, the same for every Python,
 R and command-line call. These rules state the limits, how a refusal reads,
-and which table a partitioned run's row and cell limits bound.
+and what a partitioned run gives.
 
 ## Refusals
 
@@ -24,34 +24,34 @@ Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/tests/ho
 `code` is `compiler_limit` for a declaration counted while a specification is
 prepared, such as its columns or keys, and a code of its own, such as
 `resource_limit` or `output_limit`, for a file, a table or a saved artifact.
-`resource` names what was counted, such as `spec_bytes`, `table_rows`,
-`columns`, `text_bytes` or `regex_size`. A check reports the preparation
+`resource` names what was counted, such as `spec_bytes`, `source_bytes`,
+`keys`, `text_bytes` or `regex_size`. A check reports the preparation
 refusals a build reports, without reading any input record.
 
 <a id="limit-2"></a>
 
-### LIMIT-2. One fixed policy bounds each file, table, declaration, pattern and built text
+### LIMIT-2. One fixed policy bounds each file, declaration, pattern and built text, and no table's rows, columns or cells
 
-Each file, table, declaration, compiled regular expression and built text value
-is admitted against the fixed maximum below at the boundary that owns it,
-before it is kept or grown. No caller selects other limits, except the
+Each file, declaration, compiled regular expression and built text value is
+admitted against the fixed maximum below at the boundary that owns it, before
+it is kept or grown. No caller selects other limits, except the
 archive-member, expanded-byte and XML-depth bounds that `read_odm()` and
 `yamaa read-odm` take ([ODM-1](reference/odm.md#odm-1)); no budget is shared
 between boundaries, and no limit depends on available memory. The number of
-inputs one specification reads is not limited: each input is bounded as a file
-and a table.
+inputs one specification reads is not limited: each input is bounded as a
+file. A table's rows, columns and cells have no fixed maximum: a source,
+intermediate, output or report table holds what its source or derivation
+yields, and a table that memory cannot hold fails as the process runs out of
+it, not as a limit.
 
 Fails: `engine_rejected`.
-Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa-core/src/limits.rs::table_geometry_is_checked_without_allocating_rows_or_cells`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::one_hundred_and_one_typed_inputs_execute_through_the_file_route`.
+Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::one_hundred_and_one_typed_inputs_execute_through_the_file_route`.
 
 | Boundary | Fixed maximum |
 | --- | ---: |
 | Each specification, schema, project, function, codelists or packaging-lock file | 8 MiB |
 | Each encoded study source file | 10 GiB |
 | Each saved output file | 10 GiB |
-| Rows in a decoded or materialized table | 10,000,000 |
-| Cells in a decoded or materialized table | 640,000,000 |
-| Columns in a source, output or intermediate table | 1,024 |
 | Keys in one key or grouping declaration | 64 |
 | Operands in one source selection | 64 |
 | Links followed in one composition, each `parent` and each `include` entry | 8,192 |
@@ -65,8 +65,7 @@ A MiB is 1,048,576 bytes and a GiB 1,073,741,824 bytes. A reader checks a
 file's encoded size before keeping its bytes and its growth while reading; a
 compressed SAS dataset is also refused when its live records times its row
 length exceed the source file limit. A writer checks the saved file size before
-extending it. A table's rows, columns and their product are checked before the
-table is built or grown. Only the text the five verbs build counts against the
+extending it. Only the text the five verbs build counts against the
 text limit ([TEXT-2](text.md#text-2)): text read from a source or copied is not
 counted. A regular expression is refused when it compiles, never while it
 matches ([TEXT-12](text.md#text-12)). The final issue collection keeps its
@@ -76,18 +75,18 @@ first 10,000 findings in their order.
 
 <a id="limit-3"></a>
 
-### LIMIT-3. A build run over key-bounded partitions gives the whole-table run's result, and its row and cell limits bound each partition
+### LIMIT-3. A build run over key-bounded partitions gives the whole-table run's result
 
 Every Python, R and command-line build divides its driver input into
 partitions of at most 624,640 records that never split a group of the
 specification's first two declared keys, such as `STUDYID` and `USUBJID`, and
 runs whole when it cannot divide it. A partitioned run gives the whole-table
 run's rows, values, order, issues, run report and saved bytes. Partitions
-change only what the row and cell limits bound: each partition of a divided
-input and its output, and the whole table everywhere else.
+change only how much of the input a run holds at once: one partition of a
+divided driver input and its output, and the whole table everywhere else.
 
 Fails: `engine_rejected`.
-Evidence: `rust/tests/host-fixtures/cases.json::partitioned-default`, `rust/tests/host-fixtures/cases.json::longitudinal-capacity`, `rust/crates/yamaa/tests/partitioned_corpus.rs::partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_functions`, `rust/crates/yamaa/tests/partitioned_reading.rs::every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_partition`, `rust/crates/yamaa/tests/partitioned_lookups.rs::a_driver_input_beyond_the_row_limit_beside_a_lookup_input_runs_by_partition`, `rust/crates/yamaa/tests/partitioned_lookups.rs::a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_not`, `rust/crates/yamaa/tests/partitioned_publication.rs::a_parquet_output_saved_in_partitions_that_divide_no_row_group_reads_back_as_the_whole_table`, `rust/crates/yamaa/tests/partitioned_publication.rs::the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table_run_refuses_it`, `rust/crates/yamaa/tests/partitioned_confinement.rs::a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_back`.
+Evidence: `rust/tests/host-fixtures/cases.json::partitioned-default`, `rust/tests/host-fixtures/cases.json::longitudinal-capacity`, `rust/crates/yamaa/tests/partitioned_corpus.rs::partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_functions`, `rust/crates/yamaa/tests/partitioned_reading.rs::every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_partition`, `rust/crates/yamaa/tests/partitioned_lookups.rs::a_driver_input_beyond_the_row_limit_beside_a_lookup_input_runs_by_partition`, `rust/crates/yamaa/tests/partitioned_lookups.rs::a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_not`, `rust/crates/yamaa/tests/partitioned_publication.rs::a_parquet_output_saved_in_partitions_that_divide_no_row_group_reads_back_as_the_whole_table`, `rust/crates/yamaa/tests/partitioned_publication.rs::the_output_of_a_sas_driver_beyond_the_row_limit_is_the_whole_table_runs`, `rust/crates/yamaa/tests/partitioned_confinement.rs::a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_back`.
 
 A run divides only a CSV or Parquet driver input, and only when no step needs
 the whole table. It reads every other input whole first, and every partition
@@ -108,16 +107,14 @@ records has ended. A window grouped by `[USUBJID, PARAMCD]` in a specification
 keyed `[STUDYID, USUBJID, ...]` omits `STUDYID` and runs whole; grouped by
 `[STUDYID, USUBJID, PARAMCD]`, it divides.
 
-The row and cell limits bound each partition of a divided driver input, decoded
-one at a time, and of its output, saved as CSV or Parquet one partition after
-another: a CSV output with the whole-table write's bytes, and a Parquet output
-reading back as the whole-table write does. They
-bound as whole tables the run report; a SAS, ODM or Dataset-JSON input and its
-output; each input other than the driver input; the input and output of a run
-with a step that needs the whole table; and a submission's SAS
-Transport or Dataset-JSON file. So a run whose steps group by subject builds
-and saves a CSV or Parquet input of any number of records, and a run that needs
-the whole table is refused past the limits exactly as it is without partitions.
+A divided driver input is decoded one partition at a time, and its output
+saved as CSV or Parquet one partition after another: a CSV output with the
+whole-table write's bytes, and a Parquet output reading back as the
+whole-table write does. A SAS, ODM or Dataset-JSON input and its output, each
+input other than the driver input, and the input and output of a run with a
+step that needs the whole table are held whole. So a run whose steps group by
+subject holds one partition of a CSV or Parquet input of any number of
+records at a time.
 
 A Rust embedder's engine runs every build whole unless it sets
 `EngineOptions::with_partitions`. Without the whole-table fallback, a step that

@@ -23,8 +23,6 @@ impl RelationField {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RelationShapeError {
-    #[error("dataset relation boundary: {0}")]
-    Limit(crate::limits::LimitExceeded),
     #[error("dataset relation shape empty identifier")]
     EmptyIdentifier,
     #[error("dataset relation shape duplicate identifier")]
@@ -48,7 +46,6 @@ impl RelationShape {
         fields: Vec<RelationField>,
         projection: Option<Vec<usize>>,
     ) -> Result<Self, RelationShapeError> {
-        crate::limits::Limits::columns(fields.len()).map_err(RelationShapeError::Limit)?;
         let mut stored = 0;
         let mut derived = 0;
         for (index, field) in fields.iter().enumerate() {

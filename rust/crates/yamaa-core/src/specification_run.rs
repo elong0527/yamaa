@@ -126,23 +126,6 @@ struct Scan<E> {
     odm: Result<Vec<crate::odm_source::MissingValues>, crate::odm_source::RecordError<E>>,
 }
 
-/// Admit the decoded input using the same geometry policy for a whole
-/// table or for each partition the scan cut from its records.
-fn admit_source_table<T: TableAccess>(
-    table: &T,
-    scan: Option<&Scan<T::Error>>,
-) -> Result<(), crate::limits::LimitExceeded> {
-    match scan {
-        Some(scan) => {
-            let width = table.schema().columns().len();
-            scan.partitions
-                .iter()
-                .try_for_each(|range| crate::limits::Limits::table(range.len(), width))
-        }
-        None => crate::limits::Limits::table(table.row_count(), table.schema().columns().len()),
-    }
-}
-
 /// Scan `declaration`'s held bytes by partition (#3830): every partition
 /// decoded once, up to the run's threads at once (#4220), and visited on
 /// the calling thread in order, cut as `read` asks, and its ODM records
@@ -345,12 +328,6 @@ fn decode_and_execute<D: Decoder>(
     let table = captured_table
         .as_ref()
         .expect("decoded table is held for this attempt");
-    crate::limits::Limits::table(table.row_count(), table.schema().columns().len()).map_err(
-        |error| RunError::Boundary {
-            source: prepared.driver_index(),
-            error,
-        },
-    )?;
     if prepared.source_interpretation(prepared.driver_index()) == Some(SourceInterpretation::Odm) {
         match odm_records(
             table,
@@ -705,15 +682,6 @@ fn decode_source<C, D: Decoder>(
             };
         }
     };
-    // An input read by partition is admitted a partition at a time, each on
-    // its own; any other input is admitted whole.
-    if let Err(error) = admit_source_table(table, scanned.as_ref()) {
-        attempt.result = Err(PortError::Run(RunError::Boundary {
-            source: index,
-            error,
-        }));
-        return Err(Stop::Final);
-    }
     let driver = prepared.driver_index();
     let odm = match scanned {
         Some(scan) => {
@@ -898,9 +866,9 @@ impl<D: Decoder> dataset::PartitionSource for Partitions<'_, D> {
 }
 
 /// How a run that reads its driver input whole divides it: as `partitioning`
-/// asks, admitting the output whole when the driver input is SAS or ODM. The
-/// row and cell limits bound such an input whole, and its output too (D264);
-/// only a CSV or Parquet driver's output is admitted a partition at a time.
+/// asks, encoding the output whole when the driver input is SAS or ODM,
+/// which is decoded whole; only a CSV or Parquet driver's output is encoded
+/// a partition at a time (D264).
 fn divided(
     prepared: &PreparedSpecification,
     partitioning: Option<dataset::Partitioning>,
@@ -921,9 +889,7 @@ fn divided(
 /// input's header or footer declares and to the other inputs' schemas, has
 /// no step that needs the whole table under the run's partitions. Every
 /// other input is read whole before any partition, and every partition
-/// reads it (#4191). Every other run reads each input whole and admits it
-/// whole, so a plan with such a step, or the whole-table fallback that runs
-/// it, refuses an input beyond the row or cell limit exactly as an
+/// reads it (#4191). Every other run reads each input whole, as an
 /// unpartitioned run does.
 ///
 /// Key-bounded partitions (#3763) are cut as the scan reads the records, by

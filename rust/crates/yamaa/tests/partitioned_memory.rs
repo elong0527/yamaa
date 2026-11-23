@@ -19,7 +19,7 @@
 //! carries, which the specification never reads, make one partition's
 //! table a large share of what a run over one partition holds: ten of them
 //! are more than that run's peak twice over. The larger input of the second
-//! test is beyond the row limit, more than a whole-table run admits.
+//! test is beyond the former 10,000,000-row limit.
 //!
 //! A run with a row per record holds its output once (#3870): the dataset,
 //! a column at a time, the host view built from it and the encoded file,
@@ -155,12 +155,12 @@ fn a_run_over_ten_partitions_holds_no_more_than_one_partition_at_a_time() {
     );
 }
 
-/// The same over 10,001,000 records, beyond the row limit, and over a
+/// The same over 10,001,000 records, beyond the former row limit, and over a
 /// million: partitions of a million records, each of whole subjects and
 /// within the limit, the last of a thousand.
 /// The input and the runs take minutes unoptimized, so the test runs in the
 /// optimized `release-test` profile, as the native lane runs every test, and
-/// no other test beyond the row limit runs beside it
+/// no other test beyond the former row limit runs beside it
 /// (`support::beyond_the_row_limit`).
 #[test]
 #[cfg_attr(
@@ -170,7 +170,7 @@ fn a_run_over_ten_partitions_holds_no_more_than_one_partition_at_a_time() {
 fn a_run_over_an_input_beyond_whole_holds_no_more_than_one_partition_at_a_time() {
     let _alone = crate::support::beyond_the_row_limit();
     let one = measured(1_000_000, 1_000_000);
-    let ten = measured(yamaa_core::limits::Limits::TABLE_ROWS + RECORDS, 1_000_000);
+    let ten = measured(10_000_000 + RECORDS, 1_000_000);
     assert!(
         ten < 2 * one,
         "ten partitions peak at {ten} bytes, one at {one}"

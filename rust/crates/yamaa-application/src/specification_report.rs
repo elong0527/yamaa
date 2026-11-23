@@ -302,13 +302,9 @@ fn dataset_failure<'a, C, E>(
                         verifications.extend(records);
                         diagnostics
                     }
-                    Outcome::Limit(bound) => vec![crate::resource_diagnostics::outcome(
-                        bound,
-                        run.compiled().sources(),
-                        run.compiled().driver_index(),
-                    )
-                    .map(|refusal| refusal.diagnostic(Step::Execute, Fault::ExecutionLimit))
-                    .ok_or(Error::UnsupportedOutcome)?],
+                    Outcome::Limit(bound) => vec![crate::resource_diagnostics::outcome(bound)
+                        .map(|refusal| refusal.diagnostic(Step::Execute, Fault::ExecutionLimit))
+                        .ok_or(Error::UnsupportedOutcome)?],
                     Outcome::Success => return Err(Error::UnsupportedOutcome.into()),
                 }
             }
@@ -363,28 +359,24 @@ fn dataset_failure<'a, C, E>(
     report["verifications"] = json!(verifications);
     Ok(report)
 }
-/// The observation of a table the run holds, whose records divide into
-/// `partitions` of these sizes: one partition for an input read whole
-/// (#4187), and those of an output held in partitions (D264, #3870). Each
-/// partition is admitted now, on its own, and the rows are encoded only
-/// when the observations are serialized, from a clone that shares the
+/// The observation of a table the run holds: an input read whole (#4187),
+/// or an output held whole or in partitions (D264, #3870). The rows are
+/// encoded only when the observations are serialized, from a clone that shares the
 /// table, so the run holds no encoded copy of them.
 fn deferred_observation<T>(
     table: &T,
     id: &Identity<'_>,
     stage: &str,
     name: &str,
-    partitions: Vec<usize>,
 ) -> Result<StoredTable, Error>
 where
     T: TableAccess + Clone + Send + Sync + 'static,
 {
-    crate::report_storage::admit_partitions(table.schema().columns().len(), &partitions)?;
     let metadata = table_metadata(table.schema(), id, stage, name);
     let table = table.clone();
     Ok(StoredTable {
         metadata,
-        rows: Rows::deferred(move || crate::report_storage::encode_partitions(&table, &partitions)),
+        rows: Rows::deferred(move || crate::report_storage::encode_table(&table)),
     })
 }
 
@@ -478,9 +470,7 @@ pub(crate) fn envelope_sources<E>(
             };
             let name = &source.read.source.name;
             tables.push(match (table.as_table(), table.scan(), &source.snapshot) {
-                (Some(whole), _, _) => {
-                    deferred_observation(whole, id, "source", name, vec![whole.row_count()])?
-                }
+                (Some(whole), _, _) => deferred_observation(whole, id, "source", name)?,
                 (None, Some(scanned), Some(bytes)) => {
                     scanned_observation(scanned, std::sync::Arc::clone(bytes), id, name)
                 }
@@ -893,9 +883,8 @@ pub(crate) fn prepare_result(
         .artifact()
         .map(|artifact| {
             let execution = execution.ok_or(Error::InvalidObservation)?;
-            let (dataset, partition) = (&execution.dataset, execution.partition_rows);
-            let logical =
-                crate::public_table::check_table(dataset, &artifact.projection, partition);
+            let dataset = &execution.dataset;
+            let logical = crate::public_table::check_table(dataset, &artifact.projection);
             match view {
                 HostView::Table => logical.map(|logical| {
                     View::Table(HostTable::new(dataset, &artifact.projection, logical))
@@ -903,19 +892,7 @@ pub(crate) fn prepare_result(
                 // Built batch by batch as it is read, after the same checks.
                 HostView::Deferred => logical.map(|_| View::Deferred),
             }
-            .map_err(|e| match e {
-                crate::public_table::TableError::Limit {
-                    resource,
-                    limit,
-                    required,
-                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                    resource,
-                    limit,
-                    required,
-                    vec!["output.path".into()],
-                )),
-                _ => Error::InvalidObservation,
-            })
+            .map_err(|_| Error::InvalidObservation)
         })
         .transpose();
     let table = match table {
@@ -1211,25 +1188,11 @@ pub(crate) fn artifact_report(
             }),
         }
     } else {
-        yamaa_core::limits::Limits::partitioned(
-            table.row_count(),
-            execution.partition_rows,
-            projection.len(),
-        )
-        .map_err(|error| {
-            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                error.resource,
-                error.limit,
-                error.actual,
-                vec!["output.path".into()],
-            ))
-        })?;
-        let (table, projection, partition) =
-            (table.clone(), projection.to_vec(), execution.partition_rows);
+        let (table, projection) = (table.clone(), projection.to_vec());
         crate::report_storage::ArtifactContent {
             name: run.compiled().output_name().into(),
             encode: std::sync::Arc::new(move || {
-                let records = crate::parquet_artifact::records(&table, &projection, partition)
+                let records = crate::parquet_artifact::records(&table, &projection)
                     .map_err(|_| Error::InvalidObservation)?;
                 Ok((raw(&records)?, raw("")?))
             }),
@@ -1239,14 +1202,7 @@ pub(crate) fn artifact_report(
     report.defer_content(encode);
     // The output observed as it is held: whole, or a partition at a time,
     // its rows encoded only when the observations are serialized (#3870).
-    let partitions = execution
-        .output_partitions()
-        .iter()
-        .map(|rows| rows.len())
-        .collect::<Vec<_>>();
-    report.push_table(deferred_observation(
-        table, id, "derived", "output", partitions,
-    )?)?;
+    report.push_table(deferred_observation(table, id, "derived", "output")?)?;
     report["outcome"] = json!("success");
     report["nodes"][0]["outcome"] = json!("success");
     Ok(report)

@@ -62,14 +62,6 @@ pub(super) fn prepare(
     if item.bindings.is_empty() {
         return Ok(Vec::new());
     }
-    if item.bindings.len() > crate::limits::Limits::COLUMNS {
-        return Err(PrepareError::limit(
-            "intermediate_derivations",
-            crate::limits::Limits::COLUMNS,
-            Some(item.bindings.len()),
-            Some(&format!("{}.derivations", checks::render(spec, item.meta))),
-        ));
-    }
     let mut result = Vec::new();
     for binding in &item.bindings {
         let expr = binding.derivation.expr;

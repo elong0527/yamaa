@@ -217,7 +217,7 @@ A record at one number of its count is a record of a counted relation: a
 record of a declared relation, once for each whole number from 1 to the count
 its own values give ([LOOKUP-29](lookup.md#lookup-29)). The specification
 declares the count and the record gives its value, a missing or negative
-count fails the run, and the table limits bound the rows
+count fails the run, and no fixed limit bounds the rows
 ([LIMIT-2](limits.md#limit-2)). The number joins the output `keys`, so
 [OUTPUT-3](output.md#output-3) still checks every row's identity.
 

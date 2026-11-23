@@ -12,7 +12,6 @@ use super::{reserved, Cx, Fail, Footprint, Run, Table};
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{RegionId, RelationId};
 use crate::dataset::{Intermediate, IntermediateDerivations, IntermediateSource};
-use crate::limits::Limits;
 use crate::table::{TableAccess, TableSchema};
 use crate::value::Value;
 use std::cell::OnceCell;
@@ -277,19 +276,6 @@ fn build<E>(
     .schema
     .clone();
     let output = plan.region(region).output.clone();
-    Limits::table(table.row_count(), input_schema.columns().len()).map_err(|error| {
-        Box::new(ExecutionError::ScopedLimit {
-            resource: match error.resource {
-                "columns" => crate::dataset::execution::Resource::SourceColumns,
-                "table_rows" => crate::dataset::execution::Resource::SourceRows,
-                "table_cells" => crate::dataset::execution::Resource::SourceCells,
-                _ => unreachable!("table boundary resource"),
-            },
-            limit: error.limit,
-            required: error.actual,
-            spec_paths: vec![item.path.clone()],
-        })
-    })?;
     let mut frame = Frame::new(output.columns().len());
     let all: Vec<usize>;
     let stored = match records {

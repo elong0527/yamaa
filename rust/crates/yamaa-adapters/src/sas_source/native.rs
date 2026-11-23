@@ -23,9 +23,6 @@ unsafe extern "C" {
         bytes: *const u8,
         length: usize,
         xport: c_int,
-        rows: usize,
-        columns: usize,
-        cells: usize,
         source_bytes: usize,
         metadata: unsafe extern "C" fn(i64, c_int, c_int, *const c_char, *mut c_void) -> c_int,
         variable: unsafe extern "C" fn(c_int, *const c_char, usize, c_int, *mut c_void) -> c_int,
@@ -169,11 +166,9 @@ unsafe extern "C" fn metadata(
             if columns == 0 {
                 return Err(Error::Invalid("header"));
             }
-            Limits::columns(columns)?;
             context.declared_columns = columns;
             if rows >= 0 {
                 let rows = usize::try_from(rows).map_err(|_| Error::Invalid("header"))?;
-                Limits::table(rows, columns)?;
                 context.declared_rows = Some(rows);
             }
             Ok(())
@@ -260,10 +255,6 @@ unsafe extern "C" fn value(
             }
             let row = usize::try_from(row).map_err(|_| Error::Invalid("record_order"))?;
             let column = usize::try_from(column).map_err(|_| Error::Invalid("record_order"))?;
-            Limits::table(
-                row.checked_add(1).ok_or(Error::Invalid("record_order"))?,
-                context.columns.len(),
-            )?;
             if column == 0 {
                 if row != context.rows.len() {
                     return Err(Error::Invalid("record_order"));
@@ -475,9 +466,6 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
             bytes.as_ptr(),
             bytes.len(),
             c_int::from(source.profile == SourceProfile::Xport),
-            Limits::TABLE_ROWS,
-            Limits::COLUMNS,
-            Limits::TABLE_CELLS,
             // Bytes that decompressing compressed records writes.
             Limits::SOURCE_BYTES,
             metadata,
@@ -496,9 +484,6 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
     }
     if status == -2 {
         let resource = match refusal_resource {
-            1 => "table_rows",
-            2 => "columns",
-            3 => "table_cells",
             4 => "source_bytes",
             _ => return Err(Error::Internal),
         };
@@ -531,6 +516,10 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
     }
     if status == -7 {
         return Err(Error::Invalid("deleted_records"));
+    }
+    if status == -8 {
+        // A declared column count past what the file's bytes hold.
+        return Err(Error::Invalid("header"));
     }
     if status != 0 {
         return Err(Error::Invalid("malformed"));
@@ -570,54 +559,38 @@ mod tests {
         }
     }
 
+    /// A header past the former row, column and cell limits (#4773) is
+    /// admitted as declared.
     #[test]
-    fn fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows() {
+    fn a_header_past_the_former_table_limits_is_admitted() {
         let source = source();
-        for (rows, columns, expected) in [
-            (9_999_999, 1, None),
-            (10_000_001, 1, Some(("table_rows", 10_000_001))),
-            (1, 1023, None),
-            (1, 1025, Some(("columns", 1025))),
-            (3_575_418, 179, None),
-            (3_575_419, 179, Some(("table_cells", 640_000_001))),
-        ] {
-            let mut context = Context {
-                source: &source,
-                encoding: source.encoding.as_deref(),
-                has_stored_encoding: true,
-                columns: Vec::new(),
-                rows: Vec::new(),
-                declared_rows: None,
-                declared_columns: 0,
-                error: None,
-            };
-            let status = unsafe {
-                metadata(
-                    rows,
-                    columns,
-                    5,
-                    std::ptr::null(),
-                    (&mut context as *mut Context<'_>).cast(),
-                )
-            };
-            match (context.error, expected) {
-                (None, None) => assert_eq!(status, 0),
-                (
-                    Some(Error::Limit {
-                        resource,
-                        actual: Some(actual),
-                        ..
-                    }),
-                    Some(expected),
-                ) => {
-                    assert_eq!(status, 1);
-                    assert_eq!((resource, actual), expected);
-                }
-                (other, _) => panic!("unexpected source header admission: {other:?}"),
-            }
-            assert!(context.columns.is_empty());
-            assert!(context.rows.is_empty());
-        }
+        let mut context = Context {
+            source: &source,
+            encoding: source.encoding.as_deref(),
+            has_stored_encoding: true,
+            columns: Vec::new(),
+            rows: Vec::new(),
+            declared_rows: None,
+            declared_columns: 0,
+            error: None,
+        };
+        // SAFETY: the context outlives the call, and the encoding pointer is
+        // null, which the callback reads as none.
+        let status = unsafe {
+            metadata(
+                10_000_001,
+                1_025,
+                5,
+                std::ptr::null(),
+                (&mut context as *mut Context<'_>).cast(),
+            )
+        };
+        assert_eq!(status, 0);
+        assert!(context.error.is_none());
+        assert_eq!(
+            (context.declared_rows, context.declared_columns),
+            (Some(10_000_001), 1_025)
+        );
     }
 
     #[test]
@@ -681,9 +654,6 @@ mod tests {
                 bytes.as_ptr(),
                 bytes.len(),
                 1,
-                Limits::TABLE_ROWS,
-                Limits::COLUMNS,
-                Limits::TABLE_CELLS,
                 Limits::SOURCE_BYTES,
                 meta,
                 field,
@@ -1031,9 +1001,6 @@ mod tests {
                     bytes.as_ptr(),
                     bytes.len(),
                     0,
-                    Limits::TABLE_ROWS,
-                    Limits::COLUMNS,
-                    Limits::TABLE_CELLS,
                     Limits::SOURCE_BYTES,
                     meta,
                     field,

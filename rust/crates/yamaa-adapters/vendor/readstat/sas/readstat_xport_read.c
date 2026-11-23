@@ -13,7 +13,7 @@
 #include "readstat_xport.h"
 #include "ieee.h"
 
-extern int yamaa_readstat_admit(size_t, size_t);
+extern int yamaa_readstat_admit(uint64_t);
 extern void yamaa_readstat_number(const unsigned char *);
 extern readstat_error_t yamaa_readstat_refuse_value(int, int, readstat_error_t);
 
@@ -279,7 +279,7 @@ static readstat_error_t xport_read_namestr_header_record(xport_ctx_t *ctx) {
      * negative count, allocates no variable table: the metadata handler sees
      * the declared count instead of an empty allocation failing. */
     if (ctx->var_count > 0) {
-        if (!yamaa_readstat_admit(0, ctx->var_count))
+        if (!yamaa_readstat_admit((uint64_t)ctx->var_count))
             return READSTAT_ERROR_MALLOC;
         ctx->variables = readstat_calloc(ctx->var_count, sizeof(readstat_variable_t *));
         if (ctx->variables == NULL) {
@@ -672,11 +672,6 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
 
     if (!ctx->handle.value)
         return READSTAT_OK;
-
-    /* A declared observation count is admitted before any record is read. */
-    if (ctx->obs_count > 0 && (ctx->obs_count > SIZE_MAX ||
-                !yamaa_readstat_admit((size_t)ctx->obs_count, ctx->var_count)))
-        return READSTAT_ERROR_MALLOC;
 
     readstat_error_t retval = READSTAT_OK;
     char *row = readstat_malloc(ctx->row_length);

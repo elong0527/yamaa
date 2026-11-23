@@ -1538,60 +1538,6 @@ mod diagnostics {
                     .iter()
                     .all(|standard| standard.version != later));
             }
-            /// Seam: a table port of 10,000,001 rows that panics if a cell is
-            /// read.
-            #[test]
-            fn transport_refuses_oversized_geometry_before_reading_cells() {
-                use yamaa_core::limits::Limits;
-                struct Oversized(TableSchema);
-                impl TableAccess for Oversized {
-                    type Error = Infallible;
-                    fn schema(&self) -> &TableSchema {
-                        &self.0
-                    }
-                    fn row_count(&self) -> usize {
-                        Limits::TABLE_ROWS + 1
-                    }
-                    fn cell(
-                        &self,
-                        _: usize,
-                        _: usize,
-                    ) -> Result<ValueRef<'_>, CellError<Infallible>> {
-                        panic!("geometry must be admitted before table access")
-                    }
-                }
-                let lists = ct::Catalogue::admit(vec![]).unwrap();
-                let study = one(project(), specification(), &lists).unwrap();
-                let table = Oversized(
-                    TableSchema::new(vec![Column {
-                        name: "VALUE".into(),
-                        kind: ColumnType::Str,
-                    }])
-                    .unwrap(),
-                );
-                let finding =
-                    submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
-                assert_eq!(finding.code, ConditionCode::ApplicationRejected);
-                assert_eq!(finding.path, "datasets.D0.transport");
-                // An engine fault names its step, closed code and bound.
-                assert_eq!(
-                    finding.context,
-                    [
-                        ("step".into(), JsonValue::String("define".into())),
-                        ("code".into(), JsonValue::String("resource_limit".into())),
-                        (
-                            "detail".into(),
-                            JsonValue::String(
-                                "table_rows: required Some(10000001), limit 10000000".into(),
-                            ),
-                        ),
-                        ("resource".into(), JsonValue::String("table_rows".into())),
-                        ("limit".into(), JsonValue::from(10_000_000)),
-                        ("actual".into(), JsonValue::from(10_000_001)),
-                    ]
-                    .into()
-                );
-            }
         }
         mod verification {
             use crate::support::{

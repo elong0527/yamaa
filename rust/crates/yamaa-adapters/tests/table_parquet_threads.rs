@@ -180,16 +180,9 @@ fn a_write_on_four_threads_is_refused_as_the_write_on_one_is() {
     let cell = |row, column| Err(Error::Cell(CellError::Access(Rc::new((row, column)))));
     let whole = |rows| partitions(rows, rows);
     // A partition of 300,000 rows, two full row groups and 37,856 rows held
-    // for a third, then one past the row limit.
-    const PAST_LIMIT: usize = 10_300_001;
-    let past_limit = || vec![0..300_000, 300_000..PAST_LIMIT];
-    let table_rows = || {
-        Err(Error::Limit {
-            resource: "table_rows",
-            limit: 10_000_000,
-            actual: Some(10_000_001),
-        })
-    };
+    // for a third, then another partition.
+    const TWO_PARTITIONS: usize = 600_001;
+    let two_partitions = || vec![0..300_000, 300_000..TWO_PARTITIONS];
     let cases = [
         Refusal {
             label: "no column",
@@ -248,35 +241,19 @@ fn a_write_on_four_threads_is_refused_as_the_write_on_one_is() {
             expected: cell(GROUP + 9_000, 2),
         },
         Refusal {
-            label: "a refused partition after the row groups full before it",
-            rows: PAST_LIMIT,
-            refused: &[],
-            projection: &[0, 1],
-            partitions: past_limit(),
-            expected: table_rows(),
-        },
-        Refusal {
-            label: "a refused cell in a row group full before a refused partition",
-            rows: PAST_LIMIT,
+            label: "a refused cell in a row group full in the first partition",
+            rows: TWO_PARTITIONS,
             refused: &[(200_000, 1)],
             projection: &[0, 1],
-            partitions: past_limit(),
+            partitions: two_partitions(),
             expected: cell(200_000, 1),
         },
         Refusal {
-            label: "a refused partition before a refused cell held for the row group it would fill",
-            rows: PAST_LIMIT,
-            refused: &[(280_000, 0)],
-            projection: &[0, 1],
-            partitions: past_limit(),
-            expected: table_rows(),
-        },
-        Refusal {
             label: "a refused cell in the first row group, in the column projected last",
-            rows: PAST_LIMIT,
+            rows: TWO_PARTITIONS,
             refused: &[(GROUP - 1, 0)],
             projection: &[1, 0],
-            partitions: past_limit(),
+            partitions: two_partitions(),
             expected: cell(GROUP - 1, 0),
         },
     ];

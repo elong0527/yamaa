@@ -15,7 +15,6 @@ mod table {
             columns::Values,
         };
         use yamaa_core::{
-            limits::Limits,
             table::{CellError, TableAccess, TableSchema, ValueRef},
             temporal::{Date, DateTime, Precision as P},
             value::ColumnType as CT,
@@ -206,9 +205,10 @@ mod table {
         }
 
         #[test]
-        /// Fixed geometry precedes every column check; a missing column, or
-        /// a column of another type or length, is refused in column order.
-        fn fixed_geometry_precedes_column_checks_in_column_order() {
+        /// A table past the former 1,024-column and 10,000,000-row limits
+        /// (#4773) is checked column by column; a missing column, or a
+        /// column of another type or length, is refused in column order.
+        fn column_checks_are_in_column_order_past_the_former_limits() {
             let wide = TableSchema::new(
                 (0..1_025)
                     .map(|column| yamaa_core::table::Column {
@@ -221,24 +221,14 @@ mod table {
             let columns = (0..1_025).map(|_| Column::empty(CT::Str)).collect();
             assert!(matches!(
                 ColumnTable::new(wide, columns, 0),
-                Err(TableError::Limit {
-                    resource: "columns",
-                    limit: 1_024,
-                    required: Some(1_025),
+                Err(TableError::ArrayType {
+                    batch: 0,
+                    column: 0
                 })
             ));
-            assert!(matches!(
-                ColumnTable::new(
-                    TableSchema::new(vec![]).unwrap(),
-                    vec![],
-                    Limits::TABLE_ROWS + 1
-                ),
-                Err(TableError::Limit {
-                    resource: "table_rows",
-                    limit: Limits::TABLE_ROWS,
-                    required: Some(_),
-                })
-            ));
+            let records =
+                ColumnTable::new(TableSchema::new(vec![]).unwrap(), vec![], 10_000_001).unwrap();
+            assert_eq!(records.row_count(), 10_000_001);
             let schema = logical_schema(&[("I", CT::Int), ("S", CT::Str)]);
             let int = || Column::Int([Some(1)].into_iter().collect());
             for (columns, expected) in [
@@ -1087,7 +1077,7 @@ mod table {
                     ],
                 ],
             );
-            let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], None).unwrap();
+            let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2]).unwrap();
             assert_eq!(
                 rows,
                 [
@@ -1167,7 +1157,7 @@ mod table {
         }
 
         #[test]
-        fn fixed_geometry_is_admitted_before_output_cell_access() {
+        fn writers_past_the_former_table_limits_reach_their_first_cell() {
             use yamaa_adapters::csv_artifact::{self, Error as CsvError};
             struct Geometry {
                 schema: TableSchema,
@@ -1185,13 +1175,12 @@ mod table {
                     Err(CellError::Access("admitted table"))
                 }
             }
-            for (rows, columns, resource, actual, exceeds) in [
-                (9_999_999, 1, "table_rows", 9_999_999, false),
-                (10_000_001, 1, "table_rows", 10_000_001, true),
-                (1, 1023, "columns", 1023, false),
-                (1, 1025, "columns", 1025, true),
-                (3_575_418, 179, "table_cells", 639_999_822, false),
-                (3_575_419, 179, "table_cells", 640_000_001, true),
+            // Past the former row, column and cell limits (#4773), no
+            // geometry is refused: each writer reaches the table's first cell.
+            for (rows, columns, label) in [
+                (10_000_001, 1, "10,000,001 rows"),
+                (1, 1025, "1,025 columns"),
+                (3_575_419, 179, "640,000,001 cells"),
             ] {
                 let schema = TableSchema::new(
                     (0..columns)
@@ -1206,24 +1195,16 @@ mod table {
                 let projection = (0..columns).collect::<Vec<_>>();
                 macro_rules! check {
                     ($result:expr, $error:ident) => {
-                        match ($result, exceeds) {
-                            (
-                                Err($error::Limit {
-                                    resource: observed,
-                                    actual: Some(required),
-                                    ..
-                                }),
-                                true,
-                            ) => assert_eq!((observed, required), (resource, actual)),
-                            (Err($error::Cell(CellError::Access("admitted table"))), false) => {}
-                            (other, _) => panic!("unexpected {resource} admission: {other:?}"),
+                        match $result {
+                            Err($error::Cell(CellError::Access("admitted table"))) => {}
+                            other => panic!("unexpected write of {label}: {other:?}"),
                         }
                     };
                 }
                 check!(csv_artifact::render(&table, &projection, None), CsvError);
                 check!(render(&table, &projection), Error);
                 check!(
-                    yamaa_adapters::parquet_artifact::records(&table, &projection, None),
+                    yamaa_adapters::parquet_artifact::records(&table, &projection),
                     Error
                 );
             }
@@ -1278,7 +1259,7 @@ mod table {
                 assert_eq!(row.get_timestamp_micros(1).unwrap(), 86_399_000_000);
             }
             assert_eq!(
-                yamaa_adapters::parquet_artifact::records(&table, &[0, 1], None).unwrap(),
+                yamaa_adapters::parquet_artifact::records(&table, &[0, 1]).unwrap(),
                 [
                     r#"["D", "T"]"#,
                     r#"["1970-02-28", "1970-01-01T23:59:59"]"#,

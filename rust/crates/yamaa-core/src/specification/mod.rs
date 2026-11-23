@@ -554,14 +554,6 @@ fn build_sources(
         } else {
             SourceInterpretation::Ordinary
         });
-        if input.source.types.len() > crate::limits::Limits::COLUMNS {
-            return Err(PrepareError::limit(
-                "source_fields",
-                crate::limits::Limits::COLUMNS,
-                Some(input.source.types.len()),
-                Some(&format!("input.{name}.types")),
-            ));
-        }
         let path = input.source.path.text.as_str();
         sources.push(SourceDeclaration {
             name: name.into(),
@@ -778,9 +770,6 @@ impl PreparedSpecification {
         let contracts = crate::producer_contract::admit(document, links).map_err(|error| {
             use crate::producer_contract::AdmissionError;
             match error {
-                AdmissionError::Limit(limit) => {
-                    PrepareError::limit(limit.resource, limit.limit, limit.actual, None)
-                }
                 AdmissionError::Invalid(findings) => PrepareError::Invalid(
                     findings.into_iter().map(PreflightFinding::Scalar).collect(),
                 ),

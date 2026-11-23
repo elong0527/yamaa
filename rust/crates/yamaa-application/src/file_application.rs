@@ -676,13 +676,10 @@ fn result<E>(
 }
 
 /// Move the accepted dataset out of `attempt`, for a deferred build whose
-/// output is read as a stream (#3697), with the most rows one partition of
-/// it holds when the run admitted it a partition at a time (D264); none when
-/// the attempt accepted no dataset. The attempt then holds no execution
+/// output is read as a stream (#3697); none when the attempt accepted no
+/// dataset. The attempt then holds no execution
 /// result, so read whatever else it holds, such as its host failures, first.
-pub fn take_dataset<C, E>(
-    attempt: &mut Attempt<C, E>,
-) -> Option<(yamaa_core::dataset::Dataset, Option<std::num::NonZeroUsize>)> {
+pub fn take_dataset<C, E>(attempt: &mut Attempt<C, E>) -> Option<yamaa_core::dataset::Dataset> {
     let result = std::mem::replace(
         &mut attempt.dataset.result,
         Err(yamaa_core::specification_run::PortError::Incomplete),
@@ -691,7 +688,7 @@ pub fn take_dataset<C, E>(
         Ok(yamaa_core::dataset::ExecutionAttempt {
             result: Ok(execution),
             ..
-        }) => Some((execution.dataset, execution.partition_rows)),
+        }) => Some(execution.dataset),
         other => {
             attempt.dataset.result = other;
             None

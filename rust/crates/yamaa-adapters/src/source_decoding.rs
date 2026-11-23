@@ -419,11 +419,7 @@ pub(crate) fn scan_partitions(
                     // The first Parquet partitions are kept for the run, up
                     // to one partition's records (#4212); CSV decodes again.
                     if source.profile == SourceProfile::Parquet {
-                        let width = table.schema().columns().len();
-                        kept.offer(start, &table, |records| {
-                            records <= rows.get()
-                                && yamaa_core::limits::Limits::table(records, width).is_ok()
-                        });
+                        kept.offer(start, &table, |records| records <= rows.get());
                     }
                 }
             }

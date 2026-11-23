@@ -11,7 +11,6 @@ pub enum Cause {
     Shape {
         node: usize,
     },
-    Resource(crate::limits::LimitExceeded),
     /// Complete admitted structural findings, never a fitting prefix.
     Findings(Vec<Finding>),
 }
@@ -75,8 +74,6 @@ pub fn locate(input: &Document, root: usize) -> Result<Locations<'_>, Error<'_>>
             _ => return Err(refuse(Cause::Shape { node })),
         },
     };
-    crate::limits::Limits::columns(columns.len())
-        .map_err(|error| refuse(Cause::Resource(error)))?;
     for &node in columns {
         let N::Mapping(fields) = &input.nodes()[node] else {
             return Err(refuse(Cause::Shape { node }));

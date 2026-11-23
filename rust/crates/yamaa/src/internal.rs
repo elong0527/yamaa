@@ -583,11 +583,11 @@ fn run_with(
     #[cfg(feature = "arrow")]
     let mut build = build;
     #[cfg(feature = "arrow")]
-    let batches = rows.zip(dataset).and_then(|(rows, (dataset, partition))| {
+    let batches = rows.zip(dataset).and_then(|(rows, dataset)| {
         let projection = build.projection()?.to_vec();
         // The build checked that every batch can be built, as a table build
-        // checks its table, the output's partitions each on its own (D264).
-        PublicBatches::new(dataset, projection, rows, partition).ok()
+        // checks its table.
+        PublicBatches::new(dataset, projection, rows).ok()
     });
     #[cfg(not(feature = "arrow"))]
     let batches = {
@@ -603,15 +603,14 @@ fn run_with(
 
 /// What one run of a member yields: its result, or the findings that explain
 /// why it has none; with a project, the host failures the run retained; and,
-/// for a run whose output is read as a stream, its accepted dataset with the
-/// most rows one partition of it holds (D264).
+/// for a run whose output is read as a stream, its accepted dataset.
 type Ran = (
     Result<
         Box<yamaa_application::file_application::Domain>,
         Vec<yamaa_core::diagnostic::Diagnostic>,
     >,
     Vec<FunctionError>,
-    Option<(yamaa_core::dataset::Dataset, Option<std::num::NonZeroUsize>)>,
+    Option<yamaa_core::dataset::Dataset>,
 );
 
 /// One run of a prepared member through the engine's host-functions port:

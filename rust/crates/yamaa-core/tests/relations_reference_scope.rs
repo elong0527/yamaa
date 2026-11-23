@@ -648,28 +648,19 @@ mod relations {
         }
         /// Seam: the 1,024-column limit over generated fields.
         #[test]
-        fn fixed_relation_width_precedes_coordinate_admission_and_keeps_exact_shape() {
+        fn relation_width_past_the_former_column_limit_keeps_exact_shape() {
             let fields = |count| {
                 (0..count)
                     .map(|index| RelationField::stored(index, format!("F{index}"), ColumnType::Int))
                     .collect()
             };
-            let shape = RelationShape::new(fields(1024), Some(vec![1023])).unwrap();
-            assert_eq!(shape.fields().len(), 1024);
-            assert_eq!(shape.visible_index("F1023"), Some(1023));
+            let shape = RelationShape::new(fields(1025), Some(vec![1024])).unwrap();
+            assert_eq!(shape.fields().len(), 1025, "1,025 relation fields");
+            assert_eq!(shape.visible_index("F1024"), Some(1024), "the last field");
             assert_eq!(
                 RelationShape::new(fields(1025), Some(vec![usize::MAX])),
-                Err(RelationShapeError::Limit(
-                    yamaa_core::limits::LimitExceeded {
-                        resource: "columns",
-                        limit: 1024,
-                        actual: Some(1025)
-                    }
-                ))
-            );
-            assert_eq!(
-                RelationShape::new(fields(1024), Some(vec![usize::MAX])),
-                Err(RelationShapeError::InvalidProjection)
+                Err(RelationShapeError::InvalidProjection),
+                "a projection past the fields"
             );
         }
     }
@@ -952,8 +943,8 @@ mod relations {
             .unwrap()
         }
 
-        /// Seam: the admitted ordinal source: its schema, values and refusals at its
-        /// limits.
+        /// Seam: the admitted ordinal source: its schema, values and refusal of
+        /// a colliding name.
         #[test]
         fn positions_and_stored_contract_are_exact_at_the_admission_boundary() {
             let original = schema();
@@ -977,26 +968,13 @@ mod relations {
             );
 
             assert!(matches!(
-                Ordinal::admit(&original, usize::MAX, "REC"),
-                Err(Error::ResourceLimit { .. })
-            ));
-            assert!(matches!(
                 Ordinal::admit(&original, 0, "ID"),
                 Err(Error::Collision)
             ));
             let empty = Ordinal::admit(&original, 0, "REC").unwrap();
             assert_eq!(empty.schema(), admitted.schema());
             assert_eq!(empty.value(0), None);
-            let edge = Ordinal::admit(&original, 10_000_000, "REC").unwrap();
-            assert_eq!(edge.value(9_999_999), Some(10_000_000));
-            assert!(matches!(
-                Ordinal::admit(&original, 10_000_001, "REC"),
-                Err(Error::ResourceLimit {
-                    resource: "table_rows",
-                    limit: 10_000_000,
-                    actual: Some(10_000_001)
-                })
-            ));
+            // Past the former row and column limits (#4773).
             let wide = |count| {
                 TableSchema::new(
                     (0..count)
@@ -1008,24 +986,9 @@ mod relations {
                 )
                 .unwrap()
             };
-            let admitted = Ordinal::admit(&wide(1023), 625_000, "REC").unwrap();
-            assert_eq!(admitted.schema().columns().len(), 1024);
-            assert!(matches!(
-                Ordinal::admit(&wide(1024), 0, "REC"),
-                Err(Error::ResourceLimit {
-                    resource: "columns",
-                    limit: 1024,
-                    actual: Some(1025)
-                })
-            ));
-            assert!(matches!(
-                Ordinal::admit(&wide(1023), 625_001, "REC"),
-                Err(Error::ResourceLimit {
-                    resource: "table_cells",
-                    limit: 640_000_000,
-                    actual: Some(640_001_024)
-                })
-            ));
+            let admitted = Ordinal::admit(&wide(1024), 10_000_001, "REC").unwrap();
+            assert_eq!(admitted.schema().columns().len(), 1025);
+            assert_eq!(admitted.value(10_000_000), Some(10_000_001));
         }
     }
     mod run_report {

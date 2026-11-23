@@ -21,17 +21,9 @@ pub(super) fn convert(decoded: Decoded) -> Result<ColumnTable, Error> {
     build(decoded, rows)
 }
 
-/// Admit the decoded table's geometry within the fixed limits and each text
-/// column's offsets, before any value converts: its records.
+/// Admit each decoded text column's offsets before any value converts: its
+/// records.
 pub(super) fn admit(decoded: &Decoded) -> Result<usize, Error> {
-    let columns = decoded.schema.columns().len();
-    yamaa_core::limits::Limits::table(decoded.rows, columns).map_err(|error| {
-        Error::Table(TableError::Limit {
-            resource: error.resource,
-            limit: error.limit,
-            required: error.actual,
-        })
-    })?;
     for column in &decoded.columns {
         if let Converted::Column(Column::Str(text)) = column {
             // Each decoded text column fits Arrow Utf8's offsets.

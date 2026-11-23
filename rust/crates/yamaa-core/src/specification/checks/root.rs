@@ -8,25 +8,12 @@ use std::collections::BTreeSet;
 
 /// The declaration counts preparation admits before it compiles anything.
 pub(in crate::specification) fn limits(spec: &Spec) -> Result<(), PrepareError> {
-    for (resource, actual, limit) in [
-        ("columns", spec.columns.len(), Limits::COLUMNS),
-        ("keys", spec.keys.len(), Limits::KEYS),
-    ] {
-        if actual > limit {
-            return Err(PrepareError::limit(
-                resource,
-                limit,
-                Some(actual),
-                Some(resource),
-            ));
-        }
-    }
-    if spec.output.columns.len() > Limits::COLUMNS {
+    if spec.keys.len() > Limits::KEYS {
         return Err(PrepareError::limit(
-            "projected_columns",
-            Limits::COLUMNS,
-            Some(spec.output.columns.len()),
-            Some("output.columns"),
+            "keys",
+            Limits::KEYS,
+            Some(spec.keys.len()),
+            Some("keys"),
         ));
     }
     for column in &spec.columns {
@@ -50,28 +37,14 @@ pub(in crate::specification) fn limits(spec: &Spec) -> Result<(), PrepareError> 
     }
     // Row shapes are admitted before filters or default expansion allocate a plan.
     for template in &spec.rows.templates {
-        for (resource, name, actual, limit) in [
-            (
+        let group_keys = template.group_by.as_ref().map_or(0, Vec::len);
+        if group_keys > Limits::KEYS {
+            return Err(PrepareError::limit(
                 "group_keys",
-                "group_by",
-                template.group_by.as_ref().map_or(0, Vec::len),
                 Limits::KEYS,
-            ),
-            (
-                "row_columns",
-                "derivations",
-                template.overrides.len(),
-                Limits::COLUMNS,
-            ),
-        ] {
-            if actual > limit {
-                return Err(PrepareError::limit(
-                    resource,
-                    limit,
-                    Some(actual),
-                    Some(&format!("{}.{name}", spec.cite(template.meta))),
-                ));
-            }
+                Some(group_keys),
+                Some(&format!("{}.group_by", spec.cite(template.meta))),
+            ));
         }
     }
     Ok(())
@@ -352,14 +325,6 @@ pub(in crate::specification) fn source_findings(
         if matches!(profile, Some(ast::Profile::Parquet | ast::Profile::OdmXml))
             && !input.source.types.is_empty()
         {
-            if input.source.types.len() > Limits::COLUMNS {
-                return Err(PrepareError::limit(
-                    "source_fields",
-                    Limits::COLUMNS,
-                    Some(input.source.types.len()),
-                    Some(&format!("input.{name}.types")),
-                ));
-            }
             for (field, kind) in &input.source.types {
                 findings.push(PreflightFinding::RedundantSourceType {
                     dataset: name.into(),
