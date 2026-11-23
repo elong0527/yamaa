@@ -194,6 +194,7 @@
       "operation": "define",
       "input": {
         "benchmark": "sdtm-dm-metadata",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
         "project": "project.yaml",
         "section": "sdtm",
         "created": "2026-09-11T00:00:00Z"
@@ -209,6 +210,7 @@
       "operation": "define",
       "input": {
         "benchmark": "sdtm-dm-xpt",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.csv"}},
         "project": "project.yaml",
         "section": "sdtm",
         "created": "2026-09-11T00:00:00Z"
