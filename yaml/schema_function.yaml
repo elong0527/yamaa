@@ -15,6 +15,10 @@ function_definition_class:
         required: true
         values: [function]
         description: File type of a function file, which defines one project function (FUNC-4).
+    - encoding:
+        type: file_encoding
+        required: false
+        description: Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).
     - name:
         type: identifier
         required: true

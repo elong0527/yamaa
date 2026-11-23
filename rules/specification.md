@@ -267,18 +267,48 @@ that writes the entry.
 
 <a id="spec-8"></a>
 
-### SPEC-8. Language source is ASCII
+### SPEC-8. Language source is ASCII unless the file declares UTF-8
 
 Schema documents, specifications, inheritance layers, project files, codelist
-files and function files contain only bytes from `0x00` through `0x7F`. A non-ASCII source byte fails
-validation, reporting its file and position. A format's ASCII escape notation
-may denote a non-ASCII value; the decoded value is then an ordinary string.
+files and function files contain only bytes from `0x00` through `0x7F`,
+unless the file declares `encoding: utf-8` beside `yamaa` and `type`; it is
+then UTF-8, but still escapes a byte-order mark and each `Bidi_Control`
+character. A character a file may not write literally fails validation as
+`non_ascii_source`, and bytes that are not UTF-8 in a declared file as
+`invalid_source_encoding`, each reporting its file and position. A format's
+ASCII escape notation may denote a non-ASCII value, then an ordinary
+string.
 
-Fails: `non_ascii_source`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/workflow.json::a_yaml_entry_byte_outside_ascii_names_the_entry_and_its_position`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_yaml_source_byte_outside_ascii_names_the_file_and_its_position`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`.
+Fails: `non_ascii_source`, `invalid_source_encoding`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/workflow.json::a_yaml_entry_byte_outside_ascii_names_the_entry_and_its_position`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_yaml_source_byte_outside_ascii_names_the_file_and_its_position`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`, `rust/crates/yamaa-adapters/src/yaml_source/tests.rs::the_header_decides_which_bytes_a_source_may_hold`, `rust/crates/yamaa-adapters/src/yaml_source/tests.rs::a_utf8_source_locates_a_node_by_its_byte_and_its_character_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_character_a_utf8_source_may_only_escape_names_the_escape_alone`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::bytes_a_utf8_source_holds_that_are_not_utf8_name_the_file_and_their_position`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/workflow.json::an_entry_that_declares_utf8_writes_literal_text_and_checks_clean`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/workflow.json::an_entry_that_declares_utf8_leaves_its_parent_ascii`, `rust/crates/yamaa-application/tests/fixtures/yaml_transport.json`, `rust/tests/host-fixtures/cases.json::utf8-method-and-title`, `rust/tests/host-fixtures/cases.json::utf8-parent-method`, `rust/crates/yamaa-adapters/src/lint/tests.rs::a_utf8_line_is_as_wide_as_its_characters`.
 
 For example, the YAML double-quoted escape `"\u00E9"` denotes the
-one-character string U+00E9.
+one-character string U+00E9 in either encoding, and a file that declares
+UTF-8 may write that character itself.
+
+A specification, layer or fragment, project file, codelist file or function
+file may declare UTF-8; a schema document stays ASCII. The `Bidi_Control`
+characters are `U+061C`, `U+200E`, `U+200F`, `U+202A` through `U+202E` and
+`U+2066` through `U+2069`.
+
+ASCII is the default and the recommended form. A file declares UTF-8 when it
+transcribes text whose non-ASCII characters would each need an escape, such
+as method descriptions and document titles copied from a submitted
+Define-XML document. A refusal in a file that declares no encoding names
+both remedies in its `hint`; one in a file that declares UTF-8 names the
+escape alone. The two refused kinds of character can show a reader text in
+another order than the engine reads it, or not at all, so even a UTF-8 file
+spells them as escapes.
+
+The declaration describes only the bytes of the file that writes it.
+Composition never contributes it, so a layer, fragment or parent is ASCII
+unless it declares UTF-8 itself, and a resolved specification carries no
+`encoding`. The value is exactly `utf-8` or `ascii`. The reader finds the
+declaration in the root mapping of the file's one document, wherever the
+entry stands among its fields; a file it cannot read as far as that entry
+declares nothing, and a byte-order mark before the header is refused as a
+character, not as a hidden declaration. A position in a UTF-8 file counts
+lines as in an ASCII file and columns in characters.
 
 The repository holding the language keeps the same boundary: its conformance
 documents, rules, documentation and implementation source are ASCII, and they

@@ -277,6 +277,9 @@ conditions:
   invalid_size:
     phases: [validation]
     message: "the value does not have the size {size}"
+  invalid_source_encoding:
+    phases: [validation]
+    message: "{path} holds bytes that are not UTF-8"
   invalid_string_template:
     phases: [validation]
     message: "the string template is invalid ({reason})"
@@ -362,6 +365,9 @@ conditions:
   non_ascii_source:
     phases: [validation]
     message: "{path} holds a character outside ASCII"
+    message_variants:
+      - when: hint
+        message: "{path} holds a character outside ASCII ({hint})"
   not_missing_failed:
     phases: [verification]
     message: "column {column} is missing in {failure_count} of the rows"

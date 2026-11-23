@@ -7,6 +7,11 @@ language_version:
     values: ["1.0"]
     description: Language version a file declares in `yamaa`, the oldest that admits every field it writes (SCHEMA-2).
 
+file_encoding:
+    type: str
+    values: [ascii, utf-8]
+    description: Text encoding of a file's own bytes, which `encoding` declares (SPEC-8).
+
 column_type:
     type: str
     values: [str, int, float, date, datetime, time]

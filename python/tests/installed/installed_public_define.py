@@ -926,11 +926,12 @@ class PublicDefine(unittest.TestCase):
                     ("project.yaml", case["project_mutations"]),
                 ]:
                     path = directory / filename
-                    text = path.read_text()
+                    # A case may write a declared UTF-8 file (SPEC-8).
+                    text = path.read_text(encoding="utf-8")
                     for before, after in mutations:
                         self.assertIn(before, text)
                         text = text.replace(before, after, 1)
-                    path.write_text(text)
+                    path.write_text(text, encoding="utf-8")
                 if case["inherit_specification"]:
                     (directory / "spec.yaml").rename(directory / "base.yaml")
                     (directory / "spec.yaml").write_text(

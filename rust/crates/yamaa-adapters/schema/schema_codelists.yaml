@@ -16,4 +16,8 @@ codelist_file_class:
         required: true
         values: [codelists]
         description: File type of a codelist file, which holds the codelists of one source (CT-1).
+    - encoding:
+        type: file_encoding
+        required: false
+        description: Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).
     - fields_from: codelist_source_class

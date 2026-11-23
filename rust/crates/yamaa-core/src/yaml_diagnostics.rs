@@ -13,9 +13,24 @@ pub struct UnicodeIssue {
     pub code_point: u32,
     pub offset: usize,
 }
+/// What a file that holds a character it may not write literally should do
+/// instead (SPEC-8): an ASCII file may also declare UTF-8, a UTF-8 file may
+/// only escape it.
+const ASCII_HINT: &str = "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header";
+const UTF8_HINT: &str = "write it as a \\uXXXX escape in a double-quoted scalar, which a UTF-8 file also requires for this character";
+
 #[derive(Debug)]
 pub enum Failure<'a> {
+    /// A character outside ASCII that the file may not write literally:
+    /// any one, in a file that declares no encoding, and a byte-order mark
+    /// or bidirectional control, in a file that declares UTF-8.
     NonAscii {
+        line: usize,
+        column: usize,
+        utf8: bool,
+    },
+    /// Bytes that are not UTF-8 in a file that declares UTF-8.
+    InvalidUtf8 {
         line: usize,
         column: usize,
     },
@@ -33,8 +48,22 @@ pub enum Failure<'a> {
 /// `path`.
 pub fn diagnostics<'a>(failure: Failure<'a>, identity: &'a str) -> Vec<Diagnostic<'a>> {
     match failure {
-        Failure::NonAscii { line, column } => vec![Diagnostic {
+        Failure::NonAscii { line, column, utf8 } => vec![Diagnostic {
             code: ConditionCode::SourceNonAscii,
+            spec_path: "$".into(),
+            context: [
+                ("line", Fact::Unsigned(line)),
+                ("column", Fact::Unsigned(column)),
+                ("path", Fact::Text(identity)),
+                (
+                    "hint",
+                    Fact::Text(if utf8 { UTF8_HINT } else { ASCII_HINT }),
+                ),
+            ]
+            .into(),
+        }],
+        Failure::InvalidUtf8 { line, column } => vec![Diagnostic {
+            code: ConditionCode::SourceInvalidEncoding,
             spec_path: "$".into(),
             context: [
                 ("line", Fact::Unsigned(line)),

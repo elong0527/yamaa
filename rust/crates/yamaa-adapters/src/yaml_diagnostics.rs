@@ -5,9 +5,15 @@ use yamaa_core::diagnostic::Diagnostic;
 /// Semantic source findings are shared by byte probes and document preparation.
 /// Resource refusals and internal defects are never fabricated language findings.
 fn source_diagnostics(error: &DecodeFailure, identity: &str) -> Option<Vec<Diagnostic>> {
+    use crate::yaml_decode::Encoding;
     use yamaa_core::yaml_diagnostics::Failure;
     let failure = match error {
-        DecodeFailure::NonAscii(position) => Failure::NonAscii {
+        DecodeFailure::NonAscii(position, encoding) => Failure::NonAscii {
+            line: position.line,
+            column: position.column,
+            utf8: *encoding == Encoding::Utf8,
+        },
+        DecodeFailure::InvalidUtf8(position) => Failure::InvalidUtf8 {
             line: position.line,
             column: position.column,
         },

@@ -238,8 +238,20 @@
     {
       "case": "a_yaml_source_byte_outside_ascii_names_the_file_and_its_position",
       "operation": "yaml_source",
-      "input": {"identity": "source.yaml", "failure": {"non_ascii": {"line": 1, "column": 4}}},
-      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 1, "column": 4, "path": "source.yaml"}}]
+      "input": {"identity": "source.yaml", "failure": {"non_ascii": {"line": 1, "column": 4, "encoding": "ascii"}}},
+      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 1, "column": 4, "path": "source.yaml", "hint": "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header"}}]
+    },
+    {
+      "case": "a_character_a_utf8_source_may_only_escape_names_the_escape_alone",
+      "operation": "yaml_source",
+      "input": {"identity": "source.yaml", "failure": {"non_ascii": {"line": 2, "column": 5, "encoding": "utf-8"}}},
+      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 2, "column": 5, "path": "source.yaml", "hint": "write it as a \\uXXXX escape in a double-quoted scalar, which a UTF-8 file also requires for this character"}}]
+    },
+    {
+      "case": "bytes_a_utf8_source_holds_that_are_not_utf8_name_the_file_and_their_position",
+      "operation": "yaml_source",
+      "input": {"identity": "source.yaml", "failure": {"invalid_utf8": {"line": 2, "column": 6}}},
+      "issues": [{"phase": "validation", "condition": "invalid_source_encoding", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 2, "column": 6, "path": "source.yaml"}}]
     },
     {
       "case": "a_yaml_syntax_error_names_its_position_alone",

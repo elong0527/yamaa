@@ -454,7 +454,8 @@ for (case_index in seq_along(host_truth[["xml_text_cases"]])) {
       stopifnot_case(paste(label, filename), "the mutation's text is present" = grepl(mutation[[1L]], text, fixed = TRUE))
       text <- sub(mutation[[1L]], mutation[[2L]], text, fixed = TRUE)
     }
-    writeLines(text, path)
+    # A case may write a declared UTF-8 file (SPEC-8), whatever the locale.
+    writeLines(enc2utf8(text), path, useBytes = TRUE)
   }
   if (case[["inherit_specification"]]) {
     stopifnot_case(label, "the specification becomes a parent" = file.rename(file.path(root, "spec.yaml"), file.path(root, "base.yaml")))
@@ -471,7 +472,7 @@ for (case_index in seq_along(host_truth[["xml_text_cases"]])) {
   } else {
     xml <- rawToChar(saved(result, root, "define.xml")[["define.xml"]])
     for (fragment in case[["xml_fragments"]]) stopifnot_case(label, "Define-XML holds the authored fragment" =
-      grepl(fragment, xml, fixed = TRUE))
+      grepl(enc2utf8(fragment), xml, fixed = TRUE, useBytes = TRUE))
   }
   stopifnot_case(label, "no input directory is created" = !dir.exists(file.path(root, "input")),
     "metadata alone reads no dataset" = !file.exists(file.path(root, "dm.csv")))

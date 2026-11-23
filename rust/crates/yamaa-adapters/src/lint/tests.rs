@@ -797,6 +797,38 @@ fn the_line_width_boundary_is_seventy_nine() {
 }
 
 #[test]
+fn a_utf8_line_is_as_wide_as_its_characters() {
+    let declared = CANONICAL.replacen("type: spec\n", "type: spec\nencoding: utf-8\n", 1);
+    let at_limit = declared.replace(
+        "    label: Study Identifier\n",
+        &format!("    label: {}\n", "\u{e9}".repeat(68)),
+    );
+    assert!(names(&at_limit).is_empty());
+    let over_limit = declared.replace(
+        "    label: Study Identifier\n",
+        &format!("    label: {}\n", "\u{e9}".repeat(69)),
+    );
+    let label_line = over_limit
+        .lines()
+        .position(|line| line.contains("label:"))
+        .unwrap()
+        + 1;
+    let found = findings(&over_limit)
+        .into_iter()
+        .map(|item| (item.finding, item.line, item.column, item.message))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        found,
+        [(
+            "line_width",
+            label_line,
+            80,
+            "line is 80 characters; wrap it at 79".to_owned()
+        )]
+    );
+}
+
+#[test]
 fn a_long_block_scalar_at_the_end_is_left_to_its_author() {
     // A block scalar's end sits on the line after the file's last written
     // line; wrapping must refuse the edit, not read past the end.
