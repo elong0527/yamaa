@@ -509,7 +509,7 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diag
 | `def:CommentOID` | generated, when `submission.comment` is declared |
 | `def:HasNoData` | `Yes` when `submission.has_no_data`, else omitted |
 | `Description` | `submission.label` |
-| `ItemRef` | one per `output.columns` entry, in that order |
+| `ItemRef` | one per `output.columns` entry that produces one ([DEFINE-18](#define-18)), in that order |
 | `def:Class` | `submission.class`, with `def:SubClass` when declared |
 | `def:leaf` | the file the package carries, per [DEFINE-16](#define-16) |
 
@@ -1001,7 +1001,8 @@ declares a transport or the specification a run report
 passes a regulator's or a validator's conformance checks.
 
 The reproduced export requires explicit column `data_type`, `mandatory` and
-labels. Lengths, formats, origins, methods and codelists remain as declared.
+labels for the columns the document describes. Lengths, formats, origins,
+methods and codelists remain as declared.
 `key_sequence` declares a reproduced ItemRef key position independently of
 executable `keys`, and a column's or value-level entry's `has_no_data` its
 ItemRef's `def:HasNoData`, which validated metadata measures instead
