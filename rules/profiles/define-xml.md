@@ -449,7 +449,7 @@ order, from `study.name`, `study.description` and `study.protocol_name`.
 that order.
 
 Fails: `source_system_incomplete`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_generator_version_leaves_the_source_system_incomplete`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_generator_version_leaves_the_source_system_incomplete`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_source_system_names_the_generator_in_both_documents`.
 
 | Attribute | Source |
 |---|---|
@@ -458,17 +458,17 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics
 | `FileOID` | `file_oid` |
 | `CreationDateTime` | selected `created`, or preparation-time UTC |
 | `Originator` | `originator`, when declared |
-| `SourceSystem` | fixed `yamaa` |
+| `SourceSystem` | section `source_system`, or `yamaa` |
 | `SourceSystemVersion` | section override or actual installed version |
 | `def:Context` | `context` |
 
-Each section may declare a non-empty `source_system_version`. Its value
-overrides the source-system version metadata in both Define-XML and
-Dataset-JSON, and omission selects the actual installed yamaa version. A
-source-system version that would be written empty fails with
-`source_system_incomplete`. Qualification retains the actual generator version
-separately from this metadata override. The generated Define-XML release is
-`2.1.11`, and `SourceSystem` is `yamaa`.
+Each section may declare a non-empty `source_system` and a non-empty
+`source_system_version`. They override the source-system name and version
+metadata in both Define-XML and Dataset-JSON; omission names `yamaa` and
+selects the actual installed yamaa version. A source-system version that would
+be written empty fails with `source_system_incomplete`. Qualification retains
+the actual generator version separately from this metadata override.
+The generated Define-XML release is `2.1.11`.
 
 <a id="define-13"></a>
 

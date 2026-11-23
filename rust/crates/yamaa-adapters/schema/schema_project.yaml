@@ -170,6 +170,10 @@ submission_section_class:
     - stylesheet:
         type: relative_href
         description: Optional relative stylesheet link (DEFINE-23).
+    - source_system:
+        type: str
+        min_length: 1
+        description: Optional nonempty XML and JSON source-system name; omission names yamaa (DEFINE-12).
     - source_system_version:
         type: str
         min_length: 1

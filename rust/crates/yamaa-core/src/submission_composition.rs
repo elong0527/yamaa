@@ -241,6 +241,14 @@ impl Study {
     pub fn metadata_description(&self) -> Option<&str> {
         self.metadata_description.as_deref()
     }
+    /// The source-system name the documents carry: declared, or `yamaa`
+    /// (DEFINE-12).
+    pub fn source_system(&self) -> &str {
+        self.section
+            .source_system
+            .as_ref()
+            .map_or("yamaa", |name| name.text.as_str())
+    }
     /// The source-system version the documents name: declared, or the
     /// installed version (DEFINE-12).
     pub fn source_version(&self) -> &str {
@@ -2704,6 +2712,7 @@ mod tests {
             metadata_version: None,
             originator: None,
             stylesheet: None,
+            source_system: None,
             source_system_version: None,
             analysis_results: Vec::new(),
             meta: text("").meta,
