@@ -3,7 +3,6 @@
 #include <string.h>
 #include <sys/types.h>
 #include <stdint.h>
-#include <limits.h>
 #include <time.h>
 
 #include "../readstat.h"
@@ -15,6 +14,7 @@
 #include "ieee.h"
 
 extern int yamaa_readstat_admit(uint64_t);
+extern int yamaa_readstat_admit_record(int);
 extern void yamaa_readstat_number(const unsigned char *);
 extern readstat_error_t yamaa_readstat_refuse_value(int, int, readstat_error_t);
 
@@ -603,6 +603,12 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
     int i;
     off_t pos = 0;
     char *string = NULL;
+    /* A parsed record is counted in an int, which the value handler takes as
+     * its position, so a member holds no more records than the bridge admits:
+     * at most what an int counts. One more is refused before the count
+     * overflows. */
+    if (!ctx->row_offset && !yamaa_readstat_admit_record(ctx->parsed_row_count))
+        return READSTAT_ERROR_PARSE;
     for (i=0; i<ctx->var_count; i++) {
         readstat_variable_t *variable = ctx->variables[i];
         readstat_value_t value = { .type = variable->type };
@@ -677,7 +683,9 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     char *row = readstat_malloc(ctx->row_length);
     char *blank_row = readstat_malloc(ctx->row_length);
-    int num_blank_rows = 0;
+    /* Blank records held back until a later record shows them to be data;
+     * trailing ones are padding, of any number, and are never counted. */
+    uint64_t num_blank_rows = 0;
     uint64_t rows_read = 0;
 
     if (row == NULL || blank_row == NULL) {
@@ -699,14 +707,6 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
                 if (row[tail] != ' ') { retval = READSTAT_ERROR_READ; goto cleanup; }
             }
             break;
-        }
-        /* A record is counted in an int once it is read: as a blank record
-         * held back (`num_blank_rows`) or as a parsed one, whose position the
-         * value handler takes (`parsed_row_count`). A member of more records
-         * than an int counts is refused here, before either count overflows. */
-        if (rows_read == INT_MAX) {
-            retval = READSTAT_ERROR_PARSE;
-            goto cleanup;
         }
         rows_read++;
 

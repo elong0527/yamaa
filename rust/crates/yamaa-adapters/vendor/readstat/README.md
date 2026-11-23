@@ -82,11 +82,14 @@ a table's rows, columns and cells have no fixed maximum (#4773). The C readers
 admit a declared column count against the file's own bytes, eight per column,
 before table-sized metadata allocation, and a count past them is a malformed
 header. Allocation arithmetic and source page/header
-extents are checked. The transport reader counts each record it reads in an
-`int`, as a blank record it holds back or as a parsed one, so a member of more
-than `INT_MAX` records, which a file of one-byte records can hold within the
-source-byte boundary, is malformed before either count overflows (#4782). A
-SAS page count with its high bit set is malformed:
+extents are checked. The transport reader counts each record it parses in an
+`int`, which the value handler takes as the record's position, so a member
+holds no more records than the bridge's `yamaa_readstat_admit_record` admits:
+the limit `yamaa_readstat_parse` is given, and never more than `INT_MAX`. A
+file of one-byte records can hold more within the source-byte boundary; its
+first record past the limit is malformed, before the count overflows (#4782).
+Blank records held back are counted in 64 bits, so trailing padding of any
+length is not a record. A SAS page count with its high bit set is malformed:
 upstream reads it into a signed field, where it passes the upper bound and
 overflows the check that the pages fill the file. Only live records are
 decompressed: a compressed record after them is not read, in RDC as in RLE
