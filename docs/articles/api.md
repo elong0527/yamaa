@@ -967,7 +967,11 @@ and inputs, so run and save the section first
 can see: the derivation, the values a run completes, and the published data
 when the section declares a transport or the specification a run report. It
 does not mean the document passes a regulator's or a validator's conformance
-checks.
+checks. A validated document describes every column the run publishes, so a
+sequence variable derived only to identify rows, and declared in `keys`,
+needs a `label` and `submission` metadata like any other output column; only
+reproduced metadata may leave a column out
+([DEFINE-7](../../rules/profiles/define-xml.md#define-7)).
 
 === "R"
 
