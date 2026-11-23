@@ -325,6 +325,8 @@ pub struct Section {
     pub metadata_version: Option<MetadataVersion>,
     pub originator: Option<Text>,
     pub stylesheet: Option<Text>,
+    /// An authored source-system name; omission names `yamaa` (DEFINE-12).
+    pub source_system: Option<Text>,
     /// An authored source-system version; omission selects the installed
     /// package version (DEFINE-12).
     pub source_system_version: Option<Text>,

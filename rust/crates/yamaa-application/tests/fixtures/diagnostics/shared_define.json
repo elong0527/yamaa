@@ -393,6 +393,23 @@
       }
     },
     {
+      "case": "a_declared_source_system_names_the_generator_in_both_documents",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {"project.yaml": [{"from": "  source_system_version: '1.0'\n", "to": "  source_system: Sponsor Metadata System\n  source_system_version: '4.2.0'\n"}]},
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/@SourceSystem": ["Sponsor Metadata System"], "/ODM/@SourceSystemVersion": ["4.2.0"]}},
+        "dm.json": {"select": {"/sourceSystem": ["{\"name\": \"Sponsor Metadata System\", \"version\": \"4.2.0\"}"]}}
+      }
+    },
+    {
       "case": "a_text_column_without_a_length_publishes_its_longest_value",
       "operation": "define",
       "input": {
