@@ -222,29 +222,7 @@ fn metadata_start(
             comment = true;
         }
         if byte == b'&' || byte == b'!' {
-            let prefix = &bytes[..offset];
-            // Markers follow YAML line-break handling, including standalone CR.
-            let mut line = 1;
-            let mut column = 1;
-            let mut previous_cr = false;
-            for &byte in prefix {
-                match byte {
-                    b'\n' if previous_cr => {}
-                    b'\r' | b'\n' => {
-                        line += 1;
-                        column = 1;
-                    }
-                    // A UTF-8 continuation byte continues its character.
-                    _ if byte & 0xc0 == 0x80 => {}
-                    _ => column += 1,
-                }
-                previous_cr = byte == b'\r';
-            }
-            return SourcePosition {
-                offset,
-                line,
-                column,
-            };
+            return byte_position(bytes, offset);
         }
     }
     offsets.position(fallback)
@@ -374,22 +352,30 @@ pub fn scan_strict(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
     scan_impl(source, true)
 }
 
-/// The position of the byte at `offset`, whose prefix is UTF-8: lines end
-/// at a line feed, and a column counts characters.
+/// The position of the byte at `offset`, whose prefix is UTF-8. Lines break
+/// as the scanner breaks them, at a line feed, a carriage return or the two
+/// together, and a column counts characters.
 fn byte_position(source: &[u8], offset: usize) -> SourcePosition {
-    let prefix = &source[..offset];
-    let start = prefix
-        .iter()
-        .rposition(|byte| *byte == b'\n')
-        .map_or(0, |newline| newline + 1);
+    let mut line = 1;
+    let mut column = 1;
+    let mut previous_cr = false;
+    for &byte in &source[..offset] {
+        match byte {
+            b'\n' if previous_cr => {}
+            b'\r' | b'\n' => {
+                line += 1;
+                column = 1;
+            }
+            // A UTF-8 continuation byte continues its character.
+            _ if byte & 0xc0 == 0x80 => {}
+            _ => column += 1,
+        }
+        previous_cr = byte == b'\r';
+    }
     SourcePosition {
         offset,
-        line: prefix.iter().filter(|byte| **byte == b'\n').count() + 1,
-        column: prefix[start..]
-            .iter()
-            .filter(|byte| **byte & 0xc0 != 0x80)
-            .count()
-            + 1,
+        line,
+        column,
     }
 }
 

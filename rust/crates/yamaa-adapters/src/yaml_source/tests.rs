@@ -218,9 +218,24 @@ fn the_header_decides_which_bytes_a_source_may_hold() {
             Encoding::Utf8,
         ))
     };
-    let cases: [(&[u8], Option<ScanFailure>, &str); 12] = [
+    let cases: [(&[u8], Option<ScanFailure>, &str); 15] = [
         (b"x: \xc3\xa9\n", ascii(3, 1, 4), "undeclared"),
         (b"x: \xff\n", ascii(3, 1, 4), "undeclared, not UTF-8"),
+        (
+            b"x: 1\ry: \xc3\xa9\n",
+            ascii(8, 2, 4),
+            "undeclared, after a CR",
+        ),
+        (
+            b"encoding: utf-8\rx: \xff\r",
+            Some(ScanFailure::InvalidUtf8(at(19, 2, 4))),
+            "declared, not UTF-8, after a CR",
+        ),
+        (
+            b"encoding: utf-8\r\nx: \xc3\xa9 \xff\r\n",
+            Some(ScanFailure::InvalidUtf8(at(23, 2, 6))),
+            "declared, not UTF-8, after a CRLF",
+        ),
         (b"encoding: utf-8\nx: \xc3\xa9\n", None, "declared"),
         (
             b"x: \xc3\xa9\nencoding: utf-8\n",
