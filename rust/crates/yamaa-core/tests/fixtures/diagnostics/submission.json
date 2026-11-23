@@ -468,6 +468,23 @@
       ]
     },
     {
+      "case": "a_validated_column_declares_no_omitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "omitted"], "to": true}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "context": {"detail": "schema_violation: reproduced omitted requires mode reproduced", "value": "VALUE"}
+        }
+      ]
+    },
+    {
       "case": "a_validated_method_declares_no_received_oid",
       "operation": "compose",
       "input": {
@@ -1814,6 +1831,12 @@
       "operation": "compose",
       "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "define_version"], "to": "2.0.0"}, {"set": ["specs", "1", "submission", "mode"], "to": "reproduced"}, {"set": ["specs", "1", "columns", "0", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8}}, {"set": ["specs", "1", "columns", "1", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8, "codelist": "PARAM"}}, {"set": ["specs", "1", "columns", "2", "submission"], "to": {"data_type": "integer", "mandatory": false, "length": 8}}, {"set": ["specs", "1", "columns", "3", "submission"], "to": {"data_type": "integer", "mandatory": false, "length": 8}}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets", "D1", "where"], "to": {"PARAMCD": ["Q"], "VISITN": ["one"]}}]},
       "issues": []
+    },
+    {
+      "case": "an_analysis_variable_or_where_column_a_reproduced_dataset_omits_is_refused",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "define_version"], "to": "2.0.0"}, {"set": ["specs", "1", "submission", "mode"], "to": "reproduced"}, {"set": ["specs", "1", "columns", "0", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8}}, {"set": ["specs", "1", "columns", "1", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8, "codelist": "PARAM"}}, {"set": ["specs", "1", "columns", "2", "submission"], "to": {"omitted": true}}, {"set": ["specs", "1", "columns", "3", "submission"], "to": {"omitted": true}}]},
+      "issues": [{"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.variables[0]"], "context": {"dataset": "D1", "detail": "omitted", "display": "T1", "reason": "omitted", "result": "R1", "variable": "AVAL"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.where.VISITN"], "context": {"dataset": "D1", "detail": "omitted", "display": "T1", "reason": "omitted", "result": "R1", "where_column": "VISITN"}}]
     }
   ]
 }

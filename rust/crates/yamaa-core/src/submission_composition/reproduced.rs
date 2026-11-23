@@ -40,6 +40,51 @@ pub(super) fn dataset(
     }
 }
 
+/// Whether reproduced metadata leaves `column` out of the document: its
+/// `submission` declares `omitted: true` (DEFINE-30).
+pub(super) fn omits(column: &spec::Column) -> bool {
+    column
+        .submission
+        .as_ref()
+        .and_then(|metadata| metadata.omitted.as_ref())
+        .is_some_and(|field| field.value)
+}
+
+/// Whether the received document leaves `column` out, so that the document
+/// writes no `ItemRef` or `ItemDef` for it. Nothing would write another field
+/// of its `submission` (DEFINE-26), so one beside `omitted` is refused, once,
+/// at the `omitted` that `path`, the column's `submission`, holds.
+pub(super) fn omitted(column: &spec::Column, path: &str, findings: &mut Vec<Finding>) -> bool {
+    if !omits(column) {
+        return false;
+    }
+    let others = column.submission.as_ref().is_some_and(|metadata| {
+        metadata
+            .fields
+            .iter()
+            .any(|field| field.field != spec::FieldName::Omitted)
+    });
+    if others {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{path}.omitted"),
+            "an omitted column declares no other submission field",
+            crate::json::Value::Bool(true),
+        ));
+    }
+    true
+}
+
+/// An `ItemGroupDef` requires an `ItemRef` (DEFINE-25): a dataset whose every
+/// output column is omitted is refused at the `omitted` of the first, whose
+/// `submission` path is `first`.
+pub(super) fn no_item_ref(first: &str) -> Finding {
+    crate::define_diagnostics::xml_invalid(
+        &format!("{first}.omitted"),
+        "an ItemGroupDef requires an ItemRef",
+        crate::json::Value::Bool(true),
+    )
+}
+
 pub(super) fn column(
     admission: &ColumnAdmission<'_>,
     column: &spec::Column,

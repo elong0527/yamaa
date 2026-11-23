@@ -12,6 +12,7 @@ const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
 /// A column's governed fields, where a 1.0 specification writes its origin
 /// as `origins` (P-ORIGIN-1).
 const SUBMISSION: &[F] = &[
+    F::Omitted,
     F::KeySequence,
     F::HasNoData,
     F::Core,
@@ -495,6 +496,12 @@ impl<'a> Parser<'a> {
         }
         let node = origin.node.unwrap();
         let mut metadata = self.metadata(origin, node, path, SUBMISSION)?;
+        metadata.omitted = self.boolean(
+            self.get(node, F::Omitted),
+            path.field(F::Omitted),
+            None,
+            false,
+        )?;
         metadata.value_level =
             self.entries(self.get(node, F::ValueLevel), path.field(F::ValueLevel))?;
         Ok(Some(metadata))
@@ -673,6 +680,7 @@ impl<'a> Parser<'a> {
             false,
         )?;
         Ok(ColumnSubmission {
+            omitted: None,
             key_sequence: self.text_field(node, F::KeySequence, path, TextRule::Integer, false)?,
             has_no_data,
             origin,

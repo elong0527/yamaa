@@ -181,6 +181,9 @@ pub(super) fn admit(
                 .position(|column| column.name == where_column)?;
             Some(Declared {
                 output: carried.contains(where_column),
+                // Execution binds validated metadata, which omits no column
+                // (DEFINE-30).
+                omitted: false,
                 kind: output.columns()[index].kind,
                 codelist: catalogue.and_then(|catalogue| codelist(catalogue, &spec.columns[index])),
             })

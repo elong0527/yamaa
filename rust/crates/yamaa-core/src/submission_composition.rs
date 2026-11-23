@@ -1388,18 +1388,21 @@ fn key_column_mandatory(
 }
 
 /// The declared column `name` as a where clause reads it (SUB-12): whether
-/// `output` carries it, its type, and the values its own codelist and its
-/// entries' codelists admit. A value-level entry's clause and an analysis
+/// `output` carries it, whether metadata that is `reproduced` omits it from
+/// the document (DEFINE-30), its type, and the values its own codelist and
+/// its entries' codelists admit. A value-level entry's clause and an analysis
 /// dataset's read a where column through this one description.
 fn declared_column<'c>(
     columns: &[spec::Column],
     output: &[String],
     catalogue: &'c ct::Catalogue,
+    reproduced: bool,
     name: &str,
 ) -> Option<values::Declared<'c>> {
     let declared = columns.iter().find(|column| column.name.value == name)?;
     Some(values::Declared {
         output: output.iter().any(|column| column == name),
+        omitted: reproduced && reproduced::omits(declared),
         kind: runtime_type(declared.column_type.value),
         codelist: declared.submission.as_ref().and_then(|metadata| {
             values::admitted(
@@ -1441,7 +1444,10 @@ fn compose_values(
         let Some(metadata) = base.submission.as_ref() else {
             continue;
         };
-        if metadata.value_level.is_empty() || !output_columns.contains(name) {
+        if metadata.value_level.is_empty()
+            || !output_columns.contains(name)
+            || (admission.reproduced && reproduced::omits(base))
+        {
             continue;
         }
         let entries = values::entries(doc, base.node);
@@ -1452,7 +1458,13 @@ fn compose_values(
             spec::SubmissionMode::Validated
         };
         let static_findings = values::admit(written, name, mode, |where_column| {
-            declared_column(columns, output_columns, admission.catalogue, where_column)
+            declared_column(
+                columns,
+                output_columns,
+                admission.catalogue,
+                admission.reproduced,
+                where_column,
+            )
         });
         for finding in &static_findings {
             let text = |value: &str| crate::json::Value::String(value.into());
@@ -1957,6 +1969,10 @@ fn compose_datasets(
             tabulation,
             class: dataset.class.value.name(),
         };
+        // The first column reproduced metadata omits, and whether the
+        // document describes any other output column (DEFINE-30).
+        let mut omitted = None;
+        let mut described = false;
         for (position, name) in output_columns.iter().enumerate() {
             // OUTPUT-1: an entry that repeats an earlier one, or else names no
             // declared column, fails as checking the specification refuses
@@ -1977,6 +1993,11 @@ fn compose_datasets(
                 }
             };
             let column_path = format!("{path}.columns.{name}.submission");
+            if reproduced && reproduced::omitted(column, &column_path, findings) {
+                omitted.get_or_insert(column_path);
+                continue;
+            }
+            described = true;
             if !reproduced {
                 key_column_mandatory(column, admission.keys, &path, findings);
             }
@@ -2011,6 +2032,9 @@ fn compose_datasets(
             ) {
                 selected.push(column);
             }
+        }
+        if let Some(first) = omitted.filter(|_| !described) {
+            findings.push(reproduced::no_item_ref(&first));
         }
         redundant_unique(doc, &keys, &path, findings);
         compose_values(
@@ -2655,9 +2679,9 @@ pub fn compose(
 }
 
 /// Refuse on validated metadata what only reproduced metadata declares
-/// (DEFINE-30): the ItemRef facts, which validated metadata measures instead
-/// (SUB-28), and a received method or comment OID, which validated metadata
-/// generates (DEFINE-9).
+/// (DEFINE-30): a column left out of the document, the ItemRef facts, which
+/// validated metadata measures instead (SUB-28), and a received method or
+/// comment OID, which validated metadata generates (DEFINE-9).
 fn reproduced_only_fields(
     metadata: &spec::ColumnSubmission,
     column_path: &str,
@@ -2667,6 +2691,7 @@ fn reproduced_only_fields(
     let method_oid = metadata.method.as_ref().and_then(spec::Method::oid);
     let comment_oid = metadata.comment.as_ref().and_then(spec::Comment::oid);
     for (field, declared) in [
+        ("omitted", metadata.omitted.is_some()),
         ("key_sequence", metadata.key_sequence.is_some()),
         ("has_no_data", metadata.has_no_data.is_some()),
         ("method oid", method_oid.is_some()),

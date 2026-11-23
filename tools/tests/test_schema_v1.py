@@ -163,6 +163,14 @@ EXPECTED = {
     "new.spec.submission.has_no_data": [
         Field("submission_metadata_fields", "has_no_data", "bool")
     ],
+    # #4757: reproduced metadata leaves a received column out of the document.
+    # The field belongs to a column alone, so a value-level entry, which
+    # takes the shared fields, refuses it as an unknown field (SCHEMA-13).
+    "new.spec.submission.omitted": [
+        Field("submission_column_class", "omitted", "bool"),
+        Absent("submission_metadata_fields", "omitted"),
+        Absent("submission_value_class", "omitted"),
+    ],
     # #4747: a reproduced method or comment keeps its received OID.
     "new.spec.submission.method.oid": [
         Field("submission_method_class", "oid", "method_oid", kind="identifier")

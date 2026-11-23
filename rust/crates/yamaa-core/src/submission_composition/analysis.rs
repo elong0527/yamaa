@@ -3,7 +3,9 @@
 //! declaration order, each reference resolved against the datasets the
 //! section composes and the documents it declares. No data is read: the
 //! checks are on names, types and terminology.
-use super::{declared_column, strings, text, unknown_documents, Dataset, Finding, Input};
+use super::{
+    declared_column, reproduced, strings, text, unknown_documents, Dataset, Finding, Input,
+};
 use crate::{
     ast,
     dataset::WhereTerm,
@@ -184,6 +186,16 @@ impl Listed {
             .as_ref()
             .and_then(spec::Declarations::columns)
             .map_or(&[], |columns| columns.value.as_slice())
+    }
+    /// Whether the document defines the column `name`: an output column
+    /// that reproduced metadata does not leave out (DEFINE-30).
+    fn defines(&self, name: &str) -> bool {
+        self.output.iter().any(|column| column == name)
+            && !(self.reproduced
+                && self
+                    .columns()
+                    .iter()
+                    .any(|column| column.name.value == name && reproduced::omits(column)))
     }
 }
 
@@ -396,13 +408,14 @@ fn compose_result(
     {
         findings.push(required(&format!("{path}.datasets"), "variables"));
     }
-    // The parameter is the first listed dataset's that outputs `PARAMCD`.
+    // The parameter is the first listed dataset's whose document defines
+    // `PARAMCD`.
     let parameter = result.datasets.iter().find_map(|dataset| {
         let name = dataset.dataset.name.as_str();
         listed
             .iter()
             .find(|listed| listed.id == name)
-            .filter(|listed| listed.output.iter().any(|column| column == "PARAMCD"))
+            .filter(|listed| listed.defines("PARAMCD"))
             .and_then(|_| {
                 context
                     .datasets
@@ -453,6 +466,8 @@ fn compose_dataset(
             "undeclared"
         } else if !listed.output.iter().any(|column| column == variable) {
             "not_output"
+        } else if !listed.defines(variable) {
+            "omitted"
         } else {
             continue;
         };
@@ -472,7 +487,13 @@ fn compose_dataset(
         // An analysis dataset describes no column of its own, so no where
         // column is the clause's own.
         for finding in values::admit(written, "", scope, |column| {
-            declared_column(columns, &listed.output, context.catalogue, column)
+            declared_column(
+                columns,
+                &listed.output,
+                context.catalogue,
+                listed.reproduced,
+                column,
+            )
         }) {
             let values::Finding::Where { column, fault, .. } = finding else {
                 continue;

@@ -947,7 +947,9 @@ records the declarations literally and reads no run report, artifact or input
 comment written in full may keep the identifier the received document gave it,
 such as `method: {oid: MT.SAFFL, name: Population flag, description: ...}`;
 elements that declare one `oid` with the same definition share one `MethodDef`
-or `def:CommentDef`. Validated
+or `def:CommentDef`. A column the received document leaves out stays in the
+output dataset and declares `submission: {omitted: true}`, with nothing else;
+the document then writes no `ItemRef` or `ItemDef` for it. Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first
 ([PROJECT-15](../../rules/profiles/project.md#project-15)).

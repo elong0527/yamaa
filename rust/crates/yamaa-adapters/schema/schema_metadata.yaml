@@ -60,6 +60,10 @@ submission_dataset_class:
         description: Sponsor comment carried with the dataset definition.
 
 submission_column_class:
+    - omitted:
+        type: bool
+        required: false
+        description: Whether the received document leaves out a column the output dataset carries, so the document writes no ItemRef or ItemDef for it; permitted only in reproduced metadata, as the only field of its submission (DEFINE-30).
     - fields_from: submission_metadata_fields
     - value_level:
         type: "list[submission_value_class]"
