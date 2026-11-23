@@ -85,6 +85,47 @@ pub(super) fn no_item_ref(first: &str) -> Finding {
     )
 }
 
+/// `OrderNumber` is written on every `ItemRef` of an `ItemGroupDef` or on
+/// none (DEFINE-18), and two equal numbers would leave the order undecided:
+/// once a column the document describes declares `order`, each of them under
+/// the dataset at `path` declares it, and no two declare the same number
+/// (DEFINE-30). A column whose `order` is refused as no positive number
+/// counts as declaring it, so it is reported once.
+pub(super) fn orders(columns: &[Column], path: &str, findings: &mut Vec<Finding>) {
+    let declared = |column: &Column| {
+        column
+            .declaration
+            .submission
+            .as_ref()
+            .and_then(|metadata| metadata.order.as_ref())
+            .map(|field| field.value.clone())
+    };
+    if columns.iter().all(|column| declared(column).is_none()) {
+        return;
+    }
+    let mut seen = BTreeSet::new();
+    for column in columns {
+        let at = format!(
+            "{path}.columns.{}.submission",
+            column.declaration.name.value
+        );
+        match (declared(column), column.order) {
+            (None, _) => findings.push(
+                Finding::cause(ConditionCode::SubmissionMetadataMissing, &at, "order")
+                    .with("field", "order"),
+            ),
+            (Some(text), Some(order)) if !seen.insert(order) => {
+                findings.push(crate::define_diagnostics::xml_invalid(
+                    &format!("{at}.order"),
+                    "unique order",
+                    crate::json::Value::String(text),
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
 pub(super) fn column(
     admission: &ColumnAdmission<'_>,
     column: &spec::Column,
@@ -139,24 +180,28 @@ pub(super) fn column(
             ));
         }
     }
-    let key_sequence = metadata.key_sequence.as_ref().and_then(|declared| {
-        match declared
+    let mut positive = |declared: Option<&spec::Field<String>>, field: &str, facet: &str| {
+        let declared = declared?;
+        let value = declared
             .value
             .parse::<usize>()
             .ok()
-            .filter(|value| *value > 0)
-        {
-            Some(value) => Some(value),
-            None => {
-                findings.push(crate::define_diagnostics::xml_invalid(
-                    &format!("{path}.key_sequence"),
-                    "positive key sequence",
-                    crate::json::Value::String(declared.value.clone()),
-                ));
-                None
-            }
+            .filter(|value| *value > 0);
+        if value.is_none() {
+            findings.push(crate::define_diagnostics::xml_invalid(
+                &format!("{path}.{field}"),
+                facet,
+                crate::json::Value::String(declared.value.clone()),
+            ));
         }
-    });
+        value
+    };
+    let key_sequence = positive(
+        metadata.key_sequence.as_ref(),
+        "key_sequence",
+        "positive key sequence",
+    );
+    let order = positive(metadata.order.as_ref(), "order", "positive order");
     if let Some(list) = &metadata.codelist {
         bound.insert(list.value.clone());
         if admission.catalogue.get(&list.value).is_none() {
@@ -202,6 +247,7 @@ pub(super) fn column(
             .value,
         origins,
         key_sequence,
+        order,
         values: Vec::new(),
         transport_length: None,
         has_no_data: metadata
