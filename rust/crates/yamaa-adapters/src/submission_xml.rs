@@ -676,7 +676,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .attr("FileOID", study.file_oid())
         .attr("CreationDateTime", study.created())
         .optional("Originator", section.originator.as_ref().map(|v| &v.text))
-        .attr("SourceSystem", "yamaa")
+        .attr("SourceSystem", study.source_system())
         .attr("SourceSystemVersion", study.source_version())
         .optional("def:Context", modern.then_some(section.context.name()));
     let declared = study.study();

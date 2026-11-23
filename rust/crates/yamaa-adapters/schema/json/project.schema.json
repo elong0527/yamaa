@@ -532,6 +532,13 @@
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
         },
+        "source_system": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty XML and JSON source-system name; omission names yamaa (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "source_system_version": {
           "type": "string",
           "minLength": 1,
@@ -1049,6 +1056,13 @@
           "description": "Optional relative stylesheet link (DEFINE-23).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
+        },
+        "source_system": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty XML and JSON source-system name; omission names yamaa (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         },
         "source_system_version": {
           "type": "string",

@@ -48,6 +48,7 @@ pub enum FieldName {
     MetadataVersion,
     Originator,
     Stylesheet,
+    SourceSystem,
     SourceSystemVersion,
     Kind,
     Link,
@@ -79,6 +80,7 @@ impl FieldName {
             Self::MetadataVersion => "metadata_version",
             Self::Originator => "originator",
             Self::Stylesheet => "stylesheet",
+            Self::SourceSystem => "source_system",
             Self::SourceSystemVersion => "source_system_version",
             Self::Kind => "kind",
             Self::Link => "link",
@@ -220,6 +222,7 @@ const SECTION: &[FieldName] = &[
     FieldName::MetadataVersion,
     FieldName::Originator,
     FieldName::Stylesheet,
+    FieldName::SourceSystem,
     FieldName::SourceSystemVersion,
 ];
 fn family(field: &str) -> Option<(Submission, FieldName)> {
@@ -707,6 +710,8 @@ impl<'d> Parser<'d, '_, '_> {
         };
         let originator = self.optional_text(at, FieldName::Originator, path, TextRule::NonEmpty);
         let stylesheet = self.optional_text(at, FieldName::Stylesheet, path, TextRule::Href);
+        let source_system =
+            self.optional_text(at, FieldName::SourceSystem, path, TextRule::NonEmpty);
         let source_system_version =
             self.optional_text(at, FieldName::SourceSystemVersion, path, TextRule::NonEmpty);
         Some(Section {
@@ -724,6 +729,7 @@ impl<'d> Parser<'d, '_, '_> {
             metadata_version,
             originator,
             stylesheet,
+            source_system,
             source_system_version,
             meta,
         })

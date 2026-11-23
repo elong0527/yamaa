@@ -367,7 +367,7 @@ fields:
 | `environments` | | | | `python`, `r` |
 | `environments.python`, `environments.r` | | | `lock` | |
 | `study` | `id` | `name`, `description`, `protocol_name` | | |
-| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `file_oid`, `study_oid`, `originator`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version` |
+| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version` |
 | A `standards` entry | | `name`, `version`, `status` | | |
 | A `documents` entry | `id` | `kind`, `title` | `link` | |
 | `metadata_version` | `id` | `name`, `description` | | |

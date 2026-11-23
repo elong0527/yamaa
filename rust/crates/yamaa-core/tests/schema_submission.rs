@@ -2222,36 +2222,49 @@ mod schema {
         /// Seam: the declarations, kinds and paths the raw `submission_document`
         /// decoder returns, which no reader states.
         #[test]
-        fn an_authored_source_system_version_lowers_for_every_section() {
-            for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
-                let mut a = Arena::default();
-                a.section(guide);
-                let N::Mapping(mut fields) = a.0.pop().unwrap() else {
-                    unreachable!()
-                };
-                let key = a.text("source_system_version");
-                let version = a.text("1.0");
-                fields.push((key, version));
-                let section = a.node(N::Mapping(fields));
-                let root = a.project(vec![(family, section)]);
-                let input = a.finish(root);
-                let project = lower_project(&input, None).unwrap();
-                drop(input);
-                let section = &project.submission.as_ref().unwrap().sections[0];
-                let field = section.source_system_version.as_ref().unwrap();
-                assert_eq!(field.text, "1.0");
-                assert_eq!(
-                    project.paths.render(field.meta.path),
-                    format!("{family}.source_system_version")
+        fn an_authored_source_system_name_and_version_lower_for_every_section() {
+            type Read = fn(&ast::Section) -> Option<&ast::Text>;
+            let cases: [(&str, &str, Read); 2] = [
+                ("source_system", "Sponsor Metadata System", |section| {
+                    section.source_system.as_ref()
+                }),
+                ("source_system_version", "1.0", |section| {
+                    section.source_system_version.as_ref()
+                }),
+            ];
+            for (name, value, read) in cases {
+                for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")]
+                {
+                    let mut a = Arena::default();
+                    a.section(guide);
+                    let N::Mapping(mut fields) = a.0.pop().unwrap() else {
+                        unreachable!()
+                    };
+                    let key = a.text(name);
+                    let text = a.text(value);
+                    fields.push((key, text));
+                    let section = a.node(N::Mapping(fields));
+                    let root = a.project(vec![(family, section)]);
+                    let input = a.finish(root);
+                    let project = lower_project(&input, None).unwrap();
+                    drop(input);
+                    let section = &project.submission.as_ref().unwrap().sections[0];
+                    let field = read(section).unwrap();
+                    assert_eq!(field.text, value, "{family}.{name}");
+                    assert_eq!(
+                        project.paths.render(field.meta.path),
+                        format!("{family}.{name}")
+                    );
+                }
+                // Omitted, composition names yamaa and the installed
+                // generator's version.
+                let input = full();
+                let owned = sections(&input).unwrap();
+                assert!(
+                    owned.sections.iter().all(|section| read(section).is_none()),
+                    "{name}"
                 );
             }
-            // Omitted, the installed generator's version is used at composition.
-            let input = full();
-            let owned = sections(&input).unwrap();
-            assert!(owned
-                .sections
-                .iter()
-                .all(|section| section.source_system_version.is_none()));
         }
 
         /// Seam: the declarations, kinds and paths the raw `submission_document`
