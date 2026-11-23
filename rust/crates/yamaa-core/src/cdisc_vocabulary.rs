@@ -631,3 +631,70 @@ impl WhereComparator {
         Self::VALUES.iter().find(|(spelling, _)| *spelling == name).map(|&(_, value)| value)
     }
 }
+
+/// The `analysis_reason` vocabulary, which the schema type `analysis_reason`
+/// spells.
+#[rustfmt::skip]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnalysisReason {
+    SpecifiedInProtocol,
+    SpecifiedInSap,
+    DataDriven,
+    RequestedByRegulatoryAgency,
+}
+
+#[rustfmt::skip]
+impl AnalysisReason {
+    /// Every value with its spelling, in the data file's order.
+    pub const VALUES: &'static [(&'static str, Self)] = &[
+        ("SPECIFIED IN PROTOCOL", Self::SpecifiedInProtocol),
+        ("SPECIFIED IN SAP", Self::SpecifiedInSap),
+        ("DATA DRIVEN", Self::DataDriven),
+        ("REQUESTED BY REGULATORY AGENCY", Self::RequestedByRegulatoryAgency),
+    ];
+    /// The value's spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::SpecifiedInProtocol => "SPECIFIED IN PROTOCOL",
+            Self::SpecifiedInSap => "SPECIFIED IN SAP",
+            Self::DataDriven => "DATA DRIVEN",
+            Self::RequestedByRegulatoryAgency => "REQUESTED BY REGULATORY AGENCY",
+        }
+    }
+    /// The value a spelling names, or `None` for any other text.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::VALUES.iter().find(|(spelling, _)| *spelling == name).map(|&(_, value)| value)
+    }
+}
+
+/// The `analysis_purpose` vocabulary, which the schema type `analysis_purpose`
+/// spells.
+#[rustfmt::skip]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnalysisPurpose {
+    PrimaryOutcomeMeasure,
+    SecondaryOutcomeMeasure,
+    ExploratoryOutcomeMeasure,
+}
+
+#[rustfmt::skip]
+impl AnalysisPurpose {
+    /// Every value with its spelling, in the data file's order.
+    pub const VALUES: &'static [(&'static str, Self)] = &[
+        ("PRIMARY OUTCOME MEASURE", Self::PrimaryOutcomeMeasure),
+        ("SECONDARY OUTCOME MEASURE", Self::SecondaryOutcomeMeasure),
+        ("EXPLORATORY OUTCOME MEASURE", Self::ExploratoryOutcomeMeasure),
+    ];
+    /// The value's spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::PrimaryOutcomeMeasure => "PRIMARY OUTCOME MEASURE",
+            Self::SecondaryOutcomeMeasure => "SECONDARY OUTCOME MEASURE",
+            Self::ExploratoryOutcomeMeasure => "EXPLORATORY OUTCOME MEASURE",
+        }
+    }
+    /// The value a spelling names, or `None` for any other text.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::VALUES.iter().find(|(spelling, _)| *spelling == name).map(|&(_, value)| value)
+    }
+}

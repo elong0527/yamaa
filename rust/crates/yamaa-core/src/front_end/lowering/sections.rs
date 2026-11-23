@@ -11,12 +11,15 @@
 //! [`crate::front_end::v1::project`]. A section writes `standards`, a list
 //! whose first entry is the default (D16), and `transport: dataset_json`,
 //! `dataset_ndjson` or `xpt` (P-PRJ-1, #3821); a guide status may be
-//! `Provisional` (P-STD-1).
+//! `Provisional` (P-STD-1). An `adam` section also writes
+//! `analysis_results`, each source inline or the path of an analysis
+//! results file (DEFINE-32).
 
 use super::project::Metas;
 use crate::ast::{
-    DocumentKind, ImplementationGuide, Meta, MetadataVersion, Named, Section, Study,
-    SubmissionDeclarations, SupportingDocument, Text, Transport,
+    AnalysisResultsDeclaration, AnalysisResultsSource, DocumentKind, ImplementationGuide, Meta,
+    MetadataVersion, Named, Section, Study, SubmissionDeclarations, SupportingDocument, Text,
+    Transport,
 };
 use crate::cdisc_vocabulary::{DefineContext, GuideStatus, StandardName};
 use crate::diagnostic::ScalarSubmissionRule;
@@ -50,6 +53,7 @@ pub enum FieldName {
     Stylesheet,
     SourceSystem,
     SourceSystemVersion,
+    AnalysisResults,
     Kind,
     Link,
     Title,
@@ -82,6 +86,7 @@ impl FieldName {
             Self::Stylesheet => "stylesheet",
             Self::SourceSystem => "source_system",
             Self::SourceSystemVersion => "source_system_version",
+            Self::AnalysisResults => "analysis_results",
             Self::Kind => "kind",
             Self::Link => "link",
             Self::Title => "title",
@@ -613,12 +618,22 @@ impl<'d> Parser<'d, '_, '_> {
         path: Path,
         parent: Meta,
     ) -> Option<Section> {
-        if !self.mapping(origin, path, SECTION) {
+        // Only an `adam` section declares analysis results (DEFINE-32).
+        let mut fields = SECTION.to_vec();
+        if family == Submission::Adam {
+            fields.push(FieldName::AnalysisResults);
+        }
+        if !self.mapping(origin, path, &fields) {
             return None;
         }
         let node = origin.node.unwrap();
         let meta = self.meta(parent, origin);
         let at = (node, meta);
+        let analysis_results = if family == Submission::Adam {
+            self.analysis_results(node, path, meta)
+        } else {
+            Vec::new()
+        };
         // Only Define-XML composition requires the guides and target; a
         // section that lists its specifications already admits for runs.
         let standards = self.standards(node, path, meta);
@@ -731,8 +746,54 @@ impl<'d> Parser<'d, '_, '_> {
             stylesheet,
             source_system,
             source_system_version,
+            analysis_results,
             meta,
         })
+    }
+    /// An `adam` section's `analysis_results`: each source written inline,
+    /// a root of its own, or as the path of an analysis results file
+    /// (DEFINE-32). An omitted list declares none.
+    fn analysis_results(
+        &mut self,
+        node: usize,
+        path: Path,
+        meta: Meta,
+    ) -> Vec<AnalysisResultsDeclaration> {
+        let origin = self.get(node, FieldName::AnalysisResults);
+        let list_path = path.field(FieldName::AnalysisResults);
+        let items = self.sequence(origin, list_path, true).unwrap_or(&[]);
+        let listed = self.meta(meta, origin);
+        let mut sources = Vec::with_capacity(items.len());
+        for (index, &item) in items.iter().enumerate() {
+            let meta = self.metas.index(listed, index, item);
+            let source =
+                match &self.input.nodes()[item] {
+                    N::Text(written) if !written.is_empty() => AnalysisResultsSource::File(Text {
+                        text: written.clone(),
+                        meta,
+                    }),
+                    N::Mapping(_) => AnalysisResultsSource::Inline(Box::new(
+                        super::analysis::lower(self.input, self.metas.positions(), item, false),
+                    )),
+                    _ => {
+                        let entry = Origin {
+                            container: origin.node.expect("analysis results list occurrence"),
+                            key: None,
+                            node: Some(item),
+                            field: FieldName::AnalysisResults,
+                        };
+                        self.fault(
+                            item,
+                            Some(entry),
+                            list_path.child(Step::Index(index)),
+                            Kind::ExpectedMapping,
+                        );
+                        continue;
+                    }
+                };
+            sources.push(AnalysisResultsDeclaration { source, meta });
+        }
+        sources
     }
     fn run(&mut self, root: usize, meta: Meta) -> SubmissionDeclarations {
         let N::Mapping(fields) = &self.input.nodes()[root] else {

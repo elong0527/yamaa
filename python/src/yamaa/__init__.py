@@ -486,7 +486,7 @@ def lint(paths, fix: bool = False) -> Lint:
 
 
 def schema(file_type: str) -> str:
-    """The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text."""
+    """The JSON Schema of a file type, spec, project, codelists, analysis_results or function, as canonical JSON text."""
     return _native._schema(_text(file_type, "file_type"))
 
 

@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_dataset
+spec_paths:
+  - adam.analysis_results[0].displays[0].results[0].datasets.ADSL
+rule: DEFINE-32
+context:
+  dataset: ADSL
+  section: adam

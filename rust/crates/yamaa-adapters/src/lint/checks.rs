@@ -64,6 +64,12 @@ static CODELISTS: Layout = Layout {
     spaced: &["codelists"],
     specification: false,
 };
+static ANALYSIS_RESULTS: Layout = Layout {
+    orders: fields::ANALYSIS_RESULTS,
+    sections: "displays",
+    spaced: &["displays"],
+    specification: false,
+};
 static FUNCTION: Layout = Layout {
     orders: fields::FUNCTION,
     sections: "tests",
@@ -82,6 +88,7 @@ pub(super) fn layout(document: &Document) -> &'static Layout {
         None | Some(FileType::Spec) => &SPEC,
         Some(FileType::Project) => &PROJECT,
         Some(FileType::Codelists) => &CODELISTS,
+        Some(FileType::AnalysisResults) => &ANALYSIS_RESULTS,
         Some(FileType::Function) => &FUNCTION,
     }
 }

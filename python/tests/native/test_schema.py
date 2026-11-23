@@ -20,7 +20,7 @@ pytest.importorskip(
 import yamaa
 
 COMMITTED = Path(__file__).resolve().parents[3] / "yaml" / "json"
-FILE_TYPES = ["spec", "project", "codelists", "function"]
+FILE_TYPES = ["spec", "project", "codelists", "analysis_results", "function"]
 
 
 def canonical(file_type):
@@ -53,7 +53,7 @@ def test_any_other_text_raises_the_refusal_with_its_issue(file_type):
     error = raised.value
     assert str(error) == (
         f"cannot give the schema of {file_type}: a {file_type} file is given where "
-        "a spec, project, codelists, function file is expected "
+        "a spec, project, codelists, analysis_results, function file is expected "
         "[unexpected_file_type, SCHEMA-2]"
     )
     assert error.paths == []

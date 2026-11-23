@@ -127,7 +127,7 @@ values:
   # takes them (D149).
   file_type:
     rust: yamaa::FILE_TYPES
-    values: [spec, project, codelists, function]
+    values: [spec, project, codelists, analysis_results, function]
   # The sections a project file declares (PROJECT-3), in run order: the
   # `section` a project's run and submission take.
   section:
@@ -465,7 +465,7 @@ public:
       returns: json_text
       raises: refusal
       calls: schema
-      doc: The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text.
+      doc: The JSON Schema of a file type, spec, project, codelists, analysis_results or function, as canonical JSON text.
     # #3700: the catalogue that the bundled yaml/conditions.yaml and the
     # registry give, the same in every host.
     - name: conditions

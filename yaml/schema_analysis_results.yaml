@@ -1,0 +1,152 @@
+version: "1.0"
+
+# See DEFINE-31.
+
+includes:
+    - schema_shared.yaml
+    - schema_metadata.yaml
+
+analysis_results_file_class:
+    - yamaa:
+        type: language_version
+        required: true
+        description: Oldest language version this analysis results file needs, always quoted (SCHEMA-2).
+    - type:
+        type: str
+        required: true
+        values: [analysis_results]
+        description: File type of an analysis results file, which holds the result displays of one source (DEFINE-32).
+    - encoding:
+        type: file_encoding
+        required: false
+        description: Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).
+    - fields_from: analysis_results_source_class
+
+analysis_results_source:
+    type: [project_path, analysis_results_source_class]
+    kind: structure
+    description: Inline analysis results source, or the path of an analysis results file holding one (DEFINE-32).
+
+analysis_results_source_class:
+    - displays:
+        type: "list[result_display_class]"
+        required: true
+        description: Result displays this source declares, at least one, in the order the document presents them (DEFINE-32).
+
+result_display_class:
+    - id:
+        type: define_id
+        required: true
+        description: Identifier the display's generated identity is built from, unique among the section's displays (DEFINE-9, DEFINE-32).
+    - name:
+        type: str
+        required: true
+        min_length: 1
+        description: Name the display has in the report, such as its table number, unique among the section's displays (DEFINE-32).
+    - description:
+        type: str
+        required: true
+        min_length: 1
+        description: Description of what the display shows (DEFINE-31).
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents holding the display, each with the place the display is at (DEFINE-31).
+    - results:
+        type: "list[analysis_result_class]"
+        required: true
+        description: Analysis results the display shows, at least one, in the order the document presents them (DEFINE-32).
+
+analysis_result_class:
+    - id:
+        type: identifier
+        required: true
+        description: Identifier of the result, unique within its display, closing the result's generated identity (DEFINE-9, DEFINE-32).
+    - description:
+        type: str
+        required: true
+        min_length: 1
+        description: Description of the analysis result (DEFINE-31).
+    - reason:
+        type: analysis_reason
+        required: true
+        description: Why the analysis was performed (DEFINE-31).
+    - purpose:
+        type: analysis_purpose
+        required: true
+        description: What the analysis is for in the study's objectives (DEFINE-31).
+    - datasets:
+        type: "dict[identifier, analysis_dataset_class]"
+        required: true
+        description: Datasets the result reads, at least one, each a dataset the section composes, in the order written (DEFINE-32).
+    - join:
+        type: analysis_comment
+        required: false
+        description: How the result's datasets are joined, required when it reads two or more and refused when it reads one (DEFINE-32).
+    - documentation:
+        type: analysis_comment
+        required: false
+        description: Documentation of the analysis, as text or text with the documents it refers to (DEFINE-31).
+    - programming_code:
+        type: programming_code_class
+        required: false
+        description: Programming code that produced the result, as text, as documents holding it, or both (DEFINE-31).
+
+analysis_dataset_class:
+    - where:
+        type: "dict[identifier, where_condition]"
+        required: false
+        description: Output columns of the dataset and the values that select the records the result reads; a record is selected when every listed column meets its condition (DEFINE-32, SUB-12).
+    - variables:
+        type: "list[identifier]"
+        required: false
+        description: Output columns of the dataset the result analyses; a result names at least one across its datasets (DEFINE-32).
+
+programming_code_class:
+    - context:
+        type: str
+        required: false
+        min_length: 1
+        description: Language and version the code is written in, required when code is declared (DEFINE-32).
+    - code:
+        type: str
+        required: false
+        min_length: 1
+        description: The code itself, written exactly as declared; nothing in this language parses or executes it (DEFINE-31).
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents holding the code; code, documents or both are declared (DEFINE-32).
+
+analysis_comment_class:
+    - text:
+        type: str
+        required: true
+        min_length: 1
+        description: Text of the comment or documentation.
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents the text refers to.
+
+analysis_comment:
+    type: [analysis_text, analysis_comment_class]
+    kind: value
+    description: Text, or text with the documents it refers to.
+
+analysis_text:
+    type: str
+    min_length: 1
+    description: Text of a join comment or of documentation, written plainly.
+
+analysis_reason:
+    type: str
+    values: [SPECIFIED IN PROTOCOL, SPECIFIED IN SAP, DATA DRIVEN,
+        REQUESTED BY REGULATORY AGENCY]
+    description: Reason for an analysis, one of the published values (DEFINE-31).
+
+analysis_purpose:
+    type: str
+    values: [PRIMARY OUTCOME MEASURE, SECONDARY OUTCOME MEASURE,
+        EXPLORATORY OUTCOME MEASURE]
+    description: Purpose of an analysis, one of the published values (DEFINE-31).

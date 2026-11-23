@@ -1,0 +1,68 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+codelists:
+- codelists:
+  - id: HCGRS
+    name: Pregnancy Test Result
+    items:
+    - value: NEGATIVE
+    - value: POSITIVE
+  - id: NY
+    name: No Yes Response
+    items:
+    - value: N
+    - value: Y
+study:
+  id: CATH
+  name: CATH
+  description: Example study describing the analyses behind its tables
+  protocol_name: CATH-01
+
+adam:
+  specs:
+  - spec_adsl.yaml
+  - spec_adlb.yaml
+  standards:
+  - name: ADaMIG
+    version: '1.3'
+    status: Final
+  define: define.xml
+  documents:
+  - id: SAP
+    kind: supplemental
+    link: sap.pdf
+    title: Statistical Analysis Plan
+  - id: TLF
+    kind: other
+    link: tlf.pdf
+    title: Tables
+  - id: PGM
+    kind: other
+    link: t14-1-01.R
+    title: Program of Table 14.1.01
+  transport: dataset_json
+  source_system_version: '1.0'
+  # One source is a file and one is written here; the document presents the
+  # displays in this order.
+  analysis_results:
+  - arm/efficacy.yaml
+  - displays:
+    - id: T14.1.01
+      name: Table 14.1.01
+      description: Subjects by treatment group
+      results:
+      - id: R1
+        description: Number of subjects of the safety population in each
+          treatment group
+        reason: SPECIFIED IN PROTOCOL
+        purpose: SECONDARY OUTCOME MEASURE
+        datasets:
+          ADSL:
+            where:
+              SAFFL: [Y]
+            variables: [TRT01AN]
+        documentation: Subjects are counted by treatment group.
+        programming_code:
+          context: R 4.5.1
+          documents: [PGM]

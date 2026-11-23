@@ -581,6 +581,17 @@ conditions! {
     DefineArtifactCollision => ("validation", "artifact_path_collision", Some("JSON-2")),
     DefineTransportCollision => ("validation", "transport_path_collision", Some("JSON-2")),
     DefineCreatedInvalid => ("validation", "value_not_permitted", Some("DEFINE-3")),
+    // An analysis results source's own refusals at composition (#4756): a
+    // `datasets` key the section does not compose, a variable or where
+    // column its dataset cannot answer, a display name or a result id
+    // declared twice, a list or field a result needs, and a join with
+    // nothing to join.
+    AnalysisUnknownDataset => ("validation", "unknown_dataset", Some("DEFINE-32")),
+    AnalysisDatasetInvalid => ("validation", "analysis_dataset_invalid", Some("DEFINE-32")),
+    AnalysisDuplicateName => ("validation", "duplicate_define_identifier", Some("DEFINE-32")),
+    AnalysisDuplicateResult => ("validation", "duplicate_identifier", Some("DEFINE-32")),
+    AnalysisRequiredField => ("validation", "missing_required_field", Some("DEFINE-32")),
+    AnalysisJoinNotPermitted => ("validation", "value_not_permitted", Some("DEFINE-32")),
     CodelistUnknownBinding => ("validation", "unknown_codelist", Some("CT-1")),
     ProjectBindingMissing => ("validation", "project_binding_missing", Some("CT-13")),
     CodelistBindingTypeMismatch => ("validation", "codelist_type_mismatch", Some("CT-8")),

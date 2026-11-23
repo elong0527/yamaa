@@ -179,9 +179,9 @@ fn fragments(sources: &[(File, Document)]) -> BTreeSet<PathBuf> {
 /// A named file is always read. A directory names the `.yaml` files beneath
 /// it, outside hidden directories, in sorted path order, that are yamaa
 /// files: a root that declares the 1.x header with a `type` naming a file
-/// type (`spec`, `project`, `codelists` or `function`). A mapping dictionary,
-/// a file that declares `schema_version` and any other YAML file are left
-/// out.
+/// type (`spec`, `project`, `codelists`, `analysis_results` or `function`). A
+/// mapping dictionary, a file that declares `schema_version` and any other
+/// YAML file are left out.
 fn expand(path: &Path) -> Result<Vec<File>, Error> {
     if !path.is_dir() {
         return Ok(vec![File::new(path.to_path_buf())]);

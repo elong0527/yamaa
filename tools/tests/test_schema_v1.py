@@ -201,6 +201,12 @@ EXPECTED = {
     "new.codelists.type": header("codelist_file_class", "codelists")[1:],
     "new.function.yamaa": header("function_definition_class", "function")[:1],
     "new.function.type": header("function_definition_class", "function")[1:],
+    "new.analysis_results.yamaa": header(
+        "analysis_results_file_class", "analysis_results"
+    )[:1],
+    "new.analysis_results.type": header(
+        "analysis_results_file_class", "analysis_results"
+    )[1:],
     # D23 requires key, but D63 exempts an intermediate that drives a row
     # template, which a class field cannot condition: the description and
     # LOOKUP-3 state the requirement, and the field stays optional.
@@ -423,6 +429,14 @@ EXPECTED = {
             values=("ascii", "utf-8"),
         )
     ],
+    "new.analysis_results.encoding": [
+        Field(
+            "analysis_results_file_class",
+            "encoding",
+            "file_encoding",
+            values=("ascii", "utf-8"),
+        )
+    ],
     "new.function.encoding": [
         Field(
             "function_definition_class",
@@ -588,6 +602,101 @@ EXPECTED = {
             kind="identifier",
         ),
     ],
+    # #4756: an adam section declares analysis results metadata (ARM v1.0),
+    # each source inline or a file of its own type (DEFINE-31, DEFINE-32).
+    "new.project.analysis_results": [
+        Field(
+            "adam_section_class",
+            "analysis_results",
+            "list[analysis_results_source]",
+            kind="structure",
+        ),
+        Field(
+            "analysis_results_source_class",
+            "displays",
+            "list[result_display_class]",
+            True,
+            kind="structure",
+        ),
+        Field("result_display_class", "id", "define_id", True, kind="identifier"),
+        Field("result_display_class", "name", "str", True, kind="value"),
+        Field("result_display_class", "description", "str", True, kind="value"),
+        Field(
+            "result_display_class",
+            "documents",
+            "list[document_reference]",
+            kind="identifier",
+        ),
+        Field(
+            "result_display_class",
+            "results",
+            "list[analysis_result_class]",
+            True,
+            kind="structure",
+        ),
+        Field("analysis_result_class", "id", "identifier", True, kind="identifier"),
+        Field("analysis_result_class", "description", "str", True, kind="value"),
+        Field(
+            "analysis_result_class",
+            "reason",
+            "analysis_reason",
+            True,
+            kind="value",
+            values=vocabulary("analysis_reason"),
+        ),
+        Field(
+            "analysis_result_class",
+            "purpose",
+            "analysis_purpose",
+            True,
+            kind="value",
+            values=vocabulary("analysis_purpose"),
+        ),
+        Field(
+            "analysis_result_class",
+            "datasets",
+            "dict[identifier, analysis_dataset_class]",
+            True,
+            kind="structure",
+        ),
+        Field("analysis_result_class", "join", "analysis_comment", kind="value"),
+        Field(
+            "analysis_result_class", "documentation", "analysis_comment", kind="value"
+        ),
+        Field(
+            "analysis_result_class",
+            "programming_code",
+            "programming_code_class",
+            kind="structure",
+        ),
+        Field(
+            "analysis_dataset_class",
+            "where",
+            "dict[identifier, where_condition]",
+            kind="value",
+        ),
+        Field(
+            "analysis_dataset_class",
+            "variables",
+            "list[identifier]",
+            kind="identifier",
+        ),
+        Field("programming_code_class", "context", "str", kind="value"),
+        Field("programming_code_class", "code", "str", kind="value"),
+        Field(
+            "programming_code_class",
+            "documents",
+            "list[document_reference]",
+            kind="identifier",
+        ),
+        Field("analysis_comment_class", "text", "str", True, kind="value"),
+        Field(
+            "analysis_comment_class",
+            "documents",
+            "list[document_reference]",
+            kind="identifier",
+        ),
+    ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],
@@ -611,6 +720,11 @@ RETYPED = {
     "codelists.codelist_class.id": (
         "codelist_identifier",
         "new.codelists.codelist_identifier",
+    ),
+    # Only the adam section declares analysis results (DEFINE-32).
+    "project.project_class.adam": (
+        "adam_section_class",
+        "new.project.analysis_results",
     ),
 }
 # Reshaped entries whose table kind is the 0.5 field's: the field holds
@@ -1049,6 +1163,113 @@ class JsonSchemaTests(unittest.TestCase):
                     ),
                     admitted,
                 )
+
+    def test_analysis_results_are_admitted_in_adam_alone_and_in_their_own_file(self):
+        # DEFINE-31, DEFINE-32: the shapes the analysis results schema admits,
+        # as the project and analysis_results JSON Schemas give them.
+        def source(**result):
+            written = {
+                "id": "R1",
+                "description": "Mean glucose",
+                "reason": "SPECIFIED IN SAP",
+                "purpose": "PRIMARY OUTCOME MEASURE",
+                "datasets": {"ADLB": {"where": {"PARAMCD": ["GLUC"]}}},
+            }
+            written.update(result)
+            display = {
+                "id": "T14.3.01",
+                "name": "Table 14.3.01",
+                "description": "Summary of glucose",
+                "results": [written],
+            }
+            return {"displays": [display]}
+
+        def project(section, sources):
+            listed = {"specs": ["spec.yaml"], "analysis_results": sources}
+            return {"yamaa": "1.0", "type": "project", section: listed}
+
+        def file(file_type="analysis_results", **result):
+            return {"yamaa": "1.0", "type": file_type, **source(**result)}
+
+        cases = [
+            (
+                "adam, inline and a path",
+                "project",
+                project("adam", [source(), "arm.yaml"]),
+                True,
+            ),
+            ("sdtm", "project", project("sdtm", [source()]), False),
+            ("send", "project", project("send", ["arm.yaml"]), False),
+            ("a file", "analysis_results", file(), True),
+            ("a file of another type", "analysis_results", file("codelists"), False),
+            # SPEC-8: the file declares the encoding of its own bytes.
+            (
+                "a file that declares UTF-8",
+                "analysis_results",
+                {**file(), "encoding": "utf-8"},
+                True,
+            ),
+            (
+                "a file that declares another encoding",
+                "analysis_results",
+                {**file(), "encoding": "latin-1"},
+                False,
+            ),
+            (
+                "a file without displays",
+                "analysis_results",
+                {"yamaa": "1.0", "type": "analysis_results"},
+                False,
+            ),
+            (
+                "a sponsor reason",
+                "analysis_results",
+                file(reason="PER PROTOCOL"),
+                False,
+            ),
+            ("a sponsor purpose", "analysis_results", file(purpose="SAFETY"), False),
+            ("a result id with a period", "analysis_results", file(id="R.1"), False),
+            (
+                "a join with documents",
+                "analysis_results",
+                file(join={"text": "By USUBJID.", "documents": ["SAP"]}),
+                True,
+            ),
+            ("an empty join", "analysis_results", file(join=""), False),
+            (
+                "empty documentation",
+                "analysis_results",
+                file(documentation=""),
+                False,
+            ),
+            (
+                "a join with a received oid",
+                "analysis_results",
+                file(join={"text": "By USUBJID.", "oid": "COM.JOIN"}),
+                False,
+            ),
+            (
+                "a declared parameter",
+                "analysis_results",
+                file(parameter="ADLB.PARAMCD"),
+                False,
+            ),
+            (
+                "code as documents",
+                "analysis_results",
+                file(programming_code={"documents": ["PGM"]}),
+                True,
+            ),
+            (
+                "a where value that is not text",
+                "analysis_results",
+                file(datasets={"ADLB": {"where": {"AVISITN": [24]}}}),
+                False,
+            ),
+        ]
+        for case, file_type, document, admitted in cases:
+            with self.subTest(case=case):
+                self.assertEqual(validator(file_type).is_valid(document), admitted)
 
     def test_committed_json_schemas_are_current_and_valid(self):
         self.assertEqual(

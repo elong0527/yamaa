@@ -31,11 +31,13 @@ pub fn capture_versioned(
     static SPEC: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
     static PROJECT: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
     static CODELISTS: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
+    static ANALYSIS_RESULTS: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
     static FUNCTION: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
     let admitted = match file_type {
         FileType::Spec => &SPEC,
         FileType::Project => &PROJECT,
         FileType::Codelists => &CODELISTS,
+        FileType::AnalysisResults => &ANALYSIS_RESULTS,
         FileType::Function => &FUNCTION,
     };
     once(admitted, || {

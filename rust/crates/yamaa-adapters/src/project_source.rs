@@ -39,6 +39,9 @@ pub struct PreparedEnvironment {
     pub captures: Vec<DocumentCapture>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
+    /// The analysis results sources the `adam` section declares, in written
+    /// order (DEFINE-32).
+    pub analysis_results: Vec<ast::AnalysisResults>,
 }
 /// Preserve captured provenance while moving definitions into immutable shared
 /// execution metadata. Construction performs no recapture or activation.
@@ -53,6 +56,9 @@ pub struct OwnedEnvironment {
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
+    /// The analysis results sources the `adam` section declares, in written
+    /// order (DEFINE-32).
+    analysis_results: Vec<ast::AnalysisResults>,
     inventory_documents: Vec<crate::specification_source::PreparedDocument>,
     inventory_captured: bool,
 }
@@ -126,6 +132,7 @@ impl PreparedEnvironment {
             captures: self.captures,
             lock: self.lock,
             environment: self.environment.into_execution(),
+            analysis_results: self.analysis_results,
             inventory_documents: Vec::new(),
             inventory_captured: false,
         }
@@ -142,6 +149,7 @@ impl OwnedEnvironment {
             captures: Vec::new(),
             lock: None,
             environment: yamaa_core::build::without_environment(host),
+            analysis_results: Vec::new(),
             inventory_documents: Vec::new(),
             inventory_captured: false,
         }
@@ -221,6 +229,11 @@ impl OwnedEnvironment {
     pub fn environment(&self) -> &yamaa_core::project_environment::ExecutionEnvironment {
         &self.environment
     }
+    /// The analysis results sources the `adam` section declares, inline and
+    /// from the files it lists, in written order (DEFINE-32).
+    pub fn analysis_results(&self) -> &[ast::AnalysisResults] {
+        &self.analysis_results
+    }
 }
 #[derive(Debug)]
 pub enum Failure<E> {
@@ -275,6 +288,12 @@ pub(crate) fn admit(
         DecodeTarget::CodelistFile => {
             document::decode_referenced(source, FileType::Codelists, LANGUAGE_VERSION, closures)?
         }
+        DecodeTarget::AnalysisResultsFile => document::decode_referenced(
+            source,
+            FileType::AnalysisResults,
+            LANGUAGE_VERSION,
+            closures,
+        )?,
     };
     Ok(document.admit()?.into_captured())
 }
@@ -313,6 +332,7 @@ pub fn adapt_preparation<E>(
             captures: prepared.captures,
             lock: prepared.lock,
             environment: prepared.environment,
+            analysis_results: prepared.analysis_results,
         }),
         Err(error) => Err(match error {
             application::Failure::Interrupted {

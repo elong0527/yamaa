@@ -762,6 +762,7 @@ mod project {
             Kind::Codelist if self.wide => source("held/ct.yaml", &format!("{CODELISTS}codelists: [{{id: SEX, name: Sex, data_type: integer, items: [{{value: 123456789012345678901234567890}}]}}]\n")),
             Kind::Function => source(if self.same_identity { PROJECT } else { "held/function.yaml" }, &format!("{FUNCTION}tests: [{{id: ordinary, covers: [normal, boundary], args: {{}}, result: true}}]\n")),
             Kind::Codelist => source("held/ct.yaml", &format!("{CODELISTS}codelists: [{{id: SEX, name: Sex, items: [{{value: true}}]}}]\n")),
+            Kind::AnalysisResults => panic!("the project lists no analysis results file"),
         })
             }
         }

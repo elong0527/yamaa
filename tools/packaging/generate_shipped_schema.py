@@ -34,6 +34,7 @@ V1_ENTRIES = {
     "spec": "schema_spec.yaml",
     "project": "schema_project.yaml",
     "codelists": "schema_codelists.yaml",
+    "analysis_results": "schema_analysis_results.yaml",
     "function": "schema_function.yaml",
 }
 

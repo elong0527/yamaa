@@ -368,6 +368,7 @@ impl Reads {
                 .expect("a captured environment holds its project"),
             catalogue: environment.environment().catalogue(),
             source: &environment.root().source().identity,
+            analysis: environment.analysis_results(),
         }
     }
     fn capture_specification(
