@@ -168,9 +168,12 @@ QUOTED
     "QUOTED",
     QUOTED.replace("<", "&#60;").replace(">", "&#62;").replace('"', "&#34;"),
 )
+# The toolchain release whose musl notice was reviewed (notices.MUSL), which
+# the pinned toolchain must be.
+RELEASE = notices.MUSL[0]
 # A standard library whose linked crate shares a text with the graph.
 LIBRARY = notices.StandardLibrary(
-    release="1.99.1",
+    release=RELEASE,
     statement=(
         "Copyrights in the Rust Standard Library are retained by their contributors.",
     ),
@@ -714,6 +717,20 @@ class StandardLibraryNotice(unittest.TestCase):
             "crates/vex-sdk/0.27.1", "crates/vex-sdk/0.27.2"
         )
         self.assertEqual(self.read(unread), (statement, files, licenses))
+        # An entry whose paths all lie outside library/ renders with an empty
+        # File/Directory, as Rust 1.100.0's entry for the compiler's
+        # ptrauth/llvm_siphash/tests.rs does; it covers no library file.
+        outside = LIBRARY_HTML.replace(
+            '<h2 id="out-of-tree-dependencies">',
+            '<div style="border:1px solid black; padding: 5px;">\n'
+            "    <p>\n        <b>File/Directory:</b>\n        \n    </p>\n"
+            "    <p><b>License:</b> Apache-2.0 WITH LLVM-exception AND "
+            "(Apache-2.0 OR MIT)</p>\n"
+            "    <p><b>Copyright:</b> 2003-2019 University of Illinois at "
+            "Urbana-Champaign</p>\n</div>\n\n"
+            '<h2 id="out-of-tree-dependencies">',
+        )
+        self.assertEqual(self.read(outside), (statement, files, licenses))
 
     def test_another_shape_stops_generation(self):
         cases = {
@@ -1641,7 +1658,7 @@ class LockedClosure(unittest.TestCase):
         standard, _, texts = rest.partition("\nTexts\n-----\n")
         self.assertIn("Crate: yamaa-saphyr-parser 0.2.1", crates)
         self.assertIn(
-            "From share/doc/rust/COPYRIGHT-library.html of Rust 1.99.1:\n\n"
+            f"From share/doc/rust/COPYRIGHT-library.html of Rust {RELEASE}:\n\n"
             "Copyrights in the Rust Standard Library are retained by their "
             "contributors.\n\n"
             "File/Directory: .\n"
@@ -1656,7 +1673,7 @@ class LockedClosure(unittest.TestCase):
         # The crates that std links, from the toolchain's rust-src component,
         # each with the one license relied on.
         self.assertIn(
-            "From the rust-src component of Rust 1.99.1, lib/rustlib/src/rust/library, "
+            f"From the rust-src component of Rust {RELEASE}, lib/rustlib/src/rust/library, "
             "the\ncrates that the standard library links, and those of its in-tree "
             "crates that\ndeclare a license of their own:\n\n"
             "Crate: windows-sys 0.61.2\n    License: MIT\n    Texts: [",
@@ -1664,9 +1681,11 @@ class LockedClosure(unittest.TestCase):
         )
         self.assertNotIn("r-efi", rendered)
         self.assertIn(
-            "Shipped by: Rust 1.99.1 (share/doc/rust/licenses/MIT.txt)\n", texts
+            f"Shipped by: Rust {RELEASE} (share/doc/rust/licenses/MIT.txt)\n", texts
         )
-        self.assertIn("from\nrust/Cargo.lock and the Rust 1.99.1 toolchain", rendered)
+        self.assertIn(
+            f"from\nrust/Cargo.lock and the Rust {RELEASE} toolchain", rendered
+        )
         # Only the command line's notices name musl.
         self.assertNotIn("musl", rendered)
         # A linked crate whose package ships no text for its license takes the
@@ -1740,7 +1759,7 @@ class LockedClosure(unittest.TestCase):
         section = section.partition("\nTexts\n-----\n")[0]
         self.assertIn(
             "The yamaa executables for x86_64-unknown-linux-musl and "
-            "aarch64-unknown-linux-musl link musl, the C library that Rust 1.99.1 "
+            f"aarch64-unknown-linux-musl link musl, the C library that Rust {RELEASE} "
             "bundles for those targets, statically. Their archives carry its "
             "notice as LICENSE-MUSL.txt",
             " ".join(section.split()),
@@ -1760,11 +1779,11 @@ class LockedClosure(unittest.TestCase):
                 selected = notices.notices_for(metadata, closures[host])
                 self.assertNotIn("musl", notices.render(selected, LIBRARY, host))
         # Another toolchain's musl needs reviewing first.
-        newer = dataclasses.replace(LIBRARY, release="1.100.0")
+        newer = dataclasses.replace(LIBRARY, release="1.999.0")
         with self.assertRaisesRegex(
             ValueError,
-            "the musl notice was reviewed for Rust 1.99.1, not 1.100.0: set MUSL to "
-            "the musl release that Rust 1.100.0 bundles for x86_64-unknown-linux-musl "
+            f"the musl notice was reviewed for Rust {RELEASE}, not 1.999.0: set MUSL "
+            "to the musl release that Rust 1.999.0 bundles for x86_64-unknown-linux-musl "
             "and aarch64-unknown-linux-musl, and LICENSE-MUSL.txt to its COPYRIGHT",
         ):
             notices.render(notices.notices_for(metadata, closures["cli"]), newer, "cli")
@@ -1819,7 +1838,7 @@ class LockedClosure(unittest.TestCase):
             notices.check(*built, changed)[1],
             [
                 f"{relative}/LICENSE-THIRD-PARTY.txt: differs from the notices "
-                f"generated for {crate} from rust/Cargo.lock and the Rust 1.99.1 "
+                f"generated for {crate} from rust/Cargo.lock and the Rust {RELEASE} "
                 "toolchain"
                 for relative, crate in hosts
             ],
@@ -1852,7 +1871,7 @@ class LockedClosure(unittest.TestCase):
         )
         self.assertIn(
             "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: differs from the notices "
-            "generated for yamaa-r from rust/Cargo.lock and the Rust 1.99.1 "
+            f"generated for yamaa-r from rust/Cargo.lock and the Rust {RELEASE} "
             "toolchain",
             errors,
         )
@@ -1936,7 +1955,7 @@ class LockedClosure(unittest.TestCase):
                 lists.format("pyo3 0.27.2"),
                 lists.format("windows-sys 0.61.2"),
                 "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: differs from the notices "
-                "generated for yamaa-r from rust/Cargo.lock and the Rust 1.99.1 "
+                f"generated for yamaa-r from rust/Cargo.lock and the Rust {RELEASE} "
                 "toolchain",
             ],
         )

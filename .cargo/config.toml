@@ -1,0 +1,15 @@
+# Cargo reads this file from the directory it runs in and every parent, so it
+# applies to commands run from the repository root or from rust/. It changes
+# only how Cargo resolves versions (cargo update, generate-lockfile, add), never
+# a build from the committed lock; CONTRIBUTING.md ("Toolchain and locks") has
+# the update and bypass commands.
+[resolver]
+# Resolver 2 ignores each crate's rust-version; fall back to the newest
+# release that the workspace rust-version builds.
+incompatible-rust-versions = "fallback"
+
+[registry]
+# Dependency cooldown (Cargo 1.100+): skip crates.io releases younger than
+# seven days, the window in which a compromised or broken release is usually
+# found and yanked.
+global-min-publish-age = "7 days"
