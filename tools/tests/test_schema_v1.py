@@ -290,6 +290,9 @@ EXPECTED = {
     "new.project.transport=dataset_ndjson": [
         Values("submission_section_class", "transport", ("dataset_ndjson",))
     ],
+    # #4769 (D-next on #4064): a section may declare the document's Study
+    # OID (DEFINE-9).
+    "new.project.study_oid": [Field("submission_section_class", "study_oid", "str")],
     # P-VOC-1: roles and a terminology standard's name close to the lists the
     # CDISC vocabulary file holds.
     "new.spec.submission.role=closed": [

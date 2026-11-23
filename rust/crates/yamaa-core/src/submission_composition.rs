@@ -195,6 +195,7 @@ pub struct Study {
     pub(crate) study: ast::Study,
     pub(crate) section: ast::Section,
     pub(crate) file_oid: String,
+    pub(crate) study_oid: String,
     pub(crate) metadata_id: String,
     pub(crate) metadata_name: String,
     pub(crate) metadata_description: Option<String>,
@@ -220,6 +221,11 @@ impl Study {
     /// and the section.
     pub fn file_oid(&self) -> &str {
         &self.file_oid
+    }
+    /// The `Study` OID Define-XML and Dataset-JSON carry: the section's, or
+    /// `STDY.<study.id>` (DEFINE-9).
+    pub fn study_oid(&self) -> &str {
+        &self.study_oid
     }
     pub fn metadata_id(&self) -> &str {
         &self.metadata_id
@@ -2569,6 +2575,10 @@ pub fn compose(
             },
             |f| f.text.clone(),
         ),
+        study_oid: section
+            .study_oid
+            .as_ref()
+            .map_or_else(|| format!("STDY.{}", study.id.name), |oid| oid.text.clone()),
         metadata_id,
         metadata_name,
         metadata_description: section
@@ -2640,6 +2650,7 @@ mod tests {
             context: DefineContext::Submission,
             xml_lang: text("en"),
             file_oid: None,
+            study_oid: None,
             metadata_version: None,
             originator: None,
             stylesheet: None,

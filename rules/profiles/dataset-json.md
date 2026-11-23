@@ -199,7 +199,7 @@ Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `python/tests/i
 | `fileOID` | the selected FileOID, a period, and the specification domain |
 | `originator` | `originator`, when declared |
 | `sourceSystem` | the selected source-system name and version |
-| `studyOID` | the study's generated identifier |
+| `studyOID` | the document's `Study` OID, per [DEFINE-9](define-xml.md#define-9) |
 | `metaDataVersionOID` | the metadata version's generated identifier |
 | `metaDataRef` | the generated document, per [JSON-8](#json-8) |
 | `itemGroupOID` | the dataset's generated identifier |
