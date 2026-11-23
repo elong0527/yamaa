@@ -759,10 +759,10 @@ mod table {
         }
     }
     mod csv_source {
-        // Seam: the untyped text table's owned cells and its limits.
+        // Seam: the untyped text table's owned cells and its width.
         #[test]
-        fn untyped_text_table_owns_exact_source_cells_and_limits() {
-            use yamaa_adapters::csv_source::{parse_text_table, TextTableError};
+        fn untyped_text_table_owns_exact_source_cells_past_the_former_column_limit() {
+            use yamaa_adapters::csv_source::parse_text_table;
             use yamaa_core::table::{TableAccess, ValueRef};
             let mut input = b"A,B\n9007199254740993,\"\"\nx\0y,NA".to_vec();
             let table = parse_text_table(&input).unwrap();
@@ -775,20 +775,13 @@ mod table {
             assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str("NA"));
             assert!(table.cell(2, 0).is_err());
             assert_eq!(parse_text_table(b"A,B").unwrap().row_count(), 0);
+            // A header past the former 1,024-column limit (#4773) is read.
             let wide = (0..1_025)
                 .map(|i| format!("C{i}"))
                 .collect::<Vec<_>>()
                 .join(",");
-            assert!(matches!(
-                parse_text_table(wide.as_bytes()),
-                Err(TextTableError::Csv(
-                    yamaa_adapters::csv_source::Error::Limit {
-                        resource: "columns",
-                        limit: 1_024,
-                        actual: Some(1_025)
-                    }
-                ))
-            ));
+            let wide = parse_text_table(wide.as_bytes()).unwrap();
+            assert_eq!(wide.schema().columns().len(), 1_025);
         }
     }
     #[cfg(feature = "parquet")]

@@ -145,13 +145,14 @@ fn admit_schema(schema: Sequence<'_>, annotated: &[usize]) -> Result<(usize, Vec
             .transpose()?;
         // A zero child count can describe either a primitive (some writers
         // emit it explicitly) or an empty group. Only primitives have a type.
-        if index != 0 && children.is_none_or(|count| count == 0) {
-            if matches!(element.field(1)?, Some(Value::Integer(_))) {
-                if annotated.binary_search(&index).is_ok() {
-                    annotated_leaves.push(leaves);
-                }
-                leaves += 1;
+        if index != 0
+            && children.is_none_or(|count| count == 0)
+            && matches!(element.field(1)?, Some(Value::Integer(_)))
+        {
+            if annotated.binary_search(&index).is_ok() {
+                annotated_leaves.push(leaves);
             }
+            leaves += 1;
         }
         if let Some(children) = children {
             // Each claimed child is a later element of its own, so this claim

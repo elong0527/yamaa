@@ -1,16 +1,14 @@
 //! Service contracts: how a partitioned run reads its driver input (#3792).
-//! A specification whose plan needs no whole table reads it by partition and
-//! admits each partition on its own, after reading and admitting every other
-//! input whole (#4191); any other run reads every input whole and admits it
-//! whole, exactly as an unpartitioned run does.
+//! A specification whose plan needs no whole table reads it by partition,
+//! after reading every other input whole (#4191); any other run reads every
+//! input whole, exactly as an unpartitioned run does.
 //!
-//! The seam is the run's choice of read and its admission of inputs beyond
-//! the row limit, which no fixture can hold. The inputs are geometry alone:
-//! a table reports its schema and record count and panics on any cell read,
-//! so admission is observed before data. Only the partitions a scan visits
-//! answer a cell, each record's key, which a key-bounded cut reads (#3830).
-//! A run that passes admission is cancelled at its key grain's first key, so
-//! the attempt ends as cancelled rather than with a limit.
+//! The seam is the run's choice of read over inputs of millions of records,
+//! which no fixture can hold. The inputs are geometry alone: a table reports
+//! its schema and record count and panics on any cell read, so the reads are
+//! observed before data. Only the partitions a scan visits answer a cell,
+//! each record's key, which a key-bounded cut reads (#3830). A run that
+//! passes admission is cancelled at its key grain's first key.
 mod service {
     mod partitioned_reading {
         use std::cell::{Cell, RefCell};

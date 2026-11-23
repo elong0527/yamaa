@@ -37,12 +37,9 @@ admitted against the fixed maximum below at the boundary that owns it, before
 it is kept or grown. No caller selects other limits, except the
 archive-member, expanded-byte and XML-depth bounds that `read_odm()` and
 `yamaa read-odm` take ([ODM-1](reference/odm.md#odm-1)); no budget is shared
-between boundaries, and no limit depends on available memory. The number of
-inputs one specification reads is not limited: each input is bounded as a
-file. A table's rows, columns and cells have no fixed maximum: a source,
-intermediate, output or report table holds what its source or derivation
-yields, and a table that memory cannot hold fails as the process runs out of
-it, not as a limit.
+between boundaries, and no limit depends on available memory. A table's rows,
+columns and cells, and the inputs of one specification, have no fixed
+maximum.
 
 Fails: `engine_rejected`.
 Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::one_hundred_and_one_typed_inputs_execute_through_the_file_route`.
@@ -60,6 +57,10 @@ Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/y
 | Findings in the final issue collection | 10,000 |
 | YAML nesting depth | 64 |
 | Expression and context nesting depth | 128 |
+
+A source, intermediate, output or report table holds what its source or
+derivation yields, and each input is bounded as a file. A table that memory
+cannot hold fails as the process runs out of it, not as a limit.
 
 A MiB is 1,048,576 bytes and a GiB 1,073,741,824 bytes. A reader checks a
 file's encoded size before keeping its bytes and its growth while reading; a

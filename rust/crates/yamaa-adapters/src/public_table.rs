@@ -13,7 +13,6 @@ use crate::epoch::{date_days, datetime_seconds};
 use arrow_array::RecordBatch;
 #[cfg(feature = "arrow")]
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
-use std::num::NonZeroUsize;
 use std::{convert::Infallible, fmt, ops::Range, sync::Arc};
 use yamaa_core::{
     table::{ColumnReader, TableAccess, TableSchema, ValueRef},
@@ -718,7 +717,11 @@ impl<T: TableAccess<Error = Infallible>> PublicBatches<T> {
     /// The batches of `table`'s columns `projection`, at most `rows` records
     /// each. `table` is refused here, before any batch is built, exactly when
     /// [`PublicTable::from_table`] refuses it (see [`PublicBatches::check`]).
-    pub fn new(table: T, projection: Vec<usize>, rows: NonZeroUsize) -> Result<Self, TableError> {
+    pub fn new(
+        table: T,
+        projection: Vec<usize>,
+        rows: std::num::NonZeroUsize,
+    ) -> Result<Self, TableError> {
         let logical = Self::check(&table, &projection)?;
         Ok(Self {
             schema: public_schema(logical.columns()),

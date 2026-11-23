@@ -646,7 +646,8 @@ mod relations {
             assert_eq!(shape.index("ID"), Some(0));
             assert_eq!(shape.fields().len(), 4);
         }
-        /// Seam: the 1,024-column limit over generated fields.
+        /// Seam: a relation shape over generated fields, 1,025 of them, past
+        /// the former 1,024-column limit (#4773).
         #[test]
         fn relation_width_past_the_former_column_limit_keeps_exact_shape() {
             let fields = |count| {
