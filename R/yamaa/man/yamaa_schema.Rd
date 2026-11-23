@@ -12,8 +12,8 @@ yamaa_schema(file_type)
 }
 \arguments{
   \item{file_type}{The file type, as a file writes it in its \code{type}
-    header: \code{"spec"}, \code{"project"}, \code{"codelists"} or
-    \code{"function"}.}
+    header: \code{"spec"}, \code{"project"}, \code{"codelists"},
+    \code{"analysis_results"} or \code{"function"}.}
 }
 \details{
 A specification file may be one layer of an inheritance chain, so the

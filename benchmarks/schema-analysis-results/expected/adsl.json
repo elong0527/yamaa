@@ -1,0 +1,24 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-11T00:00:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "CATH.adam.Define-XML_2.1.ADSL",
+  "sourceSystem": {"name": "yamaa", "version": "1.0"},
+  "studyOID": "STDY.CATH",
+  "metaDataVersionOID": "MDV.CATH.adam",
+  "metaDataRef": "define.xml",
+  "itemGroupOID": "IG.ADSL",
+  "records": 3,
+  "name": "ADSL",
+  "label": "Subject-Level Analysis Dataset",
+  "columns": [
+    {"itemOID": "IT.ADSL.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 4, "keySequence": 1},
+    {"itemOID": "IT.ADSL.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 8, "keySequence": 2},
+    {"itemOID": "IT.ADSL.SAFFL", "name": "SAFFL", "label": "Safety Population Flag", "dataType": "string", "length": 1},
+    {"itemOID": "IT.ADSL.TRT01AN", "name": "TRT01AN", "label": "Actual Treatment for Period 01 (N)", "dataType": "integer", "length": 8}
+  ],
+  "rows": [
+    ["CATH", "CATH-001", "Y", 1],
+    ["CATH", "CATH-002", "Y", 2],
+    ["CATH", "CATH-003", "N", null]
+  ]
+}

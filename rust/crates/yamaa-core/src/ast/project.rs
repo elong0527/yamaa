@@ -1,17 +1,17 @@
-//! The roots of a project's own files: the project file, a function file and
-//! a codelist file (#2844, design section 2).
+//! The roots of a project's own files: the project file, a function file, a
+//! codelist file and an analysis results file (#2844, design section 2).
 //!
 //! Each root owns the path arena of its file. A project's `functions` lists
 //! function files, each naming its own function with a callable for each
 //! host language, and `environments.<host>.lock` holds each host's lock
-//! (D8). An inline codelist source is a root of its own, with its own arena,
-//! inside its declaration.
+//! (D8). An inline codelist source, and an inline analysis results source,
+//! is a root of its own, with its own arena, inside its declaration.
 //!
 //! Values are held as the engine reads them: a front end converts each
 //! written scalar of a definition or a codelist and reports one it cannot,
 //! as these files always have.
 
-use super::{Header, Meta, Named, Paths, Text};
+use super::{Comment, DocumentRef, Header, Meta, Named, Paths, Text, WhereClause};
 use crate::cdisc_vocabulary::{DefineContext, GuideStatus};
 use crate::project_environment::Submission;
 use crate::project_function::Language;
@@ -333,6 +333,90 @@ pub struct Section {
     /// An authored source-system version; omission selects the installed
     /// package version (DEFINE-12).
     pub source_system_version: Option<Text>,
+    /// The analysis results sources an `adam` section declares, in written
+    /// order (DEFINE-32); no other section declares any.
+    pub analysis_results: Vec<AnalysisResultsDeclaration>,
+    pub meta: Meta,
+}
+
+/// One declared analysis results source (DEFINE-32).
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnalysisResultsDeclaration {
+    pub source: AnalysisResultsSource,
+    pub meta: Meta,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AnalysisResultsSource {
+    /// A source written in the project file.
+    Inline(Box<AnalysisResults>),
+    /// An analysis results file, relative to the project file.
+    File(Text),
+}
+
+/// One analysis results source (DEFINE-32): an analysis results file, or a
+/// source written in the project file.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnalysisResults {
+    /// An analysis results file's own header; a source written in a project
+    /// file has none.
+    pub header: Option<Header>,
+    /// In written order, the order the document presents them.
+    pub displays: Vec<ResultDisplay>,
+    pub paths: Paths,
+    pub meta: Meta,
+}
+
+/// One result display (DEFINE-31): a table, figure or listing of the report.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResultDisplay {
+    /// The identifier the display's generated identity is built from.
+    pub id: Named,
+    pub name: Text,
+    pub description: Text,
+    /// Where the display is in the supporting documents.
+    pub documents: Vec<DocumentRef>,
+    pub results: Vec<AnalysisResult>,
+    pub meta: Meta,
+}
+
+/// One analysis result of a display (DEFINE-31). Its reason and purpose are
+/// closed vocabularies, which stay text: the schema admits their values
+/// (P-VOC-1).
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnalysisResult {
+    pub id: Named,
+    pub description: Text,
+    pub reason: Text,
+    pub purpose: Text,
+    /// The datasets the result reads, in written order.
+    pub datasets: Vec<AnalysisDataset>,
+    /// How the datasets are joined, the comment of `arm:AnalysisDatasets`.
+    pub join: Option<Comment>,
+    pub documentation: Option<Comment>,
+    pub programming_code: Option<ProgrammingCode>,
+    pub meta: Meta,
+}
+
+/// One dataset an analysis result reads: its key in `datasets`, the where
+/// clause selecting its records and the columns analysed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnalysisDataset {
+    pub dataset: Named,
+    /// The where clause as written, each column in written order; `None`
+    /// when the dataset declares none.
+    pub conditions: Option<Vec<WhereClause>>,
+    pub variables: Vec<Named>,
+    pub meta: Meta,
+}
+
+/// The programming code of an analysis result: its text, the documents that
+/// hold it, or both.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProgrammingCode {
+    pub context: Option<Text>,
+    pub code: Option<Text>,
+    pub documents: Vec<DocumentRef>,
     pub meta: Meta,
 }
 

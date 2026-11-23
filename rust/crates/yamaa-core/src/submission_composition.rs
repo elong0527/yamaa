@@ -12,7 +12,9 @@ use crate::{
     submission_values as values,
 };
 use std::collections::BTreeSet;
+mod analysis;
 mod reproduced;
+pub use analysis::{AnalysisDataset, AnalysisDisplay, AnalysisResult, AnalysisTerm};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finding {
@@ -117,6 +119,9 @@ pub struct Column {
     /// One per declared origin, in declaration order (DEFINE-19).
     pub(crate) origins: Vec<OriginDefinition>,
     pub(crate) key_sequence: Option<usize>,
+    /// The `ItemRef`'s `OrderNumber` reproduced metadata declares; the
+    /// column's position in `output.columns` otherwise (DEFINE-18, DEFINE-30).
+    pub(crate) order: Option<usize>,
     pub(crate) values: Vec<ValueDefinition>,
     /// The width a transport file gives a character column (SUB-24).
     pub(crate) transport_length: Option<usize>,
@@ -205,6 +210,9 @@ pub struct Study {
     pub(crate) standards: Vec<Standard>,
     pub(crate) datasets: Vec<Dataset>,
     pub(crate) codelists: Vec<Codelist>,
+    /// The result displays of the section's analysis results sources, in
+    /// source and declaration order (DEFINE-32).
+    pub(crate) analysis: Vec<AnalysisDisplay>,
     /// Every dataset any submission section of the study declares (CT-11).
     pub(crate) inventory: BTreeSet<String>,
 }
@@ -267,6 +275,11 @@ impl Study {
     }
     pub fn codelists(&self) -> &[Codelist] {
         &self.codelists
+    }
+    /// The result displays the document's analysis results metadata holds,
+    /// in source and declaration order (DEFINE-31, DEFINE-32).
+    pub fn analysis_displays(&self) -> &[AnalysisDisplay] {
+        &self.analysis
     }
     /// The transport file the selected section requests, if any.
     pub fn transport(&self) -> Option<ast::Transport> {
@@ -339,6 +352,12 @@ impl Column {
     }
     pub fn key_sequence(&self) -> Option<usize> {
         self.key_sequence
+    }
+    /// The `OrderNumber` reproduced metadata declares for the column's
+    /// `ItemRef`; `None` when the document numbers it by position
+    /// (DEFINE-18, DEFINE-30).
+    pub fn order(&self) -> Option<usize> {
+        self.order
     }
     /// The width a transport file gives a character column, once measured
     /// (SUB-24).
@@ -545,8 +564,18 @@ fn references(
     known: &BTreeSet<&str>,
     path: &str,
 ) {
-    for reference in references {
-        let id = reference_id(reference);
+    unknown_documents(findings, references.iter().map(reference_id), known, path);
+}
+/// DEFINE-8: each document a declaration at `path` names is one the section
+/// declares, whichever declaration names it: an origin, a method or a
+/// comment of a specification, or an analysis result.
+fn unknown_documents<'r>(
+    findings: &mut Vec<Finding>,
+    documents: impl IntoIterator<Item = &'r str>,
+    known: &BTreeSet<&str>,
+    path: &str,
+) {
+    for id in documents {
         if !known.contains(id) {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionUnknownDocument, path, id)
@@ -982,6 +1011,7 @@ impl ColumnAdmission<'_> {
             mandatory,
             origins,
             key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
+            order: None,
             values: Vec::new(),
             transport_length: None,
             has_no_data: false,
@@ -1367,6 +1397,37 @@ fn key_column_mandatory(
     }
 }
 
+/// The declared column `name` as a where clause reads it (SUB-12): whether
+/// `output` carries it, whether metadata that is `reproduced` omits it from
+/// the document (DEFINE-30), its type, and the values its own codelist and
+/// its entries' codelists admit. A value-level entry's clause and an analysis
+/// dataset's read a where column through this one description.
+fn declared_column<'c>(
+    columns: &[spec::Column],
+    output: &[String],
+    catalogue: &'c ct::Catalogue,
+    reproduced: bool,
+    name: &str,
+) -> Option<values::Declared<'c>> {
+    let declared = columns.iter().find(|column| column.name.value == name)?;
+    Some(values::Declared {
+        output: output.iter().any(|column| column == name),
+        omitted: reproduced && reproduced::omits(declared),
+        kind: runtime_type(declared.column_type.value),
+        codelist: declared.submission.as_ref().and_then(|metadata| {
+            values::admitted(
+                catalogue,
+                metadata.codelist.as_ref().map(|list| list.value.as_str()),
+                metadata
+                    .value_level
+                    .iter()
+                    .filter_map(|entry| entry.metadata.codelist.as_ref())
+                    .map(|list| list.value.as_str()),
+            )
+        }),
+    })
+}
+
 /// Compose every column's value-level entries (SUB-12, SUB-13): the static
 /// checks of each column's entries, then one definition per entry carrying
 /// what the entry takes from the column (`ValueEntry::describe`).
@@ -1407,23 +1468,13 @@ fn compose_values(
             spec::SubmissionMode::Validated
         };
         let static_findings = values::admit(written, name, mode, |where_column| {
-            let declared = columns.iter().find(|c| c.name.value == where_column)?;
-            Some(values::Declared {
-                output: output_columns.iter().any(|c| c == where_column),
-                omitted: admission.reproduced && reproduced::omits(declared),
-                kind: runtime_type(declared.column_type.value),
-                codelist: declared.submission.as_ref().and_then(|metadata| {
-                    values::admitted(
-                        admission.catalogue,
-                        metadata.codelist.as_ref().map(|list| list.value.as_str()),
-                        metadata
-                            .value_level
-                            .iter()
-                            .filter_map(|entry| entry.metadata.codelist.as_ref())
-                            .map(|list| list.value.as_str()),
-                    )
-                }),
-            })
+            declared_column(
+                columns,
+                output_columns,
+                admission.catalogue,
+                admission.reproduced,
+                where_column,
+            )
         });
         for finding in &static_findings {
             let text = |value: &str| crate::json::Value::String(value.into());
@@ -1995,6 +2046,9 @@ fn compose_datasets(
         if let Some(first) = omitted.filter(|_| !described) {
             findings.push(reproduced::no_item_ref(&first));
         }
+        if reproduced {
+            reproduced::orders(&selected, &path, findings);
+        }
         redundant_unique(doc, &keys, &path, findings);
         compose_values(
             &admission,
@@ -2301,6 +2355,10 @@ pub struct Required<'a> {
     /// declaration order (DEFINE-6).
     pub standards: &'a [ast::ImplementationGuide],
     pub define: &'a ast::Text,
+    /// The section's analysis results sources, inline and from the files it
+    /// lists, in written order (DEFINE-32): none unless the caller read
+    /// them ([`Required::with_analysis`]).
+    pub analysis: &'a [ast::AnalysisResults],
 }
 impl<'a> Required<'a> {
     /// A section admits for runs with only its `specs`. Composition of the
@@ -2325,6 +2383,7 @@ impl<'a> Required<'a> {
                 section,
                 standards,
                 define,
+                analysis: &[],
             });
         }
         let mut findings = Vec::new();
@@ -2338,6 +2397,13 @@ impl<'a> Required<'a> {
             findings.push(missing(format!("{family}.define"), "define"));
         }
         Err(findings)
+    }
+    /// These declarations with the analysis results sources the section
+    /// declares, each lowered from the project file or from the file it
+    /// lists (DEFINE-32).
+    pub fn with_analysis(mut self, sources: &'a [ast::AnalysisResults]) -> Self {
+        self.analysis = sources;
+        self
     }
 }
 
@@ -2380,6 +2446,7 @@ pub fn compose(
         section,
         standards: guides,
         define,
+        analysis: sources,
     } = required;
     let mut findings = Vec::new();
     let specifications: Vec<&Document> = inputs
@@ -2487,6 +2554,17 @@ pub fn compose(
         acrfs: &acrfs,
     };
     let datasets = compose_datasets(&composition, inputs, &mut findings, &mut bound);
+    let analysis = analysis::compose(
+        &analysis::Context {
+            section: family,
+            catalogue,
+            known: &known,
+            inputs,
+            datasets: &datasets,
+        },
+        sources,
+        &mut findings,
+    );
     // The document lists every guide of the section in declaration order,
     // whether or not a dataset binds it, then the terminology standards
     // (DEFINE-6).
@@ -2608,6 +2686,7 @@ pub fn compose(
         standards,
         datasets,
         codelists,
+        analysis,
         inventory,
     })
 }
@@ -2626,6 +2705,7 @@ fn reproduced_only_fields(
     let comment_oid = metadata.comment.as_ref().and_then(spec::Comment::oid);
     for (field, declared) in [
         ("omitted", metadata.omitted.is_some()),
+        ("order", metadata.order.is_some()),
         ("key_sequence", metadata.key_sequence.is_some()),
         ("has_no_data", metadata.has_no_data.is_some()),
         ("method oid", method_oid.is_some()),
@@ -2673,6 +2753,7 @@ mod tests {
             stylesheet: None,
             source_system: None,
             source_system_version: None,
+            analysis_results: Vec::new(),
             meta: text("").meta,
         };
         assert_eq!(source_version(&section, "0.3.0"), Some("0.3.0"));

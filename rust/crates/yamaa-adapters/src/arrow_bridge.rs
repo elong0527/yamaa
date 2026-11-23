@@ -16,14 +16,20 @@ use crate::public_table::{PublicColumn, PublicTable};
 use crate::storage_api::StreamReader;
 pub use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{
+    types::{
+        ArrowPrimitiveType, Time32MillisecondType, Time32SecondType, Time64MicrosecondType,
+        Time64NanosecondType, TimestampMicrosecondType, TimestampMillisecondType,
+        TimestampNanosecondType, TimestampSecondType,
+    },
     Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    RecordBatch, RecordBatchIterator, RecordBatchOptions, RecordBatchReader, StringArray,
-    StringViewArray, Time32SecondArray, TimestampSecondArray,
+    PrimitiveArray, RecordBatch, RecordBatchIterator, RecordBatchOptions, RecordBatchReader,
+    StringArray, StringViewArray, Time32SecondArray, TimestampSecondArray,
 };
 use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use std::{ops::Range, sync::Arc};
 use yamaa_core::{
+    parquet_source::whole_second,
     table::{Column as Declared, TableSchema},
     temporal::Precision,
     value::{ColumnType, FiniteFloat},
@@ -267,8 +273,12 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
 
 /// Consume a standard stream of public Arrow types into the engine's column
 /// table: UTF-8 (including large and view arrays) as text, `Int64`,
-/// `Float64`, `Date32`, zone-free `TimestampSecond` and `Time32Second`, a
-/// date with day and a datetime with second precision, and a time of day. Other types require an explicit
+/// `Float64`, `Date32`, zone-free timestamps and times in seconds,
+/// milliseconds, microseconds or nanoseconds, a date with day and a datetime
+/// with second precision, and a time of day. A timestamp or time count in
+/// milliseconds, microseconds or nanoseconds must name a whole second, as a
+/// stored count does under PARQUET-9; a count short of a whole second, or
+/// outside the years 1 to 9999, is refused. Other types require an explicit
 /// preserving conversion by the caller before exporting. A nonfinite float
 /// is missing. The whole stream is read before its values are converted,
 /// and the stream is released before this returns.
@@ -313,8 +323,13 @@ fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
                     DataType::Int64 => ColumnType::Int,
                     DataType::Float64 => ColumnType::Float,
                     DataType::Date32 => ColumnType::Date,
-                    DataType::Timestamp(TimeUnit::Second, None) => ColumnType::DateTime,
-                    DataType::Time32(TimeUnit::Second) => ColumnType::Time,
+                    // Every unit, with no zone: `append` reads each count as
+                    // the whole second it names.
+                    DataType::Timestamp(_, None) => ColumnType::DateTime,
+                    DataType::Time32(TimeUnit::Second | TimeUnit::Millisecond)
+                    | DataType::Time64(TimeUnit::Microsecond | TimeUnit::Nanosecond) => {
+                        ColumnType::Time
+                    }
                     _ => return Err(TableError::ArrayType { batch: 0, column }),
                 };
                 Ok(Declared {
@@ -327,8 +342,54 @@ fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
     .map_err(|_| TableError::SchemaMismatch { batch: 0 })
 }
 
+/// How many counts of `unit` make one second.
+const fn per_second(unit: &TimeUnit) -> i64 {
+    match unit {
+        TimeUnit::Second => 1,
+        TimeUnit::Millisecond => 1_000,
+        TimeUnit::Microsecond => 1_000_000,
+        TimeUnit::Nanosecond => 1_000_000_000,
+    }
+}
+
+/// Append the counts of `array`, column `at.1` of batch `at.0`, each a whole
+/// second in `unit`, as the seconds `into` reads. A count short of a whole
+/// second (`whole_second`, the judgement a stored count meets under
+/// PARQUET-9), or a second outside the calendar, is refused at its row; a
+/// missing value stays missing, whatever its slot holds.
+fn append_temporal<T, V>(
+    values: &mut Vec<Option<V>>,
+    array: &dyn Array,
+    unit: &TimeUnit,
+    at: (usize, usize),
+    into: impl Fn(i64) -> Option<V>,
+) -> Result<(), TableError>
+where
+    T: ArrowPrimitiveType,
+    T::Native: Into<i64>,
+{
+    let (batch, column) = at;
+    let counts = array
+        .as_any()
+        .downcast_ref::<PrimitiveArray<T>>()
+        .ok_or(TableError::ArrayType { batch, column })?;
+    for row in 0..array.len() {
+        values.push(if array.is_null(row) {
+            None
+        } else {
+            Some(
+                whole_second(counts.value(row).into(), per_second(unit))
+                    .and_then(&into)
+                    .ok_or(TableError::TemporalRange { batch, column, row })?,
+            )
+        });
+    }
+    Ok(())
+}
+
 /// Append `array`, column `column` of batch `batch`, to `values`: a
-/// temporal value outside the years 1 to 9999 is refused.
+/// temporal value outside the years 1 to 9999, or a timestamp or time count
+/// short of a whole second, is refused.
 fn append(
     values: &mut Column,
     array: &dyn Array,
@@ -394,29 +455,43 @@ fn append(
             }
         }
         Column::DateTime(datetimes) => {
-            let seconds = cast::<TimestampSecondArray>(array, batch, column)?;
-            for row in 0..array.len() {
-                datetimes.push(if present(row) {
-                    Some(
-                        datetime_from_seconds(seconds.value(row), Precision::Second)
-                            .ok_or(TableError::TemporalRange { batch, column, row })?,
-                    )
-                } else {
-                    None
-                });
+            let DataType::Timestamp(unit, None) = array.data_type() else {
+                return Err(TableError::ArrayType { batch, column });
+            };
+            let at = (batch, column);
+            let into = |seconds| datetime_from_seconds(seconds, Precision::Second);
+            match unit {
+                TimeUnit::Second => {
+                    append_temporal::<TimestampSecondType, _>(datetimes, array, unit, at, into)?
+                }
+                TimeUnit::Millisecond => append_temporal::<TimestampMillisecondType, _>(
+                    datetimes, array, unit, at, into,
+                )?,
+                TimeUnit::Microsecond => append_temporal::<TimestampMicrosecondType, _>(
+                    datetimes, array, unit, at, into,
+                )?,
+                TimeUnit::Nanosecond => {
+                    append_temporal::<TimestampNanosecondType, _>(datetimes, array, unit, at, into)?
+                }
             }
         }
         Column::Time(times) => {
-            let seconds = cast::<Time32SecondArray>(array, batch, column)?;
-            for row in 0..array.len() {
-                times.push(if present(row) {
-                    Some(
-                        time_from_seconds(i64::from(seconds.value(row)))
-                            .ok_or(TableError::TemporalRange { batch, column, row })?,
-                    )
-                } else {
-                    None
-                });
+            let at = (batch, column);
+            let into = time_from_seconds;
+            match array.data_type() {
+                DataType::Time32(unit @ TimeUnit::Second) => {
+                    append_temporal::<Time32SecondType, _>(times, array, unit, at, into)?
+                }
+                DataType::Time32(unit @ TimeUnit::Millisecond) => {
+                    append_temporal::<Time32MillisecondType, _>(times, array, unit, at, into)?
+                }
+                DataType::Time64(unit @ TimeUnit::Microsecond) => {
+                    append_temporal::<Time64MicrosecondType, _>(times, array, unit, at, into)?
+                }
+                DataType::Time64(unit @ TimeUnit::Nanosecond) => {
+                    append_temporal::<Time64NanosecondType, _>(times, array, unit, at, into)?
+                }
+                _ => return Err(TableError::ArrayType { batch, column }),
             }
         }
     }

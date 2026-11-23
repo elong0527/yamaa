@@ -29,7 +29,7 @@ class ShippedSchemaTests(unittest.TestCase):
         # Schema by the type that `schema(file_type)` names, one line each,
         # read from schema/, beside the table's src/shipped_schema/.
         modules = sorted(path.name for path in (ROOT / "yaml").glob("schema_*.yaml"))
-        types = ("spec", "project", "codelists", "function")
+        types = ("spec", "project", "codelists", "analysis_results", "function")
         lines = [
             line for line in generator.render().splitlines() if "include_str!" in line
         ]

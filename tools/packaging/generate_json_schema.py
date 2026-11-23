@@ -28,6 +28,10 @@ FILE_TYPES = {
     "spec": ("schema_spec.yaml", "root_class"),
     "project": ("schema_project.yaml", "project_class"),
     "codelists": ("schema_codelists.yaml", "codelist_file_class"),
+    "analysis_results": (
+        "schema_analysis_results.yaml",
+        "analysis_results_file_class",
+    ),
     "function": ("schema_function.yaml", "function_definition_class"),
 }
 SCALARS = {

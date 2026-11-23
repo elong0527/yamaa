@@ -14,9 +14,11 @@
 //! file is read, whichever host languages it implements; the host reads only
 //! its own lock (PROJECT-2). An engine that claims no host language, such as
 //! the command line's, reads no `environments` entry, so no lock (#3030
-//! section 2.10).
+//! section 2.10). A codelist source and an analysis results source are each
+//! written inline or as the path of a file, which the one capture reads
+//! (CT-1, DEFINE-32).
 use crate::{
-    ast::{self, CodelistSource},
+    ast::{self, AnalysisResultsSource, CodelistSource},
     decoder::Decoder,
     front_end::v1::project as lower,
     limits::{LimitExceeded, Limits},
@@ -39,6 +41,7 @@ pub enum Kind {
     Lock,
     Function,
     Codelist,
+    AnalysisResults,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Origin {
@@ -46,6 +49,9 @@ pub enum Origin {
     /// A function file the project lists, by its index in `functions`.
     FunctionFile(usize),
     Codelist(usize),
+    /// An analysis results file the `adam` section lists, by its index in
+    /// `analysis_results`.
+    AnalysisResults(usize),
 }
 /// Closed structural targets are selected by the application, never by a host callback.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,6 +62,9 @@ pub enum DecodeTarget {
     FunctionFile,
     /// A codelist file, which declares `yamaa` and `type: codelists`.
     CodelistFile,
+    /// An analysis results file, which declares `yamaa` and
+    /// `type: analysis_results`.
+    AnalysisResultsFile,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -117,6 +126,9 @@ pub struct PreparedEnvironment<D, R> {
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
+    /// The analysis results sources the `adam` section declares, inline and
+    /// from the files it lists, in written order (DEFINE-32).
+    pub analysis_results: Vec<ast::AnalysisResults>,
 }
 #[derive(Debug)]
 pub struct RejectedEnvironment<E, D, X> {
@@ -349,6 +361,8 @@ pub fn prepare<P: Resolver, D: Decoder>(
     }
     let functions = capture_function_files(port, decoder, &project, &entry, &mut collected)?;
     let codelists = capture_codelists(port, decoder, &project, &entry, &mut collected)?;
+    let analysis_results =
+        capture_analysis_results(port, decoder, &project, &entry, &mut collected)?;
     // One host language runs the whole build (D8).
     let draft = Draft {
         language: host,
@@ -377,6 +391,7 @@ pub fn prepare<P: Resolver, D: Decoder>(
             captures,
             lock,
             environment,
+            analysis_results,
         }),
         result => {
             let (draft, admission) = match result {
@@ -481,4 +496,50 @@ fn capture_codelists<P: Resolver, D: Decoder>(
         }
     }
     Ok(codelists)
+}
+
+/// The analysis results sources the `adam` section declares, inline or as
+/// analysis results files relative to the project file, each declaring
+/// `type: analysis_results` (DEFINE-32). A file is read by the capture that
+/// reads a codelist file.
+fn capture_analysis_results<P: Resolver, D: Decoder>(
+    port: &mut P,
+    decoder: &mut D,
+    project: &ast::Project,
+    entry: &str,
+    collected: &mut Collected<P::Error, D::Admitted, D::DocumentError>,
+) -> Step<Vec<ast::AnalysisResults>, P, D> {
+    let mut sources = Vec::new();
+    let declared = project
+        .submission
+        .iter()
+        .flat_map(|declarations| &declarations.sections)
+        .flat_map(|section| &section.analysis_results);
+    for (index, declaration) in declared.enumerate() {
+        match &declaration.source {
+            AnalysisResultsSource::Inline(source) => sources.push(source.as_ref().clone()),
+            AnalysisResultsSource::File(written) => {
+                let result = capture_document(
+                    port,
+                    decoder,
+                    (Kind::AnalysisResults, DecodeTarget::AnalysisResultsFile),
+                    entry,
+                    &written.text,
+                    |document| lower::analysis_results(document, None),
+                );
+                let origin = Origin::AnalysisResults(index);
+                if let Some((document, source)) = collect(
+                    &mut collected.failures,
+                    (origin.clone(), &written.text),
+                    result,
+                )? {
+                    collected
+                        .captures
+                        .push(DocumentCapture { origin, document });
+                    sources.push(source);
+                }
+            }
+        }
+    }
+    Ok(sources)
 }

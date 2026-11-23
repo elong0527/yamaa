@@ -64,6 +64,10 @@ submission_column_class:
         type: bool
         required: false
         description: Whether the received document leaves out a column the output dataset carries, so the document writes no ItemRef or ItemDef for it; permitted only in reproduced metadata, as the only field of its submission (DEFINE-30).
+    - order:
+        type: int
+        required: false
+        description: Reproduced ItemRef OrderNumber, independent of the column's position in output.columns; permitted only in reproduced metadata, and declared by every column the document describes once one declares it (DEFINE-18, DEFINE-30).
     - fields_from: submission_metadata_fields
     - value_level:
         type: "list[submission_value_class]"
@@ -105,7 +109,7 @@ where_comparison_class:
 where_value:
     type: str
     min_length: 1
-    description: One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator (SUB-12).
+    description: One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it (SUB-12, DEFINE-32).
 
 submission_role_fields:
     - core:

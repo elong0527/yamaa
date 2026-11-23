@@ -365,8 +365,8 @@ class RenderingTests(unittest.TestCase):
         python = self.public.render_python([])
         self.assertIn(
             "def schema(file_type: str) -> str:\n"
-            '    """The JSON Schema of a file type, spec, project, codelists or '
-            'function, as canonical JSON text."""\n'
+            '    """The JSON Schema of a file type, spec, project, codelists, '
+            'analysis_results or function, as canonical JSON text."""\n'
             '    return _native._schema(_text(file_type, "file_type"))\n',
             python,
         )

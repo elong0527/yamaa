@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of submission composition (SUB, DEFINE, OUTPUT-1, OUTPUT-2), of admitting held rows as a composed dataset's published rows (XPT-7, XPT-8, JSON-3, JSON-4, CT-11), of the findings the Define-XML and XPT encoders make (DEFINE-3, DEFINE-16, DEFINE-24, DEFINE-25, JSON-2, XPT-10), and of preparing a specification that restates a mandatory column (CHECK-5, SUB-11). A study is the `study` document, a 1.0 project whose `sdtm` section lists one specification of the SDTM model (D4, D16, D25), or `value_level`, the same with a second column its value-level entries select on, or `cited_terminology`, the same with two columns bound to the codelists FIRST and SECOND of three codelist sources, the first and third citing one release of the CDISC/NCI SDTM terminology and the second a later one, after the case's edits. The cases whose table compared only part of each issue compare those fields, or those keys of its context; the cases whose table found its issues by cause among several, or left a defect of their input without a row, say `among`.",
+  "about": "The refusals of submission composition (SUB, DEFINE, OUTPUT-1, OUTPUT-2), of admitting held rows as a composed dataset's published rows (XPT-7, XPT-8, JSON-3, JSON-4, CT-11), of the findings the Define-XML and XPT encoders make (DEFINE-3, DEFINE-16, DEFINE-24, DEFINE-25, JSON-2, XPT-10), and of preparing a specification that restates a mandatory column (CHECK-5, SUB-11). A study is the `study` document, a 1.0 project whose `sdtm` section lists one specification of the SDTM model (D4, D16, D25), or `value_level`, the same with a second column its value-level entries select on, or `cited_terminology`, the same with two columns bound to the codelists FIRST and SECOND of three codelist sources, the first and third citing one release of the CDISC/NCI SDTM terminology and the second a later one, or `analysis`, a 1.0 project whose `adam` section lists two specifications of the ADaM model, declares one supporting document and writes one analysis results source inline, whose one result reads both datasets (DEFINE-31, DEFINE-32), after the case's edits. The cases whose table compared only part of each issue compare those fields, or those keys of its context; the cases whose table found its issues by cause among several, or left a defect of their input without a row, say `among`.",
   "documents": {
     "study": {
       "project": {
@@ -142,6 +142,56 @@
       "terminology": [],
       "installed": "0.3.0",
       "created": "2026-09-11T00:00:00"
+    },
+    "analysis": {
+      "project": {
+        "yamaa": "1.0",
+        "type": "project",
+        "study": {"id": "S01", "name": "Independent study", "description": "Submission detector witness", "protocol_name": "P01"},
+        "adam": {
+          "standards": [{"name": "ADaMIG", "version": "1.3", "status": "Final"}],
+          "context": "Other",
+          "define": "define.xml",
+          "specs": ["d0.yaml", "d1.yaml"],
+          "documents": [{"id": "SAP", "kind": "supplemental", "link": "sap.pdf", "title": "Statistical Analysis Plan"}],
+          "analysis_results": [{"displays": [{"id": "T1", "name": "Table 1", "description": "Independent display", "documents": ["SAP"], "results": [{"id": "R1", "description": "Independent result", "reason": "SPECIFIED IN SAP", "purpose": "PRIMARY OUTCOME MEASURE", "datasets": {"D0": {"where": {"FLAG": ["Y"]}}, "D1": {"where": {"PARAMCD": ["X"], "VISITN": ["1"]}, "variables": ["AVAL"]}}, "join": "D1 is joined to D0 by SUBJECT.", "documentation": {"text": "Independent documentation", "documents": ["SAP"]}, "programming_code": {"context": "R 4.5.1", "code": "mean(d1$AVAL)\n"}}]}]}]
+        }
+      },
+      "specs": [
+        {
+          "yamaa": "1.0",
+          "type": "spec",
+          "model": "ADaM",
+          "domain": "D0",
+          "keys": ["SUBJECT"],
+          "submission": {"label": "Independent subjects", "class": "ADAM OTHER", "structure": "One record per subject", "repeating": false},
+          "columns": [
+            {"name": "SUBJECT", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Req", "mandatory": true, "length": 8, "origins": [{"type": "Assigned"}]}},
+            {"name": "FLAG", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Perm", "mandatory": false, "length": 8, "origins": [{"type": "Assigned"}]}},
+            {"name": "HIDDEN", "type": "str", "label": "Internal column", "derivation": "'X'"}
+          ],
+          "output": {"path": "d0.csv", "columns": ["SUBJECT", "FLAG"]}
+        },
+        {
+          "yamaa": "1.0",
+          "type": "spec",
+          "model": "ADaM",
+          "domain": "D1",
+          "keys": ["SUBJECT", "PARAMCD"],
+          "submission": {"label": "Independent parameters", "class": "BASIC DATA STRUCTURE", "structure": "One record per subject per parameter", "repeating": true},
+          "columns": [
+            {"name": "SUBJECT", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Req", "mandatory": true, "length": 8, "origins": [{"type": "Assigned"}]}},
+            {"name": "PARAMCD", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Req", "mandatory": true, "length": 8, "origins": [{"type": "Assigned"}], "codelist": "PARAM"}},
+            {"name": "VISITN", "type": "int", "label": "Independent column", "derivation": "1", "submission": {"core": "Perm", "mandatory": false, "length": 8, "origins": [{"type": "Assigned"}]}},
+            {"name": "AVAL", "type": "int", "label": "Independent column", "derivation": "1", "submission": {"core": "Perm", "mandatory": false, "length": 8, "origins": [{"type": "Assigned"}]}}
+          ],
+          "output": {"path": "d1.csv", "columns": ["SUBJECT", "PARAMCD", "VISITN", "AVAL"]}
+        }
+      ],
+      "others": [],
+      "terminology": [{"codelists": [{"id": "PARAM", "name": "Parameter codes", "items": [{"value": "X"}]}]}],
+      "installed": "1.0",
+      "created": "2026-09-30T00:00:00"
     }
   },
   "cases": [
@@ -431,6 +481,23 @@
           "rule": "DEFINE-25",
           "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
           "context": {"detail": "schema_violation: reproduced omitted requires mode reproduced", "value": "VALUE"}
+        }
+      ]
+    },
+    {
+      "case": "a_validated_column_declares_no_order",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "order"], "to": 1}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "context": {"detail": "schema_violation: reproduced order requires mode reproduced", "value": "VALUE"}
         }
       ]
     },
@@ -1721,6 +1788,78 @@
       "operation": "define_publication",
       "input": {"artifact": 18446744073709551615, "written": "dm.json", "stage": "publication", "cause": "opaque original cause"},
       "issues": [{"phase": "output", "condition": "publication_failed", "rule": "OUTPUT-8", "spec_paths": ["define"], "context": {"artifact": 18446744073709551615, "cause": "opaque original cause", "path": "dm.json"}}]
+    },
+    {
+      "case": "an_analysis_result_over_two_of_the_sections_datasets_composes",
+      "operation": "compose",
+      "input": {"base": "analysis"},
+      "issues": []
+    },
+    {
+      "case": "an_analysis_dataset_the_section_does_not_compose_is_unknown",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets"], "to": {"D0": {"where": {"FLAG": ["Y"]}}, "DX": {"variables": ["AVAL"]}}}]},
+      "issues": [{"phase": "validation", "condition": "unknown_dataset", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.DX"], "context": {"dataset": "DX", "datasets": ["D0", "D1"], "detail": "DX", "section": "adam"}}]
+    },
+    {
+      "case": "an_analysis_variable_or_where_column_its_dataset_does_not_declare_or_output_is_refused",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets", "D0"], "to": {"where": {"NOWHERE": ["Y"], "HIDDEN": ["X"]}, "variables": ["NOVAR", "HIDDEN", "FLAG", "FLAG"]}}]},
+      "issues": [{"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D0.variables[0]"], "context": {"dataset": "D0", "detail": "undeclared", "display": "T1", "reason": "undeclared", "result": "R1", "variable": "NOVAR"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D0.variables[1]"], "context": {"dataset": "D0", "detail": "not_output", "display": "T1", "reason": "not_output", "result": "R1", "variable": "HIDDEN"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D0.variables[3]"], "context": {"dataset": "D0", "detail": "duplicate_variable", "display": "T1", "reason": "duplicate_variable", "result": "R1", "variable": "FLAG"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D0.where.NOWHERE"], "context": {"dataset": "D0", "detail": "undeclared", "display": "T1", "reason": "undeclared", "result": "R1", "where_column": "NOWHERE"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D0.where.HIDDEN"], "context": {"dataset": "D0", "detail": "not_output", "display": "T1", "reason": "not_output", "result": "R1", "where_column": "HIDDEN"}}]
+    },
+    {
+      "case": "an_analysis_where_clause_names_no_column_a_value_outside_its_codelist_or_one_that_does_not_convert",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets", "D0", "where"], "to": {}}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets", "D1", "where"], "to": {"PARAMCD": ["X", "Q"], "VISITN": ["one"], "AVAL": {"comparator": "GE", "values": ["2", "3"]}, "SUBJECT": {"comparator": "LT", "values": ["M"]}}}]},
+      "issues": [{"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D0.where"], "context": {"dataset": "D0", "detail": "no_columns", "display": "T1", "reason": "no_columns", "result": "R1", "where_column": null}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.where.PARAMCD"], "context": {"dataset": "D1", "detail": "not_in_codelist", "display": "T1", "reason": "not_in_codelist", "result": "R1", "values": ["Q"], "where_column": "PARAMCD"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.where.VISITN"], "context": {"dataset": "D1", "detail": "value_type", "display": "T1", "reason": "value_type", "result": "R1", "where_column": "VISITN"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.where.AVAL"], "context": {"comparator": "GE", "dataset": "D1", "detail": "value_count", "display": "T1", "reason": "value_count", "result": "R1", "where_column": "AVAL"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.where.SUBJECT"], "context": {"dataset": "D1", "detail": "ordered_str", "display": "T1", "reason": "ordered_str", "result": "R1", "where_column": "SUBJECT"}}]
+    },
+    {
+      "case": "a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results"], "to": [{"displays": [{"id": "T1", "name": "Table 1", "description": "Independent display", "documents": ["SAP"], "results": [{"id": "R1", "description": "Independent result", "reason": "SPECIFIED IN SAP", "purpose": "PRIMARY OUTCOME MEASURE", "datasets": {"D0": {"where": {"FLAG": ["Y"]}}, "D1": {"where": {"PARAMCD": ["X"], "VISITN": ["1"]}, "variables": ["AVAL"]}}, "join": "D1 is joined to D0 by SUBJECT.", "documentation": {"text": "Independent documentation", "documents": ["SAP"]}, "programming_code": {"context": "R 4.5.1", "code": "mean(d1$AVAL)\n"}}]}]}, {"displays": [{"id": "T1", "name": "Table 1", "description": "Another display", "results": [{"id": "R1", "description": "Another result", "reason": "DATA DRIVEN", "purpose": "EXPLORATORY OUTCOME MEASURE", "datasets": {"D1": {"variables": ["AVAL"]}}}, {"id": "R1", "description": "Another result", "reason": "DATA DRIVEN", "purpose": "EXPLORATORY OUTCOME MEASURE", "datasets": {"D1": {"variables": ["AVAL"]}}}]}]}]}]},
+      "issues": [{"phase": "validation", "condition": "duplicate_define_identifier", "rule": "DEFINE-10", "spec_paths": ["adam.analysis_results[1].displays[0].id"], "context": {"detail": "T1", "identifier": "T1"}}, {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[1].displays[0].name"], "context": {"detail": "Table 1", "identifier": "Table 1"}}, {"phase": "validation", "condition": "duplicate_identifier", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[1].displays[0].results[1].id"], "context": {"detail": "R1", "identifier": "R1"}}]
+    },
+    {
+      "case": "a_result_reading_two_datasets_needs_its_join_one_variable_and_code_or_documents",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"remove": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "join"]}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets", "D1"], "to": {"where": {"PARAMCD": ["X"]}}}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "programming_code"], "to": {"context": "R 4.5.1"}}]},
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].join"], "context": {"detail": "join", "field": "join"}}, {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].programming_code"], "context": {"detail": "code", "field": "code"}}, {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets"], "context": {"detail": "variables", "field": "variables"}}]
+    },
+    {
+      "case": "a_source_a_display_and_a_result_declare_at_least_one_member_and_code_its_context",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results"], "to": [{"displays": []}, {"displays": [{"id": "T2", "name": "Table 2", "description": "Empty display", "results": []}]}, {"displays": [{"id": "T3", "name": "Table 3", "description": "Empty result", "results": [{"id": "R1", "description": "No dataset", "reason": "DATA DRIVEN", "purpose": "EXPLORATORY OUTCOME MEASURE", "datasets": {}, "programming_code": {"code": "1\n"}}]}]}]}]},
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays"], "context": {"detail": "displays", "field": "displays"}}, {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[1].displays[0].results"], "context": {"detail": "results", "field": "results"}}, {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[2].displays[0].results[0].datasets"], "context": {"detail": "datasets", "field": "datasets"}}, {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[2].displays[0].results[0].programming_code.context"], "context": {"detail": "context", "field": "context"}}]
+    },
+    {
+      "case": "a_join_on_a_result_that_reads_one_dataset_is_not_permitted",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets"], "to": {"D1": {"where": {"PARAMCD": ["X"]}, "variables": ["AVAL"]}}}]},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].join"], "context": {"detail": "a result that reads one dataset joins nothing", "value": "D1 is joined to D0 by SUBJECT."}}]
+    },
+    {
+      "case": "a_display_or_an_analysis_result_citing_an_undeclared_document_is_refused",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results", "0", "displays", "0", "documents"], "to": ["TLF"]}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "join"], "to": {"text": "D1 is joined to D0 by SUBJECT.", "documents": [{"document": "PLAN"}]}}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "documentation"], "to": {"text": "Independent documentation", "documents": ["NOTES"]}}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "programming_code"], "to": {"context": "R 4.5.1", "documents": ["PGM"]}}]},
+      "issues": [{"phase": "validation", "condition": "unknown_document", "rule": "DEFINE-8", "spec_paths": ["adam.analysis_results[0].displays[0].documents"], "context": {"detail": "TLF", "document": "TLF"}}, {"phase": "validation", "condition": "unknown_document", "rule": "DEFINE-8", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].join"], "context": {"detail": "PLAN", "document": "PLAN"}}, {"phase": "validation", "condition": "unknown_document", "rule": "DEFINE-8", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].documentation"], "context": {"detail": "NOTES", "document": "NOTES"}}, {"phase": "validation", "condition": "unknown_document", "rule": "DEFINE-8", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].programming_code"], "context": {"detail": "PGM", "document": "PGM"}}]
+    },
+    {
+      "case": "a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "define_version"], "to": "2.0.0"}, {"set": ["specs", "1", "submission", "mode"], "to": "reproduced"}, {"set": ["specs", "1", "columns", "0", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8}}, {"set": ["specs", "1", "columns", "1", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8, "codelist": "PARAM"}}, {"set": ["specs", "1", "columns", "2", "submission"], "to": {"data_type": "integer", "mandatory": false, "length": 8}}, {"set": ["specs", "1", "columns", "3", "submission"], "to": {"data_type": "integer", "mandatory": false, "length": 8}}, {"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets", "D1", "where"], "to": {"PARAMCD": ["Q"], "VISITN": ["one"]}}]},
+      "issues": []
+    },
+    {
+      "case": "an_analysis_variable_or_where_column_a_reproduced_dataset_omits_is_refused",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "define_version"], "to": "2.0.0"}, {"set": ["specs", "1", "submission", "mode"], "to": "reproduced"}, {"set": ["specs", "1", "columns", "0", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8}}, {"set": ["specs", "1", "columns", "1", "submission"], "to": {"data_type": "text", "mandatory": true, "length": 8, "codelist": "PARAM"}}, {"set": ["specs", "1", "columns", "2", "submission"], "to": {"omitted": true}}, {"set": ["specs", "1", "columns", "3", "submission"], "to": {"omitted": true}}]},
+      "issues": [{"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.variables[0]"], "context": {"dataset": "D1", "detail": "omitted", "display": "T1", "reason": "omitted", "result": "R1", "variable": "AVAL"}}, {"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.where.VISITN"], "context": {"dataset": "D1", "detail": "omitted", "display": "T1", "reason": "omitted", "result": "R1", "where_column": "VISITN"}}]
+    },
+    {
+      "case": "an_analysis_where_column_listing_one_value_in_two_spellings_is_refused",
+      "operation": "compose",
+      "input": {"base": "analysis", "edits": [{"set": ["project", "adam", "analysis_results", "0", "displays", "0", "results", "0", "datasets", "D1", "where"], "to": {"PARAMCD": ["X"], "VISITN": ["1", "1.0"]}}]},
+      "issues": [{"phase": "validation", "condition": "analysis_dataset_invalid", "rule": "DEFINE-32", "spec_paths": ["adam.analysis_results[0].displays[0].results[0].datasets.D1.where.VISITN"], "context": {"dataset": "D1", "detail": "duplicate_value", "display": "T1", "reason": "duplicate_value", "result": "R1", "where_column": "VISITN"}}]
     }
   ]
 }

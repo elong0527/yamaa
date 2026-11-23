@@ -38,6 +38,7 @@ pub struct Closures {
     spec: Arc<CapturedSchema>,
     project: Arc<CapturedSchema>,
     codelists: Arc<CapturedSchema>,
+    analysis_results: Arc<CapturedSchema>,
     function: Arc<CapturedSchema>,
 }
 
@@ -49,6 +50,7 @@ impl Closures {
             spec: shipped_schema::capture_versioned(FileType::Spec)?,
             project: shipped_schema::capture_versioned(FileType::Project)?,
             codelists: shipped_schema::capture_versioned(FileType::Codelists)?,
+            analysis_results: shipped_schema::capture_versioned(FileType::AnalysisResults)?,
             function: shipped_schema::capture_versioned(FileType::Function)?,
         })
     }
@@ -63,6 +65,7 @@ impl Closures {
             FileType::Spec => &self.spec,
             FileType::Project => &self.project,
             FileType::Codelists => &self.codelists,
+            FileType::AnalysisResults => &self.analysis_results,
             FileType::Function => &self.function,
         }
     }
@@ -71,6 +74,7 @@ impl Closures {
             FileType::Spec => &mut self.spec,
             FileType::Project => &mut self.project,
             FileType::Codelists => &mut self.codelists,
+            FileType::AnalysisResults => &mut self.analysis_results,
             FileType::Function => &mut self.function,
         }
     }

@@ -47,8 +47,8 @@
 #   id            stable id: <file type>.<owner>.<field>[=<value>], or
 #                 new.<file type>.<path> for a field 1.0 adds.
 #   file_type     the 1.0 file type that owns the item: spec, project,
-#                 codelists or function; `environment` entries describe the
-#                 file type D8 removes.
+#                 codelists, analysis_results or function; `environment`
+#                 entries describe the file type D8 removes.
 #   schema        today's location, yaml/<file>#<owner>.<field>; an owner is
 #                 a named class or a registry payload such as
 #                 expressions.diff.
@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 686
-  changes: 117
+  entries: 691
+  changes: 122
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 71
+    new, decided: 76
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7934,6 +7934,73 @@ entries:
   reason: Reproduced metadata records a received document that leaves out a column its dataset carries; the column
     stays in the output dataset and the document writes no ItemRef or ItemDef for it. Validated metadata refuses it.
   field_kind: value
+  convert: {action: none}
+- id: new.spec.submission.order
+  file_type: spec
+  path: columns[].submission.order
+  today: null
+  kind: new
+  proposed: order
+  decision: decided (D-next, owner decision on issue 4752)
+  ref: DEFINE-30
+  reason: Reproduced metadata records a received document whose ItemRef OrderNumbers differ from the output column
+    order; the ItemRefs are written in the declared order and the dataset keeps its own. Optional, but declared by
+    every described column of a dataset once one declares it. Validated metadata refuses it.
+  field_kind: value
+  convert: {action: none}
+- id: new.analysis_results.yamaa
+  file_type: analysis_results
+  path: yamaa
+  today: null
+  kind: new
+  proposed: 'yamaa: "1.N"'
+  decision: decided (D-next, owner decision on issue 4756)
+  reason: As in every yamaa document (D4). No 0.5 file is an analysis results file, so the converter
+    wrote none.
+  field_kind: value
+  convert: {action: none}
+- id: new.analysis_results.type
+  file_type: analysis_results
+  path: type
+  today: null
+  kind: new
+  proposed: 'type: analysis_results'
+  decision: decided (D-next, owner decision on issue 4756)
+  ref: SCHEMA-2
+  reason: Names the file type of an analysis results file, which holds the result displays of one source
+    (D4, DEFINE-32).
+  field_kind: value
+  convert: {action: none}
+- id: new.analysis_results.encoding
+  file_type: analysis_results
+  path: encoding
+  today: null
+  kind: new
+  proposed: 'encoding: utf-8'
+  decision: decided (D-next, owner decision on issue 4756)
+  ref: SPEC-8
+  reason: 'The header field every file type carries (#4750): omitted, the file is ASCII; `utf-8` lets this
+    file alone write non-ASCII characters literally, as a display title or documentation copied from a
+    received document may need, and composition never contributes it (SPEC-8).'
+  field_kind: value
+  convert: {action: none}
+- id: new.project.analysis_results
+  file_type: project
+  path: adam.analysis_results[]
+  today: null
+  kind: new
+  proposed: 'analysis_results: sources of the adam section, each written inline or as the path of a
+    type: analysis_results file, declaring result displays, the analysis results each shows, the datasets,
+    where clause and variables each result reads, its join comment, its documentation and its programming
+    code'
+  decision: decided (D-next, owner decision on issue 4756)
+  ref: DEFINE-32
+  reason: 'An addition to the approved table under D27 (#4756): an adam section declares analysis results
+    metadata (ARM v1.0), which composition resolves against the datasets and documents of the section and
+    the Define-XML document carries as arm:AnalysisResultDisplays (DEFINE-31). Only the adam section takes
+    the field, through adam_section_class, so sdtm and send refuse it as unknown_field. No 0.5 file
+    declares it, so the converter wrote none.'
+  field_kind: structure
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

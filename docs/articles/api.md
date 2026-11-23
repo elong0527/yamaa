@@ -46,7 +46,7 @@ functions, arguments, members and printed forms on this page, as the
 
 Every yamaa file is YAML whose first two fields are `yamaa`, the oldest
 language version the file needs, always quoted, as in `yamaa: "1.0"`, and
-`type`, which names one of four file types.
+`type`, which names one of five file types.
 
 * A **specification** (`type: spec`) describes one dataset: its inputs, keys,
   columns, checks and `output`.
@@ -59,6 +59,9 @@ language version the file needs, always quoted, as in `yamaa: "1.0"`, and
   each host language.
 * A **codelists file** (`type: codelists`) holds the codelists of one
   terminology source ([Codelists and terminology](terminology.md)).
+* An **analysis results file** (`type: analysis_results`) holds the analysis
+  results metadata of one source, which an `adam` section lists
+  ([Analysis results](schema-intro.md#analysis-results)).
 
 An engine reads a file that declares its own language version or an older 1.x
 one, and refuses a newer file as `unsupported_language_version`, naming the
@@ -254,9 +257,14 @@ metadata and save targets keep reading and writing their files. Declared input
 `types` still apply, and the report identifies these inputs as `memory:<alias>`
 with no byte count. An unknown alias fails the run before study data is read.
 
-Frames admit UTF-8 strings, 64-bit integers and floats, date32, zone-free
-second timestamps and second time32 values. Convert other physical types preserving their values before
-exporting; an unsupported type raises `yamaa.Error` with an input diagnostic.
+Frames admit UTF-8 strings, 64-bit integers and floats, date32, and zone-free
+timestamps and times of day in seconds, milliseconds, microseconds or
+nanoseconds, so a pandas, Polars or PyArrow frame keeps the unit its library
+gives it. Each timestamp or time must fall on a whole second, as one read from
+a Parquet file must; a value with a fraction of a second raises `yamaa.Error`.
+Convert other physical types, a timestamp with a time zone among them,
+preserving their values before exporting; an unsupported type raises
+`yamaa.Error` with an input diagnostic.
 R takes the same alias overrides as a named list of data frames:
 
 ```r
@@ -925,6 +933,12 @@ its newline-delimited form, or one SAS Transport version 5 file next to
 define.xml. A section without `transport` fails with `missing_required_field`
 at it, unless it sets `context: Other` for a document that is not a
 submission, which then writes define.xml alone.
+An `adam` section that declares `analysis_results` also gets its analysis
+results metadata in define.xml, as `arm:AnalysisResultDisplays`, under every
+`define_version`: the displays of the report and, for each result, the
+datasets, records and variables behind it, each name checked against the
+section ([Analysis results](schema-intro.md#analysis-results)). A document
+without the field is unchanged.
 Its `save()` writes each section's transport files, then its define.xml, and
 returns the paths it wrote. Its `created` is the creation time that the
 documents carry: the `created` you gave, or else the time the submission read
@@ -940,7 +954,11 @@ such as `method: {oid: MT.SAFFL, name: Population flag, description: ...}`;
 elements that declare one `oid` with the same definition share one `MethodDef`
 or `def:CommentDef`. A column the received document leaves out stays in the
 output dataset and declares `submission: {omitted: true}`, with nothing else;
-the document then writes no `ItemRef` or `ItemDef` for it. Validated
+the document then writes no `ItemRef` or `ItemDef` for it. When the received
+document lists its `ItemRef`s in another order than the dataset carries its
+columns, each column the document describes declares the received
+`OrderNumber` as `submission: {order: 2, ...}`, and the document lists the
+`ItemRef`s in that order. Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first
 ([PROJECT-15](../../rules/profiles/project.md#project-15)).
@@ -1045,8 +1063,8 @@ The result has `status`, `findings` and `paths`. Read `result.findings` in Pytho
 ## JSON Schema of a file type
 
 `schema()` returns the JSON Schema of a file type, `spec`, `project`,
-`codelists` or `function`, as canonical JSON text: one line, with its members
-in key order. Save it, and an editor that validates YAML against a JSON Schema
+`codelists`, `analysis_results` or `function`, as canonical JSON text: one
+line, with its members in key order. Save it, and an editor that validates YAML against a JSON Schema
 checks and completes yamaa files as you type. The schema is part of the
 installed engine, so every installation of one release gives the same text. A
 specification file may be one layer of an inheritance chain, so the `spec`
@@ -1263,7 +1281,7 @@ yamaa selftest
 | `resolve` | Prints the resolved specification as canonical JSON | `resolve()` |
 | `read-odm` | Reads SOURCE, an ODM XML file or a TAR archive that holds one, and saves its items to OUT | `read_odm()` |
 | `lint` | Lints each PATH, a yamaa file or a directory of them; with `--fix`, first applies the proved fixes in place | `lint()` |
-| `schema` | Prints the JSON Schema of TYPE: `spec`, `project`, `codelists` or `function` | `schema()` |
+| `schema` | Prints the JSON Schema of TYPE: `spec`, `project`, `codelists`, `analysis_results` or `function` | `schema()` |
 | `conditions` | Prints the condition catalogue | `conditions()` |
 | `selftest` | Runs the cases built into the engine and compares each with its expected files | `selftest()` |
 

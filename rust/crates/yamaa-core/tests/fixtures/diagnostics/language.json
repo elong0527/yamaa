@@ -20,16 +20,16 @@
       "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["schema_version"], "context": {"version": "0.5", "language_versions": ["1.0"]}}]
     },
     {
-      "case": "a_type_naming_none_of_the_four_is_unexpected_where_any_is_expected",
+      "case": "a_type_naming_no_file_type_is_unexpected_where_any_is_expected",
       "operation": "language_header",
       "input": {"document": {"yamaa": "1.0", "type": "environment"}},
-      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["type"], "context": {"type": "environment", "expected": ["spec", "project", "codelists", "function"]}}]
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["type"], "context": {"type": "environment", "expected": ["spec", "project", "codelists", "analysis_results", "function"]}}]
     },
     {
-      "case": "a_file_type_argument_naming_none_of_the_four_is_unexpected_with_no_spec_path",
+      "case": "a_file_type_argument_naming_no_file_type_is_unexpected_with_no_spec_path",
       "operation": "file_type_argument",
       "input": {"type": "specs"},
-      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": [], "context": {"type": "specs", "expected": ["spec", "project", "codelists", "function"]}}]
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": [], "context": {"type": "specs", "expected": ["spec", "project", "codelists", "analysis_results", "function"]}}]
     },
     {
       "case": "a_named_file_in_a_newer_version_is_refused_at_the_field_that_names_it",

@@ -353,7 +353,7 @@ pub fn reads_as_layer(file_type: FileType, document: &Document) -> bool {
         FileType::Project => {
             declares_parent(document) || document.field(document.root(), "clear").is_some()
         }
-        FileType::Codelists | FileType::Function => false,
+        FileType::Codelists | FileType::AnalysisResults | FileType::Function => false,
     }
 }
 

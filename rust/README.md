@@ -47,7 +47,7 @@ other configuration.
 
 | Feature | Dependency edge and capability |
 | --- | --- |
-| `yaml` | Saphyr parser and adapter scalar decoding; admits specification, project, codelists, function and schema YAML bytes, and the files `lint` checks. |
+| `yaml` | Saphyr parser and adapter scalar decoding; admits specification, project, codelists, analysis results, function and schema YAML bytes, and the files `lint` checks. |
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
@@ -124,11 +124,13 @@ conversions and R data-frame conversion copy.
 Public dates project Date32 days and zone-free datetimes project whole
 TimestampSecond values, preserving existing public semantics; collected
 precision remains private to execution. Import accepts UTF-8 (including large
-and view arrays), Int64, Float64, Date32 and zone-free TimestampSecond, and
-copies the values into the engine's columns, a date with day and a datetime
-with second precision. Other types, fractional units and timezones require an
-explicit preserving conversion before import. Nonfinite floats become missing
-under the existing engine rule.
+and view arrays), Int64, Float64, Date32, and zone-free timestamps and times of
+day in seconds, milliseconds, microseconds or nanoseconds, and copies the
+values into the engine's columns, a date with day, a datetime with second
+precision and a time of day. A count in a finer unit must name a whole second,
+as a stored Parquet count does (PARQUET-9); a count short of one is refused.
+Other types and timezones require an explicit preserving conversion before
+import. Nonfinite floats become missing under the existing engine rule.
 R's data-frame conversion holds integers as doubles and text as character, and
 raises an error for an integer beyond 2^53 or text containing NUL rather than
 change the value. Requested Python schema conversion is refused rather than

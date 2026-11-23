@@ -596,7 +596,8 @@ Release candidates are not covered: the freeze starts at 1.0.0 (#3030 D1).
 
 **What is frozen.** Each surface is named by the files that hold it.
 
-- Files: the four file types, `project`, `spec`, `codelists` and `function`,
+- Files: the five file types, `project`, `spec`, `codelists`,
+  `analysis_results` and `function`,
   as the committed JSON Schemas in `yaml/json/` give them (every field's
   name, kind, type, default and meaning, and the verbs and verifications
   with their parameters), the closed grammars in `yaml/grammar/`, and the

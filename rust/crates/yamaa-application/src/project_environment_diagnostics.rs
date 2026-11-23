@@ -44,12 +44,14 @@ pub fn scalar_root(
         .map_err(projection_error)?;
     report.diagnostics().map_err(projection_error)
 }
-/// The projection origin of one captured dependency. A lock carries no document.
+/// The projection origin of one captured dependency. A lock carries no
+/// document, and an analysis results file takes no part in the environment's
+/// admission: composition reads its source (DEFINE-32).
 fn origin(origin: &Origin) -> Option<projection::Origin> {
     match origin {
         Origin::FunctionFile(index) => Some(projection::Origin::FunctionFile(*index)),
         Origin::Codelist(index) => Some(projection::Origin::Codelist(*index)),
-        Origin::Lock => None,
+        Origin::AnalysisResults(_) | Origin::Lock => None,
     }
 }
 /// Each listed file is admitted against the closure of its own type.
@@ -58,6 +60,7 @@ fn same_schema(origin: &Origin, schema: &CapturedSchema) -> bool {
         |file_type: FileType| schema.structure().root_class().name == file_type.root_class();
     match origin {
         Origin::Codelist(_) => root_class(FileType::Codelists),
+        Origin::AnalysisResults(_) => root_class(FileType::AnalysisResults),
         Origin::FunctionFile(_) => root_class(FileType::Function),
         Origin::Lock => false,
     }
@@ -150,6 +153,7 @@ fn metadata_path<E>(origin: &Origin, rejected: &RejectedEnvironment<E>) -> Resul
         }
         Origin::FunctionFile(index) => format!("functions[{index}]"),
         Origin::Codelist(index) => format!("codelists[{index}]"),
+        Origin::AnalysisResults(index) => format!("adam.analysis_results[{index}]"),
     })
 }
 fn resource_limit(bound: yamaa_core::limits::LimitExceeded, declaration: &str) -> Error {
