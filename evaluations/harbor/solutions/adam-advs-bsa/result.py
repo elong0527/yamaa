@@ -7,11 +7,12 @@
 """Create an ADVS dataset with derived body surface area records.
 
 Reads the collected ADVS dataset from /app/input, keeps every collected
-record, and adds one body surface area (BSA) record for each subject and
-visit that has both a height result (PARAMCD "HEIGHT") and a weight
-result (PARAMCD "WEIGHT") with a value. BSA uses the Mosteller formula,
-sqrt(height in cm * weight in kg / 3600), and is not rounded. A BSA
-record carries DTYPE "CALCULATION"; collected records have no DTYPE.
+record, and adds one body surface area (BSA) record for each weight result
+(PARAMCD "WEIGHT"), at the weight's visit. Height (PARAMCD "HEIGHT") is
+collected once per subject, so every weight uses the subject's height
+result, whatever visit collected it. BSA uses the Mosteller formula,
+sqrt(height in cm * weight in kg / 3600), and is not rounded. A weight with
+no result, or a subject with no height result, gets no BSA record.
 """
 
 import csv
@@ -21,52 +22,40 @@ import os
 INPUT_PATH = "/app/input/advs.csv"
 OUTPUT_PATH = "/app/output/advs.csv"
 
-COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT", "DTYPE"]
+COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT"]
 
 
 def main():
     with open(INPUT_PATH, newline="") as f:
         collected = list(csv.DictReader(f))
 
-    # Index height and weight results by study, subject and visit.
+    # The subject's one height result.
     heights = {}
-    weights = {}
     for row in collected:
         aval = (row.get("AVAL") or "").strip()
-        if not aval:
-            continue
-        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
-        if row["PARAMCD"] == "HEIGHT":
+        if row["PARAMCD"] == "HEIGHT" and aval:
+            key = (row["STUDYID"], row["USUBJID"])
+            if key in heights:
+                raise ValueError(f"more than one height result for {key}")
             heights[key] = float(aval)
-        elif row["PARAMCD"] == "WEIGHT":
-            weights[key] = float(aval)
 
-    # Position of the last collected record of each subject and visit,
-    # so a derived BSA record follows its source records.
-    last_index = {}
-    for i, row in enumerate(collected):
-        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
-        last_index[key] = i
-
-    out_rows = []
-    for i, row in enumerate(collected):
-        out = {c: row.get(c, "") for c in COLUMNS}
-        out["DTYPE"] = ""
-        out_rows.append(out)
-        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
-        if last_index[key] == i and key in heights and key in weights:
-            bsa = math.sqrt(heights[key] * weights[key] / 3600.0)
-            out_rows.append(
-                {
-                    "STUDYID": key[0],
-                    "USUBJID": key[1],
-                    "PARAMCD": "BSA",
-                    "PARAM": "Body Surface Area (m^2)",
-                    "AVAL": repr(bsa),
-                    "VISIT": key[2],
-                    "DTYPE": "CALCULATION",
-                }
-            )
+    out_rows = [{c: row.get(c, "") for c in COLUMNS} for row in collected]
+    for row in collected:
+        aval = (row.get("AVAL") or "").strip()
+        key = (row["STUDYID"], row["USUBJID"])
+        if row["PARAMCD"] != "WEIGHT" or not aval or key not in heights:
+            continue
+        bsa = math.sqrt(float(aval) * heights[key] / 3600.0)
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "PARAMCD": "BSA",
+                "PARAM": "Body Surface Area (m^2)",
+                "AVAL": repr(bsa),
+                "VISIT": row["VISIT"],
+            }
+        )
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     with open(OUTPUT_PATH, "w", newline="") as f:

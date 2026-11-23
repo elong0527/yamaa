@@ -84,7 +84,7 @@ const DIVIDED: [&str; 3] = [
 /// STUDYID and SITEID. adam-adlb-lymphocytes is admitted but runs as one
 /// partition: its `lb.csv` returns to LYM-001's CYCLE 1 DAY 1 records after
 /// other subjects, so the input is not grouped by USUBJID and VISIT.
-const KEY_BOUNDED: [&str; 33] = [
+const KEY_BOUNDED: [&str; 32] = [
     "adam-adae-occurrence-flags",
     "adam-adae-serious-sequence",
     "adam-adae-severity-rank",
@@ -111,7 +111,6 @@ const KEY_BOUNDED: [&str; 33] = [
     "adam-adsl-period-dates",
     "adam-adtr-nadir",
     "adam-adtr-sum",
-    "adam-advs-bsa",
     "adam-advs-first-observed-carry",
     "adam-advs-locf",
     "adam-advs-map",

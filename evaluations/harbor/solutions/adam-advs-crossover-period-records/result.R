@@ -20,8 +20,10 @@ vs <- read_csv(
 adsl <- read_csv(
   "/app/input/adsl.csv",
   col_types = cols(
-    AP01SDT = col_date(), AP02SDT = col_date(),
-    AP01SDTM = col_datetime(), AP02SDTM = col_datetime(),
+    AP01SDT = col_date(), AP01EDT = col_date(),
+    AP02SDT = col_date(), AP02EDT = col_date(),
+    AP01SDTM = col_datetime(), AP01EDTM = col_datetime(),
+    AP02SDTM = col_datetime(), AP02EDTM = col_datetime(),
     .default = col_character()
   )
 )
@@ -42,18 +44,26 @@ collected <- vs |>
     ADTM = format(moment, "%Y-%m-%dT%H:%M:%S", tz = "UTC")
   )
 
-# The latest period whose start is at or before the record. A record
-# with a time is compared with the period start datetimes, a date-only
-# record with the period start dates; a missing start never matches,
-# so a subject who never started period 2 stays in period 1.
+# Whether a record lies within a period's start and end, both included.
+# Each limit is compared by time when both the record and the limit have
+# one, and by date otherwise; a missing date or limit never matches.
+within <- function(adt, moment, sdt, sdtm, edt, edtm) {
+  after_start <- if_else(
+    !is.na(moment) & !is.na(sdtm), moment >= sdtm, adt >= sdt
+  )
+  before_end <- if_else(
+    !is.na(moment) & !is.na(edtm), moment <= edtm, adt <= edt
+  )
+  coalesce(after_start & before_end, FALSE)
+}
+
+# The later period wins when a record lies within both.
 advs <- collected |>
   left_join(adsl, by = c("STUDYID", "USUBJID")) |>
   mutate(
     APERIOD = case_when(
-      !is.na(moment) & !is.na(AP02SDTM) & moment >= AP02SDTM ~ 2L,
-      is.na(moment) & !is.na(ADT) & !is.na(AP02SDT) & ADT >= AP02SDT ~ 2L,
-      !is.na(moment) & !is.na(AP01SDTM) & moment >= AP01SDTM ~ 1L,
-      is.na(moment) & !is.na(ADT) & !is.na(AP01SDT) & ADT >= AP01SDT ~ 1L,
+      within(ADT, moment, AP02SDT, AP02SDTM, AP02EDT, AP02EDTM) ~ 2L,
+      within(ADT, moment, AP01SDT, AP01SDTM, AP01EDT, AP01EDTM) ~ 1L,
       .default = NA_integer_
     ),
     PARAMCD = VSTESTCD,

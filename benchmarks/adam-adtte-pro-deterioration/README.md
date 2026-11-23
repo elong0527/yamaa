@@ -3,8 +3,9 @@
 **Goal:** flag each visit-level patient-reported outcome (PRO) score as a
 deterioration or not, then build one time-to-deterioration record per
 subject with parameter code `TTDGHS` (`Time to Deterioration in Global
-Health Status`), carrying `STARTDT`, `ADT`, `AVAL`, `CNSR`,
-`EVNTDESC`, `CNSDTDSC`, `SRCDOM`, `SRCVAR`, and `SRCSEQ`.
+Health Status (months)`, naming the unit of `AVAL`), carrying `STARTDT`,
+`ADT`, `AVAL`, `CNSR`, `EVNTDESC`, `CNSDTDSC`, `SRCDOM`, `SRCVAR`, and
+`SRCSEQ`.
 
 **Input:** subject-level randomization and death dates (`RANDDT`,
 `DTHDT`), visit-level PRO scores on a 0 to 100 scale, each with a
