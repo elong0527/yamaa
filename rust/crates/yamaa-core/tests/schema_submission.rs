@@ -1429,6 +1429,7 @@ mod schema {
             let context = a.text("Other");
             let xml_lang = a.text("fr-CA");
             let file = a.text("FILE.analysis-1");
+            let study_oid = a.text("STUDY.analysis-1");
             let metadata = a.text_map(&[
                 ("id", "MDV.analysis-1"),
                 ("name", "Analysis metadata"),
@@ -1447,6 +1448,7 @@ mod schema {
                 ("context", context),
                 ("xml_lang", xml_lang),
                 ("file_oid", file),
+                ("study_oid", study_oid),
                 ("metadata_version", metadata),
                 ("stylesheet", style),
             ]);
@@ -1511,6 +1513,7 @@ mod schema {
             assert_eq!(path(&project, send.xml_lang.meta), "send.xml_lang");
             assert!(
                 send.file_oid.is_none()
+                    && send.study_oid.is_none()
                     && send.metadata_version.is_none()
                     && send.originator.is_none()
                     && send.stylesheet.is_none()
@@ -1521,6 +1524,7 @@ mod schema {
             assert_eq!(adam.context, DefineContext::Other);
             assert_eq!(adam.xml_lang.text, "fr-CA");
             assert_eq!(adam.file_oid.as_ref().unwrap().text, "FILE.analysis-1");
+            assert_eq!(adam.study_oid.as_ref().unwrap().text, "STUDY.analysis-1");
             let metadata = adam.metadata_version.as_ref().unwrap();
             assert_eq!(metadata.id.name, "MDV.analysis-1");
             assert_eq!(metadata.name.text, "Analysis metadata");

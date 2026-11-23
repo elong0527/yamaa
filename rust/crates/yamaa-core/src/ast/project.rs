@@ -322,6 +322,9 @@ pub struct Section {
     /// The language of generated translated text; `en` when omitted.
     pub xml_lang: Text,
     pub file_oid: Option<Text>,
+    /// An authored `Study` OID; omission generates `STDY.<study.id>`
+    /// (DEFINE-9).
+    pub study_oid: Option<Text>,
     pub metadata_version: Option<MetadataVersion>,
     pub originator: Option<Text>,
     pub stylesheet: Option<Text>,

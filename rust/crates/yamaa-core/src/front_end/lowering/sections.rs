@@ -44,6 +44,7 @@ pub enum FieldName {
     Context,
     XmlLang,
     FileOid,
+    StudyOid,
     MetadataVersion,
     Originator,
     Stylesheet,
@@ -74,6 +75,7 @@ impl FieldName {
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
             Self::FileOid => "file_oid",
+            Self::StudyOid => "study_oid",
             Self::MetadataVersion => "metadata_version",
             Self::Originator => "originator",
             Self::Stylesheet => "stylesheet",
@@ -214,6 +216,7 @@ const SECTION: &[FieldName] = &[
     FieldName::Context,
     FieldName::XmlLang,
     FieldName::FileOid,
+    FieldName::StudyOid,
     FieldName::MetadataVersion,
     FieldName::Originator,
     FieldName::Stylesheet,
@@ -691,6 +694,7 @@ impl<'d> Parser<'d, '_, '_> {
             meta,
         );
         let file_oid = self.optional_text(at, FieldName::FileOid, path, TextRule::NonEmpty);
+        let study_oid = self.optional_text(at, FieldName::StudyOid, path, TextRule::NonEmpty);
         let metadata_origin = self.get(node, FieldName::MetadataVersion);
         let metadata_version = if metadata_origin.node.is_some() {
             self.metadata(
@@ -716,6 +720,7 @@ impl<'d> Parser<'d, '_, '_> {
             context: context?,
             xml_lang: xml_lang?,
             file_oid,
+            study_oid,
             metadata_version,
             originator,
             stylesheet,

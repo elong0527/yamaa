@@ -264,11 +264,11 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-codelist-dotted-id`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
 
 | Object | Identifier |
 |---|---|
-| `Study` | `STDY.<study.id>` |
+| `Study` | `STDY.<study.id>`, or the section's `study_oid` |
 | `MetaDataVersion` | `MDV.<metadata_version.id>` |
 | `def:Standard`, implementation guide | `STD.<standard.name>` |
 | `def:Standard`, terminology | `STD.CT_<standard.publishing_set>` |
@@ -296,6 +296,14 @@ standard the `standard` of a codelist source whose codelists the document binds
 
 A codelist `id` may itself join segments with periods
 ([CT-1](terminology.md#ct-1)), so a codelist `ADSL.ARMCD` is `CL.ADSL.ARMCD`.
+
+A section's non-empty `study_oid` is the document's `Study` OID in place of
+`STDY.<study.id>`, written as declared, with no prefix, so a received document
+whose `Study` OID repeats its `FileOID` can be written. A document holds one
+`Study`, the only element of its type and one no element of the document
+references, so the declaration cannot collide with an identifier of its space
+([DEFINE-10](#define-10)). Dataset-JSON's `studyOID` carries the same value
+([JSON-1](dataset-json.md#json-1)).
 
 A reproduced method or comment that declares `oid` carries that identifier in
 place of its `MT.` or `COM.` row, and every reference to it cites the declared
