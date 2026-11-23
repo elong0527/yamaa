@@ -987,21 +987,31 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
                     "2.0 has no HasNoData declaration",
                 ));
             }
-            for origin in column.origins() {
-                let declared = origin.declaration();
-                let implicit_source = match declared.kind.value.name() {
+            // The refusal names the origin's own type or source at its
+            // position, so the message states the declared value 2.0 lacks.
+            for (index, origin) in column.origins().iter().enumerate() {
+                let at = format!("datasets.{identity}.submission.origins[{index}]");
+                let kind = origin.declaration().kind.value;
+                if legacy_origin(kind, study.section().family).is_none() {
+                    return Err(xml_invalid(
+                        &format!("{at}.type"),
+                        "Define-XML 2.0 representation",
+                        text(kind.name()),
+                    ));
+                }
+                let implicit_source = match kind.name() {
                     "Collected" => Some("Investigator"),
                     "Derived" | "Assigned" | "Other" | "Protocol" => Some("Sponsor"),
                     _ => None,
                 };
-                if legacy_origin(declared.kind.value, study.section().family).is_none()
-                    || origin
-                        .source()
-                        .is_some_and(|source| Some(source.name()) != implicit_source)
+                if let Some(source) = origin
+                    .source()
+                    .filter(|source| Some(source.name()) != implicit_source)
                 {
-                    return Err(invalid(
-                        &format!("datasets.{identity}.submission.origins"),
-                        "2.0 cannot represent this origin type or source",
+                    return Err(xml_invalid(
+                        &format!("{at}.source"),
+                        "Define-XML 2.0 representation",
+                        text(source.name()),
                     ));
                 }
             }
