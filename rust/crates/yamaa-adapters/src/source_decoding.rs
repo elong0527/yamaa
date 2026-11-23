@@ -10,6 +10,11 @@ use yamaa_core::specification::{BindError, PrepareError, SourceDeclaration};
 #[derive(Debug)]
 pub enum Error {
     ResourceLimit(crate::resource_diagnostics::Refusal),
+    /// Memory refused a reservation the read made before building what it
+    /// reserved for, at the paths that asked for it (LIMIT-2).
+    Allocation {
+        spec_paths: Vec<String>,
+    },
     Prepare(PrepareError),
     Source(TextTableError),
     TypedSource(crate::typed_csv::Error),
@@ -164,14 +169,9 @@ pub fn decode_source(
 
 /// The ODM fields a CSV header stores (NAME-8), all read as text.
 fn odm_header(names: &[String]) -> Result<yamaa_core::odm_source::FieldBinding, Error> {
-    let fields = names
-        .iter()
-        .map(|name| yamaa_core::odm_source::StoredField {
-            name,
-            kind: Some(yamaa_core::value::ColumnType::Str),
-        })
-        .collect::<Vec<_>>();
-    yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)
+    let names = names.iter().map(String::as_str).collect::<Vec<_>>();
+    yamaa_core::odm_source::bind_fields(&names, |_| Some(yamaa_core::value::ColumnType::Str))
+        .map_err(Error::OdmFields)
 }
 
 /// CSV records as the fixed ODM table: the eleven fields `binding` locates,
@@ -648,16 +648,13 @@ pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
 
 fn project_odm(table: ColumnTable) -> Result<ColumnTable, Error> {
     use yamaa_core::table::{Column, TableAccess, TableSchema};
-    let fields = table
-        .schema()
-        .columns()
+    let columns = table.schema().columns();
+    let names = columns
         .iter()
-        .map(|column| yamaa_core::odm_source::StoredField {
-            name: column.name.as_str(),
-            kind: Some(column.kind),
-        })
+        .map(|column| column.name.as_str())
         .collect::<Vec<_>>();
-    let binding = yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
+    let binding = yamaa_core::odm_source::bind_fields(&names, |field| Some(columns[field].kind))
+        .map_err(Error::OdmFields)?;
     let schema = TableSchema::new(
         yamaa_core::odm_source::FIELDS
             .iter()

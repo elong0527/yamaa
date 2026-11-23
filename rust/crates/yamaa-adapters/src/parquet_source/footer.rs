@@ -55,9 +55,63 @@ pub(super) struct Schema {
     pub leaves: Vec<Leaf>,
 }
 
+impl Schema {
+    /// Whether the path of `leaf` is `name`: the names from the message
+    /// root's child above the leaf down to it, joined by `.`. The path is
+    /// read from the leaf up and never built: a path held by each leaf
+    /// would copy the names above it once for every leaf below them, which
+    /// a footer of nested groups and many leaves makes far larger than the
+    /// footer itself (#4782).
+    pub fn named(&self, leaf: &Leaf, name: &str) -> bool {
+        let mut above = name.as_bytes();
+        for (index, part) in self.names(leaf).enumerate() {
+            // A `.` joins each name to the one below it.
+            let joined = match index {
+                0 => Some(above),
+                _ => above.strip_suffix(b"."),
+            };
+            let Some(rest) = joined.and_then(|rest| rest.strip_suffix(part.as_bytes())) else {
+                return false;
+            };
+            above = rest;
+        }
+        above.is_empty()
+    }
+
+    /// The names of the path of `leaf` ([`Self::named`]), from the leaf up.
+    fn names<'a>(&'a self, leaf: &Leaf) -> impl Iterator<Item = &'a str> {
+        let mut next = Some(leaf.node);
+        std::iter::from_fn(move || {
+            let node = &self.nodes[next?];
+            next = (node.parent != 0).then_some(node.parent);
+            Some(node.name.as_str())
+        })
+    }
+
+    /// The bytes of the path of `leaf` ([`Self::named`]), or `None` past the
+    /// platform's count.
+    pub fn path_bytes(&self, leaf: &Leaf) -> Option<usize> {
+        // One byte joins each name to the one above it.
+        self.names(leaf)
+            .try_fold(0usize, |bytes, name| bytes.checked_add(name.len() + 1))
+            .map(|bytes| bytes - 1)
+    }
+
+    /// The path of `leaf` ([`Self::named`]), built for a caller that has
+    /// admitted its bytes ([`Self::path_bytes`]).
+    pub fn path(&self, leaf: &Leaf) -> String {
+        let mut names: Vec<_> = self.names(leaf).collect();
+        names.reverse();
+        names.join(".")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Node {
     pub name: String,
+    /// The position in `Schema::nodes` of the group that holds the node; the
+    /// message root, which no group holds, names itself.
+    pub parent: usize,
     /// `None` for the message root alone.
     pub repetition: Option<Repetition>,
     pub converted: Converted,
@@ -74,14 +128,13 @@ pub(super) enum Kind {
 }
 
 /// One leaf column: its primitive's physical type and annotations, where it
-/// sits, and its maximum levels.
+/// sits, and its maximum levels. Its path is read from its node up
+/// (`Schema::named`).
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Leaf {
     pub node: usize,
     /// The position of the message root's child above it.
     pub root: usize,
-    /// The names from that child down to the leaf.
-    pub path: Vec<String>,
     pub physical: Physical,
     pub type_length: i32,
     pub precision: i32,
@@ -352,7 +405,7 @@ fn schema(list: Sequence<'_>) -> Result<Schema, Error> {
         nodes: Vec::new(),
         leaves: Vec::new(),
     };
-    let (next, _) = node(&elements, 0, &mut schema)?;
+    let (next, _) = node(&elements, 0, 0, &mut schema)?;
     // Exactly one root, holding every element.
     if next != elements.len() {
         return Err(Error::Malformed);
@@ -361,20 +414,27 @@ fn schema(list: Sequence<'_>) -> Result<Schema, Error> {
         return Err(Error::Malformed);
     };
     for (root, &child) in roots.iter().enumerate() {
-        levels(&mut schema, child, root, &mut Vec::new(), (0, 0))?;
+        levels(&mut schema, child, root, (0, 0))?;
     }
     Ok(schema)
 }
 
-/// Add the node of element `index`, and every node below it, to `schema`;
-/// return the position of the element after its subtree, and the node's.
-fn node(elements: &[Element], index: usize, schema: &mut Schema) -> Result<(usize, usize), Error> {
+/// Add the node of element `index`, a child of the node at `parent`, and
+/// every node below it, to `schema`; return the position of the element
+/// after its subtree, and the node's.
+fn node(
+    elements: &[Element],
+    index: usize,
+    parent: usize,
+    schema: &mut Schema,
+) -> Result<(usize, usize), Error> {
     let element = elements.get(index).ok_or(Error::Malformed)?;
     let root = index == 0;
     let position = schema.nodes.len();
     if root && element.children.is_none_or(|children| children == 0) {
         schema.nodes.push(Node {
             name: element.name.clone(),
+            parent,
             repetition: None,
             converted: Converted::None,
             logical: None,
@@ -398,6 +458,7 @@ fn node(elements: &[Element], index: usize, schema: &mut Schema) -> Result<(usiz
             let Some(physical) = element.physical else {
                 schema.nodes.push(Node {
                     name: element.name.clone(),
+                    parent,
                     repetition: Some(repetition),
                     converted: populated(converted, logical),
                     logical,
@@ -417,6 +478,7 @@ fn node(elements: &[Element], index: usize, schema: &mut Schema) -> Result<(usiz
             primitive.check()?;
             schema.nodes.push(Node {
                 name: element.name.clone(),
+                parent,
                 repetition: Some(repetition),
                 converted: populated(converted, logical),
                 logical,
@@ -425,7 +487,6 @@ fn node(elements: &[Element], index: usize, schema: &mut Schema) -> Result<(usiz
             schema.leaves.push(Leaf {
                 node: position,
                 root: 0,
-                path: Vec::new(),
                 physical,
                 type_length: primitive.length,
                 precision: primitive.precision,
@@ -441,6 +502,7 @@ fn node(elements: &[Element], index: usize, schema: &mut Schema) -> Result<(usiz
             let repetition = element.repetition.map(self::repetition).transpose()?;
             schema.nodes.push(Node {
                 name: element.name.clone(),
+                parent,
                 // The message root holds no repetition, whatever it says.
                 repetition: repetition.filter(|_| !root),
                 converted: populated(converted, logical),
@@ -450,7 +512,7 @@ fn node(elements: &[Element], index: usize, schema: &mut Schema) -> Result<(usiz
             let mut next = index + 1;
             let mut children = Vec::new();
             for _ in 0..count {
-                let (after, child) = node(elements, next, schema)?;
+                let (after, child) = node(elements, next, position, schema)?;
                 next = after;
                 children.push(child);
             }
@@ -460,14 +522,13 @@ fn node(elements: &[Element], index: usize, schema: &mut Schema) -> Result<(usiz
     }
 }
 
-/// Give each leaf below node `node`, a child of the root at `root`, its
-/// path and maximum levels. Every node but the message root has a
-/// repetition.
+/// Give each leaf below node `node`, a child of the root at `root`, that
+/// child's position and its maximum levels. Every node but the message root
+/// has a repetition.
 fn levels(
     schema: &mut Schema,
     node: usize,
     root: usize,
-    path: &mut Vec<String>,
     (mut definition, mut repetition): (i16, i16),
 ) -> Result<(), Error> {
     match schema.nodes[node].repetition.ok_or(Error::Malformed)? {
@@ -478,22 +539,19 @@ fn levels(
             repetition += 1;
         }
     }
-    path.push(schema.nodes[node].name.clone());
     match schema.nodes[node].kind.clone() {
         Kind::Primitive(leaf) => {
             let leaf = &mut schema.leaves[leaf];
             leaf.root = root;
-            leaf.path = path.clone();
             leaf.max_definition = definition;
             leaf.max_repetition = repetition;
         }
         Kind::Group(children) => {
             for child in children {
-                levels(schema, child, root, path, (definition, repetition))?;
+                levels(schema, child, root, (definition, repetition))?;
             }
         }
     }
-    path.pop();
     Ok(())
 }
 
@@ -790,7 +848,8 @@ fn list<'a>(fields: &Struct<'a>, id: i16) -> Result<Option<Sequence<'a>>, Error>
 #[cfg(test)]
 mod tests {
     //! The footer decoder's seam that the readers cannot reach: footers of
-    //! more row groups than a test file holds.
+    //! more row groups, or of more nested groups and leaves, than a test
+    //! file holds.
     use super::*;
 
     fn varint(mut value: u64, output: &mut Vec<u8>) {
@@ -971,6 +1030,161 @@ mod tests {
             assert_eq!(footer.num_rows, count as i64, "{ordinals}");
             assert_own_chunks(&footer.row_groups, count);
         }
+    }
+
+    /// A footer of the shape #4782 reports: no row group, `depth` REQUIRED
+    /// groups `g` nested below the message root, and `leaves` REQUIRED INT64
+    /// leaves `x` in the innermost, or below the root when `depth` is 0.
+    fn nested(depth: usize, leaves: usize) -> Vec<u8> {
+        let group = |name: &[u8], children: usize| {
+            let group = Fields::default().integer(3, 5, 0).binary(4, name);
+            group.integer(5, 5, children as i64).end()
+        };
+        let children = |level: usize| if level == depth { leaves } else { 1 };
+        let mut elements = vec![group(b"schema", children(0))];
+        elements.extend((1..=depth).map(|level| group(b"g", children(level))));
+        let leaf = Fields::default().integer(1, 5, 2).integer(3, 5, 0);
+        elements.extend(std::iter::repeat_n(leaf.binary(4, b"x").end(), leaves));
+        let footer = Fields::default().integer(1, 5, 1).list(2, 12, &elements);
+        let footer = footer.integer(3, 6, 0).list(4, 12, &[]);
+        footer.binary(6, b"yamaa test").end()
+    }
+
+    /// The Parquet file that holds `footer` and no page.
+    fn file(footer: &[u8]) -> Vec<u8> {
+        let length = u32::try_from(footer.len()).unwrap().to_le_bytes();
+        [b"PAR1", footer, &length[..], b"PAR1"].concat()
+    }
+
+    /// Set in the child process that decodes the footer under a bounded
+    /// address space. Only Linux starts one.
+    #[cfg(target_os = "linux")]
+    const CHILD: &str = "YAMAA_PARQUET_FOOTER_CHILD";
+
+    #[test]
+    fn a_leaf_below_nested_groups_reads_its_path_from_the_names_above_it() {
+        // Under memory overcommit a plain read cannot tell how much it asked
+        // for, so on Linux a child process decodes the footer, with its
+        // address space bounded to 2 GiB. The child only decodes.
+        #[cfg(target_os = "linux")]
+        if std::env::var_os(CHILD).is_none() {
+            let test = concat!(
+                module_path!(),
+                "::a_leaf_below_nested_groups_reads_its_path_from_the_names_above_it"
+            );
+            let output = std::process::Command::new("/bin/sh")
+                .args(["-c", "ulimit -v 2097152 && exec \"$0\" \"$@\""])
+                .arg(std::env::current_exe().unwrap())
+                .args(["--exact", test.split_once("::").unwrap().1])
+                .arg("--test-threads=1")
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+            // The child ran this test rather than matching nothing.
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(stdout.contains("1 passed"), "{stdout}");
+            return;
+        }
+        // The deepest tree admission takes, `SEMANTIC_DEPTH` less the root
+        // and the leaf, over leaves enough that a path held by each would
+        // copy the 126 names above them 600,000 times: 75,600,000 names,
+        // which the bound does not hold, from a footer of 4.8 million bytes
+        // (#4782).
+        let (depth, leaves) = (126, 600_000);
+        let footer = decode(&nested(depth, leaves)).unwrap();
+        let schema = &footer.schema;
+        // Authored from the tree: 126 groups `g`, then the leaf `x`.
+        let path = format!("{}x", "g.".repeat(depth));
+        // The nodes are the elements, each holding its own name once.
+        assert_eq!(schema.nodes.len(), 1 + depth + leaves);
+        assert_eq!(schema.leaves.len(), leaves);
+        for (index, leaf) in schema.leaves.iter().enumerate() {
+            let levels = (leaf.root, leaf.max_definition, leaf.max_repetition);
+            assert_eq!(levels, (0, 0, 0), "{index}");
+            assert_eq!(schema.path_bytes(leaf), Some(path.len()), "{index}");
+            assert!(schema.named(leaf, &path), "{index}");
+        }
+        let last = &schema.leaves[leaves - 1];
+        assert_eq!(schema.path(last), path);
+        for other in [&path[2..], &format!("g.{path}"), &path[..path.len() - 2]] {
+            assert!(!schema.named(last, other), "{} bytes", other.len());
+        }
+    }
+
+    #[test]
+    fn a_path_joins_its_names_with_a_period_whatever_the_names_hold() {
+        // message { group `a` { `b`, `` }, `a.b`, `` }: a name may hold a
+        // period or nothing, so two leaves may share a path.
+        let leaf = |name: &[u8]| {
+            let leaf = Fields::default().integer(1, 5, 2).integer(3, 5, 0);
+            leaf.binary(4, name).end()
+        };
+        let group = |name: &[u8], children: i64| {
+            let group = Fields::default().integer(3, 5, 0).binary(4, name);
+            group.integer(5, 5, children).end()
+        };
+        let elements = [
+            Fields::default().binary(4, b"m").integer(5, 5, 3).end(),
+            group(b"a", 2),
+            leaf(b"b"),
+            leaf(b""),
+            leaf(b"a.b"),
+            leaf(b""),
+        ];
+        let footer = Fields::default().integer(1, 5, 1).list(2, 12, &elements);
+        let footer = footer.integer(3, 6, 0).list(4, 12, &[]).end();
+        let schema = decode(&footer).unwrap().schema;
+        let paths: Vec<_> = schema
+            .leaves
+            .iter()
+            .map(|leaf| (schema.path(leaf), schema.path_bytes(leaf), leaf.root))
+            .collect();
+        assert_eq!(
+            paths,
+            [
+                ("a.b".to_owned(), Some(3), 0),
+                ("a.".to_owned(), Some(2), 0),
+                ("a.b".to_owned(), Some(3), 1),
+                (String::new(), Some(0), 2),
+            ]
+        );
+        for (leaf, name, named) in [
+            (0, "a.b", true),
+            (0, "b", false),
+            (0, "a.b.", false),
+            (0, "m.a.b", false),
+            (1, "a.", true),
+            (1, "a", false),
+            (1, "", false),
+            (2, "a.b", true),
+            (2, ".a.b", false),
+            (3, "", true),
+            (3, ".", false),
+        ] {
+            let stored = &schema.leaves[leaf];
+            assert_eq!(schema.named(stored, name), named, "leaf {leaf}, {name:?}");
+        }
+    }
+
+    #[test]
+    fn a_signature_whose_paths_outgrow_the_file_is_refused_before_one_is_built() {
+        use crate::parquet_source::reader::{signature, Error as Refusal};
+        // 1,000 leaves, each below 126 groups: 253 bytes of path each, in a
+        // file of a few bytes for each element.
+        let deep = file(&nested(126, 1_000));
+        assert_eq!(
+            signature(&deep),
+            Err(Refusal::ResourceLimit {
+                resource: "source_bytes",
+                limit: deep.len(),
+                actual: Some(253_000),
+            })
+        );
+        // The same leaves below the root spell the names the footer holds.
+        let flat = signature(&file(&nested(0, 1_000))).unwrap();
+        assert_eq!(flat.len(), 1_000);
+        assert!(flat.iter().all(|column| column.path == "x"));
     }
 
     #[test]

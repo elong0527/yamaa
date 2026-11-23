@@ -9,7 +9,7 @@
 //! moved-from header is safe. An import copies the frame's values into the
 //! engine's own columns and releases the stream. Foreign streams must
 //! satisfy the Arrow C Data/Stream producer contract.
-use crate::column_table::{Column, ColumnTable, TableError};
+use crate::column_table::{Column, ColumnTable, TableError, RECORD_COUNT};
 use crate::columns::{Text, Validity};
 use crate::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
 use crate::public_table::{PublicColumn, PublicTable};
@@ -290,8 +290,15 @@ pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ColumnTable,
     let mut batches = Vec::new();
     for batch in reader {
         let batch = batch.map_err(TableError::Arrow)?;
-        // The batches are held, so their records add up within memory.
-        rows = rows.saturating_add(batch.num_rows());
+        // A batch's arrays hold its records, so held records add up within
+        // memory. A batch without arrays claims a count it does not hold,
+        // and a stream of such batches may claim more records together than
+        // the platform counts: no table holds those (#4782).
+        rows = rows
+            .checked_add(batch.num_rows())
+            .ok_or(TableError::Representation {
+                representation: RECORD_COUNT,
+            })?;
         batches.push(batch);
     }
     let mut columns = logical

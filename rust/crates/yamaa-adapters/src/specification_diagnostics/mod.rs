@@ -109,6 +109,9 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Ok(Some(diagnostics)) => return Rejection::Invalid(diagnostics),
         Ok(None) => {}
     }
+    if let Error::Allocation { spec_paths } = error {
+        return Rejection::Fault(issue::allocation(spec_paths.clone()));
+    }
     let refusal = match error {
         Error::ResourceLimit(refusal) => Some(refusal.clone()),
         _ => source.and_then(|source| crate::resource_diagnostics::source(error, source)),
@@ -168,6 +171,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Error::Execution(error) if error.is_internal() => (Step::Execute, Fault::Internal),
         Error::Execution(_) => (Step::Execute, Fault::ExecutionBoundary),
         Error::ResourceLimit(_) => (Step::Ingest, Fault::SourceLimit),
+        Error::Allocation { .. } => unreachable!("allocation refusals handled above"),
         Error::Sources(_) => (Step::Ingest, Fault::SourceCollectionBoundary),
         Error::OdmFields(_) | Error::OdmValues(_) => (Step::Ingest, Fault::OdmProjectionBoundary),
         Error::OdmSource(crate::odm_xml::Error::Unavailable) => {

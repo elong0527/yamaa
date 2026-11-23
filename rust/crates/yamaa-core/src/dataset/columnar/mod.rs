@@ -116,6 +116,55 @@ fn filled<T: Clone, E>(len: usize, value: T) -> Result<Vec<T>, Fail<E>> {
     Ok(filled)
 }
 
+/// The driver records each candidate row of a template reads.
+enum Members {
+    /// A record grain: one record a row, each row's record in order. One
+    /// reserved buffer holds them, so no row allocates.
+    Records(Vec<usize>),
+    /// The records of each group, in the groups' order.
+    Groups(Vec<Vec<usize>>),
+}
+
+impl Members {
+    /// The record grain's rows: `eligible`, or every one of `records`
+    /// records. Reserved before any is written: a table without columns
+    /// claims its records without holding them, so no memory bounds their
+    /// count (#4782).
+    fn records<E>(eligible: Option<&[usize]>, records: usize) -> Result<Self, Fail<E>> {
+        let mut rows = Vec::new();
+        reserved(rows.try_reserve_exact(eligible.map_or(records, <[usize]>::len)))?;
+        match eligible {
+            Some(eligible) => rows.extend_from_slice(eligible),
+            None => rows.extend(0..records),
+        }
+        Ok(Self::Records(rows))
+    }
+
+    /// The candidate rows.
+    fn len(&self) -> usize {
+        match self {
+            Self::Records(rows) => rows.len(),
+            Self::Groups(groups) => groups.len(),
+        }
+    }
+
+    /// The records every row reads, together.
+    fn total(&self) -> usize {
+        match self {
+            Self::Records(rows) => rows.len(),
+            Self::Groups(groups) => groups.iter().map(Vec::len).sum(),
+        }
+    }
+
+    /// The records row `row` reads.
+    fn of(&self, row: usize) -> &[usize] {
+        match self {
+            Self::Records(rows) => std::slice::from_ref(&rows[row]),
+            Self::Groups(groups) => &groups[row],
+        }
+    }
+}
+
 /// A table one read addresses.
 enum Table<'a, E> {
     /// A source port.
@@ -869,34 +918,32 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             None => self.source_table(region, node.driver.source, secondary),
         };
         let read = driver.eligible.as_ref().map_or(table.row_count(), Vec::len);
-        let groups: Vec<Vec<usize>> = match &node.driver.grain {
-            super::resolved::Grain::Records => match &driver.eligible {
-                Some(eligible) => eligible.iter().map(|&row| vec![row]).collect(),
-                None => (0..table.row_count()).map(|row| vec![row]).collect(),
-            },
+        let groups = match &node.driver.grain {
+            super::resolved::Grain::Records => {
+                Members::records(driver.eligible.as_deref(), table.row_count())?
+            }
             super::resolved::Grain::Groups(fields) => {
                 let fields: Vec<usize> = fields.iter().map(|&field| field as usize).collect();
-                match &driver.eligible {
+                Members::Groups(match &driver.eligible {
                     Some(eligible) => relations::driver_groups(table, eligible, &fields)?,
                     None => crate::table_grouping::partition(&table, &fields)
                         .map_err(|error| Box::new(ExecutionError::Grouping(error)))?,
-                }
+                })
             }
             super::resolved::Grain::Keys => {
                 unreachable!("key mode is admitted only as the sole template")
             }
         };
-        let identities: Vec<usize> = (0..groups.len())
-            .map(|offset| {
-                next_identity
-                    .checked_add(offset)
-                    .ok_or_else(|| Box::new(ExecutionError::Capacity))
-            })
-            .collect::<Result<_, _>>()?;
+        let mut identities: Vec<usize> = Vec::new();
+        reserved(identities.try_reserve_exact(groups.len()))?;
+        for offset in 0..groups.len() {
+            let identity = next_identity.checked_add(offset);
+            identities.push(identity.ok_or_else(|| Box::new(ExecutionError::Capacity))?);
+        }
         *next_identity = next_identity
             .checked_add(groups.len())
             .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
-        reserved(frame.try_reserve(groups.len(), groups.iter().map(Vec::len).sum()))?;
+        reserved(frame.try_reserve(groups.len(), groups.total()))?;
         let prewindow: Vec<BindingId> = plan
             .row_bindings(template)
             .filter(|&binding| plan.binding(binding).stage == Stage::Prewindow)
@@ -911,7 +958,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         let unit = |run: &mut Self, frame: &mut Frame, row_mode: bool| -> Result<(), Fail<E>> {
             let cx_template = index as u32;
             if row_mode {
-                for (members, &identity) in groups.iter().zip(&identities) {
+                for (member, &identity) in identities.iter().enumerate() {
+                    let members = groups.of(member);
                     let row = frame.push(cx_template, Identity::Candidate(identity), members);
                     for &binding in &prewindow {
                         run.complete_binding(
@@ -934,7 +982,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 }
             } else {
                 frame.extend(cx_template, groups.len(), |index, records| {
-                    records.extend_from_slice(&groups[index]);
+                    records.extend_from_slice(groups.of(index));
                     Identity::Candidate(identities[index])
                 });
                 let rows: Vec<usize> = (start..frame.rows()).collect();

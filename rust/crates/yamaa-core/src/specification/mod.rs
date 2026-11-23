@@ -5,6 +5,7 @@ use crate::ast::{ExprId, ExprKind};
 use crate::{
     ast, column_dependencies,
     expression::{CompileError, CompiledExpression, Context as ExpressionContext},
+    names::Positions,
     reference_binding::{self, Catalog},
     table::{Column, TableSchema},
     value::ColumnType,
@@ -1256,13 +1257,18 @@ impl PreparedSpecification {
                 path: self.output_path.clone(),
             });
         }
+        // Each list is looked up by name, never searched: a specification
+        // declares and projects as many columns as its bytes hold (#4782).
+        let declared = self.declared();
+        let projected = Positions::of(self.projection.iter().map(String::as_str));
+        let ordered = Positions::of(self.output_order.iter().map(|(name, _, _)| name.as_str()));
         for (position, name) in self.projection.iter().enumerate() {
-            if self.projection[..position].contains(name) {
+            if projected.repeats(position, name) {
                 findings.push(OutputFinding::DuplicateColumn {
                     position,
                     name: name.clone(),
                 });
-            } else if !self.output.columns().iter().any(|c| c.name == *name) {
+            } else if !declared.contains(name) {
                 findings.push(OutputFinding::UndeclaredColumn {
                     position,
                     name: name.clone(),
@@ -1271,7 +1277,7 @@ impl PreparedSpecification {
         }
         for (position, &column) in self.keys.iter().enumerate() {
             let name = &self.output.columns()[column].name;
-            if !self.projection.contains(name) {
+            if !projected.contains(name) {
                 findings.push(OutputFinding::InternalKey {
                     position,
                     name: name.clone(),
@@ -1279,20 +1285,12 @@ impl PreparedSpecification {
             }
         }
         for (position, (name, _, _)) in self.output_order.iter().enumerate() {
-            if self.output_order[..position]
-                .iter()
-                .any(|(previous, _, _)| previous == name)
-            {
+            if ordered.repeats(position, name) {
                 findings.push(OutputFinding::DuplicateOrderTerm {
                     position,
                     name: name.clone(),
                 });
-            } else if !self
-                .output
-                .columns()
-                .iter()
-                .any(|column| &column.name == name)
-            {
+            } else if !declared.contains(name) {
                 findings.push(OutputFinding::UndeclaredOrderColumn {
                     position,
                     name: name.clone(),
@@ -1300,6 +1298,12 @@ impl PreparedSpecification {
             }
         }
         findings
+    }
+
+    /// The position of each declared output column, by its name.
+    fn declared(&self) -> Positions<'_> {
+        let columns = self.output.columns().iter();
+        Positions::of(columns.map(|column| column.name.as_str()))
     }
 
     /// CSV-17: a `str` value of a projected column that equals the declared
@@ -1345,15 +1349,13 @@ impl PreparedSpecification {
         if !self.output_findings().is_empty() {
             return Vec::new();
         }
+        let declared = self.declared();
         self.output_order
             .iter()
             .map(
                 |(name, descending, nulls_first)| crate::dataset::OrderTerm {
-                    column: self
-                        .output
-                        .columns()
-                        .iter()
-                        .position(|column| &column.name == name)
+                    column: declared
+                        .first(name)
                         .expect("validated output order names a declared column"),
                     descending: *descending,
                     nulls_first: *nulls_first,

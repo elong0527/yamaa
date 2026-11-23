@@ -637,6 +637,38 @@ fn nonfinite_missingness_empty_schema_and_the_row_limit_are_explicit() {
     assert_eq!(records(10_000_001).unwrap().row_count(), 10_000_001);
 }
 
+/// A batch without columns claims its records without holding them, so the
+/// batches of one stream may claim more together than the platform counts
+/// (#4782). The import refuses that stream, where it once saturated the
+/// count; it keeps any count the batches do add up to, which nothing is
+/// reserved for until a run reads the table.
+#[test]
+fn a_stream_without_columns_that_claims_more_records_than_are_counted_is_refused() {
+    // The most records one batch of a C stream claims: a signed 64-bit
+    // length. Two of them are counted, and three are not.
+    let most = usize::try_from(i64::MAX).unwrap();
+    let schema = Arc::new(Schema::empty());
+    let claimed = |batches: usize| {
+        let options = RecordBatchOptions::new().with_row_count(Some(most));
+        let batch = RecordBatch::try_new_with_options(schema.clone(), Vec::new(), &options);
+        let batches = vec![batch.unwrap(); batches];
+        arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema.clone(), batches))
+            .map(|table| (table.row_count(), table.schema().columns().len()))
+    };
+    for (batches, records) in [(1, most), (2, most * 2)] {
+        assert_eq!(claimed(batches).unwrap(), (records, 0), "{batches}");
+    }
+    assert!(
+        matches!(
+            claimed(3),
+            Err(TableError::Representation {
+                representation: "record count in the platform's unsigned word"
+            })
+        ),
+        "three batches"
+    );
+}
+
 #[test]
 fn public_temporals_preserve_existing_epoch_view_without_mutating_collected_precision() {
     let logical = TableSchema::new(vec![

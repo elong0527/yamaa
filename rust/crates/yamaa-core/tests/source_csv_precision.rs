@@ -738,7 +738,7 @@ mod source {
     }
     mod odm_source {
         use yamaa_core::{
-            odm_source::{self, SchemaError, StoredField},
+            odm_source::{self, SchemaError},
             value::ColumnType,
         };
 
@@ -760,19 +760,9 @@ mod source {
                 "studyoid",
                 "İtemOID",
             ];
-            let fields = names
-                .iter()
-                .enumerate()
-                .map(|(index, &name)| StoredField {
-                    name,
-                    kind: if index == 0 || index == 12 {
-                        None
-                    } else {
-                        Some(ColumnType::Str)
-                    },
-                })
-                .collect::<Vec<_>>();
-            let binding = odm_source::bind_fields(&fields).unwrap();
+            // The vendor fields at 0 and 12 have no column type.
+            let kind = |stored| (stored != 0 && stored != 12).then_some(ColumnType::Str);
+            let binding = odm_source::bind_fields(&names, kind).unwrap();
             assert_eq!(binding.stored(), &[11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
             assert_eq!(odm_source::canonical("İtemOID"), None);
             assert_eq!(odm_source::canonical("ItemOID.extra"), None);
@@ -782,37 +772,17 @@ mod source {
         #[test]
         fn metadata_findings_keep_missing_schema_order_and_stored_ambiguity_type_order() {
             let fields = [
-                StoredField {
-                    name: "VALUE",
-                    kind: Some(ColumnType::Int),
-                },
-                StoredField {
-                    name: "FormOID",
-                    kind: None,
-                },
-                StoredField {
-                    name: "subjectkey",
-                    kind: Some(ColumnType::Str),
-                },
-                StoredField {
-                    name: "SubjectKey",
-                    kind: Some(ColumnType::Float),
-                },
-                StoredField {
-                    name: "vendor",
-                    kind: Some(ColumnType::Date),
-                },
-                StoredField {
-                    name: "STUDYOID",
-                    kind: Some(ColumnType::Str),
-                },
-                StoredField {
-                    name: "StudyOID",
-                    kind: Some(ColumnType::Str),
-                },
+                ("VALUE", Some(ColumnType::Int)),
+                ("FormOID", None),
+                ("subjectkey", Some(ColumnType::Str)),
+                ("SubjectKey", Some(ColumnType::Float)),
+                ("vendor", Some(ColumnType::Date)),
+                ("STUDYOID", Some(ColumnType::Str)),
+                ("StudyOID", Some(ColumnType::Str)),
             ];
+            let names = fields.map(|(name, _)| name);
             assert_eq!(
-                odm_source::bind_fields(&fields),
+                odm_source::bind_fields(&names, |stored| fields[stored].1),
                 Err(vec![
                     SchemaError::Missing {
                         fields: vec![
@@ -851,26 +821,18 @@ mod source {
         #[test]
         fn vendor_metadata_does_not_change_the_eleven_exposed_coordinates() {
             let large = "v".repeat(1_048_577);
-            let mut fields = odm_source::FIELDS
-                .iter()
-                .map(|name| StoredField {
-                    name,
-                    kind: Some(ColumnType::Str),
-                })
-                .collect::<Vec<_>>();
-            fields.push(StoredField {
-                name: &large,
-                kind: None,
-            });
-            fields.extend(std::iter::repeat_n(
-                StoredField {
-                    name: "vendor",
-                    kind: None,
-                },
-                4097,
-            ));
-            let binding = odm_source::bind_fields(&fields).unwrap();
+            let mut names = odm_source::FIELDS.to_vec();
+            names.push(&large);
+            names.extend(std::iter::repeat_n("vendor", 4097));
+            // A vendor field's column type is never asked (#4782).
+            let mut asked = Vec::new();
+            let binding = odm_source::bind_fields(&names, |stored| {
+                asked.push(stored);
+                Some(ColumnType::Str)
+            })
+            .unwrap();
             assert_eq!(binding.stored(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+            assert_eq!(asked, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         }
 
         struct Records {

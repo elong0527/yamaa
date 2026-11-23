@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <limits.h>
 #include <time.h>
 
 #include "../readstat.h"
@@ -698,6 +699,14 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
                 if (row[tail] != ' ') { retval = READSTAT_ERROR_READ; goto cleanup; }
             }
             break;
+        }
+        /* A record is counted in an int once it is read: as a blank record
+         * held back (`num_blank_rows`) or as a parsed one, whose position the
+         * value handler takes (`parsed_row_count`). A member of more records
+         * than an int counts is refused here, before either count overflows. */
+        if (rows_read == INT_MAX) {
+            retval = READSTAT_ERROR_PARSE;
+            goto cleanup;
         }
         rows_read++;
 

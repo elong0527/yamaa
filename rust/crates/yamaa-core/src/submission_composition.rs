@@ -3,6 +3,7 @@ use crate::{
     application_issue as issue, ast,
     cdisc_vocabulary::{Core, DataType, DefineContext, ModelKind, OriginSource, OriginType},
     diagnostic::{ConditionCode, Definition},
+    names::Positions,
     project_environment::Submission,
     project_terminology as ct,
     schema::{Document, DocumentNode as N},
@@ -596,10 +597,6 @@ fn comment_references(
 }
 /// SUB-15: the origin type and source pairs each family admits. `send` takes
 /// any source the `sdtm` table admits for the type, or none.
-/// The column of `tree` that `name` declares.
-fn tree_column<'t>(tree: &'t ast::Spec, name: &str) -> Option<&'t ast::Column> {
-    tree.columns.iter().find(|column| column.name.name == name)
-}
 /// SUB-20: the first derivation that is not the copy a Predecessor claims.
 fn copy_failure(
     tree: &ast::Spec,
@@ -753,13 +750,30 @@ struct ColumnAdmission<'a> {
     known: &'a BTreeSet<&'a str>,
     acrfs: &'a [&'a ast::SupportingDocument],
     keys: &'a [String],
+    /// The lists a dataset's columns are found in by name.
+    names: &'a Names<'a>,
     reads: &'a Reads,
     /// The dataset's class decides whether `core` derives `mandatory` (SUB-10).
     tabulation: bool,
     /// The dataset's class, reported with a refused `datetime` column (SUB-27).
     class: &'static str,
 }
+/// A dataset's lists of columns, each looked up by name and never searched:
+/// a dataset declares and lists as many columns as its file's bytes hold
+/// (#4782).
+struct Names<'a> {
+    /// The columns the specification's tree declares.
+    tree: Positions<'a>,
+    /// The columns the dataset's document declares.
+    declared: Positions<'a>,
+    /// The entries of `output.columns`.
+    output: Positions<'a>,
+}
 impl ColumnAdmission<'_> {
+    /// The column of the tree that `name` declares.
+    fn tree_column(&self, name: &str) -> Option<&ast::Column> {
+        Some(&self.tree.columns[self.names.tree.first(name)?])
+    }
     /// SUB-10: the one resolution the domain build also enforces.
     fn mandatory(&self, name: &str, metadata: &spec::ColumnSubmission) -> bool {
         spec::resolve_mandatory(
@@ -1404,14 +1418,14 @@ fn key_column_mandatory(
 /// dataset's read a where column through this one description.
 fn declared_column<'c>(
     columns: &[spec::Column],
-    output: &[String],
+    (declared, output): (&Positions<'_>, &Positions<'_>),
     catalogue: &'c ct::Catalogue,
     reproduced: bool,
     name: &str,
 ) -> Option<values::Declared<'c>> {
-    let declared = columns.iter().find(|column| column.name.value == name)?;
+    let declared = &columns[declared.first(name)?];
     Some(values::Declared {
-        output: output.iter().any(|column| column == name),
+        output: output.contains(name),
         omitted: reproduced && reproduced::omits(declared),
         kind: runtime_type(declared.column_type.value),
         codelist: declared.submission.as_ref().and_then(|metadata| {
@@ -1434,7 +1448,6 @@ fn declared_column<'c>(
 fn compose_values(
     admission: &ColumnAdmission<'_>,
     declarations: &spec::Declarations,
-    output_columns: &[String],
     selected: &mut [Column],
     path: &str,
     findings: &mut Vec<Finding>,
@@ -1445,17 +1458,19 @@ fn compose_values(
         .columns()
         .expect("admitted dataset columns")
         .value;
-    let positions: Vec<String> = selected
+    let names = admission.names;
+    let selected_names: Vec<String> = selected
         .iter()
         .map(|column| column.declaration.name.value.clone())
         .collect();
+    let positions = Positions::of(selected_names.iter().map(String::as_str));
     for base in columns {
         let name = &base.name.value;
         let Some(metadata) = base.submission.as_ref() else {
             continue;
         };
         if metadata.value_level.is_empty()
-            || !output_columns.contains(name)
+            || !names.output.contains(name)
             || (admission.reproduced && reproduced::omits(base))
         {
             continue;
@@ -1470,7 +1485,7 @@ fn compose_values(
         let static_findings = values::admit(written, name, mode, |where_column| {
             declared_column(
                 columns,
-                output_columns,
+                (&names.declared, &names.output),
                 admission.catalogue,
                 admission.reproduced,
                 where_column,
@@ -1540,7 +1555,7 @@ fn compose_values(
         if !static_findings.is_empty() {
             continue;
         }
-        let Some(position) = positions.iter().position(|column| column == name) else {
+        let Some(position) = positions.first(name) else {
             continue;
         };
         for entry in &metadata.value_level {
@@ -1550,20 +1565,17 @@ fn compose_values(
                 .clause
                 .iter()
                 .map(|term| {
-                    positions
-                        .iter()
-                        .position(|column| column == &term.column.value)
-                        .and_then(|index| {
-                            values::where_term(
-                                index,
-                                term.comparator,
-                                term.values
-                                    .iter()
-                                    .map(|value| value.value.clone())
-                                    .collect(),
-                                selected[index].runtime_type(),
-                            )
-                        })
+                    positions.first(&term.column.value).and_then(|index| {
+                        values::where_term(
+                            index,
+                            term.comparator,
+                            term.values
+                                .iter()
+                                .map(|value| value.value.clone())
+                                .collect(),
+                            selected[index].runtime_type(),
+                        )
+                    })
                 })
                 .collect::<Option<Vec<_>>>();
             let effective = entry.describe(base, mode);
@@ -1583,7 +1595,7 @@ fn compose_values(
             }
             // An entry without origins of its own answers with the column's,
             // which the column's own refutation already covers (SUB-13).
-            let derivations = match tree_column(admission.tree, name) {
+            let derivations = match admission.tree_column(name) {
                 Some(column) if !entry.metadata.origins.is_empty() => values::levels(column)
                     .iter()
                     .find(|level| level.id.name == *id)
@@ -1944,7 +1956,12 @@ fn compose_datasets(
                 );
             }
         }
-        admit_keys(doc, columns, &keys, &output_columns, &path, findings);
+        let names = Names {
+            tree: Positions::of(input.tree.columns.iter().map(|c| c.name.name.as_str())),
+            declared: Positions::of(columns.value.iter().map(|c| c.name.value.as_str())),
+            output: Positions::of(output_columns.iter().map(String::as_str)),
+        };
+        admit_keys(doc, &names, &keys, &path, findings);
         let mut selected = Vec::new();
         for column in &columns.value {
             reserved_metadata(
@@ -1954,7 +1971,7 @@ fn compose_datasets(
                 &format!("{path}.columns.{}", column.name.value),
                 findings,
             );
-            if column.submission.is_some() && !output_columns.contains(&column.name.value) {
+            if column.submission.is_some() && !names.output.contains(&column.name.value) {
                 findings.push(
                     Finding::cause(
                         ConditionCode::SubmissionColumnNotOutput,
@@ -1975,6 +1992,7 @@ fn compose_datasets(
             known,
             acrfs,
             keys: &keys,
+            names: &names,
             reads: &reads,
             tabulation,
             class: dataset.class.value.name(),
@@ -1988,8 +2006,8 @@ fn compose_datasets(
             // declared column, fails as checking the specification refuses
             // it, at the entry under the listing, and DEFINE-7 reads no
             // metadata for it.
-            let repeated = output_columns[..position].contains(name);
-            let column = match columns.value.iter().find(|c| &c.name.value == name) {
+            let repeated = names.output.repeats(position, name);
+            let column = match names.declared.first(name).map(|at| &columns.value[at]) {
                 Some(column) if !repeated => column,
                 _ => {
                     let name = name.clone();
@@ -2029,7 +2047,7 @@ fn compose_datasets(
             }
             // The column's origin answers for every construction whose rows an
             // entry declaring its own origin does not all select (SUB-19).
-            let derivations = tree_column(input.tree, name).map_or_else(Vec::new, |column| {
+            let derivations = admission.tree_column(name).map_or_else(Vec::new, |column| {
                 values::column_expressions(input.tree, column)
             });
             if let Some(column) = admission.admit(
@@ -2053,7 +2071,6 @@ fn compose_datasets(
         compose_values(
             &admission,
             &declarations,
-            &output_columns,
             &mut selected,
             &path,
             findings,
@@ -2261,18 +2278,11 @@ fn admit_dataset(
 /// schema's to refuse.
 fn admit_keys(
     doc: &Document,
-    columns: &spec::Field<Vec<spec::Column>>,
+    names: &Names<'_>,
     keys: &[String],
-    output_columns: &[String],
     path: &str,
     findings: &mut Vec<Finding>,
 ) {
-    let declared = |name: &String| {
-        columns
-            .value
-            .iter()
-            .any(|column| &column.name.value == name)
-    };
     let written = doc.field(doc.root(), "keys").map(|node| &doc.nodes()[node]);
     if matches!(written, Some(N::Sequence(items)) if items.is_empty()) {
         findings.push(Finding::listed(
@@ -2288,13 +2298,13 @@ fn admit_keys(
             };
             findings.push(Finding::listed(path, refusal.diagnostic()));
         }
-        let refusal = if !declared(key) {
+        let refusal = if !names.declared.contains(key) {
             PreflightFinding::UndeclaredKey {
                 position,
                 column: key.clone(),
             }
             .diagnostic()
-        } else if !output_columns.contains(key) {
+        } else if !names.output.contains(key) {
             OutputFinding::InternalKey {
                 position,
                 name: key.clone(),

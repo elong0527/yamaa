@@ -248,12 +248,14 @@ pub(super) fn table_schema(
 pub(super) fn signature(bytes: &[u8]) -> Result<Vec<super::ColumnSignature>, Error> {
     let frame = framing::admit(bytes)?;
     let footer = footer::decode(frame.metadata)?;
-    Ok(footer
-        .schema
+    let schema = &footer.schema;
+    let paths = schema.leaves.iter().map(|leaf| schema.path_bytes(leaf));
+    admit_paths(paths, bytes.len())?;
+    Ok(schema
         .leaves
         .iter()
         .map(|leaf| super::ColumnSignature {
-            path: leaf.path.join("."),
+            path: schema.path(leaf),
             physical_type: leaf.physical.name().into(),
             logical_type: leaf.logical.map(|logical| logical.debug()),
             converted_type: leaf.converted.name().into(),
@@ -263,6 +265,28 @@ pub(super) fn signature(bytes: &[u8]) -> Result<Vec<super::ColumnSignature>, Err
             max_repetition_level: leaf.max_repetition,
         })
         .collect())
+}
+
+/// Admit the paths a signature spells, by the bytes of each leaf's, against
+/// the `held` bytes of their file, before one is built (#4782). A signature
+/// spells every leaf's path, and the leaves below a group share the names
+/// above them, so a footer of nested groups spells far more bytes than it
+/// holds. A file that reads as a table names each field by one leaf of that
+/// name, which the footer holds, so its paths are admitted.
+pub(super) fn admit_paths(
+    paths: impl IntoIterator<Item = Option<usize>>,
+    held: usize,
+) -> Result<(), Error> {
+    let mut paths = paths.into_iter();
+    let spelled = paths.try_fold(0usize, |sum, path| sum.checked_add(path?));
+    if spelled.is_none_or(|spelled| spelled > held) {
+        return Err(Error::ResourceLimit {
+            resource: "source_bytes",
+            limit: held,
+            actual: spelled,
+        });
+    }
+    Ok(())
 }
 
 /// Reconcile page counts with their held chunk and row-group metadata before
@@ -360,30 +384,41 @@ fn odm_fields(
     hint: Option<&metadata::Hint>,
     decoders: Decoders,
 ) -> Result<[usize; 11], Error> {
-    let leaves = &footer.schema.leaves;
+    let stored = &footer.schema;
     let arrow = (decoders.arrow)(frame, footer, hint)?;
     let arrow_schema = schema::normalize(&arrow, hint.map(|hint| &hint.schema));
-    let fields = arrow_schema
+    let names: Vec<_> = arrow_schema
         .fields()
         .iter()
-        .map(|field| yamaa_core::odm_source::StoredField {
-            name: field.name(),
-            kind: leaves
-                .iter()
-                .enumerate()
-                .find(|(_, leaf)| leaf.max_repetition == 0 && leaf.path.join(".") == *field.name())
-                .and_then(|(index, leaf)| {
-                    profile::column_type(leaf, field.data_type(), frame.annotated.contains(&index))
-                }),
-        })
-        .collect::<Vec<_>>();
-    let binding = yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
-    Ok(binding.stored().map(|root| {
-        leaves
+        .map(|field| field.name().as_str())
+        .collect();
+    // The binding asks the type of a field that alone stores an ODM field,
+    // so the leaves are searched eleven times at most, whatever the file
+    // stores beside them.
+    let binding = yamaa_core::odm_source::bind_fields(&names, |field| {
+        let field = arrow_schema.field(field);
+        let (index, leaf) = stored
+            .leaves
             .iter()
-            .position(|leaf| leaf.path.join(".") == *arrow_schema.field(root).name())
+            .enumerate()
+            .find(|(_, leaf)| leaf.max_repetition == 0 && stored.named(leaf, field.name()))?;
+        profile::column_type(leaf, field.data_type(), annotated(frame, index))
+    })
+    .map_err(Error::OdmFields)?;
+    Ok(binding.stored().map(|root| {
+        stored
+            .leaves
+            .iter()
+            .position(|leaf| stored.named(leaf, arrow_schema.field(root).name()))
             .expect("admitted flat ODM field")
     }))
+}
+
+/// Whether leaf column `column` is one whose variant, geometry or geography
+/// annotation the footer's presentation removes
+/// (`framing::Framing::annotated`, which ascends).
+fn annotated(frame: &framing::Framing<'_>, column: usize) -> bool {
+    frame.annotated.binary_search(&column).is_ok()
 }
 
 /// The table schema of an ODM read: the eleven canonical text fields.
@@ -415,7 +450,6 @@ fn layout(
     decoders: Decoders,
 ) -> Result<Layout, Error> {
     let leaves = &footer.schema.leaves;
-    let annotated = |column: usize| frame.annotated.contains(&column);
     let row_count = usize::try_from(footer.num_rows).map_err(|_| Error::Malformed)?;
     let arrow = (decoders.arrow)(frame, footer, hint)?;
     // The records of each partition, which its row groups hold.
@@ -446,8 +480,9 @@ fn layout(
             arrow_schema.fields().len() == leaves.len()
                 && arrow_schema.fields().get(index).is_some_and(|field| {
                     leaf.max_repetition == 0
-                        && leaf.path.join(".") == *field.name()
-                        && profile::column_type(leaf, field.data_type(), annotated(index)).is_some()
+                        && footer.schema.named(leaf, field.name())
+                        && profile::column_type(leaf, field.data_type(), annotated(frame, index))
+                            .is_some()
                 })
         })
         .collect();

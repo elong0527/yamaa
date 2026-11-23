@@ -3,7 +3,7 @@
 //! shared by both hosts. Display formats are never semantic type authorities.
 use crate::column_table::ColumnTable;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     ffi::{c_char, c_int, c_void, CStr},
     panic::{catch_unwind, AssertUnwindSafe},
 };
@@ -68,9 +68,15 @@ impl TableAccess for Rows {
 }
 struct Context<'a> {
     source: &'a SourceDeclaration,
+    /// The type `source.types` declares for each field it names.
+    types: BTreeMap<&'a str, ColumnType>,
     encoding: Option<&'a str>,
     has_stored_encoding: bool,
     columns: Vec<Column>,
+    /// The names of `columns`. A field's name and a declared type's field
+    /// are looked up here, never searched for among the columns: a file
+    /// holds as many fields as its bytes do (#4782).
+    names: BTreeSet<String>,
     rows: Vec<Vec<Value>>,
     declared_rows: Option<usize>,
     declared_columns: usize,
@@ -82,7 +88,7 @@ impl Context<'_> {
             return Err(Error::Invalid("header"));
         }
         for (name, _) in &self.source.types {
-            if !self.columns.iter().any(|column| &column.name == name) {
+            if !self.names.contains(name) {
                 return Err(Error::Typing(yamaa_core::typed_csv::Error::UnknownField {
                     field: name.clone(),
                 }));
@@ -211,27 +217,21 @@ unsafe extern "C" fn variable(
             if name.is_empty() {
                 return Err(located("field_name", Field::Index(position)));
             }
-            if context.columns.iter().any(|column| column.name == name) {
+            if context.names.contains(&name) {
                 return Err(located("field_name", Field::Name(name)));
             }
-            let kind = context
-                .source
-                .types
-                .iter()
-                .find(|(field, _)| field == &name)
-                .map_or(
-                    if text != 0 {
-                        ColumnType::Str
-                    } else {
-                        ColumnType::Float
-                    },
-                    |(_, kind)| *kind,
-                );
+            let stored = if text != 0 {
+                ColumnType::Str
+            } else {
+                ColumnType::Float
+            };
+            let kind = context.types.get(name.as_str()).copied().unwrap_or(stored);
             // SAS types narrow numeric storage. Character values carry no numeric
             // epoch or integer meaning and numeric storage cannot become text.
             if (text != 0) != (kind == ColumnType::Str) {
                 return Err(located("field_type", Field::Name(name)));
             }
+            context.names.insert(name.clone());
             context.columns.push(Column { name, kind });
             Ok(())
         })
@@ -437,14 +437,15 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
         admit_xport(bytes)?;
     }
     // Declaration admission precedes C or source value allocation.
-    let mut declared = BTreeSet::new();
-    for (name, _) in &source.types {
-        if name.is_empty() || !declared.insert(name) {
+    let mut types = BTreeMap::new();
+    for (name, kind) in &source.types {
+        if name.is_empty() || types.insert(name.as_str(), *kind).is_some() {
             return Err(Error::Internal);
         }
     }
     let mut context = Context {
         source,
+        types,
         encoding: source.encoding.as_deref(),
         // SAS header byte 70 is the stored encoding code. ReadStat maps
         // 0 (unset) and 204 (any) to Windows-1252; neither names an encoding.
@@ -454,6 +455,7 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
             .copied()
             .is_some_and(|code| !matches!(code, 0 | 204)),
         columns: Vec::new(),
+        names: BTreeSet::new(),
         rows: Vec::new(),
         declared_rows: None,
         declared_columns: 0,
@@ -566,9 +568,11 @@ mod tests {
         let source = source();
         let mut context = Context {
             source: &source,
+            types: BTreeMap::new(),
             encoding: source.encoding.as_deref(),
             has_stored_encoding: true,
             columns: Vec::new(),
+            names: BTreeSet::new(),
             rows: Vec::new(),
             declared_rows: None,
             declared_columns: 0,

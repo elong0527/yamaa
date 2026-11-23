@@ -25,14 +25,6 @@ pub fn canonical(name: &str) -> Option<usize> {
         .position(|field| field.eq_ignore_ascii_case(name))
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct StoredField<'a> {
-    pub name: &'a str,
-    /// None is a physical type outside the ordinary closed profile. Vendor
-    /// fields need no logical type and are never admitted as exposed columns.
-    pub kind: Option<ColumnType>,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SchemaError {
     #[error("odm source missing: fields={fields:?}")]
@@ -174,12 +166,21 @@ impl FieldBinding {
     }
 }
 
-pub fn bind_fields(fields: &[StoredField<'_>]) -> Result<FieldBinding, Vec<SchemaError>> {
+/// Bind the stored fields `names`, in stored order, to the eleven fields.
+/// `kind` answers the column type of the stored field at a position, `None`
+/// for a physical type outside the ordinary closed profile. It is asked only
+/// of a field that alone stores one of the eleven: a vendor field needs no
+/// logical type and is never admitted as an exposed column, so a source of
+/// any number of fields is typed eleven times at most (#4782).
+pub fn bind_fields(
+    names: &[&str],
+    mut kind: impl FnMut(usize) -> Option<ColumnType>,
+) -> Result<FieldBinding, Vec<SchemaError>> {
     let mut first = [None; 11];
     let mut counts = [0usize; 11];
     let mut order = Vec::new();
-    for (stored, field) in fields.iter().enumerate() {
-        if let Some(canonical) = canonical(field.name) {
+    for (stored, name) in names.iter().enumerate() {
+        if let Some(canonical) = canonical(name) {
             if first[canonical].is_none() {
                 first[canonical] = Some(stored);
                 order.push(canonical);
@@ -202,22 +203,23 @@ pub fn bind_fields(fields: &[StoredField<'_>]) -> Result<FieldBinding, Vec<Schem
         if counts[index] > 1 {
             errors.push(SchemaError::Ambiguous {
                 field: FIELDS[index],
-                stored: fields
+                stored: names
                     .iter()
-                    .filter(|field| canonical(field.name) == Some(index))
-                    .map(|field| field.name.into())
+                    .filter(|name| canonical(name) == Some(index))
+                    .map(|&name| name.into())
                     .collect(),
             });
         }
     }
     for &index in &order {
         if counts[index] == 1 {
-            let field = fields[first[index].expect("present metadata coordinate")];
-            if field.kind != Some(ColumnType::Str) {
+            let stored = first[index].expect("present metadata coordinate");
+            let kind = kind(stored);
+            if kind != Some(ColumnType::Str) {
                 errors.push(SchemaError::Type {
                     field: FIELDS[index],
-                    stored_field: field.name.into(),
-                    kind: field.kind,
+                    stored_field: names[stored].into(),
+                    kind,
                 });
             }
         }
