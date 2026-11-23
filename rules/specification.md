@@ -270,7 +270,8 @@ that writes the entry.
 ### SPEC-8. Language source is ASCII unless the file declares UTF-8
 
 Schema documents, specifications, inheritance layers, project files, codelist
-files and function files contain only bytes from `0x00` through `0x7F`,
+files, analysis results files and function files contain only bytes from
+`0x00` through `0x7F`,
 unless the file declares `encoding: utf-8` beside `yamaa` and `type`; it is
 then UTF-8, but still escapes a byte-order mark and each `Bidi_Control`
 character. A character a file may not write literally fails validation as
@@ -286,8 +287,9 @@ For example, the YAML double-quoted escape `"\u00E9"` denotes the
 one-character string U+00E9 in either encoding, and a file that declares
 UTF-8 may write that character itself.
 
-A specification, layer or fragment, project file, codelist file or function
-file may declare UTF-8; a schema document stays ASCII. The `Bidi_Control`
+A specification, layer or fragment, project file, codelist file, analysis
+results file or function file may declare UTF-8; a schema document stays
+ASCII. The `Bidi_Control`
 characters are `U+061C`, `U+200E`, `U+200F`, `U+202A` through `U+202E` and
 `U+2066` through `U+2069`.
 

@@ -16,6 +16,10 @@ analysis_results_file_class:
         required: true
         values: [analysis_results]
         description: File type of an analysis results file, which holds the result displays of one source (DEFINE-32).
+    - encoding:
+        type: file_encoding
+        required: false
+        description: Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).
     - fields_from: analysis_results_source_class
 
 analysis_results_source:

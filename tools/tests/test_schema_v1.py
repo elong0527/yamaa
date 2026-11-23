@@ -406,6 +406,14 @@ EXPECTED = {
             values=("ascii", "utf-8"),
         )
     ],
+    "new.analysis_results.encoding": [
+        Field(
+            "analysis_results_file_class",
+            "encoding",
+            "file_encoding",
+            values=("ascii", "utf-8"),
+        )
+    ],
     "new.function.encoding": [
         Field(
             "function_definition_class",
@@ -1171,6 +1179,19 @@ class JsonSchemaTests(unittest.TestCase):
             ("send", "project", project("send", ["arm.yaml"]), False),
             ("a file", "analysis_results", file(), True),
             ("a file of another type", "analysis_results", file("codelists"), False),
+            # SPEC-8: the file declares the encoding of its own bytes.
+            (
+                "a file that declares UTF-8",
+                "analysis_results",
+                {**file(), "encoding": "utf-8"},
+                True,
+            ),
+            (
+                "a file that declares another encoding",
+                "analysis_results",
+                {**file(), "encoding": "latin-1"},
+                False,
+            ),
             (
                 "a file without displays",
                 "analysis_results",

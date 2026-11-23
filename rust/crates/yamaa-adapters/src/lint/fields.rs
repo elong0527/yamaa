@@ -251,7 +251,7 @@ pub(super) static ANALYSIS_RESULTS: &Class = &ANALYSIS_RESULTS_FILE_CLASS;
 
 #[rustfmt::skip]
 static ANALYSIS_RESULTS_FILE_CLASS: Class = Class {
-    fields: &["yamaa", "type", "displays"],
+    fields: &["yamaa", "type", "encoding", "displays"],
     members: &[
         ("displays", Holds::Items, &RESULT_DISPLAY_CLASS),
     ],
