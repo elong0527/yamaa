@@ -98,9 +98,10 @@ codelists:
 
 A list's `id` is what a column binds, and its `name` is the human-readable
 description. An `id` is declared once in a file, and a later file may
-replace a list by its `id` ([below](#replace-a-shared-list)); a `name` is
-unique among the lists the project keeps. A repeated `id` in one file, or a
-repeated `name`, fails validation with `duplicate_define_identifier`.
+replace a list by its `id` ([below](#replace-a-shared-list)). A `name` is
+a label, so two lists may share one under different `id`s, as Define-XML
+requires only the `CodeList` OID to be unique. A repeated `id` in one file
+fails validation with `duplicate_define_identifier`.
 An `id` may join identifier segments with periods, such as `ADSL.ARMCD`;
 the Define-XML `CodeList` it produces is then `CL.ADSL.ARMCD`, the
 dataset-qualified spelling submitted documents commonly use.
@@ -161,10 +162,10 @@ The replacing list is the later declaration alone, its `name`, items and
 decodes included; nothing of the list it replaces is kept. It belongs to its
 own file, so it is drawn from that file's `standard`, and a Define-XML
 document lists it where that file lists it. Every other list of the shared
-files is kept as declared. A `name` stays unique among the lists the project
-keeps: a later list that reuses a kept list's `name` under another `id`, such
-as a replacement written under a misspelled `id`, fails with
-`duplicate_define_identifier`. The
+files is kept as declared. A later list written under another `id`, such as
+a replacement under a misspelled `id`, replaces nothing: it is kept beside the
+shared list even when it takes the shared list's `name`, so check that a
+replacing list's `id` matches the one it replaces. The
 [terminology rule](../../rules/profiles/terminology.md#ct-1) states the
 composition.
 

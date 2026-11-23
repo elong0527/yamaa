@@ -73,7 +73,6 @@ impl Ord for ValueKey<'_> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fault {
     DuplicateId,
-    DuplicateName,
     FormatNamePrefix,
     InvalidShape,
     InvalidValue { item: usize },
@@ -181,12 +180,10 @@ fn replaced(sources: &[Codelists]) -> BTreeSet<(usize, usize)> {
 }
 
 /// Validate every list across every captured source without resolving dictionaries.
-/// A replaced list is still checked on its own; an `id` repeats only within
-/// one source, and a `name` is unique over the composed lists (CT-1).
+/// A replaced list is still checked on its own, and an `id` repeats only
+/// within one source; a `name` is a label several lists may share (CT-1).
 pub fn validate(sources: &[Codelists]) -> Vec<Finding> {
     let mut findings = Vec::new();
-    let replaced = replaced(sources);
-    let mut names = BTreeSet::new();
     for (source_index, source) in sources.iter().enumerate() {
         let mut ids = BTreeSet::new();
         for (codelist, list) in source.codelists.iter().enumerate() {
@@ -199,9 +196,6 @@ pub fn validate(sources: &[Codelists]) -> Vec<Finding> {
             };
             if !ids.insert(&list.id.name) {
                 push(Fault::DuplicateId);
-            }
-            if !replaced.contains(&(source_index, codelist)) && !names.insert(&list.name.text) {
-                push(Fault::DuplicateName);
             }
             // A text codelist's SAS format is a character format, whose name
             // begins with `$`, and a numeric codelist's is not (CT-12).
