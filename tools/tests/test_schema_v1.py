@@ -171,6 +171,14 @@ EXPECTED = {
         Absent("submission_metadata_fields", "omitted"),
         Absent("submission_value_class", "omitted"),
     ],
+    # #4752: reproduced metadata keeps a received ItemRef order. Like
+    # `omitted`, it belongs to a column alone, so a value-level entry refuses
+    # it as an unknown field (SCHEMA-13).
+    "new.spec.submission.order": [
+        Field("submission_column_class", "order", "int"),
+        Absent("submission_metadata_fields", "order"),
+        Absent("submission_value_class", "order"),
+    ],
     # #4747: a reproduced method or comment keeps its received OID.
     "new.spec.submission.method.oid": [
         Field("submission_method_class", "oid", "method_oid", kind="identifier")

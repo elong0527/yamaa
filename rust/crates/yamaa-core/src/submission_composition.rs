@@ -117,6 +117,9 @@ pub struct Column {
     /// One per declared origin, in declaration order (DEFINE-19).
     pub(crate) origins: Vec<OriginDefinition>,
     pub(crate) key_sequence: Option<usize>,
+    /// The `ItemRef`'s `OrderNumber` reproduced metadata declares; the
+    /// column's position in `output.columns` otherwise (DEFINE-18, DEFINE-30).
+    pub(crate) order: Option<usize>,
     pub(crate) values: Vec<ValueDefinition>,
     /// The width a transport file gives a character column (SUB-24).
     pub(crate) transport_length: Option<usize>,
@@ -339,6 +342,12 @@ impl Column {
     }
     pub fn key_sequence(&self) -> Option<usize> {
         self.key_sequence
+    }
+    /// The `OrderNumber` reproduced metadata declares for the column's
+    /// `ItemRef`; `None` when the document numbers it by position
+    /// (DEFINE-18, DEFINE-30).
+    pub fn order(&self) -> Option<usize> {
+        self.order
     }
     /// The width a transport file gives a character column, once measured
     /// (SUB-24).
@@ -982,6 +991,7 @@ impl ColumnAdmission<'_> {
             mandatory,
             origins,
             key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
+            order: None,
             values: Vec::new(),
             transport_length: None,
             has_no_data: false,
@@ -1995,6 +2005,9 @@ fn compose_datasets(
         if let Some(first) = omitted.filter(|_| !described) {
             findings.push(reproduced::no_item_ref(&first));
         }
+        if reproduced {
+            reproduced::orders(&selected, &path, findings);
+        }
         redundant_unique(doc, &keys, &path, findings);
         compose_values(
             &admission,
@@ -2626,6 +2639,7 @@ fn reproduced_only_fields(
     let comment_oid = metadata.comment.as_ref().and_then(spec::Comment::oid);
     for (field, declared) in [
         ("omitted", metadata.omitted.is_some()),
+        ("order", metadata.order.is_some()),
         ("key_sequence", metadata.key_sequence.is_some()),
         ("has_no_data", metadata.has_no_data.is_some()),
         ("method oid", method_oid.is_some()),
