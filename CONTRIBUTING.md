@@ -87,11 +87,26 @@ from which both hosts' registrations and public layers are generated.
 `rust/rust-toolchain.toml` and the unchanged `rust/Cargo.lock`. The
 workspace `rust-version` is the oldest Rust that builds the engine; the R
 and Python source packages build with the caller's toolchain. Update the
-lock with Cargo's MSRV-aware fallback, since resolver 2 ignores each crate's
-`rust-version`:
+lock with the pinned toolchain, from the repository root or `rust/`:
 
 ```sh
-CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo update -p <crate>
+cargo update -p <crate>
+```
+
+`.cargo/config.toml` at the repository root shapes every such update. Since
+resolver 2 ignores each crate's `rust-version`, it turns on Cargo's MSRV-aware
+fallback, which takes the newest release that the workspace `rust-version`
+builds. It also holds back crates.io releases published in the last seven
+days, Cargo's dependency cooldown, so that a compromised or broken release is
+usually found and yanked before a lock adopts it; Cargo names each release it
+held back. The cooldown needs Cargo 1.100 or later: older Cargo ignores it,
+and 1.99 also warns on every command. Neither key changes a build from the
+committed lock. When an advisory needs a release younger than the cooldown,
+allow it for that one update; the release stays in the lock until a later
+update resolves that crate again:
+
+```sh
+CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update -p <crate> --precise <version>
 ```
 
 `make check-repository` fails when a locked package that a supported target

@@ -2,5 +2,5 @@
 # this file (#3030 D55). It names only what a build needs.
 # Repository checks add Clippy, rustfmt and rust-src (tools/ci/toolchain.py).
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 profile = "minimal"

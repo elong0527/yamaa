@@ -50,7 +50,7 @@ linux-raw-sys	0.12.1	MIT	crates.io	transitive dependency of rustix on Linux: raw
 log	0.4.34	MIT	crates.io	not compiled: iana-time-zone's logging on wasm32
 lz4_flex	0.11.6	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature)
 memchr	2.8.3	MIT	crates.io	transitive dependency of quick-xml and serde_json: fast byte search
-musl	1.2.5	MIT	https://musl.libc.org/, bundled in rust-std 1.99.1 for the musl targets	the C library that only the yamaa executables for x86_64-unknown-linux-musl and aarch64-unknown-linux-musl link, statically; their archives carry its notice, LICENSE-MUSL.txt
+musl	1.2.5	MIT	https://musl.libc.org/, bundled in rust-std 1.100.0 for the musl targets	the C library that only the yamaa executables for x86_64-unknown-linux-musl and aarch64-unknown-linux-musl link, statically; their archives carry its notice, LICENSE-MUSL.txt
 num	0.4.3	MIT	crates.io	transitive dependency of the Arrow crates: generic numeric traits, re-exporting the num-* crates
 num-bigint	0.4.8	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); num uses it too
 num-complex	0.4.6	MIT	crates.io	transitive dependency of num: the complex number types that it re-exports
@@ -69,7 +69,7 @@ ReadStat	1.1.9	MIT	rust/crates/yamaa-adapters/vendor/readstat, from https://gith
 regex	1.13.1	MIT	crates.io	linear-time matching for the portable regex subset (yamaa-core)
 regex-automata	0.4.18	MIT	crates.io	transitive dependency of regex: its matching engines
 regex-syntax	0.8.11	MIT	crates.io	transitive dependency of regex: its pattern parser
-rust-std	1.99.1	MIT	https://github.com/rust-lang/rust at 1.99.1	the Rust standard library (core, alloc and std) of the pinned toolchain that builds this package, statically linked into its native code; LICENSE-THIRD-PARTY.txt carries its notices
+rust-std	1.100.0	MIT	https://github.com/rust-lang/rust at 1.100.0	the Rust standard library (core, alloc and std) of the pinned toolchain that builds this package, statically linked into its native code; LICENSE-THIRD-PARTY.txt carries its notices
 rustc_version	0.4.1	MIT	crates.io	build script: the compiler version check of flatbuffers
 rustix	1.1.6	MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
 rustversion	1.0.23	MIT	crates.io	procedural macro: compiler version conditions in indoc's build script, which only the Python binding compiles, and in wasm-bindgen's, which no supported target compiles
