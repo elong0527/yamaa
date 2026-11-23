@@ -6778,7 +6778,7 @@
     "where_value": {
       "type": "string",
       "minLength": 1,
-      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator (SUB-12)."
+      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it (SUB-12, DEFINE-32)."
     },
     "window_selection": {
       "anyOf": [

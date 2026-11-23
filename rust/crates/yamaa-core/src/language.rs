@@ -1028,7 +1028,7 @@ mod tests {
                 ("class", C::Text("project_class".into())),
             ]
         );
-        // A type naming none of the four is unexpected where any is expected,
+        // A type naming none of the five is unexpected where any is expected,
         // once the version is read.
         let (header, document) = read(file(T::text("1.0"), T::text("environment")));
         let node = document.field(document.root(), "type").unwrap();

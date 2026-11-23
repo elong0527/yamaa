@@ -1107,7 +1107,7 @@ Every element and attribute of Analysis Results Metadata 1.0 has one source: a
 declaration, or a derivation from the datasets the section composes. `reason`
 and `purpose` take the published values only.
 
-Evidence: `schema-analysis-results`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_compose_under_define_2_0`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_reason_outside_the_published_values_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_tab_in_programming_code_is_untransportable`, `tools/tests/test_stage_define_inputs.py::test_staged_oracles_validate_goldens_and_reject_invalid_artifacts`.
+Evidence: `schema-analysis-results`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_compose_under_define_2_0`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_reason_outside_the_published_values_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_tab_in_programming_code_is_untransportable`, `tools/tests/test_stage_define_inputs.py::test_staged_oracles_validate_goldens_and_reject_invalid_artifacts`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`.
 
 | `arm:ResultDisplay` attribute or child | Source |
 |---|---|
@@ -1164,8 +1164,9 @@ escaped as [DEFINE-23](#define-23) states: a YAML `|` block keeps its final
 line feed and `|-` drops it. A tab or a carriage return in any of it, pasted
 code included, fails with `untransportable_text` under
 [DEFINE-24](#define-24), and every `Description` carries the document's one
-language ([DEFINE-21](#define-21)). A display's `id` and `name`, and a
-result's `id`, are attribute values, where a line feed fails too.
+language ([DEFINE-21](#define-21)). A display's `name` and a code's
+`context` are attribute values, where a line feed fails too; a fault in one
+is reported at the display or the `programming_code` that writes it.
 
 <a id="define-32"></a>
 
@@ -1181,7 +1182,7 @@ several datasets declares `join`, and every result names a variable. No data
 is read.
 
 Fails: `unknown_dataset`, `analysis_dataset_invalid`, `duplicate_identifier`, `duplicate_define_identifier`, `missing_required_field`, `value_not_permitted`.
-Evidence: `schema-analysis-results`, `negative-analysis-unknown-dataset`, `negative-analysis-where-not-in-codelist`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_result_over_two_of_the_sections_datasets_composes`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_the_section_does_not_compose_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_its_dataset_does_not_declare_or_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_clause_names_no_column_a_value_outside_its_codelist_or_one_that_does_not_convert`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_result_reading_two_datasets_needs_its_join_one_variable_and_code_or_documents`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_source_a_display_and_a_result_declare_at_least_one_member_and_code_its_context`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_join_on_a_result_that_reads_one_dataset_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_or_an_analysis_result_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_under_sdtm_is_an_unknown_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`, `rust/crates/yamaa-core/src/language.rs::referencing_fields_name_the_type_their_file_declares`.
+Evidence: `schema-analysis-results`, `negative-analysis-unknown-dataset`, `negative-analysis-where-not-in-codelist`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_result_over_two_of_the_sections_datasets_composes`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_the_section_does_not_compose_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_its_dataset_does_not_declare_or_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_clause_names_no_column_a_value_outside_its_codelist_or_one_that_does_not_convert`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_result_reading_two_datasets_needs_its_join_one_variable_and_code_or_documents`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_source_a_display_and_a_result_declare_at_least_one_member_and_code_its_context`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_join_on_a_result_that_reads_one_dataset_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_or_an_analysis_result_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_under_sdtm_is_an_unknown_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`, `rust/crates/yamaa-core/src/language.rs::referencing_fields_name_the_type_their_file_declares`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_empty_analysis_join_is_shorter_than_its_minimum_length`.
 
 Only an `adam` section declares `analysis_results`; under `sdtm` or `send`
 the field fails as `unknown_field`
@@ -1199,7 +1200,11 @@ it whole ([PROJECT-16](project.md#project-16)).
 
 A declaration is reported at its position in the section,
 `adam.analysis_results[<s>].displays[<d>].results[<r>]`, whichever kind of
-source holds it. A source declares at least one display, a display at least
+source holds it. A schema finding names the display and the result by
+identity, in the notation of [LAYER-9](../inheritance.md#layer-9): the display
+by its `name` and the result by its `id`, as
+`adam.analysis_results[0].displays['Table 1'].results.R1.reason` does. A
+source declares at least one display, a display at least
 one result and a result at least one dataset; an empty `displays`, `results`
 or `datasets` fails with `missing_required_field` there, naming the field.
 
@@ -1256,7 +1261,10 @@ result's datasets or contradict them.
 A result that lists two or more datasets declares `join`, the comment that
 says how they are joined, and fails with `missing_required_field` at `join`
 without it. A result that lists one dataset has nothing to join, and its
-`join` fails with `value_not_permitted`, reporting the text as `value`. A
+`join` fails with `value_not_permitted`, reporting the text as `value` and
+`a result that reads one dataset joins nothing` as `detail`. A `join` or
+`documentation` written as empty text fails as a value shorter than its
+minimum length ([SCHEMA-12](../reference/schema-language.md#schema-12)). A
 result whose datasets list no variable between them fails with
 `missing_required_field` at its `datasets`, naming `variables`; one dataset
 of several may list none, as one that only selects the subjects does.
@@ -1265,6 +1273,11 @@ whenever it declares `code`: otherwise it fails with `missing_required_field`
 at `programming_code`, naming `code`, or at `programming_code.context`.
 `context: Submission` adds no requirement to an analysis result
 ([DEFINE-4](#define-4)).
+
+One result's findings are reported in this order: a repeated `id`, an empty
+`datasets`, `join`, a document it names that is not declared,
+`programming_code`, each dataset in written order, its variables before its
+where clause, and last a result that names no variable.
 
 Composition never evaluates an analysis where clause against rows. Whether a
 dataset that holds more records than a result uses declares a clause, whether

@@ -73,18 +73,18 @@ class DefineStage(unittest.TestCase):
                 )
             # A 2.0 document that carries analysis results metadata is valid
             # once its one arm:AnalysisResultDisplays is set aside (DEFINE-25).
-            document, displays = without_displays(
-                etree.parse(
-                    str(
-                        ROOT
-                        / "rust/crates/yamaa-adapters/tests/fixtures"
-                        / "define_2_0_analysis_results.xml"
-                    ),
-                    parser,
+            for name in (
+                "define_2_0_analysis_results.xml",
+                "define_2_0_analysis_selections.xml",
+            ):
+                document, displays = without_displays(
+                    etree.parse(
+                        str(ROOT / "rust/crates/yamaa-adapters/tests/fixtures" / name),
+                        parser,
+                    )
                 )
-            )
-            self.assertEqual(len(displays), 1)
-            legacy_schema.assertValid(document)
+                self.assertEqual(len(displays), 1, name)
+                legacy_schema.assertValid(document)
             xml_schema = etree.XMLSchema(
                 etree.parse(str(schemas / "define/2.1/define2-1-0.xsd"), parser)
             )

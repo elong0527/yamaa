@@ -1212,6 +1212,13 @@ class JsonSchemaTests(unittest.TestCase):
                 file(join={"text": "By USUBJID.", "documents": ["SAP"]}),
                 True,
             ),
+            ("an empty join", "analysis_results", file(join=""), False),
+            (
+                "empty documentation",
+                "analysis_results",
+                file(documentation=""),
+                False,
+            ),
             (
                 "a join with a received oid",
                 "analysis_results",
