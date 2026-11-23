@@ -1279,6 +1279,76 @@ mod table {
                 Err(Error::Invalid("malformed"))
             ));
         }
+        #[test]
+        fn a_declared_field_count_past_eight_per_file_byte_is_a_header_refusal() {
+            // SAS-6 admits a declared field count against the file's own
+            // bytes, eight per field, before the field table is allocated. A
+            // SAS7BDAT column-size subheader and a Transport NAMESTR header
+            // each declare one field of a one-field file; one past the file's
+            // bytes over eight, and a count whose table could not be
+            // allocated, are refused as `header` (#4782).
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, MIX};
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8)]);
+                dataset.total = 1;
+                dataset.mix_rows = 1;
+                let row = dataset.row(&[Cell::Num(7.0)]);
+                let file = |columns: u64| {
+                    let mut pointers = dataset.metadata();
+                    pointers[1] = Pointer::metadata(layout.column_size(columns));
+                    dataset.file(&[Page::new(MIX, pointers, vec![row.clone()])])
+                };
+                let held = file(1);
+                assert_eq!(
+                    cells(&read_built(&held).unwrap()),
+                    [[float(7.0)]],
+                    "{layout:?}"
+                );
+                let past = held.len() as u64 / 8 + 1;
+                let unallocatable = if layout.word() == 8 {
+                    1 << 60
+                } else {
+                    u64::from(u32::MAX)
+                };
+                for columns in [past, unallocatable] {
+                    assert!(
+                        matches!(read_built(&file(columns)), Err(Error::Invalid("header"))),
+                        "{layout:?} {columns}"
+                    );
+                }
+            }
+            use crate::support::xport::{records, transport};
+            for version in [5, 8] {
+                let observations = "0".repeat(if version == 5 { 30 } else { 15 });
+                let held = transport(
+                    version,
+                    &[("A", 8)],
+                    &observations,
+                    &records(&[("A", 8)], &[&["x"]]),
+                );
+                let source = declaration("built.xpt");
+                assert_eq!(
+                    cells(&sas_source::parse(&held, &source).unwrap()),
+                    [[ValueRef::Str("x")]],
+                    "{version}"
+                );
+                // The NAMESTR header is the eighth record; its field count is
+                // the five digits from byte 53.
+                let counted = 7 * 80 + 53..7 * 80 + 58;
+                assert_eq!(&held[counted.clone()], b"00001", "{version}");
+                for columns in [held.len() / 8 + 1, 99_999] {
+                    let mut bytes = held.clone();
+                    bytes[counted.clone()].copy_from_slice(format!("{columns:05}").as_bytes());
+                    assert!(
+                        matches!(
+                            sas_source::parse(&bytes, &source),
+                            Err(Error::Invalid("header"))
+                        ),
+                        "{version} {columns}"
+                    );
+                }
+            }
+        }
         /// A compressed dataset whose rows are 4,096 bytes: the field `X`, then
         /// a gap. It counts `total` live records and stores `rows`, compressed
         /// with RDC or RLE, in place on its first page, or moved to its second

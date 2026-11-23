@@ -111,6 +111,18 @@ fn filled<T: Clone, E>(len: usize, value: T) -> Result<Vec<T>, Fail<E>> {
     Ok(filled)
 }
 
+/// One group of each of the `count` records `rows`, reserved before any is
+/// written.
+fn record_groups<E>(
+    rows: impl Iterator<Item = usize>,
+    count: usize,
+) -> Result<Vec<Vec<usize>>, Fail<E>> {
+    let mut groups = Vec::new();
+    reserved(groups.try_reserve_exact(count))?;
+    groups.extend(rows.map(|row| vec![row]));
+    Ok(groups)
+}
+
 /// A table one read addresses.
 enum Table<'a, E> {
     /// A source port.
@@ -865,9 +877,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         };
         let read = driver.eligible.as_ref().map_or(table.row_count(), Vec::len);
         let groups: Vec<Vec<usize>> = match &node.driver.grain {
+            // One group per record, reserved before it is written: a table
+            // of no columns may count records no column holds.
             super::resolved::Grain::Records => match &driver.eligible {
-                Some(eligible) => eligible.iter().map(|&row| vec![row]).collect(),
-                None => (0..table.row_count()).map(|row| vec![row]).collect(),
+                Some(eligible) => record_groups(eligible.iter().copied(), eligible.len())?,
+                None => record_groups(0..table.row_count(), table.row_count())?,
             },
             super::resolved::Grain::Groups(fields) => {
                 let fields: Vec<usize> = fields.iter().map(|&field| field as usize).collect();

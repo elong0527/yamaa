@@ -42,10 +42,34 @@ pub(super) fn per_second(stored: &Leaf) -> Option<i64> {
         _ => None,
     }
 }
+/// The leaf that each field of `arrow` stores, by position in `stored`, when
+/// the field is one leaf, not repeated, whose path is its name. The field's
+/// leaves are those below the message root's child of its position, which
+/// follow one another in schema order.
+pub(super) fn flat(arrow: &Schema, stored: &Stored) -> Vec<Option<usize>> {
+    let leaves = &stored.leaves;
+    let mut leaf = 0;
+    arrow
+        .fields()
+        .iter()
+        .enumerate()
+        .map(|(index, field)| {
+            let first = leaf;
+            while leaf < leaves.len() && leaves[leaf].root == index {
+                leaf += 1;
+            }
+            (leaf - first == 1
+                && leaves[first].max_repetition == 0
+                && stored.named(&leaves[first], field.name()))
+            .then_some(first)
+        })
+        .collect()
+}
+
 /// The table schema of the fields `arrow` of the schema `stored`, or the
 /// first field's finding. A field has a column type when it is one leaf,
 /// not repeated, whose path is its name, and a column row admits that leaf
-/// (`column_type`). `annotated` lists the leaf columns whose variant,
+/// (`column_type`). `annotated` lists, ascending, the leaf columns whose variant,
 /// geometry or geography annotation the footer reads as none, and `later`
 /// the later types the embedded schema names (`storage_api::LaterTypes`),
 /// which a refused field's stored type spells.
@@ -55,24 +79,23 @@ pub(super) fn columns(
     annotated: &[usize],
     later: &[(Vec<usize>, LaterType)],
 ) -> Result<TableSchema, Error> {
-    let leaves = &stored.leaves;
-    let mut leaf = 0;
-    let fields = arrow.fields().iter().enumerate().map(|(index, field)| {
-        let first = leaf;
-        while leaf < leaves.len() && leaves[leaf].root == index {
-            leaf += 1;
+    let flat = flat(arrow, stored);
+    // The later types below each root, gathered once (#4782).
+    let mut below = std::collections::HashMap::<usize, Vec<_>>::new();
+    for (path, later) in later {
+        if let Some((&root, rest)) = path.split_first() {
+            below.entry(root).or_default().push((rest, *later));
         }
-        let descriptor = (leaf - first == 1).then(|| &leaves[first]);
-        let later: Vec<_> = later
-            .iter()
-            .filter_map(|(path, later)| match path.split_first() {
-                Some((&root, below)) if root == index => Some((below, *later)),
-                _ => None,
-            })
-            .collect();
-        let kind = descriptor
-            .filter(|column| column.max_repetition == 0 && column.path.join(".") == *field.name())
-            .and_then(|column| column_type(column, field.data_type(), annotated.contains(&first)));
+    }
+    let fields = arrow.fields().iter().enumerate().map(|(index, field)| {
+        let later = below.remove(&index).unwrap_or_default();
+        let kind = flat[index].and_then(|leaf| {
+            column_type(
+                &stored.leaves[leaf],
+                field.data_type(),
+                annotated.binary_search(&leaf).is_ok(),
+            )
+        });
         core_profile::Field {
             name: field.name().clone(),
             kind,
@@ -99,6 +122,7 @@ mod tests {
     fn stored(leaves: &[(Physical, Option<Logical>, Converted)]) -> Stored {
         let mut nodes = vec![Node {
             name: "schema".into(),
+            parent: None,
             repetition: None,
             converted: Converted::None,
             logical: None,
@@ -108,6 +132,7 @@ mod tests {
         for (index, &(physical, logical, converted)) in leaves.iter().enumerate() {
             nodes.push(Node {
                 name: "X".into(),
+                parent: Some(0),
                 repetition: Some(Repetition::Optional),
                 converted,
                 logical,
@@ -116,7 +141,6 @@ mod tests {
             columns.push(Leaf {
                 node: index + 1,
                 root: index,
-                path: vec!["X".into()],
                 physical,
                 type_length: -1,
                 precision: -1,

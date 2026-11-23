@@ -3,7 +3,7 @@
 //! shared by both hosts. Display formats are never semantic type authorities.
 use crate::column_table::ColumnTable;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap, HashSet},
     ffi::{c_char, c_int, c_void, CStr},
     panic::{catch_unwind, AssertUnwindSafe},
 };
@@ -71,18 +71,33 @@ struct Context<'a> {
     encoding: Option<&'a str>,
     has_stored_encoding: bool,
     columns: Vec<Column>,
+    /// The names of `columns`, so a repeated name is found in constant time
+    /// however many fields the file declares (#4782).
+    names: HashSet<String>,
+    /// Each field's declared type, the first entry of a name winning.
+    types: HashMap<&'a str, ColumnType>,
     rows: Vec<Vec<Value>>,
     declared_rows: Option<usize>,
     declared_columns: usize,
     error: Option<Error>,
 }
+/// Each declared field's type, the first entry of a name winning, as a
+/// search of the entries in order finds it.
+fn declared_types(source: &SourceDeclaration) -> HashMap<&str, ColumnType> {
+    let mut types = HashMap::new();
+    for (name, kind) in &source.types {
+        types.entry(name.as_str()).or_insert(*kind);
+    }
+    types
+}
+
 impl Context<'_> {
     fn declarations(&self) -> Result<(), Error> {
         if self.columns.len() != self.declared_columns {
             return Err(Error::Invalid("header"));
         }
         for (name, _) in &self.source.types {
-            if !self.columns.iter().any(|column| &column.name == name) {
+            if !self.names.contains(name) {
                 return Err(Error::Typing(yamaa_core::typed_csv::Error::UnknownField {
                     field: name.clone(),
                 }));
@@ -211,27 +226,24 @@ unsafe extern "C" fn variable(
             if name.is_empty() {
                 return Err(located("field_name", Field::Index(position)));
             }
-            if context.columns.iter().any(|column| column.name == name) {
+            if context.names.contains(&name) {
                 return Err(located("field_name", Field::Name(name)));
             }
             let kind = context
-                .source
                 .types
-                .iter()
-                .find(|(field, _)| field == &name)
-                .map_or(
-                    if text != 0 {
-                        ColumnType::Str
-                    } else {
-                        ColumnType::Float
-                    },
-                    |(_, kind)| *kind,
-                );
+                .get(name.as_str())
+                .copied()
+                .unwrap_or(if text != 0 {
+                    ColumnType::Str
+                } else {
+                    ColumnType::Float
+                });
             // SAS types narrow numeric storage. Character values carry no numeric
             // epoch or integer meaning and numeric storage cannot become text.
             if (text != 0) != (kind == ColumnType::Str) {
                 return Err(located("field_type", Field::Name(name)));
             }
+            context.names.insert(name.clone());
             context.columns.push(Column { name, kind });
             Ok(())
         })
@@ -454,6 +466,8 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
             .copied()
             .is_some_and(|code| !matches!(code, 0 | 204)),
         columns: Vec::new(),
+        names: HashSet::new(),
+        types: declared_types(source),
         rows: Vec::new(),
         declared_rows: None,
         declared_columns: 0,
@@ -569,6 +583,8 @@ mod tests {
             encoding: source.encoding.as_deref(),
             has_stored_encoding: true,
             columns: Vec::new(),
+            names: HashSet::new(),
+            types: declared_types(&source),
             rows: Vec::new(),
             declared_rows: None,
             declared_columns: 0,

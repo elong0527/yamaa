@@ -1256,13 +1256,22 @@ impl PreparedSpecification {
                 path: self.output_path.clone(),
             });
         }
+        // The declared and projected names as sets, so each check is a lookup
+        // however many columns the output declares (#4782).
+        let declared = self
+            .output
+            .columns()
+            .iter()
+            .map(|column| column.name.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        let mut projected = std::collections::HashSet::with_capacity(self.projection.len());
         for (position, name) in self.projection.iter().enumerate() {
-            if self.projection[..position].contains(name) {
+            if !projected.insert(name.as_str()) {
                 findings.push(OutputFinding::DuplicateColumn {
                     position,
                     name: name.clone(),
                 });
-            } else if !self.output.columns().iter().any(|c| c.name == *name) {
+            } else if !declared.contains(name.as_str()) {
                 findings.push(OutputFinding::UndeclaredColumn {
                     position,
                     name: name.clone(),
@@ -1271,28 +1280,21 @@ impl PreparedSpecification {
         }
         for (position, &column) in self.keys.iter().enumerate() {
             let name = &self.output.columns()[column].name;
-            if !self.projection.contains(name) {
+            if !projected.contains(name.as_str()) {
                 findings.push(OutputFinding::InternalKey {
                     position,
                     name: name.clone(),
                 });
             }
         }
+        let mut ordered = std::collections::HashSet::with_capacity(self.output_order.len());
         for (position, (name, _, _)) in self.output_order.iter().enumerate() {
-            if self.output_order[..position]
-                .iter()
-                .any(|(previous, _, _)| previous == name)
-            {
+            if !ordered.insert(name.as_str()) {
                 findings.push(OutputFinding::DuplicateOrderTerm {
                     position,
                     name: name.clone(),
                 });
-            } else if !self
-                .output
-                .columns()
-                .iter()
-                .any(|column| &column.name == name)
-            {
+            } else if !declared.contains(name.as_str()) {
                 findings.push(OutputFinding::UndeclaredOrderColumn {
                     position,
                     name: name.clone(),

@@ -11,7 +11,7 @@ use crate::{
     submission_origin::{self as origin, Reads},
     submission_values as values,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 mod analysis;
 mod reproduced;
 pub use analysis::{AnalysisDataset, AnalysisDisplay, AnalysisResult, AnalysisTerm};
@@ -1945,6 +1945,21 @@ fn compose_datasets(
             }
         }
         admit_keys(doc, columns, &keys, &output_columns, &path, findings);
+        // The listed names, the first declaration of each name and the
+        // specification's own columns, so each lookup below takes constant
+        // time however many columns the dataset declares (#4782).
+        let listed = output_columns
+            .iter()
+            .map(String::as_str)
+            .collect::<HashSet<_>>();
+        let mut declared = HashMap::with_capacity(columns.value.len());
+        for column in &columns.value {
+            declared.entry(column.name.value.as_str()).or_insert(column);
+        }
+        let mut specified = HashMap::with_capacity(input.tree.columns.len());
+        for column in &input.tree.columns {
+            specified.entry(column.name.name.as_str()).or_insert(column);
+        }
         let mut selected = Vec::new();
         for column in &columns.value {
             reserved_metadata(
@@ -1954,7 +1969,7 @@ fn compose_datasets(
                 &format!("{path}.columns.{}", column.name.value),
                 findings,
             );
-            if column.submission.is_some() && !output_columns.contains(&column.name.value) {
+            if column.submission.is_some() && !listed.contains(column.name.value.as_str()) {
                 findings.push(
                     Finding::cause(
                         ConditionCode::SubmissionColumnNotOutput,
@@ -1983,13 +1998,14 @@ fn compose_datasets(
         // document describes any other output column (DEFINE-30).
         let mut omitted = None;
         let mut described = false;
+        let mut seen = HashSet::with_capacity(output_columns.len());
         for (position, name) in output_columns.iter().enumerate() {
             // OUTPUT-1: an entry that repeats an earlier one, or else names no
             // declared column, fails as checking the specification refuses
             // it, at the entry under the listing, and DEFINE-7 reads no
             // metadata for it.
-            let repeated = output_columns[..position].contains(name);
-            let column = match columns.value.iter().find(|c| &c.name.value == name) {
+            let repeated = !seen.insert(name.as_str());
+            let column = match declared.get(name.as_str()).copied() {
                 Some(column) if !repeated => column,
                 _ => {
                     let name = name.clone();
@@ -2029,9 +2045,11 @@ fn compose_datasets(
             }
             // The column's origin answers for every construction whose rows an
             // entry declaring its own origin does not all select (SUB-19).
-            let derivations = tree_column(input.tree, name).map_or_else(Vec::new, |column| {
-                values::column_expressions(input.tree, column)
-            });
+            let derivations = specified
+                .get(name.as_str())
+                .map_or_else(Vec::new, |column| {
+                    values::column_expressions(input.tree, column)
+                });
             if let Some(column) = admission.admit(
                 column,
                 &column_path,

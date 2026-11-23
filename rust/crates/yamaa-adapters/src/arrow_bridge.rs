@@ -288,10 +288,14 @@ pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ColumnTable,
     let logical = public_schema(&schema)?;
     let mut rows = 0usize;
     let mut batches = Vec::new();
-    for batch in reader {
+    for (index, batch) in reader.enumerate() {
         let batch = batch.map_err(TableError::Arrow)?;
-        // The batches are held, so their records add up within memory.
-        rows = rows.saturating_add(batch.num_rows());
+        // A batch of no arrays may claim any count, so the records of a
+        // stream of no fields need not fit memory: a sum past `usize` is
+        // refused at the batch that overflows it, not saturated.
+        rows = rows
+            .checked_add(batch.num_rows())
+            .ok_or(TableError::SchemaMismatch { batch: index })?;
         batches.push(batch);
     }
     let mut columns = logical

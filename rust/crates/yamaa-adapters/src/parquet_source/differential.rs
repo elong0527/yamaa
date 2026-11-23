@@ -511,11 +511,10 @@ fn upstream(metadata: &ParquetMetaData) -> Footer {
         nodes: Vec::new(),
         leaves: Vec::new(),
     };
-    node(descriptor.root_schema(), &mut schema);
+    node(descriptor.root_schema(), None, &mut schema);
     for (index, column) in descriptor.columns().iter().enumerate() {
         let leaf = &mut schema.leaves[index];
         leaf.root = descriptor.get_column_root_idx(index);
-        leaf.path = column.path().parts().to_vec();
         leaf.max_definition = column.max_def_level();
         leaf.max_repetition = column.max_rep_level();
     }
@@ -557,7 +556,11 @@ fn upstream(metadata: &ParquetMetaData) -> Footer {
 
 /// Add `stored` and the nodes below it to `schema`, as the native model
 /// orders them; return its position.
-fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
+fn node(
+    stored: &parquet::schema::types::Type,
+    parent: Option<usize>,
+    schema: &mut Schema,
+) -> usize {
     use parquet::basic::Repetition as R;
     use parquet::schema::types::Type;
     let info = stored.get_basic_info();
@@ -571,6 +574,7 @@ fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
     let logical = info.logical_type().as_ref().map(logical_type);
     schema.nodes.push(Node {
         name: info.name().into(),
+        parent,
         repetition,
         converted,
         logical,
@@ -588,7 +592,6 @@ fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
             schema.leaves.push(Leaf {
                 node: position,
                 root: 0,
-                path: Vec::new(),
                 physical: physical_type(*stored_physical),
                 type_length: *type_length,
                 precision: *precision,
@@ -600,7 +603,10 @@ fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
             });
         }
         Type::GroupType { fields, .. } => {
-            let children = fields.iter().map(|field| node(field, schema)).collect();
+            let children = fields
+                .iter()
+                .map(|field| node(field, Some(position), schema))
+                .collect();
             schema.nodes[position].kind = Kind::Group(children);
         }
     }

@@ -620,21 +620,34 @@ fn nonfinite_missingness_empty_schema_and_the_row_limit_are_explicit() {
         panic!()
     };
     assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
-    let records = |rows| {
+    let records = |claims: &[usize]| {
         let schema = Arc::new(Schema::empty());
-        let batch = RecordBatch::try_new_with_options(
-            schema.clone(),
-            Vec::new(),
-            &RecordBatchOptions::new().with_row_count(Some(rows)),
-        )
-        .unwrap();
-        arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema, vec![batch]))
+        let batches = claims
+            .iter()
+            .map(|&rows| {
+                RecordBatch::try_new_with_options(
+                    schema.clone(),
+                    Vec::new(),
+                    &RecordBatchOptions::new().with_row_count(Some(rows)),
+                )
+                .unwrap()
+            })
+            .collect();
+        arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema, batches))
     };
-    let table = records(3).unwrap();
+    let table = records(&[3]).unwrap();
     assert_eq!(table.row_count(), 3);
     assert_eq!(table.schema().columns().len(), 0);
     // Past the former 10,000,000-row limit (#4773).
-    assert_eq!(records(10_000_001).unwrap().row_count(), 10_000_001);
+    assert_eq!(records(&[10_000_001]).unwrap().row_count(), 10_000_001);
+    // Batches of no arrays whose claims sum past `usize` are refused at the
+    // batch that overflows the sum (#4782). A C array's length is signed,
+    // so each claim is at most `i64::MAX`.
+    let most = i64::MAX as usize;
+    assert!(matches!(
+        records(&[most, most, 2]),
+        Err(TableError::SchemaMismatch { batch: 2 })
+    ));
 }
 
 #[test]

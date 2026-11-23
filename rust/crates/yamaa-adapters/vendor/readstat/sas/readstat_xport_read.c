@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <limits.h>
 #include <time.h>
 
 #include "../readstat.h"
@@ -602,6 +603,10 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
     int i;
     off_t pos = 0;
     char *string = NULL;
+    /* Records are counted in a signed int: a record past INT_MAX of them
+     * cannot be numbered, so the parse fails closed rather than overflow. */
+    if (!ctx->row_offset && ctx->parsed_row_count == INT_MAX)
+        return READSTAT_ERROR_ROW_COUNT_MISMATCH;
     for (i=0; i<ctx->var_count; i++) {
         readstat_variable_t *variable = ctx->variables[i];
         readstat_value_t value = { .type = variable->type };
@@ -676,7 +681,7 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     char *row = readstat_malloc(ctx->row_length);
     char *blank_row = readstat_malloc(ctx->row_length);
-    int num_blank_rows = 0;
+    uint64_t num_blank_rows = 0;
     uint64_t rows_read = 0;
 
     if (row == NULL || blank_row == NULL) {

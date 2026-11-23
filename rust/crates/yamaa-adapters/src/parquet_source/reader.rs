@@ -254,7 +254,7 @@ pub(super) fn signature(bytes: &[u8]) -> Result<Vec<super::ColumnSignature>, Err
         .leaves
         .iter()
         .map(|leaf| super::ColumnSignature {
-            path: leaf.path.join("."),
+            path: footer.schema.path(leaf).join("."),
             physical_type: leaf.physical.name().into(),
             logical_type: leaf.logical.map(|logical| logical.debug()),
             converted_type: leaf.converted.name().into(),
@@ -364,27 +364,27 @@ fn odm_fields(
     let leaves = &footer.schema.leaves;
     let arrow = (decoders.arrow)(frame, footer, hint)?;
     let arrow_schema = schema::normalize(&arrow, hint.map(|hint| &hint.schema));
+    // Each field's own leaf, as an ordinary read judges it (#4782).
+    let flat = profile::flat(&arrow_schema, &footer.schema);
     let fields = arrow_schema
         .fields()
         .iter()
-        .map(|field| yamaa_core::odm_source::StoredField {
+        .zip(&flat)
+        .map(|(field, &leaf)| yamaa_core::odm_source::StoredField {
             name: field.name(),
-            kind: leaves
-                .iter()
-                .enumerate()
-                .find(|(_, leaf)| leaf.max_repetition == 0 && leaf.path.join(".") == *field.name())
-                .and_then(|(index, leaf)| {
-                    profile::column_type(leaf, field.data_type(), frame.annotated.contains(&index))
-                }),
+            kind: leaf.and_then(|leaf| {
+                profile::column_type(
+                    &leaves[leaf],
+                    field.data_type(),
+                    frame.annotated.binary_search(&leaf).is_ok(),
+                )
+            }),
         })
         .collect::<Vec<_>>();
     let binding = yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
-    Ok(binding.stored().map(|root| {
-        leaves
-            .iter()
-            .position(|leaf| leaf.path.join(".") == *arrow_schema.field(root).name())
-            .expect("admitted flat ODM field")
-    }))
+    Ok(binding
+        .stored()
+        .map(|root| flat[root].expect("admitted flat ODM field")))
 }
 
 /// The table schema of an ODM read: the eleven canonical text fields.
@@ -416,7 +416,7 @@ fn layout(
     decoders: Decoders,
 ) -> Result<Layout, Error> {
     let leaves = &footer.schema.leaves;
-    let annotated = |column: usize| frame.annotated.contains(&column);
+    let annotated = |column: usize| frame.annotated.binary_search(&column).is_ok();
     let row_count = usize::try_from(footer.num_rows).map_err(|_| Error::Malformed)?;
     let arrow = (decoders.arrow)(frame, footer, hint)?;
     // The records of each partition, which its row groups hold.
@@ -447,7 +447,7 @@ fn layout(
             arrow_schema.fields().len() == leaves.len()
                 && arrow_schema.fields().get(index).is_some_and(|field| {
                     leaf.max_repetition == 0
-                        && leaf.path.join(".") == *field.name()
+                        && footer.schema.named(leaf, field.name())
                         && profile::column_type(leaf, field.data_type(), annotated(index)).is_some()
                 })
         })

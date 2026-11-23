@@ -31,7 +31,8 @@ source-authority encoding metadata treatment, early admission of a declared
 column count against the file's bytes, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
-version 8 observation count admission, overlapping RDC back-reference
+version 8 observation count admission, transport record counting that fails
+closed past `INT_MAX` records rather than overflow its signed counter, overlapping RDC back-reference
 propagation, accounting for records deleted in place, row length consistency
 once columns are submitted, bounded work for moved-record references,
 admission of the bytes that decompression writes, column

@@ -4,7 +4,7 @@ use super::*;
 use crate::diagnostic::{ConditionCode as C, Context as DiagnosticContext, Diagnostic};
 use crate::expression_table::Verb;
 use crate::limits::Limits;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// The declaration counts preparation admits before it compiles anything.
 pub(in crate::specification) fn limits(spec: &Spec) -> Result<(), PrepareError> {
@@ -58,8 +58,11 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         .iter()
         .map(|column| column.name.name.as_str())
         .collect::<Vec<_>>();
+    // The declared names as a set, so each check below is a lookup however
+    // many columns the specification declares (#4782).
+    let mut declared = HashSet::with_capacity(names.len());
     for (position, &name) in names.iter().enumerate() {
-        if names[..position].contains(&name) {
+        if !declared.insert(name) {
             let mut finding = LookupFinding::new(
                 &format!("columns[{position}].name"),
                 C::PreflightDuplicateColumn,
@@ -71,7 +74,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
     let rows = &spec.rows.templates;
     for template in rows {
         for (column, _) in &template.overrides {
-            if !names.contains(&column.name.as_str()) {
+            if !declared.contains(column.name.as_str()) {
                 findings.push(PreflightFinding::UndeclaredRowColumn {
                     row_path: spec.cite(template.meta),
                     column: column.name.clone(),
@@ -79,12 +82,18 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
             }
         }
     }
-    let overrides = |template: &ast::Template, name: &str| {
-        template
-            .overrides
-            .iter()
-            .any(|(column, _)| column.name == name)
-    };
+    // Each template's overridden columns, as a set.
+    let overridden = rows
+        .iter()
+        .map(|template| {
+            template
+                .overrides
+                .iter()
+                .map(|(column, _)| column.name.as_str())
+                .collect::<HashSet<_>>()
+        })
+        .collect::<Vec<_>>();
+    let overrides = |template: usize, name: &str| overridden[template].contains(name);
     if !rows.is_empty() {
         for (column, &name) in spec.columns.iter().zip(&names) {
             match &column.derivation {
@@ -93,8 +102,9 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 Some(derivation) if aggregate(spec, derivation.expr) => {
                     let overridden = rows
                         .iter()
-                        .filter(|template| overrides(template, name))
-                        .map(|template| template.id.name.clone())
+                        .enumerate()
+                        .filter(|&(index, _)| overrides(index, name))
+                        .map(|(_, template)| template.id.name.clone())
                         .collect::<Vec<_>>();
                     if !overridden.is_empty() {
                         findings.push(PreflightFinding::DuplicateRowDefault {
@@ -108,8 +118,9 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 None => {
                     let missing = rows
                         .iter()
-                        .filter(|template| !overrides(template, name))
-                        .map(|template| template.id.name.clone())
+                        .enumerate()
+                        .filter(|&(index, _)| !overrides(index, name))
+                        .map(|(_, template)| template.id.name.clone())
                         .collect::<Vec<_>>();
                     if !missing.is_empty() {
                         findings.push(PreflightFinding::MissingRowDerivation {
@@ -133,8 +144,13 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         .inputs
         .iter()
         .map(|input| input.name.name.as_str())
-        .collect::<Vec<_>>();
-    if inputs.contains(&spec.domain.name.as_str()) {
+        .collect::<HashSet<_>>();
+    let intermediates = spec
+        .intermediates
+        .iter()
+        .map(|item| item.id.name.as_str())
+        .collect::<HashSet<_>>();
+    if inputs.contains(spec.domain.name.as_str()) {
         findings.push(PreflightFinding::DomainInputCollision {
             domain: spec.domain.name.clone(),
         });
@@ -150,7 +166,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 identifier: name.into(),
             });
         }
-        if !names.contains(&name) {
+        if !declared.contains(name) {
             findings.push(PreflightFinding::UndeclaredKey {
                 position,
                 column: name.into(),
@@ -161,7 +177,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         findings.push(PreflightFinding::DriverUnavailable { dataset: None });
     }
     if let Some(base) = &spec.rows.base {
-        if !inputs.contains(&base.name.as_str()) {
+        if !inputs.contains(base.name.as_str()) {
             findings.push(PreflightFinding::DriverUnavailable {
                 dataset: Some(base.name.clone()),
             });
@@ -175,12 +191,12 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 .collect(),
         });
     }
+    // The first template of each identity.
+    let mut first = HashMap::with_capacity(rows.len());
     for (index, template) in rows.iter().enumerate() {
         let identity = template.id.name.as_str();
-        if let Some(previous) = rows[..index]
-            .iter()
-            .position(|prior| prior.id.name == identity)
-        {
+        let previous = *first.entry(identity).or_insert(index);
+        if previous != index {
             let mut finding = LookupFinding::new(
                 &format!("{}.id", spec.cite(template.meta)),
                 C::PreflightDuplicateRow,
@@ -196,9 +212,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
             findings.push(PreflightFinding::Scalar(finding));
         }
         let driver = template_driver(spec, template);
-        if !driver.is_some_and(|name| {
-            inputs.contains(&name) || spec.intermediates.iter().any(|item| item.id.name == name)
-        }) {
+        if !driver.is_some_and(|name| inputs.contains(name) || intermediates.contains(name)) {
             findings.push(PreflightFinding::RowDriverUnavailable {
                 row_path: spec.cite(template.meta),
                 row: identity.into(),
