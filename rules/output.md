@@ -107,6 +107,38 @@ Submission key metadata describes the identity in `keys`, as
 [JSON-9](profiles/dataset-json.md#json-9) require; neither ordering nor the
 separate uniqueness check changes it.
 
+When no combination of the received variables is both non-missing and unique,
+the specification derives the row identity: the sequence variable of its
+model, such as `ASEQ` for ADaM or `--SEQ` for SDTM, numbered by `row_number`
+([WINDOW-6](windows.md#window-6)) within each subject in the order of the
+variables that tell its records apart. A key is an output column
+([OUTPUT-2](#output-2)) and a key column is mandatory
+([SUB-10](profiles/submission.md#sub-10)), so neither a nullable variable nor
+an internal row number can stand in for it. For example, when two records of a
+subject share `PARAMCD` and `ADT` and differ only in a `PCRDT` that one of them
+leaves missing, these fields accompany the declared columns:
+
+```yaml
+keys: [STUDYID, USUBJID, ASEQ]
+columns:
+  - name: ASEQ
+    type: int
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [PARAMCD, ADT, PCRDT]
+output:
+  path: adeff.csv
+  columns: [STUDYID, USUBJID, ASEQ, PARAMCD, ADT, PCRDT, AVAL]
+  order_by: [STUDYID, USUBJID, PARAMCD, ADT, PCRDT]
+verifications:
+  - unique: {columns: [STUDYID, USUBJID, PARAMCD, ADT, PCRDT], id: sponsor-keys}
+```
+
+Whether a key value is missing or repeated depends on the rows, so this rule
+fails when a run builds them, never at `check()`, which reads no data.
+
 ## Profiles
 
 <a id="output-4"></a>
