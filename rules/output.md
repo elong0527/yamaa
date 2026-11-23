@@ -107,6 +107,15 @@ Submission key metadata describes the identity in `keys`, as
 [JSON-9](profiles/dataset-json.md#json-9) require; neither ordering nor the
 separate uniqueness check changes it.
 
+When no combination of the received variables is both non-missing and unique,
+the specification derives the row identity, such as the sequence variable of
+its model, and declares it in `keys`. A key is an output column
+([OUTPUT-2](#output-2)) and a key column is mandatory
+([SUB-10](profiles/submission.md#sub-10)), so neither a nullable variable nor
+an internal column can stand in for it. Whether a key value is missing or
+repeated depends on the rows, so this rule fails when a run builds them, never
+at `check()`, which reads no data.
+
 ## Profiles
 
 <a id="output-4"></a>
