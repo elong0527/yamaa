@@ -123,6 +123,9 @@ project-includes = ["src/yamaa"]
 preset = "default"
 
 [tool.uv]
+# Dependency cooldown: skip package files uploaded in the last 7 days.
+exclude-newer = "7 days"
+
 # `make setup` installs a built wheel, which uv rebuilds only when a file listed
 # here changes. List every wheel input: the package files and the Rust
 # workspace that the extension compiles. Paths are relative to this directory.
