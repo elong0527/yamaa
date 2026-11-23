@@ -479,6 +479,66 @@ fn sub_second_temporal_units_import_as_the_whole_seconds_they_name() {
     };
     assert_eq!(value.to_string(), "2262-04-11T23:47:16");
     assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
+    // One second before 1970-01-01T00:00:00 is a negative count in each unit.
+    for array in [
+        Arc::new(TimestampMillisecondArray::from(vec![-1_000])) as ArrayRef,
+        Arc::new(TimestampMicrosecondArray::from(vec![-1_000_000])) as ArrayRef,
+        Arc::new(TimestampNanosecondArray::from(vec![-1_000_000_000])) as ArrayRef,
+    ] {
+        let kind = array.data_type().clone();
+        let table = imported("DT", array).unwrap();
+        let ValueRef::DateTime(value) = table.cell(0, 0).unwrap() else {
+            panic!("{kind}: a datetime")
+        };
+        assert_eq!(value.to_string(), "1969-12-31T23:59:59", "{kind}");
+    }
+}
+
+/// A whole second outside the day, or outside the years 1 to 9999, is
+/// refused at its row in a finer unit as it is in seconds.
+#[test]
+fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
+    for (array, row) in [
+        // 24:00:00, the first second after the day.
+        (
+            Arc::new(Time32MillisecondArray::from(vec![86_400_000, 0])) as ArrayRef,
+            0,
+        ),
+        // One second before midnight.
+        (
+            Arc::new(Time64MicrosecondArray::from(vec![0, -1_000_000])) as ArrayRef,
+            1,
+        ),
+        // 10000-01-01T00:00:00, the second after 9999-12-31T23:59:59, which
+        // is 2_932_896 days and 86_399 seconds from 1970-01-01T00:00:00.
+        (
+            Arc::new(TimestampMillisecondArray::from(vec![
+                253_402_300_800_000,
+                0,
+            ])) as ArrayRef,
+            0,
+        ),
+        // 0000-12-31T23:59:59, the second before 0001-01-01T00:00:00, which
+        // is 719_162 days before 1970-01-01T00:00:00.
+        (
+            Arc::new(TimestampMicrosecondArray::from(vec![
+                0,
+                -62_135_596_801_000_000,
+            ])) as ArrayRef,
+            1,
+        ),
+    ] {
+        let kind = array.data_type().clone();
+        let error = imported("T", array).err();
+        assert!(
+            matches!(
+                error,
+                Some(TableError::TemporalRange { batch: 0, column: 0, row: found })
+                    if found == row
+            ),
+            "{kind}: {error:?}"
+        );
+    }
 }
 
 /// A time or datetime count short of a whole second is refused at its row;
