@@ -56,9 +56,8 @@ included, and the directory is free.
 
 Two generations with the same captured inputs and `created` produce the same
 bytes. An explicit `created` is a whole-second civil datetime, which a trailing
-`Z` may mark as UTC; the document and each Dataset-JSON file write it as given,
-and an XPT header, which has no designator, writes its civil time. Omission
-selects the current UTC time during preparation, and Save retains that time. An omitted
+`Z` may mark as UTC; omission selects the current UTC time during preparation,
+and Save retains that time. An omitted
 `file_oid` is `study.id`, the selected lower-case section key and
 `Define-XML_2.1` (or `Define-XML_2.0` for 2.0.0), joined by dots. An omitted metadata-version ID is
 `study.id.section`, and an omitted name is `study.name section metadata`.
@@ -69,7 +68,8 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metada
 Explicit overrides retain their admitted text, independently of these
 defaults. An explicit `created` that is not a whole-second civil datetime,
 alone or followed by `Z`, fails with `value_not_permitted`; any other offset is
-refused.
+refused. The document and each Dataset-JSON file write `created` as given, `Z`
+included, and an XPT header, which has no designator, writes its civil time.
 
 <a id="define-4"></a>
 
